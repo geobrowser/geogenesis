@@ -52,6 +52,7 @@ vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberR
 
 const { ExploreSpaceScopeUnresolvedError, fetchCompleteExplorePopulationIndex, fetchExploreFeed } =
   await import('./fetch-explore-feed');
+const { encodeExploreForYouCursor } = await import('./explore-window-cursor');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 
@@ -653,5 +654,268 @@ describe('leading Best with a playable debate', () => {
     await fetchExploreFeed({ ...leadArgs, cursor: 'w1:0:next' });
 
     expect(mediaAsked).toEqual([]);
+  });
+});
+
+/** GEO-3083. For you: the followed-topic stream mixed 3:1 with Best, both under Best's rules. */
+describe('For you', () => {
+  const TOPIC_A = '11111111111111111111111111111111';
+  const TOPIC_B = '22222222222222222222222222222222';
+  const forYouArgs = { ...feedArgs, typeIds: [CLAIM_TYPE_ID, DEBATE_TYPE_ID], forYouTopicIds: [TOPIC_A, TOPIC_B] };
+
+  function claims(prefix: string, count: number) {
+    return Array.from({ length: count }, (_, i) => entity(`${prefix}${i}`, CLAIM_TYPE_ID));
+  }
+
+  /** Stream pages as the decoder returns them. `gaps` are node indices that failed to decode. */
+  function respond(
+    topicEntities: unknown[],
+    bestEntities: unknown[],
+    topicOf: (id: string) => string = () => TOPIC_A,
+    gaps: { topics?: number[]; best?: number[] } = {}
+  ) {
+    const followed = new Set((topicEntities as Array<{ id: string }>).map(e => e.id));
+    const page = (
+      all: unknown[],
+      offset: number,
+      first: number,
+      gapAt: number[] = [],
+      tagged: (id: string) => boolean
+    ) => {
+      const nodes = (all as Array<{ id: string }>).slice(offset, offset + first);
+      const kept = nodes.map((e, i) => ({ e, i })).filter(({ i }) => !gapAt.includes(offset + i));
+      return {
+        entities: kept.map(({ e }) => e),
+        rawIndex: kept.map(({ i }) => i),
+        matchedTopicIds: new Map(kept.map(({ e }) => [e.id, tagged(e.id) ? [topicOf(e.id)] : []])),
+        fetched: nodes.length,
+      };
+    };
+    windows.responder = (operation, variables) => {
+      const offset = Number(variables.offset ?? 0);
+      const first = Number(variables.first);
+      if (operation === 'ExploreForYouConnection') return page(topicEntities, offset, first, gaps.topics, () => true);
+      if (operation === 'ExploreForYouBestConnection') {
+        return page(bestEntities, offset, first, gaps.best, id => followed.has(id));
+      }
+      return page(bestEntities, offset, first, gaps.best, () => false);
+    };
+  }
+
+  const opsOf = (name: string) => windows.variables.filter((_, i) => windows.operations[i] === name);
+
+  it('asks for both streams under the same scope, with maxPerTopic at offset + first', async () => {
+    respond(claims('t', 5), claims('b', 5));
+
+    await fetchExploreFeed(forYouArgs);
+
+    const [topic] = opsOf('ExploreForYouConnection');
+    const [best] = opsOf('ExploreForYouBestConnection');
+    expect(topic).toMatchObject({ topicIds: [TOPIC_A, TOPIC_B], offset: 0, first: 66, maxPerTopic: 66 });
+    expect(best).toMatchObject({ offset: 0, first: 66, maxPerType: 66, topicIds: [TOPIC_A, TOPIC_B] });
+    expect(topic.typeIds).toEqual(best.typeIds);
+    expect((topic.filter as { or?: unknown }).or).toEqual(claimsRequireDebateTagFilter([SPACE]).or);
+  });
+
+  it('serves three followed items then one Best item', async () => {
+    respond(claims('t', 30), claims('b', 30));
+
+    const { items } = await fetchExploreFeed(forYouArgs);
+
+    expect(items.slice(0, 8).map(item => item.entityId)).toEqual(['t0', 't1', 't2', 'b0', 't3', 't4', 't5', 'b1']);
+  });
+
+  it('is exactly Best when nothing is followed', async () => {
+    respond(claims('t', 30), claims('b', 30));
+
+    await fetchExploreFeed({ ...forYouArgs, forYouTopicIds: [] });
+
+    expect(windows.operations).not.toContain('ExploreForYouConnection');
+  });
+
+  it('holds one topic to the cap while another can fill in', async () => {
+    // Shaped like testnet following 10 topics, where one topic held 59 of 66. Three topics, because
+    // at 6 per page two cannot fill a page between them and the cap has to give.
+    const TOPIC_C = '33333333333333333333333333333333';
+    const topicEntities = [...claims('a', 40), ...claims('c', 13), ...claims('d', 13)];
+    respond(topicEntities, claims('b', 30), id =>
+      id.startsWith('a') ? TOPIC_A : id.startsWith('c') ? TOPIC_B : TOPIC_C
+    );
+
+    const { items } = await fetchExploreFeed(forYouArgs);
+
+    expect(items.filter(item => item.entityId.startsWith('a')).length).toBeLessThanOrEqual(6);
+  });
+
+  it('pages both streams with no repeats and full pages, moving each past what it served', async () => {
+    respond(claims('t', 100), claims('b', 100));
+
+    const pages: string[][] = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < 5; i += 1) {
+      const result = await fetchExploreFeed({ ...forYouArgs, cursor });
+      pages.push(result.items.map(item => item.entityId));
+      cursor = result.nextCursor;
+    }
+
+    const served = pages.flat();
+    expect(new Set(served).size).toBe(served.length);
+    expect(pages.every(page => page.length === 22)).toBe(true);
+    // Each stream moves past what it served, and maxPerTopic keeps up with the offset.
+    const offsets = opsOf('ExploreForYouConnection').map(v => Number(v.offset));
+    expect(offsets).toEqual([...offsets].sort((x, y) => x - y));
+    expect(offsets.at(-1)).toBeGreaterThan(0);
+    for (const v of opsOf('ExploreForYouConnection')) expect(v.maxPerTopic).toBe(Number(v.offset) + 66);
+    expect(served.filter(id => id.startsWith('b')).length).toBeGreaterThanOrEqual(5 * 5);
+  });
+
+  it('becomes Best once the followed topics run out, and ends when Best does', async () => {
+    respond(claims('t', 3), claims('b', 40));
+
+    const pages: string[][] = [];
+    let cursor: string | null = null;
+    do {
+      const result = await fetchExploreFeed({ ...forYouArgs, cursor });
+      pages.push(result.items.map(item => item.entityId));
+      cursor = result.nextCursor;
+    } while (cursor !== null && pages.length < 10);
+
+    expect(pages[0].slice(0, 5)).toEqual(['t0', 't1', 't2', 'b0', 'b1']);
+    expect(pages.flat()).toEqual(['t0', 't1', 't2', ...claims('b', 40).map((_, i) => `b${i}`)]);
+    expect(pages.slice(0, -1).every(page => page.length === 22)).toBe(true);
+    // The topic stream ran out on the first page, so it isn't asked again.
+    expect(opsOf('ExploreForYouConnection')).toHaveLength(1);
+    expect(cursor).toBeNull();
+  });
+
+  it('serves an item matching a follow from the topic stream only, so pages never repeat it', async () => {
+    // Best ranks t0-t9 too; they are followed, so only the topic stream may serve them.
+    respond(claims('t', 10), [...claims('t', 10), ...claims('b', 80)]);
+
+    const pages: string[][] = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < 4; i += 1) {
+      const result = await fetchExploreFeed({ ...forYouArgs, cursor });
+      pages.push(result.items.map(item => item.entityId));
+      cursor = result.nextCursor;
+    }
+
+    const served = pages.flat();
+    expect(new Set(served).size).toBe(served.length);
+    expect(pages.every(page => page.length === 22)).toBe(true);
+    expect(served.filter(id => id.startsWith('t'))).toHaveLength(10);
+  });
+
+  it('falls back to Best for a page when the topic query fails, instead of failing it', async () => {
+    respond([], claims('b', 100));
+    const inner = windows.responder!;
+    windows.responder = (operation, variables) => {
+      if (operation === 'ExploreForYouConnection') throw new Error('Unknown argument "maxPerTopic"');
+      return inner(operation, variables);
+    };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const first = await fetchExploreFeed(forYouArgs);
+    const second = await fetchExploreFeed({ ...forYouArgs, cursor: first.nextCursor });
+
+    expect(first.items.map(item => item.entityId)).toEqual(claims('b', 22).map((_, i) => `b${i}`));
+    expect(second.items[0]?.entityId).toBe('b22');
+    // Each page tries the topic stream again, so a transient failure costs one page of mixing.
+    expect(opsOf('ExploreForYouConnection')).toHaveLength(2);
+    error.mockRestore();
+  });
+
+  it('loses nothing to a transient topic failure', async () => {
+    const tagged = claims('t', 40);
+    respond(tagged, [...tagged, ...claims('b', 120)]);
+    const inner = windows.responder!;
+    let topicCalls = 0;
+    windows.responder = (operation, variables) => {
+      if (operation === 'ExploreForYouConnection' && ++topicCalls === 2) throw new Error('timeout');
+      return inner(operation, variables);
+    };
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    const served: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const result = await fetchExploreFeed({ ...forYouArgs, cursor });
+      served.push(...result.items.map(item => item.entityId));
+      cursor = result.nextCursor;
+    } while (cursor !== null && served.length < 400);
+
+    expect(new Set(served)).toEqual(new Set([...tagged, ...claims('b', 120)].map(e => (e as { id: string }).id)));
+    error.mockRestore();
+  });
+
+  it('keeps its place when a node fails to decode', async () => {
+    respond(claims('t', 30), claims('b', 90), () => TOPIC_A, { topics: [0], best: [0, 5] });
+
+    const served: string[] = [];
+    let cursor: string | null = null;
+    do {
+      const result = await fetchExploreFeed({ ...forYouArgs, cursor });
+      served.push(...result.items.map(item => item.entityId));
+      cursor = result.nextCursor;
+    } while (cursor !== null && served.length < 200);
+
+    const expected = [...claims('t', 30), ...claims('b', 90)]
+      .map(e => (e as { id: string }).id)
+      .filter(id => !['t0', 'b0', 'b5'].includes(id));
+    expect(served).toHaveLength(expected.length);
+    expect(new Set(served)).toEqual(new Set(expected));
+  });
+
+  it('remembers a Best row it served from deep in the stream when the next page reads less', async () => {
+    // Page 1 reads two chunks of Best and takes the debate at raw index 128; page 2 reads one.
+    const tagged = claims('t', 56);
+    const followed = [...tagged, ...claims('u', 40)];
+    const best = [
+      ...claims('c', 4),
+      ...tagged,
+      ...claims('y', 66),
+      ...claims('w', 2),
+      entity('d0', DEBATE_TYPE_ID),
+      ...claims('z', 60),
+    ];
+    respond(followed, best, id => [TOPIC_A, TOPIC_B, '33333333333333333333333333333333'][Number(id.slice(1)) % 3]);
+
+    const served: string[] = [];
+    let cursor: string | null = null;
+    for (let i = 0; i < 8 && (i === 0 || cursor !== null); i += 1) {
+      const result = await fetchExploreFeed({ ...forYouArgs, cursor });
+      served.push(...result.items.map(item => item.entityId));
+      cursor = result.nextCursor;
+    }
+
+    expect(served.filter(id => id === 'd0')).toHaveLength(1);
+    expect(new Set(served).size).toBe(served.length);
+  });
+
+  it('reads further into the topic stream when most of its next rows were already served', async () => {
+    // The state a long scroll reaches: Best has run out, and the per-topic cap served 49 of the
+    // next 66 topic rows ahead of the frontier.
+    respond(claims('t', 400), []);
+    const served = new Set(Array.from({ length: 49 }, (_, i) => i + 1));
+    const cursor = encodeExploreForYouCursor({ topic: { offset: 100, served }, best: null });
+
+    const { items, nextCursor } = await fetchExploreFeed({ ...forYouArgs, cursor });
+
+    expect(items).toHaveLength(22);
+    expect(items.map(item => item.entityId)).not.toContain('t101');
+    expect(nextCursor).not.toBeNull();
+  });
+
+  it('fetches further into Best when most of it matches a follow, to keep the Best share', async () => {
+    // 95% of Best's first rows are followed items, which only the topic stream serves.
+    const tagged = claims('t', 120);
+    const best = [...tagged.slice(0, 63), ...claims('b', 3), ...tagged.slice(63), ...claims('x', 40)];
+    respond(tagged, best);
+
+    const { items } = await fetchExploreFeed(forYouArgs);
+
+    const bestItems = items.filter(item => !item.entityId.startsWith('t'));
+    expect(bestItems.length).toBeGreaterThanOrEqual(5);
+    expect(opsOf('ExploreForYouBestConnection').length).toBeGreaterThan(1);
   });
 });

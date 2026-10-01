@@ -140,6 +140,18 @@ let internalAccount = false;
 let scriptRequested = false;
 let lastPageView: { key: string; timestamp: number } | null = null;
 const pendingCalls: PendingCall[] = [];
+// Calls wait here until the runtime script loads, which a blocker can prevent for the life of the
+// tab. Hard-bounded; identity calls displace events first, since later events rely on them.
+const MAX_PENDING_CALLS = 1000;
+const IDENTITY_METHODS = new Set<PendingCall['method']>([
+  'identifyUser',
+  'signedUp',
+  'loggedIn',
+  'sessionRestored',
+  'loggedOut',
+  'identityReset',
+  'reconcileAnonymousIdentity',
+]);
 
 // NEXT_PUBLIC_ prefix is required: this loader runs client-side, and Next only exposes
 // NEXT_PUBLIC_* env vars to the browser bundle. Set NEXT_PUBLIC_DISABLE_POSTHOG='1' to keep
@@ -555,6 +567,13 @@ function callOrQueue(call: PendingCall) {
 
   if (invokeRuntime(call)) {
     return;
+  }
+
+  if (pendingCalls.length >= MAX_PENDING_CALLS) {
+    if (!IDENTITY_METHODS.has(call.method)) return;
+    // Room for an identity call comes from the oldest event, keeping the bound hard.
+    const evict = pendingCalls.findIndex(queued => !IDENTITY_METHODS.has(queued.method));
+    pendingCalls.splice(evict === -1 ? 0 : evict, 1);
   }
 
   pendingCalls.push(call);

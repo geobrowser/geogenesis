@@ -43,6 +43,13 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'forYouFeed',
+    label: 'For you feed',
+    description:
+      'Add a For you sort to Explore, built from the topics you follow, and open on it (GEO-3083). Needs the topic-ranked feed from gaia#983, which is on testnet only.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',

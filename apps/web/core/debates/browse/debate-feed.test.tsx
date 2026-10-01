@@ -97,12 +97,14 @@ vi.mock('./debate-feed-player', async () => {
       active,
       preload,
       buffer,
+      releaseMedia,
       onPlaybackState,
     }: {
       debate: Debate;
       active: boolean;
       preload?: boolean;
       buffer?: boolean;
+      releaseMedia?: boolean;
       onPlaybackState?: (state: typeof mocks.playerState) => void;
     }) => {
       const state = JSON.stringify(mocks.playerState);
@@ -113,6 +115,7 @@ vi.mock('./debate-feed-player', async () => {
           data-active={active}
           data-preload={preload ? 'true' : 'false'}
           data-buffer={buffer ? 'true' : 'false'}
+          data-release-media={releaseMedia ? 'true' : 'false'}
         />
       );
     },
@@ -916,8 +919,31 @@ describe('DebatesBrowseFeed — preloading the next debate (GEO-2895)', () => {
       active: el.getAttribute('data-active') === 'true',
       preload: el.getAttribute('data-preload') === 'true',
       buffer: el.getAttribute('data-buffer') === 'true',
+      releaseMedia: el.getAttribute('data-release-media') === 'true',
     }));
   }
+
+  // Cards stay mounted as the viewer scrolls, so only one behind through the preload window ahead
+  // may hold loaded media (GEO-3067).
+  it('releases media outside one behind to the preload window ahead', () => {
+    mocks.debates = [
+      ...mocks.debates,
+      completedDebate('debate-4', 'Fourth claim', '2026-07-02T00:04:10.000Z'),
+      completedDebate('debate-5', 'Fifth claim', '2026-07-02T00:05:10.000Z'),
+      completedDebate('debate-6', 'Sixth claim', '2026-07-02T00:06:10.000Z'),
+    ];
+    render(<DebatesBrowseFeed spaceId="space-1" />);
+    const players = playersInRenderOrder();
+    const activeIndex = players.findIndex(p => p.active);
+
+    expect(activeIndex).toBeGreaterThanOrEqual(0);
+    players.forEach((p, i) => {
+      expect(p.releaseMedia).toBe(i < activeIndex - 1 || i > activeIndex + 2);
+      // Nothing the feed preloads is ever released.
+      if (p.preload || p.active) expect(p.releaseMedia).toBe(false);
+    });
+    expect(players.some(p => p.releaseMedia)).toBe(true);
+  });
 
   // GEO-2965 widened this from one ahead to two. The active card now holds until both of its
   // recordings can play, so a card reached cold waits; a quick double swipe is how a viewer lands on

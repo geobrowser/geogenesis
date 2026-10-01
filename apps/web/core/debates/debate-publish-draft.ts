@@ -8,6 +8,8 @@ import type { DataType, Relation, Value } from '~/core/types';
 import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
@@ -22,7 +24,9 @@ import {
   MARKDOWN_CONTENT_PROPERTY_ID,
   NAME_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
+  SELECTOR_TYPE_ID,
   SOURCES_PROPERTY_ID,
+  TARGET_PROPERTY_ID,
   TEXT_BLOCK_TYPE_ID,
   TRANSCRIPT_TYPE_ID,
   TYPES_PROPERTY_ID,
@@ -90,6 +94,13 @@ export type DebateClaimInput = {
    * policy has already cleared this when the entity carries the tag already.
    */
   isContestable?: boolean;
+  /**
+   * When in the debate this claim was said, in integer milliseconds on the transcript's clock:
+   * geo-chat's `start_ms`/`end_ms`, the span of the transcript it was extracted from (GEO-2958).
+   * Written onto the block → claim relation entity, where the app reads it as a certainty — so
+   * this is null whenever geo-chat did not measure it, and the app falls back to matching.
+   */
+  timing?: { startMs: number; endMs: number } | null;
 };
 
 export type DebatePublishInput = {
@@ -208,11 +219,12 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     propertyId: string;
     toEntityId: string;
     toEntityName: string | null;
-  }) => {
+  }): { id: string; name: string | null } => {
+    const entityId = createEntityId();
     relations.push(
       makeRelation({
         id: createEntityId(),
-        entityId: createEntityId(),
+        entityId,
         position: createPosition(),
         spaceId: input.spaceId,
         propertyId,
@@ -221,6 +233,11 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         toEntityName,
       })
     );
+    return { id: entityId, name: null };
+  };
+
+  const setInteger = (entityId: string, propertyId: string, value: number) => {
+    values.push(makeIntegerValue({ entityId, entityName: null, propertyId, value, spaceId: input.spaceId }));
   };
 
   // One Topics relation per (entity, topic). `relate` does not dedupe, and a reused claim can appear
@@ -456,12 +473,33 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         const blockClaimKey = `${blockId}:${claimId}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
           linkedBlockClaims.add(blockClaimKey);
-          relate({
+          const statement = relate({
             fromEntity: blockRef,
             propertyId: DEBATE_CLAIMS_PROPERTY_ID,
             toEntityId: claimId,
             toEntityName: claimEntityText,
           });
+          // When this statement was said, on the relation's own entity rather than the claim: a
+          // claim stated in two turns has two moments. Typed Selector → Debate videos, the graph's
+          // shape for "this relation points at a span of its target" (the one `Reply to` uses).
+          // Only a measured span is written — the app reads these as a to-the-second certainty.
+          const timing = publishableTiming(claim.timing);
+          if (timing) {
+            setInteger(statement.id, CLAIM_START_OFFSET_PROPERTY_ID, timing.startMs);
+            setInteger(statement.id, CLAIM_END_OFFSET_PROPERTY_ID, timing.endMs);
+            relate({
+              fromEntity: statement,
+              propertyId: TYPES_PROPERTY_ID,
+              toEntityId: SELECTOR_TYPE_ID,
+              toEntityName: 'Selector',
+            });
+            relate({
+              fromEntity: statement,
+              propertyId: TARGET_PROPERTY_ID,
+              toEntityId: DEBATE_VIDEOS_PROPERTY_ID,
+              toEntityName: 'Debate videos',
+            });
+          }
         }
         if (!sourcedClaims.has(claimId)) {
           sourcedClaims.add(claimId);
@@ -508,6 +546,19 @@ export function mergeTranscriptSegmentsIntoTurns(
   return turns;
 }
 
+/**
+ * A claim's span if it is a real interval of whole, non-negative milliseconds, else null. The
+ * decoder already refuses anything else; this is the publisher refusing it too, because a bad
+ * value here would be published as a certainty and nothing downstream can demote it.
+ */
+export function publishableTiming(timing: DebateClaimInput['timing']): { startMs: number; endMs: number } | null {
+  if (!timing) return null;
+  const { startMs, endMs } = timing;
+  if (!Number.isSafeInteger(startMs) || !Number.isSafeInteger(endMs)) return null;
+  if (startMs < 0 || endMs <= startMs) return null;
+  return { startMs, endMs };
+}
+
 /** Dashless, lower-case — the form ids are compared in, so one entity is one key. */
 function normalizeId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
@@ -533,6 +584,32 @@ function makeTextValue({
     entity: { id: entityId, name: entityName },
     property: { id: propertyId, name: null, dataType: TEXT_DATA_TYPE },
     value,
+    spaceId,
+    isLocal: true,
+    hasBeenPublished: false,
+  };
+}
+
+const INTEGER_DATA_TYPE: DataType = 'INTEGER';
+
+function makeIntegerValue({
+  entityId,
+  entityName,
+  propertyId,
+  value,
+  spaceId,
+}: {
+  entityId: string;
+  entityName: string | null;
+  propertyId: string;
+  value: number;
+  spaceId: string;
+}): Value {
+  return {
+    id: ID.createValueId({ entityId, propertyId, spaceId }),
+    entity: { id: entityId, name: entityName },
+    property: { id: propertyId, name: null, dataType: INTEGER_DATA_TYPE },
+    value: String(value),
     spaceId,
     isLocal: true,
     hasBeenPublished: false,
