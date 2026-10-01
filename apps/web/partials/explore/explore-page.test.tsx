@@ -1,9 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render, screen } from '@testing-library/react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ExplorePage } from './explore-page';
+import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 
 const mocks = vi.hoisted(() => ({
   flags: {} as Record<string, boolean>,
@@ -111,6 +113,28 @@ describe('ExplorePage For you sort', () => {
       sortOptions: ['for-you', 'best', 'top', 'new'],
       followedTopicIds: ['aaaa', 'bbbb'],
     });
+  });
+
+  it('counts onboarding picks still waiting to be followed', () => {
+    mocks.flags = { forYouFeed: true };
+    const store = createStore();
+    store.set(feedTopicsAtom, [
+      { id: 'cccc', name: 'Bitcoin' },
+      { id: 'aaaa', name: 'Already followed' },
+    ]);
+    render(
+      <Provider store={store}>
+        <ExplorePage
+          featuredSpaces={[]}
+          featuredRankings={[]}
+          pendingMembershipSpaceIds={[]}
+          memberOrEditorSpaceIds={[]}
+          communityCalls={[]}
+        />
+      </Provider>
+    );
+
+    expect(mocks.feedProps.at(-1)?.followedTopicIds).toEqual(['aaaa', 'bbbb', 'cccc']);
   });
 
   // Privy restores the wallet after mount; until then the follows read as empty.

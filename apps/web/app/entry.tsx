@@ -53,6 +53,14 @@ const PendingPersonalSpaceRunner = dynamic(
   { ssr: false }
 );
 
+const PendingTopicFollowsRunner = dynamic(
+  () =>
+    import('~/partials/onboarding/pending-topic-follows-runner').then(m => ({
+      default: m.PendingTopicFollowsRunner,
+    })),
+  { ssr: false }
+);
+
 const PendingCreatedSpaceRunner = dynamic(
   () =>
     import('~/partials/create-space/pending-created-space-runner').then(m => ({
@@ -169,6 +177,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <ClientOnly>
           <OnboardingDialog />
           <PendingPersonalSpaceRunner />
+          <PendingTopicFollowsRunner />
           <PendingActionsRunner />
           <CreateSpaceDialog />
           <PendingCreatedSpaceRunner />

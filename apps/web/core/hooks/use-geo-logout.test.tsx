@@ -39,6 +39,7 @@ vi.mock('~/partials/onboarding/dialog', () => ({
   topicIdAtom: {},
 }));
 vi.mock('~/atoms/dismissed-hints', () => ({ dismissedHintsAtom: {} }));
+vi.mock('~/atoms/onboarding-feed-topics', () => ({ feedTopicsAtom: {} }));
 
 describe('useGeoLogoutCleanup', () => {
   beforeEach(() => {

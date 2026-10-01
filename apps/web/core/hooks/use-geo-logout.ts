@@ -22,6 +22,7 @@ import {
 } from '~/partials/onboarding/dialog';
 
 import { dismissedHintsAtom } from '~/atoms/dismissed-hints';
+import { feedTopicsAtom } from '~/atoms/onboarding-feed-topics';
 
 /**
  * Registers the side-effects that wipe every trace of the previous account on
@@ -51,6 +52,7 @@ export function useGeoLogoutCleanup() {
   const setDismissedHints = useSetAtom(dismissedHintsAtom);
   const setPending = useSetAtom(pendingPersonalSpaceAtom);
   const setSelectedTopicIds = useSetAtom(selectedTopicIdsAtom);
+  const setFeedTopics = useSetAtom(feedTopicsAtom);
 
   useLogout({
     onSuccess: async () => {
@@ -71,6 +73,7 @@ export function useGeoLogoutCleanup() {
         setDismissedHints([]);
         setPending(null);
         setSelectedTopicIds([]);
+        setFeedTopics([]);
         // Bulletproof reset — see the doc comment. `/root` is the public home and
         // drops the user out of any onboarding/pending context they logged out of.
         window.location.assign('/root');
