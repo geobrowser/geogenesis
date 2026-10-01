@@ -15,6 +15,7 @@ vi.mock('~/core/environment', () => ({
       chainId: '19411',
       rpc: '',
     }),
+    variables: { sentryDsn: '' },
   },
 }));
 
