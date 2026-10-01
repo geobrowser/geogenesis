@@ -11,7 +11,7 @@ import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
-import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import { type TurnState, clampSeconds, primeForSound, speakerLabel } from '~/core/debates/playback-utils';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
@@ -19,6 +19,7 @@ import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { reportEvent } from '~/core/telemetry/logger';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
 
 import { Avatar } from '~/design-system/avatar';
@@ -194,17 +195,48 @@ export function DebateFeedPlayer({
     slot2Src,
     active,
   });
+  /*
+   * Every tap that can start sound unlocks *both* recordings while it is still a gesture.
+   *
+   * WebKit (every iOS browser) only lets an element make sound if it was unmuted or played inside a
+   * gesture, element by element, and the sound moves between these two at each turn boundary with no
+   * gesture in sight. See `primeForSound`. Done here, in the handlers, because the render that
+   * applies the change runs after them.
+   */
+  const primeBoth = () => primeForSound([slot1VideoRef.current, slot2VideoRef.current]);
   // The hold is for autoplay. A viewer pressing play has chosen not to wait, so every control that
   // starts playback lets the pair go first.
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
+    if (!playing) primeBoth();
     pair.release();
     togglePlaybackRaw();
   };
   const playFromStart = () => {
     measurement.control('replay');
+    primeBoth();
     pair.release();
     void playFromStartRaw();
+  };
+  /*
+   * The browser would not let the next speaker be heard (see `DebaterVideo`'s mute effect).
+   *
+   * Keep the debate moving muted rather than stopped, and say so: flipping the viewer's mute puts the
+   * Unmute control back on screen, and tapping it is the gesture that unlocks both elements. Left
+   * alone, WebKit's pause would split the pair and the playback hook would stop the whole debate.
+   */
+  const onUnmuteRefused = (video: HTMLVideoElement, slot: 1 | 2) => {
+    video.muted = true;
+    void video.play().catch(() => {
+      /* Still refused muted: the pair check in the playback hook stops the debate and shows play. */
+    });
+    setMutedByUser(true);
+    reportEvent({
+      name: 'debate_playback_unmute_refused',
+      level: 'warning',
+      tags: { slot: String(slot) },
+      extra: { debate_id: debate.id, playhead_seconds: playheadSeconds },
+    });
   };
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
@@ -605,6 +637,7 @@ export function DebateFeedPlayer({
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
           onRecovered={() => resyncSlot(1)}
+          onUnmuteRefused={video => onUnmuteRefused(video, 1)}
           onExhausted={() => void refreshSlotUrl(1)}
           onToggle={toggleFromVideo}
           claims={claimsFor(1)}
@@ -635,6 +668,7 @@ export function DebateFeedPlayer({
                   ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
                   onClick={() => {
                     measurement.control(mutedByUser ? 'unmute' : 'mute');
+                    if (mutedByUser) primeBoth();
                     setMutedByUser(current => !current);
                   }}
                   className={
@@ -664,6 +698,7 @@ export function DebateFeedPlayer({
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
           onRecovered={() => resyncSlot(2)}
+          onUnmuteRefused={video => onUnmuteRefused(video, 2)}
           onExhausted={() => void refreshSlotUrl(2)}
           onToggle={toggleFromVideo}
           claims={claimsFor(2)}
@@ -838,6 +873,7 @@ function DebaterVideo({
   isResuming,
   onPlaybackTick,
   onRecovered,
+  onUnmuteRefused,
   onExhausted,
   onToggle,
   claims,
@@ -884,6 +920,8 @@ function DebaterVideo({
   /** This tile's recording was rebuilt after its pipeline died — put it back in step with its
    * partner. See {@link MAX_MEDIA_RECOVERY_ATTEMPTS}. */
   onRecovered?: () => void;
+  /** The browser paused this element rather than let it be unmuted without a gesture. */
+  onUnmuteRefused?: (video: HTMLVideoElement) => void;
   /** Every rebuild of this recording failed — re-sign it, in case the URL is what is broken. */
   onExhausted?: () => void;
   onToggle: () => void;
@@ -935,11 +973,28 @@ function DebaterVideo({
    * This is why `playFromStart` no longer writes `muted` either. The value it has (`mutedByUser`)
    * is not the value rendered here, so repairing from the hook moved the divergence rather than
    * closing it. `muted` has one owner: this render.
+   *
+   * An unmute can be refused, and WebKit refuses by pausing the element on the spot — what a turn
+   * handoff on an iPhone met when this element had never been unmuted inside a gesture. Caught here,
+   * in the same commit, before the `pause` event reaches the playback hook and stops the debate.
+   *
+   * "Was running" comes off the element's own events rather than `paused`: React writes the `muted`
+   * prop before this effect runs, so by now a refused element already reads as paused. Its `pause`
+   * event has not been dispatched yet, which is what makes the two disagree. Only an actual
+   * muted -> unmuted transition counts, so a source swap that pauses the element is not mistaken
+   * for one.
    */
+  const runningRef = React.useRef(false);
+  const appliedMutedRef = React.useRef<boolean | null>(null);
+  const onUnmuteRefusedRef = React.useRef(onUnmuteRefused);
+  onUnmuteRefusedRef.current = onUnmuteRefused;
   React.useLayoutEffect(() => {
     const video = videoRef.current;
     if (!video || isResuming) return;
+    const unmuting = appliedMutedRef.current === true && !muted;
+    appliedMutedRef.current = muted;
     video.muted = muted;
+    if (unmuting && runningRef.current && video.paused) onUnmuteRefusedRef.current?.(video);
   }, [isResuming, muted, src, videoRef]);
 
   /**
@@ -1146,11 +1201,20 @@ function DebaterVideo({
             src={src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
-            onEnded={onPlaybackTick}
+            onEnded={() => {
+              runningRef.current = false;
+              onPlaybackTick();
+            }}
             onError={onMediaError}
             onLoadedMetadata={onPlaybackTick}
-            onPause={onPlaybackTick}
-            onPlay={onPlaybackTick}
+            onPause={() => {
+              runningRef.current = false;
+              onPlaybackTick();
+            }}
+            onPlay={() => {
+              runningRef.current = true;
+              onPlaybackTick();
+            }}
             onTimeUpdate={onPlaybackTick}
           />
         ) : (
@@ -1278,7 +1342,21 @@ function DebaterVideo({
             // The backlog is a list you have opened to scroll, and it should leave the debate
             // visible behind it — so it gives most of the picture back, and at that width the
             // dissolve at its top edge reads as the edge of a list rather than as damage.
-            claimsOpen ? 'w-[45%] md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
+            //
+            // `@min-md:` on the phone width, because `md:` here is a *custom* max-width variant and
+            // Tailwind emits custom variants after its own container queries — so a bare `md:w-[62%]`
+            // would beat the `@max-md:` sheet width below on every phone. Scoping it to a wide player
+            // keeps it exactly where it applied before: a phone-width viewport with a player of
+            // 448px or more (a tablet in portrait), and nowhere else.
+            claimsOpen ? 'w-[45%] @min-md:md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
+            // A small player (`@max-md`: a phone, or the compact gallery) opens the list as a sheet
+            // instead (GEO-3114): the live card's full width, so a claim prints whole in a few
+            // lines rather than eight at 45%, and pinned below the tile's top controls (`top-14`
+            // clears the mute control, which runs 12px to 54px on a phone) so the list can be as
+            // tall as the tile allows. It covers the face only while the viewer has it open: the
+            // chip under it ("Hide"), or a pointer leaving the tile, puts it away. The live card
+            // needs nothing here, as it docks itself to one line (see `ClaimCardSmallPanel`).
+            claimsOpen && '@max-md:top-14 @max-md:w-[calc(100%-1.75rem)]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.

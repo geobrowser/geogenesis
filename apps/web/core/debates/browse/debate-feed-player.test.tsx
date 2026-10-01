@@ -79,6 +79,9 @@ vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: vi.fn(), closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
 
+const telemetryMocks = vi.hoisted(() => ({ reportEvent: vi.fn() }));
+vi.mock('~/core/telemetry/logger', () => ({ reportEvent: telemetryMocks.reportEvent }));
+
 vi.mock('~/core/hooks/use-space', () => ({
   useSpace: () => ({ space: null }),
 }));
@@ -465,6 +468,160 @@ describe('DebateFeedPlayer repairs a mute made behind React (GEO-2947)', () => {
   });
 });
 
+/**
+ * A `<video>` that behaves the way WebKit does about sound: it may only be unmuted while it is
+ * playing if it was unmuted or played inside a user gesture at least once, and it answers any other
+ * unmute by pausing itself. `inGesture` is the test's stand-in for "a click is being handled".
+ */
+function webkitVideo(video: HTMLVideoElement, { playing = true, playRejects = false } = {}) {
+  let muted = video.muted;
+  let paused = !playing;
+  let unlocked = false;
+  const writes: boolean[] = [];
+  const plays: number[] = [];
+  Object.defineProperty(video, 'muted', {
+    configurable: true,
+    get: () => muted,
+    set: (value: boolean) => {
+      writes.push(value);
+      if (gesture.active) unlocked = true;
+      muted = value;
+      if (!value && !paused && !unlocked) paused = true;
+    },
+  });
+  Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
+  // What the player reads "was running" from; a real element would have fired it on starting.
+  if (playing) act(() => void video.dispatchEvent(new Event('play')));
+  video.play = () => {
+    plays.push(Date.now());
+    if (gesture.active) unlocked = true;
+    if (playRejects) return Promise.reject(new DOMException('not allowed', 'NotAllowedError'));
+    if (muted || unlocked) paused = false;
+    return Promise.resolve();
+  };
+  return { writes, plays, isUnlocked: () => unlocked };
+}
+
+const gesture = { active: false };
+/** A click, with the gesture open for exactly as long as its handler runs. */
+function tap(element: Element) {
+  gesture.active = true;
+  try {
+    fireEvent.click(element);
+  } finally {
+    gesture.active = false;
+  }
+}
+
+describe('sound across a turn handoff on WebKit', () => {
+  beforeEach(() => telemetryMocks.reportEvent.mockReset());
+
+  it('unlocks both recordings inside the unmute tap and leaves the non-speaker muted', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    const one = webkitVideo(slot1);
+    const two = webkitVideo(slot2);
+    const controller = mocks.controller as ReturnType<typeof controllerFixture>;
+
+    tap(within(slot1.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name: 'Unmute' }));
+
+    expect(one.isUnlocked()).toBe(true);
+    expect(two.isUnlocked()).toBe(true);
+    // Toggled and put straight back: the tap itself changes no element's mute — the render does.
+    expect(one.writes).toEqual([false, true]);
+    expect(two.writes).toEqual([false, true]);
+    expect(controller.setMutedByUser).toHaveBeenCalledTimes(1);
+
+    update({ mutedByUser: false, turnSlot: 1 });
+    expect(slot1.muted).toBe(false);
+    expect(slot2.muted).toBe(true);
+
+    // The handoff, from a media tick — no gesture — now succeeds on the element nobody tapped.
+    update({ mutedByUser: false, turnSlot: 2 });
+    expect(slot1.muted).toBe(true);
+    expect(slot2.muted).toBe(false);
+    expect(slot2.paused).toBe(false);
+    expect(telemetryMocks.reportEvent).not.toHaveBeenCalled();
+  });
+
+  it('unlocks both recordings inside a play tap', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: false, turnSlot: 1, playing: false });
+    const one = webkitVideo(slot1, { playing: false });
+    const two = webkitVideo(slot2, { playing: false });
+
+    tap(within(slot1.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name: 'Play debate' }));
+
+    expect(one.isUnlocked()).toBe(true);
+    expect(two.isUnlocked()).toBe(true);
+    expect(slot1.muted).toBe(true);
+    expect(slot2.muted).toBe(true);
+  });
+
+  it('keeps playing muted and brings back the Unmute control when the handoff unmute is refused', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: false, turnSlot: 1 });
+    // Never unmuted in a gesture: slot 1 was made audible before this test's elements existed.
+    webkitVideo(slot1);
+    const two = webkitVideo(slot2);
+    const controller = mocks.controller as ReturnType<typeof controllerFixture>;
+
+    update({ mutedByUser: false, turnSlot: 2 });
+    const next = mocks.controller as ReturnType<typeof controllerFixture>;
+
+    // Refused, so it is muted again and restarted rather than left paused and silent.
+    // React's prop write and the effect's both ask for sound; the last write takes it back.
+    expect(two.writes).toEqual([false, false, true]);
+    expect(slot2.muted).toBe(true);
+    expect(two.plays).toHaveLength(1);
+    expect(slot2.paused).toBe(false);
+    expect(next.setMutedByUser).toHaveBeenCalledWith(true);
+    expect(controller.setMutedByUser).not.toHaveBeenCalled();
+    expect(telemetryMocks.reportEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'debate_playback_unmute_refused', tags: { slot: '2' } })
+    );
+
+    // The mute is now the rendered truth, and the control to undo it is on screen.
+    update({ mutedByUser: true, turnSlot: 2 });
+    expect(slot2.muted).toBe(true);
+    expect(
+      within(slot1.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name: 'Unmute' })
+    ).toBeTruthy();
+  });
+
+  it('still asks for a tap, rather than going silent, when even the muted restart is refused', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: false, turnSlot: 1 });
+    webkitVideo(slot1);
+    const two = webkitVideo(slot2, { playRejects: true });
+
+    update({ mutedByUser: false, turnSlot: 2 });
+    const next = mocks.controller as ReturnType<typeof controllerFixture>;
+
+    expect(two.plays).toHaveLength(1);
+    // Paused and muted: the playback hook's pair check stops the debate and shows play, and the
+    // viewer's mute is recorded so the next start does not ask for sound it cannot have.
+    expect(slot2.paused).toBe(true);
+    expect(slot2.muted).toBe(true);
+    expect(next.setMutedByUser).toHaveBeenCalledWith(true);
+  });
+
+  it('changes nothing where the browser allows the unmute', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: false, turnSlot: 1 });
+    webkitVideo(slot1);
+    webkitVideo(slot2);
+    // A browser with no per-element rule: Chrome, once the page has had any gesture.
+    gesture.active = true;
+    try {
+      update({ mutedByUser: false, turnSlot: 2 });
+    } finally {
+      gesture.active = false;
+    }
+    const next = mocks.controller as ReturnType<typeof controllerFixture>;
+
+    expect(slot2.muted).toBe(false);
+    expect(slot2.paused).toBe(false);
+    expect(next.setMutedByUser).not.toHaveBeenCalled();
+    expect(telemetryMocks.reportEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe('DebateFeedPlayer media release (GEO-2963)', () => {
   it('restores both sources after the Strict Mode cleanup rehearsal', () => {
     const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 }, true);
@@ -609,6 +766,28 @@ describe('a backlog latch outliving its stack', () => {
     // Replay. The corner has no keyboard and no pointer in it, so it starts closed.
     rerender(renderAt(false));
     expect(lastOpen()).toBe(false);
+  });
+
+  /**
+   * GEO-3114. On a small player the opened list is a sheet: as wide as the live card and pinned
+   * below the tile's top controls, so a claim prints whole. Behind `@max-md:` only, so the wide
+   * panel's 45%/62% column is untouched — and only while open, so the live card keeps the corner.
+   */
+  it('turns the opened corner into a sheet on a small panel, and only the opened one', () => {
+    mocks.ticker = withCardsForSlot1();
+    const { container } = render(renderAt(false));
+    const corner = () => container.querySelector('[data-claim-corner]') as HTMLElement;
+
+    const classes = () => [...corner().classList];
+
+    expect(classes()).not.toContain('@max-md:top-14');
+    expect(classes()).toContain('w-[calc(100%-1.75rem)]');
+
+    fireEvent.click(stackIn(container) as HTMLElement);
+
+    expect(classes()).toEqual(
+      expect.arrayContaining(['w-[45%]', '@min-md:md:w-[62%]', '@max-md:top-14', '@max-md:w-[calc(100%-1.75rem)]'])
+    );
   });
 
   // The same latch, released by the same cleanup: a tile scrolled out of the preload window empties
