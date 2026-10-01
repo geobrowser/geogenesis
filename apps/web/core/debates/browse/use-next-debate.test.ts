@@ -1,8 +1,9 @@
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from '~/core/debates/api';
+import { markDebateWatched } from '~/core/debates/watched-debates';
 
 import { useNextDebate } from './use-next-debate';
 
@@ -40,8 +41,6 @@ const claimName = (id: string) => ({
 });
 
 const mocks = vi.hoisted(() => ({
-  watched: new Set<string>(),
-  reads: 0,
   keyframeInputs: [] as { relations: { spaceId: string }[] }[][],
 }));
 
@@ -79,27 +78,32 @@ vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
     isLoading: false,
   }),
 }));
-vi.mock('~/core/debates/watched-debates', () => ({
-  readWatchedDebateIds: () => {
-    mocks.reads += 1;
-    return new Set(mocks.watched);
-  },
-  markDebateWatched: vi.fn(),
-}));
 
 const debate = {
   id: 'current',
   claim: { space_id: SPACE, claim_entity_id: 'c0' },
 } as unknown as Debate;
 
+// A real Storage: the hook reads the watched list through its own module, as the player writes it.
+function installStorage() {
+  const store = new Map<string, string>();
+  Object.defineProperty(window, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, value),
+      removeItem: (key: string) => void store.delete(key),
+    },
+  });
+}
+
 describe('useNextDebate', () => {
   beforeEach(() => {
-    mocks.watched = new Set();
-    mocks.reads = 0;
+    installStorage();
   });
 
   it('offers the best-ranked debate, with its key frame and its sides from the graph', () => {
-    const { result } = renderHook(() => useNextDebate(debate, true, false));
+    const { result } = renderHook(() => useNextDebate(debate, true));
 
     expect(result.current).toMatchObject({
       debateId: 'first',
@@ -112,21 +116,27 @@ describe('useNextDebate', () => {
     });
   });
 
-  it('re-reads what has been watched when the card comes on screen, not only when it went live', () => {
-    // The player stayed mounted while the viewer finished `first` somewhere else in the feed.
-    const { result, rerender } = renderHook(({ shown }) => useNextDebate(debate, true, shown), {
-      initialProps: { shown: false },
-    });
+  it('drops a suggestion the viewer finishes elsewhere while this card stays on screen', () => {
+    // An ended card stays up as the feed scrolls on, and the debate it suggests can be finished
+    // further down. Coming back to this card must not offer it again — and nothing about this card
+    // changes in between, so only the watched list itself can say so.
+    const { result } = renderHook(() => useNextDebate(debate, true));
     expect(result.current?.debateId).toBe('first');
 
-    mocks.watched = new Set(['first']);
-    rerender({ shown: true });
+    act(() => markDebateWatched('first'));
+
+    expect(result.current?.debateId).toBe('second');
+  });
+
+  it('skips debates already watched before this one went live', () => {
+    markDebateWatched('first');
+    const { result } = renderHook(() => useNextDebate(debate, true));
 
     expect(result.current?.debateId).toBe('second');
   });
 
   it("reads the chosen debate's sides and video in this space only", () => {
-    const { result } = renderHook(() => useNextDebate(debate, true, false));
+    const { result } = renderHook(() => useNextDebate(debate, true));
 
     expect(result.current?.participants.map(participant => participant.spaceId)).toEqual(['ada-first', 'bo-first']);
     const handedToKeyframes = mocks.keyframeInputs.at(-1)!.flatMap(entity => entity.relations);
@@ -135,7 +145,7 @@ describe('useNextDebate', () => {
   });
 
   it('suggests nothing while the debate has not been live', () => {
-    const { result } = renderHook(() => useNextDebate(debate, false, false));
+    const { result } = renderHook(() => useNextDebate(debate, false));
     expect(result.current).toBeNull();
   });
 });

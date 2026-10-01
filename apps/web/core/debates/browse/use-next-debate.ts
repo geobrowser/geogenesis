@@ -10,7 +10,7 @@ import {
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
   DEBATE_TYPE_ID,
 } from '~/core/debates/ontology';
-import { readWatchedDebateIds } from '~/core/debates/watched-debates';
+import { useWatchedDebateIds } from '~/core/debates/watched-debates';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { useQueryEntities } from '~/core/sync/use-store';
 import { Entities } from '~/core/utils/entity';
@@ -49,11 +49,12 @@ const NO_RANKING: ReadonlyMap<string, number> = new Map();
  * on either page gets a cache read.
  *
  * `live` is the end card's own latch: on once the debate has been active, so the suggestion is worked
- * out while the debate plays rather than after it ends. `shown` is whether the card is on screen,
- * which is when the watched set is re-read. Recording a finished debate is the player's — see
- * `DebateFeedPlayer` — because a compact tile finishes debates without ever showing this card.
+ * out while the debate plays rather than after it ends. The watched list is subscribed to, so a
+ * debate finished anywhere drops out of the suggestion at once. Recording a finished debate is the
+ * player's — see `DebateFeedPlayer` — because a compact tile finishes debates without ever showing
+ * this card.
  */
-export function useNextDebate(debate: Debate, live: boolean, shown: boolean): NextDebate | null {
+export function useNextDebate(debate: Debate, live: boolean): NextDebate | null {
   const spaceId = normId(debate.claim.space_id);
 
   const ranking = useDebatesBestOrder(spaceId, live);
@@ -72,15 +73,9 @@ export function useNextDebate(debate: Debate, live: boolean, shown: boolean): Ne
   });
   const candidates = React.useMemo(() => nextDebateCandidates(debates, claims, spaceId), [claims, debates, spaceId]);
 
-  // Re-read when the card comes on screen as well as when the debate goes live: a player stays
-  // mounted as the feed scrolls, and a debate finished elsewhere since this one went live must not
-  // be offered here.
-  const watchedDebateIds = React.useMemo(
-    () => (live ? readWatchedDebateIds() : NO_WATCHED),
-    // `debate.id` so a player handed a different debate reads again; `shown` for the reason above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [live, shown, debate.id]
-  );
+  // Kept current rather than read once: see `useWatchedDebateIds`.
+  const watched = useWatchedDebateIds();
+  const watchedDebateIds = live ? watched : NO_WATCHED;
 
   // Held until everything the choice rests on has answered, so the suggestion isn't drawn off a
   // partial list and then swapped. A ranking that failed falls through to query order.

@@ -122,7 +122,7 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
     entity: batchPending ? null : (entities[0] ?? null),
   });
 
-  const nextDebate = useNextDebate(debate, live, shown);
+  const nextDebate = useNextDebate(debate, live);
 
   const carousel = React.useMemo<EndCardClaims>(
     () => ({

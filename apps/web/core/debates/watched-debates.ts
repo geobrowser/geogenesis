@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -41,4 +43,58 @@ export function markDebateWatched(debateId: string): void {
   } catch {
     // Quota or private mode: the next recommendation may repeat, which is all this was preventing.
   }
+  for (const listener of listeners) listener();
+}
+
+const listeners = new Set<() => void>();
+
+/**
+ * Told whenever the watched list changes — in this tab, or in another one (the `storage` event only
+ * fires for writes made elsewhere, which is exactly the half a listener here would otherwise miss).
+ */
+export function subscribeToWatchedDebates(onChange: () => void): () => void {
+  listeners.add(onChange);
+  const onStorage = (event: StorageEvent) => {
+    if (event.key === STORAGE_KEY || event.key === null) onChange();
+  };
+  window.addEventListener('storage', onStorage);
+  return () => {
+    listeners.delete(onChange);
+    window.removeEventListener('storage', onStorage);
+  };
+}
+
+/**
+ * The watched list, kept current.
+ *
+ * Subscribed rather than read at a moment of the caller's choosing: an ended end card stays on
+ * screen as the feed scrolls on, and the debate it suggests can be finished further down without
+ * anything about the card itself changing. Only the list can say so.
+ */
+export function useWatchedDebateIds(): ReadonlySet<string> {
+  return React.useSyncExternalStore(subscribeToWatchedDebates, watchedSnapshot, serverSnapshot);
+}
+
+// `useSyncExternalStore` wants the same object back until something changed, so the parsed set is
+// cached against the raw string it came from.
+let cachedRaw: string | null | undefined;
+let cachedSet: ReadonlySet<string> = new Set();
+const EMPTY: ReadonlySet<string> = new Set();
+
+function watchedSnapshot(): ReadonlySet<string> {
+  let raw: string | null;
+  try {
+    raw = window.localStorage.getItem(STORAGE_KEY);
+  } catch {
+    return EMPTY;
+  }
+  if (raw !== cachedRaw) {
+    cachedRaw = raw;
+    cachedSet = readWatchedDebateIds();
+  }
+  return cachedSet;
+}
+
+function serverSnapshot(): ReadonlySet<string> {
+  return EMPTY;
 }

@@ -41,7 +41,7 @@ const mocks = vi.hoisted(() => ({
   /** The entity each render handed the claim's own response state. */
   claimEntity: [] as unknown[],
   /** What each render asked the next-debate suggestion with. */
-  nextDebateCalls: [] as { live: boolean; shown: boolean }[],
+  nextDebateCalls: [] as { live: boolean }[],
 }));
 
 vi.mock('~/core/debates/use-debate-transcript-claims', () => ({
@@ -74,8 +74,8 @@ vi.mock('~/core/sync/use-store', () => ({
   },
 }));
 vi.mock('./use-next-debate', () => ({
-  useNextDebate: (_debate: unknown, live: boolean, shown: boolean) => {
-    mocks.nextDebateCalls.push({ live, shown });
+  useNextDebate: (_debate: unknown, live: boolean) => {
+    mocks.nextDebateCalls.push({ live });
     return null;
   },
 }));
@@ -228,16 +228,16 @@ describe('useDebateEndCard', () => {
     expect(result.current.carousel.entitiesByClaimId.get('s1')).toEqual({ id: 's1' });
   });
 
-  it('works out the next debate on the same latch as the numbers, and marks it shown with the card', () => {
+  it('works out the next debate on the same latch as the numbers', () => {
     const { rerender } = render(
       ({ enabled, shown }: { enabled: boolean; shown: boolean }) => useDebateEndCard(debate, enabled, shown),
       { enabled: true, shown: false }
     );
-    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true, shown: false });
+    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
 
     // Scrolled away with the card on screen: still live, so the suggestion doesn't vanish either.
     rerender({ enabled: false, shown: true });
-    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true, shown: true });
+    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
   });
 
   it('keeps asking once the debate has been active, so scrolling past it does not empty the card', () => {

@@ -1,6 +1,8 @@
+import { act, renderHook } from '@testing-library/react';
+
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { markDebateWatched, readWatchedDebateIds } from './watched-debates';
+import { markDebateWatched, readWatchedDebateIds, useWatchedDebateIds } from './watched-debates';
 
 // Node's own webstorage can shadow jsdom's with an object that has no methods, so the suite installs
 // a plain Map-backed Storage rather than depending on which one it gets.
@@ -63,5 +65,36 @@ describe('watched debates', () => {
     });
 
     expect(() => markDebateWatched('one')).not.toThrow();
+  });
+
+  describe('useWatchedDebateIds', () => {
+    it('updates when a debate is marked watched in this tab', () => {
+      const { result } = renderHook(() => useWatchedDebateIds());
+      expect(result.current.has('one')).toBe(false);
+
+      act(() => markDebateWatched('one'));
+
+      expect(result.current.has('one')).toBe(true);
+    });
+
+    it('updates when another tab marks one', () => {
+      const { result } = renderHook(() => useWatchedDebateIds());
+
+      // What another tab's write looks like here: the value changes underneath, then `storage` fires.
+      window.localStorage.setItem('geogenesis.debates.watched.v1', JSON.stringify(['elsewhere']));
+      act(() => {
+        window.dispatchEvent(new StorageEvent('storage', { key: 'geogenesis.debates.watched.v1' }));
+      });
+
+      expect(result.current.has('elsewhere')).toBe(true);
+    });
+
+    it('hands back the same set until the list changes, so it can sit in a dependency list', () => {
+      const { result, rerender } = renderHook(() => useWatchedDebateIds());
+      const first = result.current;
+
+      rerender();
+      expect(result.current).toBe(first);
+    });
   });
 });
