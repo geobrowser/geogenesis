@@ -6,6 +6,7 @@ import {
   hasProcessedVideo,
   pairPlayhead,
   playBothWithMutedFallback,
+  primeForSound,
   recordingWindowOffsetsSeconds,
   sortTurnSegments,
   timelineSecondsFor,
@@ -744,5 +745,39 @@ describe('turn spans', () => {
     ]);
 
     expect(spans[0]).toEqual({ index: 0, slot: 1, startSeconds: 0, endSeconds: 35 });
+  });
+});
+
+describe('primeForSound', () => {
+  function recorder(muted: boolean) {
+    const writes: boolean[] = [];
+    let value = muted;
+    return {
+      writes,
+      get muted() {
+        return value;
+      },
+      set muted(next: boolean) {
+        writes.push(next);
+        value = next;
+      },
+    };
+  }
+
+  it('unmutes a muted element inside the gesture and puts its mute straight back', () => {
+    const speaker = recorder(true);
+    const listener = recorder(true);
+    primeForSound([speaker, listener]);
+    expect(speaker.writes).toEqual([false, true]);
+    expect(listener.writes).toEqual([false, true]);
+    expect(speaker.muted).toBe(true);
+    expect(listener.muted).toBe(true);
+  });
+
+  it('leaves an already audible element audible, and skips a missing one', () => {
+    const audible = recorder(false);
+    primeForSound([audible, null]);
+    expect(audible.writes).toEqual([true, false]);
+    expect(audible.muted).toBe(false);
   });
 });
