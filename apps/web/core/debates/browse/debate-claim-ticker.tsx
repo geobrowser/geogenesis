@@ -384,7 +384,11 @@ function DebateClaimTickerCardBody({
         tone={tone}
         compactLine={line}
       />
-      <div className={cx('relative', line && '@max-md:order-2 @max-md:min-w-0 @max-md:flex-1')}>
+      {/* A flex column, so the text — or the expand toggle wrapping it — stays a blockified flex
+          item exactly as it was before this wrapper existed. In a plain block box the toggle is an
+          inline-level `<button>`, which sits on a line box of its own and adds the strut's 7px
+          under every truncated claim in the wide backlog. */}
+      <div className={cx('relative flex flex-col', line && '@max-md:order-2 @max-md:min-w-0 @max-md:flex-1')}>
         <TickerClaimText text={claim.text} tone={tone} smallPanel={smallPanel} />
         {line && onReadInFull && (
           /* The whole line is the target on a small panel, and it does not expand in place: one
