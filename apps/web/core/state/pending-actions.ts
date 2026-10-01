@@ -38,7 +38,12 @@ type RunnablePendingAction = PendingAction & { run: () => Promise<void> | void }
 /** A live handler's answer when its control unmounted before it could act: try another. */
 const HANDLER_GONE = Symbol('handler gone');
 
-type LiveHandler = (intent: string | undefined) => Promise<void | typeof HANDLER_GONE> | void;
+/**
+ * `isCurrent` says whether the queued action being replayed is still the one in the queue. A replay
+ * can wait — for a control to mount, for its data to load — and the press can be withdrawn or
+ * replaced by a newer one meanwhile; the old one must not then publish.
+ */
+type LiveHandler = (intent: string | undefined, isCurrent: () => boolean) => Promise<void | typeof HANDLER_GONE> | void;
 
 /**
  * Per action id, the handlers of the controls for it that are mounted now — the latest last.
@@ -94,10 +99,12 @@ function useLivePendingActionHandler(
   }, [ready]);
 
   useEffect(() => {
-    const live: LiveHandler = async intent => {
+    const live: LiveHandler = async (intent, isCurrent) => {
       if (!readyRef.current) {
         const outcome = await new Promise<'ready' | 'gone'>(resolve => readyWaiters.current.push(resolve));
         if (outcome === 'gone') return HANDLER_GONE;
+        // Withdrawn or replaced while it waited: done, and the replacement runs on its own.
+        if (!isCurrent()) return;
       }
       return handlerRef.current(intent);
     };
@@ -144,14 +151,16 @@ export function useEnqueuePendingAction(component: ActionComponent = 'entity_vot
       const queued: RunnablePendingAction = {
         ...action,
         run: async () => {
+          // Withdrawn, or replaced by a newer press — checked after every wait below.
+          const isCurrent = () => store.get(pendingActionsAtom).includes(queued);
           // Until a control carries it out, or none is left to and the press's own `run` does.
           for (;;) {
-            // Withdrawn, or replaced by a newer press, while it waited.
-            if (!store.get(pendingActionsAtom).includes(queued)) return;
+            if (!isCurrent()) return;
             const live = currentLiveHandler(action.id);
             if (!live && action.run) return withActionContext(context, action.run);
             const handler = live ?? (await waitForLiveHandler(action.id));
-            const outcome = await withActionContext(context, () => handler(action.intent));
+            if (!isCurrent()) return;
+            const outcome = await withActionContext(context, () => handler(action.intent, isCurrent));
             if (outcome !== HANDLER_GONE) return;
           }
         },

@@ -68,7 +68,9 @@ export function BountyInterestCard({ detail, roles }: Props) {
   // Without a space, only while one is being made — with no setup under way, nothing would publish it.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const canQueue = state === 'signed-out' || (state === 'no-personal-space' && isAccountSetupPending);
-  const showQueued = queuedInterest.queued && canQueue;
+  // Through the replay as well: once the space exists the state reads `can-apply`, and dropping the
+  // queued view there put a second live "I'm interested" beside the replay, racing it.
+  const showQueued = queuedInterest.queued && (canQueue || state === 'can-apply');
 
   const copy: Record<InterestCardState, { title: string; body: string }> = {
     'signed-out': { title: 'Want to take on this bounty?', body: 'Express interest and an editor can allocate you.' },

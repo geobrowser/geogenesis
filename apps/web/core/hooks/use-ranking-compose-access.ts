@@ -20,6 +20,19 @@ import { postOnboardingRedirectAtom } from '~/atoms/post-onboarding-redirect';
 export type RankingComposeAccessStatus =
   'loading' | 'needs-login' | 'needs-onboarding' | 'needs-membership' | 'not-found' | 'ready';
 
+/**
+ * Whether this status sends the viewer through sign-in or onboarding — and so needs a return address
+ * to come back to compose.
+ *
+ * Not while a new account's space is being created: onboarding is done and the space is on its way,
+ * so there is nothing to send them through, and a return address left set then is one
+ * `PostAuthRedirect` follows once the space registers — pulling them back to compose from wherever
+ * they went since.
+ */
+export function rankingComposeNeedsAccountStep(status: RankingComposeAccessStatus, isAccountSetupPending: boolean) {
+  return status === 'needs-login' || (status === 'needs-onboarding' && !isAccountSetupPending);
+}
+
 export function useRankingComposeAccess(spaceId: string, rankingId?: string) {
   const queryClient = useQueryClient();
   const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();

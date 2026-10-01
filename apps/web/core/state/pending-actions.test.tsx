@@ -83,6 +83,39 @@ describe('useQueuedAction', () => {
     expect(remaining).toHaveBeenCalledWith('negative');
   });
 
+  // Withdrawn or replaced while the control's data loaded: the old press must not publish, and the
+  // replacement — a different side — is what runs.
+  it('does not run a press replaced while it waited for the control to be ready', async () => {
+    const run = vi.fn();
+    const view = renderControl(run, false);
+    act(() => view.result.current.queue('positive'));
+    const first = Promise.resolve(queued()[0]!.run());
+    await Promise.resolve();
+
+    act(() => view.result.current.queue('negative'));
+    view.rerender({ ready: true, run });
+    await first;
+    expect(run).not.toHaveBeenCalled();
+
+    await queued()[0]!.run();
+    expect(run).toHaveBeenCalledOnce();
+    expect(run).toHaveBeenCalledWith('negative');
+  });
+
+  it('does not run a press withdrawn while it waited for the control to be ready', async () => {
+    const run = vi.fn();
+    const view = renderControl(run, false);
+    act(() => view.result.current.queue('positive'));
+    const running = Promise.resolve(queued()[0]!.run());
+    await Promise.resolve();
+
+    act(() => view.result.current.cancel());
+    view.rerender({ ready: true, run });
+    await running;
+
+    expect(run).not.toHaveBeenCalled();
+  });
+
   it('skips an action withdrawn while it waited', async () => {
     const run = vi.fn();
     const view = renderControl(run, false);
