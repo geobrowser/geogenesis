@@ -1,4 +1,4 @@
-import { act, render, waitFor } from '@testing-library/react';
+import { act, cleanup, render, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -104,7 +104,11 @@ beforeEach(() => {
     media(this).t = v;
   });
 });
-afterEach(() => vi.restoreAllMocks());
+afterEach(() => {
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+  cleanup();
+});
 
 function canplayAll(c: HTMLElement) {
   for (const v of Array.from(c.querySelectorAll('video')))
@@ -115,6 +119,19 @@ function canplayAll(c: HTMLElement) {
 
 // A start that comes back blocked must keep its error on screen and in the GEO-3074 outcome
 // state; re-running autoplay as the resume settles cleared it within milliseconds (GEO-3067).
+//
+// GEO-3111: this used to sample once after a fixed 2 real-second wall-clock wait, racing the
+// confirm cycle's real `setTimeout`s (`PLAY_CONFIRM_POLLS` x `PLAY_CONFIRM_INTERVAL_MS` in
+// playback-utils.ts, which resets the error and sets it again) against CI scheduling jitter — a
+// slow shard could still be between the reset and the re-set at the 2s mark.
+//
+// Fake timers looked like the fix, but proved to be the wrong tool here, confirmed by running
+// this file under real multi-process CPU contention: the component's own effect scheduling can
+// land a tick later than a synchronous `act()` guarantees, through a path `setTimeout`/
+// `setInterval` faking doesn't reach, so advancing (even via `vi.runAllTimersAsync`) can resolve
+// before the retry has actually started. `waitFor` below polls the real DOM on a real timer
+// instead of sampling once at a guessed instant, so it is insensitive to exactly when, or over
+// how many ticks, the retry gets scheduled.
 describe('DebateFeedPlayer blocked start', () => {
   it('keeps the error shown and reported while retrying', async () => {
     vi.mocked(HTMLMediaElement.prototype.play).mockImplementation(function (this: HTMLMediaElement) {
@@ -125,8 +142,24 @@ describe('DebateFeedPlayer blocked start', () => {
     const view = render(<DebateFeedPlayer debate={debate} active onPlaybackState={s => states.push(s.error)} />);
     await waitFor(() => expect(view.container.querySelectorAll('video')).toHaveLength(2));
     canplayAll(view.container);
-    await act(() => new Promise(r => setTimeout(r, 2000)));
+
+    // Poll for the end state rather than sampling once after a fixed sleep — this is what makes
+    // it immune to the original race. Generous timeout: the nominal cycle is ~300ms, but a loaded
+    // CI shard is exactly the case this has to tolerate rather than race.
+    await waitFor(
+      () => {
+        expect(view.container.textContent).toContain('Could not play both videos');
+        expect(states.at(-1)).toBe(true);
+      },
+      { timeout: 8_000 }
+    );
+
+    // And it stays up, steadily, once it has — nothing later clears it while the card is left
+    // alone (GEO-3067). A real wait here is fine: unlike the original bug, this isn't racing to
+    // land inside a narrow window, it only has to outlast one the error could wrongly disappear
+    // in, which the regression this guards against did "within milliseconds".
+    await act(() => new Promise(resolve => setTimeout(resolve, 500)));
     expect(view.container.textContent).toContain('Could not play both videos');
     expect(states.at(-1)).toBe(true);
-  }, 10000);
+  }, 15_000);
 });
