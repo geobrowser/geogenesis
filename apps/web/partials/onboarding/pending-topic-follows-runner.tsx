@@ -35,7 +35,6 @@ function withCrossTabLock(run: () => Promise<Outcome>): Promise<Outcome | null> 
 /**
  * Follows onboarding topic picks once the personal space is rendered and indexed; publishing to an
  * unindexed space shows a status-bar error. Picks persist until a follow succeeds, so reloads resume.
- * One tab at a time publishes them (see withCrossTabLock).
  */
 export function PendingTopicFollowsRunner() {
   const [picks, setPicks] = useAtom(feedTopicsAtom);
