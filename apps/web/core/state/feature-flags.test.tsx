@@ -35,6 +35,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       bountiesTab: true,
+      profilePoints: false,
     });
   });
 
@@ -52,6 +53,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       bountiesTab: true,
+      profilePoints: false,
     });
   });
 
@@ -78,6 +80,7 @@ describe('feature flags', () => {
       exploreSidePanel: false,
       forYouFeed: false,
       bountiesTab: true,
+      profilePoints: false,
     });
   });
 });
