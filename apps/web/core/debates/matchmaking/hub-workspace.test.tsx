@@ -72,9 +72,8 @@ vi.mock('./lobby-tab', () => ({
 }));
 
 vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-live-rail" /> }));
-// Both have their own suites through the side panel; here it only matters that the header draws them.
-vi.mock('./schedule-button', () => ({ ScheduleButton: () => <div data-testid="schedule-button" /> }));
-vi.mock('./availability-toggle', () => ({ AvailabilityToggle: () => <div data-testid="availability-toggle" /> }));
+// Covered through the side panel's suite; here it only matters that the header draws them.
+vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => <div data-testid="hub-header-controls" /> }));
 
 const mocks = vi.hoisted(() => ({ ready: true, authenticated: true, search: '', mounts: [] as string[] }));
 
@@ -340,7 +339,6 @@ describe('the header', () => {
     render(<DebatesHubWorkspace />);
 
     const header = screen.getByRole('heading', { name: 'Debates' }).closest('header')!;
-    expect(within(header).getByTestId('schedule-button')).toBeInTheDocument();
-    expect(within(header).getByTestId('availability-toggle')).toBeInTheDocument();
+    expect(within(header).getByTestId('hub-header-controls')).toBeInTheDocument();
   });
 });

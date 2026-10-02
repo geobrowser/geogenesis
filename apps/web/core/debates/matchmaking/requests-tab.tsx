@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { Text } from '~/design-system/text';
+import cx from 'classnames';
 
 import { useDebateActivity } from '../hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
@@ -14,6 +14,7 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
+import { RequestSection } from './request-section';
 import { ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
@@ -122,7 +123,7 @@ export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
         </HubStickyControls>
       )}
 
-      <div className={dense ? 'flex flex-col gap-3 px-4' : 'flex flex-col gap-3 px-4 py-3'}>
+      <div className={cx('flex flex-col gap-3 px-4', !dense && 'py-3')}>
         {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
             must not vanish because an unrelated read failed. */}
         <ScheduledDebatesSection content={scheduled} />
@@ -179,16 +180,5 @@ export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
         )}
       </div>
     </div>
-  );
-}
-
-function RequestSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <Text as="h3" variant="footnote" color="grey-04">
-        {label}
-      </Text>
-      {children}
-    </section>
   );
 }

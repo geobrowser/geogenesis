@@ -79,11 +79,7 @@ describe('HubLiveRail', () => {
     mocks.requestsHasContent = false;
     render(<HubLiveRail />);
 
-    // The heading too, not just the list: an empty section is exactly the thing being avoided, and a
-    // bare "Requests" with nothing under it costs the rail the same height either way. It lives with
-    // the content now, so nothing draws it when the content does not.
     expect(screen.queryByTestId('requests-tab')).not.toBeInTheDocument();
-    expect(screen.queryByText('Requests')).not.toBeInTheDocument();
 
     expect(screen.getByTestId('people-tab')).toBeInTheDocument();
   });

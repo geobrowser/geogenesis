@@ -1,11 +1,35 @@
 'use client';
 
+import * as React from 'react';
+
 import cx from 'classnames';
 
 import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
+import { ScheduleButton } from './schedule-button';
 
-/** The hub header's "I'm available" switch — drawn by both the side panel and the full-screen hub. */
-export function AvailabilityToggle() {
+/**
+ * The hub header's right-hand controls — the schedule calendar, then the "I'm available" switch —
+ * shared by the side panel and the full-screen hub so the two cannot drift apart. Both draw nothing
+ * signed out. `children` trail them: the panel's Close.
+ */
+export function HubHeaderControls({
+  scheduleButtonRef,
+  children,
+}: {
+  /** The panel's banner sends focus here when it retires. */
+  scheduleButtonRef?: React.RefObject<HTMLButtonElement | null>;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-w-0 items-center gap-1">
+      <ScheduleButton ref={scheduleButtonRef} />
+      <AvailabilityToggle />
+      {children}
+    </div>
+  );
+}
+
+function AvailabilityToggle() {
   const { authenticated } = useGeoChatAuth();
   const { data: activity } = useDebateActivity(authenticated);
   const updateAvailability = useUpdateDebateAvailability();

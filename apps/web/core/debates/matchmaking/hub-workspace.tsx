@@ -8,14 +8,13 @@ import { useSearchParams } from 'next/navigation';
 import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
-import { AvailabilityToggle } from './availability-toggle';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
+import { HubHeaderControls } from './hub-header-controls';
 import { HubLiveRail } from './hub-live-rail';
 import { HubSkeleton } from './hub-states';
 import { LobbyTab } from './lobby-tab';
-import { ScheduleButton } from './schedule-button';
 import { useHubFilterOwner } from './use-hub-filter-owner';
 import type { DebatesHubTab } from '~/atoms';
 
@@ -100,12 +99,9 @@ export function DebatesHubWorkspace() {
         <Text as="h1" variant="mainPage" color="text">
           Debates
         </Text>
-        {/* The side panel's header controls, in the same order, so being available or setting your
-            week does not mean leaving full screen for the panel. Both draw nothing signed out. */}
-        <div className="flex min-w-0 items-center gap-1">
-          <ScheduleButton />
-          <AvailabilityToggle />
-        </div>
+        {/* The side panel's controls, so going available or setting your week does not mean
+            leaving full screen for the panel. */}
+        <HubHeaderControls />
       </header>
 
       <div className="flex gap-8 px-4">

@@ -69,7 +69,7 @@ export function HubFacetRail({
     isFetchingNextPage: false,
     fetchNextPage: showMoreTopics,
     // The rail scrolls on its own, so the lead time has to be measured against it, not the page.
-    rootSelector: '[data-testid="hub-facet-rail"]',
+    rootSelector: '[data-hub-facet-rail-scroll]',
   });
 
   return (

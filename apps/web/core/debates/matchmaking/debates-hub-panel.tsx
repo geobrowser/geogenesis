@@ -22,17 +22,16 @@ import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
-import { AvailabilityToggle } from './availability-toggle';
 import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
+import { HubHeaderControls } from './hub-header-controls';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
 import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
-import { ScheduleButton } from './schedule-button';
 import { SetScheduleBanner } from './set-schedule-banner';
 import { SIGNED_OUT_TABS } from './signed-out-tabs';
 import { useDebatesHub } from './use-debates-hub';
@@ -281,9 +280,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         <Text as="h2" variant="smallTitle">
           Debates
         </Text>
-        <div className="flex min-w-0 items-center gap-1">
-          <ScheduleButton ref={scheduleButtonRef} />
-          <AvailabilityToggle />
+        <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
           {onClose ? (
             <button
               type="button"
@@ -296,7 +293,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               <CloseSmall />
             </button>
           ) : null}
-        </div>
+        </HubHeaderControls>
       </div>
 
       <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
