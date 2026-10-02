@@ -33,6 +33,10 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 }));
 
 const mocks = vi.hoisted(() => ({
+  /** GEO-3120. Claims the graph says this pair have debated, and the spaces it was asked about. */
+  pairDebatedClaimIds: [] as string[],
+  pairDebatedPending: false,
+  pairDebatedAskedFor: [] as Array<[string, string]>,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
   sourceDebateLoading: false,
   /** GEO-2758. The Related tab's discovery: the topic query and the source claim's hydration. */
@@ -799,6 +803,29 @@ vi.mock('~/core/debates/matchmaking/hooks', () => ({
   },
 }));
 
+// The pair's published debates (GEO-3120). The graph fetch is stubbed and the hook wrapped rather
+// than replaced, so its local record runs for real. The graph's answer is applied synchronously, as
+// every other lookup in these suites is: left to react-query it lands a tick after the first paint,
+// and every case that reads the page on that paint would be reading the wait instead.
+vi.mock('~/core/io/subgraph/fetch-pair-debated-claims', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/io/subgraph/fetch-pair-debated-claims')>()),
+  fetchPairDebatedClaims: (spaceIdA: string, spaceIdB: string) => {
+    mocks.pairDebatedAskedFor.push([spaceIdA, spaceIdB]);
+    return Promise.resolve([]);
+  },
+}));
+vi.mock('~/core/debates/use-pair-debated-claims', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/debates/use-pair-debated-claims')>();
+  return {
+    ...actual,
+    usePairDebatedClaims: (args: Parameters<typeof actual.usePairDebatedClaims>[0]) => {
+      const local = actual.usePairDebatedClaims(args);
+      if (mocks.pairDebatedPending) return { claimIds: local.claimIds, isLoading: true };
+      return { claimIds: new Set([...local.claimIds, ...mocks.pairDebatedClaimIds]), isLoading: false };
+    },
+  };
+});
+
 // The curated lookup has its own tests; these cover the picker around it.
 vi.mock('~/core/debates/recommended-claims', () => ({
   useRecommendedClaimSections: () => ({
@@ -877,6 +904,9 @@ function mutation(mutate = mocks.mutate) {
 }
 
 beforeEach(() => {
+  mocks.pairDebatedClaimIds = [];
+  mocks.pairDebatedPending = false;
+  mocks.pairDebatedAskedFor.length = 0;
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
   mocks.relatedEntities = [];
@@ -5621,6 +5651,36 @@ describe('the Related tab', () => {
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
   });
+
+  /**
+   * GEO-3120. The 1 Oct report: the Related tab offered a claim the pair had debated an hour
+   * earlier, with "Request debate" on it. Earlier debates are not the session's exclusions — those
+   * are the debate that opened this lobby — so they come from the pair's own history.
+   */
+  it('keeps a neighbour the pair debated earlier out of the list, and the tab with it when it was the only one', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity()];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity()];
+    mocks.pairDebatedClaimIds = [bareHex(RELATED)];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('holds the Related slot while the pair history is still coming', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity()];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity()];
+    mocks.pairDebatedPending = true;
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    // Offered, and nothing drawn as a new match before the history says whether it is one.
+    expect(screen.getByRole('button', { name: 'Related' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('A claim on the same topic')).toBeNull();
+  });
 });
 
 describe('inside a debate room', () => {
@@ -5792,5 +5852,125 @@ describe('inside a debate room', () => {
 
     await waitFor(() => expect(mocks.replace.mock.calls.length + mocks.back.mock.calls.length).toBeGreaterThan(0));
     expect(screen.queryByText('This room has closed')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-3120. Claims this pair have already debated against each other, on any day, are kept apart
+ * from the new ones: folded away under their own heading rather than offered as a fresh match, and
+ * still requestable from there, since a pair may debate a claim again (GEO-2874).
+ */
+describe('claims the pair have already debated', () => {
+  function alreadyDebatedToggle() {
+    return screen.getByRole('button', { name: /Already debated with Salina/ });
+  }
+
+  it('asks the graph about this pair, by both participants', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(mocks.pairDebatedAskedFor).toContainEqual(['profile-local', 'profile-remote']));
+  });
+
+  it('moves a claim they debated out of the Lobby and into a folded section', async () => {
+    mocks.pairDebatedClaimIds = [CLAIM_SHARED.replace(/-/g, '')];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('You and Salina have already debated every claim here.')).toBeInTheDocument();
+    const toggle = alreadyDebatedToggle();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+
+    fireEvent.click(toggle);
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Already debated')).toBeInTheDocument();
+    // Still a choice they can make.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled());
+  });
+
+  it('leaves the list alone when the pair have debated nothing on it', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull();
+  });
+
+  /**
+   * The graph learns of a debate only once it is published, about half an hour after it ends, and
+   * a pair can get through several in that time. The lobby that opens after each debate records
+   * its claim, so the next lobby knows before the graph does.
+   */
+  it('remembers the claim of an earlier lobby before the graph has it', async () => {
+    mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SHARED, space_id: SPACE_1 } };
+    const first = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    first.unmount();
+
+    // The next debate, on another claim; the graph still knows of neither.
+    mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+    mocks.session = session({ id: 'rematch-2', source_debate_id: 'debate-2' });
+    render(<DebateRematchPageClient sessionId="rematch-2" />);
+    await showOpponentClaims();
+
+    fireEvent.click(alreadyDebatedToggle());
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  // The same, without a remount: a debate room keeps the picker mounted from one session to the next.
+  it('remembers it when the page moves to the next session in place', async () => {
+    mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SHARED, space_id: SPACE_1 } };
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+    mocks.session = session({ id: 'rematch-2', source_debate_id: 'debate-2' });
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+    await showOpponentClaims();
+
+    fireEvent.click(alreadyDebatedToggle());
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  it('keeps one pair’s record from another pair', async () => {
+    mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SHARED, space_id: SPACE_1 } };
+    const first = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    first.unmount();
+
+    // Same viewer, someone else across the table.
+    const base = session({ id: 'rematch-2', source_debate_id: 'debate-2' });
+    mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
+    mocks.session = {
+      ...base,
+      participants: base.participants.map(participant =>
+        participant.user_id === 'user-remote'
+          ? { ...participant, profile_space_id: 'profile-someone-else' }
+          : participant
+      ),
+    };
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED, SPACE_1, true),
+      position('profile-someone-else', CLAIM_SHARED, SPACE_1, false),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-2" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull();
+  });
+
+  it('narrows the folded section by the search the viewer typed', async () => {
+    mocks.pairDebatedClaimIds = [CLAIM_SHARED.replace(/-/g, '')];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+    expect(alreadyDebatedToggle()).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'nothing like it' } });
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull());
   });
 });
