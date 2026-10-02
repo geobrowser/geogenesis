@@ -698,10 +698,10 @@ function PersonRow({
 
   return (
     // Three columns rather than a flex run, so the button sits in its own track instead of sharing a
-    // row box with the name — where it was the tallest thing and set the name's line height. All
-    // three tracks centre on the row: hanging them from the top clustered everything up there and
-    // left the join date trailing under an empty right-hand side.
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
+    // row box with the name — where it was the tallest thing and set the name's line height. The
+    // tracks hang from the top, so the face, the name and the button all start on one line: centred,
+    // the face and button drifted down to the middle of however many stat lines the row carried.
+    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
       {/* The dot means "can be asked now", the same as inside the claim pills, so offline and away
           rows (GEO-3119) go without it. The clip sits on the inner span: on the
           wrapper it would cut the half of the dot that hangs over the rim. */}

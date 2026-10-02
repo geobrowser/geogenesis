@@ -1241,6 +1241,7 @@ export function HubListColumns({
         aria-label="Filters"
         className="sticky top-[7.5rem] hidden max-h-[calc(100dvh-8.5rem)] w-60 shrink-0 self-start overflow-y-auto @[72rem]/hub:block"
         data-testid="hub-facet-rail"
+        data-hub-facet-rail-scroll
       >
         {rail}
       </aside>

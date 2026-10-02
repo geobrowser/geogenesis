@@ -22,8 +22,8 @@ export function HubLiveRail() {
     <div className="flex flex-col gap-6 pb-8" data-testid="hub-live-rail">
       {!ready ? null : authenticated ? (
         <>
-          <RequestsTab dense denseLabel="Requests" />
-          <RailSection label="Available now">
+          <RequestsTab dense />
+          <RailSection label="People">
             <PeopleTab dense />
           </RailSection>
         </>
@@ -52,7 +52,7 @@ function SignedOutRail() {
         </div>
       </section>
 
-      <RailSection label="Available now">
+      <RailSection label="People">
         <PeopleTab dense />
       </RailSection>
     </>

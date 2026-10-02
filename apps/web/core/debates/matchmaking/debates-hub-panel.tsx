@@ -21,17 +21,17 @@ import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle'
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
-import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
+import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
+import { HubHeaderControls } from './hub-header-controls';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
 import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
-import { ScheduleButton } from './schedule-button';
 import { SetScheduleBanner } from './set-schedule-banner';
 import { SIGNED_OUT_TABS } from './signed-out-tabs';
 import { useDebatesHub } from './use-debates-hub';
@@ -280,9 +280,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         <Text as="h2" variant="smallTitle">
           Debates
         </Text>
-        <div className="flex min-w-0 items-center gap-1">
-          <ScheduleButton ref={scheduleButtonRef} />
-          <AvailabilityToggle />
+        <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
           {onClose ? (
             <button
               type="button"
@@ -295,7 +293,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               <CloseSmall />
             </button>
           ) : null}
-        </div>
+        </HubHeaderControls>
       </div>
 
       <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
@@ -446,50 +444,5 @@ function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
         Open full screen
       </Link>
     </div>
-  );
-}
-
-function AvailabilityToggle() {
-  const { authenticated } = useGeoChatAuth();
-  const { data: activity } = useDebateActivity(authenticated);
-  const updateAvailability = useUpdateDebateAvailability();
-
-  const available = activity?.available_to_debate ?? false;
-
-  if (!authenticated) return null;
-
-  return (
-    <button
-      type="button"
-      data-geo-analytics-label="Debate availability"
-      data-geo-analytics-intent="update_debate_availability"
-      role="switch"
-      // Without this the switch announces "Unavailable, off", which is ambiguous about which way
-      // pressing it goes.
-      aria-label="Available to debate"
-      aria-checked={available}
-      disabled={updateAvailability.isPending}
-      onClick={() => updateAvailability.mutate(!available)}
-      className={cx(
-        'flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-metadataMedium transition-colors disabled:cursor-wait',
-        available ? 'bg-green/15 text-green' : 'bg-grey-01 text-grey-04'
-      )}
-    >
-      <span>{available ? "I'm available" : 'Unavailable'}</span>
-      <span
-        aria-hidden="true"
-        className={cx(
-          'relative h-4 w-6 shrink-0 rounded-full transition-colors',
-          available ? 'bg-green' : 'bg-grey-03'
-        )}
-      >
-        <span
-          className={cx(
-            'absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform',
-            available && 'translate-x-2'
-          )}
-        />
-      </span>
-    </button>
   );
 }
