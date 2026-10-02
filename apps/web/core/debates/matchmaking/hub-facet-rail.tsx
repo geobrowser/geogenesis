@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 
 import { Avatar } from '~/design-system/avatar';
@@ -16,6 +17,13 @@ import type { MatchmakingFacetCount, MatchmakingTopic } from '../api';
 
 /** Topics past this are reachable by typing rather than by scrolling a list of hundreds. */
 const TOPIC_ROWS_BEFORE_SEARCH = 12;
+
+/**
+ * Topic rows drawn at a time. The facet arrives whole — one grouped aggregate, which has no paging —
+ * and in a broad scope that is well over a thousand topics, every one of them a row. The rest are
+ * drawn as the rail is scrolled toward them; "Find a topic" still searches all of them.
+ */
+export const TOPIC_ROWS_PER_PAGE = 30;
 
 type FacetTopic = MatchmakingTopic & { count?: number };
 
@@ -51,6 +59,18 @@ export function HubFacetRail({
     if (!term) return facetTopics;
     return facetTopics.filter(topic => (topic.name ?? '').toLowerCase().includes(term));
   }, [facetTopics, topicSearch]);
+
+  const [topicRowLimit, setTopicRowLimit] = React.useState(TOPIC_ROWS_PER_PAGE);
+  const shownTopics = matchingTopics.slice(0, topicRowLimit);
+  const moreTopics = matchingTopics.length > shownTopics.length;
+  const showMoreTopics = React.useCallback(() => setTopicRowLimit(limit => limit + TOPIC_ROWS_PER_PAGE), []);
+  const topicSentinelRef = useInfiniteScrollSentinel({
+    hasNextPage: moreTopics,
+    isFetchingNextPage: false,
+    fetchNextPage: showMoreTopics,
+    // The rail scrolls on its own, so the lead time has to be measured against it, not the page.
+    rootSelector: '[data-hub-facet-rail-scroll]',
+  });
 
   return (
     <div className="flex flex-col gap-6 pb-8">
@@ -97,13 +117,17 @@ export function HubFacetRail({
             <Input
               withSearchIcon
               value={topicSearch}
-              onChange={event => setTopicSearch(event.currentTarget.value)}
+              onChange={event => {
+                setTopicSearch(event.currentTarget.value);
+                // Back to one page, so a narrowed list starts at its top.
+                setTopicRowLimit(TOPIC_ROWS_PER_PAGE);
+              }}
               placeholder="Find a topic"
               aria-label="Find a topic"
             />
           </div>
         )}
-        {matchingTopics.map(topic => (
+        {shownTopics.map(topic => (
           <FacetRow
             key={topic.id}
             label={topic.name ?? 'Topic'}
@@ -112,6 +136,9 @@ export function HubFacetRail({
             onSelect={() => onTopicToggle(topic.id)}
           />
         ))}
+        {moreTopics && (
+          <div ref={topicSentinelRef} aria-hidden="true" data-testid="topic-rows-sentinel" className="h-px" />
+        )}
       </FacetGroup>
     </div>
   );

@@ -35,6 +35,7 @@ import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
+import { RequestSection } from './request-section';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
 
@@ -76,7 +77,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   return (
     <>
       {(upcoming.length > 0 || roomsError) && (
-        <Section label="Upcoming debates">
+        <RequestSection label="Upcoming debates">
           {upcoming.map(({ room, opponentUserId, scheduledEndAt, requestId }) => (
             <UpcomingRow
               key={room.room_id}
@@ -100,11 +101,11 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
             />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
-        </Section>
+        </RequestSection>
       )}
 
       {(answerable.length > 0 || requestsError) && (
-        <Section label="Scheduled">
+        <RequestSection label="Scheduled">
           {requestsError && <ReadFailed>Could not read your scheduled debates: {requestsError.message}</ReadFailed>}
           {/* The instant cards' list, so one that expires folds away the way theirs do. */}
           <HubCardList>
@@ -125,7 +126,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               {conflict}
             </Text>
           )}
-        </Section>
+        </RequestSection>
       )}
 
       {/* The week the scheduling emails' "Choose different time" opens, in the same reschedule
@@ -566,17 +567,6 @@ function ReadFailed({ children }: { children: React.ReactNode }) {
     <Text as="p" variant="footnote" color="red-01">
       {children}
     </Text>
-  );
-}
-
-function Section({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <Text as="h3" variant="footnote" color="grey-04">
-        {label}
-      </Text>
-      {children}
-    </section>
   );
 }
 

@@ -11,6 +11,7 @@ import { useGeoChatAuth } from '../hooks';
 import { fromClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
+import { HubHeaderControls } from './hub-header-controls';
 import { HubLiveRail } from './hub-live-rail';
 import { HubSkeleton } from './hub-states';
 import { LobbyTab } from './lobby-tab';
@@ -98,6 +99,9 @@ export function DebatesHubWorkspace() {
         <Text as="h1" variant="mainPage" color="text">
           Debates
         </Text>
+        {/* The side panel's controls, so going available or setting your week does not mean
+            leaving full screen for the panel. */}
+        <HubHeaderControls />
       </header>
 
       <div className="flex gap-8 px-4">

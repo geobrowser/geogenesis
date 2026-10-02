@@ -72,6 +72,8 @@ vi.mock('./lobby-tab', () => ({
 }));
 
 vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-live-rail" /> }));
+// Covered through the side panel's suite; here it only matters that the header draws them.
+vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => <div data-testid="hub-header-controls" /> }));
 
 const mocks = vi.hoisted(() => ({ ready: true, authenticated: true, search: '', mounts: [] as string[] }));
 
@@ -328,5 +330,15 @@ describe('choosing which claim list the workspace shows', () => {
     expect(within(screen.getByTestId('claims-tab-explore')).getAllByRole('button', { name: 'Explore' })).toHaveLength(
       1
     );
+  });
+});
+
+describe('the header', () => {
+  // The side panel's controls, so full screen is not a step away from setting them.
+  it('carries the schedule calendar and the availability switch beside the title', () => {
+    render(<DebatesHubWorkspace />);
+
+    const header = screen.getByRole('heading', { name: 'Debates' }).closest('header')!;
+    expect(within(header).getByTestId('hub-header-controls')).toBeInTheDocument();
   });
 });
