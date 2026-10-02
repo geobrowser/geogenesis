@@ -705,6 +705,17 @@ describe('PeopleTab', () => {
     expect(button).toHaveClass('bg-text');
   });
 
+  // "In a debate" is a status, not the offer, so it keeps the outlined pill and its own label.
+  it('leaves the In a debate pill outlined and labelled as itself', () => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const button = screen.getByRole('button', { name: 'In a debate' });
+    expect(button).not.toHaveClass('bg-text');
+    expect(button).toHaveClass('border');
+    expect(button).toHaveAttribute('data-geo-analytics-label', 'Debate hub In a debate');
+  });
+
   // Matches the Matches tab: a request you're waiting on gets a card rather than a sentence, and
   // stays in view rather than scrolling away behind people you can no longer ask.
   it('puts a sticky card above the list for a request you sent', () => {
