@@ -454,6 +454,11 @@ export type LiveRecordingStream = {
   release: () => Promise<void>;
   /** The recording must not publish: discard the streamed parts and the local chunks. */
   abort: () => Promise<void>;
+  /**
+   * The room let go of a recording it could not finish: stop streaming, but keep the local chunks
+   * and the multipart upload for orphan recovery. Reports nothing; the recording didn't finish here.
+   */
+  detach: () => Promise<void>;
 };
 
 /**
@@ -530,6 +535,11 @@ export function startLiveRecordingStream({
       await streamer.abort();
       await writes;
       await deleteRecordingStream(id).catch(() => undefined);
+    },
+    async detach() {
+      // Stops the timer, and records a part already on the wire so recovery knows it landed.
+      await streamer.finish();
+      await writes;
     },
   };
 }

@@ -275,6 +275,40 @@ describe('debate recording streaming', () => {
     );
   });
 
+  it('stops streaming when the room lets go of a recording, and keeps it for recovery', async () => {
+    const wire = transport();
+    let wakeups = 0;
+    const live = stream.startLiveRecordingStream({
+      id: 'user-a:debate-1:1',
+      metadata: metadata(),
+      transport: {
+        ...wire,
+        startMultipart: async () => ({ filename: 'rec/1.local.webm', upload_id: 'upload-1', part_size: 5 }),
+      },
+      shouldPause: () => {
+        wakeups += 1;
+        return false;
+      },
+    });
+    live.append(new Blob(['0123456789ab']), 2_000);
+    await new Promise(resolve => setTimeout(resolve, 20));
+
+    await live.detach();
+    const atDetach = { wakeups, puts: wire.putPart.mock.calls.length };
+    // A whole part's worth more would go out at once if anything were still streaming.
+    live.append(new Blob(['cdefg']), 3_000);
+    await new Promise(resolve => setTimeout(resolve, 50));
+
+    expect(wakeups).toBe(atDetach.wakeups);
+    expect(wire.putPart).toHaveBeenCalledTimes(atDetach.puts);
+    // Left for `recoverOrphanedRecordingStreams`: the chunks, and the upload with what reached R2.
+    const saved = await stream.getRecordingStream('user-a:debate-1:1');
+    expect(saved?.byteSize).toBe(17);
+    expect(saved?.multipart).toEqual(expect.objectContaining({ uploadId: 'upload-1', uploadedPartNumbers: [1, 2] }));
+    expect(wire.abortMultipart).not.toHaveBeenCalled();
+    expect(analytics.capture).not.toHaveBeenCalledWith('debate_recording_stream_finished', expect.anything());
+  });
+
   it('uploadRemainingParts sends only the parts that did not make it out live, tail included', async () => {
     const wire = transport();
     const progress: number[] = [];
