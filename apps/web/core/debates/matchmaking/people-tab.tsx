@@ -75,6 +75,7 @@ import { type DebatesHubTab, debatesHubPeopleOnlineOnlyAtom, debatesHubPeopleSpa
 const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_MATCHES: ClaimMatch[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
+const EMPTY_USER_IDS: ReadonlySet<string> = new Set();
 
 /** Shared times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
 const INLINE_SLOTS = 3;
@@ -180,7 +181,7 @@ export function PeopleTab({
   const { offlinePeople, schedulesByUser, schedulableUserIds } = React.useMemo(() => {
     const byUser = new Map<string, PersonSchedule>();
     if (!showOffline || !schedulableQuery.data) {
-      return { offlinePeople: [], schedulesByUser: byUser, schedulableUserIds: new Set<string>() };
+      return { offlinePeople: [], schedulesByUser: byUser, schedulableUserIds: EMPTY_USER_IDS };
     }
 
     const onRoster = new Set(onlinePeople.map(person => normId(person.user_id)));
@@ -554,6 +555,7 @@ export function PeopleTab({
             ) : null}
             <ul className="flex flex-col">
               {people.map(person => {
+                const userKey = normId(person.user_id);
                 const isViewer =
                   (currentUserId !== null && person.user_id === currentUserId) ||
                   (personalSpaceId !== null && normId(person.profile_space_id) === normId(personalSpaceId));
@@ -573,8 +575,8 @@ export function PeopleTab({
                     }
                     claimNamesById={matchingClaimNamesById}
                     claimNamesLoading={matchingClaimsLoading}
-                    schedule={schedulesByUser.get(normId(person.user_id))}
-                    canScheduleAway={schedulableUserIds.has(normId(person.user_id))}
+                    schedule={schedulesByUser.get(userKey)}
+                    canScheduleAway={schedulableUserIds.has(userKey)}
                     record={records.get(person.profile_space_id) ?? null}
                     spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
                     labelsById={labelsById}
@@ -678,10 +680,12 @@ function PersonRow({
 }) {
   const createChallenge = useCreateDebateChallenge();
   // Online but away (GEO-3119): a hidden tab, or nobody at it lately. A live request would go unseen,
-  // so the row says why and offers Schedule the way an offline row does — but only when there is a
-  // week to book. Otherwise the pill just says Away until they are back.
+  // so the row offers Schedule the way an offline row does — but only when there is a week to book.
+  // Otherwise the pill says Away, the way it says In a debate, until they are back.
   const away = Boolean(person.away) && !schedule;
   const offersSchedule = Boolean(schedule) || (away && canScheduleAway);
+  // Reached only when Schedule is not offered: someone who cannot take a live request right now.
+  const unrequestable = person.in_debate || away;
   const openSchedule = (opener: HTMLElement | null) =>
     onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, 'people_schedule');
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
@@ -753,7 +757,8 @@ function PersonRow({
         )}
         {/* One compact row: debates, positions, then the viewer-relative match count. The
             latter opens the exact claims without making every person row permanently taller. */}
-        {away ? (
+        {/* Says why the pill books a time. When the pill reads Away itself, this would only repeat it. */}
+        {away && offersSchedule ? (
           <Text as="p" variant="footnote" color="grey-04">
             Away
           </Text>
@@ -822,20 +827,13 @@ function PersonRow({
           >
             Schedule
           </HubPillButton>
-        ) : away ? (
-          <HubPillButton
-            disabled
-            title={`${speakerLabel(person)} is away. You can request a debate when they're back.`}
-          >
-            Away
-          </HubPillButton>
         ) : (
           <HubPillButton
-            // Only the offer is primary. "In a debate" is a status, so it keeps the outlined pill and
-            // its own text-derived analytics label.
-            variant={person.in_debate ? 'secondary' : 'primary'}
+            // Only the offer is primary. "In a debate" and "Away" are statuses, so they keep the outlined
+            // pill and their own text-derived analytics labels.
+            variant={unrequestable ? 'secondary' : 'primary'}
             // Pinned to the old label so the analytics series survives the copy change to "Debate now".
-            analyticsLabel={person.in_debate ? undefined : 'Debate hub Request debate'}
+            analyticsLabel={unrequestable ? undefined : 'Debate hub Request debate'}
             onClick={() =>
               onRequireSignIn
                 ? onRequireSignIn({
@@ -847,25 +845,35 @@ function PersonRow({
                     { recipient_profile_space_id: person.profile_space_id },
                     {
                       // They went away after the list loaded (GEO-3119): steer to scheduling rather
-                      // than leave the press looking like it did nothing.
+                      // than leave the press looking like it did nothing. With no week to book, the
+                      // refetched list redraws them as Away instead.
                       onError: error => {
-                        if (error instanceof GeoChatRequestError && error.code === RECIPIENT_AWAY_CODE) {
+                        if (
+                          canScheduleAway &&
+                          error instanceof GeoChatRequestError &&
+                          error.code === RECIPIENT_AWAY_CODE
+                        ) {
                           openSchedule(null);
                         }
                       },
                     }
                   )
             }
-            // `in_debate` holds signed out too: it means this person is in an active debate right now,
-            // which is true of them rather than of any viewer, so signing in would not make them
-            // available. `can_challenge` and the viewer's own pending request are the viewer-relative
+            // `in_debate` and `away` hold signed out too: they describe this person rather than any
+            // viewer, so signing in would not make them available. `can_challenge` and the viewer's own pending request are the viewer-relative
             // ones, and those are what the press bypasses on its way to the sign-in.
-            disabled={person.in_debate || (!onRequireSignIn && (!person.can_challenge || disabled))}
+            disabled={unrequestable || (!onRequireSignIn && (!person.can_challenge || disabled))}
             pending={createChallenge.isPending}
             pendingLabel="Requesting…"
-            title={disabled ? disabledReason : undefined}
+            title={
+              away
+                ? `${speakerLabel(person)} is away. You can request a debate when they're back.`
+                : disabled
+                  ? disabledReason
+                  : undefined
+            }
           >
-            {person.in_debate ? 'In a debate' : 'Debate now'}
+            {person.in_debate ? 'In a debate' : away ? 'Away' : 'Debate now'}
           </HubPillButton>
         )}
       </div>

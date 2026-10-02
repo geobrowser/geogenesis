@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
-import type { DebateChallenge, DebatePerson, SchedulablePeopleResponse } from '../api';
+import { type DebateChallenge, type DebatePerson, GeoChatRequestError, type SchedulablePeopleResponse } from '../api';
 import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
@@ -1609,11 +1609,35 @@ describe('Online only', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const row = screen.getByRole('listitem');
-    expect(within(row).getByText('Away', { selector: 'p' })).toBeInTheDocument();
     expect(within(row).queryByRole('button', { name: 'Schedule a debate with Arturas' })).not.toBeInTheDocument();
-    expect(within(row).queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
+    // The pill says it, so the status line under the name does not repeat it.
+    expect(within(row).getAllByText('Away')).toHaveLength(1);
     expect(within(row).getByRole('button', { name: 'Away' })).toBeDisabled();
     expect(within(row).getByRole('button', { name: 'See times for Arturas' })).toBeEnabled();
+  });
+
+  // They went away between the list loading and the press. Their week opens only when it has times.
+  it.each([
+    [
+      'opens their week when they have times to book',
+      [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
+      true,
+    ],
+    ['leaves the week closed when they have none', [], false],
+  ])('on a refused press because they went away, %s', async (_, people, opens) => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.schedulable = { viewer_timezone: 'UTC', viewer_has_schedule: true, truncated: false, people };
+    mocks.createChallenge.mockImplementation((_request, options) =>
+      options.onError(new GeoChatRequestError('away', 'recipient_away', 409))
+    );
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
+
+    expect(mocks.createChallenge).toHaveBeenCalledTimes(1);
+    if (opens) await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    else expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
   });
 
   it('offers an away person no Schedule with Online only on', () => {
