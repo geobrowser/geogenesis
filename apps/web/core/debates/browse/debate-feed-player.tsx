@@ -113,6 +113,9 @@ type DebateFeedPlayerProps = {
   onPlaybackState?: (state: DebatePagePlayerState) => void;
 };
 
+/** The longest `activateBothInGesture` holds pause ticks while its re-plays settle. */
+const ACTIVATION_HOLD_MAX_MS = 1_500;
+
 export function DebateFeedPlayer({
   debate,
   active,
@@ -212,15 +215,40 @@ export function DebateFeedPlayer({
    * iOS only lets an element become audible from a user gesture, element by element, and refuses
    * any other unmute by pausing it. The sound moves to the other recording at each turn boundary,
    * on a media tick, so a tap that unmuted only the speaker left the next speaker's element to be
-   * refused at the handoff. A `play()` made inside a gesture lifts that restriction for the element,
-   * and on a running element it changes nothing else: no `muted` write, no event the playback hook
-   * reacts to. Measured on an iPhone: after a tap that had `play()`-ed both, the handoff was allowed.
-   * Not both unmuted at once instead: iOS then played neither audibly (#2719's first attempt).
+   * refused at the handoff. Not both unmuted at once instead: iOS then played neither audibly.
+   *
+   * It takes a real paused -> playing transition inside the gesture. A `play()` on an element that
+   * is already playing is a no-op and grants nothing (#2719, measured on an iPhone: the handoff
+   * stopped pausing, but the second speaker stayed inaudible all turn). Pausing and playing again,
+   * in the same tick, is what a pause-then-play by the viewer does, and that made them audible.
+   *
+   * `muted` is not touched. The `pause` events this queues are not the viewer pausing: by the time
+   * they are dispatched the element already reads as playing again, and the tick they would run is
+   * held until the plays settle (`activatingRef`), then run once — so a refused `play()` still
+   * reaches the pair check, which stops the debate and shows play, as it would have anyway.
    */
+  const activatingRef = React.useRef(0);
   const activateBothInGesture = () => {
-    for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
-      if (video && !video.paused) void video.play().catch(() => {});
-    }
+    const running = [slot1VideoRef.current, slot2VideoRef.current].filter(
+      (video): video is HTMLVideoElement => video !== null && !video.paused
+    );
+    if (running.length === 0) return;
+    const generation = ++activatingRef.current;
+    const plays = running.map(video => {
+      video.pause();
+      return video.play();
+    });
+    const release = () => {
+      if (activatingRef.current !== generation) return;
+      activatingRef.current = 0;
+      onPlaybackTick();
+    };
+    void Promise.allSettled(plays).then(release);
+    // A play that neither starts nor fails (a stalled load) must not hold pause ticks for good.
+    window.setTimeout(release, ACTIVATION_HOLD_MAX_MS);
+  };
+  const onPauseTick = () => {
+    if (activatingRef.current === 0) onPlaybackTick();
   };
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
@@ -620,6 +648,7 @@ export function DebateFeedPlayer({
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
+          onPauseTick={onPauseTick}
           onRecovered={() => resyncSlot(1)}
           onExhausted={() => void refreshSlotUrl(1)}
           onToggle={toggleFromVideo}
@@ -680,6 +709,7 @@ export function DebateFeedPlayer({
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
+          onPauseTick={onPauseTick}
           onRecovered={() => resyncSlot(2)}
           onExhausted={() => void refreshSlotUrl(2)}
           onToggle={toggleFromVideo}
@@ -854,6 +884,7 @@ function DebaterVideo({
   mutedByUser,
   isResuming,
   onPlaybackTick,
+  onPauseTick = onPlaybackTick,
   onRecovered,
   onExhausted,
   onToggle,
@@ -898,6 +929,8 @@ function DebaterVideo({
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
+  /** What a `pause` event runs; the player holds it while it re-plays both inside a gesture. */
+  onPauseTick?: () => void;
   /** This tile's recording was rebuilt after its pipeline died — put it back in step with its
    * partner. See {@link MAX_MEDIA_RECOVERY_ATTEMPTS}. */
   onRecovered?: () => void;
@@ -1166,7 +1199,7 @@ function DebaterVideo({
             onEnded={onPlaybackTick}
             onError={onMediaError}
             onLoadedMetadata={onPlaybackTick}
-            onPause={onPlaybackTick}
+            onPause={onPauseTick}
             onPlay={onPlaybackTick}
             onTimeUpdate={onPlaybackTick}
           />
