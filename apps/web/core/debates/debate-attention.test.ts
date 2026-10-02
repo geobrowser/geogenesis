@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  PRESENCE_HIDE_GRACE_MS,
   createDebateAttentionStore,
   createDebateConnectionPresenceStore,
   createDebateVisibilityStore,
@@ -307,11 +308,12 @@ describe('debate connection presence (GEO-2849)', () => {
   });
 });
 
-// GEO-2849 was reversed on 2026-09-23: presence reads visibility again, with a longer grace than
-// polling uses. These two facts are the whole change, and both are a one-line edit away from being
-// undone by accident — the store the hook picks, and the number. Pinned here for that reason, and
-// asserted through the hook rather than the store so a swap back cannot pass.
-describe('useDebatePresence is visibility on a three-minute grace', () => {
+// GEO-2849 was reversed on 2026-09-23: presence reads visibility again, with its own grace. GEO-3119
+// cut that grace to thirty seconds, now shorter than the sixty polling uses. Both facts are a
+// one-line edit away from being undone by accident — the store the hook picks, and the number.
+// Pinned here for that reason, and asserted through the hook rather than the store so a swap back
+// cannot pass.
+describe('useDebatePresence is visibility on a thirty-second grace', () => {
   let visibilityState: DocumentVisibilityState;
 
   beforeEach(() => {
@@ -333,17 +335,34 @@ describe('useDebatePresence is visibility on a three-minute grace', () => {
     });
   }
 
-  it('keeps a hidden tab present well past the sixty seconds polling uses, then drops it', () => {
+  it('is thirty seconds', () => {
+    expect(PRESENCE_HIDE_GRACE_MS).toBe(30_000);
+  });
+
+  it('keeps a hidden tab present through the grace, then drops it well before polling would', () => {
     const { result } = renderHook(() => useDebatePresence());
     expect(result.current).toBe(true);
 
     hide();
-    // The old grace. Dropping here would mean the hook is reading the polling store.
-    act(() => vi.advanceTimersByTime(179_000));
+    act(() => vi.advanceTimersByTime(PRESENCE_HIDE_GRACE_MS - 1_000));
     expect(result.current).toBe(true);
 
+    // Still inside the polling store's sixty seconds: dropping here proves the hook reads its own.
     act(() => vi.advanceTimersByTime(2_000));
     expect(result.current).toBe(false);
+  });
+
+  it('a tab shown again inside the grace never drops', () => {
+    const { result } = renderHook(() => useDebatePresence());
+
+    hide();
+    act(() => vi.advanceTimersByTime(10_000));
+    visibilityState = 'visible';
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    act(() => vi.advanceTimersByTime(PRESENCE_HIDE_GRACE_MS * 2));
+    expect(result.current).toBe(true);
   });
 
   // The regression that motivated the reversal: a tab that is merely open must not stay present

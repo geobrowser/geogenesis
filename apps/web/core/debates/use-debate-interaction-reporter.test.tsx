@@ -7,7 +7,7 @@ vi.mock('./api', () => ({
   reportDebateInteraction: (token: unknown, accountKey: unknown) => reportDebateInteraction(token, accountKey),
 }));
 
-const { INTERACTION_REPORT_INTERVAL_MS, useDebateInteractionReporter } =
+const { INTERACTION_REPORT_INTERVAL_MS, isMediaPlaying, useDebateInteractionReporter } =
   await import('./use-debate-interaction-reporter');
 
 const getToken = () => Promise.resolve('token');
@@ -90,5 +90,63 @@ describe('debate interaction reporter', () => {
     reportDebateInteraction.mockImplementationOnce(() => Promise.reject(new Error('offline')));
     mount();
     expect(() => interact()).not.toThrow();
+  });
+
+  // GEO-3119: three minutes without input is away, and someone watching a debate touches nothing.
+  describe('while a debate plays', () => {
+    let visibilityState: DocumentVisibilityState;
+
+    beforeEach(() => {
+      visibilityState = 'visible';
+      vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => visibilityState);
+    });
+    afterEach(() => {
+      document.body.innerHTML = '';
+      vi.restoreAllMocks();
+    });
+
+    function addVideo({ paused = false, muted = false }: { paused?: boolean; muted?: boolean } = {}) {
+      const video = document.createElement('video');
+      video.muted = muted;
+      Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
+      Object.defineProperty(video, 'ended', { configurable: true, get: () => false });
+      Object.defineProperty(video, 'readyState', { configurable: true, get: () => 4 });
+      document.body.appendChild(video);
+      return video;
+    }
+
+    it('counts visible playback as being there, muted or not', () => {
+      addVideo({ muted: true });
+      expect(isMediaPlaying(document)).toBe(true);
+      mount();
+      act(() => {
+        vi.advanceTimersByTime(INTERACTION_REPORT_INTERVAL_MS);
+      });
+      expect(reportDebateInteraction).toHaveBeenCalledTimes(1);
+      act(() => {
+        vi.advanceTimersByTime(INTERACTION_REPORT_INTERVAL_MS * 2);
+      });
+      expect(reportDebateInteraction).toHaveBeenCalledTimes(3);
+    });
+
+    it('does not count a paused video', () => {
+      addVideo({ paused: true });
+      mount();
+      act(() => {
+        vi.advanceTimersByTime(INTERACTION_REPORT_INTERVAL_MS * 3);
+      });
+      expect(reportDebateInteraction).not.toHaveBeenCalled();
+    });
+
+    // A debate left playing in a background tab has nobody watching it.
+    it('does not count playback in a hidden tab', () => {
+      addVideo();
+      visibilityState = 'hidden';
+      mount();
+      act(() => {
+        vi.advanceTimersByTime(INTERACTION_REPORT_INTERVAL_MS * 3);
+      });
+      expect(reportDebateInteraction).not.toHaveBeenCalled();
+    });
   });
 });

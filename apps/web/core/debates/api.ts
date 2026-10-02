@@ -299,6 +299,8 @@ export type DebateProfile = {
   available_to_debate: boolean;
   is_self: boolean;
   can_challenge: boolean;
+  /** Online but away for live requests (GEO-3119); see `DebatePerson.away`. */
+  away?: boolean;
 };
 
 export type DebateRematchParticipant = DebateParticipantSummary & {
@@ -452,6 +454,12 @@ export type DebateMatchmakingPresence = {
 export type DebatePerson = DebateParticipantSummary &
   DebateMatchmakingPresence & {
     can_challenge: boolean;
+    /**
+     * Online but not requestable for a live debate (GEO-3119): the tab is hidden, or nobody has used
+     * Geo in it for three minutes. The row offers Schedule instead of Request debate. Optional
+     * because an older geo-chat never lists such people at all.
+     */
+    away?: boolean;
   };
 
 export type DebatePeopleResponse = {
@@ -1009,6 +1017,31 @@ export async function reportDebateInteraction(getPrivyIdentityToken: GetPrivyIde
     auth: true,
     getPrivyIdentityToken,
     accountKey,
+  });
+}
+
+/** geo-chat's refusal for a live request to someone online but away (GEO-3119). */
+export const RECIPIENT_AWAY_CODE = 'recipient_away';
+
+export type DebateRequestReceiptKind = 'challenge' | 'claim_request';
+export type DebateRequestReceiptStage = 'delivered' | 'seen';
+
+/**
+ * Records that a live request reached this recipient's screen, or that they were there to see it
+ * (GEO-3119), so an "I never got it" can be checked against the data. Idempotent on geo-chat's side,
+ * and fire-and-forget here: a lost receipt must never get in the way of answering the request.
+ */
+export async function reportDebateRequestReceipt(
+  receipt: { kind: DebateRequestReceiptKind; request_id: string; stage: DebateRequestReceiptStage },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<void>('/me/debate-request-receipts', {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    body: receipt,
   });
 }
 

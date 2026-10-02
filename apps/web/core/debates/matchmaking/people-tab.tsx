@@ -26,7 +26,13 @@ import { AvailabilityModal } from '~/partials/availability/availability-modal';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
 import { activeDebate } from '../activity-state';
-import type { DebatePerson, SchedulablePerson, ScheduleOverlapSlot } from '../api';
+import {
+  type DebatePerson,
+  GeoChatRequestError,
+  RECIPIENT_AWAY_CODE,
+  type SchedulablePerson,
+  type ScheduleOverlapSlot,
+} from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import {
   useCreateDebateChallenge,
@@ -169,8 +175,8 @@ export function PeopleTab({
     return () => clearInterval(interval);
   }, [showOffline]);
 
-  // Anyone already on the roster is requestable now, so they keep their online row. Someone who is
-  // online but off the roster (unavailable, tab hidden) still cannot take a request, so they stay here.
+  // Anyone on the roster keeps their roster row: requestable now, or online but away (GEO-3119), which
+  // the row draws with Schedule. Someone online but off the roster (unavailable) stays here.
   const { offlinePeople, schedulesByUser } = React.useMemo(() => {
     const byUser = new Map<string, PersonSchedule>();
     if (!showOffline || !schedulableQuery.data) return { offlinePeople: [], schedulesByUser: byUser };
@@ -343,7 +349,8 @@ export function PeopleTab({
       .map((person, index) => ({
         person,
         index,
-        online: person.online ? 1 : 0,
+        // Away people sort with the offline: neither can be asked right now.
+        online: person.online && !person.away ? 1 : 0,
         matchCount: matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
       }))
       .sort(
@@ -660,6 +667,11 @@ function PersonRow({
   ) => void;
 }) {
   const createChallenge = useCreateDebateChallenge();
+  // Online but away (GEO-3119): a hidden tab, or nobody at it lately. A live request would go unseen,
+  // so the row offers Schedule the way an offline row does, and says why.
+  const away = Boolean(person.away) && !schedule;
+  const openSchedule = (opener: HTMLElement | null) =>
+    onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, 'people_schedule');
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const activeSpaces =
     spaceIds.length > 0 ? (
@@ -690,9 +702,8 @@ function PersonRow({
     // three tracks centre on the row: hanging them from the top clustered everything up there and
     // left the join date trailing under an empty right-hand side.
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-center gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
-      {/* Everyone in this list is online by definition — the tab is "everyone online and available
-          right now" — so the dot needs no condition, and it ties the faces here to the ones inside
-          the claim pills, which mean the same thing. The clip sits on the inner span: on the
+      {/* The dot means "can be asked now", the same as inside the claim pills, so offline and away
+          rows (GEO-3119) go without it. The clip sits on the inner span: on the
           wrapper it would cut the half of the dot that hangs over the rim. */}
       <div className="relative h-8 w-8 shrink-0">
         <div className="h-8 w-8 overflow-hidden rounded-full">
@@ -701,7 +712,7 @@ function PersonRow({
         {/* The face here is 32px, twice the claim pills', so the dot is twice theirs: 8px of green
             in a 4px ring. It carried the pills' 8px dot before, which on a face this size read as
             a speck rather than a badge. */}
-        {schedule ? null : <OnlineDot faceSize={32} />}
+        {schedule || away ? null : <OnlineDot faceSize={32} />}
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.
@@ -730,6 +741,11 @@ function PersonRow({
         )}
         {/* One compact row: debates, positions, then the viewer-relative match count. The
             latter opens the exact claims without making every person row permanently taller. */}
+        {away ? (
+          <Text as="p" variant="footnote" color="grey-04">
+            Away
+          </Text>
+        ) : null}
         {record || activeSpaces || match ? (
           <div className="flex min-w-0 flex-col gap-0.5">
             <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
@@ -756,7 +772,7 @@ function PersonRow({
             is next free. Gating it on the same reasons would hide it at the moment it earns its
             place. Signed out it opens Privy like the pill does, because the endpoint behind it is
             viewer-scoped and would only 401. */}
-        {!schedule && (
+        {!schedule && !away && (
           <button
             type="button"
             // Every row carries this control, so the visible label alone leaves a screen reader or
@@ -783,16 +799,14 @@ function PersonRow({
             <Calendar />
           </button>
         )}
-        {schedule ? (
-          // Offline people cannot take a request, so the pill books a time instead. Never disabled by
-          // the viewer's live request state, for the same reason "See times" is not.
+        {schedule || away ? (
+          // Offline and away people cannot take a live request, so the pill books a time instead.
+          // Never disabled by the viewer's live request state, for the same reason "See times" is not.
           <HubPillButton
             aria-label={`Schedule a debate with ${speakerLabel(person)}`}
             analyticsLabel="Debate hub Schedule debate"
             analyticsIntent="open_peer_availability"
-            onClick={event =>
-              onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, event.currentTarget, 'people_schedule')
-            }
+            onClick={event => openSchedule(event.currentTarget)}
           >
             Schedule
           </HubPillButton>
@@ -805,7 +819,18 @@ function PersonRow({
                     target_type: 'space',
                     auth_control: 'start_debate',
                   })
-                : createChallenge.mutate({ recipient_profile_space_id: person.profile_space_id })
+                : createChallenge.mutate(
+                    { recipient_profile_space_id: person.profile_space_id },
+                    {
+                      // They went away after the list loaded (GEO-3119): steer to scheduling rather
+                      // than leave the press looking like it did nothing.
+                      onError: error => {
+                        if (error instanceof GeoChatRequestError && error.code === RECIPIENT_AWAY_CODE) {
+                          openSchedule(null);
+                        }
+                      },
+                    }
+                  )
             }
             // `in_debate` holds signed out too: it means this person is in an active debate right now,
             // which is true of them rather than of any viewer, so signing in would not make them

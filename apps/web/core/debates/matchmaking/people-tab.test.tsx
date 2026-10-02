@@ -1551,6 +1551,27 @@ describe('Online only', () => {
     expect(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
   });
 
+  // GEO-3119: online but away (a hidden tab, or nobody at it lately). Listed, so the sender knows they
+  // exist, but a live request would go unseen, so the row says Away and offers Schedule.
+  it('draws an away person as Away, with Schedule instead of Request debate', async () => {
+    mocks.people = [
+      { ...person('user-them', 'Arturas'), away: true, can_challenge: false },
+      person('user-other', 'Vytautas'),
+    ];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const rows = screen.getAllByRole('listitem');
+    expect(within(rows[0]).getByText('Vytautas')).toBeInTheDocument();
+    expect(within(rows[0]).getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    expect(within(rows[1]).getByText('Arturas')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Away')).toBeInTheDocument();
+    expect(within(rows[1]).queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
   it('leaves hidden accounts off the list, online or offline', () => {
     // Dashed on purpose: geo-chat can spell a space id either way.
     mocks.people = [
