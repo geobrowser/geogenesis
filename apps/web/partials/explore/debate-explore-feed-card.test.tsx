@@ -535,6 +535,54 @@ describe('DebateExploreFeedCard', () => {
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
   });
 
+  // One shared claims panel for the feed — opening Claims on a second card must replace the first,
+  // not stack a second identical overlay behind it.
+  it('replaces the open claims panel when a second card opens one', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+
+    render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+          <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+
+    // Both cards offer the control, which is the precondition the bug needed.
+    const claimsButtons = screen.queryAllByRole('button', { name: /^Claims/ });
+    expect(claimsButtons).toHaveLength(2);
+
+    fireEvent.click(claimsButtons[0]);
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
+
+    fireEvent.click(claimsButtons[1]);
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(1);
+  });
+
+  // And closing it leaves the feed with none, rather than uncovering the one it replaced.
+  it('leaves no claims panel open after closing the one that replaced another', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+
+    render(
+      <QueryClientProvider client={client}>
+        <Provider>
+          <DebateExploreFeedCard item={item} fallback={<div />} />
+          <DebateExploreFeedCard item={{ ...item, entityId: 'debate-two' }} fallback={<div />} />
+        </Provider>
+      </QueryClientProvider>
+    );
+    intersectAll(0.7);
+
+    for (const button of screen.queryAllByRole('button', { name: /^Claims/ })) fireEvent.click(button);
+    fireEvent.click(screen.getByText('Close'));
+
+    expect(screen.queryAllByTestId('claims-panel')).toHaveLength(0);
+  });
+
   /**
    * The open flags live on the card now, not in a subtree that unmounts with the player, so the
    * panel they control must not be gated on the media window the way the controls are. Scrolling

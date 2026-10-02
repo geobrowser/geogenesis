@@ -1,10 +1,10 @@
 'use client';
 
-import { useAtom } from 'jotai';
+import { useAtomValue, useSetAtom } from 'jotai';
 
 import { useActionContext } from '~/core/action-context-provider';
 
-import { type EntitySidePanelTarget, entitySidePanelAtom } from '~/atoms';
+import { type EntitySidePanelTarget, entitySidePanelAtom, openEntitySidePanelAtom } from '~/atoms';
 
 export type OpenSidePanelOptions = Pick<
   EntitySidePanelTarget,
@@ -13,7 +13,9 @@ export type OpenSidePanelOptions = Pick<
 
 export function useEntitySidePanel() {
   const getContext = useActionContext('entity_vote_buttons', 'entity', '');
-  const [target, setTarget] = useAtom(entitySidePanelAtom);
+
+  const target = useAtomValue(entitySidePanelAtom);
+  const setTarget = useSetAtom(openEntitySidePanelAtom);
 
   const openSidePanel = (
     entityId: string,
