@@ -329,7 +329,8 @@ export class RecordingPartStreamer {
     } finally {
       if (this.inFlight === step) this.inFlight = null;
     }
-    this.schedule(0);
+    // Only while a whole part is waiting; otherwise the next `append` schedules the pump.
+    if (this.nextPartNumber() !== null) this.schedule(0);
   }
 
   private async start(): Promise<void> {
