@@ -23,6 +23,10 @@ const mocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
   lockRequest: vi.fn(),
   markUploaded: vi.fn(),
+  markFailed: vi.fn(),
+  readRecording: vi.fn(),
+  retryFailed: vi.fn(),
+  retryNow: vi.fn(),
   observer: null as null | ((uploads: DebateRecordingUpload[]) => void),
   queue: [] as DebateRecordingUpload[],
   resolveUser: vi.fn(),
@@ -134,6 +138,33 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
     mocks.observer?.(mocks.queue);
   },
   getDebateRecordingUpload: (id: string) => mocks.getUpload(id),
+  readDebateRecordingUploadBlob: (upload: DebateRecordingUpload) => mocks.readRecording(upload),
+  markDebateRecordingUploadFailed: async (id: string, reason: string, error: unknown) => {
+    await mocks.markFailed(id, reason, error);
+    mocks.queue = mocks.queue.map(upload =>
+      upload.id === id
+        ? {
+            ...upload,
+            failedAt: Date.now(),
+            failedReason: reason as DebateRecordingUpload['failedReason'],
+            lastError: error instanceof Error ? error.message : 'Recording upload failed.',
+          }
+        : upload
+    );
+    mocks.observer?.(mocks.queue);
+  },
+  retryFailedDebateRecordingUpload: async (id: string) => {
+    await mocks.retryFailed(id);
+    mocks.queue = mocks.queue.map(upload =>
+      upload.id === id
+        ? { ...upload, failedAt: null, failedReason: null, attemptCount: 0, nextAttemptAt: Date.now(), lastError: null }
+        : upload
+    );
+    mocks.observer?.(mocks.queue);
+  },
+  retryDebateRecordingUploadNow: async (id: string) => {
+    await mocks.retryNow(id);
+  },
   markDebateRecordingUploaded: async (id: string, filename: string) => {
     await mocks.markUploaded(id, filename);
     mocks.queue = mocks.queue.map(upload =>
@@ -221,6 +252,10 @@ beforeEach(() => {
   mocks.invalidateQueries.mockReset();
   mocks.lockRequest.mockReset().mockImplementation(async (_name, _options, callback) => callback({ name: 'lock' }));
   mocks.markUploaded.mockReset().mockResolvedValue(undefined);
+  mocks.markFailed.mockReset().mockResolvedValue(undefined);
+  mocks.readRecording.mockReset().mockImplementation(async (upload: DebateRecordingUpload) => upload.blob);
+  mocks.retryFailed.mockReset().mockResolvedValue(undefined);
+  mocks.retryNow.mockReset().mockResolvedValue(undefined);
   mocks.observer = null;
   mocks.queue = [];
   mocks.resolveUser.mockReset().mockResolvedValue('user-a');
@@ -539,7 +574,11 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
+    // GEO-3116: kept, not deleted, and shown to the person.
+    await waitFor(() =>
+      expect(mocks.markFailed).toHaveBeenCalledWith(uploadId('debate-1'), 'retries_exhausted', expect.any(TypeError))
+    );
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
     expect(mocks.scheduleRetry).not.toHaveBeenCalled();
     expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_failed', {
       debate_id: 'debate-1',
@@ -552,7 +591,9 @@ describe('DebateRecordingUploadCoordinator', () => {
       error_message: 'Load failed',
     });
     expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_retry_scheduled', expect.anything());
-    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    expect(await screen.findByText('1 debate didn’t upload')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();
     // And it is not attempted again, even though the row's own backoff says "due".
     await new Promise(resolve => setTimeout(resolve, 100));
     expect(mocks.completeUpload).toHaveBeenCalledOnce();
@@ -590,13 +631,141 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
-    // Tried first: age alone never discards a recording.
+    await waitFor(() =>
+      expect(mocks.markFailed).toHaveBeenCalledWith(uploadId('debate-1'), 'retries_exhausted', expect.anything())
+    );
+    // Tried first: age alone never stops a recording.
     expect(mocks.createUpload).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_recording_upload_failed',
       expect.objectContaining({ attempt_count: 1, terminal_reason: 'retries_exhausted' })
     );
+  });
+
+  // GEO-3116. A copy this browser cannot read is never going to upload. It used to fail as a
+  // network error ("Load failed") for 30 attempts; now it stops at the first and says so.
+  it('stops at once, and offers help, when this browser cannot read its copy of the recording', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { RecordingUploadError } = await import('./recording-upload-errors');
+    mocks.readRecording.mockRejectedValue(
+      new RecordingUploadError('This browser can no longer read its saved copy of the recording.', 'blob_unreadable')
+    );
+    mocks.thankingDebateId = null;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.markFailed).toHaveBeenCalledWith(uploadId('debate-1'), 'blob_unreadable', expect.anything())
+    );
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+    expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_failed',
+      expect.objectContaining({ attempt_count: 1, terminal_reason: 'blob_unreadable', error_code: 'blob_unreadable' })
+    );
+    expect(
+      await screen.findByText('1 debate didn’t upload — this browser lost its copy of the recording')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Get help' })).toBeInTheDocument();
+  });
+
+  it('shows the failure even when the queue cannot record it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { RecordingUploadError } = await import('./recording-upload-errors');
+    mocks.readRecording.mockRejectedValue(new RecordingUploadError('gone', 'blob_unreadable'));
+    mocks.markFailed.mockImplementation(async () => {
+      throw new Error('Error modifying one or more objects');
+    });
+    mocks.thankingDebateId = null;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText(/1 debate didn’t upload/)).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mocks.readRecording).toHaveBeenCalledOnce();
+  });
+
+  it('puts a failed upload back in the queue from the banner', async () => {
+    mocks.thankingDebateId = null;
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS,
+        failedAt: Date.now() - 1_000,
+        failedReason: 'retries_exhausted',
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(mocks.retryFailed).toHaveBeenCalledWith(uploadId('debate-1')));
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('does not attempt a failed upload on startup until asked', async () => {
+    mocks.thankingDebateId = null;
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        failedAt: Date.now() - 1_000,
+        failedReason: 'retries_exhausted',
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('1 debate didn’t upload')).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    // Dismissing hides the notice; it never discards the recording.
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+  });
+
+  it('offers to retry now after a few failed attempts, and skips the backoff when asked', async () => {
+    mocks.thankingDebateId = null;
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        attemptCount: 3,
+        nextAttemptAt: Date.now() + 5 * 60_000,
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(
+      await screen.findByText('Waiting to upload 1 debate — Load failed. Retrying automatically.')
+    ).toBeInTheDocument();
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+    expect(mocks.retryNow).toHaveBeenCalledWith(uploadId('debate-1'));
+  });
+
+  it('does not offer to retry now after a single failure', async () => {
+    mocks.thankingDebateId = null;
+    mocks.queue = [
+      { ...queuedRecording('debate-1'), attemptCount: 1, nextAttemptAt: Date.now() + 60_000, lastError: 'Load failed' },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText(/Retrying automatically/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry now' })).not.toBeInTheDocument();
   });
 
   it('never sends a filename, URL or signature in upload failure properties', async () => {

@@ -48,13 +48,19 @@ import {
 } from './recording-upload-errors';
 import {
   type DebateRecordingUpload,
+  type RecordingUploadTerminalReason,
   debateRecordingUploadId,
   deleteDebateRecordingUpload,
   enqueueDebateRecordingUpload,
   getDebateRecordingUpload,
+  isDebateRecordingUploadFailed,
+  markDebateRecordingUploadFailed,
   markDebateRecordingUploaded,
   observeDebateRecordingUploads,
+  readDebateRecordingUploadBlob,
   requeueDebateRecordingParts,
+  retryDebateRecordingUploadNow,
+  retryFailedDebateRecordingUpload,
   scheduleDebateRecordingRetry,
   setDebateRecordingMultipart,
 } from './recording-upload-queue';
@@ -121,12 +127,22 @@ export function recordingUploadRetriesExhausted(attemptCount: number, createdAt:
   return attemptCount >= MAX_RECORDING_UPLOAD_ATTEMPTS || now - createdAt >= MAX_RECORDING_UPLOAD_AGE_MS;
 }
 
+export type { RecordingUploadTerminalReason } from './recording-upload-queue';
+
 /**
- * Why an upload stopped for good, on `debate_recording_upload_failed`. Only `rejected` and
- * `retries_exhausted` are this device failing to deliver a recording; `opponent_cancelled` is a
- * cancellation, and a failure rate excludes it.
+ * After this many failed attempts the banner offers to retry now rather than leaving the person to
+ * wait out the backoff (GEO-3116). Three is about 35 seconds of failing: past a blip.
  */
-export type RecordingUploadTerminalReason = 'rejected' | 'retries_exhausted' | 'opponent_cancelled';
+export const RECORDING_UPLOAD_RETRY_NOW_AFTER_ATTEMPTS = 3;
+
+/** How long a failed upload, bytes and all, is kept for the person to retry before it is cleared. */
+export const FAILED_RECORDING_UPLOAD_KEEP_MS = 30 * 24 * 60 * 60_000;
+
+/**
+ * Where "Get help" goes when a recording cannot be uploaded. Geo's public Discord, as linked from
+ * geobrowser.io; there is no support address in the app.
+ */
+export const DEBATE_RECORDING_HELP_URL = 'https://discord.gg/Hcng2pURZ';
 
 /** Where a cancellation was asked for: the thank-you card's Publish switch, or the upload banner. */
 type RecordingCancelSource = 'thanking_toggle' | 'upload_banner';
@@ -139,6 +155,11 @@ type RecordingUploadDependencies = {
   markUploaded: (id: string, filename: string) => Promise<void>;
   completeUpload: (debateId: string, request: LocalRecordingCompleteRequest) => Promise<unknown>;
   deleteUpload: (id: string) => Promise<void>;
+  /**
+   * The recording's bytes, in memory (GEO-3116). Read only when there is something to send. Without
+   * it the row's own `blob` is used, as rows carried before GEO-3116.
+   */
+  readRecording?: (upload: DebateRecordingUpload) => Promise<Blob>;
   /** GEO-2955: the parts of a recording that was streamed during the debate. */
   getPartUrls?: (
     debateId: string,
@@ -161,9 +182,10 @@ export async function processDebateRecordingUpload(
   let filename = upload.filename;
   let multipart = streamedMultipart(upload, dependencies);
   if (upload.stage === 'queued' || !filename) {
+    const blob = await recordingBlob(upload, dependencies);
     if (multipart) {
       try {
-        await sendRemainingParts(upload, multipart, dependencies);
+        await sendRemainingParts(upload, blob, multipart, dependencies);
         filename = multipart.filename;
       } catch (error) {
         // A geo-chat that has lost the multipart routes since the debate started. The recording
@@ -179,7 +201,7 @@ export async function processDebateRecordingUpload(
         mime_type: upload.mimeType,
         started_at_ms: startedAtMs,
       });
-      await dependencies.putRecording(target.upload, upload.blob, upload.mimeType);
+      await dependencies.putRecording(target.upload, blob, upload.mimeType);
       filename = target.filename;
     }
     await dependencies.markUploaded(upload.id, filename!);
@@ -213,6 +235,12 @@ export async function processDebateRecordingUpload(
   await dependencies.deleteUpload(upload.id);
 }
 
+async function recordingBlob(upload: DebateRecordingUpload, dependencies: RecordingUploadDependencies): Promise<Blob> {
+  if (dependencies.readRecording) return dependencies.readRecording(upload);
+  if (upload.blob) return upload.blob;
+  throw new RecordingUploadError('This browser no longer has a copy of the recording.', 'blob_unreadable');
+}
+
 /** The streamed upload to finish, when this row has one and the transport to finish it. */
 function streamedMultipart(
   upload: DebateRecordingUpload,
@@ -224,12 +252,13 @@ function streamedMultipart(
 
 async function sendRemainingParts(
   upload: DebateRecordingUpload,
+  blob: Blob,
   multipart: StreamedRecordingMultipart,
   dependencies: RecordingUploadDependencies
 ) {
   const progress = { ...multipart, uploadedPartNumbers: [...multipart.uploadedPartNumbers] };
   await uploadRemainingParts(
-    upload.blob,
+    blob,
     multipart,
     {
       getPartUrls: (partFilename, uploadId, partNumbers) =>
@@ -314,9 +343,32 @@ export function DebateRecordingUploadCoordinator() {
     },
     [cancelledDebateIds, normalizedThankingDebateId, thankingDebate?.recordingCancelled]
   );
+  // What this tab has decided about an upload's failure since the row was last read (GEO-3116): a
+  // reason when it stopped retrying, `null` when the person asked to retry. It decides on its own
+  // when the row could not be written — a pre-GEO-3116 Safari row can fail every write.
+  const [localFailures, setLocalFailures] = React.useState<ReadonlyMap<string, RecordingUploadTerminalReason | null>>(
+    () => new Map()
+  );
+  const [failedNoticeDismissed, setFailedNoticeDismissed] = React.useState(false);
+  const failureReasonOf = React.useCallback(
+    (upload: DebateRecordingUpload): RecordingUploadTerminalReason | null => {
+      if (localFailures.has(upload.id)) return localFailures.get(upload.id) ?? null;
+      return isDebateRecordingUploadFailed(upload) ? (upload.failedReason ?? 'retries_exhausted') : null;
+    },
+    [localFailures]
+  );
   const publishableUploads = React.useMemo(
     () => uploads.filter(upload => !isUploadCancelled(upload)),
     [isUploadCancelled, uploads]
+  );
+  // Uploads still being attempted, and ones that stopped for good and wait on the person.
+  const activeUploads = React.useMemo(
+    () => publishableUploads.filter(upload => failureReasonOf(upload) === null),
+    [failureReasonOf, publishableUploads]
+  );
+  const failedUploads = React.useMemo(
+    () => publishableUploads.filter(upload => failureReasonOf(upload) !== null),
+    [failureReasonOf, publishableUploads]
   );
   // The thank-you card carries the publish opt-out while it is on screen, so the banner doesn't
   // draw a second control for the same debate (GEO-2773). It still speaks for that debate's
@@ -331,6 +383,8 @@ export function DebateRecordingUploadCoordinator() {
   // Keyed by upload id. Read on every scheduling decision, so a failed write-back cannot turn the
   // backoff into a hot loop. See `recordingUploadDueAt`.
   const backoffRef = React.useRef(new Map<string, RecordingUploadBackoff>());
+  // Uploads the person asked to retry now: due whatever their backoff or row says.
+  const retryNowRef = React.useRef(new Set<string>());
   const mountedRef = React.useRef(true);
   const identityAttemptsRef = React.useRef(0);
 
@@ -447,6 +501,17 @@ export function DebateRecordingUploadCoordinator() {
     }
   }, [isUploadCancelled, uploads]);
 
+  // A failed upload keeps its bytes so the person can retry it, but not forever.
+  React.useEffect(() => {
+    const now = Date.now();
+    for (const upload of uploads) {
+      if (typeof upload.failedAt !== 'number' || now - upload.failedAt < FAILED_RECORDING_UPLOAD_KEEP_MS) continue;
+      void deleteDebateRecordingUpload(upload.id).catch(error =>
+        console.warn('[DebateRecordingUploadCoordinator] could not clear an old failed upload:', error)
+      );
+    }
+  }, [uploads]);
+
   React.useEffect(() => {
     const handleOnline = () => {
       setOnline(true);
@@ -471,22 +536,25 @@ export function DebateRecordingUploadCoordinator() {
   }, [userId]);
 
   React.useEffect(() => {
-    if (activeUploadId || publishableUploads.length === 0) return;
+    if (activeUploadId || activeUploads.length === 0) return;
     const nextAttemptAt = Math.min(
-      ...publishableUploads.map(upload => recordingUploadDueAt(upload, backoffRef.current.get(upload.id)))
+      ...activeUploads.map(upload => recordingUploadDueAt(upload, backoffRef.current.get(upload.id)))
     );
     const delay = Math.max(0, nextAttemptAt - Date.now());
     if (delay === 0) return;
     const timer = window.setTimeout(() => setWakeAt(Date.now()), delay);
     return () => window.clearTimeout(timer);
-  }, [activeUploadId, publishableUploads]);
+  }, [activeUploadId, activeUploads]);
 
   React.useEffect(() => {
     if (!userId || !online || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
-    const upload = publishableUploads.find(
-      candidate => recordingUploadDueAt(candidate, backoffRef.current.get(candidate.id)) <= Date.now()
+    const upload = activeUploads.find(
+      candidate =>
+        retryNowRef.current.has(candidate.id) ||
+        recordingUploadDueAt(candidate, backoffRef.current.get(candidate.id)) <= Date.now()
     );
     if (!upload) return;
+    const retryRequested = retryNowRef.current.delete(upload.id);
 
     activeUploadIdRef.current = upload.id;
     setActiveUploadId(upload.id);
@@ -496,17 +564,23 @@ export function DebateRecordingUploadCoordinator() {
     const backoffs = backoffRef.current;
     let attemptStage = upload.stage;
     let attemptCount = Math.max(upload.attemptCount, backoffs.get(upload.id)?.attemptCount ?? 0);
-    let attemptCreatedAt = upload.createdAt;
+    let attemptCreatedAt = upload.retriesStartedAt ?? upload.createdAt;
     void withRecordingUploadLock(async () => {
       const latestUpload = await getDebateRecordingUpload(upload.id);
       if (!latestUpload || latestUpload.userId !== userId) return;
       attemptStage = latestUpload.stage;
       attemptCount = Math.max(latestUpload.attemptCount, backoffs.get(upload.id)?.attemptCount ?? 0);
-      attemptCreatedAt = latestUpload.createdAt;
+      attemptCreatedAt = latestUpload.retriesStartedAt ?? latestUpload.createdAt;
       // The row this was picked from can be a stale report of one already pushed back. Hold off
-      // until it is due, and remember that here, or the stale report picks it again at once.
-      if (latestUpload.nextAttemptAt > Date.now()) {
+      // until it is due, and remember that here, or the stale report picks it again at once. A retry
+      // the person asked for goes ahead regardless: their row may not have taken the new time.
+      if (!retryRequested && latestUpload.nextAttemptAt > Date.now()) {
         backoffs.set(upload.id, { attemptCount, nextAttemptAt: latestUpload.nextAttemptAt });
+        return;
+      }
+      if (!retryRequested && isDebateRecordingUploadFailed(latestUpload)) {
+        // Stopped for good in another tab since this one last looked; it waits on the person.
+        backoffs.set(upload.id, { attemptCount, nextAttemptAt: Number.POSITIVE_INFINITY });
         return;
       }
       await processDebateRecordingUpload(latestUpload, {
@@ -541,24 +615,31 @@ export function DebateRecordingUploadCoordinator() {
         // is the last straw. Never a filename, a URL or media content: see the classifier.
         const errorProperties = recordingUploadErrorProperties(error, { online });
         const permanent = isPermanentRecordingUploadError(error);
+        // This browser's copy of the recording cannot be read (GEO-3116). No retry can change that,
+        // so it stops at once rather than after thirty attempts and two and a half hours.
+        const unreadable = !permanent && errorProperties.error_code === 'blob_unreadable';
         // A failure the browser itself puts down to being offline is never the last straw: the
         // connection coming back is exactly what a retry is for.
         const exhausted =
           !permanent &&
+          !unreadable &&
           errorProperties.error_code !== 'offline' &&
           recordingUploadRetriesExhausted(failedAttemptCount, attemptCreatedAt);
-        // Drop the local blob for failures no retry can fix (see the permanent codes above), and for
-        // ones that have been retried past the bound, instead of leaving the banner up forever.
-        if (permanent || exhausted) {
-          // The recording is dropped here and never retried, so this is the one place a lost upload
-          // can be counted. `recording_cancelled` arrives here too — the opponent's cancellation
-          // reaching this device, which the canceller's own event does not see — and is marked as
-          // such so it is never read as this device failing.
+        // Stop for failures no retry can fix, and for ones retried past the bound, instead of
+        // leaving the banner up forever. What the server refused is dropped; what this device could
+        // not deliver is kept, for the person to see and retry (GEO-3116).
+        if (permanent || exhausted || unreadable) {
+          // The upload is never retried automatically after this, so this is the one place a lost
+          // upload can be counted. `recording_cancelled` arrives here too — the opponent's
+          // cancellation reaching this device, which the canceller's own event does not see — and
+          // is marked as such so it is never read as this device failing.
           const terminalReason: RecordingUploadTerminalReason = isRecordingCancelledElsewhereError(error)
             ? 'opponent_cancelled'
-            : exhausted
-              ? 'retries_exhausted'
-              : 'rejected';
+            : unreadable
+              ? 'blob_unreadable'
+              : exhausted
+                ? 'retries_exhausted'
+                : 'rejected';
           capture('debate_recording_upload_failed', {
             debate_id: upload.debateId,
             stage: attemptStage,
@@ -566,19 +647,28 @@ export function DebateRecordingUploadCoordinator() {
             terminal_reason: terminalReason,
             ...errorProperties,
           });
-          if (exhausted) {
-            console.warn('[DebateRecordingUploadCoordinator] giving up on upload after repeated failures:', {
+          if (!permanent) {
+            console.warn('[DebateRecordingUploadCoordinator] stopped retrying upload:', {
               uploadId: upload.id,
               debateId: upload.debateId,
               stage: attemptStage,
               attemptCount: failedAttemptCount,
+              terminalReason,
               error,
             });
-          }
-          try {
-            await deleteDebateRecordingUpload(upload.id);
-          } catch (queueError) {
-            console.warn('[DebateRecordingUploadCoordinator] could not delete unpublishable upload:', queueError);
+            if (mountedRef.current) setLocalFailures(current => new Map(current).set(upload.id, terminalReason));
+            if (mountedRef.current) setFailedNoticeDismissed(false);
+            try {
+              await markDebateRecordingUploadFailed(upload.id, terminalReason, error);
+            } catch (queueError) {
+              console.warn('[DebateRecordingUploadCoordinator] could not mark upload failed:', queueError);
+            }
+          } else {
+            try {
+              await deleteDebateRecordingUpload(upload.id);
+            } catch (queueError) {
+              console.warn('[DebateRecordingUploadCoordinator] could not delete unpublishable upload:', queueError);
+            }
           }
           // Kept even if the delete failed: this upload is never to be attempted again.
           backoffs.set(upload.id, { attemptCount: failedAttemptCount, nextAttemptAt: Number.POSITIVE_INFINITY });
@@ -618,20 +708,19 @@ export function DebateRecordingUploadCoordinator() {
           setWakeAt(Date.now());
         }
       });
-  }, [accountKey, activeUploadId, getPrivyIdentityToken, online, publishableUploads, queryClient, userId, wakeAt]);
+  }, [accountKey, activeUploadId, activeUploads, getPrivyIdentityToken, online, queryClient, userId, wakeAt]);
 
   // The upload in flight can be one already withdrawn — the cancellation lands while its request
   // is still running — so an id alone doesn't mean the banner has anything to report as moving.
-  const uploadActive = activeUploadId !== null && publishableUploads.some(upload => upload.id === activeUploadId);
+  const uploadActive = activeUploadId !== null && activeUploads.some(upload => upload.id === activeUploadId);
   // Uploads run one at a time, so an upload in flight that isn't a publishable one means every
   // recording left is queued behind it — waiting, whatever their backoff says. The backoff check
   // only decides the case where nothing is uploading at all: then a recording past its next
   // attempt is about to start, and one still backing off is not.
   const waiting =
     !online ||
-    (!uploadActive &&
-      (activeUploadId !== null || publishableUploads.every(upload => upload.nextAttemptAt > Date.now())));
-  const latestFailedUpload = publishableUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
+    (!uploadActive && (activeUploadId !== null || activeUploads.every(upload => upload.nextAttemptAt > Date.now())));
+  const latestFailedUpload = activeUploads.reduce<DebateRecordingUpload | null>((latest, upload) => {
     if (!upload.lastError) return latest;
     return !latest || upload.updatedAt > latest.updatedAt ? upload : latest;
   }, null);
@@ -679,10 +768,20 @@ export function DebateRecordingUploadCoordinator() {
   // Everything still on its way out of this browser, counted as debates rather than queue rows.
   // The thank-you recording is counted before it reaches IndexedDB — persisting the blob takes a
   // moment and the banner has to be up for the whole thank-you period, not from partway through.
-  const pendingUploadCount = publishableUploads.length + (thankingRecordingPending ? 1 : 0);
+  const pendingUploadCount = activeUploads.length + (thankingRecordingPending ? 1 : 0);
   // The one pending recording has not reached the queue yet, so there is no queue state to
   // describe — neither "uploading" nor "waiting" is true of it.
-  const preparingOnly = thankingRecordingPending && publishableUploads.length === 0;
+  const preparingOnly = thankingRecordingPending && activeUploads.length === 0;
+  // Still failing after a few goes: offer to try now instead of waiting out the backoff. The tab's
+  // own count is read too, since a row that cannot be written never counts up.
+  const failingAttempts = latestFailedUpload
+    ? Math.max(latestFailedUpload.attemptCount, backoffRef.current.get(latestFailedUpload.id)?.attemptCount ?? 0)
+    : 0;
+  const canRetryNow =
+    online && waitingReason === 'retry' && failingAttempts >= RECORDING_UPLOAD_RETRY_NOW_AFTER_ATTEMPTS;
+  const failedNotice = failedUploads.length > 0 && !failedNoticeDismissed;
+  // A failure is retryable unless the copy itself is gone; then all that is left is to get help.
+  const failedRetryable = failedUploads.some(upload => failureReasonOf(upload) !== 'blob_unreadable');
 
   // The thank-you card draws the opt-out now, so tell it what there is to offer. Published in a
   // layout effect for the same reason the room publishes its side in one: the control and the
@@ -736,8 +835,8 @@ export function DebateRecordingUploadCoordinator() {
   );
 
   // When the banner is showing upload progress, its percentage covers every queued recording.
-  const queuedBytes = publishableUploads.reduce((total, upload) => total + upload.byteSize, 0);
-  const transferredBytes = publishableUploads.reduce((transferred, upload) => {
+  const queuedBytes = activeUploads.reduce((total, upload) => total + upload.byteSize, 0);
+  const transferredBytes = activeUploads.reduce((transferred, upload) => {
     if (upload.stage === 'uploaded') return transferred + upload.byteSize;
     // A streamed recording arrives with most of its bytes already out, and a multipart attempt
     // reports whole parts; count whichever is further along.
@@ -855,7 +954,41 @@ export function DebateRecordingUploadCoordinator() {
     }
   }, [cancelTargetDebateId, cancellableDebateId, uploadedDebateIds, uploads]);
 
-  const bannerVisible = pendingUploadCount > 0 || bannerThankingUploadFinished;
+  const retryNow = React.useCallback(() => {
+    for (const upload of activeUploads) {
+      const backoff = backoffRef.current.get(upload.id);
+      if (!upload.lastError && !backoff) continue;
+      // Due now, but the attempts made so far still count towards the bound.
+      backoffRef.current.set(upload.id, {
+        attemptCount: Math.max(upload.attemptCount, backoff?.attemptCount ?? 0),
+        nextAttemptAt: 0,
+      });
+      retryNowRef.current.add(upload.id);
+      void retryDebateRecordingUploadNow(upload.id).catch(error =>
+        console.warn('[DebateRecordingUploadCoordinator] could not bring the retry forward:', error)
+      );
+    }
+    setWakeAt(Date.now());
+  }, [activeUploads]);
+
+  const retryFailed = React.useCallback(() => {
+    const retried = failedUploads.filter(upload => failureReasonOf(upload) !== 'blob_unreadable');
+    for (const upload of retried) {
+      backoffRef.current.delete(upload.id);
+      retryNowRef.current.add(upload.id);
+      void retryFailedDebateRecordingUpload(upload.id).catch(error =>
+        console.warn('[DebateRecordingUploadCoordinator] could not requeue a failed upload:', error)
+      );
+    }
+    setLocalFailures(current => {
+      const next = new Map(current);
+      for (const upload of retried) next.set(upload.id, null);
+      return next;
+    });
+    setWakeAt(Date.now());
+  }, [failedUploads, failureReasonOf]);
+
+  const bannerVisible = pendingUploadCount > 0 || bannerThankingUploadFinished || failedNotice;
   // The banner sits on the bottom edge of the viewport across its full width, so anything else
   // anchored down there — the assistant launcher and its panel, bottom-opening dropdowns — has to
   // clear it by exactly the banner's height, which both read from `DEBATE_UPLOAD_BANNER_HEIGHT_PX`.
@@ -878,6 +1011,10 @@ export function DebateRecordingUploadCoordinator() {
           percent={uploadPercent}
           waitingReason={waitingReason}
           errorMessage={latestFailedUpload?.lastError ?? null}
+          onRetryNow={canRetryNow ? retryNow : undefined}
+          failedCount={failedNotice ? failedUploads.length : 0}
+          onRetryFailed={failedRetryable ? retryFailed : undefined}
+          onDismissFailed={() => setFailedNoticeDismissed(true)}
           canCancel={!cardOwnsPublishControl && cancellableDebateId !== null && !cancelPromptOpen}
           onCancel={() => {
             cancelSourceRef.current = 'upload_banner';
@@ -907,6 +1044,10 @@ export function DebateRecordingUploadBanner({
   percent = null,
   waitingReason,
   errorMessage,
+  onRetryNow,
+  failedCount = 0,
+  onRetryFailed,
+  onDismissFailed,
   canCancel,
   onCancel,
 }: {
@@ -918,12 +1059,27 @@ export function DebateRecordingUploadBanner({
   percent?: number | null;
   waitingReason: DebateRecordingUploadWaitingReason;
   errorMessage: string | null;
+  /** Offered once a pending upload has failed a few times (GEO-3116): skips the rest of the backoff. */
+  onRetryNow?: () => void;
+  /** Uploads that stopped retrying and wait on the person (GEO-3116). Shown once nothing is pending. */
+  failedCount?: number;
+  /** Absent when no failed upload can be retried, because this browser lost its copy. */
+  onRetryFailed?: () => void;
+  onDismissFailed?: () => void;
   canCancel: boolean;
   onCancel: () => void;
 }) {
   const label = `${count} debate${count === 1 ? '' : 's'}`;
+  // The failure notice speaks only when nothing is still on its way out: a moving queue is the
+  // more urgent thing to say ("keep browser open"), and the notice returns once it is done.
+  const showFailed = failedCount > 0 && count === 0 && !(thankingUploadFinished && count === 0);
   let message: string;
-  if (thankingUploadFinished && count === 0) {
+  if (showFailed) {
+    const failedLabel = `${failedCount} debate${failedCount === 1 ? '' : 's'}`;
+    message = onRetryFailed
+      ? `${failedLabel} didn’t upload`
+      : `${failedLabel} didn’t upload — this browser lost its copy of the recording`;
+  } else if (thankingUploadFinished && count === 0) {
     // Nothing left on the wire, and the thank-you debate can still be withdrawn — so the line
     // belongs to the Cancel action beside it. A queue that is still moving outranks it: that is
     // the one thing on screen telling the user this tab still has work to finish.
@@ -993,18 +1149,43 @@ export function DebateRecordingUploadBanner({
             />
           </div>
         )}
-        {(showKeepBrowserOpen || canCancel) && (
+        {(showKeepBrowserOpen || canCancel || showFailed || onRetryNow) && (
           <div
             className={cx('flex max-w-full min-w-0 shrink-0 items-center gap-2', showProgress && 'justify-self-start')}
           >
             {showKeepBrowserOpen && <span className="min-w-0 truncate">Keep browser open</span>}
-            {canCancel && (
-              <SmallButton
-                type="button"
-                variant="ghost"
-                onClick={onCancel}
-                className="shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none focus-visible:border-white focus-visible:shadow-none"
+            {!showFailed && onRetryNow && (
+              <SmallButton type="button" variant="ghost" onClick={onRetryNow} className={bannerButtonClassName}>
+                Retry now
+              </SmallButton>
+            )}
+            {showFailed && onRetryFailed && (
+              <SmallButton type="button" variant="ghost" onClick={onRetryFailed} className={bannerButtonClassName}>
+                Retry
+              </SmallButton>
+            )}
+            {showFailed && (
+              <a
+                href={DEBATE_RECORDING_HELP_URL}
+                target="_blank"
+                rel="noreferrer"
+                className="shrink-0 underline underline-offset-2 hover:text-grey-02"
               >
+                Get help
+              </a>
+            )}
+            {showFailed && onDismissFailed && (
+              <button
+                type="button"
+                aria-label="Dismiss"
+                onClick={onDismissFailed}
+                className="grid size-4 shrink-0 place-items-center rounded-full hover:bg-white/10"
+              >
+                <CloseSmall />
+              </button>
+            )}
+            {canCancel && (
+              <SmallButton type="button" variant="ghost" onClick={onCancel} className={bannerButtonClassName}>
                 Cancel
               </SmallButton>
             )}
@@ -1014,6 +1195,9 @@ export function DebateRecordingUploadBanner({
     </div>
   );
 }
+
+const bannerButtonClassName =
+  'shrink-0 bg-transparent! text-white! hover:border-transparent hover:bg-white/10! hover:text-white! hover:shadow-none focus-visible:border-white focus-visible:shadow-none';
 
 export function DebateCancelUploadDialog({
   busy,
@@ -1099,6 +1283,7 @@ function recordingUploadDependencies(
     completeUpload: (debateId, request) =>
       completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     deleteUpload: deleteDebateRecordingUpload,
+    readRecording: readDebateRecordingUploadBlob,
     getPartUrls: (debateId, filename, uploadId, partNumbers) =>
       getLocalRecordingPartUrls(
         debateId,

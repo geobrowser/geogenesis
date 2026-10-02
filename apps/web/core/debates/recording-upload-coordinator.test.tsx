@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
 import {
+  DEBATE_RECORDING_HELP_URL,
   DebateCancelUploadDialog,
   DebateRecordingUploadBanner,
   isPermanentRecordingUploadError,
@@ -62,7 +63,7 @@ describe('debate recording uploader', () => {
       'debate-1',
       expect.objectContaining({
         filename: 'recordings/debate-1/recording.webm',
-        byte_size: upload.blob.size,
+        byte_size: upload.byteSize,
         started_at_ms: 1_000,
         ended_at_ms: 11_000,
         framerate: 29.97,
@@ -121,6 +122,41 @@ describe('debate recording uploader', () => {
 
     expect(dependencies.markUploaded).toHaveBeenCalledOnce();
     expect(dependencies.deleteUpload).not.toHaveBeenCalled();
+  });
+
+  // GEO-3116. The bytes are read when there is something to send, not from the row.
+  it('sends the recording it reads, not the row’s own blob', async () => {
+    const stored = new Blob(['from storage'], { type: 'video/webm' });
+    const readRecording = vi.fn().mockResolvedValue(stored);
+    const dependencies = { ...uploadDependencies(), readRecording };
+
+    await processDebateRecordingUpload({ ...queuedRecording(), blob: undefined, storage: 'chunks' }, dependencies);
+
+    expect(readRecording).toHaveBeenCalledOnce();
+    expect(dependencies.putRecording).toHaveBeenCalledWith(expect.anything(), stored, 'video/webm');
+  });
+
+  it('does not read the recording to finish one already uploaded', async () => {
+    const readRecording = vi.fn();
+    const dependencies = { ...uploadDependencies(), readRecording };
+
+    await processDebateRecordingUpload(
+      { ...queuedRecording(), stage: 'uploaded', filename: 'recordings/debate-1/recording.webm' },
+      dependencies
+    );
+
+    expect(readRecording).not.toHaveBeenCalled();
+    expect(dependencies.completeUpload).toHaveBeenCalledOnce();
+  });
+
+  it('fails as blob_unreadable, sending nothing, when there is no copy to send', async () => {
+    const dependencies = uploadDependencies();
+
+    await expect(
+      processDebateRecordingUpload({ ...queuedRecording(), blob: undefined, storage: 'memory' }, dependencies)
+    ).rejects.toMatchObject({ code: 'blob_unreadable' });
+    expect(dependencies.createUpload).not.toHaveBeenCalled();
+    expect(dependencies.putRecording).not.toHaveBeenCalled();
   });
 
   describe('a recording streamed during the debate (GEO-2955)', () => {
@@ -235,6 +271,87 @@ describe('debate recording uploader', () => {
 });
 
 describe('DebateRecordingUploadBanner', () => {
+  // GEO-3116: an upload that stopped retrying is shown, not dropped silently.
+  it('says a debate did not upload, with retry, help and dismiss', () => {
+    const retry = vi.fn();
+    const dismiss = vi.fn();
+    render(
+      <DebateRecordingUploadBanner
+        count={0}
+        waitingReason={null}
+        errorMessage={null}
+        failedCount={1}
+        onRetryFailed={retry}
+        onDismissFailed={dismiss}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('1 debate didn’t upload')).toBeInTheDocument();
+    expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();
+    expect(screen.queryByRole('progressbar')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Get help' })).toHaveAttribute('href', DEBATE_RECORDING_HELP_URL);
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(retry).toHaveBeenCalledOnce();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(dismiss).toHaveBeenCalledOnce();
+  });
+
+  it('offers only help when this browser lost its copy of the recording', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={0}
+        waitingReason={null}
+        errorMessage={null}
+        failedCount={1}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(
+      screen.getByText('1 debate didn’t upload — this browser lost its copy of the recording')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Get help' })).toBeInTheDocument();
+  });
+
+  it('reports a moving queue over an earlier failure', () => {
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason={null}
+        errorMessage={null}
+        failedCount={1}
+        onRetryFailed={() => undefined}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.queryByText(/didn’t upload/)).not.toBeInTheDocument();
+  });
+
+  it('offers to retry now once a pending upload keeps failing', () => {
+    const retryNow = vi.fn();
+    render(
+      <DebateRecordingUploadBanner
+        count={1}
+        waitingReason="retry"
+        errorMessage="Load failed"
+        onRetryNow={retryNow}
+        canCancel={false}
+        onCancel={() => undefined}
+      />
+    );
+
+    expect(screen.getByText('Waiting to upload 1 debate — Load failed. Retrying automatically.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+    expect(retryNow).toHaveBeenCalledOnce();
+  });
+
   it('shows the upload and publishing state with determinate progress and a cancel action', () => {
     const cancel = vi.fn();
     render(

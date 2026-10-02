@@ -55,7 +55,10 @@ export type DebateRecordingStream = {
 export type DebateRecordingChunk = {
   streamId: string;
   seq: number;
-  blob: Blob;
+  /** The timeslice's bytes. Stored as an `ArrayBuffer`, not a `Blob`, for Safari (GEO-3116). */
+  data?: ArrayBuffer;
+  /** Chunks written before GEO-3116. */
+  blob?: Blob;
 };
 
 export type RecordingStreamMetadata = Pick<
@@ -89,10 +92,12 @@ export async function appendRecordingChunk(
   blob: Blob,
   chunkAtMs: number
 ): Promise<void> {
+  // Read before the transaction opens: it would commit at a non-IndexedDB `await` inside it.
+  const data = await blob.arrayBuffer();
   await db.transaction('rw', db.debateRecordingStreams, db.debateRecordingChunks, async () => {
     const stream = await db.debateRecordingStreams.get(streamId);
     if (!stream) return;
-    await db.debateRecordingChunks.put({ streamId, seq, blob });
+    await db.debateRecordingChunks.put({ streamId, seq, data });
     await db.debateRecordingStreams.update(streamId, {
       byteSize: stream.byteSize + blob.size,
       chunkCount: Math.max(stream.chunkCount, seq + 1),
@@ -121,7 +126,7 @@ export async function listRecordingStreams(userId: string): Promise<DebateRecord
 export async function readRecordingStreamBlob(stream: DebateRecordingStream): Promise<Blob> {
   const chunks = await db.debateRecordingChunks.where('streamId').equals(stream.id).sortBy('seq');
   return new Blob(
-    chunks.map(chunk => chunk.blob),
+    chunks.map(chunk => chunk.data ?? chunk.blob ?? new ArrayBuffer(0)),
     { type: stream.mimeType }
   );
 }
