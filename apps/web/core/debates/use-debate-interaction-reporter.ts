@@ -20,6 +20,20 @@ export const INTERACTION_REPORT_INTERVAL_MS = 30_000;
 const INTERACTION_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'] as const;
 
 /**
+ * Moving the mouse counts too. Without it someone reading a claim or a profile with the mouse in
+ * hand went Away three minutes after their last click and back the moment they clicked, which on
+ * everyone else's People list read as rows flickering between online and away (2026-10-02).
+ *
+ * Only a trusted move that actually moved: browsers can dispatch pointer events when content shifts
+ * under a cursor that has not moved, and an abandoned tab must not keep itself present that way.
+ */
+export function isHumanPointerMove(event: Event): boolean {
+  if (!event.isTrusted) return false;
+  const { movementX, movementY } = event as PointerEvent;
+  return (movementX ?? 0) !== 0 || (movementY ?? 0) !== 0;
+}
+
+/**
  * Is a video or audio element playing in this document? Muted counts: watching a debate with the
  * sound off is still watching.
  */
@@ -89,6 +103,10 @@ export function useDebateInteractionReporter(
     for (const eventName of INTERACTION_EVENTS) {
       window.addEventListener(eventName, onInteraction, { passive: true, capture: true });
     }
+    const onPointerMove = (event: Event) => {
+      if (isHumanPointerMove(event)) onInteraction();
+    };
+    window.addEventListener('pointermove', onPointerMove, { passive: true, capture: true });
     const watching = window.setInterval(() => {
       if (document.visibilityState === 'visible' && isMediaPlaying(document)) onInteraction();
     }, INTERACTION_REPORT_INTERVAL_MS);
@@ -102,6 +120,7 @@ export function useDebateInteractionReporter(
       for (const eventName of INTERACTION_EVENTS) {
         window.removeEventListener(eventName, onInteraction, { capture: true });
       }
+      window.removeEventListener('pointermove', onPointerMove, { capture: true });
     };
   }, [enabled]);
 }

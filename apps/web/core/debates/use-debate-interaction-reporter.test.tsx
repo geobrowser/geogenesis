@@ -7,7 +7,7 @@ vi.mock('./api', () => ({
   reportDebateInteraction: (token: unknown, accountKey: unknown) => reportDebateInteraction(token, accountKey),
 }));
 
-const { INTERACTION_REPORT_INTERVAL_MS, isMediaPlaying, useDebateInteractionReporter } =
+const { INTERACTION_REPORT_INTERVAL_MS, isHumanPointerMove, isMediaPlaying, useDebateInteractionReporter } =
   await import('./use-debate-interaction-reporter');
 
 const getToken = () => Promise.resolve('token');
@@ -17,6 +17,23 @@ const interact = () =>
   act(() => {
     window.dispatchEvent(new Event('pointerdown'));
   });
+
+describe('isHumanPointerMove', () => {
+  const move = (init: Partial<{ isTrusted: boolean; movementX: number; movementY: number }>) =>
+    ({ isTrusted: false, movementX: 0, movementY: 0, ...init }) as unknown as Event;
+
+  it('counts a trusted move that actually moved', () => {
+    expect(isHumanPointerMove(move({ isTrusted: true, movementX: 3 }))).toBe(true);
+    expect(isHumanPointerMove(move({ isTrusted: true, movementY: -1 }))).toBe(true);
+  });
+
+  // Content shifting under a still cursor can dispatch a move with no movement; an abandoned tab
+  // must not keep itself present that way.
+  it('ignores a move with no movement, and any untrusted move', () => {
+    expect(isHumanPointerMove(move({ isTrusted: true }))).toBe(false);
+    expect(isHumanPointerMove(move({ isTrusted: false, movementX: 5 }))).toBe(false);
+  });
+});
 
 describe('debate interaction reporter', () => {
   beforeEach(() => {
@@ -33,6 +50,14 @@ describe('debate interaction reporter', () => {
 
   // The ranking matters most in the seconds after someone comes back, so the first click reports
   // at once rather than up to the throttle interval later.
+  it('does not report a scripted pointer move', () => {
+    mount();
+    act(() => {
+      window.dispatchEvent(new MouseEvent('pointermove', { movementX: 4 } as MouseEventInit));
+    });
+    expect(reportDebateInteraction).not.toHaveBeenCalled();
+  });
+
   it('reports the first interaction immediately', () => {
     mount();
     expect(reportDebateInteraction).not.toHaveBeenCalled();
