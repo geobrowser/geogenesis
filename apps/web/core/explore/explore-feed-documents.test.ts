@@ -7,6 +7,7 @@ import { exploreCompleteIndexDocument } from './explore-complete-index-document'
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
 import { exploreRelationIndexDocument } from './explore-relation-index-document';
+import { exploreTopicFeedConnectionDocument } from './explore-topic-feed-document';
 
 function operation(doc: DocumentNode): OperationDefinitionNode {
   const op = doc.definitions.find(d => d.kind === Kind.OPERATION_DEFINITION);
@@ -66,6 +67,8 @@ describe('explore feed documents', () => {
     // The type-filtered Best path renders the same card through the same decoder, so a
     // field missing here would be a card that quietly differs only when a type is ticked.
     expect(nodeFieldNames(exploreBestByTypeConnectionDocument)).toEqual(forNew);
+    // A topic page's Best and New (GEO-3092) fall back to the complete population per window.
+    expect(nodeFieldNames(exploreTopicFeedConnectionDocument)).toEqual(forNew);
     expect(forNew).toContain('name');
     expect(forNew).toContain('createdAt');
   });

@@ -40,6 +40,7 @@ export async function GET(request: Request) {
       requireName: true,
       entityFilter: topicFeedFilter(topicId, selectedTopicIds),
       completePopulationScopes,
+      topicFeedTopicIds: [topicId, ...selectedTopicIds],
     });
     return NextResponse.json(result);
   } catch (error) {

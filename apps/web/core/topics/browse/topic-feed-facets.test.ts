@@ -23,6 +23,8 @@ const TOPIC_C = 'cccccccccccccccccccccccccccccccc';
 
 const mocks = vi.hoisted(() => ({
   calls: [] as Array<{ operation: string | undefined; variables: Record<string, any> }>,
+  /** gaia's grouped type counts, or `fail` for an API without them. */
+  typeCounts: 'fail' as 'fail' | Array<{ typeId: string; entityCount: string | number }>,
 }));
 
 vi.mock('~/core/io/queries', async () => {
@@ -72,6 +74,10 @@ vi.mock('~/core/io/graphql-client', async () => {
           })
         );
       }
+      if (operation?.name?.value === 'TopicFeedTypeCounts') {
+        if (mocks.typeCounts === 'fail') throw new Error('Cannot query field "topicFeedTypeCounts"');
+        return Effect.succeed(decoder({ topicFeedTypeCounts: mocks.typeCounts }));
+      }
       if (operation?.name?.value === 'SpaceTopicFeedTypeCounts') {
         return Effect.succeed(
           decoder({ t0: { totalCount: '888' }, t1: { totalCount: 35 }, t2: null, t3: { totalCount: 'nope' } })
@@ -86,6 +92,7 @@ const spaceIds = ['11111111111111111111111111111111'];
 
 beforeEach(() => {
   mocks.calls = [];
+  mocks.typeCounts = 'fail';
   clearSpaceTopicCaches();
 });
 
@@ -157,7 +164,42 @@ describe('fetchTopicFeedFacets', () => {
 });
 
 describe('fetchTopicFeedCompositionCounts', () => {
-  it('counts every selected type from the same compact population the feed orders', async () => {
+  it("reads gaia's grouped counts for the page topic, absent types as zero", async () => {
+    mocks.typeCounts = [
+      { typeId: CLAIM_TYPE_ID, entityCount: '7854' },
+      { typeId: DEBATE_TYPE_ID, entityCount: 12 },
+    ];
+    const expected = emptyTopicFeedCompositionCounts();
+    expected.typeCounts[CLAIM_TYPE_ID] = 7854;
+    expected.typeCounts[DEBATE_TYPE_ID] = 12;
+
+    await expect(fetchTopicFeedCompositionCounts({ spaceIds, topicId: PAGE_TOPIC })).resolves.toEqual(expected);
+
+    expect(mocks.calls.map(call => call.operation)).toEqual(['TopicFeedTypeCounts']);
+    expect(mocks.calls[0]?.variables).toEqual({
+      topicIds: [PAGE_TOPIC],
+      typeIds: TOPIC_FEED_ENTITY_TYPE_IDS,
+      spaceIds,
+      matchAll: true,
+      debateTaggedClaims: false,
+    });
+  });
+
+  it('counts the compact population when the grouped count is empty, as before gaia builds it', async () => {
+    mocks.typeCounts = [];
+
+    // Its own space, so the population cache doesn't leak into the next test.
+    const counts = await fetchTopicFeedCompositionCounts({
+      spaceIds: ['22222222222222222222222222222222'],
+      topicId: PAGE_TOPIC,
+    });
+
+    expect(counts.typeCounts[CLAIM_TYPE_ID]).toBe(2);
+    expect(mocks.calls.map(call => call.operation)).toEqual(['TopicFeedTypeCounts', 'ExploreRelationIndex']);
+  });
+
+  it('counts the compact population the feed falls back to when the grouped count fails', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const expected = emptyTopicFeedCompositionCounts();
     expected.typeCounts[CLAIM_TYPE_ID] = 2;
     expected.typeCounts[DEBATE_TYPE_ID] = 1;
@@ -173,6 +215,7 @@ describe('fetchTopicFeedCompositionCounts', () => {
       typeIds: { overlaps: expect.arrayContaining([CLAIM_TYPE_ID, DEBATE_TYPE_ID, NEWS_STORY_TYPE_ID]) },
     });
     expect(fromEntity.and[1]).toEqual(topicFeedFilter(PAGE_TOPIC));
+    warn.mockRestore();
   });
 });
 

@@ -1,6 +1,7 @@
 import { Effect } from 'effect';
 
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
+import { topicFeedTypeCountsDocument } from '~/core/explore/explore-topic-feed-document';
 import { buildExploreFeedFilter, fetchCompleteExplorePopulationIndex } from '~/core/explore/fetch-explore-feed';
 import type { EntityFilter, RelationFilter } from '~/core/gql/graphql';
 import { graphql } from '~/core/io/graphql-client';
@@ -174,12 +175,9 @@ export function emptyTopicFeedCompositionCounts(): TopicFeedCompositionCounts {
 }
 
 /**
- * Counts the exact compact population the Topic feed orders.
- *
- * The old implementation issued one relation-heavy `totalCount` connection per displayed type.
- * This instead reuses the feed's complete-population promise/cache and counts its tiny `typeIds`
- * field locally. That makes the header, dropdown and cards agree by construction while avoiding a
- * second graph scan on the common Best-first page load.
+ * Per-type sizes of the population the Topic feed orders, from gaia's grouped count (GEO-3092). An
+ * entity with several feed types counts once in each, as in the type dropdown. Falls back to
+ * counting the complete population if the count fails.
  */
 export async function fetchTopicFeedCompositionCounts({
   spaceIds,
@@ -190,6 +188,56 @@ export async function fetchTopicFeedCompositionCounts({
 }): Promise<TopicFeedCompositionCounts> {
   if (spaceIds.length === 0) return emptyTopicFeedCompositionCounts();
 
+  try {
+    const counts = await fetchTopicFeedTypeCounts({ spaceIds, topicId });
+    // As the feed: no rows may mean gaia's topic table isn't built yet.
+    return Object.values(counts.typeCounts).some(count => count > 0)
+      ? counts
+      : countCompletePopulation({ spaceIds, topicId });
+  } catch (error) {
+    console.warn('topic feed composition: type counts failed, counting the complete population', error);
+    return countCompletePopulation({ spaceIds, topicId });
+  }
+}
+
+async function fetchTopicFeedTypeCounts({
+  spaceIds,
+  topicId,
+}: {
+  spaceIds: string[];
+  topicId: string;
+}): Promise<TopicFeedCompositionCounts> {
+  const rows = await Effect.runPromise(
+    graphql({
+      query: topicFeedTypeCountsDocument,
+      decoder: data => data.topicFeedTypeCounts ?? [],
+      variables: {
+        topicIds: [topicId],
+        typeIds: [...TOPIC_FEED_ENTITY_TYPE_IDS],
+        spaceIds,
+        matchAll: true,
+        debateTaggedClaims: false,
+      },
+    })
+  );
+  const normalizedIdToCanonicalId = new Map(TOPIC_FEED_ENTITY_TYPE_IDS.map(id => [normId(id), id]));
+  const counts = emptyTopicFeedCompositionCounts();
+  for (const row of rows) {
+    const typeId = row?.typeId ? normalizedIdToCanonicalId.get(normId(row.typeId)) : undefined;
+    const count = Number(row?.entityCount ?? 0);
+    if (typeId && Number.isFinite(count)) counts.typeCounts[typeId] = count;
+  }
+  return counts;
+}
+
+/** The pre-gaia#985 count: download the population the feed falls back to and count it here. */
+async function countCompletePopulation({
+  spaceIds,
+  topicId,
+}: {
+  spaceIds: string[];
+  topicId: string;
+}): Promise<TopicFeedCompositionCounts> {
   const rows = await fetchCompleteExplorePopulationIndex({
     spaceIds,
     sort: 'best',

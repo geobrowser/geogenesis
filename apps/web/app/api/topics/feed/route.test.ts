@@ -61,4 +61,18 @@ describe('GET /api/topics/feed', () => {
     expect(mocks.filter.mock.calls[0]?.[1]).toEqual(selectedTopicIds.slice(0, 10));
     expect(mocks.scopes.mock.calls[0]?.[1]).toEqual(selectedTopicIds.slice(0, 10));
   });
+
+  it('reads Best and New from the walk over the page topic and every selection (GEO-3092)', async () => {
+    const params = new URLSearchParams({
+      topicId: PAGE_TOPIC,
+      spaceId: SPACE,
+      typeIds: CLAIM_TYPE_ID,
+      topicIds: topicId(1),
+    });
+
+    await GET(new Request(`https://example.com/api/topics/feed?${params}`));
+
+    expect(mocks.fetchFeed.mock.calls[0]?.[0]).toMatchObject({ topicFeedTopicIds: [PAGE_TOPIC, topicId(1)] });
+    expect(mocks.fetchFeed.mock.calls[0]?.[0]).not.toHaveProperty('requireDebateTagOnClaims');
+  });
 });

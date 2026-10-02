@@ -45,6 +45,7 @@ import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import type { ExploreCompleteIndexNode } from './explore-index-selection';
 import { exploreRelationIndexDocument } from './explore-relation-index-document';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import { exploreTopicFeedConnectionDocument } from './explore-topic-feed-document';
 import { entityMatchesExploreTypeIds } from './explore-type-filter';
 import {
   type ExploreForYouCursor,
@@ -593,6 +594,54 @@ async function fetchCompleteEntitiesPage(args: {
   };
 }
 
+/** gaia rejects `maxPerTopic` above this, so a topic walk can't serve a window ending deeper. */
+const TOPIC_FEED_MAX_DEPTH = 1_000;
+
+/**
+ * A topic page's Best or New window from one ranked walk (GEO-3092), in the complete-population
+ * order: Best by ranking score, New by creation time, ties by id. `maxPerTopic` below
+ * `offset + first` returns short.
+ */
+async function fetchTopicFeedPage(args: {
+  topicIds: readonly string[];
+  spaceIds: string[];
+  sort: Extract<ExploreSort, 'best' | 'new'>;
+  time: ExploreTime;
+  limit: number;
+  offset: number;
+  typeIds: readonly string[];
+  requireDebateTagOnClaims?: boolean;
+}): Promise<ExploreEntitiesPageResponse> {
+  const t = timeThresholdSec(args.time);
+  return Effect.runPromise(
+    graphql({
+      query: exploreTopicFeedConnectionDocument,
+      decoder: (data: { entitiesRankedForTopicsConnection?: EntitiesConnectionShape }) => {
+        const nodes = data.entitiesRankedForTopicsConnection?.nodes ?? [];
+        return {
+          entities: decodeConnection({ nodes }).entities,
+          endCursor: String(args.offset + nodes.length),
+          hasNextPage: nodes.length >= args.limit,
+        };
+      },
+      variables: {
+        first: args.limit,
+        offset: args.offset,
+        topicIds: [...args.topicIds],
+        spaceIds: args.spaceIds,
+        typeIds: [...args.typeIds],
+        maxPerTopic: args.offset + args.limit,
+        sortBy: args.sort,
+        // Every topic, as `topicFeedFilter` narrows.
+        matchAll: true,
+        createdAfter: t != null ? String(t) : undefined,
+        debateTaggedClaims: args.requireDebateTagOnClaims ?? false,
+        spaceIdsForLists: args.spaceIds,
+      },
+    })
+  );
+}
+
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
 async function fetchTopEntitiesPage(args: {
   spaceIds: string[];
@@ -761,6 +810,12 @@ export async function fetchExploreFeed(args: {
    * full population from a compact index rather than applying one expensive combined predicate.
    */
   completePopulationScopes?: readonly ExploreCompletePopulationScope[];
+  /**
+   * GEO-3092. The topics every entity in `completePopulationScopes` is tagged with. Best and New then
+   * read each window from one ranked topic walk, and use the complete population only for a window
+   * deeper than `TOPIC_FEED_MAX_DEPTH` or when the walk fails.
+   */
+  topicFeedTopicIds?: readonly string[];
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = exploreBrowseSpaceIds(args.browse, args.spaceFilterIds);
@@ -845,19 +900,54 @@ export async function fetchExploreFeed(args: {
   const usesCompletePopulation = completeSort !== null;
   const bestFiltersServerSide = !usesCompletePopulation && args.sort === 'best' && (args.typeIds?.length ?? 0) > 0;
 
+  const fetchContextualWindow = async (
+    sort: Extract<ExploreSort, 'best' | 'new'>,
+    offset: number
+  ): Promise<ExploreEntitiesPageResponse> => {
+    const complete = () =>
+      fetchCompleteEntitiesPage({
+        spaceIds: baseIds,
+        sort,
+        time: args.time,
+        limit: windowSize,
+        offset,
+        typeIds: args.typeIds ?? [],
+        requireName: args.requireName,
+        requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+        scopes: args.completePopulationScopes ?? [],
+      });
+    const topicIds = args.topicFeedTopicIds ?? [];
+    // The walk only serves named entities.
+    if (topicIds.length === 0 || args.requireName === false || offset + windowSize > TOPIC_FEED_MAX_DEPTH) {
+      return complete();
+    }
+    try {
+      const page = await fetchTopicFeedPage({
+        topicIds,
+        spaceIds: baseIds,
+        sort,
+        time: args.time,
+        limit: windowSize,
+        offset,
+        typeIds: args.typeIds ?? [],
+        requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+      });
+      // gaia's topic table is empty until its first reconcile, so an empty first window may mean
+      // "not built yet" rather than "no entities". A topic that really is empty is cheap to confirm.
+      return offset === 0 && page.entities.length === 0 ? complete() : page;
+    } catch (error) {
+      // An API without gaia#985 still serves the page, slowly.
+      console.warn('topic feed: topic walk failed, using the complete population', error);
+      return complete();
+    }
+  };
+
   const fetchWindow = (windowAfter: string | null) =>
     completeSort !== null
-      ? fetchCompleteEntitiesPage({
-          spaceIds: baseIds,
-          sort: completeSort,
-          time: args.time,
-          limit: windowSize,
-          offset: Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0,
-          typeIds: args.typeIds ?? [],
-          requireName: args.requireName,
-          requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-          scopes: args.completePopulationScopes ?? [],
-        })
+      ? fetchContextualWindow(
+          completeSort,
+          Number.isSafeInteger(Number(windowAfter)) && Number(windowAfter) >= 0 ? Number(windowAfter) : 0
+        )
       : bestFiltersServerSide
         ? fetchBestEntitiesByTypePage({
             spaceIds: baseIds,
