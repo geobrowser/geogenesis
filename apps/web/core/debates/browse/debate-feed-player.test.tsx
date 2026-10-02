@@ -429,56 +429,100 @@ describe('DebateFeedPlayer audio gating (GEO-2947)', () => {
 });
 
 describe('the Unmute tap and iOS gesture activation (GEO-3115)', () => {
-  /** A running element whose `play()` and `muted` writes are recorded, and what they saw. */
+  /**
+   * A running element that keeps its own `paused`, as a browser does: `pause()` stops it and
+   * `play()` starts it again synchronously. `calls` is every pause/play, in order.
+   */
   function running(video: HTMLVideoElement) {
-    Object.defineProperty(video, 'paused', { configurable: true, get: () => false });
-    const play = vi.fn(() => Promise.resolve());
-    video.play = play;
-    return play;
+    let paused = false;
+    const calls: Array<'pause' | 'play'> = [];
+    let settle: () => void = () => {};
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
+    video.pause = () => {
+      calls.push('pause');
+      paused = true;
+    };
+    video.play = () => {
+      calls.push('play');
+      paused = false;
+      return new Promise<void>(resolve => (settle = resolve));
+    };
+    return { calls, settle: () => settle() };
   }
   const muteButton = (video: HTMLVideoElement, name: 'Mute' | 'Unmute') =>
     within(video.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name });
 
-  it('plays both recordings inside the Unmute tap, before any re-render', () => {
+  it('pauses and re-plays both recordings inside the Unmute tap, before any re-render', () => {
     const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
-    const play1 = running(slot1);
-    const play2 = running(slot2);
+    const one = running(slot1);
+    const two = running(slot2);
     const controller = mocks.controller as ReturnType<typeof controllerFixture>;
     // The fixture's setter changes nothing, so anything seen here was done by the handler itself.
-    const atTap: Array<[number, number, boolean, boolean]> = [];
+    const atTap: unknown[] = [];
     controller.setMutedByUser.mockImplementation(() =>
-      atTap.push([play1.mock.calls.length, play2.mock.calls.length, slot1.muted, slot2.muted])
+      atTap.push([[...one.calls], [...two.calls], slot1.muted, slot2.muted, slot1.paused, slot2.paused])
     );
 
     fireEvent.click(muteButton(slot1, 'Unmute'));
 
-    // Both activated, and the tap itself wrote no mute: the listening debater stays muted.
-    expect(atTap).toEqual([[1, 1, true, true]]);
+    // A real paused -> playing transition on each, no mute written (the listener stays muted), and
+    // both left playing.
+    expect(atTap).toEqual([[['pause', 'play'], ['pause', 'play'], true, true, false, false]]);
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+    expect(
+      within(slot1.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name: 'Pause debate' })
+    ).toBeTruthy();
+  });
+
+  it('holds the pause events it causes from the playback tick, then ticks once the plays settle', async () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    const one = running(slot1);
+    const two = running(slot2);
+    const controller = mocks.controller as ReturnType<typeof controllerFixture>;
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+    act(() => {
+      slot1.dispatchEvent(new Event('pause'));
+      slot2.dispatchEvent(new Event('pause'));
+    });
+    expect(controller.onPlaybackTick).not.toHaveBeenCalled();
+
+    await act(async () => {
+      one.settle();
+      two.settle();
+    });
+    expect(controller.onPlaybackTick).toHaveBeenCalledTimes(1);
+
+    // Outside an activation a pause is the ordinary tick again.
+    act(() => void slot1.dispatchEvent(new Event('pause')));
+    expect(controller.onPlaybackTick).toHaveBeenCalledTimes(2);
   });
 
   it('starts nothing when the pair is paused', () => {
     const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1, playing: false });
-    const play1 = vi.fn(() => Promise.resolve());
-    const play2 = vi.fn(() => Promise.resolve());
-    slot1.play = play1;
-    slot2.play = play2;
+    const one = running(slot1);
+    const two = running(slot2);
+    slot1.pause();
+    slot2.pause();
+    one.calls.length = 0;
+    two.calls.length = 0;
 
     fireEvent.click(muteButton(slot1, 'Unmute'));
 
-    expect(play1).not.toHaveBeenCalled();
-    expect(play2).not.toHaveBeenCalled();
+    expect(one.calls).toEqual([]);
+    expect(two.calls).toEqual([]);
   });
 
-  it('plays nothing on Mute, and mutes both', () => {
+  it('touches neither element on Mute, and mutes both', () => {
     const { slot1, slot2, update } = renderPlayer({ mutedByUser: false, turnSlot: 1 });
-    const play1 = running(slot1);
-    const play2 = running(slot2);
+    const one = running(slot1);
+    const two = running(slot2);
 
     fireEvent.click(muteButton(slot1, 'Mute'));
-    update({ mutedByUser: true, turnSlot: 1 });
+    expect(one.calls).toEqual([]);
+    expect(two.calls).toEqual([]);
 
-    expect(play1).not.toHaveBeenCalled();
-    expect(play2).not.toHaveBeenCalled();
+    update({ mutedByUser: true, turnSlot: 1 });
     expect(slot1.muted).toBe(true);
     expect(slot2.muted).toBe(true);
   });
