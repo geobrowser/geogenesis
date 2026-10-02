@@ -815,6 +815,13 @@ type TopicNamesQuery = {
 
 const topicNamesDocument = parse(TOPIC_NAMES_SOURCE) as TypedDocumentNode<TopicNamesQuery, { ids: string[] }>;
 
+/**
+ * The most ids one names request asks for, matching its `first`. The server rejects a `first`
+ * above 1000, and the Debate tag alone carries more topics than that (1,413 when this was
+ * written) — so one request named the first thousand and every row past them read "Topic".
+ */
+const TOPIC_NAMES_BATCH_SIZE = 1000;
+
 export const taggedFacetQueryKey = (
   dimension: 'topics' | 'spaces',
   tagId: string,
@@ -904,23 +911,30 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
     // Names outlive a filter click, so the previous set stands while the new one is fetched rather
     // than every row falling back to "Topic" for a moment.
     placeholderData: keepPreviousData,
-    queryFn: ({ signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: topicNamesDocument,
-          decoder: (data: TopicNamesQuery) => {
-            const map = new Map<string, string | null>();
-            // Keyed on the normalized id. `groupedAggregates` answers in dashed UUIDs and
-            // `entitiesConnection` in dashless ones, so an unnormalized map never matches and every
-            // row falls back to the word "Topic" — which is exactly how this shipped and was caught
-            // in a browser.
-            for (const node of data.entitiesConnection?.nodes ?? []) if (node) map.set(uuidToHex(node.id), node.name);
-            return map;
-          },
-          variables: { ids },
-          signal,
-        })
-      ),
+    queryFn: async ({ signal }) => {
+      const batches: string[][] = [];
+      for (let i = 0; i < ids.length; i += TOPIC_NAMES_BATCH_SIZE)
+        batches.push(ids.slice(i, i + TOPIC_NAMES_BATCH_SIZE));
+      const nodes = await Promise.all(
+        batches.map(batch =>
+          Effect.runPromise(
+            graphql({
+              query: topicNamesDocument,
+              decoder: (data: TopicNamesQuery) => data.entitiesConnection?.nodes ?? [],
+              variables: { ids: batch },
+              signal,
+            })
+          )
+        )
+      );
+      const map = new Map<string, string | null>();
+      // Keyed on the normalized id. `groupedAggregates` answers in dashed UUIDs and
+      // `entitiesConnection` in dashless ones, so an unnormalized map never matches and every
+      // row falls back to the word "Topic" — which is exactly how this shipped and was caught
+      // in a browser.
+      for (const node of nodes.flat()) if (node) map.set(uuidToHex(node.id), node.name);
+      return map;
+    },
     staleTime: TOPIC_NAMES_STALE_TIME,
     enabled: enabled && ids.length > 0,
   });

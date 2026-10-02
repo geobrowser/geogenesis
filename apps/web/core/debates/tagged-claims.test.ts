@@ -817,6 +817,22 @@ describe('the facet menus', () => {
     });
   });
 
+  it('names every topic when the menu holds more than one request can name', async () => {
+    // The server caps `first` at 1000 and the Debate tag carries more topics than that, so a single
+    // names request left everything past the thousandth row reading "Topic".
+    const groups = Array.from({ length: 1413 }, (_, i) => ({
+      id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
+      count: 1,
+    }));
+    respondWithGroups(groups);
+    const { result } = renderHook(() => useTaggedTopicFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper: Wrapper });
+
+    await waitFor(() => expect(result.current.topics).toHaveLength(1413));
+    await waitFor(() => expect(result.current.topics.filter(topic => topic.name === null)).toEqual([]));
+    const nameRequests = graphqlMock.mock.calls.map(([args]) => (args.variables as any).ids).filter(Boolean);
+    expect(nameRequests.map((ids: string[]) => ids.length)).toEqual([1000, 413]);
+  });
+
   // GEO-2798 review. `keepPreviousData` keeps the previous filter's counts on screen so the menu
   // does not blink, and the cost is that `isLoading` is already false while they are showing. A
   // caller reconciling its selection against them would prune the viewer's pick against a menu they
