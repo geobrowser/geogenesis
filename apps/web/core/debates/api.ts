@@ -3,6 +3,8 @@
 import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
+import type { RecordingPlaybackVariant } from './mobile-rendition';
+
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
@@ -94,6 +96,11 @@ export type DebateRecording = {
   height: number | null;
   framerate: number | null;
   video_bits_per_second: number | null;
+  /**
+   * MIME type of the recording's 720p H.264 mobile rendition (GEO-3118), or null/absent until
+   * geo-chat has written one. Sign it with `getRecordingUrl(..., { variant: 'mobile' })`.
+   */
+  mobile_content_type?: string | null;
 };
 
 export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -2236,11 +2243,13 @@ export async function getRecordingUrl(
   debateId: string,
   filename: string,
   getPrivyIdentityToken?: GetPrivyIdentityToken,
-  accountKey?: string | null
+  accountKey?: string | null,
+  variant?: RecordingPlaybackVariant
 ) {
   return geoChatRequest<{ url: string }>(`/debates/${debateId}/recordings/url`, {
     method: 'POST',
-    body: { filename },
+    // `variant` only when asked for, so every other request is byte-for-byte what it was.
+    body: variant ? { filename, variant } : { filename },
     auth: 'optional',
     getPrivyIdentityToken,
     accountKey,
