@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ENTITY_ID_BATCH_SIZE,
+  batchEntityIds,
   buildSearchPath,
   flattenRestResults,
   getBatchEntities,
@@ -514,15 +515,21 @@ describe('getBatchEntities', () => {
   });
 });
 
-/**
- * The `id` argument is `UUID!`. An id the server cannot parse comes back as a 400, not as
- * an empty list, so asking about one is never a way to find out that nothing links there.
- *
- * A space with no home entity reaches this with `''` (see `getSpaceFrontPage`), which is
- * what produced a standing `Variable "$id" got invalid value ""` on /space/[id] in
- * production. The point of these tests is the *absence of a request*: returning `[]` while
- * still making the call would leave the 400s exactly where they were.
- */
+describe('batchEntityIds', () => {
+  it('splits ids into consecutive batches of the given size', () => {
+    expect(batchEntityIds(['a', 'b', 'c', 'd', 'e'], 2)).toEqual([['a', 'b'], ['c', 'd'], ['e']]);
+  });
+
+  // A size that never moves the loop forward spins until memory runs out, and a fractional one
+  // slices at truncated offsets. Neither is an id list anyone can use, so it is refused up front.
+  // The fractional case goes first: without the guard it returns, where the others never do.
+  it('refuses a size that is not a positive whole number', () => {
+    expect(() => batchEntityIds(['a', 'b', 'c'], 1.5)).toThrow(RangeError);
+    expect(() => batchEntityIds(['a'], 0)).toThrow(RangeError);
+    expect(() => batchEntityIds(['a'], -1)).toThrow(RangeError);
+  });
+});
+
 describe('getEntityNames', () => {
   afterEach(() => graphqlMock.mockReset());
 
@@ -548,6 +555,15 @@ describe('getEntityNames', () => {
   });
 });
 
+/**
+ * The `id` argument is `UUID!`. An id the server cannot parse comes back as a 400, not as
+ * an empty list, so asking about one is never a way to find out that nothing links there.
+ *
+ * A space with no home entity reaches this with `''` (see `getSpaceFrontPage`), which is
+ * what produced a standing `Variable "$id" got invalid value ""` on /space/[id] in
+ * production. The point of these tests is the *absence of a request*: returning `[]` while
+ * still making the call would leave the 400s exactly where they were.
+ */
 describe('getEntityBacklinks', () => {
   afterEach(() => graphqlMock.mockReset());
 
