@@ -88,6 +88,17 @@ describe('HubLiveRail', () => {
     expect(screen.getByTestId('people-tab')).toBeInTheDocument();
   });
 
+  // Its sections name themselves ("Upcoming debates", "Sent", "Received"), so a "Requests" heading
+  // above them only said the same thing twice.
+  it('heads the people list "People" and draws no Requests heading of its own', () => {
+    mocks.requestsHasContent = true;
+    render(<HubLiveRail />);
+
+    expect(screen.getByRole('heading', { name: 'People' })).toBeInTheDocument();
+    expect(screen.queryByText('Available now')).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Requests' })).not.toBeInTheDocument();
+  });
+
   // Signed out the rail loses two of its three lists. Two empty headings would say nothing, so it
   // keeps the one that still answers and explains the two that need an account.
   it('keeps People signed out and explains what the account-gated one would offer', () => {

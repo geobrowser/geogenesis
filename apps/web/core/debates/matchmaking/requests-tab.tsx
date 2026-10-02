@@ -31,9 +31,10 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  * Server already drops offline/blocked; this tab is presentation and space/status narrowing.
  *
  * `dense` (live rail): no sticky filters — three stickies stacked would overlap, and a rail
- * has no room for full-tab chrome.
+ * has no room for full-tab chrome. No heading or outer padding either: each section below names
+ * itself, and the rail spaces its sections the way the facet rail opposite does.
  */
-export function RequestsTab({ dense = false, denseLabel }: { dense?: boolean; denseLabel?: string } = {}) {
+export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
   const scheduled = useScheduledContent();
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
@@ -93,17 +94,13 @@ export function RequestsTab({ dense = false, denseLabel }: { dense?: boolean; de
     scheduled.upcoming.length > 0 ||
     scheduled.requestsError !== null ||
     scheduled.roomsError !== null;
-  const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
+  const hasRequests = Boolean(sent || outgoingChallenge || received.length > 0 || incomingChallenge);
+  const isEmpty = !hasRequests && !hasScheduled;
 
   if (dense && isEmpty) return null;
 
   return (
     <div className="flex flex-col">
-      {dense && denseLabel ? (
-        <Text as="h3" variant="footnoteMedium" color="grey-04" className="px-4 pb-1">
-          {denseLabel}
-        </Text>
-      ) : null}
       {!dense && (
         <HubStickyControls>
           <SpaceTopicFilters
@@ -125,57 +122,61 @@ export function RequestsTab({ dense = false, denseLabel }: { dense?: boolean; de
         </HubStickyControls>
       )}
 
-      <div className="flex flex-col gap-3 px-4 py-3">
+      <div className={dense ? 'flex flex-col gap-3 px-4' : 'flex flex-col gap-3 px-4 py-3'}>
         {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
             must not vanish because an unrelated read failed. */}
         <ScheduledDebatesSection content={scheduled} />
 
-        <HubQueryState
-          analyticsSurface="hub"
-          isLoading={requestsQuery.isLoading}
-          error={requestsQuery.error}
-          failureReason={requestsQuery.failureReason}
-          onRetry={() => void requestsQuery.refetch()}
-          isEmpty={isEmpty}
-          emptyMessage={
-            hasFilters ? 'No requests match these filters.' : 'Any debate requests you’ll receive will appear here.'
-          }
-          emptyAction={
-            hasFilters
-              ? {
-                  label: 'Clear filters',
-                  onClick: () => {
-                    setSpaceIds([]);
-                    setStatus('all');
-                  },
-                }
-              : undefined
-          }
-        >
-          <div className="flex flex-col gap-4">
-            {sent || outgoingChallenge ? (
-              <RequestSection label="Sent">
-                <div className="flex flex-col gap-2">
-                  {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
-                  <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
-                </div>
-              </RequestSection>
-            ) : null}
+        {/* Dense with only scheduled debates to show, the requests list would be an empty box that
+            still takes a gap below them. */}
+        {dense && !hasRequests && !requestsQuery.isLoading && !requestsQuery.error ? null : (
+          <HubQueryState
+            analyticsSurface="hub"
+            isLoading={requestsQuery.isLoading}
+            error={requestsQuery.error}
+            failureReason={requestsQuery.failureReason}
+            onRetry={() => void requestsQuery.refetch()}
+            isEmpty={isEmpty}
+            emptyMessage={
+              hasFilters ? 'No requests match these filters.' : 'Any debate requests you’ll receive will appear here.'
+            }
+            emptyAction={
+              hasFilters
+                ? {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setSpaceIds([]);
+                      setStatus('all');
+                    },
+                  }
+                : undefined
+            }
+          >
+            <div className="flex flex-col gap-4">
+              {sent || outgoingChallenge ? (
+                <RequestSection label="Sent">
+                  <div className="flex flex-col gap-2">
+                    {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
+                    <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
+                  </div>
+                </RequestSection>
+              ) : null}
 
-            {incomingChallenge || received.length > 0 ? (
-              <RequestSection label="Received">
-                <div className="flex flex-col gap-2">
-                  {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
-                  <HubCardList>
-                    {received.map(request => (
-                      <IncomingRequestCard key={request.id} request={request} />
-                    ))}
-                  </HubCardList>
-                </div>
-              </RequestSection>
-            ) : null}
-          </div>
-        </HubQueryState>
+              {incomingChallenge || received.length > 0 ? (
+                <RequestSection label="Received">
+                  <div className="flex flex-col gap-2">
+                    {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
+                    <HubCardList>
+                      {received.map(request => (
+                        <IncomingRequestCard key={request.id} request={request} />
+                      ))}
+                    </HubCardList>
+                  </div>
+                </RequestSection>
+              ) : null}
+            </div>
+          </HubQueryState>
+        )}
       </div>
     </div>
   );

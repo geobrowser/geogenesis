@@ -442,37 +442,36 @@ describe('dense (workspace rail) visibility', () => {
     mocks.scheduled = EMPTY_SCHEDULED;
   });
 
-  it('renders nothing at all when nothing is pending, heading included', () => {
-    const { container } = render(<RequestsTab dense denseLabel="Requests" />);
+  it('renders nothing at all when nothing is pending', () => {
+    const { container } = render(<RequestsTab dense />);
 
     expect(container.innerHTML).toBe('');
-    expect(screen.queryByText('Requests')).not.toBeInTheDocument();
   });
 
-  it('draws its own heading once it has something', () => {
+  it('draws once it has something', () => {
     mocks.incoming = [request('request-1', SPACE_A, 'Bitcoin will never go above $250K')];
-    render(<RequestsTab dense denseLabel="Requests" />);
+    const { container } = render(<RequestsTab dense />);
 
-    expect(screen.getByText('Requests')).toBeInTheDocument();
+    expect(container.innerHTML).not.toBe('');
   });
 
   it('appears for a sent request as well as a received one', () => {
     mocks.outbound = request('request-1', SPACE_A, 'Bitcoin will never go above $250K');
-    render(<RequestsTab dense denseLabel="Requests" />);
+    const { container } = render(<RequestsTab dense />);
 
-    expect(screen.getByText('Requests')).toBeInTheDocument();
+    expect(container.innerHTML).not.toBe('');
   });
 
   it('appears for a pending challenge with no claim requests', () => {
     mocks.challenge = challenge('recipient');
-    render(<RequestsTab dense denseLabel="Requests" />);
+    const { container } = render(<RequestsTab dense />);
 
-    expect(screen.getByText('Requests')).toBeInTheDocument();
+    expect(container.innerHTML).not.toBe('');
   });
 
   it('does not appear for a challenge that is no longer pending', () => {
     mocks.challenge = { ...challenge('recipient'), status: 'accepted' };
-    const { container } = render(<RequestsTab dense denseLabel="Requests" />);
+    const { container } = render(<RequestsTab dense />);
 
     expect(container.innerHTML).toBe('');
   });
@@ -484,25 +483,25 @@ describe('dense (workspace rail) visibility', () => {
       ...EMPTY_SCHEDULED,
       answerable: [{ id: 'scheduled-1' }] as unknown as ScheduledContent['answerable'],
     };
-    render(<RequestsTab dense denseLabel="Requests" />);
+    const { container } = render(<RequestsTab dense />);
 
-    expect(screen.getByText('Requests')).toBeInTheDocument();
+    expect(container.innerHTML).not.toBe('');
   });
 
   it('appears for an upcoming room', () => {
     mocks.peerAvailability = true;
     mocks.scheduled = { ...EMPTY_SCHEDULED, upcoming: [{ id: 'room-1' }] as unknown as ScheduledContent['upcoming'] };
-    render(<RequestsTab dense denseLabel="Requests" />);
+    const { container } = render(<RequestsTab dense />);
 
-    expect(screen.getByText('Requests')).toBeInTheDocument();
+    expect(container.innerHTML).not.toBe('');
   });
 
   // A failed read is not an empty one: going quiet would tell the viewer nothing is scheduled.
   it('appears when a scheduled read failed', () => {
     mocks.peerAvailability = true;
     mocks.scheduled = { ...EMPTY_SCHEDULED, requestsError: new Error('nope') };
-    render(<RequestsTab dense denseLabel="Requests" />);
+    const { container } = render(<RequestsTab dense />);
 
-    expect(screen.getByText('Requests')).toBeInTheDocument();
+    expect(container.innerHTML).not.toBe('');
   });
 });
