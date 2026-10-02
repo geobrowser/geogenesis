@@ -1578,6 +1578,12 @@ describe('Online only', () => {
       { ...person('user-them', 'Arturas'), away: true, can_challenge: false },
       person('user-other', 'Vytautas'),
     ];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
+    };
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const rows = screen.getAllByRole('listitem');
@@ -1590,6 +1596,34 @@ describe('Online only', () => {
     fireEvent.click(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Arturas' }));
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
     expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
+  // Schedule on an away row has to lead somewhere: with no free time of theirs, or no hours of the
+  // viewer's, geo-chat leaves them off the schedulable list and the week would open empty.
+  it.each([
+    ['they have no free time this week', { viewer_has_schedule: true }],
+    ['the viewer has no hours set', { viewer_has_schedule: false }],
+  ])('draws an away person with a disabled Away pill when %s', (_, overrides) => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
+    mocks.schedulable = { viewer_timezone: 'UTC', truncated: false, people: [], ...overrides };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByRole('listitem');
+    expect(within(row).getByText('Away', { selector: 'p' })).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Schedule a debate with Arturas' })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Away' })).toBeDisabled();
+    expect(within(row).getByRole('button', { name: 'See times for Arturas' })).toBeEnabled();
+  });
+
+  it('offers an away person no Schedule with Online only on', () => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    fireEvent.click(screen.getByRole('switch', { name: 'Online only' }));
+
+    const row = screen.getByRole('listitem');
+    expect(within(row).queryByRole('button', { name: 'Schedule a debate with Arturas' })).not.toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Away' })).toBeDisabled();
   });
 
   it('leaves hidden accounts off the list, online or offline', () => {

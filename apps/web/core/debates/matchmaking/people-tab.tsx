@@ -175,13 +175,19 @@ export function PeopleTab({
     return () => clearInterval(interval);
   }, [showOffline]);
 
-  // Anyone on the roster keeps their roster row: requestable now, or online but away (GEO-3119), which
-  // the row draws with Schedule. Someone online but off the roster (unavailable) stays here.
-  const { offlinePeople, schedulesByUser } = React.useMemo(() => {
+  // Anyone on the roster keeps their roster row: requestable now, or online but away (GEO-3119).
+  // Someone online but off the roster (unavailable) stays here.
+  const { offlinePeople, schedulesByUser, schedulableUserIds } = React.useMemo(() => {
     const byUser = new Map<string, PersonSchedule>();
-    if (!showOffline || !schedulableQuery.data) return { offlinePeople: [], schedulesByUser: byUser };
+    if (!showOffline || !schedulableQuery.data) {
+      return { offlinePeople: [], schedulesByUser: byUser, schedulableUserIds: new Set<string>() };
+    }
 
     const onRoster = new Set(onlinePeople.map(person => normId(person.user_id)));
+    // geo-chat lists everyone with free time this week, online or not, and nobody while the viewer
+    // has no hours of their own. An away person on it can be booked; one off it would open an empty
+    // week, or skip the viewer's own "set your availability" gate, so their row offers no Schedule.
+    const schedulable = new Set(schedulableQuery.data.people.map(candidate => normId(candidate.user.user_id)));
     // geo-chat's window follows the UTC date, which west of UTC can run a day past the modal's week.
     const today = new Date(now);
     const weekEnds = new Date(today.getFullYear(), today.getMonth(), today.getDate() + PEER_SCHEDULE_DAYS).getTime();
@@ -201,7 +207,7 @@ export function PeopleTab({
       });
       offline.push(schedulableAsPerson(candidate));
     }
-    return { offlinePeople: offline, schedulesByUser: byUser };
+    return { offlinePeople: offline, schedulesByUser: byUser, schedulableUserIds: schedulable };
   }, [now, onlinePeople, schedulableQuery.data, showOffline]);
 
   const allPeople = React.useMemo(() => [...onlinePeople, ...offlinePeople], [onlinePeople, offlinePeople]);
@@ -568,6 +574,7 @@ export function PeopleTab({
                     claimNamesById={matchingClaimNamesById}
                     claimNamesLoading={matchingClaimsLoading}
                     schedule={schedulesByUser.get(normId(person.user_id))}
+                    canScheduleAway={schedulableUserIds.has(normId(person.user_id))}
                     record={records.get(person.profile_space_id) ?? null}
                     spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
                     labelsById={labelsById}
@@ -625,6 +632,7 @@ function PersonRow({
   claimNamesById,
   claimNamesLoading,
   schedule,
+  canScheduleAway,
   record,
   spaceIds,
   labelsById,
@@ -643,6 +651,8 @@ function PersonRow({
   claimNamesLoading: boolean;
   /** Set only for an offline row: their upcoming times shared with the viewer. */
   schedule?: PersonSchedule;
+  /** Whether an away person has free time the viewer can book, which needs both to have hours set. */
+  canScheduleAway: boolean;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
   record: PersonRecord | null;
   /** Debate-enabled spaces where this person has at least one claim position or recorded debate. */
@@ -668,8 +678,10 @@ function PersonRow({
 }) {
   const createChallenge = useCreateDebateChallenge();
   // Online but away (GEO-3119): a hidden tab, or nobody at it lately. A live request would go unseen,
-  // so the row offers Schedule the way an offline row does, and says why.
+  // so the row says why and offers Schedule the way an offline row does — but only when there is a
+  // week to book. Otherwise the pill just says Away until they are back.
   const away = Boolean(person.away) && !schedule;
+  const offersSchedule = Boolean(schedule) || (away && canScheduleAway);
   const openSchedule = (opener: HTMLElement | null) =>
     onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, 'people_schedule');
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
@@ -772,7 +784,7 @@ function PersonRow({
             is next free. Gating it on the same reasons would hide it at the moment it earns its
             place. Signed out it opens Privy like the pill does, because the endpoint behind it is
             viewer-scoped and would only 401. */}
-        {!schedule && !away && (
+        {!offersSchedule && (
           <button
             type="button"
             // Every row carries this control, so the visible label alone leaves a screen reader or
@@ -799,7 +811,7 @@ function PersonRow({
             <Calendar />
           </button>
         )}
-        {schedule || away ? (
+        {offersSchedule ? (
           // Offline and away people cannot take a live request, so the pill books a time instead.
           // Never disabled by the viewer's live request state, for the same reason "See times" is not.
           <HubPillButton
@@ -809,6 +821,13 @@ function PersonRow({
             onClick={event => openSchedule(event.currentTarget)}
           >
             Schedule
+          </HubPillButton>
+        ) : away ? (
+          <HubPillButton
+            disabled
+            title={`${speakerLabel(person)} is away. You can request a debate when they're back.`}
+          >
+            Away
           </HubPillButton>
         ) : (
           <HubPillButton
