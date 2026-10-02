@@ -5621,6 +5621,46 @@ describe('the Related tab', () => {
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
   });
+
+  /**
+   * GEO-3120. Related claims are looked up in geo-chat by id like every other list, so they carry
+   * its `previously_debated` flag. Spelled as production spells them: geo-chat's row hyphenated,
+   * the graph's entity bare hex.
+   */
+  it('takes a neighbour the pair already debated out of the list, and the tab with it when it was the only one', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(bareHex(RELATED))];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity(bareHex(RELATED))];
+    mocks.claims = [
+      sharedClaim(),
+      { ...sharedClaim(), claim: claimSummary(RELATED, 'A claim on the same topic'), previously_debated: true },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('folds a debated neighbour away under the new ones', async () => {
+    const OTHER = '019fedb9-7db8-7a05-9b88-9de4cf60bb76';
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), relatedEntity(OTHER, 'Another neighbour')];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity(), relatedEntity(OTHER, 'Another neighbour')];
+    mocks.claims = [
+      sharedClaim(),
+      { ...sharedClaim(), claim: claimSummary(RELATED, 'A claim on the same topic'), previously_debated: true },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('Another neighbour')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Related' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('A claim on the same topic')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
+
+    expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+  });
 });
 
 describe('inside a debate room', () => {
@@ -5792,5 +5832,136 @@ describe('inside a debate room', () => {
 
     await waitFor(() => expect(mocks.replace.mock.calls.length + mocks.back.mock.calls.length).toBeGreaterThan(0));
     expect(screen.queryByText('This room has closed')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-3120. Claims this pair have already debated against each other, on any day, are kept apart
+ * from the new ones: folded away under their own heading rather than offered as a fresh match, and
+ * still requestable from there, since a pair may debate a claim again (GEO-2874). geo-chat's
+ * `previously_debated` is the only source.
+ */
+describe('claims the pair have already debated', () => {
+  const debated = (claim: DebateRematchClaim): DebateRematchClaim => ({ ...claim, previously_debated: true });
+
+  function alreadyDebatedToggle() {
+    return screen.getByRole('button', { name: /Already debated with Salina/ });
+  }
+
+  it('moves a debated claim out of the Lobby and into a folded section', async () => {
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('You and Salina have already debated every claim here.')).toBeInTheDocument();
+    const toggle = alreadyDebatedToggle();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Already debated')).toBeInTheDocument();
+    // Still a choice they can make.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled());
+  });
+
+  it('keeps it out of Explore’s new claims too, and leaves the rest listed', async () => {
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+
+    fireEvent.click(alreadyDebatedToggle());
+
+    // Below the new claims, never among them.
+    expect(appearsBefore('A newly published claim', 'A claim both participants chose')).toBe(true);
+    expect(
+      within(screen.getByTestId('rematch-already-debated')).getByText('A claim both participants chose')
+    ).toBeInTheDocument();
+  });
+
+  it('does the same on the viewer’s own Positions', async () => {
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showMyPositions();
+
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+    fireEvent.click(alreadyDebatedToggle());
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  /** The flag is about the pair and the claim, so either spelling of the id carries it. */
+  it('matches geo-chat’s row to the graph’s claim across the two id spellings', async () => {
+    mocks.entities = [{ ...sharedEntity(), id: CLAIM_SHARED.replace(/-/g, '') }, publishedEntity()];
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED.replace(/-/g, ''), SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED.replace(/-/g, ''), SPACE_1, false),
+    ];
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('You and Salina have already debated every claim here.')).toBeInTheDocument();
+    expect(alreadyDebatedToggle()).toBeInTheDocument();
+  });
+
+  /**
+   * The debate that opened this lobby is the session's exclusion, and geo-chat flags it as debated
+   * as soon as it reaches `thanking`. It stays gone, rather than turning up in the folded section.
+   */
+  it('still drops the claim of the debate that opened the lobby entirely', async () => {
+    mocks.entities = [
+      sharedEntity(),
+      publishedEntity(),
+      { ...sharedEntity(), id: CLAIM_SOURCE, name: 'The claim the pair just debated' },
+    ];
+    mocks.positions = [...mocks.positions, position('profile-remote', CLAIM_SOURCE, SPACE_1, true)];
+    mocks.claims = [
+      sharedClaim(),
+      debated({ ...sharedClaim(), claim: claimSummary(CLAIM_SOURCE, 'The claim the pair just debated') }),
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByText('The claim the pair just debated')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull();
+  });
+
+  /** A geo-chat that predates the flag sends `false` on every row, and the page is what it was. */
+  it('changes nothing when no claim is flagged', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull();
+    expect(screen.queryByText('Already debated')).toBeNull();
+
+    await showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByTestId('rematch-already-debated')).toBeNull();
+  });
+
+  it('narrows the folded section by the search the viewer typed', async () => {
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+    expect(alreadyDebatedToggle()).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'nothing like it' } });
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull());
   });
 });
