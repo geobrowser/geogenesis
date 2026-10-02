@@ -1,3 +1,4 @@
+import './ensure-web-storage.js';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
 

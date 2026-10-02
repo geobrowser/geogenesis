@@ -1,3 +1,4 @@
+import './src/ensure-web-storage.js';
 export {
   usePrivy,
   // App-wide observers should not wait for wallet activation before handling auth.
