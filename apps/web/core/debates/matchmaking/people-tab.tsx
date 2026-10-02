@@ -812,6 +812,11 @@ function PersonRow({
           </HubPillButton>
         ) : (
           <HubPillButton
+            // Only the offer is primary. "In a debate" is a status, so it keeps the outlined pill and
+            // its own text-derived analytics label.
+            variant={person.in_debate ? 'secondary' : 'primary'}
+            // Pinned to the old label so the analytics series survives the copy change to "Debate now".
+            analyticsLabel={person.in_debate ? undefined : 'Debate hub Request debate'}
             onClick={() =>
               onRequireSignIn
                 ? onRequireSignIn({
@@ -841,7 +846,7 @@ function PersonRow({
             pendingLabel="Requesting…"
             title={disabled ? disabledReason : undefined}
           >
-            {person.in_debate ? 'In a debate' : 'Request debate'}
+            {person.in_debate ? 'In a debate' : 'Debate now'}
           </HubPillButton>
         )}
       </div>
