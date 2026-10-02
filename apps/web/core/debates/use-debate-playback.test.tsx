@@ -2068,3 +2068,127 @@ describe('useDebatePlayback — a fresh pair is positioned before it is started 
     expect(slot1.seeks).toEqual([expect.closeTo(64.969, 6)]);
   });
 });
+
+/**
+ * Drift correction acts on the muted recording, never on the one being heard.
+ *
+ * A rate nudge time-stretches an element's audio and a sync seek on these cue-less WebM files
+ * re-primes its audio pipeline; on a phone both are heard as crackle. So the audible recording
+ * leads at rate 1 and the other follows it.
+ */
+describe('useDebatePlayback — drift correction leaves the audible recording alone', () => {
+  let now = 1_700_000_000_000;
+
+  beforeEach(() => {
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => 'visible');
+    // Allowance timing: 30s per turn, slot 1 first, so 40s is slot 2's turn.
+    mocks.turnSegments = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function playingAt(seconds: number, { unmuted }: { unmuted: boolean }) {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    // The mute atom is module-global; set it explicitly every time so no test inherits another's.
+    act(() => result.current.setMutedByUser(!unmuted));
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    act(() => result.current.seekBoth(seconds));
+
+    // Past the floor between sync seeks, which the deliberate seek above just reset.
+    now = Date.now() + 10_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    return { result, slot1, slot2 };
+  }
+
+  it('nudges slot 1, not the audible slot 2, during slot 2’s turn', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: true });
+    expect(result.current.turnState?.slot).toBe(2);
+
+    slot2.currentTime = 41;
+    slot1.currentTime = 40.6; // beyond the nudge threshold, inside the seek one
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.playbackRate).toBe(1.03); // behind its leader, so it speeds up
+    expect(slot2.playbackRate).toBe(1);
+    expect(slot2.currentTime).toBe(41);
+  });
+
+  it('seeks slot 1, not the audible slot 2, when the gap is too wide to nudge', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: true });
+
+    slot2.currentTime = 41;
+    slot1.currentTime = 43;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.currentTime).toBe(41);
+    expect(slot1.playbackRate).toBe(1);
+    expect(slot2.currentTime).toBe(41);
+    expect(slot2.playbackRate).toBe(1);
+  });
+
+  it('still corrects slot 2 during slot 1’s turn', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: true });
+    expect(result.current.turnState?.slot).toBe(1);
+
+    slot1.currentTime = 11;
+    slot2.currentTime = 10.6;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(slot1.playbackRate).toBe(1);
+  });
+
+  it('puts the new speaker back to rate 1 when the turn hands over mid-nudge', async () => {
+    const { result, slot1, slot2 } = await playingAt(29, { unmuted: true });
+
+    // Slot 1 speaking; slot 2 is behind and gets nudged.
+    slot1.currentTime = 29.5;
+    slot2.currentTime = 29.1;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(1.03);
+
+    // Across the boundary, still out of step: slot 2 is now heard and leads at rate 1, and the
+    // drift is taken up by slot 1 instead.
+    slot1.currentTime = 31;
+    slot2.currentTime = 30.6;
+    act(() => result.current.onPlaybackTick());
+    expect(result.current.turnState?.slot).toBe(2);
+    expect(slot2.playbackRate).toBe(1);
+    expect(slot1.playbackRate).toBe(0.97);
+  });
+
+  it('keeps correcting slot 2 when nothing is audible (the feed’s muted default)', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: false });
+    expect(result.current.turnState?.slot).toBe(2);
+
+    slot1.currentTime = 41;
+    slot2.currentTime = 40.6;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(slot1.playbackRate).toBe(1);
+
+    slot2.currentTime = 43;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.currentTime).toBe(41);
+    expect(slot1.currentTime).toBe(41);
+  });
+});
