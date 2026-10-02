@@ -53,7 +53,11 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
 }
 
 /**
- * The company or school, with its logo.
+ * The company or school, with its logo when it has one.
+ *
+ * No placeholder when it does not. Most organisations here have no logo, and a
+ * row of identical grey squares under the name says nothing about the person
+ * — it only reads as something that failed to load.
  *
  * The logo belongs to the company, so it is glued to the first word of the name
  * — a wrap can fall anywhere in the name, but never between the logo and it,
@@ -68,9 +72,11 @@ function OrganizationName({ role, spaceId }: { role: CurrentRole; spaceId: strin
   return (
     <ProfileEntityLink entityId={role.organizationId} spaceId={spaceId} className="text-grey-04 hover:underline">
       <span className="whitespace-nowrap">
-        <span className="mr-2 inline-flex align-middle">
-          <OrganizationImage url={role.avatarUrl} size={20} />
-        </span>
+        {role.avatarUrl ? (
+          <span className="mr-2 inline-flex align-middle">
+            <OrganizationImage url={role.avatarUrl} size={20} />
+          </span>
+        ) : null}
         {first}
       </span>
       {rest.length > 0 ? ` ${rest.join(' ')}` : null}

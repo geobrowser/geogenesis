@@ -14,6 +14,10 @@ import { entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchor
 /** Entity-title token (`text-entityTitle`), including the narrow-viewport steps in `styles.css`. */
 const titleTypographyClassName = 'text-entityTitle';
 
+/** The gap under the title in each mode — exported for a row that draws it itself. */
+export const BROWSE_BOTTOM_SPACING = 12;
+export const EDITING_BOTTOM_SPACING = 3.5;
+
 type EntityPageTitleProps = {
   value: string;
   isEditing: boolean;
@@ -27,6 +31,12 @@ type EntityPageTitleProps = {
    * `entity-page-anchors`, which says why it is an attribute rather than a ref.
    */
   entityId?: string;
+  /**
+   * The gap under the title, drawn inside it. Off when the title sits in a row
+   * that centres other controls against it: counted as part of the title, the
+   * gap pulls their centre below the name's. Such a row draws the gap itself.
+   */
+  withBottomSpacing?: boolean;
 };
 
 /**
@@ -50,6 +60,7 @@ export function EntityPageTitle({
   className,
   accessory,
   entityId,
+  withBottomSpacing = true,
 }: EntityPageTitleProps) {
   if (isEditing) {
     return (
@@ -63,7 +74,7 @@ export function EntityPageTitle({
             'm-0 -mb-px w-full resize-none overflow-hidden bg-transparent p-0 text-text placeholder:text-grey-03 focus:outline-hidden'
           )}
         />
-        <Spacer height={3.5} />
+        {withBottomSpacing && <Spacer height={EDITING_BOTTOM_SPACING} />}
       </div>
     );
   }
@@ -86,7 +97,7 @@ export function EntityPageTitle({
           {value || ZERO_WIDTH_SPACE}
         </h1>
       )}
-      <Spacer height={12} />
+      {withBottomSpacing && <Spacer height={BROWSE_BOTTOM_SPACING} />}
     </div>
   );
 }
