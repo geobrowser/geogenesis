@@ -97,11 +97,14 @@ import { extractSingleTypeIdFromFilter, extractTypeIdsFromFilter, removeTypeIdsF
 // `EntitiesBatch` has no `first` argument, so keep id.in calls under the API's default page size.
 export const ENTITY_ID_BATCH_SIZE = 50;
 
-/** `ids` in consecutive batches of at most `ENTITY_ID_BATCH_SIZE`, for `id: { in }` style filters. */
-export function batchEntityIds(ids: readonly string[]): string[][] {
+/** API rejects `first` (mapped from `limit`) above this on `entities` and `entitiesConnection`. */
+const ENTITIES_CONNECTION_MAX_FIRST = 1000;
+
+/** `ids` in consecutive batches of at most `size`, for `id: { in }` style filters. */
+export function batchEntityIds(ids: readonly string[], size = ENTITY_ID_BATCH_SIZE): string[][] {
   const batches: string[][] = [];
-  for (let start = 0; start < ids.length; start += ENTITY_ID_BATCH_SIZE) {
-    batches.push(ids.slice(start, start + ENTITY_ID_BATCH_SIZE));
+  for (let start = 0; start < ids.length; start += size) {
+    batches.push(ids.slice(start, start + size));
   }
   return batches;
 }
@@ -180,17 +183,31 @@ export function getBatchEntitySpaces(entityIds: string[], signal?: AbortControll
   });
 }
 
-/** Lightweight batch fetch that returns only {id, name} for a set of entity IDs. */
+/**
+ * Lightweight batch fetch that returns only {id, name} for a set of entity IDs, however many.
+ *
+ * `entities` without a `first` silently stops at 100 rows, and rejects a `first` above 1000 — so
+ * the ids go out in batches of the most one request may name. Without that, a topic menu holding
+ * 1,413 ids named the first slice of them and drew every other row as "Topic".
+ */
 export function getEntityNames(entityIds: string[], signal?: AbortController['signal']) {
-  return graphql({
-    query: entityNamesQuery,
-    decoder: data =>
-      (data.entities ?? [])
-        .filter((e): e is { id: string; name: string | null } => e != null && typeof e.id === 'string')
-        .map(e => ({ id: e.id as string, name: (e.name as string | null) ?? null })),
-    variables: { filter: { id: { in: entityIds } } },
-    signal,
-  });
+  return Effect.map(
+    Effect.all(
+      batchEntityIds(entityIds, ENTITIES_CONNECTION_MAX_FIRST).map(batch =>
+        graphql({
+          query: entityNamesQuery,
+          decoder: data =>
+            (data.entities ?? [])
+              .filter((e): e is { id: string; name: string | null } => e != null && typeof e.id === 'string')
+              .map(e => ({ id: e.id as string, name: (e.name as string | null) ?? null })),
+          variables: { filter: { id: { in: batch } }, first: batch.length },
+          signal,
+        })
+      ),
+      { concurrency: ENTITY_ID_BATCH_CONCURRENCY }
+    ),
+    rows => rows.flat()
+  );
 }
 
 type GetAllEntitiesOptions = {
@@ -210,9 +227,6 @@ type GetAllEntitiesOptions = {
   filter?: EntityFilter;
   orderBy?: EntitiesOrderBy[];
 };
-
-/** API rejects `first` (mapped from `limit`) above this on `entitiesConnection`. */
-const ENTITIES_CONNECTION_MAX_FIRST = 1000;
 
 export type EntitiesPage = {
   entities: Entity[];

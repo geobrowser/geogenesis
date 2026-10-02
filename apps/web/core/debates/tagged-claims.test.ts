@@ -7,7 +7,7 @@ import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { graphql } from '~/core/io/graphql-client';
-import { getResultsPage } from '~/core/io/queries';
+import { getEntityNames, getResultsPage } from '~/core/io/queries';
 
 import {
   NO_TAGGED_CLAIM_FILTERS,
@@ -29,8 +29,9 @@ const graphqlMock = graphql as unknown as Mock;
 
 // Search is answered by the REST endpoint now (GEO-2898), so it is a dependency of this module
 // rather than part of the filter it builds.
-vi.mock('~/core/io/queries', () => ({ getResultsPage: vi.fn() }));
+vi.mock('~/core/io/queries', () => ({ getResultsPage: vi.fn(), getEntityNames: vi.fn() }));
 const searchMock = getResultsPage as unknown as Mock;
+const entityNamesMock = getEntityNames as unknown as Mock;
 
 /**
  * Pages of `/search` results, as ids, answered by the offset they were asked for.
@@ -66,6 +67,7 @@ function sentSearchArgs(call = 0) {
 beforeEach(() => {
   graphqlMock.mockReset();
   searchMock.mockReset();
+  entityNamesMock.mockReset();
 });
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -767,21 +769,16 @@ describe('the filter it builds', () => {
 
 describe('the facet menus', () => {
   function respondWithGroups(groups: Array<{ id: string; count: number }>) {
-    graphqlMock.mockImplementation(({ decoder, variables }) => {
-      // The names query answers separately; it is the only one taking `ids`.
-      if ((variables as any).ids) {
-        // Answers dashless, as the connection does, whatever spelling it was asked with.
-        return Effect.succeed(
-          decoder({
-            entitiesConnection: {
-              nodes: (variables as any).ids.map((id: string) => {
-                const dashless = id.replace(/-/g, '');
-                return { id: dashless, name: `Topic ${dashless}` };
-              }),
-            },
-          })
-        );
-      }
+    // The names answer separately, dashless as `entities` answers, whatever spelling they were asked with.
+    entityNamesMock.mockImplementation((ids: string[]) =>
+      Effect.succeed(
+        ids.map(id => {
+          const dashless = id.replace(/-/g, '');
+          return { id: dashless, name: `Topic ${dashless}` };
+        })
+      )
+    );
+    graphqlMock.mockImplementation(({ decoder }) => {
       return Effect.succeed(
         decoder({
           relationsConnection: {
@@ -815,22 +812,6 @@ describe('the facet menus', () => {
       name: `Topic ${TOPIC}`,
       count: 12,
     });
-  });
-
-  it('names every topic when the menu holds more than one request can name', async () => {
-    // The server caps `first` at 1000 and the Debate tag carries more topics than that, so a single
-    // names request left everything past the thousandth row reading "Topic".
-    const groups = Array.from({ length: 1413 }, (_, i) => ({
-      id: `00000000-0000-4000-8000-${String(i).padStart(12, '0')}`,
-      count: 1,
-    }));
-    respondWithGroups(groups);
-    const { result } = renderHook(() => useTaggedTopicFacet(TAG, NO_TAGGED_CLAIM_FILTERS, true), { wrapper: Wrapper });
-
-    await waitFor(() => expect(result.current.topics).toHaveLength(1413));
-    await waitFor(() => expect(result.current.topics.filter(topic => topic.name === null)).toEqual([]));
-    const nameRequests = graphqlMock.mock.calls.map(([args]) => (args.variables as any).ids).filter(Boolean);
-    expect(nameRequests.map((ids: string[]) => ids.length)).toEqual([1000, 413]);
   });
 
   // GEO-2798 review. `keepPreviousData` keeps the previous filter's counts on screen so the menu

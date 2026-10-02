@@ -61,10 +61,8 @@ function scopedFeedFilter(
 }
 
 async function fetchTopicNames(ids: string[], signal?: AbortSignal) {
-  const batches: string[][] = [];
-  for (let index = 0; index < ids.length; index += 50) batches.push(ids.slice(index, index + 50));
-  const rows = await Promise.all(batches.map(batch => Effect.runPromise(getEntityNames(batch, signal))));
-  return new Map(rows.flat().map(row => [normId(row.id), row.name]));
+  const rows = await Effect.runPromise(getEntityNames(ids, signal));
+  return new Map(rows.map(row => [normId(row.id), row.name]));
 }
 
 async function namedFacets(counts: Map<string, number>, excludedTopicId: string, signal?: AbortSignal) {
