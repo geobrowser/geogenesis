@@ -4912,10 +4912,9 @@ describe('DebateRoomPageClient', () => {
       };
       view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-      // Either path stops it: the cancellation discards it, the connection failure detaches it.
-      await waitFor(() =>
-        expect(mocks.liveStreamDetach.mock.calls.length + mocks.liveStreamAbort.mock.calls.length).toBeGreaterThan(0)
-      );
+      // A connection timeout goes through the connection-failure path only, which keeps the chunks.
+      await waitFor(() => expect(mocks.liveStreamDetach).toHaveBeenCalledOnce());
+      expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
       expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
     });
   });

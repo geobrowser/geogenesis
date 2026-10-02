@@ -291,7 +291,7 @@ describe('debate recording streaming', () => {
       },
     });
     live.append(new Blob(['0123456789ab']), 2_000);
-    await new Promise(resolve => setTimeout(resolve, 20));
+    await vi.waitFor(() => expect(wire.putPart).toHaveBeenCalledTimes(2));
 
     await live.detach();
     const atDetach = { wakeups, puts: wire.putPart.mock.calls.length };
