@@ -482,6 +482,7 @@ afterEach(async () => {
   vi.useRealTimers();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  vi.unstubAllEnvs();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
 });
 
@@ -3051,6 +3052,132 @@ describe('DebateRoomPageClient', () => {
     expect(processedTrack.enabled).toBe(true);
   });
 
+  describe('recording audio limiter (GEO-3118)', () => {
+    it('records the original stream, and creates no AudioContext, when the flag is off', async () => {
+      const contexts = installAudioContextMock();
+      installRecordingMocks();
+
+      await renderLiveDebate();
+
+      await waitFor(() => expect(mocks.mediaRecorderConstruct).toHaveBeenCalledOnce());
+      const recordedStream = mocks.mediaRecorderConstruct.mock.calls[0]?.[0] as MediaStream;
+      expect(recordedStream.getAudioTracks()[0]).toMatchObject({ id: 'krisp-processed-audio' });
+      expect(recordedStream.getVideoTracks()[0]).toMatchObject({ kind: 'video' });
+      expect(recordedStream.getTracks()).toHaveLength(2);
+      // Other room features (the speech detector) have contexts of their own; none built a limiter.
+      expect(contexts.filter(context => context.destinations > 0)).toHaveLength(0);
+    });
+
+    it('records the original video with limited audio, leaving the published tracks alone, when the flag is on', async () => {
+      vi.stubEnv('NEXT_PUBLIC_DEBATE_RECORDING_LIMITER', '1');
+      const contexts = installAudioContextMock();
+      const audioTrack = createLocalAudioTrack();
+      const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+      mocks.createLocalTracks.mockResolvedValue([audioTrack, videoTrack]);
+      const recorders = installRecordingMocks();
+
+      await renderLiveDebate();
+
+      await waitFor(() => expect(mocks.mediaRecorderConstruct).toHaveBeenCalledOnce());
+      const recordedStream = mocks.mediaRecorderConstruct.mock.calls[0]?.[0] as MediaStream;
+      const limiterContexts = contexts.filter(context => context.destinations > 0);
+      expect(limiterContexts).toHaveLength(1);
+      const context = limiterContexts[0]!;
+      expect(recordedStream.getVideoTracks()).toEqual([videoTrack.mediaStreamTrack]);
+      expect(recordedStream.getAudioTracks()).toEqual([context.processedTrack]);
+      // The graph reads the Krisp-processed track the call publishes; LiveKit still gets the originals.
+      expect(context.sources[0]?.getTracks()[0]).toMatchObject({ id: 'krisp-processed-audio' });
+      expect(mocks.publishTrack.mock.calls.map(call => call[0])).toEqual([audioTrack, videoTrack]);
+
+      act(() => {
+        recorders[0]?.dispatchEvent(new Event('stop'));
+      });
+
+      expect(context.processedTrack.stop).toHaveBeenCalledOnce();
+      expect(context.close).toHaveBeenCalledOnce();
+    });
+
+    it('records the original stream when the AudioContext is not running', async () => {
+      vi.stubEnv('NEXT_PUBLIC_DEBATE_RECORDING_LIMITER', '1');
+      const contexts = installAudioContextMock('suspended');
+      const warning = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      installRecordingMocks();
+
+      await renderLiveDebate();
+
+      await waitFor(() => expect(mocks.mediaRecorderConstruct).toHaveBeenCalledOnce());
+      const recordedStream = mocks.mediaRecorderConstruct.mock.calls[0]?.[0] as MediaStream;
+      expect(recordedStream.getAudioTracks()[0]).toMatchObject({ id: 'krisp-processed-audio' });
+      expect(contexts.filter(context => context.destinations > 0)).toHaveLength(0);
+      expect(warning).toHaveBeenCalledWith(
+        '[DebateRecording] audio limiter unavailable (audio_context_not_running); recording the unprocessed stream.',
+        ''
+      );
+      expect(mocks.capture).toHaveBeenCalledWith(
+        'debate_recording_limiter_fallback',
+        expect.objectContaining({ debate_id: 'debate-1', reason: 'audio_context_not_running' })
+      );
+      expect(mocks.mediaRecorderStart).toHaveBeenCalled();
+    });
+
+    it('records the original stream when the AudioContext cannot be constructed', async () => {
+      vi.stubEnv('NEXT_PUBLIC_DEBATE_RECORDING_LIMITER', '1');
+      vi.stubGlobal(
+        'AudioContext',
+        class {
+          constructor() {
+            throw new DOMException('not allowed', 'NotAllowedError');
+          }
+        }
+      );
+      vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+      installRecordingMocks();
+
+      await renderLiveDebate();
+
+      await waitFor(() => expect(mocks.mediaRecorderConstruct).toHaveBeenCalledOnce());
+      const recordedStream = mocks.mediaRecorderConstruct.mock.calls[0]?.[0] as MediaStream;
+      expect(recordedStream.getAudioTracks()[0]).toMatchObject({ id: 'krisp-processed-audio' });
+      expect(mocks.mediaRecorderStart).toHaveBeenCalled();
+    });
+
+    // Gating sets `enabled` on the published track. The graph reads that same object — not a
+    // clone with its own `enabled` — and a disabled track feeds Web Audio silence.
+    it('feeds the graph the very track the microphone gate disables', async () => {
+      vi.stubEnv('NEXT_PUBLIC_DEBATE_RECORDING_LIMITER', '1');
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+      const contexts = installAudioContextMock();
+      const processedTrack = { kind: 'audio', enabled: true, id: 'krisp-processed-audio' };
+      mocks.krispNoiseFilter.mockReturnValue({
+        processedTrack,
+        setEnabled: mocks.krispSetEnabled,
+        isEnabled: mocks.krispIsEnabled,
+        destroy: mocks.krispDestroy,
+      });
+      installRecordingMocks();
+
+      const view = await renderLiveDebate({ first_participant_slot: 2, current_speaker_slot: 2 });
+
+      await waitFor(() => expect(contexts.some(context => context.destinations > 0)).toBe(true));
+      const limiterContext = contexts.find(context => context.destinations > 0)!;
+      const graphInput = limiterContext.sources[0]!.getTracks()[0];
+      expect(graphInput).toBe(processedTrack);
+      expect(processedTrack.enabled).toBe(false);
+
+      mocks.debate = {
+        ...mocks.debate!,
+        started_at: '2026-07-01T23:59:40.000Z',
+        current_turn_index: 1,
+        current_speaker_slot: 1,
+        turn_started_at: '2026-07-02T00:00:10.000Z',
+        turn_ends_at: '2026-07-02T00:00:40.000Z',
+      };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() => expect(graphInput).toMatchObject({ enabled: true }));
+    });
+  });
+
   it('toggles Krisp from the debate debug controls without restarting the recorder', async () => {
     mocks.featureFlags.debateDebugging = true;
     installRecordingMocks();
@@ -5234,6 +5361,52 @@ function installRecordingMocks() {
   );
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
   return recorders;
+}
+
+/** A Web Audio stand-in recording what the recorder's limiter graph is built from. */
+function installAudioContextMock(state: AudioContextState = 'running') {
+  const contexts: Array<{
+    state: AudioContextState;
+    sources: MediaStream[];
+    destinations: number;
+    processedTrack: { kind: string; id: string; enabled: boolean; readyState: string; stop: () => void };
+    close: ReturnType<typeof vi.fn>;
+  }> = [];
+  const node = () => ({ connect: vi.fn(), disconnect: vi.fn() });
+  const param = () => ({ value: 0 });
+  vi.stubGlobal(
+    'AudioContext',
+    class {
+      state = state;
+      sources: MediaStream[] = [];
+      destinations = 0;
+      processedTrack = { kind: 'audio', id: 'limited-audio', enabled: true, readyState: 'live', stop: vi.fn() };
+      close = vi.fn(() => Promise.resolve());
+
+      constructor() {
+        contexts.push(this);
+      }
+
+      createMediaStreamSource(stream: MediaStream) {
+        this.sources.push(stream);
+        return node();
+      }
+
+      createGain() {
+        return { ...node(), gain: param() };
+      }
+
+      createDynamicsCompressor() {
+        return { ...node(), threshold: param(), knee: param(), ratio: param(), attack: param(), release: param() };
+      }
+
+      createMediaStreamDestination() {
+        this.destinations += 1;
+        return { ...node(), stream: new MediaStream([this.processedTrack as unknown as MediaStreamTrack]) };
+      }
+    }
+  );
+  return contexts;
 }
 
 function createLocalAudioTrack() {

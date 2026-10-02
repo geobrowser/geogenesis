@@ -70,6 +70,11 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
+import {
+  type RecordingAudioLimiter,
+  prepareRecordingStream,
+  roomAudioContextOf,
+} from '~/core/debates/recording-audio-limiter';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import { type LiveRecordingStream, putRecordingPart, startLiveRecordingStream } from '~/core/debates/recording-stream';
 import {
@@ -414,6 +419,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const ownershipRef = React.useRef<DebateRoomOwnershipCoordinator | null>(null);
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
+  // GEO-3118. The Web Audio graph feeding the recorder its limited audio, when the flag is on.
+  const recordingAudioLimiterRef = React.useRef<RecordingAudioLimiter | null>(null);
   const reportedRecorderFailuresRef = React.useRef(new Set<string>());
   const recordingChunksRef = React.useRef<Blob[]>([]);
   // GEO-2955. The recording made durable while it is made: every timeslice to IndexedDB, and to
@@ -1008,15 +1015,24 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
   }, []);
 
-  const startLocalRecorder = React.useCallback((stream: MediaStream) => {
+  const startLocalRecorder = React.useCallback((stream: MediaStream, roomAudioContext: AudioContext | null) => {
     if (recordingStartedAtRef.current !== null) return;
     if (recorderRef.current && recorderRef.current.state !== 'inactive') return;
     const debateId = debateIdRef.current;
+    // GEO-3118. With the limiter flag off this is `stream` itself. With it on, the recorder gets the
+    // same video track and a limited copy of the audio; LiveKit keeps publishing the original.
+    recordingAudioLimiterRef.current?.dispose();
+    const limiter = prepareRecordingStream({ stream, debateId, audioContext: roomAudioContext });
+    recordingAudioLimiterRef.current = limiter;
+    const disposeLimiter = () => {
+      limiter.dispose();
+      if (recordingAudioLimiterRef.current === limiter) recordingAudioLimiterRef.current = null;
+    };
     // GEO-2843. Any failure is reported and leaves no recorder behind — the state an unsupported
     // browser has always left: the pill never lights and there is nothing to persist. The calling
     // effect re-runs on every debate refresh, so each stage is reported once per debate.
     const started = startDebateRecorder({
-      stream,
+      stream: limiter.stream,
       debateId,
       timesliceMs: 1_000,
       report: failure => {
@@ -1067,7 +1083,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // A recorder can end without `stopLocalRecorder`: `disconnectRoom` stops the local tracks,
         // the stream goes inactive and the recorder stops itself. `capturing` outlives the modal, so
         // clear it from the recorder's own events or the pill keeps claiming to record.
-        recorder.addEventListener('stop', () => setCapturing(false), { once: true });
+        recorder.addEventListener(
+          'stop',
+          () => {
+            setCapturing(false);
+            disposeLimiter();
+          },
+          { once: true }
+        );
         // `startDebateRecorder` reports the `error` itself; this only clears the pill.
         recorder.addEventListener('error', () => setCapturing(false), { once: true });
         recorder.ondataavailable = event => {
@@ -1079,6 +1102,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       },
     });
     if (started) recorderRef.current = started.recorder;
+    else disposeLimiter();
   }, []);
 
   const stopLocalRecorder = React.useCallback(async () => {
@@ -1233,6 +1257,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     liveRecordingStreamRef.current = null;
     const recorder = recorderRef.current;
     if (!recorder) {
+      recordingAudioLimiterRef.current?.dispose();
+      recordingAudioLimiterRef.current = null;
       recordingChunksRef.current = [];
       recordingStartedAtRef.current = null;
       recordingEndedAtRef.current = null;
@@ -1250,6 +1276,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       recorder.stop();
       await stopped;
     }
+    // The recorder's own `stop` listener normally does this; repeat it for a recorder that had
+    // already gone inactive.
+    recordingAudioLimiterRef.current?.dispose();
+    recordingAudioLimiterRef.current = null;
     recorderRef.current = null;
     recordingChunksRef.current = [];
     recordingStartedAtRef.current = null;
@@ -2415,7 +2445,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // large misses on record are unaffected. Those need the clock to stop being armed by `/joined`,
     // which is the rest of GEO-2644; this is the prerequisite that makes that possible without
     // deadlocking capture against the clock it would then be waiting on.
-    startLocalRecorder(stream);
+    // The room's AudioContext, which Krisp already runs in, for the recording limiter (GEO-3118).
+    startLocalRecorder(stream, roomAudioContextOf(localTracksRef.current));
     recordingStopTimerRef.current = window.setTimeout(
       () => {
         persistRecordingAfterCapture();
@@ -2428,6 +2459,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     clearRecordingTimers,
     debate,
     localMediaStreamRef,
+    localTracksRef,
     persistRecordingAfterCapture,
     roomState,
     serverClock,
