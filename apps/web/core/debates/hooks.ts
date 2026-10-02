@@ -84,6 +84,7 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
+import type { RecordingPlaybackVariant } from './mobile-rendition';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -129,8 +130,12 @@ export const debateQueryKeys = {
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
   media: (debateId: string) => ['debates', 'media', debateId] as const,
   /** Viewer-specific: whether a recording can be read at all is decided per identity. */
-  recordingUrl: (debateId: string, filename: string, accountKey: string | null) =>
-    ['debates', 'recording-url', debateId, filename, accountKey] as const,
+  recordingUrl: (
+    debateId: string,
+    filename: string,
+    accountKey: string | null,
+    variant: RecordingPlaybackVariant | 'original' = 'original'
+  ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
@@ -1379,7 +1384,8 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
  */
 export const RECORDING_URL_STALE_MS = 5 * 60 * 1000;
 
-type RecordingUrlRequest = { debateId: string; filename: string };
+/** `variant: 'mobile'` signs the recording's mobile rendition (GEO-3118) instead of the file itself. */
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
 
 /**
  * The signed playback URL for one debate recording, cached.
@@ -1398,9 +1404,9 @@ export function useRecordingPlaybackUrl() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return React.useMemo(() => {
-    const options = ({ debateId, filename }: RecordingUrlRequest, staleTime: number) => ({
-      queryKey: debateQueryKeys.recordingUrl(debateId, filename, accountKey),
-      queryFn: () => getRecordingUrl(debateId, filename, getPrivyIdentityToken, accountKey),
+    const options = ({ debateId, filename, variant }: RecordingUrlRequest, staleTime: number) => ({
+      queryKey: debateQueryKeys.recordingUrl(debateId, filename, accountKey, variant),
+      queryFn: () => getRecordingUrl(debateId, filename, getPrivyIdentityToken, accountKey, variant),
       staleTime,
       // Dropped once it could no longer be served anyway.
       gcTime: RECORDING_URL_STALE_MS,

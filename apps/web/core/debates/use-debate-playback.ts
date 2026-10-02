@@ -8,6 +8,7 @@ import { reportEvent } from '~/core/telemetry/logger';
 
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
+import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
@@ -137,6 +138,24 @@ const RECORDING_URL_REUSE_MS = 5 * 60_000;
 /** Re-sign attempts after a lapse before the card shows its load error, and the wait between. */
 const MAX_RESIGN_RETRIES = 2;
 const RESIGN_RETRY_DELAY_MS = 2_000;
+
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
+
+/**
+ * Signs one recording, carrying `variant` only when one is wanted so the default request is
+ * unchanged. A mobile rendition that cannot be signed (GEO-3118) falls back to the recording
+ * itself: the rendition is an optimisation, and failing to get one is no reason to show the
+ * viewer a load error for a debate that plays.
+ */
+function signRecording(
+  sign: (request: RecordingUrlRequest) => Promise<{ url: string }>,
+  debateId: string,
+  filename: string,
+  variant: RecordingPlaybackVariant | undefined
+) {
+  if (!variant) return sign({ debateId, filename });
+  return sign({ debateId, filename, variant }).catch(() => sign({ debateId, filename }));
+}
 
 export function useDebatePlayback(
   debate: Debate,
@@ -404,6 +423,19 @@ export function useDebatePlayback(
   const slot2Recording = debate.recordings.find(recording => recording.participant_slot === 2) ?? null;
   const slot1RecordingFilename = slot1Recording?.filename ?? null;
   const slot2RecordingFilename = slot2Recording?.filename ?? null;
+  // Which file of each recording to sign: the 720p H.264 rendition on a phone, when the flag is on
+  // and geo-chat has written one (GEO-3118); otherwise the recording itself, as before. Decided
+  // per slot, since a rendition can exist for one recording before the other.
+  const slot1MobileContentType = slot1Recording?.mobile_content_type ?? null;
+  const slot2MobileContentType = slot2Recording?.mobile_content_type ?? null;
+  const slot1Variant = React.useMemo(
+    () => recordingPlaybackVariant({ mobile_content_type: slot1MobileContentType }),
+    [slot1MobileContentType]
+  );
+  const slot2Variant = React.useMemo(
+    () => recordingPlaybackVariant({ mobile_content_type: slot2MobileContentType }),
+    [slot2MobileContentType]
+  );
 
   // How far each recording's own timeline sits from the debate-timeline origin, so the two
   // videos can be kept in lockstep despite starting at different instants on different devices.
@@ -474,7 +506,7 @@ export function useDebatePlayback(
       return;
     }
 
-    const recordingsKey = `${debate.id}|${slot1RecordingFilename}|${slot2RecordingFilename}`;
+    const recordingsKey = `${debate.id}|${slot1RecordingFilename}|${slot2RecordingFilename}|${slot1Variant ?? ''}|${slot2Variant ?? ''}`;
     // Already holding URLs for exactly these recordings — a re-activation, not a new debate.
     if (fetchedForRef.current === recordingsKey) return;
 
@@ -517,8 +549,8 @@ export function useDebatePlayback(
     refreshedSlotsRef.current.clear();
 
     Promise.all([
-      recordingUrlsRef.current.lookup({ debateId: debate.id, filename: slot1RecordingFilename }),
-      recordingUrlsRef.current.lookup({ debateId: debate.id, filename: slot2RecordingFilename }),
+      signRecording(recordingUrlsRef.current.lookup, debate.id, slot1RecordingFilename, slot1Variant),
+      signRecording(recordingUrlsRef.current.lookup, debate.id, slot2RecordingFilename, slot2Variant),
     ])
       .then(([slot1Result, slot2Result]) => {
         // Cancelled mid-flight: commit nothing and leave the key unclaimed so the next run
@@ -554,7 +586,15 @@ export function useDebatePlayback(
     return () => {
       cancelled = true;
     };
-  }, [cancelRecoveries, debate.id, enabled, slot1RecordingFilename, slot2RecordingFilename]);
+  }, [
+    cancelRecoveries,
+    debate.id,
+    enabled,
+    slot1RecordingFilename,
+    slot2RecordingFilename,
+    slot1Variant,
+    slot2Variant,
+  ]);
 
   // Nothing may outlive the card: a pending rejoin holds listeners on an element that is going
   // away, and a count that nothing would ever decrement.
@@ -594,7 +634,12 @@ export function useDebatePlayback(
 
       try {
         // `refresh`, never the cached `lookup`: the cached URL is the one suspected of being dead.
-        const { url } = await recordingUrlsRef.current.refresh({ debateId: debate.id, filename });
+        const { url } = await signRecording(
+          recordingUrlsRef.current.refresh,
+          debate.id,
+          filename,
+          slot === 1 ? slot1Variant : slot2Variant
+        );
         // Merged rather than replaced: the other slot's URL is in use and is not ours to touch.
         setUrls(current =>
           current[slot === 1 ? 'slot1' : 'slot2'] === url
@@ -605,7 +650,7 @@ export function useDebatePlayback(
         /* The tile has already shown what it shows when a recording cannot be revived. */
       }
     },
-    [debate.id, slot1RecordingFilename, slot2RecordingFilename]
+    [debate.id, slot1RecordingFilename, slot2RecordingFilename, slot1Variant, slot2Variant]
   );
 
   // While released, mark the held URLs lapsed once they reach the reuse window. Rechecked when the
@@ -634,8 +679,8 @@ export function useDebatePlayback(
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     Promise.all([
-      recordingUrlsRef.current.refresh({ debateId: debate.id, filename: slot1RecordingFilename }),
-      recordingUrlsRef.current.refresh({ debateId: debate.id, filename: slot2RecordingFilename }),
+      signRecording(recordingUrlsRef.current.refresh, debate.id, slot1RecordingFilename, slot1Variant),
+      signRecording(recordingUrlsRef.current.refresh, debate.id, slot2RecordingFilename, slot2Variant),
     ])
       .then(([slot1Result, slot2Result]) => {
         if (cancelled) return;
@@ -660,7 +705,16 @@ export function useDebatePlayback(
       cancelled = true;
       if (retryTimer) clearTimeout(retryTimer);
     };
-  }, [mediaAttached, urlsLapsed, resignAttempt, debate.id, slot1RecordingFilename, slot2RecordingFilename]);
+  }, [
+    mediaAttached,
+    urlsLapsed,
+    resignAttempt,
+    debate.id,
+    slot1RecordingFilename,
+    slot2RecordingFilename,
+    slot1Variant,
+    slot2Variant,
+  ]);
 
   // Reaching the card (active or preloading) gives a re-sign that ran out of retries another go.
   React.useEffect(() => {
