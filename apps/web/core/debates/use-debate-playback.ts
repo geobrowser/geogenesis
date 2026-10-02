@@ -198,6 +198,13 @@ export function useDebatePlayback(
   const needsPrepositionRef = React.useRef(false);
   /** Slot 1's last forward progress, for telling "stalled" apart from "merely not paused". */
   const primaryProgressRef = React.useRef<{ seconds: number; at: number } | null>(null);
+  /** The same for slot 2, which is the drift correction's leader while it is the audible one. */
+  const secondaryProgressRef = React.useRef<{ seconds: number; at: number } | null>(null);
+  /**
+   * `mutedByUser` for the tick, which must not take it as a dependency: `onPlaybackTick` is wired
+   * into media event listeners, and a new identity on every mute toggle would re-bind them.
+   */
+  const mutedByUserRef = React.useRef(mutedByUser);
   const lastSyncSeekAtRef = React.useRef(0);
   /** See MIN_BACKGROUND_RESTART_INTERVAL_MS. */
   const lastBackgroundRestartAtRef = React.useRef(0);
@@ -432,6 +439,10 @@ export function useDebatePlayback(
   React.useEffect(() => {
     recordingUrlsRef.current = recordingUrls;
   }, [recordingUrls]);
+
+  React.useEffect(() => {
+    mutedByUserRef.current = mutedByUser;
+  }, [mutedByUser]);
 
   // Which recordings `urls` currently holds signed URLs for, so re-entering a card does
   // not re-request them (GEO-2895).
@@ -678,6 +689,7 @@ export function useDebatePlayback(
    */
   const noteDeliberateSeek = React.useCallback(() => {
     primaryProgressRef.current = null;
+    secondaryProgressRef.current = null;
     lastSyncSeekAtRef.current = Date.now();
   }, []);
 
@@ -693,6 +705,7 @@ export function useDebatePlayback(
       if (!primaryVideo || !secondaryVideo) return false;
       moveTo(primaryVideo, Math.max(0, playhead - offsets.slot1));
       moveTo(secondaryVideo, Math.max(0, playhead - offsets.slot2));
+      primaryVideo.playbackRate = 1;
       secondaryVideo.playbackRate = 1;
       noteDeliberateSeek();
       // This *is* the debate's position now — a scrub backwards must not be dragged forward by
@@ -755,13 +768,20 @@ export function useDebatePlayback(
     else if (position.live) lastRunningPlayheadRef.current = playhead;
     setPlayheadSeconds(playhead);
 
-    // Lock slot 2 to slot 1, offset by the gap between when the two recordings started, so
-    // neither debater's audio drifts ahead of the other.
+    // Keep the two recordings in step, offset by the gap between when they started, so neither
+    // debater's audio drifts ahead of the other.
+    //
+    // **The correction acts on the muted recording, never on the one the viewer is hearing.** A
+    // rate nudge time-stretches the element's audio and a seek on these files is a parse walk that
+    // drops and re-primes the audio pipeline; on a phone both come out as crackle and clicks. So
+    // the audible recording leads at rate 1 and is never seeked for sync, and the other follows
+    // it. Which one is audible comes from the same turn state that drives `audible` in the
+    // player. With nothing audible — the feed's muted default — slot 1 leads, as it always has.
     //
     // Two things make this harder than it looks, and getting either wrong is visible as a
     // glitching video (GEO-2828).
     //
-    // **A stalled slot 1 must not be a seek target.** `paused` stays false while a video
+    // **A stalled leader must not be a seek target.** `paused` stays false while a video
     // starves for data, so "not paused" does not mean "advancing". When slot 1 stalled — it is
     // the larger file, so it starves first — its `currentTime` froze, drift crossed the
     // threshold, and slot 2 was dragged *back* to the frozen position, played forward a second,
@@ -775,7 +795,6 @@ export function useDebatePlayback(
     // reaches the old 0.18s threshold in about two seconds of playback, so it could never
     // settle. Nudging the rate absorbs ordinary drift without touching the demuxer; a seek is
     // kept for a gap too large to close that way.
-    const syncDelta = offsets.slot2 - offsets.slot1;
     const now = Date.now();
     // Every correction below assumes the pair's play/pause states are the settled result of a
     // decision — ours or the viewer's. Two situations break that assumption, and in both the
@@ -788,47 +807,60 @@ export function useDebatePlayback(
     // with slower still.
     const pairIsSettled = !hidden && resumesInFlightRef.current === 0 && recoveringSlotsRef.current === 0;
 
-    if (primaryVideo) {
-      const progress = primaryProgressRef.current;
-      if (!progress || primaryVideo.currentTime > progress.seconds + STALL_EPSILON_SECONDS) {
-        primaryProgressRef.current = { seconds: primaryVideo.currentTime, at: now };
+    for (const [video, progressRef] of [
+      [primaryVideo, primaryProgressRef],
+      [secondaryVideo, secondaryProgressRef],
+    ] as const) {
+      if (video) {
+        const progress = progressRef.current;
+        if (!progress || video.currentTime > progress.seconds + STALL_EPSILON_SECONDS) {
+          progressRef.current = { seconds: video.currentTime, at: now };
+        }
+      } else {
+        progressRef.current = null;
       }
-    } else {
-      primaryProgressRef.current = null;
     }
+
+    // Slot 2 leads only while it is the one being heard: its turn, and the viewer has unmuted.
+    // `audible` in the player is `playing && turnState.slot === N`, unmuted unless `mutedByUser`;
+    // `playing` is implied below by the leader not being paused.
+    const syncTurn = turnStateAt(playhead);
+    const slot2Leads = !mutedByUserRef.current && syncTurn?.slot === 2;
+    const leader = slot2Leads ? secondaryVideo : primaryVideo;
+    const follower = slot2Leads ? primaryVideo : secondaryVideo;
+    const leaderProgress = slot2Leads ? secondaryProgressRef.current : primaryProgressRef.current;
+    // Where the follower's `currentTime` should be, given the leader's.
+    const followerDelta = slot2Leads ? offsets.slot1 - offsets.slot2 : offsets.slot2 - offsets.slot1;
 
     // `readyState` is the direct signal and the clock is the corroborating one: a video can sit
     // at HAVE_ENOUGH_DATA and still not advance if the decoder is wedged.
-    const primaryStalled =
-      !primaryVideo ||
-      primaryVideo.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ||
-      (primaryProgressRef.current !== null && now - primaryProgressRef.current.at > STALL_AFTER_MS);
+    const leaderStalled =
+      !leader ||
+      leader.readyState < HTMLMediaElement.HAVE_FUTURE_DATA ||
+      (leaderProgress !== null && now - leaderProgress.at > STALL_AFTER_MS);
 
-    if (
-      primaryVideo &&
-      secondaryVideo &&
-      pairIsSettled &&
-      !primaryVideo.paused &&
-      !secondaryVideo.seeking &&
-      !primaryStalled
-    ) {
-      const drift = secondaryVideo.currentTime - (primaryVideo.currentTime - syncDelta);
+    // The leader is never corrected, so a nudge left on it from before the roles swapped (a turn
+    // boundary, or the viewer unmuting) goes now.
+    if (leader && leader.playbackRate !== 1) leader.playbackRate = 1;
+
+    if (leader && follower && pairIsSettled && !leader.paused && !follower.seeking && !leaderStalled) {
+      const drift = follower.currentTime - (leader.currentTime - followerDelta);
       const absDrift = Math.abs(drift);
 
       if (absDrift > SYNC_SEEK_DRIFT_SECONDS && now - lastSyncSeekAtRef.current > MIN_SYNC_SEEK_INTERVAL_MS) {
-        secondaryVideo.currentTime = Math.max(0, primaryVideo.currentTime - syncDelta);
-        secondaryVideo.playbackRate = 1;
+        follower.currentTime = Math.max(0, leader.currentTime - followerDelta);
+        follower.playbackRate = 1;
         lastSyncSeekAtRef.current = now;
       } else if (absDrift > SYNC_NUDGE_DRIFT_SECONDS) {
         // Small enough that a rate change closes it within a few seconds, and far enough from 1
-        // to actually converge. Pitch shift at 3% is not audible.
-        secondaryVideo.playbackRate = drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE;
-      } else if (secondaryVideo.playbackRate !== 1) {
-        secondaryVideo.playbackRate = 1;
+        // to actually converge. On the muted element, so the pitch shift is not heard at all.
+        follower.playbackRate = drift > 0 ? 1 - SYNC_NUDGE_RATE : 1 + SYNC_NUDGE_RATE;
+      } else if (follower.playbackRate !== 1) {
+        follower.playbackRate = 1;
       }
-    } else if (secondaryVideo && secondaryVideo.playbackRate !== 1) {
+    } else if (follower && follower.playbackRate !== 1) {
       // Never leave a nudge running once the pair is no longer being kept in step.
-      secondaryVideo.playbackRate = 1;
+      follower.playbackRate = 1;
     }
 
     /**
