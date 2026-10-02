@@ -52,7 +52,20 @@ describe('classifyRecordingUploadError', () => {
       Object.assign(new Error('Database has been closed'), { name: 'DatabaseClosedError' }),
       'indexeddb',
     ],
+    [
+      // GEO-3116: what Safari's first attempt reported on 1 Oct, through Dexie's ModifyError.
+      'a Dexie update Safari would not store',
+      new Error(
+        'Error modifying one or more objects. Errors: UnknownError: Error preparing Blob/File data to be stored in object store'
+      ),
+      'indexeddb',
+    ],
     ['a blob whose data is gone', domException('NotReadableError'), 'blob_unreadable'],
+    [
+      'a saved recording this browser cannot read',
+      new RecordingUploadError('This browser can no longer read its saved copy of the recording.', 'blob_unreadable'),
+      'blob_unreadable',
+    ],
     ['an aborted request', domException('AbortError'), 'aborted'],
     ['a timed-out request', domException('TimeoutError'), 'timeout'],
     ['the geo-chat session timing out', new Error('Geo Chat session request timed out.'), 'timeout'],

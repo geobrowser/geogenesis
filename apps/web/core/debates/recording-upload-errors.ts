@@ -121,7 +121,10 @@ export function classifyRecordingUploadError(error: unknown, online: boolean): s
   if (
     indexedDbErrorNames.has(name) ||
     (inner !== null && indexedDbErrorNames.has(inner)) ||
-    /indexed ?db|indexed database/i.test(message)
+    /indexed ?db|indexed database/i.test(message) ||
+    // Dexie's ModifyError and BulkError carry the name `Error`; the IndexedDB failure is in the
+    // message. Safari's "Error preparing Blob/File data to be stored in object store" arrives so.
+    /error modifying one or more objects|object store/i.test(message)
   ) {
     return 'indexeddb';
   }

@@ -268,6 +268,21 @@ describe('debate recording streaming', () => {
     expect(await db.debateRecordingChunks.count()).toBe(0);
   });
 
+  // GEO-3116: no Blob is handed to IndexedDB, which Safari could not reliably store.
+  it('stores timeslices as bytes, and still reads chunks saved as Blobs before', async () => {
+    await stream.createRecordingStream('s1', metadata());
+    await stream.appendRecordingChunk('s1', 1, new Blob(['world']), 2_000);
+    // A chunk an earlier version wrote, as a Blob.
+    await db.debateRecordingChunks.put({ streamId: 's1', seq: 0, blob: new Blob(['hello ']) });
+
+    const stored = await db.debateRecordingChunks.get(['s1', 1]);
+    expect(stored?.blob).toBeUndefined();
+    expect(Object.prototype.toString.call(stored?.data)).toBe('[object ArrayBuffer]');
+    expect(await text(await stream.readRecordingStreamBlob((await stream.getRecordingStream('s1'))!))).toBe(
+      'hello world'
+    );
+  });
+
   describe('recoverOrphanedRecordingStreams', () => {
     const now = () => Date.now() + stream.RECORDING_STREAM_ORPHAN_AFTER_MS + 1;
 
