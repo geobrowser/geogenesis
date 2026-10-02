@@ -696,6 +696,15 @@ describe('PeopleTab', () => {
     expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
   });
 
+  // The analytics label used to come from the button text; the copy change must not split the series.
+  it('keeps the Request debate analytics label on the Debate now button', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const button = screen.getAllByRole('button', { name: 'Debate now' })[0];
+    expect(button).toHaveAttribute('data-geo-analytics-label', 'Debate hub Request debate');
+    expect(button).toHaveClass('bg-text');
+  });
+
   // Matches the Matches tab: a request you're waiting on gets a card rather than a sentence, and
   // stays in view rather than scrolling away behind people you can no longer ask.
   it('puts a sticky card above the list for a request you sent', () => {
