@@ -206,6 +206,22 @@ export function DebateFeedPlayer({
     pair.release();
     void playFromStartRaw();
   };
+  /*
+   * Let both recordings make sound later, from inside the Unmute tap (GEO-3115).
+   *
+   * iOS only lets an element become audible from a user gesture, element by element, and refuses
+   * any other unmute by pausing it. The sound moves to the other recording at each turn boundary,
+   * on a media tick, so a tap that unmuted only the speaker left the next speaker's element to be
+   * refused at the handoff. A `play()` made inside a gesture lifts that restriction for the element,
+   * and on a running element it changes nothing else: no `muted` write, no event the playback hook
+   * reacts to. Measured on an iPhone: after a tap that had `play()`-ed both, the handoff was allowed.
+   * Not both unmuted at once instead: iOS then played neither audibly (#2719's first attempt).
+   */
+  const activateBothInGesture = () => {
+    for (const video of [slot1VideoRef.current, slot2VideoRef.current]) {
+      if (video && !video.paused) void video.play().catch(() => {});
+    }
+  };
   const seekBoth = (seconds: number) => {
     measurement.control('seek');
     seekBothRaw(seconds);
@@ -635,6 +651,7 @@ export function DebateFeedPlayer({
                   ariaLabel={mutedByUser ? 'Unmute' : 'Mute'}
                   onClick={() => {
                     measurement.control(mutedByUser ? 'unmute' : 'mute');
+                    if (mutedByUser && playing) activateBothInGesture();
                     setMutedByUser(current => !current);
                   }}
                   className={

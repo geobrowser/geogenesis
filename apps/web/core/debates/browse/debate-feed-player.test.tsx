@@ -428,6 +428,75 @@ describe('DebateFeedPlayer audio gating (GEO-2947)', () => {
   });
 });
 
+describe('the Unmute tap and iOS gesture activation (GEO-3115)', () => {
+  /** A running element whose `play()` and `muted` writes are recorded, and what they saw. */
+  function running(video: HTMLVideoElement) {
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => false });
+    const play = vi.fn(() => Promise.resolve());
+    video.play = play;
+    return play;
+  }
+  const muteButton = (video: HTMLVideoElement, name: 'Mute' | 'Unmute') =>
+    within(video.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name });
+
+  it('plays both recordings inside the Unmute tap, before any re-render', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    const play1 = running(slot1);
+    const play2 = running(slot2);
+    const controller = mocks.controller as ReturnType<typeof controllerFixture>;
+    // The fixture's setter changes nothing, so anything seen here was done by the handler itself.
+    const atTap: Array<[number, number, boolean, boolean]> = [];
+    controller.setMutedByUser.mockImplementation(() =>
+      atTap.push([play1.mock.calls.length, play2.mock.calls.length, slot1.muted, slot2.muted])
+    );
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+
+    // Both activated, and the tap itself wrote no mute: the listening debater stays muted.
+    expect(atTap).toEqual([[1, 1, true, true]]);
+  });
+
+  it('starts nothing when the pair is paused', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1, playing: false });
+    const play1 = vi.fn(() => Promise.resolve());
+    const play2 = vi.fn(() => Promise.resolve());
+    slot1.play = play1;
+    slot2.play = play2;
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+
+    expect(play1).not.toHaveBeenCalled();
+    expect(play2).not.toHaveBeenCalled();
+  });
+
+  it('plays nothing on Mute, and mutes both', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: false, turnSlot: 1 });
+    const play1 = running(slot1);
+    const play2 = running(slot2);
+
+    fireEvent.click(muteButton(slot1, 'Mute'));
+    update({ mutedByUser: true, turnSlot: 1 });
+
+    expect(play1).not.toHaveBeenCalled();
+    expect(play2).not.toHaveBeenCalled();
+    expect(slot1.muted).toBe(true);
+    expect(slot2.muted).toBe(true);
+  });
+
+  it('still moves the mute with the turn after an unmute', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    running(slot1);
+    running(slot2);
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+    update({ mutedByUser: false, turnSlot: 1 });
+    expect([slot1.muted, slot2.muted]).toEqual([false, true]);
+
+    update({ mutedByUser: false, turnSlot: 2 });
+    expect([slot1.muted, slot2.muted]).toEqual([true, false]);
+  });
+});
+
 describe('DebateFeedPlayer repairs a mute made behind React (GEO-2947)', () => {
   it('re-asserts the rendered mute once the resume is over', () => {
     const { slot1, update } = renderPlayer({ mutedByUser: false, turnSlot: 1, isResuming: true });
