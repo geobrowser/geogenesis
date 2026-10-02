@@ -693,7 +693,7 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
   });
 
   // Matches the Matches tab: a request you're waiting on gets a card rather than a sentence, and
@@ -719,11 +719,11 @@ describe('PeopleTab', () => {
     expect(within(request).getByText('VS')).toBeInTheDocument();
   });
 
-  it('still greys out every Request debate button while the request is open', () => {
+  it('still greys out every Debate now button while the request is open', () => {
     mocks.challenge = challenge('requester');
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
+    for (const button of screen.getAllByRole('button', { name: 'Debate now' })) {
       expect(button).toBeDisabled();
     }
   });
@@ -765,7 +765,7 @@ describe('PeopleTab', () => {
 
   // The activity payload keeps reporting a challenge as pending until the server says otherwise,
   // so expiry has to be applied here — the same filter every other request surface uses. Without
-  // it the tab sat on an "Expired" card with every Request debate button still dead underneath it.
+  // it the tab sat on an "Expired" card with every Debate now button still dead underneath it.
   it('drops an expired challenge instead of waiting for the server to say so', () => {
     mocks.challenge = challenge('requester', -1_000);
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -774,11 +774,11 @@ describe('PeopleTab', () => {
     expect(screen.queryByText('Expired')).not.toBeInTheDocument();
   });
 
-  it('re-enables the Request debate buttons once the request has expired', () => {
+  it('re-enables the Debate now buttons once the request has expired', () => {
     mocks.challenge = challenge('requester', -1_000);
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
   });
 
   it('drops an expired incoming challenge too, sentence and all', () => {
@@ -786,7 +786,7 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
   });
 
   // The same action the Requests tab offers on this challenge, reachable without leaving People.
@@ -831,7 +831,7 @@ describe('PeopleTab', () => {
     mocks.authenticated = false;
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Request debate' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Debate now' })[0]);
 
     expect(mocks.promptSignIn).toHaveBeenCalled();
     expect(mocks.createChallenge).not.toHaveBeenCalled();
@@ -859,7 +859,7 @@ describe('PeopleTab', () => {
     expect(screen.queryByText(/^Won /)).not.toBeInTheDocument();
     expect(screen.queryByText('73%')).not.toBeInTheDocument();
     expect(screen.getByText('On Geo since Jan 2026')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
   });
 
   // The row's availability flags describe a pairing with somebody, and signed out there is nobody
@@ -869,7 +869,7 @@ describe('PeopleTab', () => {
     mocks.people = [{ ...person('user-them', 'Arturas'), can_challenge: false }];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Debate now' })).not.toBeDisabled();
   });
 
   // `in_debate` is true of the person, not of any viewer, so signing in would not make them
@@ -1547,13 +1547,13 @@ describe('Online only', () => {
     const rows = screen.getAllByRole('listitem');
     expect(within(rows[0]).getByText('Arturas')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Ona')).toBeInTheDocument();
-    expect(within(rows[1]).queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(within(rows[1]).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
     expect(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
   });
 
   // GEO-3119: online but away (a hidden tab, or nobody at it lately). Listed, so the sender knows they
   // exist, but a live request would go unseen, so the row says Away and offers Schedule.
-  it('draws an away person as Away, with Schedule instead of Request debate', async () => {
+  it('draws an away person as Away, with Schedule instead of Debate now', async () => {
     mocks.people = [
       { ...person('user-them', 'Arturas'), away: true, can_challenge: false },
       person('user-other', 'Vytautas'),
@@ -1562,10 +1562,10 @@ describe('Online only', () => {
 
     const rows = screen.getAllByRole('listitem');
     expect(within(rows[0]).getByText('Vytautas')).toBeInTheDocument();
-    expect(within(rows[0]).getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    expect(within(rows[0]).getByRole('button', { name: 'Debate now' })).toBeEnabled();
     expect(within(rows[1]).getByText('Arturas')).toBeInTheDocument();
     expect(within(rows[1]).getByText('Away')).toBeInTheDocument();
-    expect(within(rows[1]).queryByRole('button', { name: 'Request debate' })).not.toBeInTheDocument();
+    expect(within(rows[1]).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
 
     fireEvent.click(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Arturas' }));
     await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
@@ -1632,7 +1632,7 @@ describe('Online only', () => {
     const arturasRow = screen.getByText('Arturas').closest('li')!;
     expect(onaRow.compareDocumentPosition(arturasRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(onaRow).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
-    expect(within(arturasRow).getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+    expect(within(arturasRow).getByRole('button', { name: 'Debate now' })).toBeInTheDocument();
   });
 
   it('keeps someone on the live roster in their online row rather than listing them twice', () => {
@@ -1646,7 +1646,7 @@ describe('Online only', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getAllByText('Arturas')).toHaveLength(1);
-    expect(screen.getByRole('button', { name: 'Request debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Debate now' })).toBeInTheDocument();
   });
 
   it('shows upcoming shared times only, capped, with the rest behind More times', () => {

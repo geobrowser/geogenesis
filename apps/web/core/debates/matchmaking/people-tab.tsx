@@ -812,6 +812,9 @@ function PersonRow({
           </HubPillButton>
         ) : (
           <HubPillButton
+            variant="primary"
+            // Pinned to the old label so the analytics series survives the copy change to "Debate now".
+            analyticsLabel="Debate hub Request debate"
             onClick={() =>
               onRequireSignIn
                 ? onRequireSignIn({
@@ -841,7 +844,7 @@ function PersonRow({
             pendingLabel="Requesting…"
             title={disabled ? disabledReason : undefined}
           >
-            {person.in_debate ? 'In a debate' : 'Request debate'}
+            {person.in_debate ? 'In a debate' : 'Debate now'}
           </HubPillButton>
         )}
       </div>
