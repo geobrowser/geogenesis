@@ -699,8 +699,8 @@ function PersonRow({
   return (
     // Three columns rather than a flex run, so the button sits in its own track instead of sharing a
     // row box with the name — where it was the tallest thing and set the name's line height. The
-    // tracks hang from the top so the face and the button both line up with the name: centred, they
-    // drifted down to the middle of however many stat lines the row carried.
+    // tracks hang from the top, so the face, the name and the button all start on one line: centred,
+    // the face and button drifted down to the middle of however many stat lines the row carried.
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
       {/* The dot means "can be asked now", the same as inside the claim pills, so offline and away
           rows (GEO-3119) go without it. The clip sits on the inner span: on the
@@ -766,8 +766,7 @@ function PersonRow({
           />
         ) : null}
       </div>
-      {/* The pill is 28px against the name's 20px line, so it rises 4px to centre on it. */}
-      <div className="-mt-1 flex shrink-0 items-center gap-2">
+      <div className="flex shrink-0 items-center gap-2">
         {/* Quiet, and deliberately never disabled alongside the pill: someone already in a debate,
             or a viewer whose own request is pending, is exactly who wants to know when this person
             is next free. Gating it on the same reasons would hide it at the moment it earns its
