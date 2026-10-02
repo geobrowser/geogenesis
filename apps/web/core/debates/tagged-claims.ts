@@ -20,6 +20,7 @@ import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
+import { getEntityNames } from '~/core/io/queries';
 import {
   type RelationFacetCount,
   decodeRelationFacet,
@@ -791,30 +792,6 @@ export function useTaggedAnsweredCount(tagId: string, filters: TaggedClaimFilter
  */
 export type TaggedFacetCount = RelationFacetCount;
 
-/**
- * Names for the topic ids a facet came back with.
- *
- * The aggregate answers in ids, and a menu row needs a word. One request covers the whole menu and
- * is keyed on the ids, so it is fetched once and reused while the viewer narrows — topic names do
- * not change on the timescale of a filter click.
- */
-const TOPIC_NAMES_SOURCE = /* GraphQL */ `
-  query TaggedTopicNames($ids: [UUID!]!) {
-    entitiesConnection(first: 1000, filter: { id: { in: $ids } }) {
-      nodes {
-        id
-        name
-      }
-    }
-  }
-`;
-
-type TopicNamesQuery = {
-  entitiesConnection: { nodes: Array<{ id: string; name: string | null } | null> | null } | null;
-};
-
-const topicNamesDocument = parse(TOPIC_NAMES_SOURCE) as TypedDocumentNode<TopicNamesQuery, { ids: string[] }>;
-
 export const taggedFacetQueryKey = (
   dimension: 'topics' | 'spaces',
   tagId: string,
@@ -899,28 +876,21 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
 
   const ids = React.useMemo(() => (counts.data ?? NO_FACET_COUNTS).map(count => count.id), [counts.data]);
 
+  // The aggregate answers in ids, and a menu row needs a word. Keyed on the ids, so the names are
+  // fetched once and reused while the viewer narrows — topic names do not change on the timescale of
+  // a filter click.
   const names = useQuery({
     queryKey: ['tagged-claims', 'topic-names', ids] as const,
     // Names outlive a filter click, so the previous set stands while the new one is fetched rather
     // than every row falling back to "Topic" for a moment.
     placeholderData: keepPreviousData,
-    queryFn: ({ signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: topicNamesDocument,
-          decoder: (data: TopicNamesQuery) => {
-            const map = new Map<string, string | null>();
-            // Keyed on the normalized id. `groupedAggregates` answers in dashed UUIDs and
-            // `entitiesConnection` in dashless ones, so an unnormalized map never matches and every
-            // row falls back to the word "Topic" — which is exactly how this shipped and was caught
-            // in a browser.
-            for (const node of data.entitiesConnection?.nodes ?? []) if (node) map.set(uuidToHex(node.id), node.name);
-            return map;
-          },
-          variables: { ids },
-          signal,
-        })
-      ),
+    queryFn: async ({ signal }) => {
+      const rows = await Effect.runPromise(getEntityNames(ids, signal));
+      // Keyed on the normalized id. `groupedAggregates` answers in dashed UUIDs and `entities` in
+      // dashless ones, so an unnormalized map never matches and every row falls back to the word
+      // "Topic" — which is exactly how this shipped and was caught in a browser.
+      return new Map(rows.map(row => [uuidToHex(row.id), row.name]));
+    },
     staleTime: TOPIC_NAMES_STALE_TIME,
     enabled: enabled && ids.length > 0,
   });

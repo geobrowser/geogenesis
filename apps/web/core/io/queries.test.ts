@@ -3,10 +3,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   ENTITY_ID_BATCH_SIZE,
+  batchEntityIds,
   buildSearchPath,
   flattenRestResults,
   getBatchEntities,
   getEntityBacklinks,
+  getEntityNames,
   groupRestResults,
   hasDefaultSearchExcludedType,
   indexVoteRowsByObject,
@@ -510,6 +512,46 @@ describe('getBatchEntities', () => {
     await Effect.runPromise(getBatchEntities(idsFor(ENTITY_ID_BATCH_SIZE)));
 
     expect(graphqlMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('batchEntityIds', () => {
+  it('splits ids into consecutive batches of the given size', () => {
+    expect(batchEntityIds(['a', 'b', 'c', 'd', 'e'], 2)).toEqual([['a', 'b'], ['c', 'd'], ['e']]);
+  });
+
+  // A size that never moves the loop forward spins until memory runs out, and a fractional one
+  // slices at truncated offsets. Neither is an id list anyone can use, so it is refused up front.
+  // The fractional case goes first: without the guard it returns, where the others never do.
+  it('refuses a size that is not a positive whole number', () => {
+    expect(() => batchEntityIds(['a', 'b', 'c'], 1.5)).toThrow(RangeError);
+    expect(() => batchEntityIds(['a'], 0)).toThrow(RangeError);
+    expect(() => batchEntityIds(['a'], -1)).toThrow(RangeError);
+  });
+});
+
+describe('getEntityNames', () => {
+  afterEach(() => graphqlMock.mockReset());
+
+  // `entities` stops at 100 rows without a `first` and rejects one above 1000. The Debate tag's
+  // topic menu holds more than either, and every id past the cap was drawn as "Topic".
+  it('names every id, in requests the API will answer', async () => {
+    const ids = Array.from({ length: 1413 }, (_, index) => `topic-${index}`);
+    graphqlMock.mockImplementation((args: { variables: { filter: { id: { in: string[] } }; first: number } }) =>
+      Effect.succeed(args.variables.filter.id.in.slice(0, args.variables.first).map(id => ({ id, name: id })))
+    );
+
+    const rows = await Effect.runPromise(getEntityNames(ids));
+
+    expect(rows.map(row => row.id)).toEqual(ids);
+    const requests = graphqlMock.mock.calls.map(([args]) => args.variables);
+    expect(requests.map(variables => variables.filter.id.in.length)).toEqual([1000, 413]);
+    expect(requests.map(variables => variables.first)).toEqual([1000, 413]);
+  });
+
+  it('sends nothing for no ids', async () => {
+    expect(await Effect.runPromise(getEntityNames([]))).toEqual([]);
+    expect(graphqlMock).not.toHaveBeenCalled();
   });
 });
 
