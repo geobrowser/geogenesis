@@ -81,6 +81,14 @@ export type DebateClaimInput = {
    */
   existingClaimEntityId?: string | null;
   /**
+   * GEO-2870 D1: the stable id geo-chat minted for this claim (its `entity_id`), so a claim can be
+   * requested by id before this publish runs. When there is no `existingClaimEntityId`, the Claim
+   * is minted with exactly this id instead of a fresh one; a reference always wins over it. The
+   * id is deterministic per debate and claim, so claims sharing it are one entity, minted once.
+   * Null/absent (payloads from before D1) mints a fresh id as before.
+   */
+  stableEntityId?: string | null;
+  /**
    * Topics the extractor assigned to this claim, selected from the debated claim's own topic
    * set ({KG entity id, name}). Written on minted and reused claims alike; for a reused entity
    * the reuse policy has already subtracted the topics the entity carries on the graph, so the
@@ -386,6 +394,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
     const debateTaggedClaims = new Set<string>();
+    const mintedClaims = new Set<string>();
 
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
@@ -434,9 +443,15 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         const claimEntityText = claim.text.trim();
         if (claimEntityText.length === 0) continue;
         const existingClaimId = claim.existingClaimEntityId?.trim() || null;
-        const claimId = existingClaimId ?? createEntityId();
+        // A reference wins; otherwise geo-chat's stable id (D1), which anything that requested
+        // this claim before it published already holds; otherwise, for older payloads, a fresh id.
+        const stableClaimId = existingClaimId === null ? claim.stableEntityId?.trim() || null : null;
+        const claimId = existingClaimId ?? stableClaimId ?? createEntityId();
         const claimRef = { id: claimId, name: claimEntityText };
-        if (existingClaimId === null) {
+        // A stable id is shared by every statement of one claim, so the entity is minted once —
+        // under the first statement's text — and the later statements only link to it.
+        if (existingClaimId === null && !mintedClaims.has(normalizeId(claimId))) {
+          mintedClaims.add(normalizeId(claimId));
           setText(claimId, claimEntityText, NAME_PROPERTY_ID, claimEntityText);
           relate({
             fromEntity: claimRef,
@@ -454,12 +469,13 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // same topic, and `relate` does not dedupe.
         // The Debate tag is what makes a claim a candidate motion in the picker, so it
         // goes on contestable claims only — minted or reused alike, once per entity.
-        // Reused entities key on their id; minted ones cannot, because `createEntityId`
-        // returns a fresh id per claim, so keying on it would dedupe nothing. Two
-        // verbatim extractions of one proposition therefore mint two entities (the
-        // long-standing behaviour) but yield a single motion. Near-duplicates that
-        // differ in wording still slip through — matching upstream is what catches those.
-        const tagKey = existingClaimId ? normalizeId(existingClaimId) : `text:${claimEntityText.toLowerCase()}`;
+        // Reused entities and geo-chat's stable ids (D1) key on the id. A fresh id cannot,
+        // because `createEntityId` returns a new one per claim, so keying on it would
+        // dedupe nothing: two verbatim extractions from an older payload therefore mint two
+        // entities (the long-standing behaviour) but yield a single motion. Near-duplicates
+        // that differ in wording still slip through — matching upstream is what catches those.
+        const tagKey =
+          existingClaimId || stableClaimId ? normalizeId(claimId) : `text:${claimEntityText.toLowerCase()}`;
         if (claim.isContestable && !debateTaggedClaims.has(tagKey)) {
           debateTaggedClaims.add(tagKey);
           relate({

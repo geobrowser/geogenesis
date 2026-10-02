@@ -106,3 +106,38 @@ describe('decodeExtractedClaims timing (GEO-2958)', () => {
     expect(claims[0].timing).toBeNull();
   });
 });
+
+describe('decodeExtractedClaims stable ids (GEO-2870 D1)', () => {
+  it("carries geo-chat's entity_id as a dashless id, and null when absent or blank", () => {
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [
+        { text: 'Minted', is_factual: true, turn_index: 0, entity_id: '5E1F0C3A-9B2D-4E6F-8A7B-6C5D4E3F2A1B' },
+        {
+          text: 'Matched',
+          is_factual: true,
+          turn_index: 0,
+          existing_entity_id: '4f12f5ea073442cbaa0fb10f70a9a876',
+          entity_id: null,
+        },
+        { text: 'Older payload', is_factual: null, turn_index: 0 },
+        { text: 'Blank', is_factual: null, turn_index: 0, entity_id: '  ' },
+      ],
+    });
+    expect(claims.map(c => c.stableEntityId)).toEqual(['5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b', null, null, null]);
+    expect(claims[1].existingClaimEntityId).toBe('4f12f5ea073442cbaa0fb10f70a9a876');
+  });
+
+  it('drops an entity_id the publish path would throw on, and says so', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [{ text: 'Bad id', is_factual: null, turn_index: 0, entity_id: 'not-an-entity-id' }],
+    });
+    expect(claims[0].stableEntityId).toBeNull();
+    expect(warn).toHaveBeenCalledWith(
+      '[debate-acceptor] dropping extracted-claim entity ids that are not entity ids',
+      expect.objectContaining({ count: 1 })
+    );
+  });
+});
