@@ -39,6 +39,7 @@ import {
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
   type MatchmakingClaimsQuery,
+  RECIPIENT_AWAY_CODE,
   type TranscriptFormat,
   abortDebate,
   acceptDebateChallenge,
@@ -1271,10 +1272,15 @@ export function useCreateDebateChallenge() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
     onError: (error, request) => {
-      if (!(error instanceof GeoChatRequestError) || error.code !== 'challenge_unavailable') return;
+      if (!(error instanceof GeoChatRequestError)) return;
+      if (error.code !== 'challenge_unavailable' && error.code !== RECIPIENT_AWAY_CODE) return;
       void queryClient.invalidateQueries({
         queryKey: debateQueryKeys.profile(accountKey, request.recipient_profile_space_id),
       });
+      // They went away between the list loading and the press (GEO-3119): redraw them as Away.
+      if (error.code === RECIPIENT_AWAY_CODE) {
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.people(accountKey) });
+      }
     },
   });
   return useObservedMutation(mutation, 'start_debate', request =>

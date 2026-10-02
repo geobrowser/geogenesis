@@ -18,6 +18,9 @@ const mocks = vi.hoisted(() => ({
   // Whether this tab is the focused one. jsdom reports no focus, so the real store would make
   // every routing case here look like a background tab.
   hasAttention: true,
+  /** The visibility-backed presence the gateway would report on its own (GEO-3119). */
+  visiblePresence: true,
+  gatewayPresence: vi.fn(),
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
   mediaMutate: vi.fn(),
@@ -96,17 +99,23 @@ vi.mock('./rooms/room-opponent', async importOriginal => ({
 }));
 
 vi.mock('./debate-attention', () => ({
-  useDebatePresence: () => true,
+  useDebatePresence: () => mocks.visiblePresence,
   useDebateAttention: () => mocks.hasAttention,
 }));
 
+// Receipts are their own concern (debate-request-receipts.test.tsx); here they would only fetch.
+vi.mock('./debate-request-receipts', () => ({ useDebateRequestReceipts: () => undefined }));
+
 vi.mock('./debate-gateway', () => ({
-  useDebateGateway: () => ({
-    status: mocks.gatewayPaused ? 'degraded' : 'ready',
-    paused: mocks.gatewayPaused,
-    pauseReason: mocks.gatewayPauseReason,
-    capabilities: [],
-  }),
+  useDebateGateway: (_enabled: boolean, _token: unknown, _accountKey: unknown, presence: boolean) => {
+    mocks.gatewayPresence(presence);
+    return {
+      status: mocks.gatewayPaused ? 'degraded' : 'ready',
+      paused: mocks.gatewayPaused,
+      pauseReason: mocks.gatewayPauseReason,
+      capabilities: [],
+    };
+  },
   useDebateGatewayScope: () => undefined,
 }));
 
@@ -171,6 +180,8 @@ beforeEach(() => {
   mocks.finishedRoomIds = new Set();
   mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
+  mocks.visiblePresence = true;
+  mocks.gatewayPresence.mockReset();
   mocks.prompts = [];
   mocks.promptsFetching = false;
   mocks.authenticated = true;
@@ -473,6 +484,28 @@ describe('DebateCoordinator', () => {
 
     expect(await screen.findByText('Debate request')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
+  });
+
+  // GEO-3119: a hidden tab goes offline after thirty seconds, but never at the cost of the viewer's
+  // own request. geo-chat refuses an accept from an offline requester.
+  it('keeps a hidden requester online while their challenge waits for an answer', () => {
+    mocks.visiblePresence = false;
+    mocks.currentUserId = 'user-requester';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(mocks.gatewayPresence).toHaveBeenLastCalledWith(true);
+  });
+
+  it('lets a hidden tab go offline when nothing of the viewer is pending', () => {
+    mocks.visiblePresence = false;
+    mocks.currentUserId = 'user-recipient';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(mocks.gatewayPresence).toHaveBeenLastCalledWith(false);
   });
 
   it('does not interrupt the sender of a challenge while it waits to be answered', async () => {
