@@ -1,4 +1,4 @@
-import { capture } from '~/core/analytics';
+import { reportEvent } from '~/core/telemetry/logger';
 
 /**
  * A limiter on the audio the local `MediaRecorder` encodes (GEO-3118). Off unless
@@ -57,6 +57,14 @@ function defaultCreateAudioContext(): AudioContextLike | null {
   return new AudioContextClass({ latencyHint: 'interactive' });
 }
 
+/**
+ * The console line plus one Sentry warning per debate and reason. Sentry rather than an analytics
+ * event: the analytics collector drops event names it has not been told about, and this is an
+ * operational signal (is the limiter actually running on iPhones?) rather than a product metric.
+ * The debate id is `extra`, not a tag, to keep tags low-cardinality.
+ */
+const reportedFallbacks = new Set<string>();
+
 export function reportRecordingLimiterFallback({
   debateId,
   reason,
@@ -66,21 +74,27 @@ export function reportRecordingLimiterFallback({
   reason: RecordingLimiterFallbackReason;
   error?: unknown;
 }) {
-  const errorLike = typeof error === 'object' && error !== null && 'name' in error && 'message' in error;
   console.warn(
     `[DebateRecording] audio limiter unavailable (${reason}); recording the unprocessed stream.`,
     error ?? ''
   );
-  try {
-    capture('debate_recording_limiter_fallback', {
-      debate_id: debateId,
+  const key = `${debateId}:${reason}`;
+  if (reportedFallbacks.has(key)) return;
+  reportedFallbacks.add(key);
+  const errorLike = typeof error === 'object' && error !== null && 'name' in error && 'message' in error;
+  // `reportEvent` already swallows its own failures, so this can never affect capture.
+  reportEvent({
+    name: 'debate_recording_limiter_fallback',
+    level: 'warning',
+    tags: {
       reason,
-      error_name: error === undefined ? null : errorLike ? String(error.name) : 'UnknownError',
+      error_name: error === undefined ? 'none' : errorLike ? String(error.name) : 'UnknownError',
+    },
+    extra: {
+      debate_id: debateId,
       error_message: error === undefined ? null : errorLike ? String(error.message) : String(error),
-    });
-  } catch {
-    // Analytics is best-effort and must never affect capture.
-  }
+    },
+  });
 }
 
 /**

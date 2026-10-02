@@ -29,7 +29,6 @@ export type AnalyticsEventName =
   | 'debate_playback_control'
   | 'debate_playback_interval'
   | 'debate_recorder_failed'
-  | 'debate_recording_limiter_fallback'
   | 'debate_recording_orphan'
   | 'debate_recording_parts_requeued'
   | 'debate_recording_stream_finished'

@@ -8,8 +8,8 @@ import {
   roomAudioContextOf,
 } from './recording-audio-limiter';
 
-const analytics = vi.hoisted(() => ({ capture: vi.fn() }));
-vi.mock('~/core/analytics', () => analytics);
+const telemetry = vi.hoisted(() => ({ reportEvent: vi.fn() }));
+vi.mock('~/core/telemetry/logger', () => telemetry);
 
 type FakeTrack = { kind: string; id: string; enabled: boolean; readyState: MediaStreamTrackState; stop: () => void };
 
@@ -81,7 +81,7 @@ describe('prepareRecordingStream', () => {
 
   beforeEach(() => {
     vi.stubGlobal('MediaStream', FakeMediaStream);
-    analytics.capture.mockReset();
+    telemetry.reportEvent.mockReset();
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
     audio = fakeTrack('audio', 'mic');
     video = fakeTrack('video', 'camera');
@@ -276,19 +276,24 @@ describe('prepareRecordingStream', () => {
     expect(context.close).not.toHaveBeenCalled();
   });
 
-  it('reports a fallback once to the console and analytics, never throwing', () => {
-    analytics.capture.mockImplementation(() => {
-      throw new Error('analytics down');
+  it('reports a fallback to Sentry once per debate and reason, warning on the console every time', () => {
+    reportRecordingLimiterFallback({ debateId: 'debate-dedupe', reason: 'graph_failed', error: new Error('x') });
+    reportRecordingLimiterFallback({ debateId: 'debate-dedupe', reason: 'graph_failed', error: new Error('x') });
+    reportRecordingLimiterFallback({ debateId: 'debate-dedupe', reason: 'audio_context_not_running' });
+
+    expect(console.warn).toHaveBeenCalledTimes(3);
+    expect(telemetry.reportEvent).toHaveBeenCalledTimes(2);
+    expect(telemetry.reportEvent).toHaveBeenNthCalledWith(1, {
+      name: 'debate_recording_limiter_fallback',
+      level: 'warning',
+      tags: { reason: 'graph_failed', error_name: 'Error' },
+      extra: { debate_id: 'debate-dedupe', error_message: 'x' },
     });
-    expect(() =>
-      reportRecordingLimiterFallback({ debateId: 'debate-1', reason: 'graph_failed', error: new Error('x') })
-    ).not.toThrow();
-    expect(console.warn).toHaveBeenCalledOnce();
-    expect(analytics.capture).toHaveBeenCalledWith('debate_recording_limiter_fallback', {
-      debate_id: 'debate-1',
-      reason: 'graph_failed',
-      error_name: 'Error',
-      error_message: 'x',
+    expect(telemetry.reportEvent).toHaveBeenNthCalledWith(2, {
+      name: 'debate_recording_limiter_fallback',
+      level: 'warning',
+      tags: { reason: 'audio_context_not_running', error_name: 'none' },
+      extra: { debate_id: 'debate-dedupe', error_message: null },
     });
   });
 });

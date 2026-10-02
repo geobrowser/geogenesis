@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   estimateStorage: vi.fn(),
   mediaRecorderStart: vi.fn(),
   mediaRecorderConstruct: vi.fn(),
+  reportEvent: vi.fn(),
   readyMutateAsync: vi.fn(),
   capturingMutateAsync: vi.fn().mockResolvedValue(undefined),
   liveKitJoinMutateAsync: vi.fn(),
@@ -96,6 +97,11 @@ vi.mock('~/design-system/prefetch-link', () => ({
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => mocks.featureFlags[id] ?? false,
+}));
+
+vi.mock('~/core/telemetry/logger', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/telemetry/logger')>()),
+  reportEvent: mocks.reportEvent,
 }));
 
 vi.mock('~/core/analytics', () => ({
@@ -350,6 +356,7 @@ beforeEach(() => {
   mocks.estimateStorage.mockReset();
   mocks.mediaRecorderStart.mockReset();
   mocks.mediaRecorderConstruct.mockReset();
+  mocks.reportEvent.mockReset();
   mocks.readyMutateAsync.mockReset();
   mocks.liveKitJoinMutateAsync.mockReset();
   mocks.markJoinedMutateAsync.mockReset();
@@ -3113,9 +3120,12 @@ describe('DebateRoomPageClient', () => {
         '[DebateRecording] audio limiter unavailable (audio_context_not_running); recording the unprocessed stream.',
         ''
       );
-      expect(mocks.capture).toHaveBeenCalledWith(
-        'debate_recording_limiter_fallback',
-        expect.objectContaining({ debate_id: 'debate-1', reason: 'audio_context_not_running' })
+      expect(mocks.reportEvent).toHaveBeenCalledWith(
+        expect.objectContaining({
+          name: 'debate_recording_limiter_fallback',
+          level: 'warning',
+          tags: expect.objectContaining({ reason: 'audio_context_not_running' }),
+        })
       );
       expect(mocks.mediaRecorderStart).toHaveBeenCalled();
     });
