@@ -1,3 +1,4 @@
+import './ensure-web-storage.js';
 import { createGeoWalletClient, defineGeoNetworkConfig, GeoTestnetConfig } from '@geoprotocol/geo-sdk';
 import { type Account, type Address, type Hex, createPublicClient, http } from 'viem';
 import {

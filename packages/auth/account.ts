@@ -1,3 +1,4 @@
+import './src/ensure-web-storage.js';
 export {
   generateZeroDevAccount,
   isRevertedUserOperationError,
