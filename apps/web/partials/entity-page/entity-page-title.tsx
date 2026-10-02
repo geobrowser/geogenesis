@@ -14,9 +14,10 @@ import { entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchor
 /** Entity-title token (`text-entityTitle`), including the narrow-viewport steps in `styles.css`. */
 const titleTypographyClassName = 'text-entityTitle';
 
-/** The gap under the title in each mode — exported for a row that draws it itself. */
-export const BROWSE_BOTTOM_SPACING = 12;
-export const EDITING_BOTTOM_SPACING = 3.5;
+/** The gap under the title, by mode — exported for a row that draws it itself. */
+export function titleBottomSpacing(isEditing: boolean) {
+  return isEditing ? 3.5 : 12;
+}
 
 type EntityPageTitleProps = {
   value: string;
@@ -74,7 +75,7 @@ export function EntityPageTitle({
             'm-0 -mb-px w-full resize-none overflow-hidden bg-transparent p-0 text-text placeholder:text-grey-03 focus:outline-hidden'
           )}
         />
-        {withBottomSpacing && <Spacer height={EDITING_BOTTOM_SPACING} />}
+        {withBottomSpacing && <Spacer height={titleBottomSpacing(true)} />}
       </div>
     );
   }
@@ -97,7 +98,7 @@ export function EntityPageTitle({
           {value || ZERO_WIDTH_SPACE}
         </h1>
       )}
-      {withBottomSpacing && <Spacer height={BROWSE_BOTTOM_SPACING} />}
+      {withBottomSpacing && <Spacer height={titleBottomSpacing(false)} />}
     </div>
   );
 }

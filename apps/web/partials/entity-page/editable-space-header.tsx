@@ -32,7 +32,7 @@ import { HistoryEmpty } from '../history/history-empty';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
-import { BROWSE_BOTTOM_SPACING, EDITING_BOTTOM_SPACING, EntityPageTitle } from './entity-page-title';
+import { EntityPageTitle, titleBottomSpacing } from './entity-page-title';
 
 type OverlayMode = 'closed' | 'menu' | 'creatingVersion' | 'spaceRelationships' | 'spaceTopic' | 'subtopics';
 
@@ -171,7 +171,7 @@ export function EditableSpaceHeading({
           6px below the name. */}
       <div
         className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
-        style={{ paddingBottom: isEditing ? EDITING_BOTTOM_SPACING : BROWSE_BOTTOM_SPACING }}
+        style={{ paddingBottom: titleBottomSpacing(isEditing) }}
       >
         <EntityPageTitle
           // Browse falls back to the server's name; edit must not. A fallback in

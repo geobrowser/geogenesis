@@ -34,7 +34,7 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
     // with three roles in between. Both come out at 8px.
     <ul className="mt-2 mb-5 flex flex-col gap-1">
       {roles.map(role => (
-        <li key={`${role.kind}-${role.organizationId}-${role.subject}`} className="min-w-0 text-body break-words">
+        <li key={`${role.kind}-${role.organizationId}-${role.subject}`} className="text-body wrap-break-word">
           {/*
            * Running text rather than a flex row, so a line too long for the
            * column wraps instead of running off it. As a row, the role could not
@@ -67,7 +67,8 @@ export function ProfileHeadline({ roles, spaceId }: Props) {
  * baseline left it sitting low and crowding the word before it.
  */
 function OrganizationName({ role, spaceId }: { role: CurrentRole; spaceId: string }) {
-  const [first, ...rest] = role.organization.split(' ');
+  // Split at the first run of whitespace, keeping the rest exactly as written.
+  const [, first = '', rest = ''] = role.organization.trim().match(/^(\S*)([\s\S]*)$/) ?? [];
 
   return (
     <ProfileEntityLink entityId={role.organizationId} spaceId={spaceId} className="text-grey-04 hover:underline">
@@ -79,7 +80,7 @@ function OrganizationName({ role, spaceId }: { role: CurrentRole; spaceId: strin
         ) : null}
         {first}
       </span>
-      {rest.length > 0 ? ` ${rest.join(' ')}` : null}
+      {rest}
     </ProfileEntityLink>
   );
 }

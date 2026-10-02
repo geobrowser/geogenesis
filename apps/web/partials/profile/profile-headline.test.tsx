@@ -60,4 +60,16 @@ describe('ProfileHeadline', () => {
     const unbreakable = screen.getByTestId('org-logo').closest('.whitespace-nowrap');
     expect(unbreakable).toHaveTextContent(/^UN$/);
   });
+
+  it('keeps the logo with the name when the name is stored with stray whitespace', () => {
+    render(
+      <ProfileHeadline
+        roles={[role({ organization: '  UN  Foundation ', avatarUrl: 'ipfs://logo' })]}
+        spaceId={SPACE}
+      />
+    );
+
+    expect(screen.getByTestId('org-logo').closest('.whitespace-nowrap')).toHaveTextContent(/^UN$/);
+    expect(screen.getByRole('listitem')).toHaveTextContent('at UN Foundation');
+  });
 });
