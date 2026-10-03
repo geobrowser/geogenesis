@@ -1,3 +1,5 @@
+import { uuidToHex } from '~/core/id/normalize';
+
 import { type DebateClaimInput, type DebatePublishTurn, publishableTiming } from '../debate-publish-draft';
 import { looksLikeEntityId } from './claim-reuse';
 
@@ -22,6 +24,13 @@ export type DebateExtractedClaimsClaim = {
    * `match` audit object next to it, which the publisher does not read.
    */
   existing_entity_id?: string | null;
+  /**
+   * GEO-2870 D1: the stable entity id geo-chat minted for this claim when it committed the
+   * payload (32 hex), so the claim can be requested by id long before this sweep publishes it.
+   * Present only on unmatched claims — a matched claim's `existing_entity_id` wins and this is
+   * null. Absent on payloads from before geo-chat minted ids, which then mint a fresh id here.
+   */
+  entity_id?: string | null;
   /**
    * Topics the extractor assigned to this claim, drawn from the debated claim's own topic set
    * (geo-chat's replica naming: entity_id + name). Absent on payloads from before topic
@@ -68,6 +77,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
       text: turn.text,
     }));
   const droppedTopics: unknown[] = [];
+  const droppedStableIds: unknown[] = [];
   const claims: DebateClaimInput[] = (Array.isArray(response.claims) ? response.claims : []).map(claim => ({
     text: claim.text,
     isFactual: claim.is_factual ?? null,
@@ -76,6 +86,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
       typeof claim.existing_entity_id === 'string' && claim.existing_entity_id.trim().length > 0
         ? claim.existing_entity_id.trim()
         : null,
+    stableEntityId: decodeStableEntityId(claim.entity_id, droppedStableIds),
     topics: decodeTopics(claim.topics, droppedTopics),
     isContestable: claim.is_contestable === true,
     timing: decodeTiming(claim.start_ms, claim.end_ms),
@@ -88,7 +99,31 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
       sample: droppedTopics.slice(0, 5),
     });
   }
+  if (droppedStableIds.length > 0) {
+    // The claim still publishes, under a fresh id — but anything that already requested it by
+    // geo-chat's id will not find it, so this must not be silent.
+    console.warn('[debate-acceptor] dropping extracted-claim entity ids that are not entity ids', {
+      count: droppedStableIds.length,
+      sample: droppedStableIds.slice(0, 5),
+    });
+  }
   return { transcriptTurns, claims };
+}
+
+/**
+ * geo-chat's `entity_id` → a dashless lowercase entity id, or null. A malformed id is dropped (the
+ * claim then mints a fresh id, as before D1) rather than passed on: `Graph.createRelation` asserts
+ * every id and throws, which would fail this debate's publish on every sweep.
+ */
+function decodeStableEntityId(entityId: unknown, dropped: unknown[]): string | null {
+  if (entityId === null || entityId === undefined) return null;
+  const id = typeof entityId === 'string' ? entityId.trim() : '';
+  if (id.length === 0) return null;
+  if (!looksLikeEntityId(id)) {
+    dropped.push(entityId);
+    return null;
+  }
+  return uuidToHex(id);
 }
 
 /**

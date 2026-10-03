@@ -15,7 +15,8 @@ import { loadMotionTopics } from './motion-topics';
 
 // The reuse policy needs a graph read and its own flag, both covered in `claim-reuse.test.ts`. Here it
 // passes claims through, so what the loader decodes from geo-chat is observable on the input.
-vi.mock('./claim-reuse', () => ({
+vi.mock('./claim-reuse', async importOriginal => ({
+  ...(await importOriginal<typeof import('./claim-reuse')>()),
   applyClaimReusePolicy: vi.fn(async (claims: unknown) => claims),
 }));
 
@@ -189,7 +190,15 @@ describe('loadDebatePublishSource media gating', () => {
       ],
       claims: [
         // Timed where geo-chat measured the span (GEO-2958), untimed where it did not.
-        { text: 'The nuclear program was advancing.', is_factual: true, turn_index: 0, start_ms: 0, end_ms: 9_000 },
+        {
+          text: 'The nuclear program was advancing.',
+          is_factual: true,
+          turn_index: 0,
+          start_ms: 0,
+          end_ms: 9_000,
+          // GEO-2870 D1: geo-chat's stable id, carried through to the draft.
+          entity_id: '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b',
+        },
         { text: 'The action was unjustified.', is_factual: false, turn_index: 1, start_ms: null, end_ms: null },
       ],
     });
@@ -205,6 +214,7 @@ describe('loadDebatePublishSource media gating', () => {
         isFactual: true,
         turnIndex: 0,
         existingClaimEntityId: null,
+        stableEntityId: '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b',
         topics: [],
         isContestable: false,
         timing: { startMs: 0, endMs: 9_000 },
@@ -214,6 +224,7 @@ describe('loadDebatePublishSource media gating', () => {
         isFactual: false,
         turnIndex: 1,
         existingClaimEntityId: null,
+        stableEntityId: null,
         topics: [],
         isContestable: false,
         timing: null,
