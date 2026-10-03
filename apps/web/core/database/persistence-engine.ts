@@ -44,7 +44,7 @@ export class PersistenceEngine {
     });
 
     stream.on(GeoEventStream.LOCAL_CHANGES_CLEARED, event => {
-      this.onCleared(event.spaceId);
+      this.onCleared(event.spaceId, event.valueIds, event.relationIds);
     });
   }
 
@@ -128,8 +128,18 @@ export class PersistenceEngine {
     }
   }
 
-  private async onCleared(spaceId: string) {
+  private async onCleared(spaceId: string, valueIds?: string[], relationIds?: string[]) {
+    const isTargeted = valueIds !== undefined || relationIds !== undefined;
+
     try {
+      if (isTargeted) {
+        for (const id of valueIds ?? []) this.pendingValues.delete(id);
+        for (const id of relationIds ?? []) this.pendingRelations.delete(id);
+        if (valueIds && valueIds.length > 0) await db.values.bulkDelete(valueIds);
+        if (relationIds && relationIds.length > 0) await db.relations.bulkDelete(relationIds);
+        return;
+      }
+
       await db.values.where('spaceId').equals(spaceId).delete();
       await db.relations.where('spaceId').equals(spaceId).delete();
     } catch (err) {
