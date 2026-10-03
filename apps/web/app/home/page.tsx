@@ -4,7 +4,7 @@ import * as Effect from 'effect/Effect';
 import { cookies } from 'next/headers';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookie } from '~/core/cookie/wallet-session';
 import type { Space } from '~/core/io/dto/spaces';
 import { getSpaces } from '~/core/io/queries';
 import { cachedFetchProfile } from '~/core/io/subgraph';
@@ -62,7 +62,7 @@ function mapAndSortGovernanceSpaceOptions(spaces: Space[]): GovernanceSpaceOptio
 
 export default async function PersonalHomePage(props: Props) {
   const [cookieStore, sp] = await Promise.all([cookies(), props.searchParams]);
-  const connectedAddress = cookieStore.get(WALLET_ADDRESS)?.value;
+  const connectedAddress = readWalletCookie(cookieStore);
 
   const person = connectedAddress ? await cachedFetchProfile(connectedAddress) : null;
 

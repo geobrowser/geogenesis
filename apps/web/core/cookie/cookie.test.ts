@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+// @vitest-environment node
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { onConnectionChange } from './cookie';
-import { WALLET_ADDRESS } from './index';
+import { WALLET_SESSION, signWalletSession, verifyWalletSession } from './wallet-session';
 
 const store = vi.hoisted(() => {
   const values = new Map<string, string>();
@@ -13,53 +14,156 @@ const store = vi.hoisted(() => {
     delete: vi.fn((name: string) => void values.delete(name)),
   };
 });
+const verifyToken = vi.hoisted(() => vi.fn<(token: string) => Promise<`0x${string}` | null>>());
 
 vi.mock('next/headers', () => ({ cookies: async () => store }));
+vi.mock('./privy-identity-token', () => ({ verifyPrivyIdentityToken: verifyToken }));
 
-const ADDRESS = '0x1111111111111111111111111111111111111111';
-const OTHER = '0x2222222222222222222222222222222222222222';
+const LEGACY = 'walletAddress';
+const ADDRESS = '0xA0Cf798816D4b9b9866b5330EEa46a18382f251e';
+const OTHER = '0x5B38Da6a701c568545dCfcB03FcB875f56beddC4';
 
 describe('onConnectionChange', () => {
   beforeEach(() => {
+    vi.stubEnv('WALLET_SESSION_SECRET', 'test-secret');
     store.values.clear();
     vi.clearAllMocks();
+    verifyToken.mockImplementation(async token => (token === 'token-for-address' ? ADDRESS : null));
   });
 
-  // Any cookie write in a Server Action makes Next re-render the page, and after a deploy that is
-  // a full reload — so a repeat connect for the same wallet must not write.
-  it('does not rewrite the cookie when it already holds the address', async () => {
-    store.values.set(WALLET_ADDRESS, ADDRESS);
+  afterEach(() => vi.unstubAllEnvs());
 
-    await expect(onConnectionChange({ type: 'connect', address: ADDRESS })).resolves.toBe(ADDRESS);
+  it('issues a signed session for the wallet in a verified token', async () => {
+    await expect(onConnectionChange({ type: 'connect', identityToken: 'token-for-address' })).resolves.toBe(ADDRESS);
+
+    expect(store.set).toHaveBeenCalledWith(
+      WALLET_SESSION,
+      expect.any(String),
+      expect.objectContaining({ httpOnly: true })
+    );
+    expect(verifyWalletSession(store.values.get(WALLET_SESSION))).toBe(ADDRESS);
+  });
+
+  // GEO-3107: the caller used to name the address. Now an unverifiable token changes nothing.
+  it('does not issue a session for a token that does not verify', async () => {
+    await expect(onConnectionChange({ type: 'connect', identityToken: 'forged' })).resolves.toBeNull();
 
     expect(store.set).not.toHaveBeenCalled();
   });
 
-  it('writes the cookie when it is missing', async () => {
-    await onConnectionChange({ type: 'connect', address: ADDRESS });
+  // Echoing the existing session here would name the previous wallet after an account switch,
+  // which the client takes as settled and never retries — leaving the tab signed in as that wallet.
+  it('answers null for an unverifiable token, and leaves the existing session alone', async () => {
+    store.values.set(WALLET_SESSION, signWalletSession(OTHER)!);
 
-    expect(store.set).toHaveBeenCalledWith(WALLET_ADDRESS, ADDRESS, expect.objectContaining({ httpOnly: true }));
+    await expect(onConnectionChange({ type: 'connect', identityToken: 'forged' })).resolves.toBeNull();
+
+    expect(store.set).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
+    expect(verifyWalletSession(store.values.get(WALLET_SESSION))).toBe(OTHER);
   });
 
-  it('writes the cookie when it holds a different address', async () => {
-    store.values.set(WALLET_ADDRESS, OTHER);
+  // Any cookie write in a Server Action makes Next re-render the page, and after a deploy that is
+  // a full reload (#2672) — so a repeat connect for the same wallet must not write.
+  it('does not rewrite a valid session for the same wallet', async () => {
+    store.values.set(WALLET_SESSION, signWalletSession(ADDRESS)!);
 
-    await onConnectionChange({ type: 'connect', address: ADDRESS });
+    await expect(onConnectionChange({ type: 'connect', identityToken: 'token-for-address' })).resolves.toBe(ADDRESS);
 
-    expect(store.set).toHaveBeenCalledWith(WALLET_ADDRESS, ADDRESS, expect.anything());
+    expect(store.set).not.toHaveBeenCalled();
+    expect(store.delete).not.toHaveBeenCalled();
   });
 
-  it('deletes the cookie on disconnect', async () => {
-    store.values.set(WALLET_ADDRESS, ADDRESS);
+  it('replaces a session for a different wallet', async () => {
+    store.values.set(WALLET_SESSION, signWalletSession(OTHER)!);
+
+    await onConnectionChange({ type: 'connect', identityToken: 'token-for-address' });
+
+    expect(verifyWalletSession(store.values.get(WALLET_SESSION))).toBe(ADDRESS);
+  });
+
+  it('replaces a hand-written session value', async () => {
+    store.values.set(WALLET_SESSION, ADDRESS);
+
+    await onConnectionChange({ type: 'connect', identityToken: 'token-for-address' });
+
+    expect(verifyWalletSession(store.values.get(WALLET_SESSION))).toBe(ADDRESS);
+  });
+
+  it('deletes the old unsigned cookie when its holder connects', async () => {
+    store.values.set(LEGACY, ADDRESS);
+
+    await onConnectionChange({ type: 'connect', identityToken: 'token-for-address' });
+
+    expect(store.delete).toHaveBeenCalledWith(LEGACY);
+    expect(verifyWalletSession(store.values.get(WALLET_SESSION))).toBe(ADDRESS);
+  });
+
+  it('does not delete the old cookie on the strength of a forged token', async () => {
+    store.values.set(LEGACY, ADDRESS);
+
+    await onConnectionChange({ type: 'connect', identityToken: 'forged' });
+
+    expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  it('issues nothing without a signing secret', async () => {
+    vi.stubEnv('WALLET_SESSION_SECRET', '');
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    await expect(onConnectionChange({ type: 'connect', identityToken: 'token-for-address' })).resolves.toBeNull();
+
+    expect(store.set).not.toHaveBeenCalled();
+  });
+
+  it('deletes the session and the old cookie on disconnect', async () => {
+    store.values.set(WALLET_SESSION, signWalletSession(ADDRESS)!);
+    store.values.set(LEGACY, ADDRESS);
 
     await expect(onConnectionChange({ type: 'disconnect' })).resolves.toBeNull();
 
-    expect(store.delete).toHaveBeenCalledWith(WALLET_ADDRESS);
+    expect(store.delete).toHaveBeenCalledWith(WALLET_SESSION);
+    expect(store.delete).toHaveBeenCalledWith(LEGACY);
   });
 
   it('does not delete on disconnect when there is no cookie', async () => {
     await onConnectionChange({ type: 'disconnect' });
 
     expect(store.delete).not.toHaveBeenCalled();
+  });
+
+  // Renewal is a cookie write, so it re-renders the page (#2672): only once the session is due.
+  describe('renewal', () => {
+    const DAY = 24 * 60 * 60 * 1000;
+
+    it('re-issues a session for the same wallet once it is more than 7 days old', async () => {
+      const old = signWalletSession(ADDRESS, Date.now() - 8 * DAY)!;
+      store.values.set(WALLET_SESSION, old);
+
+      await expect(onConnectionChange({ type: 'connect', identityToken: 'token-for-address' })).resolves.toBe(ADDRESS);
+
+      expect(store.set).toHaveBeenCalledTimes(1);
+      const renewed = store.values.get(WALLET_SESSION)!;
+      expect(renewed).not.toBe(old);
+      expect(verifyWalletSession(renewed, Date.now() + 29 * DAY)).toBe(ADDRESS);
+    });
+
+    it('leaves a same-wallet session under 7 days old alone', async () => {
+      store.values.set(WALLET_SESSION, signWalletSession(ADDRESS, Date.now() - 6 * DAY)!);
+
+      await onConnectionChange({ type: 'connect', identityToken: 'token-for-address' });
+
+      expect(store.set).not.toHaveBeenCalled();
+    });
+
+    it('issues the cookie for 30 days', async () => {
+      await onConnectionChange({ type: 'connect', identityToken: 'token-for-address' });
+
+      expect(store.set).toHaveBeenCalledWith(
+        WALLET_SESSION,
+        expect.any(String),
+        expect.objectContaining({ maxAge: 30 * 24 * 60 * 60 })
+      );
+    });
   });
 });

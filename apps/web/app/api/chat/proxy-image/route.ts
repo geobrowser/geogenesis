@@ -3,7 +3,7 @@
 // fetches server-side with a real User-Agent and streams the bytes back.
 import { cookies } from 'next/headers';
 
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookieLowercase } from '~/core/cookie/wallet-session';
 
 import { ipCeilingLimit, loggedInLimit } from '../rate-limit';
 import { SsrfBlockedError, isPrivateHost, safeFetch } from '../web-fetch/helpers';
@@ -22,12 +22,6 @@ function isSameOrigin(req: Request): boolean {
   } catch {
     return false;
   }
-}
-
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
 }
 
 function getClientIp(req: Request): string {
@@ -71,7 +65,7 @@ export async function POST(req: Request) {
   }
 
   const cookieStore = await cookies();
-  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  const wallet = readWalletCookieLowercase(cookieStore);
   if (!wallet) {
     return jsonError(401, 'Sign in to proxy images.');
   }

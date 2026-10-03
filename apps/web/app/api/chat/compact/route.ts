@@ -9,7 +9,7 @@ import { createAnthropic } from '@ai-sdk/anthropic';
 import { type UIMessage, generateText, isTextUIPart, isToolUIPart } from 'ai';
 import { cookies } from 'next/headers';
 
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookieLowercase } from '~/core/cookie/wallet-session';
 
 import { FOLLOW_UPS_MODEL } from '../models';
 import { anonLimit, ipCeilingLimit, loggedInLimit } from '../rate-limit';
@@ -46,12 +46,6 @@ function isSameOrigin(req: Request): boolean {
   } catch {
     return false;
   }
-}
-
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
 }
 
 function getClientIp(req: Request): string {
@@ -125,7 +119,7 @@ export async function POST(req: Request) {
   }
 
   const cookieStore = await cookies();
-  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  const wallet = readWalletCookieLowercase(cookieStore);
   const isLoggedIn = wallet !== null;
   const ip = getClientIp(req);
   const identityKey = wallet ?? ip;

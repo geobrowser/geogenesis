@@ -3,7 +3,7 @@ import { NextResponse } from 'next/server';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookie } from '~/core/cookie/wallet-session';
 import { parseExploreTime } from '~/core/explore/explore-feed-params';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     return NextResponse.json({ items: [], nextCursor: null });
   }
 
-  const cookieWallet = (await cookies()).get(WALLET_ADDRESS)?.value;
+  const cookieWallet = readWalletCookie(await cookies());
 
   let personalMemberSpaceId: string | null = null;
   let memberOrEditorSpaceIds: string[] = [];

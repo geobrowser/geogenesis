@@ -417,7 +417,7 @@ export function EntityFeed({
   );
 
   // Key the query on the smart-account address because that hook is what writes the
-  // WALLET_ADDRESS cookie the server route reads. Privy's user.id updates earlier
+  // wallet session cookie the server route reads. Privy's user.id updates earlier
   // (before the cookie is set), which caused refetches to return anonymous data on
   // sign-in and leave "Join space" buttons stuck for a few seconds.
   const { smartAccount } = useSmartAccount();

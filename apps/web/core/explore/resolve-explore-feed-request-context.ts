@@ -3,7 +3,7 @@ import { cookies } from 'next/headers';
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { browseSidebarVisibleSpaces, fetchBrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookie } from '~/core/cookie/wallet-session';
 import { normId } from '~/core/utils/norm-id';
 
 import { getGovernanceHomeSpaceContext } from '~/app/home/governance-home-space-ids';
@@ -27,7 +27,7 @@ const EMPTY_BROWSE: BrowseSidebarData = {
 
 /** Auth, memberships, and visible spaces shared by Explore and contextual Topic feeds. */
 export async function resolveExploreFeedRequestContext(routeSpaceId?: string) {
-  const walletAddress = (await cookies()).get(WALLET_ADDRESS)?.value ?? null;
+  const walletAddress = readWalletCookie(await cookies()) ?? null;
   let personalMemberSpaceId: string | null = null;
   let memberOrEditorSpaceIds: string[] = [];
 

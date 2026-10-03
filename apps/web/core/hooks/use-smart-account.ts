@@ -214,8 +214,9 @@ export function useSmartAccount() {
       };
 
       // The EOA address — registry now keys permissions on this directly (no Safe
-      // indirection) so the cookie value matches what `SpaceRegistry.enter` sees.
-      // Skips the Server Action when this tab already sent this address (see `syncWalletCookie`).
+      // indirection) so the session the server issues matches what `SpaceRegistry.enter`
+      // sees. The server takes the wallet from the Privy identity token; this address only
+      // decides whether a call is needed (see `syncWalletCookie`).
       await syncWalletCookie(wrapped.account.address);
 
       return wrapped;

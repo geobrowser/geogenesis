@@ -2,22 +2,17 @@ import { Effect } from 'effect';
 import { cookies } from 'next/headers';
 
 import { getSpaceAccessById } from '~/core/access/space-access';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookieLowercase } from '~/core/cookie/wallet-session';
 import { getSpaceByAddress } from '~/core/io/queries';
 
 const normalizeId = (id: string) => id.replace(/-/g, '').toLowerCase();
 
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
-}
-
-// The wallet cookie is httpOnly + sameSite=lax (set on connect), so its presence
-// is a trustworthy "logged-in" signal for the browser publish/share flow.
+// The wallet session is only issued after the server verified a Privy login for that wallet, and
+// its signature is checked on every read, so it is a trustworthy "logged-in" signal for the
+// browser publish/share flow.
 export async function getRequestWallet(): Promise<string | null> {
   const store = await cookies();
-  return parseWalletCookie(store.get(WALLET_ADDRESS)?.value);
+  return readWalletCookieLowercase(store);
 }
 
 // True when the wallet's personal space can edit the target space. Used to ensure

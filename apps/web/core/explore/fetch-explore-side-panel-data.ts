@@ -4,7 +4,7 @@ import { cookies } from 'next/headers';
 
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { type ExploreCall, fetchCommunityCallsForExplore } from '~/core/community-calls/fetch-community-calls';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookie } from '~/core/cookie/wallet-session';
 import { type FeaturedRanking, fetchFeaturedRankings } from '~/core/io/subgraph/fetch-featured-rankings';
 import { type FeaturedSpace, fetchFeaturedSpaces } from '~/core/io/subgraph/fetch-featured-spaces';
 import { fetchActiveMemberRequest } from '~/core/io/subgraph/fetch-proposed-members';
@@ -32,7 +32,7 @@ export const fetchExploreSidePanelData = cache(
     if (options.memberSpaceId !== undefined) {
       memberSpaceId = options.memberSpaceId;
     } else {
-      const wallet = (await cookies()).get(WALLET_ADDRESS)?.value ?? null;
+      const wallet = readWalletCookie(await cookies()) ?? null;
       try {
         memberSpaceId = wallet ? await resolveMemberSpaceFromWalletSafe(wallet) : null;
       } catch {

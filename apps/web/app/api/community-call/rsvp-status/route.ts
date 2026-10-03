@@ -2,7 +2,7 @@ import { cookies } from 'next/headers';
 import { NextResponse } from 'next/server';
 
 import { resolveMemberSpaceFromWallet } from '~/core/browse/resolve-member-space-from-wallet';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookie } from '~/core/cookie/wallet-session';
 
 /**
  * Whether the signed-in user has RSVP'd to any community call.
@@ -14,7 +14,7 @@ import { WALLET_ADDRESS } from '~/core/cookie';
  * means the same id normalization applies on read as on write, so the two can't
  * drift apart.
  *
- * The person is derived server-side from the wallet cookie — the endpoint is open
+ * The person is derived server-side from the signed wallet session — the endpoint is open
  * and lets anyone read anyone's RSVP history by id, so we never accept a
  * client-supplied personId.
  */
@@ -43,7 +43,7 @@ export async function GET() {
     return NextResponse.json({ hasRsvp: false, configured: false });
   }
 
-  const cookieWallet = (await cookies()).get(WALLET_ADDRESS)?.value;
+  const cookieWallet = readWalletCookie(await cookies());
   if (!cookieWallet) {
     return NextResponse.json({ hasRsvp: false, configured: true });
   }

@@ -4,7 +4,7 @@
 import { cookies } from 'next/headers';
 
 import { EDIT_TOOL_NAMES, type EditToolFailure, notAuthorized, notSignedIn, rateLimited } from '~/core/chat/edit-types';
-import { WALLET_ADDRESS } from '~/core/cookie';
+import { readWalletCookieLowercase } from '~/core/cookie/wallet-session';
 
 import { buildWriteContext } from '../tools/write/context';
 
@@ -22,12 +22,6 @@ function isSameOrigin(req: Request): boolean {
   } catch {
     return false;
   }
-}
-
-function parseWalletCookie(raw: string | undefined): string | null {
-  if (!raw) return null;
-  const lower = raw.toLowerCase();
-  return /^0x[0-9a-f]{40}$/.test(lower) ? lower : null;
 }
 
 function jsonResponse(status: number, body: unknown) {
@@ -64,7 +58,7 @@ export async function POST(req: Request): Promise<Response> {
   }
 
   const cookieStore = await cookies();
-  const wallet = parseWalletCookie(cookieStore.get(WALLET_ADDRESS)?.value);
+  const wallet = readWalletCookieLowercase(cookieStore);
   const context = buildWriteContext({ walletAddress: wallet });
 
   if (context.kind !== 'member') {
