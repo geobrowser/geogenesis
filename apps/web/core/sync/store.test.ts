@@ -1118,6 +1118,8 @@ describe('GeoStore', () => {
       expect(mockStream.emit).toHaveBeenCalledWith({
         type: GeoEventStream.LOCAL_CHANGES_CLEARED,
         spaceId: 'space-1',
+        valueIds: ['local-value-1', 'synced-value-1'],
+        relationIds: ['local-relation-1', 'synced-relation-1'],
       });
     });
 
