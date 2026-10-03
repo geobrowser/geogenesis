@@ -55,6 +55,13 @@ export const featureFlagDefinitions = [
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
     enabledByDefault: true,
   },
+  {
+    id: 'profilePoints',
+    label: 'Profile points',
+    description:
+      "Show a person's curator points in the About card of their personal space, read from curator-backend (GEO-3113). Testnet only.",
+    enabledByDefault: false,
+  },
 ] as const;
 
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];

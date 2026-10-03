@@ -64,6 +64,7 @@ describe('FeatureFlagsDialog', () => {
         exploreSidePanel: false,
         forYouFeed: false,
         bountiesTab: true,
+        profilePoints: false,
       });
     });
   });

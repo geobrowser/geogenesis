@@ -15,11 +15,21 @@ const mocks = vi.hoisted(() => ({
   stored: undefined as undefined | { id: string; value: string; isDeleted?: boolean },
   setValue: vi.fn(),
   deleteValue: vi.fn(),
+  pointsEnabled: false,
+  points: { points: null as number | null, isLoading: false, isError: false },
+  pointsSpaceIds: [] as string[],
 }));
 
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.isEditing }));
 vi.mock('~/core/hooks/use-profile-facts', () => ({ useProfileFacts: () => ({}) }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: SPACE_ID }) }));
+vi.mock('~/core/profile/use-profile-points', () => ({
+  useProfilePointsEnabled: () => mocks.pointsEnabled,
+  useProfilePoints: (spaceId: string) => {
+    mocks.pointsSpaceIds.push(spaceId);
+    return mocks.points;
+  },
+}));
 vi.mock('~/core/sync/use-store', () => ({ useValue: () => mocks.stored ?? null }));
 vi.mock('~/core/sync/use-mutate', () => ({
   useMutate: () => ({ storage: { values: { set: mocks.setValue, delete: mocks.deleteValue } } }),
@@ -55,6 +65,9 @@ beforeEach(() => {
   mocks.stored = undefined;
   mocks.setValue.mockReset();
   mocks.deleteValue.mockReset();
+  mocks.pointsEnabled = false;
+  mocks.points = { points: null, isLoading: false, isError: false };
+  mocks.pointsSpaceIds = [];
 });
 
 afterEach(cleanup);
@@ -126,5 +139,64 @@ describe('AboutSection description', () => {
     );
 
     expect(screen.queryByRole('textbox', { name: 'Description' })).not.toBeInTheDocument();
+  });
+});
+
+/** The curator points row (GEO-3113): behind a flag, and shown the way the counts above it are. */
+describe('AboutSection points', () => {
+  function pointsValue() {
+    return screen.getByText('Points').nextElementSibling;
+  }
+
+  it('shows no row, and asks for nothing, when points are not enabled', () => {
+    mocks.points = { points: 1240, isLoading: false, isError: false };
+    renderAbout();
+
+    expect(screen.queryByText('Points')).not.toBeInTheDocument();
+    expect(mocks.pointsSpaceIds).toEqual([]);
+  });
+
+  it("shows the person's total for this space, after Proposals", () => {
+    mocks.pointsEnabled = true;
+    mocks.points = { points: 1240, isLoading: false, isError: false };
+    renderAbout();
+
+    expect(pointsValue()).toHaveTextContent('1,240');
+    expect(mocks.pointsSpaceIds).toContain(SPACE_ID);
+    const labels = Array.from(document.querySelectorAll('dt')).map(dt => dt.textContent);
+    expect(labels.indexOf('Points')).toBe(labels.indexOf('Proposals') + 1);
+  });
+
+  it('shows zero rather than hiding the row', () => {
+    mocks.pointsEnabled = true;
+    mocks.points = { points: 0, isLoading: false, isError: false };
+    renderAbout();
+
+    expect(pointsValue()).toHaveTextContent('0');
+  });
+
+  it('is plain text, not a link', () => {
+    mocks.pointsEnabled = true;
+    mocks.points = { points: 1240, isLoading: false, isError: false };
+    renderAbout();
+
+    expect(screen.getByText('1,240').closest('a')).toBeNull();
+  });
+
+  it('holds its place with the loading placeholder while the total is on its way', () => {
+    mocks.pointsEnabled = true;
+    mocks.points = { points: null, isLoading: true, isError: false };
+    renderAbout();
+
+    expect(pointsValue()?.querySelector('.animate-pulse')).not.toBeNull();
+  });
+
+  it('shows a dash rather than 0 when the total could not be read', () => {
+    mocks.pointsEnabled = true;
+    mocks.points = { points: null, isLoading: false, isError: true };
+    renderAbout();
+
+    expect(pointsValue()).toHaveTextContent('—');
+    expect(pointsValue()).not.toHaveTextContent('0');
   });
 });

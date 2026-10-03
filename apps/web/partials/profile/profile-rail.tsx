@@ -22,6 +22,7 @@ import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-f
 import { type ProfileLinkField, changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
+import { useProfilePoints, useProfilePointsEnabled } from '~/core/profile/use-profile-points';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
 import { NavUtils } from '~/core/utils/utils';
@@ -435,6 +436,7 @@ export function AboutSection({
   // never resolved. The card still shows the facts; it just offers no field.
   const canEditDescription = isEditing && personEntityId !== null;
   const elapsed = timeOnGeo(facts.joinedAt);
+  const showPoints = useProfilePointsEnabled(spaceType);
 
   return (
     <RailCard
@@ -511,6 +513,7 @@ export function AboutSection({
           value={isLoading ? null : facts.proposals.toLocaleString()}
           href={`/space/${spaceId}/proposals`}
         />
+        {showPoints && <PointsFact spaceId={spaceId} />}
 
         {/* No Account row. The system fold below already carries the address,
             in full and under its own name — saying it twice in one card, once
@@ -518,6 +521,25 @@ export function AboutSection({
             profile the most room. */}
       </dl>
     </RailCard>
+  );
+}
+
+/**
+ * Curator points (GEO-3113), last because it is the one count that comes from outside the graph.
+ *
+ * Its own component so the query only exists once the row is wanted: with the flag off nothing is
+ * requested. Zero is shown, as the counts above it are, and a failed read is a dash rather than a
+ * `0`, for the same reason. No link — there is no list of points in Geo to open.
+ */
+function PointsFact({ spaceId }: { spaceId: string }) {
+  const { points, isLoading, isError } = useProfilePoints(spaceId);
+
+  return (
+    <Fact
+      label="Points"
+      isUnavailable={isError}
+      value={isLoading || points === null ? null : points.toLocaleString()}
+    />
   );
 }
 
