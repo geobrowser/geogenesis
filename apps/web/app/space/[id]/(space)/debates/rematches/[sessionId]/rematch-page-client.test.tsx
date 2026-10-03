@@ -35,6 +35,14 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 const mocks = vi.hoisted(() => ({
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
   sourceDebateLoading: false,
+  /** GEO-2870. geo-chat's extracted-claims payload for the source debate, and whether it is final. */
+  extractedClaims: { turns: [], claims: [] } as { turns: unknown[]; claims: unknown[] },
+  extractedClaimsFinal: true,
+  extractedClaimsLoading: false,
+  /** Every debate id the extracted claims were asked for, with whether the lookup was enabled. */
+  extractedClaimsAskedFor: [] as Array<{ debateId: string; enabled: boolean }>,
+  /** GEO-2862. The viewer's "Not interested" claim ids. */
+  notInterestedIds: [] as string[],
   /** GEO-2758. The Related tab's discovery: the topic query and the source claim's hydration. */
   relatedEntities: [] as any[],
   relatedEntitiesLoading: false,
@@ -257,6 +265,18 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
+  useDebateExtractedClaims: (debateId: string, enabled: boolean) => {
+    mocks.extractedClaimsAskedFor.push({ debateId, enabled });
+    return {
+      data:
+        enabled && !mocks.extractedClaimsLoading
+          ? { payload: mocks.extractedClaims, final: mocks.extractedClaimsFinal }
+          : undefined,
+      isLoading: enabled && mocks.extractedClaimsLoading,
+      error: null,
+    };
+  },
+  useNotInterestedClaimIds: () => ({ ids: mocks.notInterestedIds, isLoading: false }),
   // Read by the match lookup above; the picker never shows an offer, so this only answers "no".
   useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
@@ -879,6 +899,11 @@ function mutation(mutate = mocks.mutate) {
 beforeEach(() => {
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
+  mocks.extractedClaims = { turns: [], claims: [] };
+  mocks.extractedClaimsFinal = true;
+  mocks.extractedClaimsLoading = false;
+  mocks.extractedClaimsAskedFor.length = 0;
+  mocks.notInterestedIds = [];
   mocks.relatedEntities = [];
   mocks.relatedEntitiesLoading = false;
   mocks.relatedEntitiesError = null;
@@ -5186,8 +5211,10 @@ describe('the Related tab', () => {
       .filter(button => button.hasAttribute('aria-pressed'))
       .map(button => button.textContent ?? '');
     expect(tabs[0]).toBe('Related');
-    expect(tabs[1]).toMatch(/^Lobby/);
-    expect(tabs[2]).toBe('Explore');
+    // GEO-2870: the debate's own claims sit beside Related, its other continuation.
+    expect(tabs[1]).toBe('From this debate');
+    expect(tabs[2]).toMatch(/^Lobby/);
+    expect(tabs[3]).toBe('Explore');
   });
 
   /**
@@ -5963,5 +5990,174 @@ describe('claims the pair have already debated', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'nothing like it' } });
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull());
+  });
+});
+
+/**
+ * GEO-2870 phase 2. "From this debate": the claims geo-chat extracted from the debate this session
+ * came out of, read from its fast path. A claim the graph already has is a full card; one it does
+ * not have yet — a freshly minted id — is drawn without controls until the debate publishes.
+ */
+describe('From this debate', () => {
+  const hex = (id: string) => id.replace(/-/g, '');
+  const MINTED = 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4';
+  const MINTED_LATER = 'e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5';
+  const turns = [
+    { turn_index: 0, participant_slot: 1, attributed_space_id: 'profile-local', speaker_name: 'You', text: '…' },
+    { turn_index: 1, participant_slot: 2, attributed_space_id: 'profile-remote', speaker_name: null, text: '…' },
+  ];
+  const extracted = (
+    text: string,
+    turn_index: number,
+    ids: { existing?: string | null; minted?: string | null } = {}
+  ) => ({
+    text,
+    is_factual: false,
+    turn_index,
+    existing_entity_id: ids.existing ?? null,
+    entity_id: ids.minted ?? null,
+    is_contestable: true,
+  });
+  /** The shared claim as the graph spells it, matched by geo-chat to a claim from the debate. */
+  const matchedEntity = () => ({ ...sharedEntity(), id: hex(CLAIM_SHARED) });
+
+  async function openTab() {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'From this debate' }));
+    await settleTabSwap();
+  }
+
+  beforeEach(() => {
+    mocks.entities = [matchedEntity()];
+    mocks.claims = [sharedClaim()];
+    // The graph's own spelling throughout, as production has it: positions and entities are both
+    // keyed by bare hex, and geo-chat's row by its hyphenated UUID.
+    mocks.positions = [
+      position('profile-local', hex(CLAIM_SHARED), SPACE_1, true),
+      position('profile-remote', hex(CLAIM_SHARED), SPACE_1, false),
+    ];
+    mocks.extractedClaims = {
+      turns,
+      claims: [
+        extracted('A claim both participants chose', 0, { existing: hex(CLAIM_SHARED), minted: MINTED_LATER }),
+        extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }),
+      ],
+    };
+  });
+
+  it('reads the source debate’s claims, and is offered only when there is a source debate', async () => {
+    await openTab();
+
+    expect(mocks.extractedClaimsAskedFor.at(-1)).toEqual({ debateId: 'debate-1', enabled: true });
+    expect(screen.getByRole('button', { name: 'From this debate' })).toHaveAttribute('aria-pressed', 'true');
+    cleanup();
+
+    mocks.session = session({ source_debate_id: null });
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    expect(screen.queryByRole('button', { name: 'From this debate' })).toBeNull();
+  });
+
+  it('draws a published claim as a requestable card under the graph match’s id, with who said it', async () => {
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    await openTab();
+
+    // The graph match wins over the minted id, which is never asked about.
+    const asked = mocks.entityIdLookups.flat();
+    expect(asked).toContain(hex(CLAIM_SHARED));
+    expect(asked).not.toContain(MINTED_LATER);
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Said by You')).toBeInTheDocument();
+
+    const request = await screen.findByRole('button', { name: 'Request debate' });
+    expect(request).toBeEnabled();
+    fireEvent.click(request);
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ claim_id: CLAIM_SHARED, source_space_id: SPACE_1 })
+    );
+  });
+
+  it('draws a claim the graph does not have yet without controls, and keeps it out of geo-chat’s row lookup', async () => {
+    await openTab();
+
+    const card = screen.getByTestId('from-this-debate-unpublished');
+    expect(within(card).getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    // No speaker name on the turn: the participant's own name stands in.
+    expect(within(card).getByText('Said by Salina')).toBeInTheDocument();
+    expect(within(card).getByText(/once the debate is published/)).toBeInTheDocument();
+    expect(within(card).queryByRole('button')).toBeNull();
+    expect(mocks.entityIdLookups.flat()).toContain(MINTED);
+    expect(mocks.rematchClaimIds.flat()).not.toContain(MINTED);
+  });
+
+  it('skips a claim with neither a graph match nor a minted id', async () => {
+    mocks.extractedClaims = {
+      turns,
+      claims: [
+        extracted('Written before ids were minted', 0),
+        extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }),
+      ],
+    };
+    await openTab();
+
+    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    expect(screen.queryByText('Written before ids were minted')).toBeNull();
+  });
+
+  it('appends new claims at the bottom without reordering the ones already listed', async () => {
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'From this debate' }));
+    await settleTabSwap();
+    const order = () =>
+      screen
+        .getAllByText(
+          /^(A claim both participants chose|Coffee dates save everyone’s time|Dinner is a better first date)$/
+        )
+        .map(node => node.textContent);
+    expect(order()).toEqual(['A claim both participants chose', 'Coffee dates save everyone’s time']);
+
+    // The next poll lists the claims the other way round and adds one between them.
+    mocks.extractedClaims = {
+      turns,
+      claims: [
+        extracted('Coffee dates save everyone’s time', 0, { minted: MINTED }),
+        extracted('Dinner is a better first date', 0, { minted: MINTED_LATER }),
+        extracted('A claim both participants chose', 1, { existing: hex(CLAIM_SHARED) }),
+      ],
+    };
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(order()).toEqual([
+      'A claim both participants chose',
+      'Coffee dates save everyone’s time',
+      'Dinner is a better first date',
+    ]);
+  });
+
+  it('says extraction is still running while the payload is empty, and stops saying so once it is final', async () => {
+    mocks.extractedClaims = { turns: [], claims: [] };
+    mocks.extractedClaimsFinal = false;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'From this debate' }));
+    await settleTabSwap();
+    expect(screen.getByText(/Pulling the claims out of your debate/)).toBeInTheDocument();
+
+    mocks.extractedClaimsFinal = true;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    expect(screen.getByText('No claims from this debate are left to debate.')).toBeInTheDocument();
+  });
+
+  it('folds a claim the pair already debated away, and leaves out one the viewer is not interested in', async () => {
+    mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+    mocks.notInterestedIds = [MINTED];
+    await openTab();
+
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+    expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 });

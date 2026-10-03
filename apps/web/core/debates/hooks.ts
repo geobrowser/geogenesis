@@ -53,6 +53,7 @@ import {
   endDebateTurn,
   getDebate,
   getDebateActivity,
+  getDebateExtractedClaims,
   getDebateMedia,
   getDebateMediaArtifactUrl,
   getDebateProfile,
@@ -69,6 +70,7 @@ import {
   listDebateClaims,
   listDebateRematchClaims,
   listDebateSharePrompts,
+  listNotInterestedClaims,
   listSpaceDebates,
   markDebateCapturing,
   markDebateJoined,
@@ -129,6 +131,8 @@ export const debateQueryKeys = {
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
   media: (debateId: string) => ['debates', 'media', debateId] as const,
+  /** GEO-2870. geo-chat's extracted claims for one debate, with whether its media job has finished. */
+  extractedClaims: (debateId: string) => ['debates', 'extracted-claims', debateId] as const,
   /** Viewer-specific: whether a recording can be read at all is decided per identity. */
   recordingUrl: (
     debateId: string,
@@ -173,6 +177,8 @@ export const debateQueryKeys = {
   matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
   requests: (accountKey: string | null) => ['debates', 'account', accountKey, 'requests'] as const,
   blocks: (accountKey: string | null) => ['debates', 'account', accountKey, 'blocks'] as const,
+  /** GEO-2862. The viewer's private "Not interested" list. */
+  notInterested: (accountKey: string | null) => ['debates', 'account', accountKey, 'not-interested'] as const,
 };
 
 export function useGeoChatAuth() {
@@ -1436,6 +1442,69 @@ export function useDebateMedia(debateId: string, enabled: boolean) {
       ),
     enabled,
   });
+}
+
+/** How often the "From this debate" source asks again while extraction may still be writing. */
+export const EXTRACTED_CLAIMS_POLL_MS = 10_000;
+
+/**
+ * GEO-2870 phase 2. The claims geo-chat extracted from one debate, read from its fast path, and
+ * whether that payload can still change.
+ *
+ * Polled until it cannot. geo-chat commits the payload when extraction finishes — minutes after the
+ * debate, well before the video — and may write it again before the media job ends (D4's final
+ * pass). A finished job, either way, is the last write, so the poll stops there; until then an
+ * empty payload is "not yet", never "none".
+ *
+ * The media read is folded into the same query rather than read off `useDebateMedia`, because that
+ * one does not poll: its status would sit at `running` for the whole visit and the poll would never
+ * stop. A failed media read only costs the stop signal, so it is not allowed to fail the claims.
+ */
+export function useDebateExtractedClaims(debateId: string, enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.extractedClaims(debateId),
+    queryFn: async ({ signal }) => {
+      const token = authenticated ? getPrivyIdentityToken : undefined;
+      const account = authenticated ? accountKey : null;
+      const [payload, media] = await Promise.all([
+        getDebateExtractedClaims(debateId, token, account, signal),
+        getDebateMedia(debateId, token, account, signal).catch(() => null),
+      ]);
+      const status = media?.job?.status;
+      return { payload, final: status === 'succeeded' || status === 'failed' };
+    },
+    enabled: enabled && Boolean(debateId),
+    refetchInterval: query => extractedClaimsRefetchInterval(query.state.data),
+  });
+}
+
+/** Polls until the payload is known to be final; a failed or pending first read keeps polling. */
+export function extractedClaimsRefetchInterval(data: { final: boolean } | undefined): number | false {
+  return data?.final ? false : EXTRACTED_CLAIMS_POLL_MS;
+}
+
+const NO_NOT_INTERESTED_IDS: string[] = [];
+
+/**
+ * The claims the viewer marked "Not interested" (GEO-2862), as ids. Private to the viewer, so
+ * signed out there is nothing to ask and nothing hidden.
+ */
+export function useNotInterestedClaimIds(enabled = true) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.notInterested(accountKey),
+    queryFn: ({ signal }) => listNotInterestedClaims(getPrivyIdentityToken, accountKey, signal),
+    enabled: enabled && authenticated,
+  });
+  const ids = React.useMemo(
+    () => query.data?.claims.map(claim => claim.claim_entity_id) ?? NO_NOT_INTERESTED_IDS,
+    [query.data]
+  );
+  return { ids, isLoading: query.isLoading };
 }
 
 /**
