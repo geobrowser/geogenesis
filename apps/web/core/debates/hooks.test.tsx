@@ -19,7 +19,9 @@ import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
 import { useDebateGatewayScope } from './debate-gateway';
 import {
+  EXTRACTED_CLAIMS_POLL_MS,
   debateQueryKeys,
+  extractedClaimsRefetchInterval,
   useAcceptDebateRematchRequest,
   useClearDebateActivity,
   useClearTimedOutDebateActivity,
@@ -28,6 +30,7 @@ import {
   useDebateActivity,
   useDebateClaims,
   useDebateClaimsBySpaces,
+  useDebateExtractedClaims,
   useDebateProfile,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
@@ -50,6 +53,8 @@ const mocks = vi.hoisted(() => ({
   leaveDebateRematch: vi.fn(),
   listDebateClaims: vi.fn(),
   getDebateProfile: vi.fn(),
+  getDebateExtractedClaims: vi.fn(),
+  getDebateMedia: vi.fn(),
   listDebateRematchClaims: vi.fn(),
   listDebateSharePrompts: vi.fn(),
   markDebateReady: vi.fn(),
@@ -108,11 +113,69 @@ vi.mock('./api', async importOriginal => {
     leaveDebateRematch: mocks.leaveDebateRematch,
     listDebateClaims: mocks.listDebateClaims,
     getDebateProfile: mocks.getDebateProfile,
+    getDebateExtractedClaims: mocks.getDebateExtractedClaims,
+    getDebateMedia: mocks.getDebateMedia,
     listDebateRematchClaims: mocks.listDebateRematchClaims,
     listDebateSharePrompts: mocks.listDebateSharePrompts,
     markDebateReady: mocks.markDebateReady,
     updateDebateAvailability: mocks.updateDebateAvailability,
   };
+});
+
+/**
+ * GEO-2870 phase 2. The "From this debate" source polls geo-chat's extracted claims until the media
+ * job has made its last write, and a media read that fails costs only that stop signal.
+ */
+describe('useDebateExtractedClaims', () => {
+  const payload = { turns: [], claims: [] };
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      {children}
+    </QueryClientProvider>
+  );
+
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    setCachedIdentityToken(null);
+    mocks.getDebateExtractedClaims.mockReset().mockResolvedValue(payload);
+    mocks.getDebateMedia.mockReset();
+  });
+
+  it.each([
+    ['running', false],
+    ['queued', false],
+    ['succeeded', true],
+    ['failed', true],
+  ] as const)('reads a %s media job as final: %s', async (status, final) => {
+    mocks.getDebateMedia.mockResolvedValue({ job: { status }, artifacts: [] });
+
+    const { result } = renderHook(() => useDebateExtractedClaims('debate-1', true), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ payload, final }));
+    expect(mocks.getDebateExtractedClaims.mock.calls[0]?.[0]).toBe('debate-1');
+  });
+
+  it('keeps the claims when the media read fails, and keeps polling', async () => {
+    mocks.getDebateMedia.mockRejectedValue(new Error('media down'));
+
+    const { result } = renderHook(() => useDebateExtractedClaims('debate-1', true), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ payload, final: false }));
+    expect(extractedClaimsRefetchInterval(result.current.data)).toBe(EXTRACTED_CLAIMS_POLL_MS);
+  });
+
+  it('stops polling once the payload is final, and polls until there is an answer', () => {
+    expect(extractedClaimsRefetchInterval(undefined)).toBe(EXTRACTED_CLAIMS_POLL_MS);
+    expect(extractedClaimsRefetchInterval({ final: false })).toBe(EXTRACTED_CLAIMS_POLL_MS);
+    expect(extractedClaimsRefetchInterval({ final: true })).toBe(false);
+  });
+
+  it('asks nothing without a source debate', () => {
+    renderHook(() => useDebateExtractedClaims('', false), { wrapper });
+    expect(mocks.getDebateExtractedClaims).not.toHaveBeenCalled();
+  });
 });
 
 describe('useDebateRematchClaimsForIds', () => {

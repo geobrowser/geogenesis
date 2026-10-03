@@ -4,6 +4,7 @@ import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
 import type { RecordingPlaybackVariant } from './mobile-rendition';
+import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
 
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
@@ -2253,6 +2254,28 @@ export async function getRecordingUrl(
     auth: 'optional',
     getPrivyIdentityToken,
     accountKey,
+  });
+}
+
+/**
+ * The claims geo-chat extracted from a debate (GEO-2870), as its media job committed them: the
+ * turns, and the claims keyed to them by `turn_index`. Empty arrays until extraction has run.
+ *
+ * The fast path. These land minutes after a debate ends, where the published graph claims wait on
+ * the composed video and the publish sweep (~27 min). GEO-2868 decided the debate-again flow reads
+ * them from here rather than publishing anything early.
+ */
+export async function getDebateExtractedClaims(
+  debateId: string,
+  getPrivyIdentityToken?: GetPrivyIdentityToken,
+  accountKey?: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateExtractedClaimsResponse>(`/debates/${debateId}/claims`, {
+    auth: 'optional',
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
   });
 }
 
