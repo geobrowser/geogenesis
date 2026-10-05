@@ -59,9 +59,11 @@ export function ScrollableTabRow({
     if (!scroller || typeof ResizeObserver === 'undefined') return;
     let width = scroller.clientWidth;
     const observer = new ResizeObserver(() => {
-      if (scroller.clientWidth === width) return;
+      const narrowed = scroller.clientWidth < width;
       width = scroller.clientWidth;
-      scrollActiveTabIntoView(scroller);
+      // Narrowing is what can clip the selected tab. Widening cannot, and re-aligning on it would
+      // move a row the viewer had scrolled away themselves.
+      if (narrowed) scrollActiveTabIntoView(scroller);
     });
     observer.observe(scroller);
     return () => observer.disconnect();

@@ -23,8 +23,11 @@ export const useEffectOnce = (effect: EffectCallback): void => {
  * refetches, such as recording that something was seen. `effect` is read when it runs, so an
  * inline closure sees that render's values.
  *
- * `key` makes it once per key instead, for a component reused across subjects rather than remounted
- * — a page the route moves between sessions on. A new key runs it again; the same key never does.
+ * `key` makes it once per run of the same key instead, for a component reused across subjects rather
+ * than remounted — a page the route moves between sessions on. It runs again whenever the key
+ * changes, including back to one it ran for before: only the latest key is remembered, matching
+ * state a caller keeps per subject the same way (the rematch picker re-lands a session it returns
+ * to, and that is a landing to report).
  */
 export const useEffectOnceWhen = (ready: boolean, effect: () => void, key?: string): void => {
   // The key it ran for, boxed so that an absent key still records that it ran.

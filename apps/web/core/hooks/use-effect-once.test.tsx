@@ -49,4 +49,17 @@ describe('useEffectOnceWhen', () => {
     expect(effect).toHaveBeenCalledTimes(2);
     expect(effect).toHaveBeenLastCalledWith('session-2');
   });
+
+  // The latest key only, deliberately: a caller that keeps its own per-subject state the same way
+  // (the rematch picker's landing) does the work again when it returns to a subject, and so must this.
+  it('runs again for a key it returns to after another', () => {
+    const effect = vi.fn();
+    const { rerender } = renderHook(({ key }) => useEffectOnceWhen(true, () => effect(key), key), {
+      initialProps: { key: 'session-a' },
+    });
+    rerender({ key: 'session-b' });
+    rerender({ key: 'session-a' });
+
+    expect(effect.mock.calls.map(([key]) => key)).toEqual(['session-a', 'session-b', 'session-a']);
+  });
 });

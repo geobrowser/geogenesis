@@ -143,6 +143,20 @@ describe('ScrollableTabRow', () => {
     expect(scrollTo).toHaveBeenLastCalledWith({ left: 640 - 200, behavior: 'smooth' });
   });
 
+  // Widening cannot clip anything, so it is not a reason to move a row someone scrolled themselves.
+  it('leaves a scrolled row alone when it widens', () => {
+    render(<Row active={5} />);
+    const scroller = screen.getByRole('button', { name: 'Tab 5' }).closest('.overflow-x-auto')!;
+    scrollLeft = 0;
+    fireEvent.scroll(scroller);
+    scrollTo.mockClear();
+
+    view = 400;
+    resize(scroller);
+
+    expect(scrollTo).not.toHaveBeenCalled();
+  });
+
   it('names its arrows for click analytics', () => {
     render(<Row active={0} />);
 
