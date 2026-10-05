@@ -50,6 +50,19 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'lobbyJoining',
+    label: 'Debate lobbies: joining',
+    description:
+      'The Live debate lobbies card in the debates panel and the lobby page at /debate/{id} (GEO-3127). Off: a lobby link says lobbies are not available.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'lobbyHosting',
+    label: 'Debate lobbies: hosting',
+    description: 'Open a lobby now or schedule one, from the lobbies card (GEO-3127). Needs lobby joining on too.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
