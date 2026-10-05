@@ -19,7 +19,7 @@ function matches(source: string, path: string) {
 }
 
 describe('marketing routing', () => {
-  it.each(['/', '/terms', '/downloads', '/help', '/docs', '/faq', '/api/help', '/api/downloads/desktop', '/api/subscribe', '/_marketing/_next/static/chunk.js',
+  it.each(['/', '/terms', '/www/help', '/www/docs', '/www/faq', '/www/downloads', '/www/api/help', '/www/future-page', '/api/subscribe', '/_marketing/_next/static/chunk.js',
     '/_marketing/image', '/hero/logo.svg', '/hero/debates/debate-1.webm',
     '/curators/card-grey-1.webp', '/opengraph-image.jpg', '/twitter-image.jpg'])
   ('forwards %s to the marketing deployment without changing its path', async path => {
@@ -30,6 +30,7 @@ describe('marketing routing', () => {
   });
 
   it.each(['/root', '/explore', '/space/123', '/space/123/debates/456',
+    '/help', '/docs', '/faq', '/downloads', '/api/help', '/api/downloads/desktop',
     '/api/chat', '/api/debates/publish-sweep', '/_next/image', '/_next/static/chunk.js',
     '/early-access', '/curator-program', '/ending-homelessness', '/blog'])
   ('does not capture existing Genesis or legacy route %s', async path => {
