@@ -262,9 +262,14 @@ export function DebateCoordinator() {
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again.
+  // Reminded lobbies ride the same list (GEO-3133), shown only with `lobbyJoining` on.
+  const lobbyJoining = useFeatureFlag('lobbyJoining');
   const joinableRooms = React.useMemo(
-    () => upcomingRooms.filter(room => room.joinable && !finishedRoomIds.has(room.room_id)),
-    [finishedRoomIds, upcomingRooms]
+    () =>
+      upcomingRooms.filter(
+        room => room.joinable && !finishedRoomIds.has(room.room_id) && (lobbyJoining || room.kind !== 'lobby')
+      ),
+    [finishedRoomIds, lobbyJoining, upcomingRooms]
   );
   // The sessions rooms have handed out, per the server, so the rematch effect below can tell one
   // from a challenge's on every device. A joinable room with none yet may be about to hand one out.
@@ -272,7 +277,8 @@ export function DebateCoordinator() {
     () => new Set(upcomingRooms.flatMap(room => (room.rematch_session_id ? [room.rematch_session_id] : []))),
     [upcomingRooms]
   );
-  const hasRoomAwaitingSession = joinableRooms.some(room => room.rematch_session_id === null);
+  // A lobby never hands out a session.
+  const hasRoomAwaitingSession = joinableRooms.some(room => room.kind !== 'lobby' && room.rematch_session_id === null);
   // `undefined` is a geo-chat that predates the field, where no room's session can be identified.
   // Until it deploys, an open room suppresses the push as it did before: a redirect into a room's
   // session is what the ticket bans, and a delayed challenge push is the lesser cost.

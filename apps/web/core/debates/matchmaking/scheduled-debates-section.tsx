@@ -185,7 +185,8 @@ export function useScheduledContent(): ScheduledContent {
   const upcoming = React.useMemo(
     () =>
       roomList
-        .filter(room => !finishedRoomIds.has(room.room_id))
+        // Reminded lobbies share the list but are not scheduled debates (GEO-3133).
+        .filter(room => room.kind !== 'lobby' && !finishedRoomIds.has(room.room_id))
         .map(room => {
           const request = requestForRoom(rows, room.room_id);
           return {
