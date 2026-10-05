@@ -298,7 +298,12 @@ export function DebateCoordinator() {
   // into the next slot must not get a Join button floating over a recording, one click from
   // leaving it. That is prompt 2's job, and prompt 2 is gated on recording state (GEO-2946).
   const promptedRoom =
-    atRoom || activeFlow ? null : (joinableRooms.find(room => !snoozedRoomIds.includes(room.room_id)) ?? null);
+    atRoom || activeFlow
+      ? null
+      : // A booked debate outranks a reminded lobby.
+        ([...joinableRooms]
+          .sort((a, b) => Number(a.kind === 'lobby') - Number(b.kind === 'lobby'))
+          .find(room => !snoozedRoomIds.includes(room.room_id)) ?? null);
 
   React.useEffect(() => {
     const liveIds = new Set(joinableRooms.map(room => room.room_id));

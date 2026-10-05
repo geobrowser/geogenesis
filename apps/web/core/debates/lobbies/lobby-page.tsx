@@ -334,11 +334,15 @@ function useHandoffNotice(members: DebateLobbyMember[]) {
   React.useEffect(() => {
     const next = newHostAfterHandoff(previousRef.current, members);
     previousRef.current = members;
-    if (!next) return;
-    setNotice(next);
+    if (next) setNotice(next);
+  }, [members]);
+
+  // Keyed on the notice, so a later roster change cannot cancel the clear.
+  React.useEffect(() => {
+    if (!notice) return;
     const timeout = setTimeout(() => setNotice(null), HANDOFF_NOTICE_MS);
     return () => clearTimeout(timeout);
-  }, [members]);
+  }, [notice]);
 
   return notice;
 }

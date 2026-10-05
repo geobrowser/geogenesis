@@ -10,6 +10,7 @@ import type { DebateLobbyView } from '../api';
 const api = vi.hoisted(() => ({
   setDebateLobbyPresence: vi.fn(),
   sendDebateLobbyHeartbeat: vi.fn(),
+  getDebateLobby: vi.fn(),
 }));
 
 vi.mock('../api', async importOriginal => ({ ...(await importOriginal<typeof import('../api')>()), ...api }));
@@ -20,7 +21,16 @@ vi.mock('../hooks', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, useLobbyPresence } = await import('./hooks');
+const { LOBBY_HEARTBEAT_MS, useDebateLobby, useLobbyPresence } = await import('./hooks');
+
+/** A presence call that resolves when the test says so. */
+function deferredJoin() {
+  let resolve: (view: DebateLobbyView) => void = () => undefined;
+  api.setDebateLobbyPresence.mockImplementationOnce(
+    () => new Promise<DebateLobbyView>(done => (resolve = done))
+  );
+  return (view: DebateLobbyView) => resolve(view);
+}
 
 function view(present: boolean, access: DebateLobbyView['access'] = { status: 'admitted' }): DebateLobbyView {
   return {
@@ -118,6 +128,37 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(joins()).toHaveLength(2));
   });
 
+  // A join answered after Leave must not put the viewer back.
+  it('keeps Leave when the join it raced resolves afterwards', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const resolveJoin = deferredJoin();
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joining'));
+
+    const leaving = result.current.leave();
+    resolveJoin(view(true));
+    await act(() => leaving);
+
+    expect(result.current.state.status).toBe('left');
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS * 2);
+    });
+    expect(api.sendDebateLobbyHeartbeat).not.toHaveBeenCalled();
+    expect(joins()).toHaveLength(1);
+    expect(leaves()).toHaveLength(1);
+  });
+
+  // Otherwise the server keeps the viewer present and the next lobby answers 409.
+  it('sends the leave when unmounted with a join in flight', async () => {
+    const resolveJoin = deferredJoin();
+    const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joining'));
+
+    unmount();
+    resolveJoin(view(true));
+    await waitFor(() => expect(leaves()).toHaveLength(1));
+  });
+
   it('stays out after Leave', async () => {
     const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
@@ -131,5 +172,24 @@ describe('useLobbyPresence', () => {
     // No second leave, and no rejoin.
     expect(leaves()).toHaveLength(1);
     expect(joins()).toHaveLength(1);
+  });
+});
+
+describe('useDebateLobby', () => {
+  // `debate.lobby_changed` only reaches present members, so nobody would tell this page.
+  it('refetches a lobby that is not yet open when it opens', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const opensAt = new Date(Date.now() + 60_000).toISOString();
+    api.getDebateLobby
+      .mockResolvedValueOnce(view(false, { status: 'not_yet_open', opens_at: opensAt }))
+      .mockResolvedValue(view(false));
+    const { result } = renderHook(() => useDebateLobby('lobby1'), { wrapper });
+    await waitFor(() => expect(result.current.data?.access.status).toBe('not_yet_open'));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    await waitFor(() => expect(result.current.data?.access.status).toBe('admitted'));
+    expect(api.getDebateLobby).toHaveBeenCalledTimes(2);
   });
 });
