@@ -1974,6 +1974,8 @@ export type DebateLobbyMember = {
   avatar_cid: string | null;
   role: DebateLobbyRole;
   creator: boolean;
+  /** Hosting for now because no host is present. `role` stays their own. */
+  acting_host: boolean;
   present_since: string;
 };
 
@@ -1985,12 +1987,24 @@ export type DebateLobbyView = {
   opens_at: string;
   scheduled: boolean;
   created_by: string;
+  /** Hosts while no host is present; `null` whenever a host is in. */
+  acting_host_id: string | null;
+  /** Moves when the acting host changes. */
   hosts_changed_at: string | null;
   reminder_count: number;
-  /** Present members, longest-present first. Empty unless the viewer is admitted. */
+  /** Present members, longest-present first. Empty for a banned viewer. */
   members: DebateLobbyMember[];
-  /** `role` is null before the viewer's first join. */
-  viewer: { role: DebateLobbyRole | null; creator: boolean; reminded: boolean; present: boolean };
+  viewer: {
+    /** `null` before the viewer's first join. */
+    role: DebateLobbyRole | null;
+    creator: boolean;
+    /** Host powers now: a host, or the acting host. Gate host tools on this, not `role`. */
+    hosting: boolean;
+    reminded: boolean;
+    /** While in this lobby's voice: when voice stops holding off Away without input. */
+    voice_away_at: string | null;
+    present: boolean;
+  };
 };
 
 export type DebateLobbyPerson = {
@@ -2007,7 +2021,7 @@ export type DebateLobbySummary = {
   starts_at: string;
   opens_at: string;
   open: boolean;
-  /** Every host, present or not, creator first. */
+  /** Every host, present or not, creator first, then the acting host. */
   hosts: DebateLobbyPerson[];
   headcount: number;
   /** Up to five present people, longest-present first. */

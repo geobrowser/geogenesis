@@ -76,18 +76,24 @@ export const ROLE_LABEL: Record<DebateLobbyRole, string> = {
 
 const ROLE_ORDER: Record<DebateLobbyRole, number> = { host: 0, speaker: 1, listener: 2, banned: 3 };
 
-/** Hosts, then speakers, then listeners; longest-present first within each, as the server sends. */
+/** Hosting now: a host, or the acting host while no host is present. */
+export function isHosting(member: Pick<DebateLobbyMember, 'role' | 'acting_host'>) {
+  return member.role === 'host' || member.acting_host;
+}
+
+/** Hosting first, then speakers, then listeners; server order (longest-present) within each. */
 export function rosterOrder(members: DebateLobbyMember[]) {
+  const rank = (member: DebateLobbyMember) => (isHosting(member) ? 0 : ROLE_ORDER[member.role]);
   return members
     .map((member, index) => ({ member, index }))
-    .sort((a, b) => ROLE_ORDER[a.member.role] - ROLE_ORDER[b.member.role] || a.index - b.index)
+    .sort((a, b) => rank(a.member) - rank(b.member) || a.index - b.index)
     .map(({ member }) => member);
 }
 
-/** Present host ids, sorted, for spotting a handoff between two views. */
+/** Ids of present members hosting now, sorted, for spotting a handoff between two views. */
 export function hostIds(members: DebateLobbyMember[]) {
   return members
-    .filter(member => member.role === 'host')
+    .filter(isHosting)
     .map(member => member.user_id)
     .sort();
 }

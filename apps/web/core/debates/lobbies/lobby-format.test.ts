@@ -13,8 +13,9 @@ import {
   rosterOrder,
 } from './lobby-format';
 
-function member(userId: string, role: DebateLobbyRole): DebateLobbyMember {
+function member(userId: string, role: DebateLobbyRole, actingHost = false): DebateLobbyMember {
   return {
+    acting_host: actingHost,
     user_id: userId,
     profile_space_id: `space-${userId}`,
     display_name: userId.toUpperCase(),
@@ -81,6 +82,11 @@ describe('rosterOrder', () => {
     ]).map(m => m.user_id);
     expect(order).toEqual(['c', 'a', 'd', 'b']);
   });
+
+  it('lists the acting host with the hosts', () => {
+    const order = rosterOrder([member('a', 'speaker'), member('b', 'speaker', true)]).map(m => m.user_id);
+    expect(order).toEqual(['b', 'a']);
+  });
 });
 
 describe('newHostAfterHandoff', () => {
@@ -90,6 +96,8 @@ describe('newHostAfterHandoff', () => {
     expect(newHostAfterHandoff(before, [member('b', 'host')])?.user_id).toBe('b');
     // A second host promoted while the first stays is not a handoff.
     expect(newHostAfterHandoff(before, [member('a', 'host'), member('b', 'host')])).toBeNull();
+    // Roles never change on a handoff; the speaker who takes over is the acting host.
+    expect(newHostAfterHandoff(before, [member('b', 'speaker', true)])?.user_id).toBe('b');
     // Hostless: nobody to announce.
     expect(newHostAfterHandoff(before, [member('b', 'listener')])).toBeNull();
   });

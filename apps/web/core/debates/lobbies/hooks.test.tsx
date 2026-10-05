@@ -26,9 +26,7 @@ const { LOBBY_HEARTBEAT_MS, useDebateLobby, useLobbyPresence } = await import('.
 /** A presence call that resolves when the test says so. */
 function deferredJoin() {
   let resolve: (view: DebateLobbyView) => void = () => undefined;
-  api.setDebateLobbyPresence.mockImplementationOnce(
-    () => new Promise<DebateLobbyView>(done => (resolve = done))
-  );
+  api.setDebateLobbyPresence.mockImplementationOnce(() => new Promise<DebateLobbyView>(done => (resolve = done)));
   return (view: DebateLobbyView) => resolve(view);
 }
 
@@ -41,10 +39,11 @@ function view(present: boolean, access: DebateLobbyView['access'] = { status: 'a
     opens_at: '2026-10-05T10:00:00Z',
     scheduled: false,
     created_by: 'u1',
+    acting_host_id: null,
     hosts_changed_at: null,
     reminder_count: 0,
     members: [],
-    viewer: { role: 'speaker', creator: false, reminded: false, present },
+    viewer: { role: 'speaker', creator: false, hosting: false, reminded: false, voice_away_at: null, present },
   };
 }
 

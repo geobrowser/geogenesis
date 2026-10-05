@@ -27,6 +27,7 @@ import {
   ROLE_LABEL,
   hereLabel,
   hostsLabel,
+  isHosting,
   newHostAfterHandoff,
   notYetOpenLabel,
   personName,
@@ -188,8 +189,8 @@ function LobbyRoom({
   const [copied, setCopied] = React.useState(false);
   const handoff = useHandoffNotice(lobby.members);
 
-  const hosts = lobby.members.filter(member => member.role === 'host');
-  const isHost = lobby.viewer.role === 'host';
+  const hosts = lobby.members.filter(isHosting);
+  const isHost = lobby.viewer.hosting;
   const roster = rosterOrder(lobby.members);
 
   const copyLink = async () => {
@@ -317,10 +318,10 @@ function RosterRow({ member, isViewer }: { member: DebateLobbyMember; isViewer: 
       <span
         className={cx(
           'rounded-full px-2 py-0.5 text-footnoteMedium',
-          member.role === 'host' ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
+          isHosting(member) ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
         )}
       >
-        {ROLE_LABEL[member.role]}
+        {member.acting_host ? 'Hosting' : ROLE_LABEL[member.role]}
       </span>
     </li>
   );
