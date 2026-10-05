@@ -6,6 +6,15 @@ const mocks = vi.hoisted(() => ({
   candidates: {} as Record<string, string[]>,
   editorSpaceIds: [] as string[],
   publish: vi.fn(),
+  lockRan: true,
+  lockOptions: [] as Array<{ ttlMs: number; waitMs?: number }>,
+}));
+
+vi.mock('~/core/debates/server/acceptor-lock', () => ({
+  withAcceptorLock: async (fn: () => Promise<unknown>, options: { ttlMs: number; waitMs?: number }) => {
+    mocks.lockOptions.push(options);
+    return mocks.lockRan ? { ran: true, value: await fn() } : { ran: false };
+  },
 }));
 
 vi.mock('~/core/debates/server/acceptor-config', () => ({
@@ -40,6 +49,8 @@ beforeEach(() => {
   mocks.editorSpaceIds = ['space-1'];
   mocks.candidates = {};
   mocks.publish.mockReset();
+  mocks.lockRan = true;
+  mocks.lockOptions = [];
 });
 
 afterEach(() => {
@@ -50,6 +61,17 @@ afterEach(() => {
 const publishedResult = { status: 'published', debateEntityId: 'e', spaceId: 'space-1', userOpHash: '0x1' };
 
 describe('publish sweep', () => {
+  it('waits for the early claims sweep to release the signing lock, then skips the tick if it does not', async () => {
+    mocks.lockRan = false;
+    mocks.candidates = { 'space-1': ['debate-1'] };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await sweep()).toEqual({ ok: true, skipped: 'acceptor_busy' });
+    expect(mocks.publish).not.toHaveBeenCalled();
+    expect(mocks.lockOptions[0]?.waitMs).toBeGreaterThan(0);
+    warn.mockRestore();
+  });
+
   it('refuses a request without the cron secret', async () => {
     const { GET } = await import('./route');
     const response = await GET(new Request('https://geo.test/api/debates/publish-sweep'));

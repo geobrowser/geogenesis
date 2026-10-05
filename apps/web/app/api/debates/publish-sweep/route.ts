@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 
 import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
+import { withAcceptorLock } from '~/core/debates/server/acceptor-lock';
 import {
   DebateNotPublishableError,
   assertDebateMediaHostConfigured,
@@ -23,6 +24,11 @@ const MAX_PUBLISH_ATTEMPTS_PER_SWEEP = 8;
 // duplicate media and transcript entities. The remaining time is headroom for the publish in flight.
 const PUBLISH_START_DEADLINE_MS = 180_000;
 
+// How long to wait for the early claims sweep to release the signing lock. The wait comes out of
+// the publish deadline (both run from the request's start), so it never eats the headroom left
+// for a publish in flight.
+const LOCK_WAIT_MS = 60_000;
+
 /**
  * Cron sweep: publish finished debates to the knowledge graph as the debate acceptor.
  *
@@ -34,6 +40,7 @@ const PUBLISH_START_DEADLINE_MS = 180_000;
  * browser or public route is in the loop, so nothing depends on a participant keeping a tab open.
  */
 export async function GET(request: Request) {
+  const requestStartedAt = Date.now();
   const secret = process.env.CRON_SECRET;
   if (!secret || request.headers.get('authorization') !== `Bearer ${secret}`) {
     return new NextResponse('Unauthorized', { status: 401 });
@@ -53,11 +60,24 @@ export async function GET(request: Request) {
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
 
-  const startedAt = Date.now();
+  // One acceptor signing at a time (see `acceptor-lock.ts`). The early claims sweep beside this one
+  // holds the lock for well under a minute, so wait for it rather than skipping a five-minute tick.
+  const outcome = await withAcceptorLock(() => runSweep(config.spaceId, requestStartedAt), {
+    ttlMs: maxDuration * 1000,
+    waitMs: LOCK_WAIT_MS,
+  });
+  if (!outcome.ran) {
+    console.warn('[debate-acceptor] sweep skipped: another publish run holds the signing lock');
+    return NextResponse.json({ ok: true, skipped: 'acceptor_busy' });
+  }
+  return NextResponse.json(outcome.value);
+}
+
+async function runSweep(acceptorSpaceId: string, startedAt: number) {
   const budgetExhausted = (attempted: number) =>
     attempted >= MAX_PUBLISH_ATTEMPTS_PER_SWEEP || Date.now() - startedAt >= PUBLISH_START_DEADLINE_MS;
 
-  const spaceIds = await listEditorSpaceIds(config.spaceId);
+  const spaceIds = await listEditorSpaceIds(acceptorSpaceId);
   const published: string[] = [];
   const failed: Array<{ debateId: string; error: string }> = [];
   let attempted = 0;
@@ -126,7 +146,7 @@ export async function GET(request: Request) {
     });
   }
 
-  return NextResponse.json({
+  return {
     ok: true,
     published,
     alreadyPublished,
@@ -137,5 +157,5 @@ export async function GET(request: Request) {
     mediaFailed,
     skipped,
     failed,
-  });
+  };
 }

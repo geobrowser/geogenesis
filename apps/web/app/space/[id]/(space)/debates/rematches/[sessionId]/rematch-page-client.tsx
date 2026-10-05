@@ -363,11 +363,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * append-only (D4) so a claim never moves under someone reading it.
    *
    * Each claim's id is geo-chat's graph match, or the stable id it minted (D1) — the id the publisher
-   * will create the claim under. A matched claim is already in the graph and requestable now. A
-   * minted one is not until the debate publishes: geo-chat resolves every request against the graph
-   * and refuses an id it cannot find (`claim_not_found`), and a position on it would be a vote on an
-   * entity that does not exist yet. So the graph lookup below is what splits the two, and an
-   * unpublished claim is drawn without the controls rather than with controls that fail.
+   * creates the claim under. A matched claim is already in the graph and requestable now. A minted
+   * one is not until it is published: geo-chat resolves every request against the graph and refuses
+   * an id it cannot find (`claim_not_found`), and a position on it would be a vote on an entity that
+   * does not exist yet. Option A publishes minted claims a minute or two after extraction rather
+   * than with the debate (`/api/debates/publish-claims-sweep`). The graph lookup below is what
+   * splits the two, and an unpublished claim is drawn without the controls rather than with
+   * controls that fail.
    * ---------------------------------------------------------------------------------------------*/
   const sourceDebateId = session?.source_debate_id ?? null;
   const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', sourceDebateId !== null);
@@ -386,7 +388,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
   const debateList = useFromThisDebateList(debateCandidates, openRequestClaimIds, sessionId);
   const debateClaimIds = React.useMemo(() => debateList.map(claim => claim.id), [debateList]);
-  const debateEntitiesQuery = useClaimEntitiesByIds(debateClaimIds);
+  // Polled while any is missing: the early claims publish puts them on the graph a minute or two
+  // after geo-chat extracts them (GEO-2870 option A), and each card gains its controls in place.
+  const debateEntitiesQuery = useClaimEntitiesByIds(debateClaimIds, { pollMissingMs: DEBATE_CLAIM_PUBLISH_POLL_MS });
   const debateEntitiesById = React.useMemo(
     () => new Map(debateEntitiesQuery.entities.map(entity => [normId(entity.id), entity])),
     [debateEntitiesQuery.entities]
@@ -3114,6 +3118,9 @@ function RematchClaimCard({
 /** A "From this debate" claim, and its picker row once the graph has it (GEO-2870). */
 type FromThisDebateItem = { claim: FromThisDebateClaim; row: DebateRematchClaim | null };
 
+/** How often the "From this debate" tab re-asks the graph for claims it does not have yet. */
+const DEBATE_CLAIM_PUBLISH_POLL_MS = 15_000;
+
 /** Which turn of the debate a claim came from, by its speaker. */
 function DebateTurnCaption({ speaker }: { speaker: string | null }) {
   return (
@@ -3128,8 +3135,8 @@ function DebateTurnCaption({ speaker }: { speaker: string | null }) {
  *
  * No position pills and no request: geo-chat resolves both against the graph and refuses an id it
  * cannot find, so either control would be a button that fails. It says when that changes instead.
- * The id is the one the publisher will create the claim under, so the same claim becomes a full
- * card in place once the debate is published.
+ * The id is the one the publisher creates the claim under, so the same claim becomes a full card in
+ * place once it is published — shortly after extraction, ahead of the debate (GEO-2870 option A).
  */
 function UnpublishedDebateClaimCard({ claim, speaker }: { claim: FromThisDebateClaim; speaker: string | null }) {
   return (
@@ -3141,7 +3148,7 @@ function UnpublishedDebateClaimCard({ claim, speaker }: { claim: FromThisDebateC
       <p className="claim-card-panel-title">{claim.text}</p>
       <DebateTurnCaption speaker={speaker} />
       <Text as="p" variant="footnote" color="grey-04">
-        You can take a side and request a debate on this once the debate is published.
+        Publishing to Geo. You can take a side and request a debate on this in a minute or two.
       </Text>
     </motion.article>
   );

@@ -7,9 +7,11 @@ import { buildDebatePublishDraft } from '../debate-publish-draft';
 import { applyClaimReusePolicy } from './claim-reuse';
 import {
   DebateNotPublishableError,
+  listEarlyClaimCandidateDebateIds,
   listSweepCandidateDebateIds,
   loadDebateOgPreview,
   loadDebatePublishSource,
+  loadSettledDebate,
 } from './debate-source';
 import { loadMotionTopics } from './motion-topics';
 
@@ -392,6 +394,56 @@ describe('listSweepCandidateDebateIds', () => {
     );
 
     await expect(listSweepCandidateDebateIds('space-1')).resolves.toEqual(['eligible']);
+  });
+});
+
+describe('listEarlyClaimCandidateDebateIds (GEO-2870 option A)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-30T12:00:00.000Z'));
+  });
+
+  it('applies the full sweep’s opt-out gate, and keeps only debates that closed within the window', async () => {
+    const recent = debateBody({ id: 'recent' });
+    const old = debateBody({ id: 'old', turn_ends_at: '2026-07-30T08:00:00.000Z' });
+    const cancelled = debateBody({ id: 'cancelled', recording_cancelled_at: '2026-07-30T11:59:00.000Z' });
+    const settling = debateBody({ id: 'settling', turn_ends_at: '2026-07-30T11:59:30.001Z' });
+    const active = debateBody({ id: 'active', status: 'thanking' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ debates: [recent, old, cancelled, settling, active] }), { status: 200 })
+      )
+    );
+
+    await expect(listEarlyClaimCandidateDebateIds('space-1', Date.now(), 3 * 60 * 60 * 1000)).resolves.toEqual([
+      'recent',
+    ]);
+  });
+});
+
+describe('loadSettledDebate (GEO-2870 option A)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-30T12:00:00.000Z'));
+  });
+
+  it('returns a complete debate past its opt-out window without asking for media', async () => {
+    mockGeoChat({ job: null, artifacts: [] });
+    await expect(loadSettledDebate(DEBATE_ID)).resolves.toMatchObject({ id: DEBATE_ID });
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).toEqual([
+      expect.stringMatching(new RegExp(`/debates/${DEBATE_ID}$`)),
+    ]);
+  });
+
+  it.each([
+    ['not_complete', { status: 'thanking' }],
+    ['recording_cancelled', { recording_cancelled_at: '2026-07-30T11:59:00.000Z' }],
+    ['cancellation_window_open', { turn_ends_at: '2026-07-30T11:59:30.001Z' }],
+  ])('refuses with %s', async (code, overrides) => {
+    mockGeoChat({ job: null, artifacts: [] }, debateBody(overrides));
+    await expect(loadSettledDebate(DEBATE_ID)).rejects.toMatchObject({ code });
   });
 });
 
