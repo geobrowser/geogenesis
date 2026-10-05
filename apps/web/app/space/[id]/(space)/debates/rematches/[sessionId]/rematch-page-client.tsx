@@ -97,6 +97,7 @@ import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-use
 import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/debates/use-debate-publishable-spaces';
 import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
+import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
@@ -1704,25 +1705,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   React.useEffect(() => {
     if (landedForSession !== null || landingNow === null) return;
     setLanding({ sessionId, tab: landingNow });
-    captureLandingTab({
-      rematchSessionId: sessionId,
-      tab: landingNow,
-      choseFirst: chosenForSession !== null,
-      matches: matchClaims.length,
-      debateClaims: debateClaimCount,
-      related: relatedClaims.length,
-      theirPositions: opponentClaims.length,
-    });
-  }, [
-    chosenForSession,
-    debateClaimCount,
-    landedForSession,
-    landingNow,
-    matchClaims.length,
-    opponentClaims.length,
-    relatedClaims.length,
-    sessionId,
-  ]);
+  }, [landedForSession, landingNow, sessionId]);
+
+  // Reported apart from the latch, and through the ref-guarded hook: Strict Mode runs a mount's
+  // effects twice, both before the latch commits, and a report inside the latch's effect went out
+  // twice. Keyed on the session, because the route reuses this page between rematches.
+  useEffectOnceWhen(
+    landingNow !== null,
+    () =>
+      captureLandingTab({
+        rematchSessionId: sessionId,
+        tab: landingNow!,
+        choseFirst: chosenForSession !== null,
+        matches: matchClaims.length,
+        debateClaims: debateClaimCount,
+        related: relatedClaims.length,
+        theirPositions: opponentClaims.length,
+      }),
+    sessionId
+  );
 
   /**
    * Related and "From this debate" can leave the strip; the rest are always there. A choice — or a

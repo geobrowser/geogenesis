@@ -375,9 +375,9 @@ function rematchClaimsLookup(claimIds: string[]) {
 function render(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   // A store per render, so jotai state does not outlive the test the way the default store does.
-  // `rematchMatchesOnlyAtom` made that visible (GEO-2861): it is an `atomWithStorage`, so a case
-  // that pressed the toggle handed the next one a filtered list — and clearing `localStorage` is
-  // not enough, because the value the store already read is held in memory.
+  // The stored switches made that visible (GEO-2861): `rematchHideMyPositionsAtom` is an
+  // `atomWithStorage`, so a case that pressed it handed the next one a filtered list — and clearing
+  // `localStorage` is not enough, because the value the store already read is held in memory.
   const store = createStore();
   const wrap = (node: ReactElement) => (
     <Provider store={store}>
@@ -5094,6 +5094,26 @@ describe('where the pair land', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(await screen.findByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  /**
+   * The report is guarded once per session (its Strict Mode guard is proven in `use-effect-once`),
+   * and the route reuses this page between rematches — so the next session reports its own landing.
+   */
+  it('reports the next rematch’s landing as well', async () => {
+    nothingToRematch();
+    const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await screen.findByText('A claim only Salina answered');
+
+    rerender(<DebateRematchPageClient sessionId="rematch-2" />);
+    await settleTabSwap();
+
+    const landings = mocks.capture.mock.calls
+      .filter(
+        ([event, properties]) => event === 'feature_exposed' && properties?.feature_id === 'debate-rematch-landing-tab'
+      )
+      .map(([, properties]) => properties.rematch_session_id);
+    expect(landings).toEqual(['rematch-1', 'rematch-2']);
   });
 
   it('reports where it landed, once, with what each earlier tab held', async () => {
