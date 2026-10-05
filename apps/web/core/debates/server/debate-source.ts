@@ -23,6 +23,7 @@ import {
 } from '../debate-publish-draft';
 import { hasProcessedVideo } from '../playback-utils';
 import { applyClaimReusePolicy } from './claim-reuse';
+import { applyClaimStancePolicy } from './claim-stance';
 import { type DebateExtractedClaimsResponse, decodeExtractedClaims } from './extracted-claims';
 import { geoChatBaseUrl } from './geo-chat-base-url';
 import { loadMotionTopics } from './motion-topics';
@@ -242,9 +243,14 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   // geo-chat decided an hour ago which claims duplicate a published one; the policy decides which
   // of those references the draft may honour now (flag, and the entity still being a Claim in
   // this space). Everything it drops is minted as before.
-  const claims = await applyClaimReusePolicy(extracted?.claims ?? [], debate.claim.space_id, {
+  const reusedClaims = await applyClaimReusePolicy(extracted?.claims ?? [], debate.claim.space_id, {
     debateId,
     motionClaimEntityId: debate.claim.claim_entity_id,
+  });
+  // After reuse, because which entity each claim resolves to decides whether it may already carry
+  // a stance toward the motion (GEO-3142): those keep theirs, so no claim gets a second one.
+  const claims = await applyClaimStancePolicy(reusedClaims, debate.claim.space_id, debate.claim.claim_entity_id, {
+    debateId,
   });
 
   // Like the share card and claims, a failed read degrades to a debate published without topics.

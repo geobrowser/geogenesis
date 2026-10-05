@@ -5,6 +5,7 @@ import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse
 
 import { buildDebatePublishDraft } from '../debate-publish-draft';
 import { applyClaimReusePolicy } from './claim-reuse';
+import { applyClaimStancePolicy } from './claim-stance';
 import {
   DebateNotPublishableError,
   listEarlyClaimCandidateDebateIds,
@@ -20,6 +21,11 @@ import { loadMotionTopics } from './motion-topics';
 vi.mock('./claim-reuse', async importOriginal => ({
   ...(await importOriginal<typeof import('./claim-reuse')>()),
   applyClaimReusePolicy: vi.fn(async (claims: unknown) => claims),
+}));
+
+// The stance policy's graph read is covered in `claim-stance.test.ts`; here it passes claims through.
+vi.mock('./claim-stance', () => ({
+  applyClaimStancePolicy: vi.fn(async (claims: unknown) => claims),
 }));
 
 // The motion's topics are a graph read, covered in `motion-topics.test.ts`. Here it returns none
@@ -200,6 +206,8 @@ describe('loadDebatePublishSource media gating', () => {
           end_ms: 9_000,
           // GEO-2870 D1: geo-chat's stable id, carried through to the draft.
           entity_id: '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b',
+          // GEO-3142: the extractor's verdict toward the motion.
+          stance: 'supports',
         },
         { text: 'The action was unjustified.', is_factual: false, turn_index: 1, start_ms: null, end_ms: null },
       ],
@@ -220,6 +228,7 @@ describe('loadDebatePublishSource media gating', () => {
         topics: [],
         isContestable: false,
         timing: { startMs: 0, endMs: 9_000 },
+        stance: 'supports',
       },
       {
         text: 'The action was unjustified.',
@@ -230,8 +239,16 @@ describe('loadDebatePublishSource media gating', () => {
         topics: [],
         isContestable: false,
         timing: null,
+        stance: null,
       },
     ]);
+    // After the reuse policy, against the debate's space and motion.
+    expect(vi.mocked(applyClaimStancePolicy)).toHaveBeenCalledWith(
+      input.claims,
+      'c9f267dcb0d270718c2a3c45a64afd32',
+      'claim-1',
+      { debateId: DEBATE_ID }
+    );
   });
 
   it('decodes geo-chat’s existing_entity_id and hands the claims to the reuse policy with the debate space', async () => {

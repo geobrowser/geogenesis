@@ -38,6 +38,17 @@ export const DEBATE_VIDEOS_PROPERTY_ID = 'c48dc314fa7148aeb967139160456f1d';
 /** Claims (RELATION) → Claim. The claim the debate argued for/against. */
 export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 
+/**
+ * A claim's stance toward another claim (GEO-3142): Supports / Opposes / Addresses (RELATION)
+ * → Claim. The debate publisher writes exactly one of these from every claim extracted from a
+ * debate to the debate's motion, judged by the extractor on what the claim says rather than on
+ * which side its speaker argued. Addresses means "on the subject, but a reason neither way".
+ * The 108 debates published before 2 Oct 2026 got theirs from a one-off backfill bot.
+ */
+export const CLAIM_SUPPORTS_PROPERTY_ID = '81faa4adafad4009b1061374c1219f04';
+export const CLAIM_OPPOSES_PROPERTY_ID = '71d1bcd5f1cf487fb9a3c7b1d53803eb';
+export const CLAIM_ADDRESSES_PROPERTY_ID = '7115a43dcac347b8b036aa113c6ad1b0';
+
 /** Transcripts (RELATION) → Transcript. */
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
 

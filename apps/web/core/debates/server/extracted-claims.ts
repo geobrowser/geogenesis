@@ -1,6 +1,11 @@
 import { uuidToHex } from '~/core/id/normalize';
 
-import { type DebateClaimInput, type DebatePublishTurn, publishableTiming } from '../debate-publish-draft';
+import {
+  type ClaimStance,
+  type DebateClaimInput,
+  type DebatePublishTurn,
+  publishableTiming,
+} from '../debate-publish-draft';
 import { looksLikeEntityId } from './claim-reuse';
 
 /** One turn of geo-chat's `GET /debates/{id}/claims` payload. */
@@ -52,6 +57,12 @@ export type DebateExtractedClaimsClaim = {
    */
   start_ms?: number | null;
   end_ms?: number | null;
+  /**
+   * GEO-3142: the claim's stance toward the debated claim — `supports`, `opposes` or `addresses`
+   * — judged by the extractor on what the claim says, not on the speaker's side. Null when the
+   * extractor gave none; absent on payloads from before the classification shipped.
+   */
+  stance?: string | null;
 };
 
 export type DebateExtractedClaimsResponse = {
@@ -90,6 +101,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     topics: decodeTopics(claim.topics, droppedTopics),
     isContestable: claim.is_contestable === true,
     timing: decodeTiming(claim.start_ms, claim.end_ms),
+    stance: decodeStance(claim.stance),
   }));
   if (droppedTopics.length > 0) {
     // Loud, like the malformed-claim-id path in `claim-reuse`: a field rename upstream would
@@ -124,6 +136,16 @@ function decodeStableEntityId(entityId: unknown, dropped: unknown[]): string | n
     return null;
   }
   return uuidToHex(id);
+}
+
+/**
+ * geo-chat's `stance` → one of the three verdicts, or null. Anything else — absent, null, or a
+ * value from a future vocabulary — writes no stance relation rather than a guessed one.
+ */
+export function decodeStance(stance: unknown): ClaimStance | null {
+  if (typeof stance !== 'string') return null;
+  const value = stance.trim().toLowerCase();
+  return value === 'supports' || value === 'opposes' || value === 'addresses' ? value : null;
 }
 
 /**

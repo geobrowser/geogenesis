@@ -10,8 +10,11 @@ import type { DataType, Relation, Value } from '~/core/types';
 import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
+  CLAIM_ADDRESSES_PROPERTY_ID,
   CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_OPPOSES_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
+  CLAIM_SUPPORTS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
@@ -58,6 +61,19 @@ export type DebatePublishTurn = {
   speakerSpaceEntityId: string;
   speakerName: string | null;
   text: string;
+};
+
+/**
+ * An extracted claim's stance toward the debate's motion (GEO-3142), as geo-chat's extractor
+ * judged it from the claim's content — not from the speaker's side.
+ */
+export type ClaimStance = 'supports' | 'opposes' | 'addresses';
+
+/** The relation each stance is published as, from the claim to the motion. */
+export const CLAIM_STANCE_PROPERTY_IDS: Record<ClaimStance, string> = {
+  supports: CLAIM_SUPPORTS_PROPERTY_ID,
+  opposes: CLAIM_OPPOSES_PROPERTY_ID,
+  addresses: CLAIM_ADDRESSES_PROPERTY_ID,
 };
 
 /** A topic entity to relate to via Topics. The name is for display only; publishing writes the id. */
@@ -111,6 +127,13 @@ export type DebateClaimInput = {
    * this is null whenever geo-chat did not measure it, and the app falls back to matching.
    */
   timing?: { startMs: number; endMs: number } | null;
+  /**
+   * GEO-3142: the claim's stance toward the debated claim, written as one Supports / Opposes /
+   * Addresses relation from the claim to `claimEntityId`. Null/absent writes none: payloads from
+   * before the classification, a verdict the extractor could not give, and a claim the stance
+   * policy found already linked to the motion (so a reused entity never gets a second one).
+   */
+  stance?: ClaimStance | null;
 };
 
 export type DebatePublishInput = {
@@ -121,6 +144,13 @@ export type DebatePublishInput = {
   /** The already-published Claim entity the debate argued. */
   claimEntityId: string;
   claimText: string;
+  /**
+   * What the debate argued. A question debate has no sides and no main claim, so its claims get
+   * no Supports / Opposes / Addresses relation, whatever stance they carry — they keep only their
+   * link to the question. Absent reads as `claim`, which every debate is until question debates
+   * ship.
+   */
+  subjectKind?: 'claim' | 'question';
   /**
    * The debated claim's Topics in this space, mirrored onto the Debate entity so the debate is
    * filed under the same topics as the claim it argued. Optional — omitted/empty publishes the
@@ -407,6 +437,13 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     const sourcedClaims = new Set<string>();
     const debateTaggedClaims = new Set<string>();
     const mintedClaims = new Set<string>();
+    // One stance relation per (claim, motion), however many statements share the claim entity: a
+    // reused entity or a D1 stable id can sit behind several extracted claims. The first statement
+    // in transcript order decides; keyed like `debateTaggedClaims`, so verbatim twins from an
+    // older payload (fresh ids) also yield one verdict per text.
+    const stancedClaims = new Set<string>();
+    const writesStance = (input.subjectKind ?? 'claim') === 'claim';
+    const motionKey = normalizeId(input.claimEntityId);
 
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
@@ -507,6 +544,18 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           });
         }
         for (const topic of claim.topics ?? []) relateTopic(claimRef, topic, isStable);
+        // Never from the motion to itself: the reuse policy refuses a reference to the motion,
+        // but a stable id is not checked against it, and a self-relation is never right.
+        if (writesStance && claim.stance && normalizeId(claimId) !== motionKey && !stancedClaims.has(tagKey)) {
+          stancedClaims.add(tagKey);
+          relate({
+            fromEntity: claimRef,
+            propertyId: CLAIM_STANCE_PROPERTY_IDS[claim.stance],
+            toEntityId: input.claimEntityId,
+            toEntityName: claimText,
+            stable: isStable,
+          });
+        }
         const blockClaimKey = `${blockId}:${claimId}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
           linkedBlockClaims.add(blockClaimKey);

@@ -141,3 +141,21 @@ describe('decodeExtractedClaims stable ids (GEO-2870 D1)', () => {
     );
   });
 });
+
+describe('decodeExtractedClaims stance (GEO-3142)', () => {
+  it('carries the three verdicts and reads anything else as no verdict', () => {
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [
+        { text: 'a', is_factual: false, turn_index: 0, stance: 'supports' },
+        { text: 'b', is_factual: false, turn_index: 0, stance: ' Opposes ' },
+        { text: 'c', is_factual: true, turn_index: 0, stance: 'addresses' },
+        { text: 'd', is_factual: false, turn_index: 0, stance: 'neutral' },
+        { text: 'e', is_factual: false, turn_index: 0, stance: null },
+        // A payload from before the classification shipped.
+        { text: 'f', is_factual: false, turn_index: 0 },
+      ],
+    });
+    expect(claims.map(c => c.stance)).toEqual(['supports', 'opposes', 'addresses', null, null, null]);
+  });
+});
