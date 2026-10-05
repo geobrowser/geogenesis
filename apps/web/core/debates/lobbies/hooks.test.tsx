@@ -57,7 +57,7 @@ const leaves = () => api.setDebateLobbyPresence.mock.calls.filter(([, body]) => 
 
 beforeEach(() => {
   api.setDebateLobbyPresence.mockImplementation(async (_id: string, body: { joined: boolean }) => view(body.joined));
-  api.sendDebateLobbyHeartbeat.mockResolvedValue(view(true));
+  api.sendDebateLobbyHeartbeat.mockResolvedValue({ connection_present: true, voice_away_at: null });
 });
 
 afterEach(async () => {
@@ -113,7 +113,7 @@ describe('useLobbyPresence', () => {
 
   it('heartbeats while joined and joins again when the lease lapsed', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce(view(false));
+    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({ connection_present: false, voice_away_at: null });
     const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
 
@@ -161,14 +161,23 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(leaves()).toHaveLength(1));
   });
 
-  // Chrome slows a long-hidden tab's timers past the 45s lease; returning renews it at once.
-  it('heartbeats as soon as the tab becomes visible', async () => {
+  // Chrome throttles a long-hidden tab's timers; returning beats at once, but not on every quick
+  // tab switch, which would run into the 30-a-minute heartbeat limit.
+  it('heartbeats when a tab returns after a long gap, not on a quick switch', async () => {
     const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
-
     const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    expect(api.sendDebateLobbyHeartbeat).not.toHaveBeenCalled();
+
+    // A throttled tab: the clock moved on, the interval did not fire.
+    const now = Date.now();
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(now + 31_000);
     act(() => document.dispatchEvent(new Event('visibilitychange')));
     await waitFor(() => expect(api.sendDebateLobbyHeartbeat).toHaveBeenCalledTimes(1));
+
+    clock.mockRestore();
     visibility.mockRestore();
   });
 

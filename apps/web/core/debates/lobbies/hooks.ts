@@ -19,8 +19,10 @@ import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../h
 import { useConnectionId } from '../rooms/hooks';
 import { isAlreadyInAnotherLobby, otherLobbyIdFrom } from './lobby-format';
 
-/** The lease is 45s server-side; three beats per lease survive one dropped request. */
+/** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
+/** A tab turning visible beats only if this long has passed, to stay under 30 beats a minute. */
+const VISIBLE_BEAT_MIN_GAP_MS = 30_000;
 
 /** The side panel list. No polling: `debate.lobbies_changed` refetches it. */
 export function useDebateLobbies(enabled = true) {
@@ -227,31 +229,27 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
     if (admitted && status === 'idle') void join(false);
   }, [admitted, join, status]);
 
-  // Heartbeat while joined. A view without the viewer means the lease lapsed: join again. Chrome
-  // slows timers in a long-hidden tab past the lease, so one goes out as soon as it is visible.
+  // Heartbeat while joined. `connection_present` false means this tab's lease lapsed or was
+  // dropped: join again; the join's view says if the lobby has since closed. A tab coming back
+  // from the background beats at once, since its timers may have been throttled.
   React.useEffect(() => {
     if (status !== 'joined' || !admitted) return;
+    let lastBeat = Date.now();
     const beat = () => {
+      lastBeat = Date.now();
       void sendDebateLobbyHeartbeat(
         lobbyId,
         { connection_id: connectionId, voice_connected: false },
         () => tokenRef.current(),
         accountKey
       )
-        .then(view => {
-          store(view);
-          if (!joinedRef.current) return;
-          if (view.access.status !== 'admitted') {
-            joinedRef.current = false;
-            setState({ status: 'idle' });
-          } else if (!view.viewer.present) {
-            void join(false);
-          }
+        .then(heartbeat => {
+          if (joinedRef.current && !heartbeat.connection_present) void join(false);
         })
         .catch(() => undefined);
     };
     const onVisible = () => {
-      if (document.visibilityState === 'visible') beat();
+      if (document.visibilityState === 'visible' && Date.now() - lastBeat >= VISIBLE_BEAT_MIN_GAP_MS) beat();
     };
     const interval = setInterval(beat, LOBBY_HEARTBEAT_MS);
     document.addEventListener('visibilitychange', onVisible);
@@ -259,7 +257,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [accountKey, admitted, connectionId, join, lobbyId, status, store]);
+  }, [accountKey, admitted, connectionId, join, lobbyId, status]);
 
   // Leave on navigation away and on tab close. A bfcache restore joins again. Callbacks are read
   // through refs so a changed identity never runs the cleanup, which would send a leave.

@@ -258,7 +258,10 @@ describe('DebateGatewayClient', () => {
     [
       'lobby list',
       { event_type: 'debate.lobbies_changed', payload: { lobby_id: 'abc' } },
-      [['debates', 'account', 'user-a', 'lobbies']],
+      [
+        ['debates', 'account', 'user-a', 'lobbies'],
+        ['debates', 'account', 'user-a', 'lobby', 'abc'],
+      ],
     ],
     [
       'one lobby',

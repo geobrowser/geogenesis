@@ -12,6 +12,7 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember, DebateLobbyView } from '../api';
+import { useMatchmakingScope } from '../matchmaking/hooks';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
@@ -59,6 +60,11 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const lobby = lobbyQuery.data ?? null;
   const admitted = lobby?.access.status === 'admitted';
   const presence = useLobbyPresence(lobbyId, admitted);
+  // `debate.lobby_changed` only reaches people inside; until then this page hears opening,
+  // arrivals and end through the matchmaking scope's `debate.lobbies_changed`.
+  const waitingOutside =
+    lobby !== null && !lobby.viewer.present && (admitted || lobby.access.status === 'not_yet_open');
+  useMatchmakingScope(waitingOutside);
 
   if (!lobby) {
     return lobbyQuery.isError ? (

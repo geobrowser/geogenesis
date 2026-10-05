@@ -1986,7 +1986,8 @@ export type DebateLobbyView = {
   starts_at: string;
   opens_at: string;
   scheduled: boolean;
-  created_by: string;
+  /** `null` once the creator's account is deleted. */
+  created_by: string | null;
   /** Hosts while no host is present; `null` whenever a host is in. */
   acting_host_id: string | null;
   /** Moves when the acting host changes. */
@@ -2099,14 +2100,20 @@ export async function setDebateLobbyPresence(
   });
 }
 
-/** Renews the connection's 45s lease. A lapsed lease answers with `viewer.present` false. */
+export type DebateLobbyHeartbeat = {
+  /** This connection's lease is live. `false`: it lapsed or was dropped, so join again. */
+  connection_present: boolean;
+  voice_away_at: string | null;
+};
+
+/** Renews this connection's 120s lease. Rate limited to 30 a minute per person. */
 export async function sendDebateLobbyHeartbeat(
   lobbyId: string,
   body: { connection_id: string; voice_connected: boolean },
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
-  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/heartbeat`, {
+  return geoChatRequest<DebateLobbyHeartbeat>(`/debate-lobbies/${lobbyId}/heartbeat`, {
     method: 'POST',
     body,
     auth: true,
