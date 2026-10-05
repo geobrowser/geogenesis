@@ -19,7 +19,7 @@ function matches(source: string, path: string) {
 }
 
 describe('marketing routing', () => {
-  it.each(['/', '/terms', '/api/subscribe', '/_marketing/_next/static/chunk.js',
+  it.each(['/', '/terms', '/downloads', '/help', '/docs', '/faq', '/api/help', '/api/downloads/desktop', '/api/subscribe', '/_marketing/_next/static/chunk.js',
     '/_marketing/image', '/hero/logo.svg', '/hero/debates/debate-1.webm',
     '/curators/card-grey-1.webp', '/opengraph-image.jpg', '/twitter-image.jpg'])
   ('forwards %s to the marketing deployment without changing its path', async path => {
