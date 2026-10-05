@@ -39,6 +39,8 @@ import {
   Badge,
   TabGroupDivider,
   type TabGroupTab,
+  TabPendingMarker,
+  isRepeatTabClick,
   tabGroupTabLinkStyles,
   useActiveTabIndicator,
 } from '~/design-system/tab-group';
@@ -285,6 +287,11 @@ export function EditableTabGroup({
   ].join('|');
   const { indicator, registerActiveTab } = useActiveTabIndicator(indicatorLayoutKey);
 
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const handlePendingChange = React.useCallback((href: string, pending: boolean) => {
+    setPendingHref(current => (pending ? href : current === href ? null : current));
+  }, []);
+
   /*
    * Both system-tab rows, drawn by one function.
    *
@@ -319,6 +326,8 @@ export function EditableTabGroup({
             : undefined
         }
         activeRef={registerActiveTab}
+        pendingHref={pendingHref}
+        onPendingChange={handlePendingChange}
       />
     </React.Fragment>
   );
@@ -358,6 +367,8 @@ export function EditableTabGroup({
                   onOpen={() => router.push(NavUtils.toEntity(tab.relation.spaceId, tab.entityId))}
                   onSelect={sidePanelTab ? () => sidePanelTab.setActiveTabId(tab.entityId) : undefined}
                   activeRef={registerActiveTab}
+                  pendingHref={pendingHref}
+                  onPendingChange={handlePendingChange}
                 />
               ))}
             </SortableContext>
@@ -400,6 +411,8 @@ function StaticTab({
   onSelect,
   onlyWhenNarrow,
   activeRef,
+  pendingHref,
+  onPendingChange,
 }: {
   href: string;
   label: string;
@@ -408,7 +421,10 @@ function StaticTab({
   onSelect?: () => void;
   onlyWhenNarrow?: boolean;
   activeRef: (element: HTMLElement | null) => void;
+  pendingHref: string | null;
+  onPendingChange: (href: string, pending: boolean) => void;
 }) {
+  const selected = pendingHref ? pendingHref === href : active;
   // `contents` rather than `block`, so the wrapper does not become a flex item
   // between the tabs and pull them apart. The same shape `TabGroup` uses.
   const wrap = (tab: React.ReactNode) => (onlyWhenNarrow ? <span className="hidden lg:contents">{tab}</span> : tab);
@@ -416,9 +432,9 @@ function StaticTab({
   if (onSelect) {
     return wrap(
       <button
-        ref={active ? activeRef : undefined}
+        ref={selected ? activeRef : undefined}
         type="button"
-        className={tabGroupTabLinkStyles({ active })}
+        className={tabGroupTabLinkStyles({ active: selected })}
         onClick={onSelect}
       >
         {label}
@@ -428,9 +444,18 @@ function StaticTab({
   }
 
   return wrap(
-    <Link ref={active ? activeRef : undefined} className={tabGroupTabLinkStyles({ active })} href={href} prefetch>
+    <Link
+      ref={selected ? activeRef : undefined}
+      className={tabGroupTabLinkStyles({ active: selected })}
+      href={href}
+      prefetch
+      onClick={event => {
+        if (isRepeatTabClick(event, selected)) event.preventDefault();
+      }}
+    >
       {label}
       {badge && <Badge>{badge}</Badge>}
+      <TabPendingMarker href={href} onPendingChange={onPendingChange} />
     </Link>
   );
 }
@@ -447,6 +472,8 @@ type SortableTabProps = {
   onOpen: () => void;
   onSelect?: () => void;
   activeRef: (element: HTMLElement | null) => void;
+  pendingHref: string | null;
+  onPendingChange: (href: string, pending: boolean) => void;
 };
 
 function SortableTab({
@@ -461,6 +488,8 @@ function SortableTab({
   onOpen,
   onSelect,
   activeRef,
+  pendingHref,
+  onPendingChange,
 }: SortableTabProps) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: tab.relation.id,
@@ -552,17 +581,22 @@ function SortableTab({
     if (onSelect) {
       e.preventDefault();
       onSelect();
+      return;
     }
+    // Clicking the tab already on screen costs a full round trip for the page already there.
+    if (isRepeatTabClick(e, selected)) e.preventDefault();
   };
 
   // tab.name already includes the live name via EntityTabs' liveNameMap, so no per-tab subscription needed here.
   const displayName = tab.name;
+  const selected = pendingHref ? pendingHref === tab.href : active;
+
   const setTabNodeRef = React.useCallback(
     (element: HTMLDivElement | null) => {
       setNodeRef(element);
-      if (active) activeRef(element);
+      if (selected) activeRef(element);
     },
-    [active, activeRef, setNodeRef]
+    [activeRef, selected, setNodeRef]
   );
 
   return (
@@ -571,7 +605,10 @@ function SortableTab({
         <TabNameInput initialValue={displayName} onSubmit={onRename} onCancel={onCancelEditing} />
       ) : (
         <Link
-          className={cx(tabGroupTabLinkStyles({ active }), 'cursor-grab touch-none select-none active:cursor-grabbing')}
+          className={cx(
+            tabGroupTabLinkStyles({ active: selected }),
+            'cursor-grab touch-none select-none active:cursor-grabbing'
+          )}
           href={onSelect ? '#' : tab.href}
           prefetch={!onSelect}
           onClick={handleLinkClick}
@@ -579,6 +616,7 @@ function SortableTab({
           {...listeners}
         >
           {displayName || 'Untitled'}
+          <TabPendingMarker href={tab.href} onPendingChange={onPendingChange} />
         </Link>
       )}
 

@@ -283,7 +283,12 @@ interface TabProps {
   onPendingChange: (href: string, pending: boolean) => void;
 }
 
-function TabPendingMarker({
+export function isRepeatTabClick(event: React.MouseEvent, selected: boolean): boolean {
+  if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return false;
+  return selected;
+}
+
+export function TabPendingMarker({
   href,
   onPendingChange,
 }: {
@@ -355,9 +360,7 @@ function Tab({
   const selected = pendingHref ? pendingHref === href : active;
 
   const guardRepeatClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
-    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
-    if (!selected) return;
-    event.preventDefault();
+    if (isRepeatTabClick(event, selected)) event.preventDefault();
   };
 
   if (!editable && hidden) {
