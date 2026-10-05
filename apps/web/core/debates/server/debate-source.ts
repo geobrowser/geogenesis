@@ -193,14 +193,7 @@ export async function loadDebateClaimSpaceId(debateId: string): Promise<string> 
  * reliable "processing done" signal).
  */
 export async function loadDebatePublishSource(debateId: string): Promise<DebateSource> {
-  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
-  if (debate.status !== 'complete') {
-    throw new DebateNotPublishableError(
-      'not_complete',
-      `Debate ${debateId} is not complete (status ${debate.status}).`
-    );
-  }
-  assertDebateRecordingPublishable(debate, Date.now());
+  const debate = await loadSettledDebate(debateId);
 
   const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
   // A failed job has already spent its retries in the worker; it is not coming back on its own.
@@ -279,6 +272,46 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   };
 
   return { debate, media, input };
+}
+
+/**
+ * GEO-2870 option A: candidate ids for the early claims sweep — the debates in a space that are
+ * past their opt-out window (the same {@link isDebatePublishableNow} test the full publish holds
+ * to) and that closed within `recentMs`. Anything older has had its claims published early already
+ * or will get them from the full publish; looking at it every minute would only spend graph reads.
+ */
+export async function listEarlyClaimCandidateDebateIds(
+  spaceId: string,
+  now: number,
+  recentMs: number
+): Promise<string[]> {
+  const response = await geoChatGet<SpaceDebatesResponse>(`/spaces/${spaceId}/debates`);
+  return response.debates
+    .filter(debate => {
+      if (!isDebatePublishableNow(debate, now)) return false;
+      const deadline = debatePublicationDeadline(debate);
+      return deadline !== null && now - deadline <= recentMs;
+    })
+    .map(debate => debate.id);
+}
+
+/**
+ * The debate, read from geo-chat, if anything from it may be published now: complete, recording not
+ * cancelled, and past the settlement window after the last moment a participant could cancel it.
+ * Throws {@link DebateNotPublishableError} otherwise. The early claims publish holds to exactly the
+ * gate the full publish does, before it looks at media — publishing a claim is publishing the
+ * debate's content, and the opt-out promises none of it reaches the graph.
+ */
+export async function loadSettledDebate(debateId: string): Promise<Debate> {
+  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
+  if (debate.status !== 'complete') {
+    throw new DebateNotPublishableError(
+      'not_complete',
+      `Debate ${debateId} is not complete (status ${debate.status}).`
+    );
+  }
+  assertDebateRecordingPublishable(debate, Date.now());
+  return debate;
 }
 
 export function isDebatePublishableNow(debate: Debate, now: number): boolean {
@@ -419,7 +452,7 @@ async function buildDebateShareCard(
  * report claims for this debate) — the caller then falls back to the raw /transcript merge and
  * publishes with no claims. `turn_index` is expected 0-based and contiguous over non-empty turns.
  */
-async function loadDebateClaims(
+export async function loadDebateClaims(
   debateId: string
 ): Promise<{ transcriptTurns: DebatePublishTurn[]; claims: DebateClaimInput[] } | null> {
   let response: DebateExtractedClaimsResponse;
