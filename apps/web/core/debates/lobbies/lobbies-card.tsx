@@ -91,8 +91,11 @@ function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
           </Text>
         </Link>
         {lobby.open ? (
-          <Link href={debateRoomPath(lobby.lobby_id)} className={hubPillClassName('primary')}>
-            Join
+          <Link
+            href={debateRoomPath(lobby.lobby_id)}
+            className={hubPillClassName(lobby.viewer_present ? 'secondary' : 'primary')}
+          >
+            {lobby.viewer_present ? 'Open' : 'Join'}
           </Link>
         ) : (
           <HubPillButton
@@ -112,6 +115,7 @@ function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
           <Text as="span" variant="footnote" color="text">
             {hereLabel(lobby.headcount)}
             {lobby.debating_count > 0 ? ` · ${lobby.debating_count} debating` : ''}
+            {lobby.viewer_present ? ' · You’re here' : ''}
           </Text>
           <LobbyAvatarStack people={lobby.avatars} total={lobby.headcount} />
         </div>

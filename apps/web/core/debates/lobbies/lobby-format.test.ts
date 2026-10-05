@@ -106,5 +106,13 @@ describe('another lobby', () => {
     expect(otherLobbyIdFrom(error)).toBe('0000000000000000000000000000abcd');
     expect(isAlreadyInAnotherLobby(new GeoChatRequestError('x', 'lobby_closed', 409))).toBe(false);
     expect(otherLobbyIdFrom(new GeoChatRequestError('no id', 'already_in_another_lobby', 409))).toBeNull();
+    // Structured field first.
+    expect(
+      otherLobbyIdFrom(
+        new GeoChatRequestError('no id', 'already_in_another_lobby', 409, null, {
+          current_lobby_id: '0000000000000000000000000000ABCE',
+        })
+      )
+    ).toBe('0000000000000000000000000000abce');
   });
 });

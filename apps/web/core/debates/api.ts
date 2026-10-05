@@ -2015,6 +2015,8 @@ export type DebateLobbySummary = {
   debating_count: number;
   reminder_count: number;
   viewer_reminded: boolean;
+  /** The viewer is in this lobby now. Missing on a geo-chat that predates it. */
+  viewer_present?: boolean;
 };
 
 export type DebateLobbiesResponse = { lobbies: DebateLobbySummary[] };
@@ -2600,13 +2602,22 @@ export class GeoChatRequestError extends Error {
   status: number;
   /** From `Retry-After`, where geo-chat sent one. */
   retryAfterMs: number | null;
+  /** geo-chat's optional `error.details`, e.g. `current_lobby_id` on `already_in_another_lobby`. */
+  details: Record<string, unknown> | null;
 
-  constructor(message: string, code: string | null, status: number, retryAfterMs: number | null = null) {
+  constructor(
+    message: string,
+    code: string | null,
+    status: number,
+    retryAfterMs: number | null = null,
+    details: Record<string, unknown> | null = null
+  ) {
     super(message);
     this.name = 'GeoChatRequestError';
     this.code = code;
     this.status = status;
     this.retryAfterMs = retryAfterMs;
+    this.details = details;
   }
 }
 
@@ -2752,13 +2763,17 @@ export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<
 
 async function requestError(response: Response) {
   let code: string | null = null;
+  let details: Record<string, unknown> | null = null;
   let message = `${response.status} ${response.statusText}`;
   try {
     const responseBody = (await response.text()).trim();
     if (responseBody) {
       try {
-        const body = JSON.parse(responseBody) as { error?: { code?: string; message?: string } };
+        const body = JSON.parse(responseBody) as {
+          error?: { code?: string; message?: string; details?: Record<string, unknown> };
+        };
         code = body.error?.code ?? null;
+        details = body.error?.details ?? null;
         message = body.error?.message || message;
       } catch {
         message = responseBody;
@@ -2767,7 +2782,13 @@ async function requestError(response: Response) {
   } catch {
     // fall back to the status line built above
   }
-  return new GeoChatRequestError(message, code, response.status, retryAfterMs(response.headers?.get('retry-after')));
+  return new GeoChatRequestError(
+    message,
+    code,
+    response.status,
+    retryAfterMs(response.headers?.get('retry-after')),
+    details
+  );
 }
 
 /** `Retry-After` in milliseconds, given as delay-seconds or an HTTP date. */

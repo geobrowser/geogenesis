@@ -1,4 +1,10 @@
-import { type DebateLobbyMember, type DebateLobbyPerson, type DebateLobbyRole, GeoChatRequestError } from '../api';
+import {
+  type DebateLobbyMember,
+  type DebateLobbyPerson,
+  type DebateLobbyRole,
+  GeoChatRequestError,
+  dashlessId,
+} from '../api';
 
 /** Stands in for a person the graph has no name for yet. */
 export const UNNAMED_PERSON = 'Someone';
@@ -104,7 +110,9 @@ export function isAlreadyInAnotherLobby(error: unknown): error is GeoChatRequest
   return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'already_in_another_lobby';
 }
 
-/** The other lobby's id, read from the 409 message ("you are already in lobby <id>; …"). */
+/** The other lobby's id: `details.current_lobby_id`, else the 409 message on an older geo-chat. */
 export function otherLobbyIdFrom(error: GeoChatRequestError) {
+  const fromDetails = error.details?.current_lobby_id;
+  if (typeof fromDetails === 'string' && fromDetails) return dashlessId(fromDetails);
   return /lobby ([0-9a-f]{32})\b/i.exec(error.message)?.[1]?.toLowerCase() ?? null;
 }
