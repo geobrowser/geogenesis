@@ -23,6 +23,26 @@ import { isAlreadyInAnotherLobby, otherLobbyIdFrom } from './lobby-format';
 export const LOBBY_HEARTBEAT_MS = 15_000;
 /** A tab turning visible beats only if this long has passed, to stay under 30 beats a minute. */
 const VISIBLE_BEAT_MIN_GAP_MS = 30_000;
+/** For a 429 without `Retry-After`. */
+const RATE_LIMIT_FALLBACK_MS = 5_000;
+
+/** How long a 429 asks us to wait, or `null` for any other outcome. */
+export function rateLimitDelayMs(error: unknown) {
+  if (!(error instanceof GeoChatRequestError) || error.status !== 429) return null;
+  return error.retryAfterMs ?? RATE_LIMIT_FALLBACK_MS;
+}
+
+/** Automatic presence calls retry once after a 429's `Retry-After`, per geo-chat's guidance. */
+async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
+  try {
+    return await task();
+  } catch (error) {
+    const delay = rateLimitDelayMs(error);
+    if (delay === null) throw error;
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return task();
+  }
+}
 
 /** The side panel list. No polling: `debate.lobbies_changed` refetches it. */
 export function useDebateLobbies(enabled = true) {
@@ -170,11 +190,13 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
       setState({ status: 'joining' });
       try {
         const view = await enqueue(() =>
-          setDebateLobbyPresence(
-            lobbyId,
-            { connection_id: connectionId, joined: true, leave_other_lobby: leaveOtherLobby },
-            () => tokenRef.current(),
-            accountKey
+          retryOnceIfRateLimited(() =>
+            setDebateLobbyPresence(
+              lobbyId,
+              { connection_id: connectionId, joined: true, leave_other_lobby: leaveOtherLobby },
+              () => tokenRef.current(),
+              accountKey
+            )
           )
         );
         if (generation !== generationRef.current) return;
@@ -235,7 +257,12 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
   React.useEffect(() => {
     if (status !== 'joined' || !admitted) return;
     let lastBeat = Date.now();
+    // A 429 waits out `Retry-After` and beats again; it is never read as a lapsed lease, since a
+    // rejoin would be limited too. The 120s lease covers a throttled beat or two.
+    let backoffUntil = 0;
+    let retry: ReturnType<typeof setTimeout> | null = null;
     const beat = () => {
+      if (Date.now() < backoffUntil) return;
       lastBeat = Date.now();
       void sendDebateLobbyHeartbeat(
         lobbyId,
@@ -246,7 +273,13 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
         .then(heartbeat => {
           if (joinedRef.current && !heartbeat.connection_present) void join(false);
         })
-        .catch(() => undefined);
+        .catch(error => {
+          const delay = rateLimitDelayMs(error);
+          if (delay === null) return;
+          backoffUntil = Date.now() + delay;
+          if (retry) clearTimeout(retry);
+          retry = setTimeout(beat, delay);
+        });
     };
     const onVisible = () => {
       if (document.visibilityState === 'visible' && Date.now() - lastBeat >= VISIBLE_BEAT_MIN_GAP_MS) beat();
@@ -255,6 +288,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       clearInterval(interval);
+      if (retry) clearTimeout(retry);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [accountKey, admitted, connectionId, join, lobbyId, status]);
@@ -286,7 +320,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
       joinedRef.current = false;
       if (sentRef.current) {
         sentRef.current = false;
-        void queue(() => sendLeaveRef.current(true)).catch(() => undefined);
+        void queue(() => retryOnceIfRateLimited(() => sendLeaveRef.current(true))).catch(() => undefined);
       }
       // Ignored after a real unmount; after StrictMode's test unmount it lets the remount join.
       setState({ status: 'idle' });

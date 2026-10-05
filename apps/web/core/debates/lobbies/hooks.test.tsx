@@ -181,6 +181,38 @@ describe('useLobbyPresence', () => {
     visibility.mockRestore();
   });
 
+  // geo-chat: a heartbeat 429 waits out Retry-After; a rejoin would be limited too.
+  it('backs off a rate-limited heartbeat without rejoining', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    api.sendDebateLobbyHeartbeat.mockRejectedValueOnce(
+      new GeoChatRequestError('slow down', 'rate_limited', 429, 2_000)
+    );
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+    });
+    expect(api.sendDebateLobbyHeartbeat).toHaveBeenCalledTimes(1);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_000);
+    });
+    expect(api.sendDebateLobbyHeartbeat).toHaveBeenCalledTimes(2);
+    expect(joins()).toHaveLength(1);
+  });
+
+  it('retries an automatic join once after Retry-After', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    api.setDebateLobbyPresence.mockRejectedValueOnce(new GeoChatRequestError('slow down', 'rate_limited', 429, 1_000));
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1_000);
+    });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    expect(joins()).toHaveLength(2);
+  });
+
   it('stays out after Leave', async () => {
     const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
