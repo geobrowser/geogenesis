@@ -2541,10 +2541,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           </div>
           <header className="mb-4">
             {/* GEO-3148. Left to right in the order the pair land on them, so wherever they land the
-                tabs before it are the ones that had nothing. The row scrolls at every width — six
-                tabs do not fit the column even on desktop — with a fade and an arrow on whichever
-                side has more, and the selected tab is brought into view. The rule sits outside the
-                scroller so it spans the visible row; `z-0` so the active marker paints over it. */}
+                tabs before it are the ones that had nothing; My positions, never landed on, comes
+                last. The row scrolls at every width — six tabs do not fit the column even on
+                desktop — with a fade and an arrow on whichever side has more, and the selected tab
+                is brought into view. The rule sits outside the scroller so it spans the visible
+                row; `z-0` so the active marker paints over it. */}
             <div className="relative">
               <ScrollableTabRow
                 activeKey={landingPending ? null : tab}
@@ -2609,8 +2610,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     pendingLabel="Counting positions"
                   />
                 </TabButton>
-                {/* The viewer's own backlog, promoted out of Explore's source menu the way GEO-2863
-                    promoted the hub's, and named for whose it is now that it sits beside theirs. */}
+                {/* The whole catalogue, for when nothing about this pair is what you want — and the last
+                    place the pair can land, so it ends the run of tabs they land on. */}
+                <TabButton
+                  name="Explore"
+                  active={!landingPending && tab === 'explore'}
+                  onClick={() => setTab('explore')}
+                >
+                  Explore
+                </TabButton>
+                {/* Last, and never landed on: the viewer's own backlog, promoted out of Explore's source
+                    menu the way GEO-2863 promoted the hub's, and named for whose it is now that it sits
+                    beside theirs. */}
                 <TabButton
                   name="My positions"
                   active={!landingPending && tab === 'positions'}
@@ -2623,14 +2634,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     active={!landingPending && tab === 'positions'}
                     pendingLabel="Counting your positions"
                   />
-                </TabButton>
-                {/* Last: the whole catalogue, for when nothing about this pair is what you want. */}
-                <TabButton
-                  name="Explore"
-                  active={!landingPending && tab === 'explore'}
-                  onClick={() => setTab('explore')}
-                >
-                  Explore
                 </TabButton>
               </ScrollableTabRow>
               <div aria-hidden className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />

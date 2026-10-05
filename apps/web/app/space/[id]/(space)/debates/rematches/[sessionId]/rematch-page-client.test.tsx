@@ -5299,8 +5299,8 @@ describe('the Related tab', () => {
     expect(tabs[1]).toMatch(/^From this debate/);
     expect(tabs[2]).toBe('Related');
     expect(tabs[3]).toMatch(/^Their positions/);
-    expect(tabs[4]).toMatch(/^My positions/);
-    expect(tabs[5]).toBe('Explore');
+    expect(tabs[4]).toBe('Explore');
+    expect(tabs[5]).toMatch(/^My positions/);
   });
 
   /**
