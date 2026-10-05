@@ -293,17 +293,6 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
 export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly', true);
 
 /**
- * The same standing preference for the debate-again flow (GEO-2861), under its own key.
- *
- * Two keys rather than one: the hub asks "who can I debate right now, out of everyone", the rematch
- * picker asks "which of this opponent's claims can we go again on". Wanting the strict answer to one
- * is not a statement about the other, and sharing a key would make it one.
- *
- * On by default, and stepped back the same way when this pair has nothing to go again on.
- */
-export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', true);
-
-/**
  * "Hide my positions" on the debates hub's Explore tab (GEO-2863).
  *
  * On by default, which is the collapse the tab shipped with — browsing is about finding something
@@ -324,11 +313,10 @@ export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPo
  * chronic rather than momentary: a reader with a long backlog of positions is hunting for new
  * claims across visits, not for one afternoon.
  *
- * On because it gives the page's two tabs one job each. The claims it hides are the ones this page
- * can act on — `debateRequestGate` refuses a request from someone holding no position — but those
- * are also what the *opponent's* tab is made of, and with "Matches only" on beside it that tab is
- * exactly "what we can go again on right now". Explore is then the other half of the flow: finding
- * a claim to take a side on. Nothing becomes unreachable, because a claim only the viewer has
+ * On because it gives the page's tabs one job each. The claims it hides are the ones this page can
+ * act on — `debateRequestGate` refuses a request from someone holding no position — but those are
+ * also what the Matches tab is made of (GEO-3148), which is exactly "what we can go again on right
+ * now". Explore is then the other half of the flow: finding a claim to take a side on. Nothing becomes unreachable, because a claim only the viewer has
  * answered cannot be requested from either tab — the gate needs both sides.
  */
 export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', true);
