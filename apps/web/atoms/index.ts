@@ -316,8 +316,9 @@ export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPo
  * On because it gives the page's tabs one job each. The claims it hides are the ones this page can
  * act on — `debateRequestGate` refuses a request from someone holding no position — but those are
  * also what the Matches tab is made of (GEO-3148), which is exactly "what we can go again on right
- * now". Explore is then the other half of the flow: finding a claim to take a side on. Nothing becomes unreachable, because a claim only the viewer has
- * answered cannot be requested from either tab — the gate needs both sides.
+ * now". Explore is then the other half of the flow: finding a claim to take a side on. Nothing
+ * becomes unreachable, because a claim only the viewer has answered cannot be requested from either
+ * tab — the gate needs both sides.
  */
 export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', true);
 

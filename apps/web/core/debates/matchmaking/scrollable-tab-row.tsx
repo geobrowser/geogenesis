@@ -4,12 +4,13 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ChevronRight } from '~/design-system/icons/chevron-right';
+import { useHorizontalOverflow } from '~/design-system/use-horizontal-overflow';
+
 /** Kept clear of the edges when a tab is scrolled into view, so it never lands under a fade. */
 const EDGE_CLEARANCE_PX = 40;
 /** How far one press of an edge button moves the row: most of a view, so a press is never wasted. */
 const SCROLL_STEP_RATIO = 0.7;
-
-type Overflow = { start: boolean; end: boolean };
 
 /**
  * A tab row that scrolls sideways at every width, and says so (GEO-3148).
@@ -24,8 +25,8 @@ type Overflow = { start: boolean; end: boolean };
  * The arrows are drawn at every width rather than only for mice. A phone can swipe, but a fade alone
  * is easy to read as decoration; the arrow says there is more.
  *
- * The tabs are the caller's, and so is the rule under them, which both rows draw outside the
- * scroller so it spans the visible width.
+ * The tabs are the caller's. The baseline rule is drawn here, outside the scroller, so it spans the
+ * visible row rather than the scrolled width; `z-0` so a tab's active marker paints over it.
  */
 export function ScrollableTabRow({
   activeKey,
@@ -42,34 +43,7 @@ export function ScrollableTabRow({
   children: React.ReactNode;
 }) {
   const scrollerRef = React.useRef<HTMLDivElement>(null);
-  const [overflow, setOverflow] = React.useState<Overflow>({ start: false, end: false });
-
-  const measure = React.useCallback(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    // A pixel of slack either side: sub-pixel widths leave `scrollLeft` a fraction short of the end.
-    const start = scroller.scrollLeft > 1;
-    const end = scroller.scrollLeft + scroller.clientWidth < scroller.scrollWidth - 1;
-    setOverflow(current => (current.start === start && current.end === end ? current : { start, end }));
-  }, []);
-
-  React.useEffect(() => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    measure();
-    scroller.addEventListener('scroll', measure, { passive: true });
-    window.addEventListener('resize', measure);
-    // The row also changes width without the window doing so: a count lands in a badge, or a tab
-    // that was waiting on a lookup appears.
-    const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
-    observer?.observe(scroller);
-    if (scroller.firstElementChild) observer?.observe(scroller.firstElementChild);
-    return () => {
-      scroller.removeEventListener('scroll', measure);
-      window.removeEventListener('resize', measure);
-      observer?.disconnect();
-    };
-  }, [measure]);
+  const overflow = useHorizontalOverflow(scrollerRef);
 
   React.useEffect(() => {
     const scroller = scrollerRef.current;
@@ -78,17 +52,14 @@ export function ScrollableTabRow({
     // `offsetLeft` against the inner row, which is `relative` and sits at the scroller's origin.
     const left = active.offsetLeft - EDGE_CLEARANCE_PX;
     const right = active.offsetLeft + active.offsetWidth + EDGE_CLEARANCE_PX;
-    let target: number | null = null;
-    if (left < scroller.scrollLeft) target = Math.max(0, left);
-    else if (right > scroller.scrollLeft + scroller.clientWidth) target = right - scroller.clientWidth;
-    if (target === null) return;
-    scrollTo(scroller, target);
+    if (left < scroller.scrollLeft) scrollRowTo(scroller, Math.max(0, left));
+    else if (right > scroller.scrollLeft + scroller.clientWidth) scrollRowTo(scroller, right - scroller.clientWidth);
   }, [activeKey]);
 
   const scrollBy = (direction: -1 | 1) => {
     const scroller = scrollerRef.current;
     if (!scroller) return;
-    scrollTo(scroller, scroller.scrollLeft + direction * scroller.clientWidth * SCROLL_STEP_RATIO);
+    scrollRowTo(scroller, scroller.scrollLeft + direction * scroller.clientWidth * SCROLL_STEP_RATIO);
   };
 
   return (
@@ -98,6 +69,7 @@ export function ScrollableTabRow({
       <div ref={scrollerRef} className="no-scrollbar overflow-x-auto overscroll-x-contain">
         <div className={cx('relative flex w-max items-center pb-2', className)}>{children}</div>
       </div>
+      <div aria-hidden className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
       {overflow.start ? (
         <EdgeButton side="start" label={`${analyticsLabelPrefix} scroll tabs left`} onClick={() => scrollBy(-1)} />
       ) : null}
@@ -108,7 +80,7 @@ export function ScrollableTabRow({
   );
 }
 
-function scrollTo(scroller: HTMLElement, left: number) {
+function scrollRowTo(scroller: HTMLElement, left: number) {
   // jsdom has no `scrollTo` on elements, and older engines take no options object.
   if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ left, behavior: 'smooth' });
   else scroller.scrollLeft = left;
@@ -135,20 +107,10 @@ function EdgeButton({ side, label, onClick }: { side: 'start' | 'end'; label: st
         onClick={onClick}
         className="pointer-events-auto mb-2 grid size-6 place-items-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
       >
-        <svg
-          viewBox="0 0 16 16"
-          aria-hidden="true"
-          className="size-3.5"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.75"
-        >
-          <path
-            d={side === 'start' ? 'M10 3.5 5.5 8l4.5 4.5' : 'M6 3.5 10.5 8 6 12.5'}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-        </svg>
+        {/* The design system has a right chevron only; the left one is the same glyph turned. */}
+        <span className={cx('grid place-items-center', side === 'start' && 'rotate-180')}>
+          <ChevronRight />
+        </span>
       </button>
     </div>
   );

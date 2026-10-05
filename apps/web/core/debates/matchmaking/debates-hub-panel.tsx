@@ -25,6 +25,7 @@ import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
@@ -305,48 +306,42 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           restoration, so a row drawn before then is the signed-out one — a returning viewer would
           watch Matches and Requests appear, and a selected tab of theirs jump to Claims. */}
       <div className={cx('shrink-0 px-4', !ready && 'invisible')} aria-hidden={!ready}>
-        <div className="relative">
-          {/* The row is `w-max` so the labels never compress, and both panel shells are
-              `overflow-hidden` — so on a narrow phone whichever tab sits last would simply be cut
-              off. It scrolls instead, with a fade and an arrow on whichever side has more (GEO-3148):
-              "My positions" pushed the five labels past the panel's 400px, and a hidden scrollbar
-              alone never said there was anything to scroll to. `gap-4` rather than `gap-6` for the
-              same width (see #2603). */}
-          <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-4">
-            {tabs.map(tab => (
-              <button
-                key={tab.id}
-                type="button"
-                data-geo-analytics-label={`Debate hub ${tab.label} tab`}
-                data-geo-analytics-intent="navigate_debates_hub"
-                aria-current={activeTab === tab.id ? 'true' : undefined}
-                data-tab-active={activeTab === tab.id ? 'true' : undefined}
-                onClick={() => changeTab(tab.id)}
-                className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
-              >
-                {tab.label}
-                {tab.id === 'requests' && requestCount > 0 ? (
-                  <Badge>
-                    {requestCount}
-                    <span className="sr-only"> pending requests</span>
-                  </Badge>
-                ) : null}
-                {activeTab === tab.id && (
-                  <motion.div
-                    layoutId="debates-hub-tab-active-border"
-                    layout
-                    initial={false}
-                    transition={{ duration: 0.2 }}
-                    className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-                  />
-                )}
-              </button>
-            ))}
-          </ScrollableTabRow>
-          {/* Outside the scroll container so the rule spans the visible row rather than the
-              scrollable width. */}
-          <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
-        </div>
+        {/* The row is `w-max` so the labels never compress, and both panel shells are
+            `overflow-hidden` — so on a narrow phone whichever tab sits last would simply be cut
+            off. It scrolls instead, with a fade and an arrow on whichever side has more (GEO-3148):
+            "My positions" pushed the five labels past the panel's 400px, and a hidden scrollbar
+            alone never said there was anything to scroll to. `gap-4` rather than `gap-6` for the
+            same width (see #2603). */}
+        <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-4">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              {...hubAnalyticsAttributes(`${tab.label} tab`, 'navigate_debates_hub')}
+              aria-current={activeTab === tab.id ? 'true' : undefined}
+              data-tab-active={activeTab === tab.id ? 'true' : undefined}
+              onClick={() => changeTab(tab.id)}
+              className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
+            >
+              {tab.label}
+              {tab.id === 'requests' && requestCount > 0 ? (
+                <Badge>
+                  {requestCount}
+                  <span className="sr-only"> pending requests</span>
+                </Badge>
+              ) : null}
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="debates-hub-tab-active-border"
+                  layout
+                  initial={false}
+                  transition={{ duration: 0.2 }}
+                  className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+                />
+              )}
+            </button>
+          ))}
+        </ScrollableTabRow>
       </div>
 
       {/* layoutScroll tells Motion to account for this element's scroll offset when it measures

@@ -10,6 +10,7 @@ import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
+import { ANALYTICS_BUILD_ID } from '~/core/analytics-opportunities';
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { useAnsweredClaimEntities } from '~/core/debates/answered-claim-entities';
 import {
@@ -50,6 +51,7 @@ import {
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
@@ -145,6 +147,11 @@ type PickerTab = 'matches' | 'related' | 'debate' | 'explore' | 'positions' | 'o
 /** A tab's answer to "is there anything here to land on", once its lookups have said. */
 type LandingState = 'pending' | 'filled' | 'empty';
 
+/** A list's landing state: unknown while its lookups are out, then whether it has any rows. */
+function listLandingState(pending: boolean, rows: number): LandingState {
+  return pending ? 'pending' : rows > 0 ? 'filled' : 'empty';
+}
+
 /**
  * GEO-3148. Where a pair land: the first of these tabs with something in it, and Explore — which
  * always has something — when none does.
@@ -194,7 +201,7 @@ function captureLandingTab(properties: {
     capture('feature_exposed', {
       feature_id: 'debate-rematch-landing-tab',
       feature_version: 'geo-3148-v1',
-      build_id: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_BUILD_ID || 'unversioned',
+      build_id: ANALYTICS_BUILD_ID,
       exposure_id: instance,
       presentation_instance_id: instance,
       measurement_version: 'growth-v2',
@@ -1676,20 +1683,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     sessionQuery.isLoading || positions.isLoading || positions.isFetching || opponentClaimsSettling;
   const landingStates: [PickerTab, LandingState][] = [
     // A lookup that failed cannot say whether there are matches. It is not a reason to wait either.
-    [
-      'matches',
-      opponentTabError ? 'empty' : opponentLandingPending ? 'pending' : matchClaims.length > 0 ? 'filled' : 'empty',
-    ],
+    ['matches', opponentTabError ? 'empty' : listLandingState(opponentLandingPending, matchClaims.length)],
     // Empty while extraction is still running counts as empty: landing on "pulling the claims out"
     // is a weaker first screen than the next tab with something on it.
-    ['debate', !debateOffered ? 'empty' : debateItemsSettling ? 'pending' : debateClaimCount > 0 ? 'filled' : 'empty'],
-    ['related', relatedClaimsSettling ? 'pending' : relatedClaims.length > 0 ? 'filled' : 'empty'],
+    ['debate', debateOffered ? listLandingState(debateItemsSettling, debateClaimCount) : 'empty'],
+    ['related', listLandingState(relatedClaimsSettling, relatedClaims.length)],
     // Here a failure *is* something to land on: the tab draws it with a retry, where landing on
     // Explore would hide it.
-    [
-      'opponent',
-      opponentTabError ? 'filled' : opponentLandingPending ? 'pending' : opponentClaims.length > 0 ? 'filled' : 'empty',
-    ],
+    ['opponent', opponentTabError ? 'filled' : listLandingState(opponentLandingPending, opponentClaims.length)],
   ];
   const landingNow = landedForSession ?? resolveLandingTab(landingStates);
 
@@ -1723,19 +1724,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const isTabOffered = (candidate: PickerTab) =>
     candidate === 'related' ? relatedOffered : candidate === 'debate' ? debateOffered : true;
+  //
+  // Read from state alone — the choice or the latched landing, never `landingNow` — so the tab drawn
+  // is always the one the queries were enabled for: `browsing` is derived from the same state, and
+  // a landing on Explore drawn a render before it was latched would flash Explore's empty list.
   const settledTab: PickerTab | null =
     chosenForSession !== null && isTabOffered(chosenForSession)
       ? chosenForSession
-      : landingNow === null
+      : landedForSession === null
         ? null
-        : isTabOffered(landingNow)
-          ? landingNow
+        : isTabOffered(landedForSession)
+          ? landedForSession
           : 'opponent';
-  /** Nothing chosen and the landing not decided yet: the list holds its skeleton and no tab is marked. */
+  /** Nothing chosen and the landing not latched yet: the list holds its skeleton and no tab is marked. */
   const landingPending = settledTab === null;
   // Matches stands in while the landing is pending. Nothing is drawn from it in that window — the
   // list is a skeleton — but every derivation below wants a tab.
   const tab: PickerTab = settledTab ?? 'matches';
+  /** The tab the strip marks, which is none until there is one. */
+  const activeTab = landingPending ? null : tab;
 
   // Recommended is offered only when a curator has a page for this pairing; the order is fixed, so
   // a source that appears doesn't reshuffle the ones already in the menu. The rest are in the hub's
@@ -2451,6 +2458,53 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       : [];
   const visibleCount = tab === 'debate' ? visibleDebateItems.length : visibleClaims.length;
 
+  /**
+   * GEO-3148. The strip, left to right in the order the pair land on them, so wherever they land the
+   * tabs before it are the ones that had nothing; My positions, never landed on, comes last. A list,
+   * as the hub's is, so a tab is its label and its count and nothing else to keep in step.
+   */
+  const pickerTabs: PickerTabSpec[] = [
+    {
+      id: 'matches',
+      label: 'Matches',
+      count: { value: matchClaims.length, pending: opponentCountPending, pendingLabel: 'Counting matches' },
+    },
+    // Offered whenever the session came out of a debate, including while extraction is still
+    // running, because the list filling in is the point (GEO-2870).
+    ...(debateOffered
+      ? [
+          {
+            id: 'debate',
+            label: 'From this debate',
+            count: {
+              value: debateClaimCount,
+              pending: debateCountPending,
+              pendingLabel: 'Counting claims from this debate',
+            },
+          } satisfies PickerTabSpec,
+        ]
+      : []),
+    // No count: the list is capped at 25, so a number would mostly report the cap. Drawn while its
+    // rows are still out — see `relatedOffered` for why the slot is held rather than filled late.
+    ...(relatedOffered ? [{ id: 'related', label: 'Related' } satisfies PickerTabSpec] : []),
+    // "Their positions" rather than "Lobby": the hub's Lobby is who is around to debate, and this is
+    // what one person has taken a side on. The header says whose room it is, so no name is needed.
+    {
+      id: 'opponent',
+      label: 'Their positions',
+      count: { value: opponentPositionCount, pending: opponentCountPending, pendingLabel: 'Counting positions' },
+    },
+    // The whole catalogue, and the last place the pair can land.
+    { id: 'explore', label: 'Explore' },
+    // The viewer's own backlog, promoted out of Explore's source menu the way GEO-2863 promoted the
+    // hub's, and named for whose it is now that it sits beside theirs.
+    {
+      id: 'positions',
+      label: 'My positions',
+      count: { value: viewerPositionCount, pending: viewerCountPending, pendingLabel: 'Counting your positions' },
+    },
+  ];
+
   const pendingRequest = session?.status === 'request_pending' ? session.request : null;
   const incomingRequest = pendingRequest?.recipient_user_id === currentUserId ? pendingRequest : null;
   // The other side of the same pending request: the viewer asked, and is waiting to hear back.
@@ -2540,104 +2594,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             )}
           </div>
           <header className="mb-4">
-            {/* GEO-3148. Left to right in the order the pair land on them, so wherever they land the
-                tabs before it are the ones that had nothing; My positions, never landed on, comes
-                last. The row scrolls at every width — six tabs do not fit the column even on
-                desktop — with a fade and an arrow on whichever side has more, and the selected tab
-                is brought into view. The rule sits outside the scroller so it spans the visible
-                row; `z-0` so the active marker paints over it. */}
-            <div className="relative">
-              <ScrollableTabRow
-                activeKey={landingPending ? null : tab}
-                analyticsLabelPrefix="Debate rematch"
-                className="gap-6"
-              >
+            <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
+              {pickerTabs.map(spec => (
                 <TabButton
-                  name="Matches"
-                  active={!landingPending && tab === 'matches'}
-                  onClick={() => setTab('matches')}
-                >
-                  Matches
-                  <TabCount
-                    count={matchClaims.length}
-                    pending={opponentCountPending}
-                    active={!landingPending && tab === 'matches'}
-                    pendingLabel="Counting matches"
-                  />
-                </TabButton>
-                {/* Offered whenever the session came out of a debate, including while extraction is
-                    still running, because the list filling in is the point (GEO-2870). */}
-                {debateOffered ? (
-                  <TabButton
-                    name="From this debate"
-                    active={!landingPending && tab === 'debate'}
-                    onClick={() => setTab('debate')}
-                  >
-                    From this debate
-                    <TabCount
-                      count={debateClaimCount}
-                      pending={debateCountPending}
-                      active={!landingPending && tab === 'debate'}
-                      pendingLabel="Counting claims from this debate"
-                    />
-                  </TabButton>
-                ) : null}
-                {/* No count: the list is capped at 25, so a number would mostly report the cap. And
-                    rendered while its rows are still out — see `relatedOffered` for why the slot is
-                    held rather than filled late. */}
-                {relatedOffered ? (
-                  <TabButton
-                    name="Related"
-                    active={!landingPending && tab === 'related'}
-                    onClick={() => setTab('related')}
-                  >
-                    Related
-                  </TabButton>
-                ) : null}
-                {/* "Their positions" rather than "Lobby" (GEO-3148): the hub's Lobby is who is around
-                    to debate, and this is what one person has taken a side on. The header says whose
-                    room this is, so the label does not need the name. */}
-                <TabButton
-                  name="Their positions"
-                  active={!landingPending && tab === 'opponent'}
-                  onClick={() => setTab('opponent')}
-                >
-                  Their positions
-                  <TabCount
-                    count={opponentPositionCount}
-                    pending={opponentCountPending}
-                    active={!landingPending && tab === 'opponent'}
-                    pendingLabel="Counting positions"
-                  />
-                </TabButton>
-                {/* The whole catalogue, for when nothing about this pair is what you want — and the last
-                    place the pair can land, so it ends the run of tabs they land on. */}
-                <TabButton
-                  name="Explore"
-                  active={!landingPending && tab === 'explore'}
-                  onClick={() => setTab('explore')}
-                >
-                  Explore
-                </TabButton>
-                {/* Last, and never landed on: the viewer's own backlog, promoted out of Explore's source
-                    menu the way GEO-2863 promoted the hub's, and named for whose it is now that it sits
-                    beside theirs. */}
-                <TabButton
-                  name="My positions"
-                  active={!landingPending && tab === 'positions'}
-                  onClick={() => setTab('positions')}
-                >
-                  My positions
-                  <TabCount
-                    count={viewerPositionCount}
-                    pending={viewerCountPending}
-                    active={!landingPending && tab === 'positions'}
-                    pendingLabel="Counting your positions"
-                  />
-                </TabButton>
-              </ScrollableTabRow>
-              <div aria-hidden className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
-            </div>
+                  key={spec.id}
+                  label={spec.label}
+                  count={spec.count}
+                  active={activeTab === spec.id}
+                  onClick={() => setTab(spec.id)}
+                />
+              ))}
+            </ScrollableTabRow>
           </header>
 
           <div className="flex flex-col gap-3">
@@ -2734,7 +2701,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
         {/* GEO-3148. The one thing this list cannot show by itself: what turns a claim here into a
             match. Only once there are claims to say it about. */}
-        {!landingPending && tab === 'opponent' && !tabIsLoading && visibleCount > 0 ? (
+        {activeTab === 'opponent' && !tabIsLoading && visibleCount > 0 ? (
           <Text as="p" variant="footnote" color="grey-04" className="mb-3">
             Take the other side of one of {remoteFirstName}’s claims to make it a match you can debate.
           </Text>
@@ -2855,7 +2822,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
         {/* GEO-3148. The end of the matches, and the way to everything of theirs. Matches arrive whole,
             so the end of the list really is the end. */}
-        {!landingPending && tab === 'matches' && !tabIsLoading && visibleCount > 0 ? (
+        {activeTab === 'matches' && !tabIsLoading && visibleCount > 0 ? (
           <div className="mt-4 flex flex-col items-center gap-2 text-center" data-testid="rematch-matches-end">
             <Text as="p" variant="footnote" color="grey-04">
               That’s every match.
@@ -3482,26 +3449,26 @@ function rematchCancellationMessage(reason: string) {
  * hub's `text-quoteMedium` row with an underlined active tab there. `tabGroupTabLinkStyles` is the
  * hub's, so this row now reads as the same control in a second place rather than as its own thing.
  */
+/** One tab of the picker's strip (GEO-3148): its label, and its count where it has one. */
+type PickerTabSpec = {
+  id: PickerTab;
+  label: string;
+  count?: { value: number; pending: boolean; pendingLabel: string };
+};
+
 function TabButton({
-  name,
+  label,
+  count,
   active,
   onClick,
-  children,
-}: {
-  /** The tab's label without its count, for click analytics (GEO-3148). */
-  name: string;
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
+}: Pick<PickerTabSpec, 'label' | 'count'> & { active: boolean; onClick: () => void }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      // Without these a tab click reached the warehouse as a bare class list, so nobody could tell
-      // which tab people picked. Same shape as the hub's tab labels.
-      data-geo-analytics-label={`Debate rematch ${name} tab`}
-      data-geo-analytics-intent="navigate_debate_rematch"
+      // Without a label a tab click reached the warehouse as a bare class list, so nobody could tell
+      // which tab people picked (GEO-3148). The hub's tabs are labelled the same way.
+      {...debateActionAnalyticsAttributes('rematch', `${label} tab`, 'navigate_debate_rematch')}
       // Read by `ScrollableTabRow` to bring the selected tab into view.
       data-tab-active={active ? 'true' : undefined}
       // `aria-pressed`, not `aria-selected`: these are plain buttons with no `role="tab"` and no
@@ -3513,7 +3480,10 @@ function TabButton({
       // — comes from the shared styles.
       className={cx(tabGroupTabLinkStyles({ active }), 'shrink-0')}
     >
-      {children}
+      {label}
+      {count ? (
+        <TabCount count={count.value} pending={count.pending} active={active} pendingLabel={count.pendingLabel} />
+      ) : null}
       {/* Drawn over the row's baseline rather than instead of it, so the marker and the hairline
           line up exactly. `bottom-[-8px]` is the strip's own `pb-2`, and `z-100` keeps it above the
           rule — the same marker the debates hub panel draws. */}
