@@ -1,6 +1,6 @@
-import { countActivityForNode } from '~/core/claims/browse/claim-activity-fields';
 import { ContentIds, SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { countActivityForNode } from '~/core/claims/browse/claim-activity-fields';
 import { getRecordingUrls } from '~/core/community-calls/recordings';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID } from '~/core/debates/ontology';
@@ -17,6 +17,7 @@ import {
   EXPLORE_ENTITY_NAME_PROPERTY_ID,
 } from './explore-constants';
 import { parseEntityUpdatedAtToUnixSec } from './explore-relative-time';
+import type { FeedItemRanking } from './for-you/feed-version';
 
 /**
  * The claim a Debate argued, as the card needs it: enough to title the card and to open the claim.
@@ -71,6 +72,11 @@ export type ExploreFeedItem = {
   activityCommentCount?: number;
   isMemberOrEditor: boolean;
   hasPendingMembershipRequest: boolean;
+  /**
+   * Which ranking put this card on the page, and why (GEO-3140 / GEO-3144). Set on Explore's Best,
+   * For you and interleaved pages; absent everywhere else.
+   */
+  ranking?: FeedItemRanking;
 };
 
 /**
