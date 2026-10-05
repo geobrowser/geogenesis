@@ -47,14 +47,25 @@ export function ScrollableTabRow({
 
   React.useEffect(() => {
     const scroller = scrollerRef.current;
-    const active = scroller?.querySelector<HTMLElement>('[data-tab-active="true"]');
-    if (!scroller || !active) return;
-    // `offsetLeft` against the inner row, which is `relative` and sits at the scroller's origin.
-    const left = active.offsetLeft - EDGE_CLEARANCE_PX;
-    const right = active.offsetLeft + active.offsetWidth + EDGE_CLEARANCE_PX;
-    if (left < scroller.scrollLeft) scrollRowTo(scroller, Math.max(0, left));
-    else if (right > scroller.scrollLeft + scroller.clientWidth) scrollRowTo(scroller, right - scroller.clientWidth);
+    if (scroller) scrollActiveTabIntoView(scroller);
   }, [activeKey]);
+
+  // And again when the row itself narrows — a phone turned upright, a window made smaller — which can
+  // clip the selected tab without the selection changing. The row's own width only: its content
+  // resizes whenever a count lands, and re-aligning on that would pull the row back from under
+  // someone scrolling it.
+  React.useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || typeof ResizeObserver === 'undefined') return;
+    let width = scroller.clientWidth;
+    const observer = new ResizeObserver(() => {
+      if (scroller.clientWidth === width) return;
+      width = scroller.clientWidth;
+      scrollActiveTabIntoView(scroller);
+    });
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, []);
 
   const scrollBy = (direction: -1 | 1) => {
     const scroller = scrollerRef.current;
@@ -78,6 +89,17 @@ export function ScrollableTabRow({
       ) : null}
     </div>
   );
+}
+
+/** Scrolls the row just far enough that the selected tab is fully visible, clear of the fades. */
+function scrollActiveTabIntoView(scroller: HTMLElement) {
+  const active = scroller.querySelector<HTMLElement>('[data-tab-active="true"]');
+  if (!active) return;
+  // `offsetLeft` against the inner row, which is `relative` and sits at the scroller's origin.
+  const left = active.offsetLeft - EDGE_CLEARANCE_PX;
+  const right = active.offsetLeft + active.offsetWidth + EDGE_CLEARANCE_PX;
+  if (left < scroller.scrollLeft) scrollRowTo(scroller, Math.max(0, left));
+  else if (right > scroller.scrollLeft + scroller.clientWidth) scrollRowTo(scroller, right - scroller.clientWidth);
 }
 
 function scrollRowTo(scroller: HTMLElement, left: number) {

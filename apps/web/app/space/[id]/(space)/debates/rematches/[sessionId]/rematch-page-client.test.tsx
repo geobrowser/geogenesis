@@ -5984,6 +5984,43 @@ describe('claims the pair have already debated', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled());
   });
 
+  /**
+   * GEO-3148. Their only position is one this pair already debated, and not a match. They have taken
+   * a side — it is folded away under their tab, not missing — so an empty Matches must not say they
+   * have not, and its way out is their tab rather than the catalogue.
+   */
+  it('explains an empty Matches by what is folded away, not by their having no positions', async () => {
+    mocks.claims = [debated(sharedClaim())];
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: /^Matches/ }));
+    await settleTabSwap();
+
+    expect(await screen.findByText(/Pick a side on one of their claims/)).toBeInTheDocument();
+    expect(screen.queryByText(/Once Salina takes a side/)).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'See Salina’s positions' }));
+    await settleTabSwap();
+
+    expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(alreadyDebatedToggle()).toBeInTheDocument();
+  });
+
+  /**
+   * And the landing deliberately does not count that fold. Every landing rule counts what is new —
+   * Matches, From this debate and Related all leave debated claims out — and a tab whose only rows
+   * are folded under "already debated every claim here" is the dead end the landing exists to skip.
+   */
+  it('lands past their positions when everything of theirs is already debated', async () => {
+    mocks.claims = [debated(sharedClaim())];
+    mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Explore' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
   it('keeps it out of Explore’s new claims too, and leaves the rest listed', async () => {
     mocks.claims = [debated(sharedClaim())];
 

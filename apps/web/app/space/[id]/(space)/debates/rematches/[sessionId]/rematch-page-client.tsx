@@ -1547,6 +1547,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * so it waits on, holds through and fails with exactly what that list does.
    */
   const matchClaims = React.useMemo(() => opponentClaims.filter(isRematchable), [isRematchable, opponentClaims]);
+  /**
+   * Whether they have taken a side on anything at all — the debated ones included, which their tab
+   * folds away rather than drops. What the Matches empty state says and offers turns on this, not on
+   * `opponentClaims`, which is only the undebated half. The landing and the badge count that half on
+   * purpose: they are about what is new.
+   */
+  const opponentHasPositions = opponentClaimsListed.length > 0;
   /** Matches already debated, which Matches leaves out and "Their positions" folds away. */
   const debatedMatchCount = React.useMemo(
     () => opponentClaimsSplit.debated.filter(isRematchable).length,
@@ -2736,7 +2743,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     : tab === 'matches'
                       ? debatedMatchCount > 0
                         ? `You’ve already debated every claim you and ${remoteName} disagree on. Pick a side on another of their claims to find a new one.`
-                        : opponentClaims.length > 0
+                        : opponentHasPositions
                           ? `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
                           : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
                       : tab === 'opponent'
@@ -2778,7 +2785,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     ? // Their positions is where a match is made, and where the debated ones are kept.
                       // With none of those there is nothing of theirs to oppose, and the catalogue is
                       // the way on.
-                      opponentClaims.length > 0 || debatedMatchCount > 0
+                      opponentHasPositions
                       ? { label: `See ${remoteFirstName}’s positions`, onClick: () => setTab('opponent') }
                       : { label: 'Explore claims', onClick: () => setTab('explore') }
                     : tab === 'opponent'
