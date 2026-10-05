@@ -134,6 +134,14 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const { indicator, registerActiveTab } = useActiveTabIndicator(tabs);
 
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  /*
+   * Last click wins, and a tab only releases the slot if it is the one holding it.
+   *
+   * The `current === href` test is not defensive noise. Tabs report in tree order, so when the
+   * pending tab moves backwards along the row the tab being released reports *after* the one being
+   * claimed — an unconditional clear would undo the new claim and drop the underline back to the
+   * committed tab, which is the original bug by another route. Covered by a test in both rows.
+   */
   const handlePendingChange = React.useCallback((href: string, pending: boolean) => {
     setPendingHref(current => (pending ? href : current === href ? null : current));
   }, []);
@@ -283,6 +291,19 @@ interface TabProps {
   onPendingChange: (href: string, pending: boolean) => void;
 }
 
+/**
+ * Whether a click on an already-selected tab should be swallowed. Shared by both tab rows.
+ *
+ * Keyed on *selected* rather than on `useLinkStatus`'s pending, which is the whole trick. Pending
+ * stops at the commit, and committing now means the loading boundary is up rather than the content
+ * being there — measured at 63ms against content at 2665ms, so a guard on pending covered 2% of the
+ * window somebody would actually re-click in. `selected` covers the committed tab too, so it holds
+ * for the whole stream, and clicking the current tab becomes the no-op a tab row should give rather
+ * than a full round trip for the page already on screen.
+ *
+ * A different tab is never a repeat — that is somebody changing their mind mid-navigation — and nor
+ * is a modified or non-primary click, which opens a new tab or window.
+ */
 export function isRepeatTabClick(event: React.MouseEvent, selected: boolean): boolean {
   if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return false;
   return selected;

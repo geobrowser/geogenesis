@@ -288,6 +288,14 @@ export function EditableTabGroup({
   const { indicator, registerActiveTab } = useActiveTabIndicator(indicatorLayoutKey);
 
   const [pendingHref, setPendingHref] = useState<string | null>(null);
+  /*
+   * Last click wins, and a tab only releases the slot if it is the one holding it.
+   *
+   * The `current === href` test is not defensive noise. Tabs report in tree order, so when the
+   * pending tab moves backwards along the row the tab being released reports *after* the one being
+   * claimed — an unconditional clear would undo the new claim and drop the underline back to the
+   * committed tab, which is the original bug by another route. Covered by a test in both rows.
+   */
   const handlePendingChange = React.useCallback((href: string, pending: boolean) => {
     setPendingHref(current => (pending ? href : current === href ? null : current));
   }, []);
