@@ -16,6 +16,7 @@ import {
   GeoChatRequestError,
   type GeoChatSession,
   type GetPrivyIdentityToken,
+  dashlessId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
   resetGeoChatSession,
@@ -63,6 +64,7 @@ type DebateEventPayload = {
   space_id?: string;
   debate_id?: string;
   rematch_session_id?: string;
+  lobby_id?: string;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -468,6 +470,15 @@ export class DebateGatewayClient {
       case 'debate.matchmaking_changed':
         this.queueMatchmakingSections(identifiers.sections);
         break;
+      // GEO-3133. Sent to matchmaking subscribers, so the lobbies card stays current without polling.
+      case 'debate.lobbies_changed':
+        this.queueAccountQuery('lobbies');
+        break;
+      // GEO-3131. Sent to the lobby's present members.
+      case 'debate.lobby_changed':
+        if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
+        this.queueAccountQuery('current-lobby');
+        break;
     }
   }
 
@@ -535,7 +546,10 @@ export class DebateGatewayClient {
       | 'requests'
       | 'scheduled-debates'
       | 'upcoming-rooms'
-      | 'room',
+      | 'room'
+      | 'lobbies'
+      | 'lobby'
+      | 'current-lobby',
     id?: string
   ) {
     if (!this.accountKey) return;

@@ -1687,7 +1687,8 @@ export async function rejectDebateChallenge(
 
 /** Why a room stopped accepting joins. A closed room is a tombstone, not a 404. */
 /** `rescheduled`: the debate moved to a new time, and accepting it books a different room. */
-export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled' | 'rescheduled';
+/** `ended`: a host ended the lobby (GEO-3128). */
+export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled' | 'rescheduled' | 'ended';
 
 /**
  * May the viewer open this room right now. Carried in a 200 body rather than an HTTP status, so a
@@ -1711,6 +1712,8 @@ export type DebateRoomWaiting =
 
 export type DebateRoomView = {
   room_id: string;
+  /** Never withheld. A lobby answers `not_a_participant` here; read it from `/debate-lobbies/{id}`. */
+  kind?: 'debate' | 'lobby';
   access: DebateRoomAccess;
   starts_at: string;
   opens_at: string;
@@ -1748,6 +1751,10 @@ export type UpcomingDebateRoom = {
    * before anyone joins, `undefined` on a geo-chat that predates the field.
    */
   rematch_session_id?: string | null;
+  /** `lobby` for a lobby the viewer asked to be reminded of. Missing on a geo-chat that predates it. */
+  kind?: 'debate' | 'lobby';
+  /** The lobby's name. Absent for a two-person room. */
+  name?: string;
 };
 
 export type UpcomingDebateRoomsResponse = {
@@ -1938,6 +1945,200 @@ export async function listUpcomingDebateRooms(
   signal?: AbortSignal
 ) {
   return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/* -------------------------------------------------------------------------------------------------
+ * Debate lobbies (GEO-3128, web GEO-3131/GEO-3133)
+ *
+ * A many-person room on the debate-room door. Ids in bodies are dashless; path ids take either.
+ * -----------------------------------------------------------------------------------------------*/
+
+/** geo-chat spells uuids with and without dashes; query keys use this one form. */
+export function dashlessId(id: string) {
+  return id.replace(/-/g, '').toLowerCase();
+}
+
+export type DebateLobbyRole = 'host' | 'speaker' | 'listener' | 'banned';
+
+export type DebateLobbyAccess =
+  | { status: 'admitted' }
+  | { status: 'not_yet_open'; opens_at: string }
+  | { status: 'closed'; reason: DebateRoomClosedReason }
+  | { status: 'banned' };
+
+export type DebateLobbyMember = {
+  user_id: string;
+  profile_space_id: string;
+  display_name: string | null;
+  avatar_cid: string | null;
+  role: DebateLobbyRole;
+  creator: boolean;
+  present_since: string;
+};
+
+export type DebateLobbyView = {
+  lobby_id: string;
+  name: string;
+  access: DebateLobbyAccess;
+  starts_at: string;
+  opens_at: string;
+  scheduled: boolean;
+  created_by: string;
+  hosts_changed_at: string | null;
+  reminder_count: number;
+  /** Present members, longest-present first. Empty unless the viewer is admitted. */
+  members: DebateLobbyMember[];
+  /** `role` is null before the viewer's first join. */
+  viewer: { role: DebateLobbyRole | null; creator: boolean; reminded: boolean; present: boolean };
+};
+
+export type DebateLobbyPerson = {
+  user_id: string;
+  profile_space_id: string;
+  display_name: string | null;
+  avatar_cid: string | null;
+};
+
+export type DebateLobbySummary = {
+  lobby_id: string;
+  name: string;
+  scheduled: boolean;
+  starts_at: string;
+  opens_at: string;
+  open: boolean;
+  /** Every host, present or not, creator first. */
+  hosts: DebateLobbyPerson[];
+  headcount: number;
+  /** Up to five present people, longest-present first. */
+  avatars: DebateLobbyPerson[];
+  debating_count: number;
+  reminder_count: number;
+  viewer_reminded: boolean;
+};
+
+export type DebateLobbiesResponse = { lobbies: DebateLobbySummary[] };
+
+export async function listDebateLobbies(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbiesResponse>('/debate-lobbies', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** 404 `lobby_not_found` for an id that is not a lobby, which includes a two-person room. */
+export async function getDebateLobby(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** Without `starts_at` the lobby opens now. A start opens it 10 minutes early. */
+export async function createDebateLobby(
+  body: { name: string; starts_at?: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>('/debate-lobbies', {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Join or leave on one connection. A join while in another open lobby is `409
+ * already_in_another_lobby` unless `leave_other_lobby` confirms leaving it.
+ */
+export async function setDebateLobbyPresence(
+  lobbyId: string,
+  body: { connection_id: string; joined: boolean; leave_other_lobby?: boolean },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  keepalive = false
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/presence`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    keepalive,
+  });
+}
+
+/** Renews the connection's 45s lease. A lapsed lease answers with `viewer.present` false. */
+export async function sendDebateLobbyHeartbeat(
+  lobbyId: string,
+  body: { connection_id: string; voice_connected: boolean },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/heartbeat`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Host only. Closes the lobby with reason `ended`. */
+export async function endDebateLobby(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/end`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Remind me. Setting it is `409 lobby_already_open` or `409 lobby_closed` when too late. */
+export async function setDebateLobbyReminder(
+  lobbyId: string,
+  reminded: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/reminder`, {
+    method: reminded ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** The open lobby the viewer is in now, if any. */
+export async function getCurrentDebateLobby(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<{ current_lobby_id: string | null }>('/me/debate-lobby', {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
