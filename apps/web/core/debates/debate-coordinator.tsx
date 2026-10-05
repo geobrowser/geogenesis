@@ -38,6 +38,7 @@ import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
+import { sameId } from './rooms/room-presence';
 import { debateRoomIdFromPath } from './rooms/room-routes';
 import {
   getPreparedSocialVideoHandoffMethod,
@@ -309,7 +310,10 @@ export function DebateCoordinator() {
       : // A booked debate outranks a reminded lobby.
         ([...joinableRooms]
           .sort((a, b) => Number(a.kind === 'lobby') - Number(b.kind === 'lobby'))
-          .find(room => !snoozedRoomIds.includes(room.room_id)) ?? null);
+          // Not the lobby on screen: a reminded lobby stays listed after it opens.
+          .find(
+            room => !snoozedRoomIds.includes(room.room_id) && !(roomIdAtPath && sameId(room.room_id, roomIdAtPath))
+          ) ?? null);
 
   React.useEffect(() => {
     const liveIds = new Set(joinableRooms.map(room => room.room_id));
