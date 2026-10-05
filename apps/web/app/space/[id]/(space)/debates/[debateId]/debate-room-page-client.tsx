@@ -736,6 +736,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     (debate.status === 'thanking' || debate.status === 'complete')
   );
   const shouldAnnounceOpponentLeft = opponentLeftFromDebateCancel || opponentLeftFromRematchEnd;
+  // Rematch lapsed (`expired`) rather than left (`ended`). Still exit the dead room; no notice —
+  // expiry is also how a mutual no-rematch ends. Cancelled recordings use their own teardown.
+  const rematchExpiredUnderViewer = Boolean(
+    debate &&
+    debate.rematch_session_id &&
+    recordingCancelledBy === null &&
+    rematchSessionStatus === 'expired' &&
+    !didLocallyLeaveRematch(debate.rematch_session_id) &&
+    (debate.status === 'thanking' || debate.status === 'complete')
+  );
   const opponentLeftDiscardedRecording =
     opponentLeftFromDebateCancel &&
     (lastActiveDebateStatusRef.current === 'preflight' ||
@@ -759,8 +769,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     roomState === 'connected' &&
     roomError
   );
+  const rematchDeadEndExit = Boolean(
+    debate?.status === 'complete' && roomState === 'idle' && (opponentLeftFromRematchEnd || rematchExpiredUnderViewer)
+  );
   const shouldHideTerminalDebate =
     (shouldExitTerminalDebate && !hasRecordingPersistenceError) ||
+    (rematchDeadEndExit && !hasRecordingPersistenceError) ||
     (recordingCancelledBy !== null && !opponentCancelledRecording && !rematchSurvivesCancellation);
   // A disconnected or reloaded room can discover that it should enter an already-live rematch.
   // Keep the recording surface over the app while that prefetched route replaces it; swapping to
@@ -2005,12 +2019,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         router.replace(destination);
         return;
       }
-      // Opponent left rematch on thank-you: leave this screen and show the notice on a normal page.
-      if (session?.status === 'ended' && !didLocallyLeaveRematch(session.id)) {
+      // Rematch is dead (`ended` or `expired`): exit forward so history back cannot remount this room.
+      // Only `ended` (opponent Leave) gets the notice — `expired` is also mutual no-rematch.
+      if ((session?.status === 'ended' || session?.status === 'expired') && !didLocallyLeaveRematch(session.id)) {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
-        setOpponentLeftNotice({ recordingDiscarded: false });
+        if (session.status === 'ended') setOpponentLeftNotice({ recordingDiscarded: false });
         returnFromDebate({ forwardOnly: true });
         return;
       }
@@ -2373,7 +2388,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [debate, returnFromDebate, shouldReturnFromTerminalDebate]);
 
   React.useEffect(() => {
-    if (!shouldAnnounceOpponentLeft) return;
+    if (!shouldAnnounceOpponentLeft && !rematchExpiredUnderViewer) return;
     if (
       roomState === 'saving' ||
       debate?.status === 'thanking' ||
@@ -2383,10 +2398,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // Leave marks after this render was committed; re-check so the leaver is not announced.
     if (debate && didLocallyLeaveDebate(debate.id)) return;
     if (debate?.rematch_session_id && didLocallyLeaveRematch(debate.rematch_session_id)) return;
-    setOpponentLeftNotice({ recordingDiscarded: opponentLeftDiscardedRecording });
+    if (shouldAnnounceOpponentLeft) setOpponentLeftNotice({ recordingDiscarded: opponentLeftDiscardedRecording });
     returnFromDebate({ forwardOnly: true });
   }, [
     shouldAnnounceOpponentLeft,
+    rematchExpiredUnderViewer,
     roomState,
     debate,
     opponentLeftDiscardedRecording,

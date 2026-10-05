@@ -4987,6 +4987,67 @@ describe('DebateRoomPageClient', () => {
     expect(getDefaultStore().get(opponentLeftNoticeAtom)).toEqual({ recordingDiscarded: false });
   });
 
+  it('boots off the thank-you screen when the rematch expires under you, with no notice', async () => {
+    // A prior entry exists, so a plain history back would step into it rather than replace forward.
+    setHistoryLength(2);
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    installRecordingMocks();
+    // The source recording is already queued, so the persist step resolves without a live capture.
+    mocks.getRecording.mockResolvedValue({ id: 'user-a:debate-1' });
+    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    mocks.rematch = rematchSession('expired');
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:35.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    // On the thank-you screen the exit waits: the recording is still finalizing, and `finishLiveDebate`
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates');
+
+    // Past the thank-you deadline `finishLiveDebate` persists the source recording, then forward-exits
+    // so a history back cannot remount this dead room. An expiry carries no attribution, so no notice.
+    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 550));
+    });
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.back).not.toHaveBeenCalled();
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(getDefaultStore().get(opponentLeftNoticeAtom)).toBeNull();
+  });
+
+  // The idle/remount twin of the live case above: a reloaded or backgrounded-dropped room comes up
+  // with nothing to finalize.
+  it('forward-exits an idle completed room whose rematch has expired, with no notice', async () => {
+    setHistoryLength(2);
+    mocks.rematch = rematchSession('expired');
+    mocks.debate = {
+      ...completedDebate(),
+      rematch_session_id: 'rematch-1',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates'));
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+    expect(mocks.back).not.toHaveBeenCalled();
+    expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
+    // An expiry carries no attribution, so the viewer leaves without the "opponent left" notice.
+    expect(screen.queryByRole('dialog', { name: 'Opponent left' })).not.toBeInTheDocument();
+    expect(getDefaultStore().get(opponentLeftNoticeAtom)).toBeNull();
+  });
+
   it('persists the recording at the canonical debate deadline without waiting for thanking status', async () => {
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     installRecordingMocks();
