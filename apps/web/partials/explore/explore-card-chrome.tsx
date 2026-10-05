@@ -56,6 +56,11 @@ export function ExploreCardSurface({
         item_position: itemPosition ?? parentScope.item_position,
         list_id: listId ?? parentScope.list_id ?? 'entity_feed',
         variant,
+        // GEO-3140 / GEO-3144: credit what happens on this card to the feed version behind it.
+        feed_version: item.ranking?.version,
+        feed_arm: item.ranking?.arm,
+        feed_experiment_id: item.ranking?.experimentId,
+        feed_exploration: item.ranking?.exploration || undefined,
       }}
     >
       {children}
