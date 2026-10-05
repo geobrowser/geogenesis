@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render } from '@testing-library/react';
+import { cleanup, createEvent, fireEvent, render, screen } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -27,14 +27,22 @@ vi.mock('~/design-system/prefetch-link', () => ({
     href,
     className,
     ref,
+    onClick,
   }: {
     children: React.ReactNode;
     href: string;
     className: string;
     ref?: React.Ref<HTMLAnchorElement>;
+    onClick?: React.MouseEventHandler<HTMLAnchorElement>;
   }) => (
     <LinkHrefContext.Provider value={href}>
-      <a href={href} className={className} ref={ref} data-selected={className.split(' ').includes('text-text')}>
+      <a
+        href={href}
+        className={className}
+        ref={ref}
+        onClick={onClick}
+        data-selected={className.split(' ').includes('text-text')}
+      >
         {children}
       </a>
     </LinkHrefContext.Provider>
@@ -66,6 +74,14 @@ afterEach(cleanup);
 /**
  * A tab reads as selected from `usePathname()`, which only updates when the navigation commits.
  */
+/** Dispatches a click the way a browser would, so `defaultPrevented` is observable. */
+function clickTab(label: string, init?: MouseEventInit) {
+  const anchor = screen.getByRole('link', { name: label });
+  const event = createEvent.click(anchor, init);
+  fireEvent(anchor, event);
+  return event;
+}
+
 describe('TabGroup pending state', () => {
   it('marks the tab being navigated to, before the route commits', () => {
     mocks.pending = new Set(['/space/space-1/community']);
@@ -130,5 +146,45 @@ describe('TabGroup pending state', () => {
     render(<TabGroup tabs={TABS} />);
 
     expect(document.querySelector('[data-tab-pending]')).toHaveAttribute('aria-hidden');
+  });
+});
+
+describe('TabGroup repeat-click guard', () => {
+  it('swallows a second click on the tab already being fetched', () => {
+    mocks.pending = new Set(['/space/space-1/community']);
+    render(<TabGroup tabs={TABS} />);
+
+    expect(clickTab('Community').defaultPrevented).toBe(true);
+  });
+
+  it('lets a different tab through while one is pending', () => {
+    mocks.pending = new Set(['/space/space-1/community']);
+    render(<TabGroup tabs={TABS} />);
+
+    expect(clickTab('Activity').defaultPrevented).toBe(false);
+  });
+
+  // A modified or non-primary click is a new tab or window, not a repeat of the one in flight.
+  it('lets a modified click through on the pending tab', () => {
+    mocks.pending = new Set(['/space/space-1/community']);
+    render(<TabGroup tabs={TABS} />);
+
+    expect(clickTab('Community', { metaKey: true }).defaultPrevented).toBe(false);
+    expect(clickTab('Community', { ctrlKey: true }).defaultPrevented).toBe(false);
+    expect(clickTab('Community', { shiftKey: true }).defaultPrevented).toBe(false);
+    expect(clickTab('Community', { button: 1 }).defaultPrevented).toBe(false);
+  });
+
+  it('swallows a click on the tab already committed, while its content is still streaming', () => {
+    mocks.pathname = '/space/space-1/community';
+    render(<TabGroup tabs={TABS} />);
+
+    expect(clickTab('Community').defaultPrevented).toBe(true);
+  });
+
+  it('leaves an ordinary click alone when nothing is pending', () => {
+    render(<TabGroup tabs={TABS} />);
+
+    expect(clickTab('Community').defaultPrevented).toBe(false);
   });
 });

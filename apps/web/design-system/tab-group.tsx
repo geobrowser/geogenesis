@@ -354,6 +354,12 @@ function Tab({
 
   const selected = pendingHref ? pendingHref === href : active;
 
+  const guardRepeatClick = (event: React.MouseEvent<HTMLAnchorElement>) => {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+    if (!selected) return;
+    event.preventDefault();
+  };
+
   if (!editable && hidden) {
     return null;
   }
@@ -398,6 +404,7 @@ function Tab({
       className={tabGroupTabLinkStyles({ active: selected, disabled })}
       href={href}
       prefetch
+      onClick={guardRepeatClick}
     >
       {label}
       {badge && <Badge>{badge}</Badge>}
