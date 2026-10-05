@@ -18,8 +18,11 @@ import {
 } from './debate-publish-draft';
 import {
   AUTHORS_PROPERTY_ID,
+  CLAIM_ADDRESSES_PROPERTY_ID,
   CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_OPPOSES_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
+  CLAIM_SUPPORTS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
@@ -951,6 +954,145 @@ describe('buildDebatePublishDraft', () => {
       expect(serialized).toContain('143140');
       expect(ops.length).toBeGreaterThan(0);
       expect(statement).toBeTruthy();
+    });
+  });
+
+  describe('claim stance toward the motion (GEO-3142)', () => {
+    const STANCE_PROPERTY_IDS = [CLAIM_SUPPORTS_PROPERTY_ID, CLAIM_OPPOSES_PROPERTY_ID, CLAIM_ADDRESSES_PROPERTY_ID];
+    const stanceRelations = (draft: ReturnType<typeof buildDebatePublishDraft>) =>
+      draft.relations.filter(r => STANCE_PROPERTY_IDS.includes(r.type.id));
+
+    it('writes exactly one Supports / Opposes / Addresses relation per claim, to the motion, in the space', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'Iran was months from a weapon.', isFactual: false, turnIndex: 0, stance: 'supports' },
+            // A concession by the "yes" speaker: the verdict is the claim's, not the speaker's side.
+            { text: 'Strikes rarely end a nuclear programme.', isFactual: false, turnIndex: 0, stance: 'opposes' },
+            { text: 'Congress has not declared war since 1942.', isFactual: true, turnIndex: 1, stance: 'addresses' },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const relations = stanceRelations(draft);
+      expect(relations).toHaveLength(3);
+      for (const relation of relations) {
+        expect(relation.toEntity.id).toBe(CLAIM_ENTITY);
+        expect(relation.spaceId).toBe(SPACE);
+      }
+      const typeFrom = (name: string) => relations.find(r => r.fromEntity.id === claimIdByName(draft, name))?.type.id;
+      expect(typeFrom('Iran was months from a weapon.')).toBe(CLAIM_SUPPORTS_PROPERTY_ID);
+      expect(typeFrom('Strikes rarely end a nuclear programme.')).toBe(CLAIM_OPPOSES_PROPERTY_ID);
+      expect(blockAuthoringClaim(draft, claimIdByName(draft, 'Strikes rarely end a nuclear programme.'))).toBe(
+        YES_SPACE
+      );
+      expect(typeFrom('Congress has not declared war since 1942.')).toBe(CLAIM_ADDRESSES_PROPERTY_ID);
+    });
+
+    it('writes no stance relation for a claim without a verdict', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'Unjudged.', isFactual: false, turnIndex: 0, stance: null },
+            { text: 'From an older payload.', isFactual: false, turnIndex: 1 },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(stanceRelations(draft)).toHaveLength(0);
+      expect(claimIdByName(draft, 'Unjudged.')).toBeDefined();
+    });
+
+    it('writes one relation when several statements resolve to the same claim entity', () => {
+      const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+      const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'Reused once.',
+              isFactual: false,
+              turnIndex: 0,
+              existingClaimEntityId: EXISTING,
+              stance: 'supports',
+            },
+            {
+              text: 'Reused twice.',
+              isFactual: false,
+              turnIndex: 1,
+              existingClaimEntityId: EXISTING,
+              stance: 'opposes',
+            },
+            { text: 'Stable.', isFactual: false, turnIndex: 0, stableEntityId: STABLE, stance: 'addresses' },
+            { text: 'Stable again.', isFactual: false, turnIndex: 1, stableEntityId: STABLE, stance: 'addresses' },
+            { text: 'Verbatim.', isFactual: false, turnIndex: 0, stance: 'opposes' },
+            { text: 'Verbatim.', isFactual: false, turnIndex: 1, stance: 'opposes' },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const relations = stanceRelations(draft);
+      expect(relations.filter(r => r.fromEntity.id === EXISTING)).toHaveLength(1);
+      // The first statement in transcript order decides.
+      expect(relations.find(r => r.fromEntity.id === EXISTING)?.type.id).toBe(CLAIM_SUPPORTS_PROPERTY_ID);
+      expect(relations.filter(r => r.fromEntity.id === STABLE)).toHaveLength(1);
+      expect(relations).toHaveLength(3);
+    });
+
+    it('never relates the motion to itself', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'The motion, restated.',
+              isFactual: false,
+              turnIndex: 0,
+              stableEntityId: CLAIM_ENTITY,
+              stance: 'supports',
+            },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(stanceRelations(draft)).toHaveLength(0);
+    });
+
+    it('writes no stance relation in a question debate, but keeps every other claim link', () => {
+      const input = baseInput({
+        subjectKind: 'question',
+        claims: [
+          { text: 'Open models speed up research.', isFactual: false, turnIndex: 0, stance: 'supports' },
+          { text: 'Labs publish model cards.', isFactual: true, turnIndex: 1, stance: 'addresses' },
+        ],
+      });
+      const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
+      expect(stanceRelations(draft)).toHaveLength(0);
+      const claimId = claimIdByName(draft, 'Open models speed up research.');
+      expect(blockAuthoringClaim(draft, claimId)).toBe(YES_SPACE);
+      expect(
+        draft.relations.some(
+          r =>
+            r.type.id === SOURCES_PROPERTY_ID && r.fromEntity.id === claimId && r.toEntity.id === draft.debateEntityId
+        )
+      ).toBe(true);
+    });
+
+    it('stance relations survive the real publish pipeline', async () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'A reason against.', isFactual: false, turnIndex: 1, stance: 'opposes' }] }),
+        { createEntityId: ID.createEntityId }
+      );
+      expect(stanceRelations(draft)).toHaveLength(1);
+      const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
+      const without = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'A reason against.', isFactual: false, turnIndex: 1 }] }),
+        { createEntityId: ID.createEntityId }
+      );
+      const opsWithout = await Effect.runPromise(
+        Publish.prepareLocalDataForPublishing(without.values, without.relations, SPACE)
+      );
+      // The relation becomes exactly one more op.
+      expect(ops.length).toBe(opsWithout.length + 1);
     });
   });
 
