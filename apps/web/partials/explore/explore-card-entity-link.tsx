@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { capture } from '~/core/analytics';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { type OpenSidePanelOptions, useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
@@ -58,8 +60,20 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, section, c
   // only names when the Claims relation is missing.
   const opensPanel = opensSidePanel && !isDebateEntity(item.types);
 
+  // GEO-3144: an open is engagement, credited like a vote or comment to the feed version behind the
+  // card, which the card's action scope carries. Recorded on every click that opens it, panel or page.
+  const snapshot = useActionContext('explore_feed_card', 'entity', item.entityId);
+  const recordOpen = React.useCallback(() => {
+    try {
+      capture('element_clicked', { ...snapshot(), source: 'explore_feed_card', element_action: 'open' });
+    } catch {
+      /* Optional telemetry. */
+    }
+  }, [snapshot]);
+
   const onClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
+      recordOpen();
       if (!opensPanel) return;
       if (isModifiedClick(event)) return;
       event.preventDefault();
@@ -68,7 +82,7 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, section, c
       // main-view edit session to return the viewer to.
       openSidePanel(item.entityId, item.spaceId, false, section?.sidePanel);
     },
-    [item.entityId, item.spaceId, opensPanel, openSidePanel, section?.sidePanel]
+    [item.entityId, item.spaceId, opensPanel, openSidePanel, recordOpen, section?.sidePanel]
   );
 
   const pageHref = NavUtils.toEntity(item.spaceId, item.entityId);
@@ -80,6 +94,7 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, section, c
       entityId={item.entityId}
       spaceId={item.spaceId}
       onClick={onClick}
+      onAuxClick={recordOpen}
       // Exempts this link from the panel's capture-phase outside-pointerdown close
       // (`entity-side-panel.tsx`). Without it, clicking a second card while the panel is open
       // tears the panel down on `pointerdown` and the `onClick` below builds it again — a

@@ -70,5 +70,5 @@ export async function resolveExploreFeedRequestContext(routeSpaceId?: string) {
     }
   }
 
-  return { browse, memberOrEditorSpaceIds, walletAddress };
+  return { browse, memberOrEditorSpaceIds, walletAddress, personalMemberSpaceId };
 }
