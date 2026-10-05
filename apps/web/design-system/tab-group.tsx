@@ -5,6 +5,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { cva } from 'class-variance-authority';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
+import { useLinkStatus } from 'next/link';
 import { usePathname } from 'next/navigation';
 
 import { useEditable } from '~/core/state/editable-store';
@@ -12,6 +13,7 @@ import { useActiveTabIdForEditor } from '~/core/state/editor/editor-provider';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
 import { entityTabIdFromHref, isEntityTabActive } from '~/core/utils/entity-tab-navigation';
 
+import { Dots } from '~/design-system/dots';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 export type TabGroupTab = {
@@ -271,8 +273,20 @@ interface TabProps {
 }
 
 /** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
+/** Shows the tab as active as soon as it is clicked, before the route commits. */
+function TabPendingMarker() {
+  const { pending } = useLinkStatus();
+  if (!pending) return null;
+
+  return (
+    <span data-tab-pending aria-hidden className="flex items-center">
+      <Dots />
+    </span>
+  );
+}
+
 export const tabGroupTabLinkStyles = cva(
-  'relative z-10 flex items-center gap-1.5 text-quoteMedium whitespace-nowrap transition-colors duration-100',
+  'relative z-10 flex items-center gap-1.5 text-quoteMedium whitespace-nowrap transition-colors duration-100 has-[[data-tab-pending]]:text-text',
   {
     variants: {
       active: {
@@ -354,6 +368,7 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
     >
       {label}
       {badge && <Badge>{badge}</Badge>}
+      <TabPendingMarker />
     </Link>
   );
 }
