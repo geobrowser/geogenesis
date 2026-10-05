@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -60,8 +60,11 @@ beforeEach(() => {
   api.sendDebateLobbyHeartbeat.mockResolvedValue(view(true));
 });
 
-afterEach(() => {
+afterEach(async () => {
+  cleanup();
   vi.useRealTimers();
+  // Let the leave an unmount queues land before the mocks reset, not in the next test.
+  await new Promise(resolve => setTimeout(resolve, 0));
   vi.clearAllMocks();
 });
 
@@ -158,6 +161,17 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(leaves()).toHaveLength(1));
   });
 
+  // Chrome slows a long-hidden tab's timers past the 45s lease; returning renews it at once.
+  it('heartbeats as soon as the tab becomes visible', async () => {
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    const visibility = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
+    act(() => document.dispatchEvent(new Event('visibilitychange')));
+    await waitFor(() => expect(api.sendDebateLobbyHeartbeat).toHaveBeenCalledTimes(1));
+    visibility.mockRestore();
+  });
+
   it('stays out after Leave', async () => {
     const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
@@ -190,5 +204,26 @@ describe('useDebateLobby', () => {
     });
     await waitFor(() => expect(result.current.data?.access.status).toBe('admitted'));
     expect(api.getDebateLobby).toHaveBeenCalledTimes(2);
+  });
+
+  // Nothing else refetches this page, so one failed refetch at opens_at must not end the retries.
+  it('tries again after the refetch at opens_at fails', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const opensAt = new Date(Date.now() + 60_000).toISOString();
+    api.getDebateLobby
+      .mockResolvedValueOnce(view(false, { status: 'not_yet_open', opens_at: opensAt }))
+      .mockRejectedValueOnce(new Error('network'))
+      .mockResolvedValue(view(false));
+    const { result } = renderHook(() => useDebateLobby('lobby1'), { wrapper });
+    await waitFor(() => expect(result.current.data?.access.status).toBe('not_yet_open'));
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(61_000);
+    });
+    await waitFor(() => expect(api.getDebateLobby).toHaveBeenCalledTimes(2));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(6_000);
+    });
+    await waitFor(() => expect(result.current.data?.access.status).toBe('admitted'));
   });
 });

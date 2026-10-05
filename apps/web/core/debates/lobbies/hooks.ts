@@ -55,7 +55,7 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
 
   const access = query.data?.access;
   const opensAt = access?.status === 'not_yet_open' ? access.opens_at : null;
-  const { refetch, dataUpdatedAt } = query;
+  const { refetch, dataUpdatedAt, errorUpdatedAt } = query;
   React.useEffect(() => {
     if (!opensAt) return;
     const at = Date.parse(opensAt);
@@ -63,8 +63,8 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
     const delay = Math.min(Math.max(at - Date.now() + 1_000, OPENS_REFETCH_MIN_MS), MAX_TIMEOUT_MS);
     const timeout = setTimeout(() => void refetch(), delay);
     return () => clearTimeout(timeout);
-    // `dataUpdatedAt` reschedules after a refetch that still says not yet open.
-  }, [dataUpdatedAt, opensAt, refetch]);
+    // Reschedules after a refetch that still says not yet open, or that failed.
+  }, [dataUpdatedAt, errorUpdatedAt, opensAt, refetch]);
 
   return query;
 }
@@ -227,10 +227,11 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
     if (admitted && status === 'idle') void join(false);
   }, [admitted, join, status]);
 
-  // Heartbeat while joined. A view without the viewer means the lease lapsed: join again.
+  // Heartbeat while joined. A view without the viewer means the lease lapsed: join again. Chrome
+  // slows timers in a long-hidden tab past the lease, so one goes out as soon as it is visible.
   React.useEffect(() => {
     if (status !== 'joined' || !admitted) return;
-    const interval = setInterval(() => {
+    const beat = () => {
       void sendDebateLobbyHeartbeat(
         lobbyId,
         { connection_id: connectionId, voice_connected: false },
@@ -248,8 +249,16 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
           }
         })
         .catch(() => undefined);
-    }, LOBBY_HEARTBEAT_MS);
-    return () => clearInterval(interval);
+    };
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') beat();
+    };
+    const interval = setInterval(beat, LOBBY_HEARTBEAT_MS);
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
   }, [accountKey, admitted, connectionId, join, lobbyId, status, store]);
 
   // Leave on navigation away and on tab close. A bfcache restore joins again. Callbacks are read

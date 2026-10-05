@@ -86,7 +86,11 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
 
 function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
   const reminder = useDebateLobbyReminder();
+  const end = useEndDebateLobby(lobby.lobby_id);
+  const [confirmingCancel, setConfirmingCancel] = React.useState(false);
   const reminded = lobby.viewer.reminded;
+  // Nobody is present before it opens, so `viewer.hosting` is false; a stored host may still cancel.
+  const canCancel = lobby.viewer.role === 'host';
 
   return (
     <LobbyShell>
@@ -110,7 +114,34 @@ function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
         <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
           {LOBBY_COPY.findDebate}
         </Link>
+        {canCancel ? (
+          confirmingCancel ? (
+            <>
+              <HubPillButton
+                variant="primary"
+                analyticsLabel="Lobby cancel confirm"
+                pending={end.isPending}
+                pendingLabel="Cancelling…"
+                onClick={() => end.mutate()}
+              >
+                Cancel for everyone
+              </HubPillButton>
+              <HubPillButton analyticsLabel="Lobby cancel back" onClick={() => setConfirmingCancel(false)}>
+                Keep it
+              </HubPillButton>
+            </>
+          ) : (
+            <HubPillButton analyticsLabel="Lobby cancel" onClick={() => setConfirmingCancel(true)}>
+              Cancel lobby
+            </HubPillButton>
+          )
+        ) : null}
       </div>
+      {end.isError ? (
+        <Text as="p" variant="footnote" color="red-01">
+          {end.error.message}
+        </Text>
+      ) : null}
       {reminder.isError ? (
         <Text as="p" variant="footnote" color="red-01">
           {reminder.error.message}

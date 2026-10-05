@@ -36,9 +36,9 @@ import {
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
-import { useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
+import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
-import { isDebateRoomPath } from './rooms/room-routes';
+import { debateRoomIdFromPath } from './rooms/room-routes';
 import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
@@ -184,7 +184,14 @@ export function DebateCoordinator() {
   //
   // A room (GEO-2941) is the same surface under a different route, and open for as long as the pair
   // are in it, so nothing app-wide may sit over it either.
-  const atDebateFlowPage = pathname.includes('/debates/rematches/') || isDebateRoomPath(pathname);
+  //
+  // A lobby (GEO-3131) shares the room's path but is where people wait between debates, so it is
+  // neither: requests and challenges accepted there must route out of it. Read from the room view
+  // the page already loaded; until it lands, the path counts as a room.
+  const roomIdAtPath = debateRoomIdFromPath(pathname);
+  const atLobby = useDebateRoom(roomIdAtPath ?? '', false).data?.kind === 'lobby';
+  const atRoom = roomIdAtPath !== null && !atLobby;
+  const atDebateFlowPage = pathname.includes('/debates/rematches/') || atRoom;
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -256,7 +263,6 @@ export function DebateCoordinator() {
 
   // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
   // cannot offer a room that would refuse the join.
-  const atRoom = isDebateRoomPath(pathname);
   const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
