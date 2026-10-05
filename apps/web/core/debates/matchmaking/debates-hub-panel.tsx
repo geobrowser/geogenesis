@@ -15,6 +15,7 @@ import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
+import { Calendar } from '~/design-system/icons/calendar';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
@@ -24,11 +25,12 @@ import { Text } from '~/design-system/text';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
+import { findATimeHref } from './find-a-time-route';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
-import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
+import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
@@ -280,20 +282,23 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         <Text as="h2" variant="smallTitle">
           Debates
         </Text>
-        <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
-          {onClose ? (
-            <button
-              type="button"
-              data-geo-analytics-label="Close debate hub"
-              data-geo-analytics-intent="close_debates_hub"
-              aria-label="Close debates"
-              onClick={onClose}
-              className={HUB_ICON_BUTTON_CLASS_NAME}
-            >
-              <CloseSmall />
-            </button>
-          ) : null}
-        </HubHeaderControls>
+        <div className="flex min-w-0 items-center gap-1">
+          <FindATimeButton />
+          <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
+            {onClose ? (
+              <button
+                type="button"
+                data-geo-analytics-label="Close debate hub"
+                data-geo-analytics-intent="close_debates_hub"
+                aria-label="Close debates"
+                onClick={onClose}
+                className={HUB_ICON_BUTTON_CLASS_NAME}
+              >
+                <CloseSmall />
+              </button>
+            ) : null}
+          </HubHeaderControls>
+        </div>
       </div>
 
       <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
@@ -395,6 +400,30 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 
       {!ready || !filtersReconciled ? null : <ExpandToWorkspaceLink activeTab={activeTab} />}
     </div>
+  );
+}
+
+/**
+ * Find a time (GEO-3152): everyone's free time as a full-screen week. The panel closes on the way,
+ * so it does not sit over the week it opened; "Back to Debates" there brings it back on this page.
+ *
+ * Icon-only on a phone, where the sheet's header also carries Close and has no room for the label.
+ */
+function FindATimeButton() {
+  const { close } = useDebatesHub();
+  const pathname = usePathname();
+  return (
+    <Link
+      href={findATimeHref(pathname)}
+      onClick={close}
+      aria-label="Find a time to debate"
+      data-geo-analytics-label="Debate hub Find a time"
+      data-geo-analytics-intent="open_find_a_time"
+      className={hubPillClassName('secondary', 'gap-1.5 md:w-7 md:px-0 [&_svg]:shrink-0')}
+    >
+      <Calendar />
+      <span className="md:sr-only">Find a time</span>
+    </Link>
   );
 }
 

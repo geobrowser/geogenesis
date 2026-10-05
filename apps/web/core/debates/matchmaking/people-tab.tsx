@@ -7,7 +7,7 @@ import { useAtom } from 'jotai';
 import { type AnalyticsProperties } from '~/core/analytics';
 import { personProfileOpened } from '~/core/analytics';
 import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
-import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import type { ScheduleEditorSurface, ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -25,7 +25,6 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
-import { activeDebate } from '../activity-state';
 import {
   type DebatePerson,
   GeoChatRequestError,
@@ -33,7 +32,6 @@ import {
   type SchedulablePerson,
   type ScheduleOverlapSlot,
 } from '../api';
-import { useClaimEntitiesByIds } from '../claim-picker-page';
 import {
   useCreateDebateChallenge,
   useDebateActivity,
@@ -41,14 +39,12 @@ import {
   useGeoChatAuth,
   useSaveDebateSchedule,
 } from '../hooks';
-import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
-import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
-import { type ClaimMatch, analyzeMatchingClaims } from './disagreement-counts';
+import type { ClaimMatch } from './disagreement-counts';
 import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
@@ -58,20 +54,12 @@ import { isExcludedFromPeopleTab } from './people-tab-exclusions';
 import { PersonMatches } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
-import { isPersonId } from './person-records-document';
 import { PersonSpaceIcons } from './person-space-icons';
-import { usePersonRecords } from './use-person-records';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useLiveRequestBlock } from './use-live-request-block';
+import { usePersonFacts } from './use-person-facts';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { type DebatesHubTab, debatesHubPeopleOnlineOnlyAtom, debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
-/**
- * Whether the records batch has answered for everybody queryable on the current roster.
- *
- * `usePersonRecords` keeps the previous roster's map while a new one lands. Checking the current ids
- * rather than `records.size` keeps that placeholder from reconciling a selection against people who
- * have already left, or clearing it before a newly arrived person's activity has loaded.
- */
 const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_MATCHES: ClaimMatch[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
@@ -80,7 +68,7 @@ const EMPTY_USER_IDS: ReadonlySet<string> = new Set();
 /** Shared times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
 const INLINE_SLOTS = 3;
 
-type PersonSchedule = { slots: ScheduleOverlapSlot[]; truncated: boolean };
+export type PersonSchedule = { slots: ScheduleOverlapSlot[]; truncated: boolean };
 
 /**
  * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
@@ -95,10 +83,6 @@ function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
     online_since: null,
     can_challenge: false,
   };
-}
-
-function recordsPending(personIds: string[], records: Map<string, PersonRecord>): boolean {
-  return personIds.some(personId => isPersonId(personId) && !records.has(personId));
 }
 
 /**
@@ -212,101 +196,32 @@ export function PeopleTab({
   }, [now, onlinePeople, schedulableQuery.data, showOffline]);
 
   const allPeople = React.useMemo(() => [...onlinePeople, ...offlinePeople], [onlinePeople, offlinePeople]);
-  const viewerProfileSpaceId = authenticated && personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;
-  // One graph read for the viewer and the whole roster. Signed-out visitors have no viewer to
-  // compare against, so they do not spend a public query fetching everybody else's positions.
-  // The presence service can hand us a malformed profile-space id; keep those out of the graph's
-  // UUID filter so one bad roster entry cannot discard every valid person's match data.
-  const positionParticipants = React.useMemo(
-    () =>
-      viewerProfileSpaceId
-        ? [
-            { profile_space_id: viewerProfileSpaceId },
-            ...allPeople.flatMap(person =>
-              isPersonId(person.profile_space_id) ? [{ profile_space_id: person.profile_space_id }] : []
-            ),
-          ]
-        : [],
-    [allPeople, viewerProfileSpaceId]
-  );
+  // `allPeople` deliberately falls back to an empty list for rendering, but that fallback is not a
+  // roster answer. On a cold load or terminal error, treating it as settled would reconcile a
+  // remembered selection against no people and erase it before there is evidence it became invalid.
+  const rosterUnavailable = peopleQuery.data === undefined;
   const {
-    byClaim: positionsByClaim,
-    isLoading: positionsLoading,
-    isPlaceholderData: positionsArePlaceholderData,
-    error: positionsError,
-  } = useParticipantPositions(positionParticipants, viewerProfileSpaceId, { onlyViewerClaims: true });
-  const matchAnalysis = React.useMemo(
-    () => analyzeMatchingClaims(positionsByClaim, viewerProfileSpaceId),
-    [positionsByClaim, viewerProfileSpaceId]
-  );
-  // A key-changing roster update retains the previous batch. It is useful placeholder UI for
-  // people already present, but an absent entry for somebody new means "unknown", not zero. A
-  // same-key background poll is not placeholder data, so settled counts stay visible while polling.
-  const matchesKnown =
-    viewerProfileSpaceId !== null && !positionsLoading && !positionsArePlaceholderData && positionsError === null;
-  const matchingClaimIds = React.useMemo(
-    () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
-    [matchAnalysis]
-  );
-  const matchingSpaceIds = React.useMemo(
-    () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.spaceId)))],
-    [matchAnalysis]
-  );
-  const { entities: matchingClaims, isLoading: matchingClaimsLoading } = useClaimEntitiesByIds(matchingClaimIds);
-  const matchingClaimNamesById = React.useMemo(
-    () => new Map(matchingClaims.map(claim => [normId(claim.id), claim.name])),
-    [matchingClaims]
-  );
+    matchAnalysis,
+    matchesKnown,
+    matchingSpaceIds,
+    matchingClaimNamesById,
+    matchingClaimsLoading,
+    records,
+    personRecordsPending,
+    publishableSpacesPending,
+    spaceActivityUnavailable,
+    debateSpacesByPerson,
+    activeSpaceIds,
+  } = usePersonFacts(allPeople, { authenticated, rosterUnavailable });
 
   // Held outside this component so they survive it, exactly as the claim tabs' filters are: the hub
   // closes on any outside pointer-down, so dismissing a dropdown by clicking away unmounts this tab
   // and `useState` would take the viewer's selection with it (GEO-2850).
   const [spaceIds, setSpaceIds] = useAtom(debatesHubPeopleSpaceIdsAtom);
 
-  // Keyed on everyone available rather than on the filtered list, so narrowing re-slices a batch
-  // that is already cached instead of firing a request per keystroke.
-  const personIds = React.useMemo(() => allPeople.map(person => person.profile_space_id), [allPeople]);
-  const records = usePersonRecords(personIds);
-  const personRecordsPending = recordsPending(personIds, records);
-
-  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
-  const publishableSpacesPending = publishableSpaceIds === null && publishableSpacesLoading;
-  // `allPeople` deliberately falls back to an empty list for rendering, but that fallback is not a
-  // roster answer. On a cold load or terminal error, treating it as settled would reconcile a
-  // remembered selection against no people and erase it before there is evidence it became invalid.
-  const rosterUnavailable = peopleQuery.data === undefined;
-  const spaceActivityUnavailable = rosterUnavailable || publishableSpacesPending || personRecordsPending;
   // Offline people carry spaces too. Until they land, the people in hand are a subset, and
   // reconciling against them would erase a space only offline people are active in.
   const offlinePeopleUnsettled = showOffline && schedulableQuery.data === undefined;
-
-  // "Active in" means evidence of activity, not membership: at least one distinct claim answered
-  // or one recorded debate in that space. The same map drives both the row and the filter so a
-  // membership-only space cannot appear in one surface but not the other. The publishable-space
-  // gate is still the claim picker's authoritative acceptor-editor set. A settled lookup with no
-  // answer deliberately fails open, matching `isSpaceDebatePublishable` elsewhere; an in-flight
-  // lookup is different, because drawing its unverified spaces would briefly make them selectable.
-  // The roster and person records get the same treatment: an absent roster or partial batch must
-  // not erase a remembered selection or filter out people whose row has not landed yet.
-  const debateSpacesByPerson = React.useMemo(() => {
-    const byPerson = new Map<string, string[]>();
-    if (spaceActivityUnavailable) return byPerson;
-
-    for (const [personId, record] of records) {
-      const activeIds = new Set<string>();
-      for (const spaceId of record.activeSpaceIds) {
-        if (isSpaceDebatePublishable(spaceId, publishableSpaceIds)) {
-          activeIds.add(normId(spaceId));
-        }
-      }
-      byPerson.set(personId, [...activeIds]);
-    }
-    return byPerson;
-  }, [publishableSpaceIds, records, spaceActivityUnavailable]);
-
-  const activeSpaceIds = React.useMemo(() => {
-    return new Set(allPeople.flatMap(person => debateSpacesByPerson.get(person.profile_space_id) ?? []));
-  }, [allPeople, debateSpacesByPerson]);
 
   // Keep the remembered atom untouched until both activity inputs settle, but never let a stale or
   // not-yet-verified value affect the current render. Filtering it synchronously also closes the
@@ -411,38 +326,7 @@ export function PeopleTab({
   // one of the two things holding the list down.
   const searchIsTheOnlyFilter = Boolean(search.trim()) && effectiveSpaceIds.length === 0;
 
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  // A challenge stays `pending` in the activity payload until the server says otherwise, so its own
-  // expiry has to be applied here — the same filter every other request surface derives from, so
-  // none of them disagree about a dead request while waiting for `debate.requests_changed`. Without
-  // it this tab would sit on an "Expired" card with every Debate button still dead underneath it.
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const pendingChallenge = liveChallenges[0] ?? null;
-  // `activity.challenge` is whichever challenge involves the viewer, in either direction. The card
-  // is about a request you sent, so it only stands in for the message when you are the one waiting
-  // on a reply — being challenged blocks the buttons just the same, but the sentence is what
-  // explains that.
-  const outboundChallenge =
-    pendingChallenge && currentUserId && pendingChallenge.requester.user_id === currentUserId ? pendingChallenge : null;
-
-  // Every Debate button greys out at once when the viewer already has something open, so say why
-  // rather than leaving a list of dead buttons. The card says it for an outbound challenge, so the
-  // sentence would only repeat it.
-  const blockedReason = pendingChallenge
-    ? outboundChallenge
-      ? null
-      : 'You have a debate request awaiting a reply.'
-    : activeDebate(activity)
-      ? "You're already in a debate."
-      : activity?.outbound_request || requests?.outbound
-        ? 'You already have an open request — withdraw it to challenge someone else.'
-        : null;
-
-  // Kept separate from `blockedReason`: the card replaces the sentence but not the reason every
-  // button below is disabled.
-  const buttonsDisabled = Boolean(blockedReason) || Boolean(outboundChallenge);
+  const { outboundChallenge, blockedReason, buttonsDisabled } = useLiveRequestBlock(activity, requests);
 
   return (
     <div className="flex flex-col">
@@ -627,13 +511,15 @@ function PeopleControls({ dense, children }: { dense: boolean; children: React.R
   return <HubStickyControls>{children}</HubStickyControls>;
 }
 
-function PersonRow({
+export function PersonRow({
   person,
   matches,
   matchesBySpace,
   claimNamesById,
   claimNamesLoading,
   schedule,
+  times,
+  entry,
   canScheduleAway,
   record,
   spaceIds,
@@ -653,6 +539,16 @@ function PersonRow({
   claimNamesLoading: boolean;
   /** Set only for an offline row: their upcoming times shared with the viewer. */
   schedule?: PersonSchedule;
+  /**
+   * Times to offer as chips on a row that is not offline, which `schedule` would redraw as one.
+   * Find a time (GEO-3152) lists online people by their free time too.
+   */
+  times?: PersonSchedule;
+  /**
+   * Where every week this row opens says it came from. Find a time sets one for the whole row; the
+   * People tab leaves it unset, and each control names its own.
+   */
+  entry?: ScheduleEntry;
   /** Whether an away person has free time the viewer can book, which needs both to have hours set. */
   canScheduleAway: boolean;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
@@ -687,7 +583,8 @@ function PersonRow({
   // Reached only when Schedule is not offered: someone who cannot take a live request right now.
   const unrequestable = person.in_debate || away;
   const openSchedule = (opener: HTMLElement | null) =>
-    onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, 'people_schedule');
+    onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, entry ?? 'people_schedule');
+  const chips = schedule ?? times;
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const activeSpaces =
     spaceIds.length > 0 ? (
@@ -768,15 +665,15 @@ function PersonRow({
             <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
           </div>
         ) : null}
-        {schedule ? (
+        {chips ? (
           <SharedTimes
             personName={speakerLabel(person)}
-            schedule={schedule}
+            schedule={chips}
             onPick={(start, opener) =>
               onSeeTimes(
                 { userId: person.user_id, name: speakerLabel(person) },
                 opener,
-                start ? 'people_time' : 'people_more_times',
+                entry ?? (start ? 'people_time' : 'people_more_times'),
                 start
               )
             }
@@ -806,7 +703,7 @@ function PersonRow({
                 : onSeeTimes(
                     { userId: person.user_id, name: speakerLabel(person) },
                     event.currentTarget,
-                    'people_see_times'
+                    entry ?? 'people_see_times'
                   )
             }
             title="See times"
@@ -926,7 +823,7 @@ function SharedTimes({
 }
 
 /** "Today 3:00 PM", "Tomorrow 9:30 AM", "Thu 6:00 PM" — the range is one week, so a weekday is unambiguous. */
-function formatSlot(iso: string, now: Date = new Date()): string {
+export function formatSlot(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
   const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const dayDiff = Math.round(
@@ -943,16 +840,22 @@ function formatSlot(iso: string, now: Date = new Date()): string {
  * Shown with "Online only" off when the viewer has no availability saved: geo-chat then matches
  * nobody, and the list would otherwise read as nobody being free (GEO-2937, GEO-2936).
  */
-function SetAvailabilityNotice() {
+export function SetAvailabilityNotice({
+  message = 'Set your availability to see offline people you can schedule a debate with.',
+  surface = 'people_tab',
+}: {
+  message?: string;
+  surface?: ScheduleEditorSurface;
+} = {}) {
   const [open, setOpen] = React.useState(false);
   const { blocks, isError, refetch } = useDebateSchedule();
-  const saveSchedule = useSaveDebateSchedule({ surface: 'people_tab' });
+  const saveSchedule = useSaveDebateSchedule({ surface });
   const openerRef = React.useRef<HTMLElement | null>(null);
 
   return (
     <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-grey-01 p-3">
       <Text as="p" variant="footnote">
-        Set your availability to see offline people you can schedule a debate with.
+        {message}
       </Text>
       <HubPillButton
         analyticsLabel="Debate hub Set availability"

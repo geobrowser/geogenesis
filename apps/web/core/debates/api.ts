@@ -979,6 +979,13 @@ export type SchedulablePerson = {
   slots: ScheduleOverlapSlot[];
   /** More overlap exists than `limit` returned. */
   truncated: boolean;
+  /**
+   * Only when asked for with `full` (GEO-3152): all of their free time still ahead, merged into
+   * continuous windows, each flagged with whether the viewer is free for it. Committed time is
+   * already taken out, and `limit` never caps it. Absent on deployments that predate it, which is
+   * not the same as an empty week.
+   */
+  their_windows?: AnnotatedSlot[];
 };
 
 /** What `/matchmaking/schedulable-people` answers. */
@@ -994,14 +1001,20 @@ export type SchedulablePeopleResponse = {
 /**
  * Everyone, online or not, with free time in the window; those sharing a slot with the viewer come
  * first (GEO-2937).
+ *
+ * `full` is Find a time's read (GEO-3152): people are listed even when the viewer has no schedule,
+ * each with `their_windows`. Without it the answer is the People tab's, unchanged.
  */
 export async function listSchedulablePeople(
-  { days, limit }: { days: number; limit: number },
+  { days, limit, full = false, spaces }: { days: number; limit: number; full?: boolean; spaces?: string[] },
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
   signal?: AbortSignal
 ) {
   const params = new URLSearchParams({ days: String(days), limit: String(limit) });
+  if (full) params.set('full', 'true');
+  // Membership, decided server-side, so it reaches past the candidate cap. See `useSchedulablePeople`.
+  if (spaces && spaces.length > 0) params.set('spaces', spaces.join(','));
 
   return geoChatRequest<SchedulablePeopleResponse>(`/matchmaking/schedulable-people?${params.toString()}`, {
     auth: true,

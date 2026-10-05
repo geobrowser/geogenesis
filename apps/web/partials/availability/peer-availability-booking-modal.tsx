@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { GeoChatRequestError } from '~/core/debates/api';
+import { GeoChatRequestError, type ScheduledDebateRequest } from '~/core/debates/api';
 import { useCreateScheduledDebate, useRescheduleScheduledDebate } from '~/core/debates/rooms/scheduling-hooks';
 import { useSetToast } from '~/core/hooks/use-toast';
 
@@ -19,6 +19,11 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
    * tab's Reschedule on an accepted debate, which geo-chat sends back to pending for the new time.
    */
   rescheduleRequestId?: string | null;
+  /**
+   * A new request the server accepted, before the requests list has been read again. Find a time
+   * (GEO-3152) draws it on its week straight away with this.
+   */
+  onRequested?: (request: ScheduledDebateRequest) => void;
 };
 
 /**
@@ -30,6 +35,7 @@ export function PeerAvailabilityBookingModal({
   onClose,
   rescheduleRequestId = null,
   entry = null,
+  onRequested,
   ...props
 }: Props) {
   const propose = useCreateScheduledDebate();
@@ -47,7 +53,8 @@ export function PeerAvailabilityBookingModal({
   // A sent request is the end of the job, so the week closes on it and the confirmation moves to a
   // toast. Per-call rather than on the hook: closing mid-flight resets the mutation, which detaches
   // these callbacks, so a late success cannot close a week opened since.
-  const onSent = (request: { scheduled_start_at: string }, viewerTimezone: string) => {
+  const onSent = (request: ScheduledDebateRequest, viewerTimezone: string) => {
+    if (mode === 'request') onRequested?.(request);
     setToast(
       <span>
         {requestSentMessage({
@@ -76,7 +83,7 @@ export function PeerAvailabilityBookingModal({
             analytics: { entry, viewerIsFree: pick.viewerIsFree },
           };
           const callbacks = {
-            onSuccess: (request: { scheduled_start_at: string }) => onSent(request, pick.viewerTimezone),
+            onSuccess: (request: ScheduledDebateRequest) => onSent(request, pick.viewerTimezone),
           };
           if (rescheduleRequestId) reschedule.mutate({ requestId: rescheduleRequestId, ...slot }, callbacks);
           else propose.mutate({ opponentUserId: userId, ...slot }, callbacks);
