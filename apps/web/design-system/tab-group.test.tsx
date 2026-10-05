@@ -1,25 +1,43 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, render } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { TabGroup, tabGroupTabLinkStyles } from './tab-group';
+import { TabGroup } from './tab-group';
 
-const mocks = vi.hoisted(() => ({ pending: false, pathname: '/space/space-1/overview' }));
+const mocks = vi.hoisted(() => ({ pending: new Set<string>(), pathname: '/space/space-1/overview' }));
 
 vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
 
-// The hook answers for the nearest Link above it, which is what the marker relies on.
+/*
+ * The real hook answers for the nearest Link above it.
+ */
+const LinkHrefContext = React.createContext<string | null>(null);
+
 vi.mock('next/link', () => ({
   default: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
-  useLinkStatus: () => ({ pending: mocks.pending }),
+  useLinkStatus: () => ({ pending: mocks.pending.has(React.use(LinkHrefContext) ?? '') }),
 }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href, className }: { children: React.ReactNode; href: string; className: string }) => (
-    <a href={href} className={className}>
-      {children}
-    </a>
+  PrefetchLink: ({
+    children,
+    href,
+    className,
+    ref,
+  }: {
+    children: React.ReactNode;
+    href: string;
+    className: string;
+    ref?: React.Ref<HTMLAnchorElement>;
+  }) => (
+    <LinkHrefContext.Provider value={href}>
+      <a href={href} className={className} ref={ref} data-selected={className.split(' ').includes('text-text')}>
+        {children}
+      </a>
+    </LinkHrefContext.Provider>
   ),
 }));
 
@@ -30,12 +48,18 @@ vi.mock('~/core/state/entity-side-panel-active-tab', () => ({ useEntitySidePanel
 const TABS = [
   { label: 'Overview', href: '/space/space-1/overview' },
   { label: 'Community', href: '/space/space-1/community' },
+  { label: 'Activity', href: '/space/space-1/activity' },
 ];
 
 beforeEach(() => {
-  mocks.pending = false;
+  mocks.pending = new Set();
   mocks.pathname = '/space/space-1/overview';
 });
+
+/** The tabs reading as selected — the colour the row gives the committed or pending tab. */
+function selectedLabels() {
+  return [...document.querySelectorAll('a[data-selected="true"]')].map(a => (a.textContent ?? '').trim());
+}
 
 afterEach(cleanup);
 
@@ -44,10 +68,10 @@ afterEach(cleanup);
  */
 describe('TabGroup pending state', () => {
   it('marks the tab being navigated to, before the route commits', () => {
-    mocks.pending = true;
+    mocks.pending = new Set(['/space/space-1/community']);
     render(<TabGroup tabs={TABS} />);
 
-    expect(document.querySelectorAll('[data-tab-pending]').length).toBeGreaterThan(0);
+    expect(document.querySelectorAll('[data-tab-pending]')).toHaveLength(1);
   });
 
   it('draws no marker when nothing is pending', () => {
@@ -56,14 +80,53 @@ describe('TabGroup pending state', () => {
     expect(document.querySelectorAll('[data-tab-pending]')).toHaveLength(0);
   });
 
-  it('keeps the has-[] hook the marker needs to colour its own tab', () => {
-    expect(tabGroupTabLinkStyles({ active: false })).toContain('has-[[data-tab-pending]]:text-text');
+  it('hands the selected state to the pending tab, not the committed one', () => {
+    mocks.pending = new Set(['/space/space-1/community']);
+    render(<TabGroup tabs={TABS} />);
+
+    expect(selectedLabels()).toEqual(['Community']);
+  });
+
+  it('selects the committed tab while nothing is pending', () => {
+    render(<TabGroup tabs={TABS} />);
+
+    expect(selectedLabels()).toEqual(['Overview']);
+  });
+
+  // A navigation that fails or is interrupted reports `pending: false`, and the row has nothing to
+  // unwind — it falls back to whatever the router committed.
+  it('falls back to the committed tab when a pending navigation ends without one', () => {
+    mocks.pending = new Set(['/space/space-1/community']);
+    const view = render(<TabGroup tabs={TABS} />);
+    expect(selectedLabels()).toEqual(['Community']);
+
+    mocks.pending = new Set();
+    view.rerender(<TabGroup tabs={TABS} />);
+
+    expect(selectedLabels()).toEqual(['Overview']);
+  });
+
+  /*
+   * A second click while the first navigation is still out.
+   *
+   * The tabs report in tree order, so when the pending tab moves backwards along the row the tab
+   * being *released* reports after the one being claimed.
+   */
+  it('keeps the newly pending tab when an earlier one releases after it', () => {
+    mocks.pending = new Set(['/space/space-1/activity']);
+    const view = render(<TabGroup tabs={TABS} />);
+    expect(selectedLabels()).toEqual(['Activity']);
+
+    mocks.pending = new Set(['/space/space-1/community']);
+    view.rerender(<TabGroup tabs={TABS} />);
+
+    expect(selectedLabels()).toEqual(['Community']);
   });
 
   // Purely visual: the marker cannot reach the Link to set `aria-busy`, so it must not be announced
   // as content either.
   it('hides the marker from assistive tech', () => {
-    mocks.pending = true;
+    mocks.pending = new Set(['/space/space-1/community']);
     render(<TabGroup tabs={TABS} />);
 
     expect(document.querySelector('[data-tab-pending]')).toHaveAttribute('aria-hidden');

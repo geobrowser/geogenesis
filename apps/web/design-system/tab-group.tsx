@@ -133,6 +133,11 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
   const pointerUpHandler = useRef<((e: PointerEvent) => void) | null>(null);
   const { indicator, registerActiveTab } = useActiveTabIndicator(tabs);
 
+  const [pendingHref, setPendingHref] = useState<string | null>(null);
+  const handlePendingChange = React.useCallback((href: string, pending: boolean) => {
+    setPendingHref(current => (pending ? href : current === href ? null : current));
+  }, []);
+
   useEffect(() => {
     const checkScroll = () => {
       const element = scrollRef.current;
@@ -233,6 +238,8 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                     hidden={t.hidden}
                     sidePanelKey={t.sidePanelKey}
                     activeRef={registerActiveTab}
+                    pendingHref={pendingHref}
+                    onPendingChange={handlePendingChange}
                   />
                 </span>
               ) : (
@@ -244,6 +251,8 @@ export function TabGroup({ tabs, className = '' }: TabGroupProps) {
                   hidden={t.hidden}
                   sidePanelKey={t.sidePanelKey}
                   activeRef={registerActiveTab}
+                  pendingHref={pendingHref}
+                  onPendingChange={handlePendingChange}
                 />
               )}
             </React.Fragment>
@@ -270,12 +279,23 @@ interface TabProps {
   hidden?: boolean;
   sidePanelKey?: string;
   activeRef: (element: HTMLElement | null) => void;
+  pendingHref: string | null;
+  onPendingChange: (href: string, pending: boolean) => void;
 }
 
-/** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
-/** Shows the tab as active as soon as it is clicked, before the route commits. */
-function TabPendingMarker() {
+function TabPendingMarker({
+  href,
+  onPendingChange,
+}: {
+  href: string;
+  onPendingChange: (href: string, pending: boolean) => void;
+}) {
   const { pending } = useLinkStatus();
+
+  useEffect(() => {
+    onPendingChange(href, pending);
+  }, [href, onPendingChange, pending]);
+
   if (!pending) return null;
 
   return (
@@ -285,8 +305,9 @@ function TabPendingMarker() {
   );
 }
 
+/** Shared with entity/space `TabGroup` and governance home tab rows (same underline behavior). */
 export const tabGroupTabLinkStyles = cva(
-  'relative z-10 flex items-center gap-1.5 text-quoteMedium whitespace-nowrap transition-colors duration-100 has-[[data-tab-pending]]:text-text',
+  'relative z-10 flex items-center gap-1.5 text-quoteMedium whitespace-nowrap transition-colors duration-100',
   {
     variants: {
       active: {
@@ -304,7 +325,17 @@ export const tabGroupTabLinkStyles = cva(
   }
 );
 
-function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: TabProps) {
+function Tab({
+  href,
+  label,
+  badge,
+  disabled,
+  hidden,
+  sidePanelKey,
+  activeRef,
+  pendingHref,
+  onPendingChange,
+}: TabProps) {
   const { editable } = useEditable();
 
   const path = usePathname();
@@ -321,13 +352,15 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
     activeSystemTab: sidePanelTab?.activeSystemTab,
   });
 
+  const selected = pendingHref ? pendingHref === href : active;
+
   if (!editable && hidden) {
     return null;
   }
 
   if (disabled) {
     return (
-      <div ref={active ? activeRef : undefined} className={tabGroupTabLinkStyles({ active, disabled })}>
+      <div ref={selected ? activeRef : undefined} className={tabGroupTabLinkStyles({ active: selected, disabled })}>
         {label}
         {badge && <Badge>{badge}</Badge>}
       </div>
@@ -339,9 +372,9 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
   if (sidePanelTab) {
     return (
       <button
-        ref={active ? activeRef : undefined}
+        ref={selected ? activeRef : undefined}
         type="button"
-        className={tabGroupTabLinkStyles({ active, disabled })}
+        className={tabGroupTabLinkStyles({ active: selected, disabled })}
         onClick={() =>
           sidePanelKey ? sidePanelTab.setActiveSystemTab(sidePanelKey) : sidePanelTab.setActiveTabId(hrefTabId)
         }
@@ -361,14 +394,14 @@ function Tab({ href, label, badge, disabled, hidden, sidePanelKey, activeRef }: 
     // The underline is one sibling owned by `TabGroup`, animated with x + width only. A shared
     // layout marker measured the page's vertical scroll between routes and flew through the label.
     <Link
-      ref={active ? activeRef : undefined}
-      className={tabGroupTabLinkStyles({ active, disabled })}
+      ref={selected ? activeRef : undefined}
+      className={tabGroupTabLinkStyles({ active: selected, disabled })}
       href={href}
       prefetch
     >
       {label}
       {badge && <Badge>{badge}</Badge>}
-      <TabPendingMarker />
+      <TabPendingMarker href={href} onPendingChange={onPendingChange} />
     </Link>
   );
 }
