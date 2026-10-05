@@ -1,6 +1,13 @@
 'use client';
 
-import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  keepPreviousData,
+  useInfiniteQuery,
+  useMutation,
+  useQueries,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -11,8 +18,10 @@ import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
 import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
 import { withQueryData } from '~/core/debates/with-query-data';
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
+import { normId } from '~/core/utils/norm-id';
 
 import {
+  type AnnotatedSlot,
   type CreateDebateRequestBody,
   type DebateParticipantSummary,
   type DebatePerson,
@@ -25,6 +34,7 @@ import {
   blockDebateUser,
   createDebateRequest,
   dismissDebateRequest,
+  getScheduleOverlaps,
   isAccountWarmingUp,
   listDebateBlocks,
   listDebatePeople,
@@ -235,6 +245,50 @@ export function useSchedulablePeople(
   );
 
   return withQueryData(query, data);
+}
+
+/**
+ * The most weeks Find a time asks for one by one. The list is ordered with the people most worth
+ * debating first, so a cap keeps the ones that matter; it exists so a long list cannot fire hundreds
+ * of requests from one page load.
+ */
+export const PEER_WEEKS_CAP = 100;
+
+/**
+ * Each person's whole free time, one `/matchmaking/schedule-overlaps` read each: the read their
+ * Schedule week already makes (GEO-3152).
+ *
+ * The schedulable list only carries the times a person shares with the viewer. Until geo-chat sends
+ * everyone's own free time in that one answer, this asks for it person by person. Keyed per person,
+ * so each is cached on its own and a list that gains someone fetches only them.
+ */
+export function usePeerWeeks(userIds: string[], enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const ids = userIds.slice(0, PEER_WEEKS_CAP);
+
+  const results = useQueries({
+    queries: ids.map(userId => ({
+      ...debateQueryNetworkOptions,
+      queryKey: debateQueryKeys.peerSchedule(accountKey, userId, FIND_A_TIME_DAYS),
+      queryFn: ({ signal }: { signal: AbortSignal }) =>
+        getScheduleOverlaps(userId, { days: FIND_A_TIME_DAYS }, getPrivyIdentityToken, accountKey, signal),
+      enabled: enabled && authenticated,
+      // Free time moves slowly; a viewer paging weeks should not refetch two hundred people.
+      staleTime: 5 * 60_000,
+    })),
+  });
+
+  return React.useMemo(() => {
+    const byUser = new Map<string, AnnotatedSlot[]>();
+    let pending = 0;
+    results.forEach((result, index) => {
+      if (result.data?.their_slots) byUser.set(normId(ids[index]), result.data.their_slots);
+      else if (result.isPending && enabled) pending++;
+    });
+    return { byUser, pending, capped: userIds.length > ids.length };
+    // `results` is a new array every render; its data is what changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [results.map(result => result.dataUpdatedAt).join(), enabled, ids.join(), userIds.length]);
 }
 
 const EMPTY_SUMMARIES: DebateParticipantSummary[] = [];

@@ -25,6 +25,8 @@ const mocks = vi.hoisted(() => ({
   scheduled: [] as ScheduledDebateRequest[],
   matchesByProfile: new Map<string, unknown[]>(),
   bookingProps: null as Record<string, unknown> | null,
+  peerWeeks: new Map<string, { start: string; end: string; viewer_free: boolean }[]>(),
+  peerWeekIds: [] as string[],
   openHub: vi.fn(),
 }));
 
@@ -62,6 +64,10 @@ vi.mock('../hooks', () => ({
 vi.mock('./hooks', () => ({
   useDebatePeople: () => ({ data: { people: mocks.roster }, isLoading: false }),
   useDebateRequests: () => ({ data: undefined }),
+  usePeerWeeks: (ids: string[], enabled: boolean) => {
+    if (enabled) mocks.peerWeekIds = ids;
+    return { byUser: enabled ? mocks.peerWeeks : new Map(), pending: 0, capped: false };
+  },
   useSchedulablePeople: (_enabled: boolean, options: unknown) => {
     mocks.schedulableOptions.push(options);
     return {
@@ -159,6 +165,8 @@ beforeEach(() => {
     scheduled: [],
     matchesByProfile: new Map(),
     bookingProps: null,
+    peerWeeks: new Map(),
+    peerWeekIds: [],
   });
   mocks.capture.mockReset();
   mocks.promptSignIn.mockReset();
@@ -192,6 +200,19 @@ describe('FindATime', () => {
       opened_from: 'direct',
       viewer_has_schedule: false,
     });
+  });
+
+  it("reads each person's week one by one when geo-chat's list carries only shared times", () => {
+    mocks.scheduleIsSet = true;
+    mocks.schedulable = response([{ user: summary('11', 'Elena'), online: false, slots: [], truncated: false }], {
+      viewer_has_schedule: true,
+    });
+    mocks.peerWeeks = new Map([['11', [{ start: at(8, 18), end: at(8, 18, 30), viewer_free: false }]]]);
+    render(<FindATime />);
+
+    expect(mocks.peerWeekIds).toEqual(['11']);
+    expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
+    expect(screen.queryByText(/only the times you share/)).not.toBeInTheDocument();
   });
 
   it('books the clicked time through the existing modal, with the time picked', () => {
