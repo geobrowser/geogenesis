@@ -80,6 +80,8 @@ const mocks = vi.hoisted(() => ({
   entityQueries: [] as Array<{ search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null }>,
   /** Every id list the opponent's claims were hydrated with, in render order. */
   entityIdLookups: [] as string[][],
+  /** The options each by-id lookup was made with, index for index with `entityIdLookups`. */
+  entityIdLookupOptions: [] as Array<{ pollMissingMs?: number } | undefined>,
   /** Every participant whose claims were asked for by person (`votedBy`), in render order. */
   votedByLookups: [] as Array<string | null>,
   /** The `votedBy` read alone is still in flight; `entityHydrationLoading` holds it too. */
@@ -628,8 +630,9 @@ vi.mock('~/core/debates/claim-picker-page', () => ({
       error: failed ? HYDRATION_ERROR : null,
     };
   },
-  useClaimEntitiesByIds: (ids: string[]) => {
+  useClaimEntitiesByIds: (ids: string[], options?: { pollMissingMs?: number }) => {
     mocks.entityIdLookups.push(ids);
+    mocks.entityIdLookupOptions.push(options);
     // Idle on an empty list, for the same reason as `rematchClaimsLookup` above: the real hook
     // batches the ids and `useQueries([])` has nothing to load.
     if (ids.length === 0) return { entities: [], isLoading: false, error: null };
@@ -943,6 +946,7 @@ beforeEach(() => {
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityIdLookups.length = 0;
+  mocks.entityIdLookupOptions.length = 0;
   mocks.votedByLookups.length = 0;
   mocks.votedByLoading = false;
   mocks.votedByError = false;
@@ -6084,10 +6088,20 @@ describe('From this debate', () => {
     expect(within(card).getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
     // No speaker name on the turn: the participant's own name stands in.
     expect(within(card).getByText('Said by Salina')).toBeInTheDocument();
-    expect(within(card).getByText(/once the debate is published/)).toBeInTheDocument();
+    expect(within(card).getByText(/in a minute or two/)).toBeInTheDocument();
     expect(within(card).queryByRole('button')).toBeNull();
     expect(mocks.entityIdLookups.flat()).toContain(MINTED);
     expect(mocks.rematchClaimIds.flat()).not.toContain(MINTED);
+  });
+
+  it('keeps asking the graph for the debate’s claims, so an unpublished one gains its controls once published', async () => {
+    await openTab();
+
+    // GEO-2870 option A: minted claims are published minutes after extraction, ahead of the debate.
+    const lookups = mocks.entityIdLookups.map((ids, index) => ({ ids, options: mocks.entityIdLookupOptions[index] }));
+    const ofTheDebate = lookups.filter(lookup => lookup.ids.includes(MINTED));
+    expect(ofTheDebate.length).toBeGreaterThan(0);
+    for (const lookup of ofTheDebate) expect(lookup.options?.pollMissingMs).toBeGreaterThan(0);
   });
 
   it('skips a claim with neither a graph match nor a minted id', async () => {

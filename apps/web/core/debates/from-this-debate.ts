@@ -15,7 +15,8 @@ export type FromThisDebateClaim = {
   /**
    * The id a request is made against, canonical: geo-chat's graph match where it found one, and
    * otherwise the stable id it minted for the claim (D1), which the publisher creates the claim
-   * under. Either way the same id the graph will carry once the debate is published.
+   * under. Either way the same id the graph carries once the claim is published, which since
+   * GEO-2870 option A is shortly after extraction rather than with the debate.
    */
   id: string;
   text: string;
