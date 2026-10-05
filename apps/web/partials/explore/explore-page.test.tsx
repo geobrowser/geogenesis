@@ -5,7 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ExplorePage } from './explore-page';
 
-const mocks = vi.hoisted(() => ({ flags: {} as Record<string, boolean> }));
+const mocks = vi.hoisted(() => ({
+  flags: {} as Record<string, boolean>,
+  feedProps: [] as Record<string, unknown>[],
+}));
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => mocks.flags[id] ?? false,
@@ -17,17 +20,25 @@ vi.mock('./explore-side-panel', () => ({
   ExploreSidePanel: () => <aside data-testid="explore-side-panel" />,
 }));
 
+vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: null }) }));
+vi.mock('~/core/topics/use-followed-topics', () => ({
+  useFollowedTopics: () => ({ topicIds: new Set(['bbbb', 'aaaa']), isLoading: false }),
+}));
+
 vi.mock('./explore-welcome-banner', () => ({ ExploreWelcomeBanner: () => null }));
 // Stubbed alongside its siblings above: the capture reaches Privy and wagmi for the account
 // shortcut it offers (GEO-2948), and this suite is about which column the layout reserves.
 vi.mock('./email-capture-popup', () => ({ ExploreEmailCapturePopup: () => null }));
-vi.mock('~/partials/feed/entity-feed', () => ({ EntityFeed: () => <div data-testid="feed" /> }));
+vi.mock('~/partials/feed/entity-feed', () => ({
+  EntityFeed: (props: Record<string, unknown>) => {
+    mocks.feedProps.push(props);
+    return <div data-testid="feed" />;
+  },
+}));
 
 function renderExplore() {
   return render(
     <ExplorePage
-      initialSpaceOptions={[]}
-      memberSpaceIds={[]}
       featuredSpaces={[]}
       featuredRankings={[]}
       pendingMembershipSpaceIds={[]}
@@ -39,6 +50,7 @@ function renderExplore() {
 
 beforeEach(() => {
   mocks.flags = {};
+  mocks.feedProps = [];
 });
 afterEach(cleanup);
 
@@ -78,5 +90,43 @@ describe('ExplorePage side panel', () => {
     const { container } = renderExplore();
 
     expect(container.querySelector('aside')).not.toBeNull();
+  });
+});
+
+/** GEO-3083. For you is behind a flag, and with it off Explore must not change at all. */
+describe('ExplorePage For you sort', () => {
+  it('opens on Best with the default sorts when the flag is off', () => {
+    renderExplore();
+
+    expect(mocks.feedProps.at(-1)?.initialSort).toBe('best');
+    expect(mocks.feedProps.at(-1)?.sortOptions).toBeUndefined();
+  });
+
+  it('opens on For you and offers it first when the flag is on', () => {
+    mocks.flags = { forYouFeed: true };
+    renderExplore();
+
+    expect(mocks.feedProps.at(-1)).toMatchObject({
+      initialSort: 'for-you',
+      sortOptions: ['for-you', 'best', 'top', 'new'],
+      followedTopicIds: ['aaaa', 'bbbb'],
+    });
+  });
+
+  // Privy restores the wallet after mount; until then the follows read as empty.
+  it('waits for a signed-in account instead of serving Best first', () => {
+    mocks.flags = { forYouFeed: true };
+    render(
+      <ExplorePage
+        featuredSpaces={[]}
+        featuredRankings={[]}
+        pendingMembershipSpaceIds={[]}
+        memberOrEditorSpaceIds={[]}
+        communityCalls={[]}
+        signedIn
+      />
+    );
+
+    expect(mocks.feedProps.at(-1)?.followedTopicIds).toBeNull();
   });
 });

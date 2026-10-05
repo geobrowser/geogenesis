@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   liveStreamFinish: vi.fn(),
   liveStreamRelease: vi.fn(),
   liveStreamAbort: vi.fn(),
+  liveStreamDetach: vi.fn(),
   getRecording: vi.fn(),
   deleteRecording: vi.fn(),
   requestPersistentStorage: vi.fn(),
@@ -154,6 +155,7 @@ vi.mock('~/core/debates/recording-stream', () => ({
       finish: mocks.liveStreamFinish,
       release: mocks.liveStreamRelease,
       abort: mocks.liveStreamAbort,
+      detach: mocks.liveStreamDetach,
     };
   },
 }));
@@ -349,6 +351,7 @@ beforeEach(() => {
   mocks.liveStreamFinish.mockReset().mockResolvedValue(null);
   mocks.liveStreamRelease.mockReset().mockResolvedValue(undefined);
   mocks.liveStreamAbort.mockReset().mockResolvedValue(undefined);
+  mocks.liveStreamDetach.mockReset().mockResolvedValue(undefined);
   mocks.getRecording.mockReset();
   mocks.deleteRecording.mockReset().mockResolvedValue(undefined);
   mocks.requestPersistentStorage.mockReset();
@@ -4865,6 +4868,7 @@ describe('DebateRoomPageClient', () => {
       // Once the queue holds the recording, the chunks saved as it was made are released.
       await waitFor(() => expect(mocks.liveStreamRelease).toHaveBeenCalledOnce());
       expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
+      expect(mocks.liveStreamDetach).not.toHaveBeenCalled();
     });
 
     it('queues an ordinary recording when nothing was streamed', async () => {
@@ -4892,6 +4896,7 @@ describe('DebateRoomPageClient', () => {
       await waitFor(() => expect(mocks.liveStreamAbort).toHaveBeenCalledOnce());
       expect(mocks.enqueueRecording).not.toHaveBeenCalled();
       expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
+      expect(mocks.liveStreamDetach).not.toHaveBeenCalled();
     });
 
     it('keeps the saved chunks for recovery when the room unmounts mid-debate', async () => {
@@ -4901,7 +4906,27 @@ describe('DebateRoomPageClient', () => {
 
       view.unmount();
 
-      // Neither discarded nor released: the coordinator decides, once the debate settles.
+      // Stopped but neither discarded nor released: the coordinator decides, once the debate settles.
+      expect(mocks.liveStreamDetach).toHaveBeenCalledOnce();
+      expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
+      expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
+    });
+
+    it('stops the live stream when a connection timeout cancels the debate mid-recording', async () => {
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = {
+        ...completedDebate(),
+        status: 'cancelled',
+        cancellation_reason: 'connection_timeout',
+        completed_at: null,
+      };
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      // A connection timeout goes through the connection-failure path only, which keeps the chunks.
+      await waitFor(() => expect(mocks.liveStreamDetach).toHaveBeenCalledOnce());
       expect(mocks.liveStreamAbort).not.toHaveBeenCalled();
       expect(mocks.liveStreamRelease).not.toHaveBeenCalled();
     });

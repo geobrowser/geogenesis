@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
+import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse/topic-feed-filter';
+
+import { buildDebatePublishDraft } from '../debate-publish-draft';
 import { applyClaimReusePolicy } from './claim-reuse';
 import {
   DebateNotPublishableError,
@@ -7,11 +11,19 @@ import {
   loadDebateOgPreview,
   loadDebatePublishSource,
 } from './debate-source';
+import { loadMotionTopics } from './motion-topics';
 
 // The reuse policy needs a graph read and its own flag, both covered in `claim-reuse.test.ts`. Here it
 // passes claims through, so what the loader decodes from geo-chat is observable on the input.
-vi.mock('./claim-reuse', () => ({
+vi.mock('./claim-reuse', async importOriginal => ({
+  ...(await importOriginal<typeof import('./claim-reuse')>()),
   applyClaimReusePolicy: vi.fn(async (claims: unknown) => claims),
+}));
+
+// The motion's topics are a graph read, covered in `motion-topics.test.ts`. Here it returns none
+// unless a test says otherwise.
+vi.mock('./motion-topics', () => ({
+  loadMotionTopics: vi.fn(async () => []),
 }));
 
 const DEBATE_ID = '019f89dc2124799193daafd5bc4ffa0a';
@@ -177,8 +189,17 @@ describe('loadDebatePublishSource media gating', () => {
         },
       ],
       claims: [
-        { text: 'The nuclear program was advancing.', is_factual: true, turn_index: 0 },
-        { text: 'The action was unjustified.', is_factual: false, turn_index: 1 },
+        // Timed where geo-chat measured the span (GEO-2958), untimed where it did not.
+        {
+          text: 'The nuclear program was advancing.',
+          is_factual: true,
+          turn_index: 0,
+          start_ms: 0,
+          end_ms: 9_000,
+          // GEO-2870 D1: geo-chat's stable id, carried through to the draft.
+          entity_id: '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b',
+        },
+        { text: 'The action was unjustified.', is_factual: false, turn_index: 1, start_ms: null, end_ms: null },
       ],
     });
 
@@ -193,16 +214,20 @@ describe('loadDebatePublishSource media gating', () => {
         isFactual: true,
         turnIndex: 0,
         existingClaimEntityId: null,
+        stableEntityId: '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b',
         topics: [],
         isContestable: false,
+        timing: { startMs: 0, endMs: 9_000 },
       },
       {
         text: 'The action was unjustified.',
         isFactual: false,
         turnIndex: 1,
         existingClaimEntityId: null,
+        stableEntityId: null,
         topics: [],
         isContestable: false,
+        timing: null,
       },
     ]);
   });
@@ -234,6 +259,42 @@ describe('loadDebatePublishSource media gating', () => {
       'c9f267dcb0d270718c2a3c45a64afd32',
       { debateId: DEBATE_ID, motionClaimEntityId: 'claim-1' }
     );
+  });
+
+  it("reads the motion's topics in the debate's space and carries them on the input", async () => {
+    const topics = [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' }];
+    vi.mocked(loadMotionTopics).mockResolvedValueOnce(topics);
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+
+    expect(vi.mocked(loadMotionTopics)).toHaveBeenCalledWith('claim-1', 'c9f267dcb0d270718c2a3c45a64afd32');
+    expect(input.claimTopics).toEqual(topics);
+  });
+
+  it('publishes direct topic edges that satisfy the topic feed predicates', async () => {
+    const topicId = 'dddddddddddddddddddddddddddddddd';
+    const selectedTopicId = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    vi.mocked(loadMotionTopics).mockResolvedValueOnce([
+      { id: topicId, name: 'Foreign policy' },
+      { id: selectedTopicId, name: 'Iran' },
+    ]);
+    mockGeoChat({ job: { status: 'succeeded' }, artifacts: [{ kind: 'final_video' }] });
+
+    const { input } = await loadDebatePublishSource(DEBATE_ID);
+    const draft = buildDebatePublishDraft(input);
+    const publishedPredicates = draft.relations
+      .filter(relation => relation.fromEntity.id === draft.debateEntityId && relation.spaceId === input.spaceId)
+      .map(relation => ({ typeId: { is: relation.type.id }, toEntityId: { is: relation.toEntity.id } }));
+
+    // New/Top and topic facets use the entity predicate; Best/composition also use the relation
+    // entry point. Both must be satisfied by edges on the Debate itself, not its extracted claims.
+    const filter = topicFeedFilter(topicId, [selectedTopicId]);
+    expect(filter.and).toHaveLength(2);
+    expect(publishedPredicates).toEqual(expect.arrayContaining(filter.and!.map(clause => clause.relations!.some)));
+    const scopes = topicFeedPopulationScopes(topicId, [selectedTopicId], [DEBATE_TYPE_ID]);
+    expect(scopes).toHaveLength(1);
+    expect(publishedPredicates).toContainEqual(scopes[0].relationFilter);
   });
 
   it('falls back to the raw transcript with no claims when geo-chat reports none', async () => {

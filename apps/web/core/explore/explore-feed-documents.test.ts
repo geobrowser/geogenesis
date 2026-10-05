@@ -6,6 +6,7 @@ import { exploreBestConnectionDocument } from './explore-best-document';
 import { exploreCompleteIndexDocument } from './explore-complete-index-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
 import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import { exploreRelationIndexDocument } from './explore-relation-index-document';
 
 function operation(doc: DocumentNode): OperationDefinitionNode {
   const op = doc.definitions.find(d => d.kind === Kind.OPERATION_DEFINITION);
@@ -29,12 +30,17 @@ function argNames(field: FieldNode): string[] {
 }
 
 /** Field names selected directly under `nodes { ... }`, which is what the card decodes. */
-function nodeFieldNames(doc: DocumentNode): string[] {
+function nodeFieldNames(doc: DocumentNode, through?: string): string[] {
   const nodes = (rootField(doc).selectionSet?.selections ?? []).find(
     s => s.kind === Kind.FIELD && s.name.value === 'nodes'
   ) as FieldNode | undefined;
   if (!nodes) throw new Error('no nodes selection');
-  return (nodes.selectionSet?.selections ?? [])
+  const entity = through
+    ? (nodes.selectionSet?.selections.find(s => s.kind === Kind.FIELD && s.name.value === through) as
+        FieldNode | undefined)
+    : nodes;
+  if (!entity) throw new Error('no entity selection');
+  return (entity.selectionSet?.selections ?? [])
     .filter(s => s.kind === Kind.FIELD)
     .map(s => (s as FieldNode).alias?.value ?? (s as FieldNode).name.value)
     .sort();
@@ -142,5 +148,15 @@ describe('the complete contextual feed index', () => {
     expect(argNames(rootField(exploreCompleteIndexDocument))).toEqual(
       ['after', 'filter', 'first', 'orderBy', 'spaceIds', 'typeIds'].sort()
     );
+  });
+  it('uses the identical compact entity selection through incoming relations', () => {
+    expect(rootField(exploreRelationIndexDocument).name.value).toBe('relationsConnection');
+    expect(nodeFieldNames(exploreRelationIndexDocument, 'fromEntity')).toEqual(
+      nodeFieldNames(exploreCompleteIndexDocument)
+    );
+    expect(argNames(rootField(exploreRelationIndexDocument))).toEqual(['after', 'filter', 'first']);
+    expect(print(exploreRelationIndexDocument)).toContain('hasNextPage');
+    expect(print(exploreRelationIndexDocument)).toContain('endCursor');
+    expect(print(exploreRelationIndexDocument)).not.toContain('totalCount');
   });
 });

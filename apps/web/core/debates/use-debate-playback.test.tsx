@@ -7,14 +7,34 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate, DebateMediaTurnSegment } from './api';
 import { useDebatePlayback } from './use-debate-playback';
 
-const mocks = vi.hoisted(() => ({ recordingUrl: vi.fn(), turnSegments: [] as DebateMediaTurnSegment[] }));
+const mocks = vi.hoisted(() => ({
+  recordingUrl: vi.fn(),
+  /** Which requests went through `refresh` — the uncached re-sign — rather than the cached lookup. */
+  recordingUrlRefreshes: [] as unknown[],
+  turnSegments: [] as DebateMediaTurnSegment[],
+  mediaPending: false,
+  reportEvent: vi.fn(),
+}));
+
+vi.mock('~/core/telemetry/logger', () => ({ reportEvent: mocks.reportEvent }));
 
 // The hook imports exactly these three from './hooks'. Mocking the module blanks everything
 // else in it, so anything omitted here arrives as undefined.
 vi.mock('./hooks', () => ({
-  useRecordingUrl: () => ({ mutateAsync: mocks.recordingUrl }),
+  useRecordingPlaybackUrl: () => ({
+    lookup: mocks.recordingUrl,
+    refresh: (request: unknown) => {
+      mocks.recordingUrlRefreshes.push(request);
+      return mocks.recordingUrl(request);
+    },
+  }),
   useDebateTranscript: () => ({ data: { segments: [] }, isLoading: false, error: null }),
-  useDebateMedia: () => ({ data: { turn_segments: mocks.turnSegments }, isLoading: false, error: null }),
+  useDebateMedia: () => ({
+    data: mocks.mediaPending ? undefined : { turn_segments: mocks.turnSegments },
+    isPending: mocks.mediaPending,
+    isLoading: mocks.mediaPending,
+    error: null,
+  }),
 }));
 
 function debateFixture(id = 'debate-1'): Debate {
@@ -33,6 +53,124 @@ function debateFixture(id = 'debate-1'): Debate {
     ],
   } as unknown as Debate;
 }
+
+// A feed card that held its URLs while released re-signs on re-attach once they are old enough
+// to be near geo-chat's 15-minute presign expiry (GEO-3067).
+describe('useDebatePlayback — re-signing held URLs after a long release (GEO-3067)', () => {
+  let now = 1_700_000_000_000;
+  let signature = 0;
+
+  beforeEach(() => {
+    now = 1_700_000_000_000;
+    signature = 0;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    mocks.turnSegments = [];
+    mocks.recordingUrlRefreshes = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=${signature++}` })
+    );
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  function renderPlayback() {
+    const debate = debateFixture();
+    return renderHook(({ mediaAttached }) => useDebatePlayback(debate, true, { mediaAttached }), {
+      initialProps: { mediaAttached: true },
+    });
+  }
+
+  it('keeps the held URLs when the card comes back within the reuse window', async () => {
+    const { result, rerender } = renderPlayback();
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const held = result.current.urls;
+
+    now += 4 * 60_000;
+    rerender({ mediaAttached: false });
+    await act(() => new Promise(resolve => setTimeout(resolve, 20)));
+    rerender({ mediaAttached: true });
+
+    expect(result.current.urlsLapsed).toBe(false);
+    expect(result.current.urls).toBe(held);
+    expect(mocks.recordingUrlRefreshes).toHaveLength(0);
+  });
+
+  it('marks held URLs lapsed while released, then re-signs both uncached on re-attach', async () => {
+    const { result, rerender } = renderPlayback();
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const held = result.current.urls;
+
+    now += 6 * 60_000;
+    rerender({ mediaAttached: false });
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(true));
+    expect(mocks.recordingUrlRefreshes).toHaveLength(0);
+
+    rerender({ mediaAttached: true });
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(false));
+    expect(mocks.recordingUrlRefreshes).toHaveLength(2);
+    expect(result.current.urls.slot1).not.toBe(held.slot1);
+    expect(result.current.urls.slot2).not.toBe(held.slot2);
+  });
+  it('keeps media detached and surfaces the load error when re-signing keeps failing', async () => {
+    const { result, rerender } = renderPlayback();
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    now += 6 * 60_000;
+    rerender({ mediaAttached: false });
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(true));
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    mocks.recordingUrl.mockImplementation(() => Promise.reject(new Error('Could not load recordings.')));
+    rerender({ mediaAttached: true });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await act(async () => {
+        await Promise.resolve();
+        vi.advanceTimersByTime(2_000);
+      });
+    }
+    vi.useRealTimers();
+
+    await waitFor(() => expect(result.current.error).toBe('Could not load recordings.'));
+    expect(result.current.urlsLapsed).toBe(true);
+    expect(mocks.recordingUrlRefreshes).toHaveLength(6);
+  });
+  it('retries an exhausted re-sign when the card is reached again', async () => {
+    const debate = debateFixture();
+    const { result, rerender } = renderHook(
+      ({ enabled, mediaAttached }) => useDebatePlayback(debate, enabled, { mediaAttached }),
+      { initialProps: { enabled: true, mediaAttached: true } }
+    );
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+
+    now += 6 * 60_000;
+    rerender({ enabled: false, mediaAttached: false });
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(true));
+
+    vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] });
+    mocks.recordingUrl.mockImplementation(() => Promise.reject(new Error('Could not load recordings.')));
+    rerender({ enabled: false, mediaAttached: true });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      await act(async () => {
+        await Promise.resolve();
+        vi.advanceTimersByTime(2_000);
+      });
+    }
+    vi.useRealTimers();
+    await waitFor(() => expect(result.current.error).toBe('Could not load recordings.'));
+    const refreshesBefore = mocks.recordingUrlRefreshes.length;
+
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=back` })
+    );
+    rerender({ enabled: true, mediaAttached: true });
+
+    await waitFor(() => expect(result.current.urlsLapsed).toBe(false));
+    expect(mocks.recordingUrlRefreshes.length).toBe(refreshesBefore + 2);
+    expect(result.current.error).toBeNull();
+    expect(result.current.urls.slot1).toBe('https://cdn.test/slot1.webm?sig=back');
+  });
+});
 
 describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)', () => {
   beforeEach(() => {
@@ -56,7 +194,7 @@ describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)',
   // THE REGRESSION. `active` flips whenever the card crosses the viewport threshold, and the
   // effect used to open with setUrls({slot1: null, slot2: null}) on every flip — blanking the
   // <video> back to the "Loading…" placeholder and re-requesting two signed URLs. That is the
-  // flicker. `useRecordingUrl` is a mutation, so nothing upstream de-duplicates the requests.
+  // flicker. (The lookup is cached since GEO-2965, but the blanking was never about the network.)
   it('does NOT refetch or blank when the card is scrolled past and returns', async () => {
     const debate = debateFixture();
     const { result, rerender } = renderHook(({ active }) => useDebatePlayback(debate, active), {
@@ -873,6 +1011,74 @@ describe('useDebatePlayback — the audible slot follows the render, not the all
   });
 });
 
+describe('useDebatePlayback — no invented turn schedule (GEO-2956)', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.mediaPending = false;
+    mocks.reportEvent.mockReset();
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+  afterEach(() => {
+    mocks.mediaPending = false;
+  });
+
+  const untimedDebate = () => ({ ...debateFixture(), turn_durations_ms: [] }) as Debate;
+  const renderedSegments: DebateMediaTurnSegment[] = [
+    {
+      turn_index: 0,
+      participant_slot: 1,
+      output_start_ms: 0,
+      output_end_ms: 50_000,
+      duration_ms: 50_000,
+      countdown_start_ms: 0,
+    },
+    {
+      turn_index: 1,
+      participant_slot: 2,
+      output_start_ms: 50_000,
+      output_end_ms: 110_000,
+      duration_ms: 60_000,
+      countdown_start_ms: 55_000,
+    },
+  ];
+
+  it('plays from the rendered segments when the row has no usable allowance', async () => {
+    mocks.turnSegments = renderedSegments;
+    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.error).toBeNull();
+    expect(result.current.timelineSeconds).toBe(110);
+    expect(result.current.turnCount).toBe(2);
+    expect(mocks.reportEvent).not.toHaveBeenCalled();
+  });
+
+  it('refuses to play and reports it when nothing recorded can place a turn', async () => {
+    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.ready).toBe(false);
+    expect(result.current.error).toMatch(/turn timings are missing/);
+    // The old fallback made this a 60s two-turn debate.
+    expect(result.current.timelineSeconds).toBe(0);
+    expect(mocks.reportEvent).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'debate_playback_turn_timing_unavailable', level: 'warning' })
+    );
+  });
+
+  it('does not call the debate broken while the media response that could time it is still loading', async () => {
+    mocks.mediaPending = true;
+    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    expect(result.current.error).toBeNull();
+    expect(mocks.reportEvent).not.toHaveBeenCalled();
+  });
+});
+
 describe('useDebatePlayback — playback survives a backgrounded tab (GEO-2947)', () => {
   let visibilityState: DocumentVisibilityState;
 
@@ -1636,10 +1842,14 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
     await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
     const untouched = result.current.urls.slot2;
     mocks.recordingUrl.mockResolvedValueOnce({ url: 'https://cdn.test/slot1.webm?sig=fresh' });
+    mocks.recordingUrlRefreshes = [];
 
     await act(async () => {
       await result.current.refreshSlotUrl(1);
     });
+
+    // Through the uncached re-sign (GEO-2965): the cached URL is the one suspected of being dead.
+    expect(mocks.recordingUrlRefreshes).toEqual([{ debateId: 'debate-1', filename: 'slot1.webm' }]);
 
     expect(result.current.urls.slot1).toBe('https://cdn.test/slot1.webm?sig=fresh');
     // The healthy tile is mid-playback. Blanking its URL would drop it to "Loading…" and release
@@ -1701,5 +1911,284 @@ describe('useDebatePlayback — a rebuilt recording rejoins the pair (GEO-2985)'
     expect(result.current.userPaused).toBe(false);
     // And the speaker still has a turn, so the audio gate does not mute the half that works.
     expect(result.current.turnState).not.toBeNull();
+  });
+});
+
+/**
+ * GEO-2965. Every debate starts with a seek — the recordings begin a few seconds before the debate
+ * (GEO-2644) — and on the preview that seek, made by `resumeBoth` after the card had waited for
+ * both elements to be able to play, started the pair 15-420ms apart again. So a fresh pair is
+ * moved to its start as soon as both know their shape, and the resume finds nothing to move.
+ */
+describe('useDebatePlayback — a fresh pair is positioned before it is started (GEO-2965)', () => {
+  beforeEach(() => {
+    mocks.turnSegments = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  /** Recordings that began 4.969s and 4.489s before the debate, as debate 01a0c99b's did. */
+  function preRolledDebate(): Debate {
+    const debate = debateFixture();
+    return {
+      ...debate,
+      recordings: [
+        { participant_slot: 1, filename: 'slot1.webm', started_at_ms: 1_700_000_000_000 - 4_969 },
+        { participant_slot: 2, filename: 'slot2.webm', started_at_ms: 1_700_000_000_000 - 4_489 },
+      ],
+    } as unknown as Debate;
+  }
+
+  /** A fake element that counts every `currentTime` write, since each one is a seek. */
+  function countingVideo(readyState: number) {
+    const video = fakeVideo();
+    let position = 0;
+    const seeks: number[] = [];
+    Object.defineProperty(video, 'currentTime', {
+      configurable: true,
+      get: () => position,
+      set: (value: number) => {
+        seeks.push(value);
+        position = value;
+      },
+    });
+    video.readyState = readyState;
+    return { video, seeks };
+  }
+
+  async function mounted(readyState: number = HTMLMediaElement.HAVE_METADATA) {
+    const debate = preRolledDebate();
+    const { result } = renderHook(() => useDebatePlayback(debate, true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const slot1 = countingVideo(readyState);
+    const slot2 = countingVideo(readyState);
+    result.current.slot1VideoRef.current = slot1.video;
+    result.current.slot2VideoRef.current = slot2.video;
+    return { result, slot1, slot2 };
+  }
+
+  it('moves both elements to the start of the debate once both know their shape', async () => {
+    const { result, slot1, slot2 } = await mounted();
+
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.seeks).toEqual([expect.closeTo(4.969, 6)]);
+    expect(slot2.seeks).toEqual([expect.closeTo(4.489, 6)]);
+  });
+
+  it('waits for both to have metadata, since a seek before that has nothing to land on', async () => {
+    const { result, slot1, slot2 } = await mounted(HTMLMediaElement.HAVE_NOTHING);
+    act(() => result.current.onPlaybackTick());
+    expect(slot1.seeks).toEqual([]);
+
+    slot1.video.readyState = HTMLMediaElement.HAVE_METADATA;
+    act(() => result.current.onPlaybackTick());
+    expect(slot1.seeks).toEqual([]);
+
+    slot2.video.readyState = HTMLMediaElement.HAVE_METADATA;
+    act(() => result.current.onPlaybackTick());
+    expect(slot1.seeks).toHaveLength(1);
+    expect(slot2.seeks).toHaveLength(1);
+  });
+
+  it('positions a pair once, however many ticks follow', async () => {
+    const { result, slot1 } = await mounted();
+    act(() => {
+      result.current.onPlaybackTick();
+      result.current.onPlaybackTick();
+      result.current.onPlaybackTick();
+    });
+    expect(slot1.seeks).toHaveLength(1);
+  });
+
+  // The point of all of it: the resume finds both elements already where it would send them, so
+  // neither re-buffers and they start from data they both already hold.
+  it('lets the first resume start the pair without seeking either element again', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    act(() => result.current.onPlaybackTick());
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.video.settlePlay();
+      slot2.video.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+
+    expect(result.current.playing).toBe(true);
+    expect(slot1.seeks).toHaveLength(1);
+    expect(slot2.seeks).toHaveLength(1);
+  });
+
+  it('still seeks on a resume that has somewhere new to go', async () => {
+    const { result, slot1, slot2 } = await mounted();
+    act(() => result.current.onPlaybackTick());
+
+    act(() => result.current.seekBoth(30));
+
+    expect(slot1.seeks.at(-1)).toBeCloseTo(34.969, 6);
+    expect(slot2.seeks.at(-1)).toBeCloseTo(34.489, 6);
+  });
+
+  it('leaves a pair alone that a resume has already started', async () => {
+    const { result, slot1, slot2 } = await mounted(HTMLMediaElement.HAVE_NOTHING);
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.video.settlePlay();
+      slot2.video.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 400));
+    });
+    const seeksAfterResume = slot1.seeks.length;
+
+    slot1.video.readyState = HTMLMediaElement.HAVE_ENOUGH_DATA;
+    slot2.video.readyState = HTMLMediaElement.HAVE_ENOUGH_DATA;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.seeks).toHaveLength(seeksAfterResume);
+  });
+
+  // A link that named a moment is where playback starts, so it is the position and nothing may
+  // drag the pair back to the debate's opening afterwards.
+  it('defers to a seek asked for before the elements existed', async () => {
+    const debate = preRolledDebate();
+    const { result } = renderHook(() => useDebatePlayback(debate, true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    act(() => result.current.seekBoth(60));
+
+    const slot1 = countingVideo(HTMLMediaElement.HAVE_METADATA);
+    const slot2 = countingVideo(HTMLMediaElement.HAVE_METADATA);
+    result.current.slot1VideoRef.current = slot1.video;
+    result.current.slot2VideoRef.current = slot2.video;
+    act(() => result.current.onPlaybackTick());
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.seeks).toEqual([expect.closeTo(64.969, 6)]);
+  });
+});
+
+/**
+ * Drift correction acts on the muted recording, never on the one being heard.
+ *
+ * A rate nudge time-stretches an element's audio and a sync seek on these cue-less WebM files
+ * re-primes its audio pipeline; on a phone both are heard as crackle. So the audible recording
+ * leads at rate 1 and the other follows it.
+ */
+describe('useDebatePlayback — drift correction leaves the audible recording alone', () => {
+  let now = 1_700_000_000_000;
+
+  beforeEach(() => {
+    vi.spyOn(document, 'visibilityState', 'get').mockImplementation(() => 'visible');
+    // Allowance timing: 30s per turn, slot 1 first, so 40s is slot 2's turn.
+    mocks.turnSegments = [];
+    mocks.recordingUrl.mockReset();
+    mocks.recordingUrl.mockImplementation(({ filename }: { filename: string }) =>
+      Promise.resolve({ url: `https://cdn.test/${filename}?sig=abc` })
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  async function playingAt(seconds: number, { unmuted }: { unmuted: boolean }) {
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    // The mute atom is module-global; set it explicitly every time so no test inherits another's.
+    act(() => result.current.setMutedByUser(!unmuted));
+    const slot1 = fakeVideo();
+    const slot2 = fakeVideo();
+    result.current.slot1VideoRef.current = slot1;
+    result.current.slot2VideoRef.current = slot2;
+
+    await act(async () => {
+      void result.current.resumeBoth();
+      await Promise.resolve();
+      slot1.settlePlay();
+      slot2.settlePlay();
+      await new Promise(resolve => setTimeout(resolve, 50));
+    });
+    act(() => result.current.seekBoth(seconds));
+
+    // Past the floor between sync seeks, which the deliberate seek above just reset.
+    now = Date.now() + 10_000;
+    vi.spyOn(Date, 'now').mockImplementation(() => now);
+    return { result, slot1, slot2 };
+  }
+
+  it('nudges slot 1, not the audible slot 2, during slot 2’s turn', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: true });
+    expect(result.current.turnState?.slot).toBe(2);
+
+    slot2.currentTime = 41;
+    slot1.currentTime = 40.6; // beyond the nudge threshold, inside the seek one
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.playbackRate).toBe(1.03); // behind its leader, so it speeds up
+    expect(slot2.playbackRate).toBe(1);
+    expect(slot2.currentTime).toBe(41);
+  });
+
+  it('seeks slot 1, not the audible slot 2, when the gap is too wide to nudge', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: true });
+
+    slot2.currentTime = 41;
+    slot1.currentTime = 43;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot1.currentTime).toBe(41);
+    expect(slot1.playbackRate).toBe(1);
+    expect(slot2.currentTime).toBe(41);
+    expect(slot2.playbackRate).toBe(1);
+  });
+
+  it('still corrects slot 2 during slot 1’s turn', async () => {
+    const { result, slot1, slot2 } = await playingAt(10, { unmuted: true });
+    expect(result.current.turnState?.slot).toBe(1);
+
+    slot1.currentTime = 11;
+    slot2.currentTime = 10.6;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(slot1.playbackRate).toBe(1);
+  });
+
+  it('puts the new speaker back to rate 1 when the turn hands over mid-nudge', async () => {
+    const { result, slot1, slot2 } = await playingAt(29, { unmuted: true });
+
+    // Slot 1 speaking; slot 2 is behind and gets nudged.
+    slot1.currentTime = 29.5;
+    slot2.currentTime = 29.1;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.playbackRate).toBe(1.03);
+
+    // Across the boundary, still out of step: slot 2 is now heard and leads at rate 1, and the
+    // drift is taken up by slot 1 instead.
+    slot1.currentTime = 31;
+    slot2.currentTime = 30.6;
+    act(() => result.current.onPlaybackTick());
+    expect(result.current.turnState?.slot).toBe(2);
+    expect(slot2.playbackRate).toBe(1);
+    expect(slot1.playbackRate).toBe(0.97);
+  });
+
+  it('keeps correcting slot 2 when nothing is audible (the feed’s muted default)', async () => {
+    const { result, slot1, slot2 } = await playingAt(40, { unmuted: false });
+    expect(result.current.turnState?.slot).toBe(2);
+
+    slot1.currentTime = 41;
+    slot2.currentTime = 40.6;
+    act(() => result.current.onPlaybackTick());
+
+    expect(slot2.playbackRate).toBe(1.03);
+    expect(slot1.playbackRate).toBe(1);
+
+    slot2.currentTime = 43;
+    act(() => result.current.onPlaybackTick());
+    expect(slot2.currentTime).toBe(41);
+    expect(slot1.currentTime).toBe(41);
   });
 });

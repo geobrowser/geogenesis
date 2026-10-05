@@ -3,6 +3,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import { Effect } from 'effect';
 
 import { BOUNTIES_RELATION_TYPE, NEWS_STORY_TYPE_ID } from '~/core/constants';
+import { DEBATE_PARTICIPANTS_PROPERTY_ID, DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { ID } from '~/core/id';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import { RANKING_BLOCK_TYPE_ID, SUBMITTED_TO_PROPERTY_ID } from '~/core/ranking-block-ids';
@@ -16,7 +17,6 @@ import type {
   CuratorLeaderboardResult,
   CuratorLeaderboardRow,
 } from './curator-leaderboard-types';
-import { CURATOR_LEADERBOARD_MAX_ROWS } from './curator-leaderboard-types';
 
 const RANKING_BLOCK_LIMIT = 100;
 const RELATION_PAGE_SIZE = 500;
@@ -33,10 +33,11 @@ type CuratorAccumulator = {
   newsStories: number;
   votes: number;
   submissions: number;
+  debates: number;
 };
 
 function emptyAccumulator(): CuratorAccumulator {
-  return { rankings: 0, newsStories: 0, votes: 0, submissions: 0 };
+  return { rankings: 0, newsStories: 0, votes: 0, submissions: 0, debates: 0 };
 }
 
 /** Ranking blocks that live in this space. */
@@ -163,6 +164,84 @@ async function fetchVoteCounts(
   }
 
   return { perCurator, truncated: votesTruncated };
+}
+
+async function fetchDebateCounts(
+  spaceHex: string,
+  window: CuratorLeaderboardWindow,
+  signal?: AbortController['signal']
+): Promise<{ perCurator: Map<string, number>; total: number; truncated: boolean }> {
+  const perCurator = new Map<string, number>();
+  const debateType = gqlId(DEBATE_TYPE_ID);
+  const participantsProperty = gqlId(DEBATE_PARTICIPANTS_PROPERTY_ID);
+  if (!debateType || !participantsProperty) return { perCurator, total: 0, truncated: false };
+
+  const createdAtFilter =
+    window.seconds === null ? '' : `filter: { createdAt: { greaterThanOrEqualTo: "${window.seconds}" } }`;
+
+  const {
+    nodes: debates,
+    truncated: debatesTruncated,
+    totalCount: debatesTotalCount,
+  } = await collectConnection<{ id: string }>(
+    'debate entities',
+    after => `query {
+      entitiesConnection(
+        first: ${ENTITY_PAGE_SIZE}${afterArg(after)}
+        spaceId: "${spaceHex}"
+        typeId: "${debateType}"
+        ${createdAtFilter}
+      ) {
+        totalCount
+        pageInfo { endCursor hasNextPage }
+        nodes { id }
+      }
+    }`,
+    data => data.entitiesConnection,
+    signal
+  );
+
+  const debateIds = [...new Set(debates.map(debate => debate.id).filter(Boolean))];
+  if (debateIds.length === 0) return { perCurator, total: debatesTotalCount ?? 0, truncated: debatesTruncated };
+
+  const relationPages = await mapWithConcurrency(chunk(debateIds, ID_CHUNK_SIZE), CHUNK_CONCURRENCY, ids =>
+    collectConnection<{ fromEntityId: string; toEntityId: string }>(
+      'debate participant relations',
+      after => `query {
+        relationsConnection(
+          first: ${RELATION_PAGE_SIZE}${afterArg(after)}
+          filter: {
+            spaceId: { is: "${spaceHex}" }
+            typeId: { is: "${participantsProperty}" }
+            fromEntityId: { in: [${gqlIdList(ids)}] }
+          }
+        ) {
+          pageInfo { endCursor hasNextPage }
+          nodes { fromEntityId toEntityId }
+        }
+      }`,
+      data => data.relationsConnection,
+      signal
+    )
+  );
+
+  const seen = new Set<string>();
+  let relationsTruncated = false;
+
+  for (const { nodes: relations, truncated } of relationPages) {
+    relationsTruncated = relationsTruncated || truncated;
+    for (const relation of relations) {
+      if (!relation.fromEntityId || !relation.toEntityId) continue;
+      const curatorSpaceId = gqlId(relation.toEntityId);
+      if (!curatorSpaceId) continue;
+      const key = `${relation.fromEntityId}:${curatorSpaceId}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      perCurator.set(curatorSpaceId, (perCurator.get(curatorSpaceId) ?? 0) + 1);
+    }
+  }
+
+  return { perCurator, total: debatesTotalCount ?? 0, truncated: debatesTruncated || relationsTruncated };
 }
 
 /**
@@ -369,6 +448,7 @@ function buildRows(
       newsStories: counts.newsStories,
       votes: counts.votes,
       submissions: counts.submissions,
+      debates: counts.debates,
       activityScore: counts.rankings + counts.newsStories + counts.submissions,
       rank: 0,
       isCurrentUser: Boolean(currentUserSpaceId && ID.equals(curatorSpaceId, currentUserSpaceId)),
@@ -393,18 +473,18 @@ function buildRows(
         newsStories: 0,
         votes: 0,
         submissions: 0,
+        debates: 0,
         activityScore: 0,
         rank: ranked.length + 1,
         isCurrentUser: true,
       } satisfies CuratorLeaderboardRow))
     : null;
 
-  const topRows = ranked.slice(0, CURATOR_LEADERBOARD_MAX_ROWS);
-  const currentUserInTop = currentUserRow ? topRows.some(row => row.isCurrentUser) : true;
+  const currentUserOnBoard = currentUserRow ? ranked.some(row => row.isCurrentUser) : true;
 
   return {
-    rows: topRows,
-    currentUserRow: currentUserRow && !currentUserInTop ? currentUserRow : null,
+    rows: ranked,
+    currentUserRow: currentUserRow && !currentUserOnBoard ? currentUserRow : null,
   };
 }
 
@@ -424,7 +504,7 @@ export async function fetchCuratorLeaderboard({
 }): Promise<CuratorLeaderboardResult> {
   const emptyResult: CuratorLeaderboardResult = {
     period,
-    metrics: { activeCurators: 0, rankings: 0, newsStories: 0 },
+    metrics: { activeCurators: 0, rankings: 0, newsStories: 0, debates: 0 },
     rows: [],
     currentUserRow: null,
     truncated: false,
@@ -435,11 +515,12 @@ export async function fetchCuratorLeaderboard({
 
   const window = curatorLeaderboardWindow(period);
 
-  const [rankings, votes, submissions, newsStories] = await Promise.all([
+  const [rankings, votes, submissions, newsStories, debates] = await Promise.all([
     fetchRankingCounts(spaceHex, window, signal),
     fetchVoteCounts(spaceHex, window, signal),
     fetchSubmissionCounts(spaceHex, window, signal),
     fetchNewsStoryCounts(spaceHex, window, signal),
+    fetchDebateCounts(spaceHex, window, signal),
   ]);
 
   const countsByCurator = new Map<string, CuratorAccumulator>();
@@ -462,6 +543,9 @@ export async function fetchCuratorLeaderboard({
   }
   for (const [curatorSpaceId, count] of newsStories.perCurator) {
     accumulate(curatorSpaceId, counts => (counts.newsStories += count));
+  }
+  for (const [curatorSpaceId, count] of debates.perCurator) {
+    accumulate(curatorSpaceId, counts => (counts.debates += count));
   }
 
   // Dropped here rather than per source, so everything downstream agrees: the rows, the active
@@ -498,9 +582,11 @@ export async function fetchCuratorLeaderboard({
       activeCurators: countsByCurator.size,
       rankings: rankings.total,
       newsStories: newsStories.total,
+      debates: debates.total,
     },
     rows,
     currentUserRow,
-    truncated: rankings.truncated || votes.truncated || submissions.truncated || newsStories.truncated,
+    truncated:
+      rankings.truncated || votes.truncated || submissions.truncated || newsStories.truncated || debates.truncated,
   };
 }

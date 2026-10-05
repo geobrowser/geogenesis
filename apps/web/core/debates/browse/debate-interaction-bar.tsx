@@ -12,6 +12,7 @@ import { Text } from '~/design-system/text';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { Comment, Share } from './icons';
+import { PILL_ACTION_CLASS } from './pill-action';
 
 type InteractionBarProps = {
   orientation: 'vertical' | 'horizontal';
@@ -53,6 +54,11 @@ type InteractionBarProps = {
    * control looks like.
    */
   responseKind?: ResponseKind | 'infer';
+  /**
+   * The debate's overflow menu, drawn last. Its host decides what is in it and whether it is drawn
+   * at all — today only the full-screen feed's Remove debate (GEO-2785), for the few who may.
+   */
+  overflow?: React.ReactNode;
   className?: string;
 };
 
@@ -85,6 +91,7 @@ export function DebateInteractionBar({
   onShare,
   shareOpen,
   responseKind = 'curation',
+  overflow,
   className,
 }: InteractionBarProps) {
   // Defined at all means comments open in the app's global panel rather than in one this bar's
@@ -138,6 +145,7 @@ export function DebateInteractionBar({
             expanded={shareOpen}
           />
         )}
+        {overflow}
       </div>
     );
   }
@@ -182,6 +190,7 @@ export function DebateInteractionBar({
           hideLabel={compact}
         />
       )}
+      {overflow}
     </div>
   );
 }
@@ -277,7 +286,7 @@ function PillAction({
       data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
       onClick={onClick}
       className={cx(
-        'flex h-7 items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text',
+        PILL_ACTION_CLASS,
         compact ? (hideLabel ? 'size-7 justify-center px-0' : 'gap-1 px-1.5') : 'gap-1.5 px-2.5',
         className
       )}

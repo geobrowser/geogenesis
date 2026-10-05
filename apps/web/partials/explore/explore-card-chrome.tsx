@@ -2,12 +2,15 @@
 
 import * as React from 'react';
 
+import { ActionSurface, useActionScope } from '~/core/action-context-provider';
+import { entityActionType } from '~/core/action-entity-context';
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FallbackImage } from '~/design-system/fallback-image';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { ExploreCardTitle } from './explore-card-title';
@@ -27,12 +30,45 @@ import { ExploreFeedCommentLink } from './explore-feed-comment-link';
 /** The card's own frame: its padding and the rule under it, cleared on the last card in a feed. */
 export const EXPLORE_CARD_CLASS = 'flex flex-col gap-2 border-b border-divider py-4 last:border-b-0';
 
+/** Shared attribution for dispatched and custom cards; the article remains the DOM root. */
+export function ExploreCardSurface({
+  item,
+  itemPosition,
+  listId,
+  variant = 'default',
+  children,
+}: {
+  item: ExploreFeedItem;
+  itemPosition?: number;
+  listId?: string;
+  variant?: string;
+  children: React.ReactNode;
+}) {
+  const parentScope = useActionScope();
+  return (
+    <ActionSurface
+      asChild
+      value={{
+        component: 'explore_feed_card',
+        target_id: item.entityId,
+        target_type: entityActionType(item.types),
+        target_type_ids: item.types.map(type => type.id),
+        item_position: itemPosition ?? parentScope.item_position,
+        list_id: listId ?? parentScope.list_id ?? 'entity_feed',
+        variant,
+      }}
+    >
+      {children}
+    </ActionSurface>
+  );
+}
+
 /** The vote and comment row every card body ends on. */
 export function ExploreCardActions({ item }: { item: ExploreFeedItem }) {
   return (
     <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
       <ExploreFeedCommentLink
-        href={`${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`}
+        href={`${NavUtils.toEntity(item.spaceId, item.entityId)}#${ENTITY_COMMENTS_ANCHOR_ID}`}
         count={item.commentCount}
       />
     </EntityRowActions>

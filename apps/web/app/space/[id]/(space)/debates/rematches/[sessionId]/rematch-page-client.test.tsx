@@ -37,6 +37,14 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 const mocks = vi.hoisted(() => ({
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
   sourceDebateLoading: false,
+  /** GEO-2870. geo-chat's extracted-claims payload for the source debate, and whether it is final. */
+  extractedClaims: { turns: [], claims: [] } as { turns: unknown[]; claims: unknown[] },
+  extractedClaimsFinal: true,
+  extractedClaimsLoading: false,
+  /** Every debate id the extracted claims were asked for, with whether the lookup was enabled. */
+  extractedClaimsAskedFor: [] as Array<{ debateId: string; enabled: boolean }>,
+  /** GEO-2862. The viewer's "Not interested" claim ids. */
+  notInterestedIds: [] as string[],
   /** GEO-2758. The Related tab's discovery: the topic query and the source claim's hydration. */
   relatedEntities: [] as any[],
   relatedEntitiesLoading: false,
@@ -74,6 +82,18 @@ const mocks = vi.hoisted(() => ({
   entityQueries: [] as Array<{ search: string | null; spaceIds?: string[] | null; topicIds?: string[] | null }>,
   /** Every id list the opponent's claims were hydrated with, in render order. */
   entityIdLookups: [] as string[][],
+  /** Every participant whose claims were asked for by person (`votedBy`), in render order. */
+  votedByLookups: [] as Array<string | null>,
+  /** The `votedBy` read alone is still in flight; `entityHydrationLoading` holds it too. */
+  votedByLoading: false,
+  /** The `votedBy` read failed outright. */
+  votedByError: false,
+  /** Claims the `votedBy` answer does not have yet — a response newer than the answer. */
+  votedByMissing: [] as string[],
+  /** Claims the `votedBy` answer still names after positions stopped — a side since taken back. */
+  votedByExtra: [] as string[],
+  /** Holds the by-id lookup whose id list contains this claim in flight, leaving the others answering. */
+  entityHydrationLoadingFor: null as string | null,
   /** The Debate tag's catalog, which is the All tab's corpus. */
   debateTagClaims: [] as Array<{
     claimEntityId: string;
@@ -116,11 +136,8 @@ const mocks = vi.hoisted(() => ({
   taggedFiltersAskedFor: [] as any[],
   taggedHasNextPage: false,
   fetchNextTaggedPage: vi.fn(),
-  boundedPagingOverride: null as {
-    autoPages: boolean;
-    stoppedShort: boolean;
-    keepLooking: () => void;
-  } | null,
+  /** How many claims under the current filters the graph records the viewer answering. */
+  graphAnsweredCount: 0,
   entityQueryHasNextPage: false,
   /** The hub's claims query (the All tab) is still in flight. */
   entityQueryLoading: false,
@@ -250,6 +267,18 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
+  useDebateExtractedClaims: (debateId: string, enabled: boolean) => {
+    mocks.extractedClaimsAskedFor.push({ debateId, enabled });
+    return {
+      data:
+        enabled && !mocks.extractedClaimsLoading
+          ? { payload: mocks.extractedClaims, final: mocks.extractedClaimsFinal }
+          : undefined,
+      isLoading: enabled && mocks.extractedClaimsLoading,
+      error: null,
+    };
+  },
+  useNotInterestedClaimIds: () => ({ ids: mocks.notInterestedIds, isLoading: false }),
   // Read by the match lookup above; the picker never shows an offer, so this only answers "no".
   useDebateActivity: () => ({ data: null, isLoading: false, error: null }),
   // The session's own saved claims. `savedClaims` lets a test empty this so a claim can only
@@ -436,7 +465,6 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     const claims = enabled && !mocks.featuredCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
-      fetched: claims.length,
       isLoading: enabled && mocks.featuredCatalogLoading,
       error: enabled ? mocks.featuredCatalogError : null,
       hasNextPage: enabled && mocks.taggedHasNextPage,
@@ -445,6 +473,12 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
       refetch: vi.fn(),
     };
   },
+  // No answered claims in the graph's record here unless a case says so, so an empty excluded
+  // catalogue reads as an empty one.
+  useTaggedAnsweredCount: (_tagId: string, filters: any, enabled: boolean) => ({
+    answeredCount: enabled && filters.excludeAnsweredBy ? mocks.graphAnsweredCount : null,
+    isLoading: false,
+  }),
   useTaggedTopicFacet: (tagId: string, filters: any, enabled: boolean) => {
     // Co-occurrence: counted over the claims that already carry every picked topic.
     const rows = enabled ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
@@ -493,16 +527,6 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     };
   },
 }));
-
-vi.mock('~/core/debates/matchmaking/use-bounded-paging', async importOriginal => {
-  const original = await importOriginal<typeof import('~/core/debates/matchmaking/use-bounded-paging')>();
-
-  return {
-    ...original,
-    useBoundedPaging: (options: Parameters<typeof original.useBoundedPaging>[0]) =>
-      mocks.boundedPagingOverride ?? original.useBoundedPaging(options),
-  };
-});
 
 const HYDRATION_ERROR = new Error('hydration exploded');
 
@@ -580,6 +604,33 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('~/core/debates/claim-picker-page', () => ({
+  /**
+   * The claims one person holds a side on, asked for by person (GEO-2656). The server's answer is
+   * the entities the positions fixture says that person answered — which is what `votedBy` reads —
+   * less any a test holds back to stand for a response newer than the answer.
+   */
+  useClaimEntitiesVotedBy: (profileSpaceId: string | null) => {
+    mocks.votedByLookups.push(profileSpaceId);
+    if (!profileSpaceId) return { entities: undefined, isLoading: false, error: null };
+    const loading = mocks.entityHydrationLoading || mocks.votedByLoading;
+    const held = new Set(
+      mocks.positions.filter(row => row.profileSpaceId === profileSpaceId).map(row => row.claimId as string)
+    );
+    const answer = mocks.entities.filter(
+      entity =>
+        (held.has(entity.id as string) || mocks.votedByExtra.includes(entity.id as string)) &&
+        !mocks.votedByMissing.includes(entity.id as string)
+    );
+    // Answerless on a failure, as react-query is on a cold key — same as the by-id lookup below.
+    const failed =
+      mocks.votedByError ||
+      Boolean(mocks.entityHydrationErrorFor && answer.some(entity => entity.id === mocks.entityHydrationErrorFor));
+    return {
+      entities: loading || failed ? undefined : answer,
+      isLoading: loading,
+      error: failed ? HYDRATION_ERROR : null,
+    };
+  },
   useClaimEntitiesByIds: (ids: string[]) => {
     mocks.entityIdLookups.push(ids);
     // Idle on an empty list, for the same reason as `rematchClaimsLookup` above: the real hook
@@ -593,12 +644,12 @@ vi.mock('~/core/debates/claim-picker-page', () => ({
     // ignored the failure still draw every row, so the states that exist to handle one could not
     // fail a test.
     const failed = Boolean(mocks.entityHydrationErrorFor && ids.includes(mocks.entityHydrationErrorFor));
+    const loading =
+      mocks.entityHydrationLoading ||
+      Boolean(mocks.entityHydrationLoadingFor && ids.includes(mocks.entityHydrationLoadingFor));
     return {
-      entities:
-        mocks.entityHydrationLoading || failed
-          ? []
-          : mocks.entities.filter(entity => ids.includes(entity.id as string)),
-      isLoading: mocks.entityHydrationLoading,
+      entities: loading || failed ? [] : mocks.entities.filter(entity => ids.includes(entity.id as string)),
+      isLoading: loading,
       // Stable identity: a fresh Error each render would be a new value for every memo below it.
       error: failed ? HYDRATION_ERROR : null,
     };
@@ -851,6 +902,11 @@ function mutation(mutate = mocks.mutate) {
 beforeEach(() => {
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
+  mocks.extractedClaims = { turns: [], claims: [] };
+  mocks.extractedClaimsFinal = true;
+  mocks.extractedClaimsLoading = false;
+  mocks.extractedClaimsAskedFor.length = 0;
+  mocks.notInterestedIds = [];
   mocks.relatedEntities = [];
   mocks.relatedEntitiesLoading = false;
   mocks.relatedEntitiesError = null;
@@ -890,6 +946,12 @@ beforeEach(() => {
   mocks.openSidePanel.mockReset();
   mocks.entityQueries.length = 0;
   mocks.entityIdLookups.length = 0;
+  mocks.votedByLookups.length = 0;
+  mocks.votedByLoading = false;
+  mocks.votedByError = false;
+  mocks.votedByMissing = [];
+  mocks.votedByExtra = [];
+  mocks.entityHydrationLoadingFor = null;
   mocks.featuredClaims = [];
   mocks.featuredCatalogLoading = false;
   mocks.featuredCatalogError = null;
@@ -898,8 +960,8 @@ beforeEach(() => {
   mocks.facetOnlySpaces = [];
   mocks.taggedFiltersAskedFor = [];
   mocks.taggedHasNextPage = false;
+  mocks.graphAnsweredCount = 0;
   mocks.fetchNextTaggedPage = vi.fn();
-  mocks.boundedPagingOverride = null;
   mocks.entityHydrationErrorFor = null;
   mocks.savedClaimsLoading = false;
   mocks.savedClaimsError = null;
@@ -1782,7 +1844,8 @@ describe('DebateRematchPageClient', () => {
       mocks.positions = [...mocks.positions, position('profile-local', CLAIM_SOURCE, SPACE_1, true)];
       render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-      await waitFor(() => expect(mocks.entityIdLookups.flat()).toContain(VIEWER_ONLY));
+      // Asked for by person (GEO-2656), the same way as the opponent's, rather than by these ids.
+      await waitFor(() => expect(mocks.votedByLookups).toContain('profile-local'));
       await waitFor(() => expect(mocks.rematchClaimIds.flat()).toContain(VIEWER_ONLY));
 
       // And the number is on the tab before it is opened, and is of the rows the tab then lists —
@@ -1969,10 +2032,10 @@ describe('DebateRematchPageClient', () => {
     // geo-chat's settled batch has no row for it, so it has no readiness row: not ready, drawn
     // without spending a per-space request to find that out.
     expect(mocks.perSpaceReadinessGroups.every(groups => groups.length === 0)).toBe(true);
-    // Hydrated by id — exactly the claims the graph named, nothing paged. Matched among the
-    // hydrations rather than as the last one: the All tab now hydrates its own rows too, for
-    // the topics geo-chat doesn't carry.
-    expect(mocks.entityIdLookups).toContainEqual([CLAIM_SHARED, FRESH]);
+    // Asked for by person rather than by the ids positions returned (GEO-2656), and nothing
+    // hydrated by id behind it: the answer already had both claims.
+    expect(mocks.votedByLookups).toContain('profile-remote');
+    expect(mocks.entityIdLookups.flat()).not.toContain(FRESH);
     // And the graph was asked about exactly these two people.
     expect(mocks.positionParticipants.at(-1)).toEqual(['profile-local', 'profile-remote']);
   });
@@ -2127,16 +2190,6 @@ describe('DebateRematchPageClient', () => {
     expect(screen.queryByRole('button', { name: 'Keep looking' })).toBeNull();
   });
 
-  it('keeps the same rematch attribution when Keep looking appears below existing rows', async () => {
-    mocks.boundedPagingOverride = { autoPages: false, stoppedShort: true, keepLooking: vi.fn() };
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    const keepLooking = screen.getByRole('button', { name: 'Keep looking' });
-    expect(keepLooking).toHaveAttribute('data-geo-analytics-label', 'Debate rematch Keep looking');
-    expect(keepLooking).toHaveAttribute('data-geo-analytics-intent', 'debate_rematch_action');
-  });
-
   it('leaves the sentinel out once there is no page left to fetch', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
@@ -2280,6 +2333,138 @@ describe('DebateRematchPageClient', () => {
 
     expect(screen.queryByLabelText('Counting positions')).toBeNull();
     expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveTextContent('1');
+  });
+
+  /**
+   * GEO-2656, the latency half. The claim entities are asked for by person (`votedBy`) now, so they
+   * start with positions instead of waiting for the ids positions returns.
+   */
+  it('asks for the opponent’s claims while positions are still in flight', async () => {
+    // As on a first load: nothing back yet, so there are no ids a by-id lookup could have used.
+    mocks.positions = [];
+    mocks.positionsLoading = true;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(mocks.votedByLookups).toContain('profile-remote');
+    expect(mocks.entityIdLookups.flat()).toHaveLength(0);
+    expect(screen.getByLabelText('Counting positions')).toBeInTheDocument();
+  });
+
+  /**
+   * And the number is still the rows, not a count of its own.
+   *
+   * A server count cannot match what the tab lists: it leaves out claims the session excludes,
+   * claims in a space that cannot publish, and positions taken in a space the claim is not in, and
+   * no filter can say any of that. Every one of those is in this fixture, with a claim that is not
+   * a claim at all and one the `votedBy` answer is missing, so the badge has to be the list's length
+   * for each of them to come out right.
+   */
+  describe('the opponent’s badge is the rows it lists', () => {
+    const TOPPED_UP = '019fedb5-4a85-7d72-9e55-6ab19c2d8831';
+    const ELSEWHERE = '019fedb6-5b96-7e83-9f66-7bc2ad4f9942';
+    const PERSONAL_CLAIM = '019fedb8-6ca7-7f94-8a77-8cd3be5fa053';
+    const NOT_A_CLAIM = '019fedb9-7db8-7aa5-9b88-9de4cf60b164';
+    const RETRACTED = '019fedba-8ec9-7bb6-8c99-aef5d071c275';
+    const PERSONAL_SPACE = '019fedae-72b6-7ab2-927a-df044d57c5bb';
+
+    function claimIn(id: string, name: string, spaceId: string) {
+      return {
+        id,
+        name,
+        description: null,
+        spaces: [spaceId],
+        values: [{ property: { id: NAME_PROPERTY }, spaceId, value: name }],
+        relations: [],
+      };
+    }
+
+    function everyFilter() {
+      mocks.spaceTypes = { [PERSONAL_SPACE]: 'PERSONAL' };
+      mocks.entities = [
+        sharedEntity(),
+        claimIn(TOPPED_UP, 'A claim the votedBy answer is missing', SPACE_1),
+        // The session's own claim, which it excludes.
+        claimIn(CLAIM_SOURCE, 'The claim the pair just debated', SPACE_1),
+        // Lives in Governance; the side was taken in Crypto.
+        claimIn(ELSEWHERE, 'A claim answered in some other space', SPACE_2),
+        claimIn(PERSONAL_CLAIM, 'A claim in a personal space', PERSONAL_SPACE),
+        claimIn(RETRACTED, 'A claim they took their side back on', SPACE_1),
+      ];
+      mocks.positions = [
+        position('profile-local', CLAIM_SHARED, SPACE_1, true),
+        position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        position('profile-remote', TOPPED_UP, SPACE_1, true),
+        position('profile-remote', CLAIM_SOURCE, SPACE_1, true),
+        position('profile-remote', ELSEWHERE, SPACE_1, true),
+        position('profile-remote', PERSONAL_CLAIM, PERSONAL_SPACE, true),
+        position('profile-remote', NOT_A_CLAIM, SPACE_1, true),
+      ];
+      mocks.votedByMissing = [TOPPED_UP];
+      mocks.votedByExtra = [RETRACTED];
+    }
+
+    const badge = () => {
+      const text = screen.getByRole('button', { name: /^Lobby/ }).textContent ?? '';
+      const digits = text.match(/\d+/);
+      return digits ? Number(digits[0]) : null;
+    };
+    const rows = () => screen.queryAllByRole('article').length;
+
+    it('counts exactly the rows the tab draws', async () => {
+      everyFilter();
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      await waitFor(() => expect(screen.getByText('A claim the votedBy answer is missing')).toBeInTheDocument());
+      expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+      expect(rows()).toBe(2);
+      expect(badge()).toBe(rows());
+      // The answer had every claim but one, so only that one went by id.
+      expect(mocks.entityIdLookups.flat()).not.toContain(CLAIM_SHARED);
+      expect(mocks.entityIdLookups).toContainEqual([TOPPED_UP, NOT_A_CLAIM]);
+    });
+
+    // The top-up is not waited for, so there is a moment with one row and not two — and the badge
+    // has to say one then, rather than two early or a skeleton over a row.
+    it('agrees with the rows while a top-up is still in flight, and after it lands', async () => {
+      everyFilter();
+      mocks.entityHydrationLoadingFor = TOPPED_UP;
+      const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      expect(rows()).toBe(1);
+      expect(badge()).toBe(1);
+
+      mocks.entityHydrationLoadingFor = null;
+      rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+      await waitFor(() => expect(rows()).toBe(2));
+      expect(badge()).toBe(2);
+    });
+
+    // The `votedBy` read failing takes nothing with it: the by-id lookup it replaced answers the
+    // whole list, and the badge still follows it.
+    it('falls back to the by-id lookup when the votedBy read fails', async () => {
+      everyFilter();
+      mocks.votedByError = true;
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      await waitFor(() => expect(rows()).toBe(2));
+      expect(badge()).toBe(2);
+      expect(mocks.entityIdLookups.flat()).toEqual(expect.arrayContaining([CLAIM_SHARED, TOPPED_UP]));
+    });
+
+    // Positions decide which claims are rows; the `votedBy` answer only supplies the entities. A
+    // side the opponent has since taken back can still be in a cached answer, and must not list.
+    it('does not list a claim only the votedBy answer still names', async () => {
+      everyFilter();
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+      await showOpponentClaims();
+
+      await waitFor(() => expect(rows()).toBe(2));
+      expect(screen.queryByText('A claim they took their side back on')).toBeNull();
+      expect(badge()).toBe(2);
+    });
   });
 
   /**
@@ -4660,6 +4845,51 @@ describe('Hide my positions', () => {
     expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
   });
 
+  /**
+   * The backlog is left out by the server (GEO-2894), so a page of the tag is rows that can be shown.
+   *
+   * Asked by the viewer's own personal space, which is what a vote's `userId` is — the participant
+   * row's `profile_space_id`, not their geo-chat user id.
+   */
+  it('asks the server to leave out what the viewer has answered', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await screen.findByText('A newly published claim');
+
+    expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBe('profile-local');
+  });
+
+  it('asks for everything once it is turned off', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.click(screen.getByRole('switch', SWITCH));
+
+    await waitFor(() => expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull());
+  });
+
+  // The server left every claim out, so the catalogue arrives empty rather than collapsed — and it
+  // is the same statement, with the same way out.
+  it('says the viewer answered these when the server leaves nothing', async () => {
+    mocks.debateTagClaims = [];
+    mocks.graphAnsweredCount = 2;
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+  });
+
+  // And an empty catalogue with nothing left out is just empty.
+  it('does not blame the switch for a catalogue that is simply empty', async () => {
+    mocks.debateTagClaims = [];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText(/No other eligible claims/)).toBeInTheDocument();
+    expect(screen.queryByText(/You’ve answered every claim here/)).toBeNull();
+  });
+
   // It is that backlog by definition, so the switch could only ever empty it — a broken tab rather
   // than a filter. Not drawn rather than drawn and ignored, so the state cannot be set from a tab
   // where it does nothing.
@@ -4997,8 +5227,10 @@ describe('the Related tab', () => {
       .filter(button => button.hasAttribute('aria-pressed'))
       .map(button => button.textContent ?? '');
     expect(tabs[0]).toBe('Related');
-    expect(tabs[1]).toMatch(/^Lobby/);
-    expect(tabs[2]).toBe('Explore');
+    // GEO-2870: the debate's own claims sit beside Related, its other continuation.
+    expect(tabs[1]).toBe('From this debate');
+    expect(tabs[2]).toMatch(/^Lobby/);
+    expect(tabs[3]).toBe('Explore');
   });
 
   /**
@@ -5432,6 +5664,46 @@ describe('the Related tab', () => {
 
     expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
   });
+
+  /**
+   * GEO-3120. Related claims are looked up in geo-chat by id like every other list, so they carry
+   * its `previously_debated` flag. Spelled as production spells them: geo-chat's row hyphenated,
+   * the graph's entity bare hex.
+   */
+  it('takes a neighbour the pair already debated out of the list, and the tab with it when it was the only one', async () => {
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(bareHex(RELATED))];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity(bareHex(RELATED))];
+    mocks.claims = [
+      sharedClaim(),
+      { ...sharedClaim(), claim: claimSummary(RELATED, 'A claim on the same topic'), previously_debated: true },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(screen.queryByRole('button', { name: 'Related' })).toBeNull();
+    expect(screen.getByRole('button', { name: /^Lobby/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('folds a debated neighbour away under the new ones', async () => {
+    const OTHER = '019fedb9-7db8-7a05-9b88-9de4cf60bb76';
+    mocks.entities = [sharedEntity(), sourceClaimEntity(), relatedEntity(), relatedEntity(OTHER, 'Another neighbour')];
+    mocks.relatedEntities = [sourceClaimEntity(), relatedEntity(), relatedEntity(OTHER, 'Another neighbour')];
+    mocks.claims = [
+      sharedClaim(),
+      { ...sharedClaim(), claim: claimSummary(RELATED, 'A claim on the same topic'), previously_debated: true },
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(await screen.findByText('Another neighbour')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Related' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.queryByText('A claim on the same topic')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
+
+    expect(screen.getByText('A claim on the same topic')).toBeInTheDocument();
+  });
 });
 
 describe('inside a debate room', () => {
@@ -5603,5 +5875,305 @@ describe('inside a debate room', () => {
 
     await waitFor(() => expect(mocks.replace.mock.calls.length + mocks.back.mock.calls.length).toBeGreaterThan(0));
     expect(screen.queryByText('This room has closed')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-3120. Claims this pair have already debated against each other, on any day, are kept apart
+ * from the new ones: folded away under their own heading rather than offered as a fresh match, and
+ * still requestable from there, since a pair may debate a claim again (GEO-2874). geo-chat's
+ * `previously_debated` is the only source.
+ */
+describe('claims the pair have already debated', () => {
+  const debated = (claim: DebateRematchClaim): DebateRematchClaim => ({ ...claim, previously_debated: true });
+
+  function alreadyDebatedToggle() {
+    return screen.getByRole('button', { name: /Already debated with Salina/ });
+  }
+
+  it('moves a debated claim out of the Lobby and into a folded section', async () => {
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('You and Salina have already debated every claim here.')).toBeInTheDocument();
+    const toggle = alreadyDebatedToggle();
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+
+    fireEvent.click(toggle);
+
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Already debated')).toBeInTheDocument();
+    // Still a choice they can make.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled());
+  });
+
+  it('keeps it out of Explore’s new claims too, and leaves the rest listed', async () => {
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+
+    fireEvent.click(alreadyDebatedToggle());
+
+    // Below the new claims, never among them.
+    expect(appearsBefore('A newly published claim', 'A claim both participants chose')).toBe(true);
+    expect(
+      within(screen.getByTestId('rematch-already-debated')).getByText('A claim both participants chose')
+    ).toBeInTheDocument();
+  });
+
+  it('does the same on the viewer’s own Positions', async () => {
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showMyPositions();
+
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+    fireEvent.click(alreadyDebatedToggle());
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+
+  /** The flag is about the pair and the claim, so either spelling of the id carries it. */
+  it('matches geo-chat’s row to the graph’s claim across the two id spellings', async () => {
+    mocks.entities = [{ ...sharedEntity(), id: CLAIM_SHARED.replace(/-/g, '') }, publishedEntity()];
+    mocks.positions = [
+      position('profile-local', CLAIM_SHARED.replace(/-/g, ''), SPACE_1, true),
+      position('profile-remote', CLAIM_SHARED.replace(/-/g, ''), SPACE_1, false),
+    ];
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('You and Salina have already debated every claim here.')).toBeInTheDocument();
+    expect(alreadyDebatedToggle()).toBeInTheDocument();
+  });
+
+  /**
+   * The debate that opened this lobby is the session's exclusion, and geo-chat flags it as debated
+   * as soon as it reaches `thanking`. It stays gone, rather than turning up in the folded section.
+   */
+  it('still drops the claim of the debate that opened the lobby entirely', async () => {
+    mocks.entities = [
+      sharedEntity(),
+      publishedEntity(),
+      { ...sharedEntity(), id: CLAIM_SOURCE, name: 'The claim the pair just debated' },
+    ];
+    mocks.positions = [...mocks.positions, position('profile-remote', CLAIM_SOURCE, SPACE_1, true)];
+    mocks.claims = [
+      sharedClaim(),
+      debated({ ...sharedClaim(), claim: claimSummary(CLAIM_SOURCE, 'The claim the pair just debated') }),
+    ];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByText('The claim the pair just debated')).toBeNull();
+    expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull();
+  });
+
+  /** A geo-chat that predates the flag sends `false` on every row, and the page is what it was. */
+  it('changes nothing when no claim is flagged', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull();
+    expect(screen.queryByText('Already debated')).toBeNull();
+
+    await showAllClaims();
+
+    expect(await screen.findByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByTestId('rematch-already-debated')).toBeNull();
+  });
+
+  it('narrows the folded section by the search the viewer typed', async () => {
+    mocks.claims = [debated(sharedClaim())];
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+    expect(alreadyDebatedToggle()).toBeInTheDocument();
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'nothing like it' } });
+
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull());
+  });
+});
+
+/**
+ * GEO-2870 phase 2. "From this debate": the claims geo-chat extracted from the debate this session
+ * came out of, read from its fast path. A claim the graph already has is a full card; one it does
+ * not have yet — a freshly minted id — is drawn without controls until the debate publishes.
+ */
+describe('From this debate', () => {
+  const hex = (id: string) => id.replace(/-/g, '');
+  const MINTED = 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4';
+  const MINTED_LATER = 'e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5';
+  const turns = [
+    { turn_index: 0, participant_slot: 1, attributed_space_id: 'profile-local', speaker_name: 'You', text: '…' },
+    { turn_index: 1, participant_slot: 2, attributed_space_id: 'profile-remote', speaker_name: null, text: '…' },
+  ];
+  const extracted = (
+    text: string,
+    turn_index: number,
+    ids: { existing?: string | null; minted?: string | null } = {}
+  ) => ({
+    text,
+    is_factual: false,
+    turn_index,
+    existing_entity_id: ids.existing ?? null,
+    entity_id: ids.minted ?? null,
+    is_contestable: true,
+  });
+  /** The shared claim as the graph spells it, matched by geo-chat to a claim from the debate. */
+  const matchedEntity = () => ({ ...sharedEntity(), id: hex(CLAIM_SHARED) });
+
+  async function openTab() {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'From this debate' }));
+    await settleTabSwap();
+  }
+
+  beforeEach(() => {
+    mocks.entities = [matchedEntity()];
+    mocks.claims = [sharedClaim()];
+    // The graph's own spelling throughout, as production has it: positions and entities are both
+    // keyed by bare hex, and geo-chat's row by its hyphenated UUID.
+    mocks.positions = [
+      position('profile-local', hex(CLAIM_SHARED), SPACE_1, true),
+      position('profile-remote', hex(CLAIM_SHARED), SPACE_1, false),
+    ];
+    mocks.extractedClaims = {
+      turns,
+      claims: [
+        extracted('A claim both participants chose', 0, { existing: hex(CLAIM_SHARED), minted: MINTED_LATER }),
+        extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }),
+      ],
+    };
+  });
+
+  it('reads the source debate’s claims, and is offered only when there is a source debate', async () => {
+    await openTab();
+
+    expect(mocks.extractedClaimsAskedFor.at(-1)).toEqual({ debateId: 'debate-1', enabled: true });
+    expect(screen.getByRole('button', { name: 'From this debate' })).toHaveAttribute('aria-pressed', 'true');
+    cleanup();
+
+    mocks.session = session({ source_debate_id: null });
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    expect(screen.queryByRole('button', { name: 'From this debate' })).toBeNull();
+  });
+
+  it('draws a published claim as a requestable card under the graph match’s id, with who said it', async () => {
+    mocks.optimisticResponses.set(CLAIM_SHARED, 'positive');
+    await openTab();
+
+    // The graph match wins over the minted id, which is never asked about.
+    const asked = mocks.entityIdLookups.flat();
+    expect(asked).toContain(hex(CLAIM_SHARED));
+    expect(asked).not.toContain(MINTED_LATER);
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Said by You')).toBeInTheDocument();
+
+    const request = await screen.findByRole('button', { name: 'Request debate' });
+    expect(request).toBeEnabled();
+    fireEvent.click(request);
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({ claim_id: CLAIM_SHARED, source_space_id: SPACE_1 })
+    );
+  });
+
+  it('draws a claim the graph does not have yet without controls, and keeps it out of geo-chat’s row lookup', async () => {
+    await openTab();
+
+    const card = screen.getByTestId('from-this-debate-unpublished');
+    expect(within(card).getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    // No speaker name on the turn: the participant's own name stands in.
+    expect(within(card).getByText('Said by Salina')).toBeInTheDocument();
+    expect(within(card).getByText(/once the debate is published/)).toBeInTheDocument();
+    expect(within(card).queryByRole('button')).toBeNull();
+    expect(mocks.entityIdLookups.flat()).toContain(MINTED);
+    expect(mocks.rematchClaimIds.flat()).not.toContain(MINTED);
+  });
+
+  it('skips a claim with neither a graph match nor a minted id', async () => {
+    mocks.extractedClaims = {
+      turns,
+      claims: [
+        extracted('Written before ids were minted', 0),
+        extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }),
+      ],
+    };
+    await openTab();
+
+    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    expect(screen.queryByText('Written before ids were minted')).toBeNull();
+  });
+
+  it('appends new claims at the bottom without reordering the ones already listed', async () => {
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'From this debate' }));
+    await settleTabSwap();
+    const order = () =>
+      screen
+        .getAllByText(
+          /^(A claim both participants chose|Coffee dates save everyone’s time|Dinner is a better first date)$/
+        )
+        .map(node => node.textContent);
+    expect(order()).toEqual(['A claim both participants chose', 'Coffee dates save everyone’s time']);
+
+    // The next poll lists the claims the other way round and adds one between them.
+    mocks.extractedClaims = {
+      turns,
+      claims: [
+        extracted('Coffee dates save everyone’s time', 0, { minted: MINTED }),
+        extracted('Dinner is a better first date', 0, { minted: MINTED_LATER }),
+        extracted('A claim both participants chose', 1, { existing: hex(CLAIM_SHARED) }),
+      ],
+    };
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+
+    expect(order()).toEqual([
+      'A claim both participants chose',
+      'Coffee dates save everyone’s time',
+      'Dinner is a better first date',
+    ]);
+  });
+
+  it('says extraction is still running while the payload is empty, and stops saying so once it is final', async () => {
+    mocks.extractedClaims = { turns: [], claims: [] };
+    mocks.extractedClaimsFinal = false;
+    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'From this debate' }));
+    await settleTabSwap();
+    expect(screen.getByText(/Pulling the claims out of your debate/)).toBeInTheDocument();
+
+    mocks.extractedClaimsFinal = true;
+    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+    await settleTabSwap();
+    expect(screen.getByText('No claims from this debate are left to debate.')).toBeInTheDocument();
+  });
+
+  it('folds a claim the pair already debated away, and leaves out one the viewer is not interested in', async () => {
+    mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+    mocks.notInterestedIds = [MINTED];
+    await openTab();
+
+    expect(screen.queryByText('A claim both participants chose')).toBeNull();
+    expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 });

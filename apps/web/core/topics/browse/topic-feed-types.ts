@@ -70,6 +70,16 @@ const canonicalIdByNormalizedId = new Map(
   TOPIC_FEED_ENTITY_TYPE_IDS.map(id => [id.replace(/-/g, '').toLowerCase(), id])
 );
 
+/**
+ * The type selection from a facets request's JSON body. Anything but an array means the feed's
+ * whole population, like an absent query parameter; non-string entries are ignored.
+ */
+export function parseTopicFeedBodyTypeIds(raw: unknown): string[] {
+  return Array.isArray(raw)
+    ? parseTopicFeedTypeIds(raw.filter((id): id is string => typeof id === 'string').join(','))
+    : parseTopicFeedTypeIds(null);
+}
+
 /** Missing means all Topic feed types; an empty value is the deliberate none-selected state. */
 export function parseTopicFeedTypeIds(raw: string | null): string[] {
   if (raw === null) return [...TOPIC_FEED_ENTITY_TYPE_IDS];

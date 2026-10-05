@@ -1,0 +1,36 @@
+'use client';
+
+import * as React from 'react';
+
+import { useActionContext } from '~/core/action-context-provider';
+import { copyAvailabilityLink } from '~/core/availability/availability-deep-link';
+import { useSetToast } from '~/core/hooks/use-toast';
+
+import { MenuItem } from '~/design-system/menu';
+
+/**
+ * "Copy availability link" in a profile's overflow menu, for the owner and visitors alike — anyone
+ * looking at someone may want to pass on a way to book them.
+ */
+export function CopyAvailabilityLinkMenuItem({ profileSpaceId }: { profileSpaceId: string }) {
+  const setToast = useSetToast();
+  const getContext = useActionContext('share_dialog', 'space', profileSpaceId);
+
+  return (
+    <MenuItem
+      closeOnSelect
+      data-geo-analytics-label="Profile menu copy availability link"
+      data-geo-analytics-intent="copy_availability_link"
+      onClick={async () => {
+        try {
+          await copyAvailabilityLink(profileSpaceId, getContext());
+          setToast(<span>Availability link copied</span>);
+        } catch {
+          setToast(<span>Could not copy link.</span>);
+        }
+      }}
+    >
+      <p>Copy availability link</p>
+    </MenuItem>
+  );
+}

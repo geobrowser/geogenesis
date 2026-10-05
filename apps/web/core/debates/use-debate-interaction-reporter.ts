@@ -5,9 +5,9 @@ import * as React from 'react';
 import { type GetPrivyIdentityToken, reportDebateInteraction } from './api';
 
 /**
- * Report at most this often. The server treats input inside a two-minute window as "active", so
- * four reports per window is ample headroom for a dropped one, and it keeps a debate-long session
- * to a couple of requests a minute.
+ * Report at most this often. The server ranks input inside two minutes as "active" and treats three
+ * minutes without any as away (GEO-3119), so this leaves headroom for a dropped report, and it
+ * keeps a debate-long session to a couple of requests a minute.
  */
 export const INTERACTION_REPORT_INTERVAL_MS = 30_000;
 
@@ -20,6 +20,31 @@ export const INTERACTION_REPORT_INTERVAL_MS = 30_000;
 const INTERACTION_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'scroll'] as const;
 
 /**
+ * Moving the mouse counts too. Without it someone reading a claim or a profile with the mouse in
+ * hand went Away three minutes after their last click and back the moment they clicked, which on
+ * everyone else's People list read as rows flickering between online and away (2026-10-02).
+ *
+ * Only a trusted move that actually moved: browsers can dispatch pointer events when content shifts
+ * under a cursor that has not moved, and an abandoned tab must not keep itself present that way.
+ */
+export function isHumanPointerMove(event: Event): boolean {
+  if (!event.isTrusted) return false;
+  const { movementX, movementY } = event as PointerEvent;
+  return (movementX ?? 0) !== 0 || (movementY ?? 0) !== 0;
+}
+
+/**
+ * Is a video or audio element playing in this document? Muted counts: watching a debate with the
+ * sound off is still watching.
+ */
+export function isMediaPlaying(documentRef: Document): boolean {
+  for (const media of documentRef.querySelectorAll<HTMLMediaElement>('video, audio')) {
+    if (!media.paused && !media.ended && media.readyState >= 2) return true;
+  }
+  return false;
+}
+
+/**
  * Tells geo-chat that a person, rather than a tab, is here.
  *
  * `last_seen_at` is refreshed by a timer and so is true of an abandoned tab forever; matchmaking
@@ -28,6 +53,11 @@ const INTERACTION_EVENTS = ['pointerdown', 'keydown', 'wheel', 'touchstart', 'sc
  *
  * Leading edge as well as trailing: someone coming back after a break is marked active on their
  * first click rather than up to thirty seconds later, which is exactly when the ranking matters.
+ *
+ * Watching counts (GEO-3119). Since that ticket geo-chat stops offering live requests to someone
+ * with no input for three minutes, and someone watching a debate does not touch anything. So while
+ * the tab is visible and media is playing, the same throttled report goes out as for input. Hidden
+ * playback does not count: a debate left playing in a background tab has nobody watching it.
  *
  * Every failure is swallowed. A missed report costs a slightly stale ranking; surfacing it would
  * cost a spurious error on a page that is working perfectly.
@@ -73,8 +103,16 @@ export function useDebateInteractionReporter(
     for (const eventName of INTERACTION_EVENTS) {
       window.addEventListener(eventName, onInteraction, { passive: true, capture: true });
     }
+    const onPointerMove = (event: Event) => {
+      if (isHumanPointerMove(event)) onInteraction();
+    };
+    window.addEventListener('pointermove', onPointerMove, { passive: true, capture: true });
+    const watching = window.setInterval(() => {
+      if (document.visibilityState === 'visible' && isMediaPlaying(document)) onInteraction();
+    }, INTERACTION_REPORT_INTERVAL_MS);
     return () => {
       cancelled = true;
+      window.clearInterval(watching);
       if (pendingTimerRef.current) {
         clearTimeout(pendingTimerRef.current);
         pendingTimerRef.current = null;
@@ -82,6 +120,7 @@ export function useDebateInteractionReporter(
       for (const eventName of INTERACTION_EVENTS) {
         window.removeEventListener(eventName, onInteraction, { capture: true });
       }
+      window.removeEventListener('pointermove', onPointerMove, { capture: true });
     };
   }, [enabled]);
 }

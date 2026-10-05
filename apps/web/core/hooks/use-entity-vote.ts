@@ -2,14 +2,18 @@
 
 import { hashKey, useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
+import { createElement, useCallback, useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 
 import { Effect, Either } from 'effect';
 
 import { ensureSpaceMembership } from '~/core/access/request-space-membership';
-import { classifyOperationFailure, observeOperation } from '~/core/analytics-operations';
+import { type ActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
+import { entityActionScope } from '~/core/action-entity-context';
+import { classifyOperationFailure, observeOperation, queueTimeoutMetrics } from '~/core/analytics-operations';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
+import { useSetToast } from '~/core/hooks/use-toast';
 import {
   EMPTY_PENDING_VOTED_OVERRIDES,
   type EntityVoteDirectionFilter,
@@ -36,11 +40,18 @@ import {
   entityResponseCountsQueryKey,
   entityResponseIndexingQueryKey,
   getResponseActionMethod,
+  isAwaitingResponseSubmission,
   responseKindToVoteKind,
   userEntityResponseQueryKey,
   waitForIndexedEntityResponse,
 } from '~/core/responses/entity-response';
+import {
+  FailedResponsesToast,
+  clearFailedResponse,
+  recordFailedResponse,
+} from '~/core/responses/failed-response-retries';
 import { geo } from '~/core/sdk/geo-client';
+import { useQueryEntity } from '~/core/sync/use-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
 import { validateSpaceId } from '~/core/utils/utils';
 
@@ -64,7 +75,16 @@ export type PendingEntityResponseIndex = {
 
 export type EntityResponseIndexingState =
   | { status: 'idle'; pending: null; runId: null }
-  | { status: 'reconciling'; pending: PendingEntityResponseIndex | null; runId: string }
+  | {
+      status: 'reconciling';
+      pending: PendingEntityResponseIndex | null;
+      runId: string;
+      /**
+       * The bundler has accepted the write and only inclusion and indexing remain (GEO-2889). From
+       * here the UI treats the response as made; see `isAwaitingResponseSubmission`.
+       */
+      submitted?: boolean;
+    }
   | { status: 'delayed'; pending: PendingEntityResponseIndex; runId: string }
   | { status: 'indexed'; pending: PendingEntityResponseIndex; runId: string };
 
@@ -104,10 +124,14 @@ type ResponseSubmissionRun = {
   runId: string;
   runOrder: number;
   status: 'pending' | 'success' | 'failed';
+  /** The bundler accepted it. Carried here so a restored run keeps its place past submission. */
+  submitted: boolean;
 };
 type ResponseIndexingRegistry = {
   activeReconciliations: Map<string, { controller: AbortController; runId: string }>;
   submissionRuns: Map<string, Map<string, ResponseSubmissionRun>>;
+  /** runOrder of the newest vote cast per response, so an older vote's failure can't offer a retry. */
+  latestRunOrders: Map<string, number>;
 };
 const responseIndexingRegistries = new WeakMap<object, ResponseIndexingRegistry>();
 
@@ -122,7 +146,7 @@ function createResponseIndexingRunId() {
 function getResponseIndexingRegistry(queryClient: object) {
   let registry = responseIndexingRegistries.get(queryClient);
   if (!registry) {
-    registry = { activeReconciliations: new Map(), submissionRuns: new Map() };
+    registry = { activeReconciliations: new Map(), submissionRuns: new Map(), latestRunOrders: new Map() };
     responseIndexingRegistries.set(queryClient, registry);
   }
   return registry;
@@ -192,7 +216,35 @@ export function useResetEntityResponseIndexingSnapshot({ entityId, spaceId, resp
   );
 }
 
+/** Shown when a response the viewer was told was made fails to land after all (GEO-2889). */
+export const RESPONSE_FAILED_AFTER_SUBMIT_COPY = 'Your position didn’t publish, so it has been undone. Try again.';
+
+type ResponseMutationVariables = {
+  direction: ResponseDirection;
+  attribution: ActionContext;
+  /**
+   * Minted per press, before the mutation runs, so the send can name the run it belongs to — the
+   * submission callback has to find *this* run, and `onMutate`'s context never reaches `mutationFn`.
+   */
+  run: { runId: string; runOrder: number };
+};
+
+function responseMutationVariables(
+  direction: ResponseDirection,
+  attribution: ActionContext
+): ResponseMutationVariables {
+  return { direction, attribution, run: createResponseIndexingRunId() };
+}
+
 export function useEntityResponse({ entityId, entityName, spaceId, responseKind }: UseEntityResponseArgs) {
+  const { entity: analyticsEntity } = useQueryEntity({ id: entityId });
+  const entityScope = entityActionScope(analyticsEntity);
+  const getContext = useActionContext(
+    'entity_vote_buttons',
+    entityScope.target_type ?? (responseKind === 'curation' ? 'entity' : 'claim'),
+    entityId,
+    entityScope
+  );
   const queryClient = useQueryClient();
   const responseIndexingRegistry = getResponseIndexingRegistry(queryClient);
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
@@ -203,6 +255,13 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     const account = readCachedSmartAccount(queryClient, null);
     return readCachedPersonalSpace(queryClient, account?.account.address);
   }, [personalSpaceId, isRegistered, queryClient]);
+  // The retry key for the current account and args. Retry replays through the latest mutation
+  // options, so it must only run while they still target the vote that failed.
+  const currentRetryKey = () =>
+    hashKey(entityResponseIndexingQueryKey(readRegisteredSpace().personalSpaceId, entityId, spaceId, responseKind));
+  const currentRetryKeyRef = useRef(currentRetryKey);
+  currentRetryKeyRef.current = currentRetryKey;
+  const setToast = useSetToast();
 
   const indexingQueryKey = useMemo(
     () => entityResponseIndexingQueryKey(personalSpaceId, entityId, spaceId, responseKind),
@@ -363,8 +422,28 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     [indexingKeyId, indexingQueryKey, isCurrentIndexingRun, queryClient, responseIndexingRegistry]
   );
 
+  /**
+   * Marks a run as accepted by the bundler, so the UI stops waiting on it (GEO-2889).
+   *
+   * Only the run that is current moves the visible state: an older run reaching the bundler after a
+   * newer press must not take the newer one's place. The registry entry is updated either way, so a
+   * rollback that restores this run restores it as submitted.
+   */
+  const markResponseSubmitted = useCallback(
+    (runId: string) => {
+      const run = responseIndexingRegistry.submissionRuns.get(indexingKeyId)?.get(runId);
+      if (run) run.submitted = true;
+      queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, current =>
+        current?.status === 'reconciling' && current.runId === runId && !current.submitted
+          ? { ...current, submitted: true }
+          : current
+      );
+    },
+    [indexingKeyId, indexingQueryKey, queryClient, responseIndexingRegistry]
+  );
+
   const executeResponse = useCallback(
-    async (direction: ResponseDirection) => {
+    async (direction: ResponseDirection, runId: string) => {
       if (!responseKind) {
         throw new Error('Response type is unavailable. Cannot submit response.');
       }
@@ -387,7 +466,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       const action = getResponseActionMethod(responseKind, direction);
       const { to, calldata } = geo.responses[action](params);
 
-      const txEffect = tx({ to, data: calldata }).pipe(
+      const txEffect = tx({ to, data: calldata, onSubmitted: () => markResponseSubmitted(runId) }).pipe(
         Effect.withSpan('web.write.entity_response'),
         Effect.annotateSpans({
           'io.operation': 'entity_response',
@@ -412,7 +491,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       if (!pending) throw new Error('Response indexing context is unavailable.');
       return { pending, transaction: result.right };
     },
-    [readRegisteredSpace, spaceId, entityId, responseKind, tx, pendingResponseIndex]
+    [readRegisteredSpace, spaceId, entityId, responseKind, tx, pendingResponseIndex, markResponseSubmitted]
   );
 
   const dropFromVotedList = (listPersonalSpaceId: string, direction: EntityVoteDirectionFilter) => {
@@ -462,8 +541,8 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
   };
 
   const responseMutation = useMutation({
-    mutationFn: executeResponse,
-    onMutate: direction => {
+    mutationFn: ({ direction, run }: ResponseMutationVariables) => executeResponse(direction, run.runId),
+    onMutate: ({ direction, attribution, run: { runId, runOrder } }) => {
       const previousState =
         queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey) ?? IDLE_INDEXING_STATE;
       const previousResponse = previousState.pending
@@ -477,8 +556,14 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
               responseKind ?? 'curation'
             )
           );
-      const operation = observeOperation('vote', 'entity', entityId);
-      const { runId, runOrder } = createResponseIndexingRunId();
+      const operation = observeOperation('vote', 'entity', entityId, undefined, attribution);
+      // Keyed by the space the vote is sent from, which can differ from the reactive one
+      // (a vote replayed before personalSpaceId resolves).
+      const votingPersonalSpaceId = readRegisteredSpace().personalSpaceId;
+      const retryKey = hashKey(entityResponseIndexingQueryKey(votingPersonalSpaceId, entityId, spaceId, responseKind));
+      // Last write wins: a newer vote on this entity supersedes any pending retry.
+      clearFailedResponse(retryKey);
+      responseIndexingRegistry.latestRunOrders.set(retryKey, runOrder);
       const pending = pendingResponseIndex(direction);
       getResponseSubmissionRuns(responseIndexingRegistry, indexingKeyId).set(runId, {
         pending,
@@ -486,6 +571,7 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         runId,
         runOrder,
         status: 'pending',
+        submitted: false,
       });
       cancelActiveResponseReconciliation(responseIndexingRegistry, indexingKeyId);
       queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
@@ -493,9 +579,18 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         pending,
         runId,
       });
-      return { previousState, runId, runOrder, previousResponse, operation, entityName };
+      return {
+        previousState,
+        runId,
+        runOrder,
+        previousResponse,
+        operation,
+        entityName,
+        personalSpaceId: votingPersonalSpaceId,
+        retryKey,
+      };
     },
-    onSuccess: (submission, direction, context) => {
+    onSuccess: (submission, { direction }, context) => {
       const previousDirection =
         context?.previousResponse === 'positive' ? 'up' : context?.previousResponse === 'negative' ? 'down' : undefined;
       const voteDirection = direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none';
@@ -540,15 +635,40 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       if (!run) return;
       run.pending = submission.pending;
       run.status = 'success';
+      // Included, so past the bundler whether or not the send reported the moment it got there.
+      markResponseSubmitted(context.runId);
       if (isCurrentIndexingRun(context.runId)) {
         void reconcileResponseIndexing(submission.pending, context.runId);
       }
     },
-    onError: (_error, _direction, context) => {
-      context?.operation.failed(classifyOperationFailure(_error));
+    onError: (_error, { direction, attribution }, context) => {
+      const failure = classifyOperationFailure(_error);
+      context?.operation.failed(failure, queueTimeoutMetrics(_error));
+      // Only `unavailable` proves nothing was submitted; retrying `unknown` could double-submit.
+      const isLatestVote =
+        context !== undefined && responseIndexingRegistry.latestRunOrders.get(context.retryKey) === context.runOrder;
+      if (failure === 'unavailable' && context?.personalSpaceId && isLatestVote) {
+        const { retryKey } = context;
+        recordFailedResponse(retryKey, {
+          retry: async () => {
+            // Account, entity, space or response kind changed since the failure.
+            if (currentRetryKeyRef.current() !== retryKey) return;
+            await responseMutation.mutateAsync(responseMutationVariables(direction, attribution));
+          },
+        });
+        setToast(createElement(FailedResponsesToast), { persistent: true });
+      }
       if (!context) return;
       const runs = responseIndexingRegistry.submissionRuns.get(indexingKeyId);
       const failedRun = runs?.get(context.runId);
+      // The viewer was shown this response as made the moment the bundler took it, so its failure
+      // has to be said out loud: the rollback below on its own reads as the position vanishing. A
+      // toast rather than only the card's inline error, because a card can be gone by now — the
+      // picker moves an answered claim away. Not for an older vote a newer press has replaced: its
+      // outcome is no longer what the screen shows.
+      if (failedRun?.submitted && isLatestVote && responseKind !== 'curation') {
+        setToast(createElement('span', null, RESPONSE_FAILED_AFTER_SUBMIT_COPY));
+      }
       if (!runs || !failedRun) return;
       failedRun.status = 'failed';
       if (!isCurrentIndexingRun(context.runId)) return;
@@ -557,11 +677,14 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
         .filter(run => run.status !== 'failed' && run.runOrder < context.runOrder)
         .sort((left, right) => right.runOrder - left.runOrder)[0];
       if (recoverableRun) {
-        queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
+        const restored: EntityResponseIndexingState = {
           status: 'reconciling',
           pending: recoverableRun.pending,
           runId: recoverableRun.runId,
-        });
+          // A `success` run was included, so it is necessarily past the bundler.
+          submitted: recoverableRun.submitted || recoverableRun.status === 'success',
+        };
+        queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, restored);
         if (recoverableRun.status === 'success' && recoverableRun.pending) {
           void reconcileResponseIndexing(recoverableRun.pending, recoverableRun.runId);
         }
@@ -585,11 +708,15 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
     const current = queryClient.getQueryData<EntityResponseIndexingState>(indexingQueryKey);
     if (!current?.pending || current.status !== 'delayed') return;
     const { runId } = current;
-    queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, {
+    const rechecking: EntityResponseIndexingState = {
       status: 'reconciling',
       pending: current.pending,
       runId,
-    });
+      // `delayed` is only reached after inclusion; re-checking the index must not put the controls
+      // back to waiting on a submission that happened long ago.
+      submitted: true,
+    };
+    queryClient.setQueryData<EntityResponseIndexingState>(indexingQueryKey, rechecking);
     void reconcileResponseIndexing(current.pending, runId);
   }, [indexingQueryKey, queryClient, reconcileResponseIndexing]);
 
@@ -627,9 +754,13 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       : indexingState.pending.expectedResponse;
 
   return {
-    submitResponse: responseMutation.mutate,
-    submitResponseAsync: responseMutation.mutateAsync,
+    submitResponse: (direction: ResponseDirection, options?: Parameters<typeof responseMutation.mutate>[1]) =>
+      responseMutation.mutate(responseMutationVariables(direction, getContext()), options),
+    submitResponseAsync: (direction: ResponseDirection, options?: Parameters<typeof responseMutation.mutateAsync>[1]) =>
+      responseMutation.mutateAsync(responseMutationVariables(direction, getContext()), options),
     optimisticResponse,
+    /** Still on its way to the bundler — see `isAwaitingResponseSubmission`. */
+    isSubmittingResponse: isAwaitingResponseSubmission(indexingState),
     isProcessingResponse:
       responseMutation.isPending || indexingState.status === 'reconciling' || indexingState.status === 'delayed',
     isResponseIndexingDelayed: indexingState.status === 'delayed',

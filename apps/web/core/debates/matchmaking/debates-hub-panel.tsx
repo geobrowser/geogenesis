@@ -4,34 +4,52 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
-import { useAtom, useSetAtom } from 'jotai';
+import { useAtomValue } from 'jotai';
+import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
 import { requestsModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
+import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
-import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
-import { useScheduledAwaitingBadgeCount } from '../rooms/scheduled-awaiting';
+import { useDebateActivity, useGeoChatAuth } from '../hooks';
+import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
+import { HubHeaderControls } from './hub-header-controls';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
+import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
 import { SetScheduleBanner } from './set-schedule-banner';
+import { SIGNED_OUT_TABS } from './signed-out-tabs';
 import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
-import { useUnexpiredRequests } from './use-request-countdown';
-import { type DebatesHubTab, debatesHubFiltersOwnerAtom, resetDebatesHubFiltersAtom } from '~/atoms';
+import { useHubFilterOwner } from './use-hub-filter-owner';
+import { useRequestsTabCount } from './use-requests-tab-count';
+import {
+  type DebatesHubTab,
+  debatesHubExploreSearchAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubExploreTopicIdsAtom,
+  debatesHubLobbySearchAtom,
+  debatesHubLobbySpaceIdsAtom,
+  debatesHubLobbyTopicIdsAtom,
+  debatesHubPositionsSearchAtom,
+  debatesHubPositionsSpaceIdsAtom,
+  debatesHubPositionsTopicIdsAtom,
+} from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -49,21 +67,7 @@ const TABS: { id: DebatesHubTab; label: string }[] = [
   { id: 'requests', label: 'Requests' },
 ];
 
-/**
- * GEO-2725. Lobby, Positions and Requests are a particular person's, so signed out they have no
- * possible contents — not an empty list but a meaningless one. Both of Lobby's lists are viewer-relative:
- * geo-chat scores `debate_now` on who is available to debate *you*, and a match is a claim you hold
- * a side on. Explore and People describe the world rather than the viewer, so both read fine
- * anonymously and are what the hub offers before sign-in (GEO-2861). Positions is the third of the
- * viewer's own: it was a source inside Explore's picker and left that menu signed out for exactly
- * this reason, so promoting it to a tab (GEO-2863) promotes the rule with it.
- *
- * In the order the anonymous row draws them, and it is read that way below rather than used to
- * filter the signed-in order. Filtered, this list said what the row contained and `TABS` quietly
- * decided how it was arranged: the row led with People while the panel opened on Explore, which is
- * the one an anonymous visitor is actually here for and the one `visibleTab` falls back to.
- */
-const SIGNED_OUT_TABS: DebatesHubTab[] = ['explore', 'people'];
+// Which tabs exist signed out, and why, is in `./signed-out-tabs`: the debates link reads it too.
 
 function tabsFor(authenticated: boolean) {
   if (authenticated) return TABS;
@@ -174,7 +178,11 @@ export function DebatesHubPanel() {
   // deliberately not an announced control — leaving Escape, which a phone rarely has, as the only
   // way out. The desktop aside is non-modal, so its toggle stays reachable and the design's
   // header stands.
-  const body = <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />;
+  const body = (
+    <ActionContextProvider value={{ overlay: 'debates_hub_sheet', component: 'debate_matchmaking' }}>
+      <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />
+    </ActionContextProvider>
+  );
 
   if (isMobile) {
     return createPortal(
@@ -245,16 +253,16 @@ type SurfaceProps = {
 
 function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: SurfaceProps) {
   const { authenticated, ready, accountKey } = useGeoChatAuth();
-  const filtersReconciled = useFilterOwner(accountKey, ready);
+  const filtersReconciled = useHubFilterOwner(accountKey, ready);
   const tabs = tabsFor(authenticated);
   const activeTab = visibleTab(requestedTab, authenticated);
   const { data: activity } = useDebateActivity(authenticated);
   const { data: requests } = useDebateRequests(authenticated);
 
-  const incoming = useUnexpiredRequests(requests?.incoming ?? []);
-  const scheduledAwaiting = useScheduledAwaitingBadgeCount(activity);
-  const requestCount = (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) + scheduledAwaiting;
+  const requestCount = useRequestsTabCount({ authenticated, activity, requests });
   const scrollRef = React.useRef<HTMLDivElement>(null);
+  // Shared so the banner can hand focus up to the header's calendar when it leaves.
+  const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   // One scroll container is shared by all four tabs, so a scrolled People list would otherwise
   // leave Requests scrolled to the same offset.
@@ -272,8 +280,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         <Text as="h2" variant="smallTitle">
           Debates
         </Text>
-        <div className="flex min-w-0 items-center gap-1">
-          <AvailabilityToggle />
+        <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
           {onClose ? (
             <button
               type="button"
@@ -281,15 +288,15 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               data-geo-analytics-intent="close_debates_hub"
               aria-label="Close debates"
               onClick={onClose}
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+              className={HUB_ICON_BUTTON_CLASS_NAME}
             >
               <CloseSmall />
             </button>
           ) : null}
-        </div>
+        </HubHeaderControls>
       </div>
 
-      <SetScheduleBanner />
+      <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
 
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
           restoration, so a row drawn before then is the signed-out one — a returning viewer would
@@ -301,7 +308,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
               with no way to reach it. Scrolling costs nothing at the widths where everything
               already fits, and Requests carries the badge, so it is the worst one to lose. */}
           <div className="no-scrollbar overflow-x-auto">
-            <div className="relative flex w-max items-center gap-6 pb-2">
+            {/* `gap-4` rather than `gap-6`: at the panel's 400px the five labels fill the row, so
+                Requests' badge sat past the right edge, in overflow a hidden scrollbar never
+                offers. */}
+            <div className="relative flex w-max items-center gap-4 pb-2">
               {tabs.map(tab => (
                 <button
                   key={tab.id}
@@ -382,94 +392,57 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           </>
         )}
       </motion.div>
+
+      {!ready || !filtersReconciled ? null : <ExpandToWorkspaceLink activeTab={activeTab} />}
     </div>
   );
 }
 
-function AvailabilityToggle() {
-  const { authenticated } = useGeoChatAuth();
-  const { data: activity } = useDebateActivity(authenticated);
-  const updateAvailability = useUpdateDebateAvailability();
-
-  const available = activity?.available_to_debate ?? false;
-
-  if (!authenticated) return null;
-
-  return (
-    <button
-      type="button"
-      data-geo-analytics-label="Debate availability"
-      data-geo-analytics-intent="update_debate_availability"
-      role="switch"
-      // Without this the switch announces "Unavailable, off", which is ambiguous about which way
-      // pressing it goes.
-      aria-label="Available to debate"
-      aria-checked={available}
-      disabled={updateAvailability.isPending}
-      onClick={() => updateAvailability.mutate(!available)}
-      className={cx(
-        'flex shrink-0 items-center gap-1.5 rounded-full px-2.5 py-1.5 text-metadataMedium transition-colors disabled:cursor-wait',
-        available ? 'bg-green/15 text-green' : 'bg-grey-01 text-grey-04'
-      )}
-    >
-      <span>{available ? "I'm available" : 'Unavailable'}</span>
-      <span
-        aria-hidden="true"
-        className={cx(
-          'relative h-4 w-6 shrink-0 rounded-full transition-colors',
-          available ? 'bg-green' : 'bg-grey-03'
-        )}
-      >
-        <span
-          className={cx(
-            'absolute top-0.5 left-0.5 h-3 w-3 rounded-full bg-white transition-transform',
-            available && 'translate-x-2'
-          )}
-        />
-      </span>
-    </button>
-  );
+/**
+ * The way out to the full-screen hub at `/matchmaking`.
+ *
+ * Values match the workspace picker (`lobby` / `explore` / `positions`). Lobby is omitted from the
+ * URL as the workspace default.
+ */
+function workspaceListFor(tab: DebatesHubTab): string | null {
+  if (tab === 'explore' || tab === 'positions' || tab === 'lobby') return tab;
+  return null;
 }
 
-/**
- * Keeps the hub's filter bar attributed to the viewer who set it.
- *
- * The selections are session-scoped (GEO-2850), and a session outlives a sign-in — so "whose are
- * these" has to be tracked rather than assumed. Three transitions, and they do not want the same
- * answer:
- *
- * Signing in is the *same person* authenticating, not a new one. The Claims tab offers a sign-in
- * prompt from inside its own empty state, so wiping the bar there would lose the picks a viewer
- * made seconds earlier on the flow the tab itself invited — which is the complaint GEO-2850 exists
- * to fix. Nothing is cleared, and nothing is re-armed either: an untouched session still has its
- * seed, so the membership default GEO-2834 is about lands on its own once the account's spaces
- * arrive. A session whose seed is spent is one where the viewer worked the menu, and forcing it
- * back would overwrite what they did — including the deliberate clear that GEO-2789 says must
- * never be second-guessed, which looks identical to an untouched filter from here.
- *
- * A different account is a different viewer, and inherits nothing.
- *
- * Signing *out* changes nothing here. `owner` keeps naming the last account seen, so the next
- * sign-in is still compared against it — otherwise A could sign out, B sign in, and B be treated
- * as a first sign-in and handed A's filters.
- *
- * Held until Privy has resolved, because `accountKey` is null before that and a null mid-resolve
- * is not someone signing out.
- */
-function useFilterOwner(accountKey: string | null, ready: boolean) {
-  const [owner, setOwner] = useAtom(debatesHubFiltersOwnerAtom);
-  const resetFilters = useSetAtom(resetDebatesHubFiltersAtom);
+function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
+  const { close } = useDebatesHub();
 
-  // Only a handover between two established accounts leaves anything on screen that is not this
-  // viewer's. Every other case — signed out, first sign-in, the same account — keeps the bar it
-  // already has by design, so there is nothing to wait for and the tabs render immediately.
-  const awaitingHandover = ready && accountKey !== null && owner !== null && owner !== accountKey;
+  const exploreSearch = useAtomValue(debatesHubExploreSearchAtom);
+  const exploreSpaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);
+  const exploreTopicIds = useAtomValue(debatesHubExploreTopicIdsAtom);
+  const lobbySearch = useAtomValue(debatesHubLobbySearchAtom);
+  const lobbySpaceIds = useAtomValue(debatesHubLobbySpaceIdsAtom);
+  const lobbyTopicIds = useAtomValue(debatesHubLobbyTopicIdsAtom);
+  const positionsSearch = useAtomValue(debatesHubPositionsSearchAtom);
+  const positionsSpaceIds = useAtomValue(debatesHubPositionsSpaceIdsAtom);
+  const positionsTopicIds = useAtomValue(debatesHubPositionsTopicIdsAtom);
 
-  React.useEffect(() => {
-    if (!ready || accountKey === null || owner === accountKey) return;
-    if (owner !== null) resetFilters();
-    setOwner(accountKey);
-  }, [accountKey, owner, ready, resetFilters, setOwner]);
+  const filters =
+    activeTab === 'lobby'
+      ? { search: lobbySearch, spaceIds: lobbySpaceIds, topicIds: lobbyTopicIds }
+      : activeTab === 'positions'
+        ? { search: positionsSearch, spaceIds: positionsSpaceIds, topicIds: positionsTopicIds }
+        : activeTab === 'explore'
+          ? { search: exploreSearch, spaceIds: exploreSpaceIds, topicIds: exploreTopicIds }
+          : { search: '', spaceIds: [] as string[], topicIds: [] as string[] };
 
-  return !awaitingHandover;
+  const query = toClaimsFilterSearch({ list: workspaceListFor(activeTab), ...filters }, 'lobby');
+
+  return (
+    <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
+      <Link
+        href={query ? `/matchmaking?${query}` : '/matchmaking'}
+        onClick={close}
+        className="flex items-center justify-center gap-1.5 text-metadata text-grey-04 transition-colors hover:text-text"
+      >
+        <ExpandSmall />
+        Open full screen
+      </Link>
+    </div>
+  );
 }

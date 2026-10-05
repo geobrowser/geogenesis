@@ -21,6 +21,8 @@ import {
   debatesHubLobbySpaceIdsAtom,
   debatesHubLobbySpaceSeedSpentAtom,
   debatesHubLobbyTopicIdsAtom,
+  debatesHubMatchesOnlyAtom,
+  debatesHubPeopleOnlineOnlyAtom,
   debatesHubPeopleSpaceIdsAtom,
   debatesHubPositionsSearchAtom,
   debatesHubPositionsSpaceIdsAtom,
@@ -41,13 +43,21 @@ const mocks = vi.hoisted(() => ({
   pathname: '/space/space-1/claims',
   searchParams: new URLSearchParams(),
   isMobile: false,
-  peerAvailability: false,
   scheduledAwaitingAnswerCount: undefined as number | undefined,
+  scheduledRequests: undefined as unknown[] | undefined,
 }));
 
-vi.mock('~/core/state/feature-flags', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
-  usePeerAvailabilityEnabled: () => mocks.peerAvailability,
+vi.mock('../rooms/scheduling-hooks', () => ({
+  useScheduledDebates: () => ({ data: mocks.scheduledRequests ? { requests: mocks.scheduledRequests } : undefined }),
+  // The People tab's booking modal; booking has its own coverage.
+  useCreateScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+  useRescheduleScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
+}));
+
+// The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
+vi.mock('./scheduled-debates-section', () => ({
+  ScheduledDebatesSection: () => null,
+  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -99,6 +109,7 @@ vi.mock('../hooks', () => ({
 
 vi.mock('./hooks', () => ({
   useMatchmakingScope: () => true,
+  useSchedulablePeople: () => ({ data: undefined, isLoading: false, error: null, refetch: vi.fn() }),
   useDebateRequests: () => ({ data: { outbound: null, incoming: [] }, isLoading: false, error: null }),
   useDebatePeople: () => ({
     data: mocks.peopleError ? undefined : { people: mocks.people },
@@ -203,8 +214,8 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/claims';
   mocks.searchParams = new URLSearchParams();
   mocks.isMobile = false;
-  mocks.peerAvailability = false;
   mocks.scheduledAwaitingAnswerCount = undefined;
+  mocks.scheduledRequests = undefined;
 });
 
 afterEach(cleanup);
@@ -239,6 +250,7 @@ const FILTER_ATOMS = [
   { name: 'debatesHubLobbySearchAtom', atom: debatesHubLobbySearchAtom, dirty: 'nuclear', cleared: '' },
   { name: 'debatesHubLobbySpaceSeedSpentAtom', atom: debatesHubLobbySpaceSeedSpentAtom, dirty: true, cleared: false },
   { name: 'debatesHubPeopleSpaceIdsAtom', atom: debatesHubPeopleSpaceIdsAtom, dirty: ['space-a'], cleared: [] },
+  { name: 'debatesHubPeopleOnlineOnlyAtom', atom: debatesHubPeopleOnlineOnlyAtom, dirty: true, cleared: false },
 ] as const;
 
 describe('DebatesHubPanel', () => {
@@ -288,7 +300,7 @@ describe('DebatesHubPanel', () => {
    */
   it('covers every filter atom on every surface', () => {
     const exported = Object.keys(atomsModule).filter(name =>
-      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent)Atom$/.test(name)
+      /^debatesHub[A-Z][A-Za-z]*(?:SpaceIds|TopicIds|Search|SpaceSeedSpent|OnlineOnly)Atom$/.test(name)
     );
 
     expect(new Set(exported)).toEqual(new Set(FILTER_ATOMS.map(entry => entry.name)));
@@ -441,7 +453,8 @@ describe('DebatesHubPanel', () => {
     fireEvent.click(screen.getByRole('button', { name: /^People/ }));
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
-    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    // Signed in, the list includes offline people free at shared times, so the empty copy says so.
+    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
   });
 
   it('toggles availability from the panel header', () => {
@@ -705,7 +718,188 @@ describe('warming Explore', () => {
   });
 });
 
-// The Requests tab's badge counts scheduled requests from activity, behind the flag.
+describe('the way out to the full-screen hub', () => {
+  it('offers it from every tab, not just the one it was added on', () => {
+    for (const tab of ['requests', 'lobby', 'explore', 'positions', 'people'] as const) {
+      const view = renderOpen(tab);
+      // The route, whatever the tab hands over with it.
+      expect(screen.getByRole('link', { name: /open full screen/i }).getAttribute('href')).toMatch(/^\/matchmaking/);
+      cleanup();
+      void view;
+    }
+  });
+
+  it.each([
+    ['explore', 'explore'],
+    ['positions', 'positions'],
+  ] as const)('opens the workspace on the list %s was showing', (tab, list) => {
+    renderOpen(tab);
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe(list);
+  });
+
+  // Hidden with the tabs: the link reads filter atoms that are still the previous account's until reset.
+  it('is not offered while the panel is holding its tabs back', () => {
+    mocks.ready = false;
+    renderOpen('explore');
+
+    expect(screen.queryByTestId('claims-tab')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /open full screen/i })).not.toBeInTheDocument();
+  });
+
+  // Link the list on screen, not the stored tab — signed out that can be Explore while storage still says Lobby.
+  describe('signed out, where the tab on screen is not the tab in storage', () => {
+    it('carries what Explore is showing, not the stored tab’s empty atoms', () => {
+      mocks.authenticated = false;
+      const store = createStore();
+      store.set(debatesHubAtom, { tab: 'lobby' });
+      store.set(debatesHubExploreSearchAtom, 'nuclear');
+      render(
+        <Provider store={store}>
+          <DebatesHubPanel />
+        </Provider>
+      );
+
+      const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+      expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('nuclear');
+    });
+
+    it('names Explore, not the list the viewer cannot see', () => {
+      mocks.authenticated = false;
+      const store = createStore();
+      store.set(debatesHubAtom, { tab: 'positions' });
+      store.set(debatesHubExploreSearchAtom, 'nuclear');
+      render(
+        <Provider store={store}>
+          <DebatesHubPanel />
+        </Provider>
+      );
+
+      const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+      expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBe('explore');
+    });
+  });
+
+  it('omits Lobby from the URL, which is the workspace default', () => {
+    renderOpen('lobby');
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+  });
+
+  it.each(['requests', 'people'] as const)('hands over no list from %s, which is not one', tab => {
+    renderOpen(tab);
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(href).toBe('/matchmaking');
+  });
+
+  it('hands over Lobby from Lobby, not what its Matches-only toggle says', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'lobby' });
+    store.set(debatesHubMatchesOnlyAtom, true);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    // Default list is omitted; the toggle never becomes its own `list` value.
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('list')).toBeNull();
+  });
+
+  /**
+   * A real anchor, so a modified click opens a tab and the destination shows on hover. A router
+   * push would give neither, and the whole point of the route is that it can be linked to.
+   */
+  it('is a link rather than a button', () => {
+    renderOpen('explore');
+
+    const link = screen.getByRole('link', { name: /open full screen/i });
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('href')).toMatch(/^\/matchmaking/);
+  });
+
+  it('closes the panel, so it is not left over the page it navigated to', () => {
+    const store = renderOpen('explore');
+    expect(store.get(debatesHubAtom)).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('link', { name: /open full screen/i }));
+
+    expect(store.get(debatesHubAtom)).toBeNull();
+  });
+});
+
+describe('the filters the expand link carries', () => {
+  it('links to a bare route when nothing is narrowed and nothing handed over', () => {
+    renderOpen('people');
+
+    expect(screen.getByRole('link', { name: /open full screen/i })).toHaveAttribute('href', '/matchmaking');
+  });
+
+  /**
+   * `scope` was the old param name. The workspace reads `list` now; a leftover `scope` must not
+   * become that choice.
+   */
+  it('carries no scope, which the workspace has no way to honour', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('scope')).toBeNull();
+  });
+
+  it('carries the tab’s narrowing into the URL', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'explore' });
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+    store.set(debatesHubExploreSpaceIdsAtom, ['space-a']);
+    store.set(debatesHubExploreTopicIdsAtom, ['topic-a', 'topic-b']);
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    const params = new URLSearchParams(href.split('?')[1] ?? '');
+    // Carried with the rest: the search is an atom now, so it outlives the tab being unmounted,
+    // which was the one reason this link used to leave it behind.
+    expect(params.get('list')).toBe('explore');
+    expect(params.get('q')).toBe('nuclear');
+    expect(params.get('spaces')).toBe('space-a');
+    expect(params.get('topics')).toBe('topic-a,topic-b');
+  });
+
+  it('carries Lobby’s narrowing, not Explore’s', () => {
+    const store = createStore();
+    store.set(debatesHubAtom, { tab: 'lobby' });
+    store.set(debatesHubLobbySearchAtom, 'climate');
+    store.set(debatesHubExploreSearchAtom, 'nuclear');
+
+    render(
+      <Provider store={store}>
+        <DebatesHubPanel />
+      </Provider>
+    );
+
+    const href = screen.getByRole('link', { name: /open full screen/i }).getAttribute('href') ?? '';
+    expect(new URLSearchParams(href.split('?')[1] ?? '').get('q')).toBe('climate');
+  });
+});
+
+// The Requests tab's badge counts scheduled requests from activity.
 describe('Requests badge', () => {
   function renderRequestsButton() {
     const store = createStore();
@@ -719,21 +913,24 @@ describe('Requests badge', () => {
   }
 
   it('counts scheduled requests waiting on an answer', () => {
-    mocks.peerAvailability = true;
     mocks.scheduledAwaitingAnswerCount = 2;
 
     expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
   });
 
   it('shows no badge when activity has no count', () => {
-    mocks.peerAvailability = true;
-
     expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
   });
 
-  it('counts no scheduled requests with the flag off, even when activity has some', () => {
-    mocks.scheduledAwaitingAnswerCount = 2;
+  // Pending in either direction: a request you sent is still in the tab until they answer.
+  it('counts every pending scheduled request once the list lands, sent or received', () => {
+    mocks.scheduledAwaitingAnswerCount = 1;
+    mocks.scheduledRequests = [
+      { status: 'pending', room_id: null, viewer_must_answer: true },
+      { status: 'pending', room_id: null, viewer_must_answer: false },
+      { status: 'accepted', room_id: 'room-1', viewer_must_answer: false },
+    ];
 
-    expect(renderRequestsButton()).not.toHaveTextContent('pending requests');
+    expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
   });
 });

@@ -20,12 +20,14 @@ import type { ClaimPickerEntity } from '~/core/debates/claim-picker-page';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
+import { getEntityNames } from '~/core/io/queries';
 import {
   type RelationFacetCount,
   decodeRelationFacet,
   relationFacetByFilterDocument,
   relationFacetDocument,
 } from '~/core/io/relation-facet';
+import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES } from '~/core/profile/profile-facts';
 
 import { type TaggedClaimSearch, useTaggedClaimSearch } from './tagged-claim-search';
 
@@ -178,6 +180,20 @@ export type TaggedClaimFilters = {
    * they all did before this existed. A single-space surface sets it to that space.
    */
   topicSpaceIds?: string[];
+  /**
+   * Leave out the claims this account holds a position on — its personal space id, which is what a
+   * vote's `userId` is. "Hide my positions" (GEO-2863, GEO-2894).
+   *
+   * Answered by the server rather than by removing rows from a page after it arrives: that way a
+   * page is fifty rows the viewer can see, the facet counts describe the same set, and there is no
+   * paging the corpus to find something to show. A retracted position counts as unanswered.
+   *
+   * This is the graph's record, which trails geo-chat's by the indexer lag, so a claim answered a
+   * moment ago can still arrive. The caller's collapse is what folds that one away.
+   *
+   * Undefined or `null` excludes nothing.
+   */
+  excludeAnsweredBy?: string | null;
 };
 
 export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
@@ -250,12 +266,6 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
 
   return {
     claims,
-    // What the server actually returned, before the two `continue`s above. Callers that need to
-    // know a *page arrived* have to count this rather than `claims`: a page of nodes that all lack
-    // a name, or a placeable tag space, decodes to nothing — and a caller reading the decoded
-    // length cannot tell that from no page at all. `useBoundedPaging` is the one that must, or the
-    // page goes uncharged and its sentinel keeps asking for more.
-    fetched: data.entitiesConnection?.nodes?.length ?? 0,
     hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
     endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
   };
@@ -338,6 +348,20 @@ export function taggedEntityFilter(
     and.push({ id: { in: searchClaimIds } });
   }
 
+  // An anti-join through the vote table's primary key (gaia#987), so it costs the same however
+  // many positions the viewer holds — where an `id: { notIn: … }` list grew with them.
+  if (filters.excludeAnsweredBy) {
+    and.push({
+      not: {
+        votedBy: {
+          userId: uuidToHex(filters.excludeAnsweredBy),
+          kinds: [...POSITION_VOTE_KINDS],
+          types: [...POSITION_VOTE_TYPES],
+        },
+      },
+    });
+  }
+
   return { and };
 }
 
@@ -412,7 +436,16 @@ const TAGGED_SEARCH_CLAIMS_QUERY_PREFIX = ['tagged-claims', 'search-claims'] as 
 
 /** One page of a search's rows. Distinct from the list key — see where it is used. */
 const taggedSearchClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters, ids: string[]) =>
-  ['tagged-claims', 'search-claims', tagId, filters.topicIds, filters.spaceIds, filters.eligibleSpaceIds, ids] as const;
+  [
+    'tagged-claims',
+    'search-claims',
+    tagId,
+    filters.topicIds,
+    filters.spaceIds,
+    filters.eligibleSpaceIds,
+    filters.excludeAnsweredBy ?? null,
+    ids,
+  ] as const;
 
 export const taggedClaimsQueryKey = (
   tagId: string,
@@ -433,6 +466,7 @@ export const taggedClaimsQueryKey = (
     filters.spaceIds,
     filters.eligibleSpaceIds,
     filters.topicSpaceIds ?? null,
+    filters.excludeAnsweredBy ?? null,
   ] as const;
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
@@ -600,21 +634,6 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
   const claimsNow = browsing ? browsedClaims : searchClaimsNow;
   const claims = useLastSettled(claimsNow, searchRowsSettling, tagId);
 
-  /**
-   * Rows the server has returned across every page held, decodable or not — see `fetched`.
-   *
-   * Zero while the *previous* filter's pages are being held. `keepPreviousData` is right for the
-   * list — narrowing should narrow rather than blank and refill — but a count is not a list: the
-   * caller has already reset its paging budget for the new filter, so handing it the old one's
-   * total charges a page that belongs to a different question. The real first page then arrives at
-   * an equal or smaller count and is never evaluated, leaving the budget a page out in whichever
-   * direction the previous list happened to point.
-   */
-  const fetched = React.useMemo(
-    () => (query.isPlaceholderData ? 0 : (query.data?.pages.reduce((total, page) => total + page.fetched, 0) ?? 0)),
-    [query.data?.pages, query.isPlaceholderData]
-  );
-
   return {
     // Disabled means no answer, not the last one.
     //
@@ -625,7 +644,6 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // wasteful — `fetchNextPage` is a manual call and ignores `enabled`, so a sentinel reading a
     // cached `true` pages a query whose scope has not been resolved yet, from an old cursor.
     claims: enabled ? claims : NO_TAGGED_CLAIMS,
-    fetched: enabled ? fetched : 0,
     // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
     // "still looking" and never show its empty state.
     //
@@ -659,6 +677,73 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // key — the approach `claims-tab` already takes for this, and for the same reason: a refetch
     // handed out of a `combine` would be a new identity on every render.
     refetch: searching ? refetchSearching : query.refetch,
+  };
+}
+
+const TAGGED_CLAIM_COUNT_SOURCE = /* GraphQL */ `
+  query TaggedClaimCount($claimTypeId: UUID!, $filter: EntityFilter!) {
+    entitiesConnection(first: 1, typeIds: { in: [$claimTypeId] }, filter: $filter) {
+      totalCount
+    }
+  }
+`;
+
+type TaggedClaimCountQuery = { entitiesConnection: { totalCount: number } | null };
+
+const taggedClaimCountDocument = parse(TAGGED_CLAIM_COUNT_SOURCE) as TypedDocumentNode<
+  TaggedClaimCountQuery,
+  Record<string, unknown>
+>;
+
+/**
+ * How many of the claims these filters match the viewer has answered — the ones
+ * `excludeAnsweredBy` is leaving out.
+ *
+ * For one question only: what an empty list means. With the answered claims left out by the server,
+ * "you have answered every claim here" and "nothing matches" both arrive as no rows, and they want
+ * different ways out — the switch, or the filters. So the caller asks this once the excluded list
+ * has come back empty, and not before; a list with rows in it never needs it.
+ *
+ * `null` while it is out, or when nothing is being excluded.
+ */
+export function useTaggedAnsweredCount(tagId: string, filters: TaggedClaimFilters, enabled: boolean) {
+  const search = useTagSearch(tagId, filters, enabled);
+  const userId = filters.excludeAnsweredBy ?? null;
+
+  const query = useQuery({
+    queryKey: [...taggedClaimsQueryKey(tagId, filters, search.claimIds), 'answered-count'] as const,
+    queryFn: ({ signal }) => {
+      const { and } = taggedEntityFilter(tagId, { ...filters, excludeAnsweredBy: null }, search.claimIds);
+      return Effect.runPromise(
+        graphql({
+          query: taggedClaimCountDocument,
+          decoder: (data: TaggedClaimCountQuery) => data.entitiesConnection?.totalCount ?? 0,
+          variables: {
+            claimTypeId: CLAIM_TYPE_ID,
+            filter: {
+              and: [
+                ...and,
+                {
+                  votedBy: {
+                    userId: uuidToHex(userId ?? ''),
+                    kinds: [...POSITION_VOTE_KINDS],
+                    types: [...POSITION_VOTE_TYPES],
+                  },
+                },
+              ],
+            },
+          },
+          signal,
+        })
+      );
+    },
+    staleTime: TAGGED_STALE_TIME,
+    enabled: enabled && userId !== null && search.settled,
+  });
+
+  return {
+    answeredCount: enabled && userId !== null ? (query.data ?? null) : null,
+    isLoading: enabled && userId !== null && (query.isLoading || !search.settled),
   };
 }
 
@@ -707,30 +792,6 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
  */
 export type TaggedFacetCount = RelationFacetCount;
 
-/**
- * Names for the topic ids a facet came back with.
- *
- * The aggregate answers in ids, and a menu row needs a word. One request covers the whole menu and
- * is keyed on the ids, so it is fetched once and reused while the viewer narrows — topic names do
- * not change on the timescale of a filter click.
- */
-const TOPIC_NAMES_SOURCE = /* GraphQL */ `
-  query TaggedTopicNames($ids: [UUID!]!) {
-    entitiesConnection(first: 1000, filter: { id: { in: $ids } }) {
-      nodes {
-        id
-        name
-      }
-    }
-  }
-`;
-
-type TopicNamesQuery = {
-  entitiesConnection: { nodes: Array<{ id: string; name: string | null } | null> | null } | null;
-};
-
-const topicNamesDocument = parse(TOPIC_NAMES_SOURCE) as TypedDocumentNode<TopicNamesQuery, { ids: string[] }>;
-
 export const taggedFacetQueryKey = (
   dimension: 'topics' | 'spaces',
   tagId: string,
@@ -750,6 +811,7 @@ export const taggedFacetQueryKey = (
     dimension === 'spaces' ? null : filters.spaceIds,
     filters.eligibleSpaceIds,
     filters.topicSpaceIds ?? null,
+    filters.excludeAnsweredBy ?? null,
   ] as const;
 
 const NO_FACET_COUNTS: TaggedFacetCount[] = [];
@@ -814,28 +876,21 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
 
   const ids = React.useMemo(() => (counts.data ?? NO_FACET_COUNTS).map(count => count.id), [counts.data]);
 
+  // The aggregate answers in ids, and a menu row needs a word. Keyed on the ids, so the names are
+  // fetched once and reused while the viewer narrows — topic names do not change on the timescale of
+  // a filter click.
   const names = useQuery({
     queryKey: ['tagged-claims', 'topic-names', ids] as const,
     // Names outlive a filter click, so the previous set stands while the new one is fetched rather
     // than every row falling back to "Topic" for a moment.
     placeholderData: keepPreviousData,
-    queryFn: ({ signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: topicNamesDocument,
-          decoder: (data: TopicNamesQuery) => {
-            const map = new Map<string, string | null>();
-            // Keyed on the normalized id. `groupedAggregates` answers in dashed UUIDs and
-            // `entitiesConnection` in dashless ones, so an unnormalized map never matches and every
-            // row falls back to the word "Topic" — which is exactly how this shipped and was caught
-            // in a browser.
-            for (const node of data.entitiesConnection?.nodes ?? []) if (node) map.set(uuidToHex(node.id), node.name);
-            return map;
-          },
-          variables: { ids },
-          signal,
-        })
-      ),
+    queryFn: async ({ signal }) => {
+      const rows = await Effect.runPromise(getEntityNames(ids, signal));
+      // Keyed on the normalized id. `groupedAggregates` answers in dashed UUIDs and `entities` in
+      // dashless ones, so an unnormalized map never matches and every row falls back to the word
+      // "Topic" — which is exactly how this shipped and was caught in a browser.
+      return new Map(rows.map(row => [uuidToHex(row.id), row.name]));
+    },
     staleTime: TOPIC_NAMES_STALE_TIME,
     enabled: enabled && ids.length > 0,
   });

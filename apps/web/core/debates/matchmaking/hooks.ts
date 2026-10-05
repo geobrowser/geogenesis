@@ -6,8 +6,11 @@ import * as React from 'react';
 
 import { useRouter } from 'next/navigation';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
 import { useParticipantAvatars, withRowParticipantAvatars } from '~/core/debates/participant-avatars';
 import { withQueryData } from '~/core/debates/with-query-data';
+import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
   type CreateDebateRequestBody,
@@ -28,6 +31,7 @@ import {
   listDebateRequests,
   listMatchmakingClaims,
   listMatchmakingMatches,
+  listSchedulablePeople,
   unblockDebateUser,
   withdrawDebateRequest,
 } from '../api';
@@ -168,6 +172,46 @@ export function useDebatePeople(enabled: boolean) {
 
   return withQueryData(query, data);
 }
+
+/**
+ * Fixed so every caller shares one cache entry. geo-chat's range is inclusive, so this is the modal's
+ * seven days. The limit leaves room for a day of past slots, which geo-chat returned before
+ * geo-chat#165 and no longer does; kept so this works against either build.
+ */
+const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
+const SCHEDULABLE_SLOTS = 48 + 3;
+
+/** Everyone with free time this week, online or not, shared slots first (GEO-2937). */
+export function useSchedulablePeople(enabled: boolean) {
+  const days = SCHEDULABLE_DAYS;
+  const limit = SCHEDULABLE_SLOTS;
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const queryEnabled = enabled && authenticated;
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions(accountKey),
+    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit),
+    queryFn: ({ signal }) => listSchedulablePeople({ days, limit }, getPrivyIdentityToken, accountKey, signal),
+    enabled: queryEnabled,
+  });
+
+  // geo-chat's `avatar_cid` is a first-sight snapshot; see `useDebatePeople`.
+  const users = React.useMemo(() => query.data?.people.map(person => person.user) ?? EMPTY_SUMMARIES, [query.data]);
+  const withAvatar = useParticipantAvatars(users, queryEnabled);
+
+  const data = React.useMemo(
+    () =>
+      query.data
+        ? { ...query.data, people: query.data.people.map(person => ({ ...person, user: withAvatar(person.user) })) }
+        : query.data,
+    [query.data, withAvatar]
+  );
+
+  return withQueryData(query, data);
+}
+
+const EMPTY_SUMMARIES: DebateParticipantSummary[] = [];
 
 export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -327,13 +371,17 @@ export function useDebateBlocks(enabled: boolean) {
 }
 
 export function useCreateDebateRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
     onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
   });
+  return useObservedMutation(mutation, 'start_debate', request =>
+    getContext({ target_type: 'claim', target_id: request.claim_entity_id })
+  );
 }
 
 export function useWithdrawDebateRequest() {
@@ -365,11 +413,12 @@ export function useDismissDebateRequest() {
  * `ready`. The other side is told by `DebateReadyPrompt` off its own activity.
  */
 export function useAcceptDebateRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const router = useRouter();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: ({ requestId, formatId }: { requestId: string; formatId?: string }) =>
       acceptDebateRequest(requestId, getPrivyIdentityToken, accountKey, formatId),
     // Claimed before the request leaves, released when it settles. The id-keyed intent below cannot
@@ -391,6 +440,9 @@ export function useAcceptDebateRequest() {
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
+  return useObservedMutation(mutation, 'join_debate', request =>
+    getContext({ target_type: 'debate_request', target_id: request.requestId })
+  );
 }
 
 export function useBlockDebateUser() {

@@ -1,5 +1,15 @@
 export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates';
-export type DebateActionAnalyticsSurface = DebateAnalyticsSurface | 'request-popup';
+/**
+ * Surfaces with actions but no filters. The last four are availability and scheduling's own
+ * dialogs and prompts, which open from the hub and from outside it alike.
+ */
+export type DebateActionAnalyticsSurface =
+  | DebateAnalyticsSurface
+  | 'request-popup'
+  | 'schedule-editor'
+  | 'peer-availability'
+  | 'availability-link'
+  | 'room-join-prompt';
 
 const ACTION_SURFACE_ANALYTICS = {
   hub: {
@@ -17,6 +27,22 @@ const ACTION_SURFACE_ANALYTICS = {
   'request-popup': {
     labelPrefix: 'Debate request popup',
     actionIntent: 'debate_request_popup_action',
+  },
+  'schedule-editor': {
+    labelPrefix: 'Schedule editor',
+    actionIntent: 'debate_schedule_action',
+  },
+  'peer-availability': {
+    labelPrefix: 'Availability',
+    actionIntent: 'peer_availability_action',
+  },
+  'availability-link': {
+    labelPrefix: 'Availability link',
+    actionIntent: 'availability_link_action',
+  },
+  'room-join-prompt': {
+    labelPrefix: 'Scheduled debate prompt',
+    actionIntent: 'scheduled_debate_prompt_action',
   },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 

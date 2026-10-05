@@ -17,11 +17,18 @@ export function parseTopicFeedIds(raw: unknown): string[] {
   return [...byCanonicalId.values()];
 }
 
-/** Bounds the AND-composed Topic predicates accepted by both public Topic feed endpoints. */
-export function parseTopicFeedSelectedIds(raw: unknown, pageTopicId: string): string[] {
-  return parseTopicFeedIds(raw)
-    .filter(id => normId(id) !== normId(pageTopicId))
-    .slice(0, MAX_TOPIC_FEED_SELECTED_TOPICS);
+/**
+ * Bounds the AND-composed Topic predicates accepted by the public Topic feed endpoints.
+ *
+ * A topic page drops its own topic, which every row already carries. A topic space has no page
+ * topic in the feed's predicate, so it passes none.
+ */
+export function parseTopicFeedSelectedIds(raw: unknown, pageTopicId?: string): string[] {
+  const ids = parseTopicFeedIds(raw);
+  return (pageTopicId ? ids.filter(id => normId(id) !== normId(pageTopicId)) : ids).slice(
+    0,
+    MAX_TOPIC_FEED_SELECTED_TOPICS
+  );
 }
 
 /**

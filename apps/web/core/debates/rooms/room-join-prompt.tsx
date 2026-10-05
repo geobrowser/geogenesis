@@ -2,66 +2,138 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+import { MotionConfig, motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
 
 import { Text } from '~/design-system/text';
 
+import { ThreadAvatar } from '~/partials/comments/thread-avatar';
+
 import type { UpcomingDebateRoom } from '../api';
+import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
+import { useServerClock } from '../matchmaking/use-request-countdown';
 import { ROOM_JOIN_PROMPT } from './room-copy';
+import { opponentName, useUpcomingRoomOpponent } from './room-opponent';
 import { debateRoomPath } from './room-routes';
 
+const MINUTE_MS = 60_000;
+/** Minute-grained copy, so a quarter-minute tick is never more than 15s stale. */
+const TICK_MS = 15_000;
+
 /**
- * The offer to join a scheduled debate (GEO-2941), never a redirect. Urgency comes from the
- * server's `due` and `others_present`, so this and the Requests tab (GEO-2940) cannot disagree.
+ * The offer to join a scheduled debate (GEO-2941), never a redirect. Shown at the top of whatever
+ * page the viewer is on once the room opens. Whether the opponent is in comes from the server's
+ * `others_present`, so this and the Requests tab (GEO-2940) cannot disagree.
  */
 export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateRoom; onNotNow: () => void }) {
   const router = useRouter();
   const [joining, setJoining] = React.useState(false);
   const [, startJoining] = React.useTransition();
+  const opponent = useUpcomingRoomOpponent(room);
+  const now = useNow();
 
-  const message = room.others_present
-    ? ROOM_JOIN_PROMPT.waitingNow
-    : room.due
-      ? ROOM_JOIN_PROMPT.startingNow
-      : ROOM_JOIN_PROMPT.scheduled(formatTime(room.starts_at));
+  const name = opponentName(opponent);
+  const schedule = scheduleLabel(new Date(room.starts_at).getTime() - now);
 
   return (
-    <div className="pointer-events-none fixed bottom-4 left-1/2 z-1100 flex w-[calc(100%-1.5rem)] max-w-md -translate-x-1/2 justify-center">
-      <div className="pointer-events-auto flex w-full items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 shadow-card">
-        <div className="min-w-0 flex-1">
-          <Text as="p" variant="metadataMedium" className="truncate">
-            {ROOM_JOIN_PROMPT.title}
-          </Text>
-          <Text as="p" variant="footnote" color="grey-04" className="truncate">
-            {message}
-          </Text>
-        </div>
-        <button
-          type="button"
-          onClick={onNotNow}
-          className="shrink-0 rounded-full px-3 py-1.5 text-metadata text-grey-04 hover:bg-grey-01"
+    <div className="pointer-events-none fixed top-[calc(2.75rem+0.75rem)] left-1/2 z-1100 flex w-[calc(100%-1.5rem)] max-w-lg -translate-x-1/2 justify-center">
+      {/* Scoped rather than global, as the hub does: `user` keeps the fade and drops the slide. */}
+      <MotionConfig reducedMotion="user">
+        <motion.div
+          initial={{ opacity: 0, y: -12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.2, ease: 'easeOut' }}
+          className="pointer-events-auto flex w-full items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 shadow-card md:flex-wrap"
         >
-          {ROOM_JOIN_PROMPT.notNow}
-        </button>
-        <button
-          type="button"
-          disabled={joining}
-          onClick={() => {
-            setJoining(true);
-            startJoining(() => router.push(debateRoomPath(room.room_id)));
-          }}
-          className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white transition-opacity hover:opacity-90 disabled:opacity-70"
-        >
-          {joining ? 'Joining…' : ROOM_JOIN_PROMPT.join}
-        </button>
-      </div>
+          {/* Framed, not a bare `Avatar`: a real photo fills whatever box it is given, and an unsized
+              one drew the opponent's profile photo at full resolution across the page. */}
+          <ThreadAvatar
+            avatarUrl={opponent?.avatar_cid}
+            value={opponent?.profile_space_id || room.room_id}
+            sizePx={36}
+          />
+          <div className="min-w-0 flex-1">
+            {/* Only what changes on an event is announced. The time line below re-renders every
+                minute, and inside the live region it would be read out every minute. */}
+            <div role="status" aria-live="polite">
+              <Text as="p" variant="metadataMedium" className="truncate">
+                {ROOM_JOIN_PROMPT.title}
+              </Text>
+              <p className="mt-0.5 flex min-w-0 items-center gap-1.5">
+                <span
+                  aria-hidden
+                  className={cx('size-2 shrink-0 rounded-full', room.others_present ? 'bg-green' : 'bg-grey-03')}
+                />
+                <Text
+                  as="span"
+                  variant="footnoteMedium"
+                  color={room.others_present ? 'text' : 'grey-04'}
+                  className="truncate"
+                >
+                  {room.others_present
+                    ? ROOM_JOIN_PROMPT.opponentJoined(name)
+                    : ROOM_JOIN_PROMPT.opponentNotJoined(name)}
+                </Text>
+              </p>
+            </div>
+            {schedule && (
+              <Text as="p" variant="footnote" color="grey-04" className="mt-0.5 truncate">
+                {schedule}
+              </Text>
+            )}
+          </div>
+          <div className="flex shrink-0 items-center gap-2 md:w-full md:justify-end">
+            <button
+              type="button"
+              {...debateActionAnalyticsAttributes('room-join-prompt', 'Not now', 'dismiss_scheduled_debate_prompt')}
+              onClick={onNotNow}
+              className="shrink-0 rounded-full px-3 py-1.5 text-metadata text-grey-04 hover:bg-grey-01"
+            >
+              {ROOM_JOIN_PROMPT.notNow}
+            </button>
+            <button
+              type="button"
+              disabled={joining}
+              {...debateActionAnalyticsAttributes('room-join-prompt', 'Join', 'join_scheduled_debate')}
+              onClick={() => {
+                setJoining(true);
+                startJoining(() => router.push(debateRoomPath(room.room_id)));
+              }}
+              className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white transition-opacity hover:opacity-90 disabled:opacity-70"
+            >
+              {joining ? 'Joining…' : ROOM_JOIN_PROMPT.join}
+            </button>
+          </div>
+        </motion.div>
+      </MotionConfig>
     </div>
   );
 }
 
-function formatTime(iso: string) {
-  const at = new Date(iso);
-  return Number.isNaN(at.getTime())
-    ? 'the scheduled time'
-    : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+/**
+ * Minutes to the start, or since it. Ahead of the start it rounds up, so the last minute reads
+ * "in 1 min" rather than "in 0 mins"; the first minute after it reads as starting now rather than
+ * "0 mins ago". `null` for an unparseable start, which has nothing honest to say.
+ */
+export function scheduleLabel(untilStartMs: number): string | null {
+  if (!Number.isFinite(untilStartMs)) return null;
+  if (untilStartMs > 0) return ROOM_JOIN_PROMPT.scheduledIn(Math.ceil(untilStartMs / MINUTE_MS));
+  const elapsedMinutes = Math.floor(-untilStartMs / MINUTE_MS);
+  return elapsedMinutes < 1 ? ROOM_JOIN_PROMPT.startingNow : ROOM_JOIN_PROMPT.scheduledAgo(elapsedMinutes);
+}
+
+/** The server's clock where it has synced, so a skewed laptop does not misreport the start. */
+function useNow() {
+  const clock = useServerClock();
+  const [now, setNow] = React.useState(() => Date.now());
+
+  React.useEffect(() => {
+    const read = () => (clock ? clock.now() : Date.now());
+    setNow(read());
+    const interval = setInterval(() => setNow(read()), TICK_MS);
+    return () => clearInterval(interval);
+  }, [clock]);
+
+  return now;
 }

@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import { Text } from '~/design-system/text';
 
-import { roomPresenceLabel, roomPresenceNote } from './room-copy';
+import { UNNAMED_OPPONENT, roomPresenceLabel, roomPresenceNote } from './room-copy';
 import type { DebateRoomPresence, DebateRoomPresenceState } from './room-presence';
 
 /**
@@ -18,7 +18,7 @@ import type { DebateRoomPresence, DebateRoomPresenceState } from './room-presenc
  */
 export function DebateRoomPresenceIndicator({
   presence,
-  opponentName = 'Your opponent',
+  opponentName = UNNAMED_OPPONENT,
 }: {
   presence: DebateRoomPresence;
   opponentName?: string;

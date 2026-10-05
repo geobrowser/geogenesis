@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { AvailabilityBlock } from '~/core/availability/blocks';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Close } from '~/design-system/icons/close';
@@ -25,6 +26,8 @@ type Props = {
   onSave: (blocks: AvailabilityBlock[]) => void;
   /** Focus goes back here on close, since the opener is off in the panel behind the overlay. */
   openerRef?: React.RefObject<HTMLElement | null>;
+  /** Beside the close button — the "copy my availability link" control, where the caller has one. */
+  headerAction?: React.ReactNode;
 };
 
 /**
@@ -37,7 +40,16 @@ type Props = {
  * Edits are held until Save. Closing by any other route (Cancel, ×, Escape, the overlay) discards
  * them, because a schedule half-dragged is not one a person meant to publish.
  */
-export function AvailabilityModal({ open, onOpenChange, blocks, error, onRetry, onSave, openerRef }: Props) {
+export function AvailabilityModal({
+  open,
+  onOpenChange,
+  blocks,
+  error,
+  onRetry,
+  onSave,
+  openerRef,
+  headerAction,
+}: Props) {
   const [draft, setDraft] = React.useState<AvailabilityBlock[]>(blocks ?? []);
 
   return (
@@ -79,14 +91,18 @@ export function AvailabilityModal({ open, onOpenChange, blocks, error, onRetry, 
                   Set your debate schedule
                 </Text>
               </Title>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => onOpenChange(false)}
-                className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
-              >
-                <Close />
-              </button>
+              <div className="flex shrink-0 items-center gap-4">
+                {headerAction}
+                <button
+                  type="button"
+                  aria-label="Close"
+                  {...debateActionAnalyticsAttributes('schedule-editor', 'Close', 'close_debate_schedule')}
+                  onClick={() => onOpenChange(false)}
+                  className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
+                >
+                  <Close />
+                </button>
+              </div>
             </div>
 
             {/* Remounted per opening so a discarded draft cannot survive into the next one. The
@@ -127,6 +143,7 @@ export function AvailabilityModal({ open, onOpenChange, blocks, error, onRetry, 
                   <>
                     <button
                       type="button"
+                      {...debateActionAnalyticsAttributes('schedule-editor', 'Cancel', 'close_debate_schedule')}
                       onClick={() => onOpenChange(false)}
                       className="rounded-full px-3 py-1 text-metadata text-grey-04 transition-colors hover:text-text"
                     >
@@ -134,6 +151,7 @@ export function AvailabilityModal({ open, onOpenChange, blocks, error, onRetry, 
                     </button>
                     <button
                       type="button"
+                      {...debateActionAnalyticsAttributes('schedule-editor', 'Save', 'save_debate_schedule')}
                       onClick={() => {
                         onSave(draft);
                         onOpenChange(false);

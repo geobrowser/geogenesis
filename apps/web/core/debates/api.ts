@@ -3,6 +3,9 @@
 import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
+import type { RecordingPlaybackVariant } from './mobile-rendition';
+import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
+
 export type ParticipantSlot = 1 | 2;
 export type DebateMatchStatus = 'pending' | 'accepted' | 'declined' | 'expired';
 export type DebateStatus = 'ready' | 'connecting' | 'preflight' | 'in_progress' | 'thanking' | 'complete' | 'cancelled';
@@ -94,6 +97,11 @@ export type DebateRecording = {
   height: number | null;
   framerate: number | null;
   video_bits_per_second: number | null;
+  /**
+   * MIME type of the recording's 720p H.264 mobile rendition (GEO-3118), or null/absent until
+   * geo-chat has written one. Sign it with `getRecordingUrl(..., { variant: 'mobile' })`.
+   */
+  mobile_content_type?: string | null;
 };
 
 export type DebateMediaJobStatus = 'queued' | 'running' | 'succeeded' | 'failed';
@@ -299,6 +307,8 @@ export type DebateProfile = {
   available_to_debate: boolean;
   is_self: boolean;
   can_challenge: boolean;
+  /** Online but away for live requests (GEO-3119); see `DebatePerson.away`. */
+  away?: boolean;
 };
 
 export type DebateRematchParticipant = DebateParticipantSummary & {
@@ -452,6 +462,12 @@ export type DebateMatchmakingPresence = {
 export type DebatePerson = DebateParticipantSummary &
   DebateMatchmakingPresence & {
     can_challenge: boolean;
+    /**
+     * Online but not requestable for a live debate (GEO-3119): the tab is hidden, or nobody has used
+     * Geo in it for three minutes. The row offers Schedule instead of Request debate. Optional
+     * because an older geo-chat never lists such people at all.
+     */
+    away?: boolean;
   };
 
 export type DebatePeopleResponse = {
@@ -688,6 +704,24 @@ export type DismissDebateRequestBody = {
 
 export type DebateBlocksResponse = {
   blocked: DebateParticipantSummary[];
+};
+
+/**
+ * A claim the viewer marked "Not interested" (GEO-2862). Private to the viewer and stored in
+ * geo-chat, not on-chain: it is a browsing preference, not a position, and it sits beside any
+ * position the viewer holds rather than replacing it. geo-chat leaves these claims out of the
+ * viewer's `/matchmaking/claims` rows and facets (except the `mine` filter).
+ */
+export type NotInterestedClaim = {
+  claim_entity_id: string;
+  /** geo-chat's synced copy of the claim text; `null` when it has not synced the claim. */
+  claim_text: string | null;
+  created_at: string;
+};
+
+/** Every write returns the whole list, newest first, so the undo list can render from it. */
+export type NotInterestedClaimsResponse = {
+  claims: NotInterestedClaim[];
 };
 
 export type ObjectStoreUpload = {
@@ -933,6 +967,50 @@ export async function getScheduleOverlaps(
   });
 }
 
+/** One person the viewer could schedule with, whether or not they share a time (geo-chat#137, GEO-2937). */
+export type SchedulablePerson = {
+  user: DebateParticipantSummary;
+  online: boolean;
+  /**
+   * Shared 30-minute slots, soonest first, capped by `limit`. Empty when they share none. Only
+   * times still ahead when geo-chat answered (geo-chat#165), though they can pass before the next
+   * fetch.
+   */
+  slots: ScheduleOverlapSlot[];
+  /** More overlap exists than `limit` returned. */
+  truncated: boolean;
+};
+
+/** What `/matchmaking/schedulable-people` answers. */
+export type SchedulablePeopleResponse = {
+  viewer_timezone: string;
+  /** False means the viewer has no availability saved, and `people` is then always empty. */
+  viewer_has_schedule: boolean;
+  people: SchedulablePerson[];
+  /** The server's candidate scan was capped. */
+  truncated: boolean;
+};
+
+/**
+ * Everyone, online or not, with free time in the window; those sharing a slot with the viewer come
+ * first (GEO-2937).
+ */
+export async function listSchedulablePeople(
+  { days, limit }: { days: number; limit: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ days: String(days), limit: String(limit) });
+
+  return geoChatRequest<SchedulablePeopleResponse>(`/matchmaking/schedulable-people?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 /**
  * Reports that a human did something. The strict half of presence.
  *
@@ -944,6 +1022,49 @@ export async function getScheduleOverlaps(
 export async function reportDebateInteraction(getPrivyIdentityToken: GetPrivyIdentityToken, accountKey: string | null) {
   return geoChatRequest<void>('/me/debate-interaction', {
     method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** geo-chat's refusal for a live request to someone online but away (GEO-3119). */
+export const RECIPIENT_AWAY_CODE = 'recipient_away';
+
+export type DebateRequestReceiptKind = 'challenge' | 'claim_request';
+export type DebateRequestReceiptStage = 'delivered' | 'seen';
+
+/**
+ * Records that a live request reached this recipient's screen, or that they were there to see it
+ * (GEO-3119), so an "I never got it" can be checked against the data. Idempotent on geo-chat's side,
+ * and fire-and-forget here: a lost receipt must never get in the way of answering the request.
+ */
+export async function reportDebateRequestReceipt(
+  receipt: { kind: DebateRequestReceiptKind; request_id: string; stage: DebateRequestReceiptStage },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<void>('/me/debate-request-receipts', {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    body: receipt,
+  });
+}
+
+/**
+ * Saves the zone this browser is in, so emails geo-chat sends while the person is away render in
+ * it. geo-chat prefers the zone on saved availability and falls back to this one, then to UTC.
+ */
+export async function reportBrowserTimezone(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  timezone: string
+) {
+  return geoChatRequest<void>('/me/timezone', {
+    method: 'PUT',
+    body: { timezone },
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -1207,6 +1328,58 @@ export async function getDebate(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/** What `POST /debates/{id}/hide` and `/unhide` answer with: the debate's visibility afterwards. */
+export type DebateVisibilityResponse = {
+  debate_id: string;
+  hidden: boolean;
+  hidden_at: string | null;
+  /** Who hid it. Null when visible, or when an operator script hid it. */
+  hidden_by_user_id: string | null;
+  hidden_reason: string | null;
+};
+
+/** geo-chat's limit on a hide reason, in characters (`MAX_HIDE_REASON_CHARS`). */
+export const DEBATE_HIDE_REASON_MAX_CHARS = 500;
+
+/**
+ * Removes a completed debate from the product (GEO-2785): it leaves every listing, and every by-id
+ * read answers `debate_not_found`. geo-chat allows a participant or an editor of the debate's space,
+ * and refuses anyone else with `debate_visibility_forbidden`. Idempotent. A blank reason is sent as
+ * none, which is how geo-chat would read it anyway.
+ */
+export async function hideDebate(
+  debateId: string,
+  reason: string | null | undefined,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  const trimmed = reason?.trim();
+  return geoChatRequest<DebateVisibilityResponse>(`/debates/${debateId}/hide`, {
+    method: 'POST',
+    body: trimmed ? { reason: trimmed } : {},
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Restores a hidden debate. Narrower than {@link hideDebate}: a space editor may restore any, a
+ * participant only one they hid themselves. Idempotent.
+ */
+export async function unhideDebate(
+  debateId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateVisibilityResponse>(`/debates/${debateId}/unhide`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 
@@ -1484,7 +1657,8 @@ export async function rejectDebateChallenge(
  * -----------------------------------------------------------------------------------------------*/
 
 /** Why a room stopped accepting joins. A closed room is a tombstone, not a 404. */
-export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled';
+/** `rescheduled`: the debate moved to a new time, and accepting it books a different room. */
+export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled' | 'rescheduled';
 
 /**
  * May the viewer open this room right now. Carried in a 200 body rather than an HTTP status, so a
@@ -1669,6 +1843,30 @@ export async function createScheduledDebate(
   });
 }
 
+/**
+ * Moves a pending or accepted request to a new time. geo-chat flips who has to answer, so the other
+ * debater is asked to accept the new time and emailed that it moved. An accepted debate goes back
+ * to pending: its room closes and its time is freed, and accepting the new time books a new room.
+ *
+ * Refusals, all `409` except the last: `reschedule_refused` (five moves already, or declined,
+ * expired, cancelled or superseded), `debate_already_started` (someone has joined the room),
+ * `schedule_conflict` (the viewer already has a debate then), and `403 not_a_participant`.
+ */
+export async function rescheduleScheduledDebate(
+  requestId: string,
+  body: { scheduled_start_at: string; scheduled_end_at: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/reschedule`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 /** The second answer books the room, and the `recorded` outcome carries its id. */
 export async function respondToScheduledDebate(
   requestId: string,
@@ -1679,6 +1877,26 @@ export async function respondToScheduledDebate(
   return geoChatRequest<ScheduledDebateResponseResult>(`/scheduled-debates/${requestId}/response`, {
     method: 'POST',
     body: { accepted },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Calls a scheduled debate off (GEO-3093). While pending only whoever proposed the current time may
+ * withdraw it; once accepted either debater may. geo-chat closes the room as `cancelled`, frees the
+ * slot for both people and withdraws the calendar invite. It refuses with `409
+ * debate_already_started` once anyone has joined the room, and `409 request_not_cancellable` once the
+ * request is already resolved.
+ */
+export async function cancelScheduledDebate(
+  requestId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>(`/scheduled-debates/${requestId}/cancel`, {
+    method: 'POST',
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -1887,6 +2105,47 @@ export async function unblockDebateUser(
   });
 }
 
+export async function listNotInterestedClaims(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>('/me/not-interested-claims', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** Idempotent: marking a claim twice keeps the first mark. */
+export async function markClaimNotInterested(
+  claimEntityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>(`/me/not-interested-claims/${encodeURIComponent(claimEntityId)}`, {
+    method: 'PUT',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Idempotent: clearing a claim that was never marked is not an error. */
+export async function clearClaimNotInterested(
+  claimEntityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<NotInterestedClaimsResponse>(`/me/not-interested-claims/${encodeURIComponent(claimEntityId)}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 export async function handleDebateSharePrompt(
   promptId: string,
   action: 'shared' | 'dismissed',
@@ -1985,14 +2244,38 @@ export async function getRecordingUrl(
   debateId: string,
   filename: string,
   getPrivyIdentityToken?: GetPrivyIdentityToken,
-  accountKey?: string | null
+  accountKey?: string | null,
+  variant?: RecordingPlaybackVariant
 ) {
   return geoChatRequest<{ url: string }>(`/debates/${debateId}/recordings/url`, {
     method: 'POST',
-    body: { filename },
+    // `variant` only when asked for, so every other request is byte-for-byte what it was.
+    body: variant ? { filename, variant } : { filename },
     auth: 'optional',
     getPrivyIdentityToken,
     accountKey,
+  });
+}
+
+/**
+ * The claims geo-chat extracted from a debate (GEO-2870), as its media job committed them: the
+ * turns, and the claims keyed to them by `turn_index`. Empty arrays until extraction has run.
+ *
+ * The fast path. These land minutes after a debate ends, where the published graph claims wait on
+ * the composed video and the publish sweep (~27 min). GEO-2868 decided the debate-again flow reads
+ * them from here rather than publishing anything early.
+ */
+export async function getDebateExtractedClaims(
+  debateId: string,
+  getPrivyIdentityToken?: GetPrivyIdentityToken,
+  accountKey?: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateExtractedClaimsResponse>(`/debates/${debateId}/claims`, {
+    auth: 'optional',
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
   });
 }
 
@@ -2102,6 +2385,21 @@ export class GeoChatRequestError extends Error {
 }
 
 /**
+ * A geo-chat failure in analytics terms: its code and status where it has them. Never the message,
+ * which is prose meant for a person and can name one.
+ */
+export function geoChatErrorProperties(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    return { error_code: error.code, http_status: error.status, error_name: 'GeoChatRequestError' };
+  }
+  return {
+    error_code: null,
+    http_status: null,
+    error_name: error instanceof Error ? error.name : typeof error,
+  };
+}
+
+/**
  * A refusal from the session exchange itself, rather than from a resource.
  *
  * The two are the same status and opposite problems, and the rest of this codebase already knows
@@ -2134,6 +2432,15 @@ export class GeoChatSessionError extends GeoChatRequestError {
  */
 export function isGeoChatRefusal(error: unknown) {
   return error instanceof GeoChatRequestError && (error.status === 401 || error.status === 403);
+}
+
+/**
+ * `/debate-profiles/:spaceId` for a person geo-chat has never seen — they have not signed in to
+ * debate. By its code rather than its status: a 404 alone is also what a deployment without the
+ * route answers (see `isMatchmakingUnavailable`), and that is a failure, not a fact about them.
+ */
+export function isDebateProfileMissing(error: unknown) {
+  return error instanceof GeoChatRequestError && error.status === 404 && error.code === 'user_not_found';
 }
 
 /**

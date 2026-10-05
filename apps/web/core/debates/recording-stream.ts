@@ -2,6 +2,7 @@ import { capture } from '~/core/analytics';
 import { db } from '~/core/database/indexeddb';
 
 import { GeoChatRequestError, type LocalRecordingPartUrl, type ObjectStoreUpload } from './api';
+import { RecordingUploadError, recordingStorageHttpError } from './recording-upload-errors';
 
 /**
  * Streaming a debate recording while it is made (GEO-2955).
@@ -54,7 +55,10 @@ export type DebateRecordingStream = {
 export type DebateRecordingChunk = {
   streamId: string;
   seq: number;
-  blob: Blob;
+  /** The timeslice's bytes. Stored as an `ArrayBuffer`, not a `Blob`, for Safari (GEO-3116). */
+  data?: ArrayBuffer;
+  /** Chunks written before GEO-3116. */
+  blob?: Blob;
 };
 
 export type RecordingStreamMetadata = Pick<
@@ -88,10 +92,12 @@ export async function appendRecordingChunk(
   blob: Blob,
   chunkAtMs: number
 ): Promise<void> {
+  // Read before the transaction opens: it would commit at a non-IndexedDB `await` inside it.
+  const data = await blob.arrayBuffer();
   await db.transaction('rw', db.debateRecordingStreams, db.debateRecordingChunks, async () => {
     const stream = await db.debateRecordingStreams.get(streamId);
     if (!stream) return;
-    await db.debateRecordingChunks.put({ streamId, seq, blob });
+    await db.debateRecordingChunks.put({ streamId, seq, data });
     await db.debateRecordingStreams.update(streamId, {
       byteSize: stream.byteSize + blob.size,
       chunkCount: Math.max(stream.chunkCount, seq + 1),
@@ -120,7 +126,7 @@ export async function listRecordingStreams(userId: string): Promise<DebateRecord
 export async function readRecordingStreamBlob(stream: DebateRecordingStream): Promise<Blob> {
   const chunks = await db.debateRecordingChunks.where('streamId').equals(stream.id).sortBy('seq');
   return new Blob(
-    chunks.map(chunk => chunk.blob),
+    chunks.map(chunk => chunk.data ?? chunk.blob ?? new ArrayBuffer(0)),
     { type: stream.mimeType }
   );
 }
@@ -323,7 +329,8 @@ export class RecordingPartStreamer {
     } finally {
       if (this.inFlight === step) this.inFlight = null;
     }
-    this.schedule(0);
+    // Only while a whole part is waiting; otherwise the next `append` schedules the pump.
+    if (this.nextPartNumber() !== null) this.schedule(0);
   }
 
   private async start(): Promise<void> {
@@ -365,7 +372,12 @@ export class RecordingPartStreamer {
     const parts = await this.options.getPartUrls(multipart.filename, multipart.uploadId, wanted);
     this.urls = new Map(parts.map(part => [part.part_number, part.upload]));
     const upload = this.urls.get(partNumber);
-    if (!upload) throw new Error(`No upload URL was returned for recording part ${partNumber}.`);
+    if (!upload) {
+      throw new RecordingUploadError(
+        `No upload URL was returned for recording part ${partNumber}.`,
+        'part_url_missing'
+      );
+    }
     return upload;
   }
 }
@@ -398,7 +410,12 @@ export async function uploadRemainingParts(
     );
     for (const partNumber of batch) {
       const upload = urls.get(partNumber);
-      if (!upload) throw new Error(`No upload URL was returned for recording part ${partNumber}.`);
+      if (!upload) {
+        throw new RecordingUploadError(
+          `No upload URL was returned for recording part ${partNumber}.`,
+          'part_url_missing'
+        );
+      }
       const { start, end } = partRange(partNumber, multipart.partSize, blob.size);
       await transport.putPart(upload, blob.slice(start, end));
       uploaded.add(partNumber);
@@ -414,7 +431,9 @@ export async function uploadRemainingParts(
 /** One part of a streamed recording. The signed URL carries everything; no headers are needed. */
 export async function putRecordingPart(upload: ObjectStoreUpload, body: Blob): Promise<void> {
   const response = await fetch(upload.url, { method: upload.method, body });
-  if (!response.ok) throw new Error(`Recording part upload failed (${response.status})`);
+  if (!response.ok) {
+    throw recordingStorageHttpError(`Recording part upload failed (${response.status})`, response.status);
+  }
 }
 
 /** A 404 with no error code is a route this geo-chat does not have, not a missing debate. */
@@ -435,6 +454,11 @@ export type LiveRecordingStream = {
   release: () => Promise<void>;
   /** The recording must not publish: discard the streamed parts and the local chunks. */
   abort: () => Promise<void>;
+  /**
+   * The room let go of a recording it could not finish: stop streaming, but keep the local chunks
+   * and the multipart upload for orphan recovery. Reports nothing; the recording didn't finish here.
+   */
+  detach: () => Promise<void>;
 };
 
 /**
@@ -511,6 +535,11 @@ export function startLiveRecordingStream({
       await streamer.abort();
       await writes;
       await deleteRecordingStream(id).catch(() => undefined);
+    },
+    async detach() {
+      // Stops the timer, and records a part already on the wire so recovery knows it landed.
+      await streamer.finish();
+      await writes;
     },
   };
 }

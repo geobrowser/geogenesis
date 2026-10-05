@@ -8,6 +8,8 @@ import type { DataType, Relation, Value } from '~/core/types';
 import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
@@ -22,7 +24,9 @@ import {
   MARKDOWN_CONTENT_PROPERTY_ID,
   NAME_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
+  SELECTOR_TYPE_ID,
   SOURCES_PROPERTY_ID,
+  TARGET_PROPERTY_ID,
   TEXT_BLOCK_TYPE_ID,
   TRANSCRIPT_TYPE_ID,
   TYPES_PROPERTY_ID,
@@ -54,6 +58,9 @@ export type DebatePublishTurn = {
   text: string;
 };
 
+/** A topic entity to relate to via Topics. The name is for display only; publishing writes the id. */
+export type DebatePublishTopic = { id: string; name: string | null };
+
 export type DebateClaimInput = {
   /** The claim text (becomes the Claim entity name). */
   text: string;
@@ -74,12 +81,20 @@ export type DebateClaimInput = {
    */
   existingClaimEntityId?: string | null;
   /**
+   * GEO-2870 D1: the stable id geo-chat minted for this claim (its `entity_id`), so a claim can be
+   * requested by id before this publish runs. When there is no `existingClaimEntityId`, the Claim
+   * is minted with exactly this id instead of a fresh one; a reference always wins over it. The
+   * id is deterministic per debate and claim, so claims sharing it are one entity, minted once.
+   * Null/absent (payloads from before D1) mints a fresh id as before.
+   */
+  stableEntityId?: string | null;
+  /**
    * Topics the extractor assigned to this claim, selected from the debated claim's own topic
    * set ({KG entity id, name}). Written on minted and reused claims alike; for a reused entity
    * the reuse policy has already subtracted the topics the entity carries on the graph, so the
    * draft never writes a duplicate Topics relation.
    */
-  topics?: { id: string; name: string | null }[];
+  topics?: DebatePublishTopic[];
   /**
    * True when the claim is broad enough to be argued for and against. Tagged `Debate`
    * so it joins the claim picker's candidate motions; a narrowly verifiable claim
@@ -87,6 +102,13 @@ export type DebateClaimInput = {
    * policy has already cleared this when the entity carries the tag already.
    */
   isContestable?: boolean;
+  /**
+   * When in the debate this claim was said, in integer milliseconds on the transcript's clock:
+   * geo-chat's `start_ms`/`end_ms`, the span of the transcript it was extracted from (GEO-2958).
+   * Written onto the block → claim relation entity, where the app reads it as a certainty — so
+   * this is null whenever geo-chat did not measure it, and the app falls back to matching.
+   */
+  timing?: { startMs: number; endMs: number } | null;
 };
 
 export type DebatePublishInput = {
@@ -97,6 +119,12 @@ export type DebatePublishInput = {
   /** The already-published Claim entity the debate argued. */
   claimEntityId: string;
   claimText: string;
+  /**
+   * The debated claim's Topics in this space, mirrored onto the Debate entity so the debate is
+   * filed under the same topics as the claim it argued. Optional — omitted/empty publishes the
+   * Debate with no Topics relations.
+   */
+  claimTopics?: DebatePublishTopic[];
   participants: DebatePublishParticipant[];
   /**
    * Durable https URL for the rendered final video (the geo-chat `…/media/artifacts/{kind}/content`
@@ -199,11 +227,12 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     propertyId: string;
     toEntityId: string;
     toEntityName: string | null;
-  }) => {
+  }): { id: string; name: string | null } => {
+    const entityId = createEntityId();
     relations.push(
       makeRelation({
         id: createEntityId(),
-        entityId: createEntityId(),
+        entityId,
         position: createPosition(),
         spaceId: input.spaceId,
         propertyId,
@@ -212,6 +241,23 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         toEntityName,
       })
     );
+    return { id: entityId, name: null };
+  };
+
+  const setInteger = (entityId: string, propertyId: string, value: number) => {
+    values.push(makeIntegerValue({ entityId, entityName: null, propertyId, value, spaceId: input.spaceId }));
+  };
+
+  // One Topics relation per (entity, topic). `relate` does not dedupe, and a reused claim can appear
+  // behind several extracted claims carrying the same topic. Keyed on normalized ids so the dedupe
+  // agrees with the reuse policy, which compares topics as hex: the same entity written once dashed
+  // and once dashless is one edge.
+  const topicEdges = new Set<string>();
+  const relateTopic = (fromEntity: { id: string; name: string | null }, topic: DebatePublishTopic) => {
+    const edge = `${normalizeId(fromEntity.id)}:${normalizeId(topic.id)}`;
+    if (topicEdges.has(edge)) return;
+    topicEdges.add(edge);
+    relate({ fromEntity, propertyId: TOPICS_PROPERTY_ID, toEntityId: topic.id, toEntityName: topic.name });
   };
 
   // --- Debate entity ---
@@ -224,6 +270,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     toEntityId: input.claimEntityId,
     toEntityName: claimText,
   });
+  // The Debate is filed under the same topics as the claim it argued.
+  for (const topic of input.claimTopics ?? []) relateTopic(debateRef, topic);
 
   for (const p of bySlot) {
     relate({
@@ -345,8 +393,8 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     // claim per debate.
     const linkedBlockClaims = new Set<string>();
     const sourcedClaims = new Set<string>();
-    const claimTopicEdges = new Set<string>();
     const debateTaggedClaims = new Set<string>();
+    const mintedClaims = new Set<string>();
 
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
@@ -395,9 +443,15 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         const claimEntityText = claim.text.trim();
         if (claimEntityText.length === 0) continue;
         const existingClaimId = claim.existingClaimEntityId?.trim() || null;
-        const claimId = existingClaimId ?? createEntityId();
+        // A reference wins; otherwise geo-chat's stable id (D1), which anything that requested
+        // this claim before it published already holds; otherwise, for older payloads, a fresh id.
+        const stableClaimId = existingClaimId === null ? claim.stableEntityId?.trim() || null : null;
+        const claimId = existingClaimId ?? stableClaimId ?? createEntityId();
         const claimRef = { id: claimId, name: claimEntityText };
-        if (existingClaimId === null) {
+        // A stable id is shared by every statement of one claim, so the entity is minted once —
+        // under the first statement's text — and the later statements only link to it.
+        if (existingClaimId === null && !mintedClaims.has(normalizeId(claimId))) {
+          mintedClaims.add(normalizeId(claimId));
           setText(claimId, claimEntityText, NAME_PROPERTY_ID, claimEntityText);
           relate({
             fromEntity: claimRef,
@@ -415,12 +469,13 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         // same topic, and `relate` does not dedupe.
         // The Debate tag is what makes a claim a candidate motion in the picker, so it
         // goes on contestable claims only — minted or reused alike, once per entity.
-        // Reused entities key on their id; minted ones cannot, because `createEntityId`
-        // returns a fresh id per claim, so keying on it would dedupe nothing. Two
-        // verbatim extractions of one proposition therefore mint two entities (the
-        // long-standing behaviour) but yield a single motion. Near-duplicates that
-        // differ in wording still slip through — matching upstream is what catches those.
-        const tagKey = existingClaimId ? normalizeId(existingClaimId) : `text:${claimEntityText.toLowerCase()}`;
+        // Reused entities and geo-chat's stable ids (D1) key on the id. A fresh id cannot,
+        // because `createEntityId` returns a new one per claim, so keying on it would
+        // dedupe nothing: two verbatim extractions from an older payload therefore mint two
+        // entities (the long-standing behaviour) but yield a single motion. Near-duplicates
+        // that differ in wording still slip through — matching upstream is what catches those.
+        const tagKey =
+          existingClaimId || stableClaimId ? normalizeId(claimId) : `text:${claimEntityText.toLowerCase()}`;
         if (claim.isContestable && !debateTaggedClaims.has(tagKey)) {
           debateTaggedClaims.add(tagKey);
           relate({
@@ -430,28 +485,37 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             toEntityName: 'Debate',
           });
         }
-        for (const topic of claim.topics ?? []) {
-          // Keyed on normalized ids so the dedupe agrees with the reuse policy, which compares
-          // topics as hex: the same entity written once dashed and once dashless is one edge.
-          const edge = `${normalizeId(claimId)}:${normalizeId(topic.id)}`;
-          if (claimTopicEdges.has(edge)) continue;
-          claimTopicEdges.add(edge);
-          relate({
-            fromEntity: claimRef,
-            propertyId: TOPICS_PROPERTY_ID,
-            toEntityId: topic.id,
-            toEntityName: topic.name,
-          });
-        }
+        for (const topic of claim.topics ?? []) relateTopic(claimRef, topic);
         const blockClaimKey = `${blockId}:${claimId}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
           linkedBlockClaims.add(blockClaimKey);
-          relate({
+          const statement = relate({
             fromEntity: blockRef,
             propertyId: DEBATE_CLAIMS_PROPERTY_ID,
             toEntityId: claimId,
             toEntityName: claimEntityText,
           });
+          // When this statement was said, on the relation's own entity rather than the claim: a
+          // claim stated in two turns has two moments. Typed Selector → Debate videos, the graph's
+          // shape for "this relation points at a span of its target" (the one `Reply to` uses).
+          // Only a measured span is written — the app reads these as a to-the-second certainty.
+          const timing = publishableTiming(claim.timing);
+          if (timing) {
+            setInteger(statement.id, CLAIM_START_OFFSET_PROPERTY_ID, timing.startMs);
+            setInteger(statement.id, CLAIM_END_OFFSET_PROPERTY_ID, timing.endMs);
+            relate({
+              fromEntity: statement,
+              propertyId: TYPES_PROPERTY_ID,
+              toEntityId: SELECTOR_TYPE_ID,
+              toEntityName: 'Selector',
+            });
+            relate({
+              fromEntity: statement,
+              propertyId: TARGET_PROPERTY_ID,
+              toEntityId: DEBATE_VIDEOS_PROPERTY_ID,
+              toEntityName: 'Debate videos',
+            });
+          }
         }
         if (!sourcedClaims.has(claimId)) {
           sourcedClaims.add(claimId);
@@ -498,6 +562,19 @@ export function mergeTranscriptSegmentsIntoTurns(
   return turns;
 }
 
+/**
+ * A claim's span if it is a real interval of whole, non-negative milliseconds, else null. The
+ * decoder already refuses anything else; this is the publisher refusing it too, because a bad
+ * value here would be published as a certainty and nothing downstream can demote it.
+ */
+export function publishableTiming(timing: DebateClaimInput['timing']): { startMs: number; endMs: number } | null {
+  if (!timing) return null;
+  const { startMs, endMs } = timing;
+  if (!Number.isSafeInteger(startMs) || !Number.isSafeInteger(endMs)) return null;
+  if (startMs < 0 || endMs <= startMs) return null;
+  return { startMs, endMs };
+}
+
 /** Dashless, lower-case — the form ids are compared in, so one entity is one key. */
 function normalizeId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
@@ -523,6 +600,32 @@ function makeTextValue({
     entity: { id: entityId, name: entityName },
     property: { id: propertyId, name: null, dataType: TEXT_DATA_TYPE },
     value,
+    spaceId,
+    isLocal: true,
+    hasBeenPublished: false,
+  };
+}
+
+const INTEGER_DATA_TYPE: DataType = 'INTEGER';
+
+function makeIntegerValue({
+  entityId,
+  entityName,
+  propertyId,
+  value,
+  spaceId,
+}: {
+  entityId: string;
+  entityName: string | null;
+  propertyId: string;
+  value: number;
+  spaceId: string;
+}): Value {
+  return {
+    id: ID.createValueId({ entityId, propertyId, spaceId }),
+    entity: { id: entityId, name: entityName },
+    property: { id: propertyId, name: null, dataType: INTEGER_DATA_TYPE },
+    value: String(value),
     spaceId,
     isLocal: true,
     hasBeenPublished: false,

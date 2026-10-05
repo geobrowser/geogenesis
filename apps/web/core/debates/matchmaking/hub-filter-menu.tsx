@@ -49,7 +49,7 @@ type Props<T extends string> = {
   /**
    * What the trigger is called, where its label does not say on its own.
    *
-   * The space and source menus name what they filter — "Any space", "Featured" — so the label is
+   * The space and topic menus name what they filter — "Any space", "Any topic" — so the label is
    * the whole answer. A sort menu's is just the order ("Best"), which tells a screen reader nothing
    * about what it does.
    */

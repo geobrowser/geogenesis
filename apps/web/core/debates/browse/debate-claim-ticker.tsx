@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
   type ClaimMarker,
@@ -15,14 +16,10 @@ import {
   tickerStack,
   tickerWindows,
 } from '~/core/debates/claim-ticker';
-import { claimsInSpokenOrder } from '~/core/debates/claim-timing';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
-import { orderedParticipants, speakerLabel } from '~/core/debates/playback-utils';
-import { useClaimTimings } from '~/core/debates/use-claim-timings';
-import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
-import { uuidToHex } from '~/core/id/normalize';
+import { speakerLabel } from '~/core/debates/playback-utils';
+import { useDrawableDebateClaims } from '~/core/debates/use-drawable-debate-claims';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
-import { useQueryEntities } from '~/core/sync/use-store';
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
@@ -78,8 +75,12 @@ export function useDebateClaimTicker(
     enabled,
   }: { playheadMs: number; timelineMs: number; enabled: boolean }
 ): DebateTicker {
-  const { claims } = useDebateTranscriptClaims(debate.id, debate.claim.space_id, enabled);
-  const { timings } = useClaimTimings(debate.id, claims, enabled);
+  const {
+    transcript: { claims },
+    claims: drawable,
+    speakerByClaimId: participantByClaimId,
+    entitiesByClaimId,
+  } = useDrawableDebateClaims(debate, enabled);
 
   const [answers, setAnswers] = React.useState<ReadonlyMap<string, boolean>>(() => new Map());
 
@@ -101,32 +102,6 @@ export function useDebateClaimTicker(
       return new Map(current).set(claimId, position);
     });
   }, []);
-
-  // Attribution rides the *block*, not the claim: a claim's own space is the debate's publication
-  // space, which both debaters share. The block's `Authors` relation points at the speaker's
-  // personal space, which is the id the participant list keys on.
-  const participantByClaimId = React.useMemo(() => {
-    const bySpace = new Map<string, DebateParticipant>();
-    for (const participant of orderedParticipants(debate)) {
-      bySpace.set(uuidToHex(participant.profile_space_id), participant);
-    }
-
-    const byBlock = new Map<string, DebateParticipant>();
-    for (const block of claims.blocks) {
-      const speaker = block.authorSpaceId ? bySpace.get(uuidToHex(block.authorSpaceId)) : undefined;
-      if (speaker) byBlock.set(block.id, speaker);
-    }
-
-    const speakers = new Map<string, DebateParticipant>();
-    for (const claim of claims.all) {
-      const speaker = byBlock.get(claim.blockId);
-      if (!speaker) continue;
-      speakers.set(claim.id, speaker);
-    }
-    return speakers;
-  }, [claims.all, claims.blocks, debate]);
-
-  const timedClaims = React.useMemo(() => claimsInSpokenOrder(claims.all, timings), [claims.all, timings]);
 
   /**
    * One gate for everything this surface offers, so the three ways it points at a claim agree.
@@ -159,39 +134,13 @@ export function useDebateClaimTicker(
    * an answer lands on whichever copy survived here. That is an argument for de-duplicating on
    * publish, not for showing the same sentence twice.
    */
-  const renderableClaims = React.useMemo(() => {
-    if (!enabled) return [];
-
-    const seen = new Set<string>();
-    return timedClaims.filter(claim => {
-      if (claim.spaceId === null || !participantByClaimId.has(claim.id)) return false;
-
-      const key = `${claim.timing?.endMs ?? 'unplaced'} ${claim.text.trim().toLowerCase()}`;
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
-  }, [enabled, participantByClaimId, timedClaims]);
+  const renderableClaims = React.useMemo(() => (enabled ? drawable : []), [enabled, drawable]);
 
   // Two lists, because the live layer and the backlog answer different questions — see
   // `backlogWindows`. Cards and markers assert a moment; the backlog only says "already said".
   const windows = React.useMemo(() => tickerWindows(renderableClaims), [renderableClaims]);
   const backlog = React.useMemo(() => backlogWindows(renderableClaims), [renderableClaims]);
   const markers = React.useMemo(() => claimMarkers(renderableClaims, timelineMs), [renderableClaims, timelineMs]);
-
-  // One batch for every claim, the way the panel does it, so the live card and the end-of-debate
-  // stack never issue a lookup per claim as they mount.
-  const claimIds = React.useMemo(() => claims.all.map(claim => claim.id), [claims.all]);
-  const { entities } = useQueryEntities({
-    where: { id: { in: claimIds } },
-    first: claimIds.length || 1,
-    enabled: enabled && claimIds.length > 0,
-  });
-  const entitiesByClaimId = React.useMemo(() => {
-    const map = new Map<string, Entity>();
-    for (const entity of entities) map.set(entity.id, entity);
-    return map;
-  }, [entities]);
 
   /**
    * Empty while this ticker is switched off, which is not the same as having no claims.
@@ -293,6 +242,23 @@ const HISTORY_EDGE_OPAQUE_PX = 71.5;
 /** The lead-in: the gradient's first stop sits 6.5% down its 71.5px, and nothing shows above it. */
 const HISTORY_EDGE_CLEAR_PX = 4.65;
 
+/** `glass` over the video; `light` on a white surface, as the end card's carousel is. */
+export type ClaimCardTone = 'glass' | 'light';
+
+/**
+ * What a claim card turns into on a small player — under `@max-md`, 448px of *player*, which is a
+ * phone and also the compact gallery on a desktop. Container queries rather than breakpoints for
+ * the same reason the end card uses them: this one component is a feed card, an explore card and
+ * a fullscreen player, and the viewport is the wrong question for two of the three.
+ *
+ * - `line`: the live card, docked to the bottom edge as one line, tap to read in full (GEO-3114).
+ *   The full card is 80px of a ~217px phone tile and climbed across the speaker's face.
+ * - `sheet`: a card in the opened list, with the whole claim printed rather than clamped. The list
+ *   is something the viewer opened on purpose, and on a phone it is the one place to read a claim
+ *   all the way through.
+ */
+export type ClaimCardSmallPanel = 'line' | 'sheet';
+
 /**
  * The claim card that rises over the video as it is said.
  *
@@ -302,15 +268,36 @@ const HISTORY_EDGE_CLEAR_PX = 4.65;
  * the sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a
  * thumb while signed out.
  */
-export function DebateClaimTickerCard({
+export function DebateClaimTickerCard(props: Parameters<typeof DebateClaimTickerCardBody>[0]) {
+  if (!props.window.claim.spaceId) return null;
+  return (
+    <ActionSurface
+      asChild
+      trackImpression={props.opacity === undefined || props.opacity > 0}
+      value={{ component: 'debate_claim_ticker', target_id: props.window.claim.id, target_type: 'claim' }}
+    >
+      <DebateClaimTickerCardBody {...props} />
+    </ActionSurface>
+  );
+}
+
+function DebateClaimTickerCardBody({
   window,
   opacity = 1,
   speaker = null,
   row,
   entity,
   onAnswered,
+  tone = 'glass',
+  smallPanel,
+  onReadInFull,
 }: {
   window: TickerWindow;
+  /**
+   * `glass` over the video, as it rises while the claim is said. `light` on a white surface — the
+   * debate end card's carousel — where the dark glass would be white text on near-white.
+   */
+  tone?: ClaimCardTone;
   /** Driven by the playhead, so a scrub lands on the right strength rather than mid-animation. */
   opacity?: number;
   /** Who said it. The card names them, so it no longer has to sit over their tile to attribute. */
@@ -318,13 +305,27 @@ export function DebateClaimTickerCard({
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
+  /**
+   * How the card redraws itself on a small player (`@max-md`, under 448px of player), and only
+   * there — at any wider panel these add nothing and the card is exactly the card it always was.
+   * See {@link ClaimCardSmallPanel}. Left unset by the end card's carousel, which has its own
+   * small-panel layout and must not inherit this one.
+   */
+  smallPanel?: ClaimCardSmallPanel;
+  /**
+   * Open the full claim, and the list it belongs to. The compact `line` card is one truncated
+   * line, so this is how a reader on a phone gets the rest of it. Only drawn on a small panel.
+   */
+  onReadInFull?: () => void;
 }) {
   const { claim } = window;
 
   if (!claim.spaceId) return null;
 
+  const line = smallPanel === 'line';
+
   return (
-    <div
+    <ActionSurfaceDiv
       // The video behind is one big play/pause button; without this every tap on a thumb would
       // also toggle playback.
       onClick={event => event.stopPropagation()}
@@ -357,7 +358,25 @@ export function DebateClaimTickerCard({
        * the open list is narrower than the live card on a phone now, so the fade reads as the edge
        * of a list rather than as damage to the claim you are reading.
        */
-      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] p-3 backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)]"
+      className={cx(
+        'pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg p-3',
+        tone === 'glass'
+          ? 'bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)]'
+          : 'bg-grey-01',
+        // One row on a small panel: avatar, the claim on a single line, the two thumbs. 36px tall
+        // against the 80px card, so on a ~217px phone tile it sits under the speaker's chin rather
+        // than across their face. The header's own box dissolves (`contents`) so its two halves
+        // can sit either side of the text.
+        //
+        // `min-h-9` because the line sits over the debater's own name row, which is 36px with its
+        // byline. A 29px line left the top of the name and the position chip showing above it,
+        // half-hidden behind the blur; matching the row covers it cleanly, as the full card did.
+        line && '@max-md:min-h-9 @max-md:flex-row @max-md:items-center @max-md:gap-2 @max-md:px-2.5 @max-md:py-1.5',
+        // The opened list on a small panel is a sheet you have asked for in order to read, and the
+        // edge dissolve would eat into the very claim that was tapped to get there — the sheet is
+        // often shorter than the ramp's 71.5px plus a whole unclamped card.
+        smallPanel === 'sheet' && '@max-md:[mask-image:none] @max-md:[-webkit-mask-image:none]'
+      )}
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -366,9 +385,37 @@ export function DebateClaimTickerCard({
         row={row}
         entity={entity}
         onAnswered={onAnswered}
+        tone={tone}
+        compactLine={line}
       />
-      <TickerClaimText text={claim.text} />
-    </div>
+      {/* A flex column, so the text — or the expand toggle wrapping it — stays a blockified flex
+          item exactly as it was before this wrapper existed. In a plain block box the toggle is an
+          inline-level `<button>`, which sits on a line box of its own and adds the strut's 7px
+          under every truncated claim in the wide backlog. */}
+      <div className={cx('relative flex flex-col', line && '@max-md:order-2 @max-md:min-w-0 @max-md:flex-1')}>
+        <TickerClaimText text={claim.text} tone={tone} smallPanel={smallPanel} />
+        {line && onReadInFull && (
+          /* The whole line is the target on a small panel, and it does not expand in place: one
+             line growing into four is a card climbing back over the face this layout exists to
+             keep clear. It opens the sheet instead, where the claim is printed in full alongside
+             the rest of what this debater has said, and the chip under it closes it again.
+
+             Drawn over the text rather than wrapping it, so the claim stays one node — the one
+             the wide layout's expand toggle wraps — and is not printed twice. `hidden` above
+             448px, which also takes it out of the tab order there. */
+          <button
+            type="button"
+            aria-label="Read the whole claim"
+            title="Read the whole claim"
+            onClick={event => {
+              event.stopPropagation();
+              onReadInFull();
+            }}
+            className="absolute inset-0 hidden cursor-pointer @max-md:block"
+          />
+        )}
+      </div>
+    </ActionSurfaceDiv>
   );
 }
 
@@ -394,7 +441,15 @@ const TICKER_CLAMP_LINES = 2;
  * Only interactive when it is actually truncated. A button that visibly does nothing is worse than
  * no button, and most short claims fit.
  */
-function TickerClaimText({ text }: { text: string }) {
+function TickerClaimText({
+  text,
+  tone,
+  smallPanel,
+}: {
+  text: string;
+  tone: ClaimCardTone;
+  smallPanel?: ClaimCardSmallPanel;
+}) {
   // In state rather than a ref: wrapping the text in a button below remounts this node, and the
   // measurement has to follow it. See `useLineClampOverflow`.
   const [textElement, setTextElement] = React.useState<HTMLSpanElement | null>(null);
@@ -416,8 +471,17 @@ function TickerClaimText({ text }: { text: string }) {
       // clamp off, so the card grows to fit the whole claim and nothing ever reports as truncated.
       // The clamp already blockifies the box; only the expanded state needs `block` of its own.
       className={cx(
-        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px] text-white',
-        expanded ? 'block' : 'line-clamp-2'
+        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
+        tone === 'glass' ? 'text-white' : 'text-text',
+        expanded ? 'block' : 'line-clamp-2',
+        // Container-query overrides, which `useLineClampOverflow` reads back off the computed style
+        // so it measures against the clamp actually drawn rather than the wide layout's two lines.
+        smallPanel === 'line' && '@max-md:line-clamp-1',
+        smallPanel === 'sheet' && '@max-md:line-clamp-none',
+        // The expand toggle below is hidden on the compact line (the sheet button does that job),
+        // and `visibility` is inherited — so the claim itself opts back in, or it would vanish
+        // with the control around it.
+        smallPanel === 'line' && '@max-md:visible'
       )}
     >
       {text}
@@ -432,7 +496,13 @@ function TickerClaimText({ text }: { text: string }) {
       aria-expanded={expanded}
       title={expanded ? 'Show less' : 'Show the whole claim'}
       onClick={() => setExpanded(current => !current)}
-      className="w-full cursor-pointer text-left"
+      className={cx(
+        'w-full cursor-pointer text-left',
+        // On the compact line the tap opens the sheet instead (see the card). `invisible` rather
+        // than `hidden`, because this button wraps the text: it leaves the tab order and the
+        // accessibility tree, and the text inside sets itself visible again.
+        smallPanel === 'line' && '@max-md:invisible'
+      )}
     >
       {body}
     </button>
@@ -671,7 +741,14 @@ export function DebateClaimTickerStack({
            * on a phone the chip's 43px came out of the list's 130 and left 87 — one card, most of
            * it inside the ramp.
            */
-          open && 'no-scrollbar max-h-[9.75rem] min-h-0 overflow-y-auto'
+          open && 'no-scrollbar max-h-[9.75rem] min-h-0 overflow-y-auto',
+          /**
+           * On a small panel the opened list is a sheet over this debater's tile, and it is as tall
+           * as the corner the player gives it rather than 156px — see `data-claim-corner`, which
+           * pins its top edge below the tile's controls while open. Its cards print the whole
+           * claim, so the list has to be allowed the height to show one.
+           */
+          open && '@max-md:max-h-none'
         )}
       >
         {shown.map(card => (
@@ -683,6 +760,10 @@ export function DebateClaimTickerStack({
             row={rowsByClaimId.get(card.window.claim.id) ?? null}
             entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
             onAnswered={onAnswered}
+            smallPanel={open ? 'sheet' : 'line'}
+            // Only where there is a sheet to open into. Without the chip's toggle the corner is
+            // hover-only, and the line would offer a tap that goes nowhere.
+            onReadInFull={!open ? onTogglePinned : undefined}
           />
         ))}
       </div>
@@ -769,6 +850,8 @@ function TickerClaimHeader({
   row,
   entity,
   onAnswered,
+  tone,
+  compactLine = false,
 }: {
   claimId: string;
   spaceId: string;
@@ -776,6 +859,13 @@ function TickerClaimHeader({
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
+  tone: ClaimCardTone;
+  /**
+   * The card is the one-line `line` layout on a small panel: this row's box dissolves so the avatar
+   * and the thumbs sit either side of the claim, and the name and the share step aside — both are
+   * in the sheet a tap away, and on a 337px line they would leave the claim about 15 characters.
+   */
+  compactLine?: boolean;
 }) {
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId, spaceId, row, entity });
   const openProfile = useOpenDebaterProfile(speaker);
@@ -804,14 +894,20 @@ function TickerClaimHeader({
   const percent = summary.percent;
 
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className={cx('flex items-center justify-between gap-2', compactLine && '@max-md:contents')}>
       {/* `text-box` trimmed, as the frame has it, and on each text node rather than on the row.
           The trim acts on a box's own line boxes, and these are flex items with their own; the
           frame gives this line a 7px box in a 16px row, which is its cap height. Trimmed, the row
           is the avatar's 16px and the words centre against it. Untrimmed, each 17px line box sets
           the row instead and the card comes out a pixel taller than the frame draws. Per node and
           not via a child selector, because the name now sits inside a button. */}
-      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-white">
+      <span
+        className={cx(
+          'flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem]',
+          tone === 'glass' ? 'text-white' : 'text-grey-04',
+          compactLine && '@max-md:order-1 @max-md:shrink-0'
+        )}
+      >
         {speaker && (
           // The same link as the name in the corner of the tile, and the same person — a reader
           // looking at who said this should be able to go and look at them from here.
@@ -821,22 +917,34 @@ function TickerClaimHeader({
             title={`Open ${speakerLabel(speaker)}`}
             className="flex min-w-0 items-center gap-1.5 text-left hover:underline"
           >
-            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-white">
+            <span
+              className={cx(
+                'block size-4 shrink-0 overflow-hidden rounded-full',
+                tone === 'glass' ? 'bg-white' : 'bg-grey-02'
+              )}
+            >
               <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
             </span>
-            <span className="truncate [text-box:trim-both_cap_alphabetic]">{speakerLabel(speaker)}</span>
+            <span className={cx('truncate [text-box:trim-both_cap_alphabetic]', compactLine && '@max-md:hidden')}>
+              {speakerLabel(speaker)}
+            </span>
           </button>
         )}
         {percent !== null && (
           <>
             {speaker && (
-              <span aria-hidden className="[text-box:trim-both_cap_alphabetic]">
+              <span aria-hidden className={cx('[text-box:trim-both_cap_alphabetic]', compactLine && '@max-md:hidden')}>
                 ·
               </span>
             )}
             {/* Same wording as the verdict on the claim page — "65% agree" — so the share reads
                 the same wherever it is printed. */}
-            <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
+            <span
+              className={cx(
+                'shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]',
+                compactLine && '@max-md:hidden'
+              )}
+            >
               {percent}% {copy.positiveAction.toLowerCase()}
             </span>
           </>
@@ -845,7 +953,7 @@ function TickerClaimHeader({
       {/* 4px apart rather than the Figma card's 12px: those are bare 12px glyphs and these are
           20px buttons, so the same gap between glyph *centres* needs a smaller gap between boxes.
           No error text here — it would make the card grow while the reader is part-way through it. */}
-      <span className="flex shrink-0 items-center gap-1">
+      <span className={cx('flex shrink-0 items-center gap-1', compactLine && '@max-md:order-3')}>
         <ClaimIconButton
           responseKind={responseKind}
           position
@@ -854,6 +962,7 @@ function TickerClaimHeader({
           disabled={!control.canRespond}
           title={control.actionTitle(true) || copy.positiveAction}
           onClick={() => control.respond(true)}
+          tone={tone}
         />
         <ClaimIconButton
           responseKind={responseKind}
@@ -863,6 +972,7 @@ function TickerClaimHeader({
           disabled={!control.canRespond}
           title={control.actionTitle(false) || copy.negativeAction}
           onClick={() => control.respond(false)}
+          tone={tone}
         />
       </span>
     </div>
@@ -889,6 +999,7 @@ function ClaimIconButton({
   disabled,
   title,
   onClick,
+  tone,
 }: {
   responseKind: ResponseKind;
   position: boolean;
@@ -897,7 +1008,9 @@ function ClaimIconButton({
   disabled: boolean;
   title: string;
   onClick?: () => void;
+  tone: ClaimCardTone;
 }) {
+  const glass = tone === 'glass';
   return (
     <button
       type="button"
@@ -924,10 +1037,10 @@ function ClaimIconButton({
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
         selected
-          ? position
-            ? 'bg-white/15 text-green'
-            : 'bg-white/15 text-red-01'
-          : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+          ? cx(glass ? 'bg-white/15' : 'bg-divider', position ? 'text-green' : 'text-red-01')
+          : glass
+            ? 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+            : 'text-grey-04 hover:bg-divider hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
       )}
     >
       <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />

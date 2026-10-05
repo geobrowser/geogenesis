@@ -11,17 +11,27 @@ import { SetScheduleBanner } from './set-schedule-banner';
 // The banner now reads and writes the saved calendar (GEO-2932). These tests are about the
 // callout and the modal opening, not the round trip, so the hooks are stubbed -- the payload
 // conversion has its own tests in core/availability.
-const mocks = vi.hoisted(() => ({ isSet: false, authenticated: true }));
+const mocks = vi.hoisted(() => ({ isSet: false, loaded: true, authenticated: true }));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useDebateSchedule: () => ({ blocks: [], isSet: mocks.isSet, isError: false, refetch: vi.fn() }),
+  useDebateSchedule: () => ({
+    data: mocks.loaded ? { is_set: mocks.isSet } : undefined,
+    blocks: mocks.loaded ? [] : undefined,
+    isSet: mocks.isSet,
+    isError: false,
+    refetch: vi.fn(),
+  }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'did:privy:1' }),
 }));
 
+// The editor's copy-link button reads the personal space through the wallet stack; it has its own tests.
+vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
+
 afterEach(() => {
   cleanup();
   mocks.isSet = false;
+  mocks.loaded = true;
   mocks.authenticated = true;
   // The dismissal is stored per notice id in localStorage, so a dismissal in one case would
   // otherwise hide the banner in every case after it.
@@ -62,27 +72,22 @@ describe('SetScheduleBanner', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  it('switches the callout to edit wording once a schedule is saved', async () => {
-    // The banner is the same control either way -- what changes is that it no longer asks for
-    // something the person has already done.
+  // Onboarding only: once a schedule exists, the header's calendar button is where it lives.
+  it('retires once a schedule is saved', () => {
     mocks.isSet = true;
     setup();
 
-    expect(await screen.findByRole('button', { name: 'Edit my schedule' })).toBeInTheDocument();
-    expect(screen.getByText('Your debate schedule')).toBeInTheDocument();
-    expect(screen.getByText(/These are the times you/)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
     expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
   });
 
-  it('opens the same calendar from the edit wording', async () => {
-    mocks.isSet = true;
-    const { user } = setup();
-    await user.click(await screen.findByRole('button', { name: 'Edit my schedule' }));
+  // Defaulting to "unset" before the read answers would flash the banner at everyone who already
+  // has a schedule, every time the panel opens.
+  it('waits for the schedule read before showing', () => {
+    mocks.loaded = false;
+    setup();
 
-    expect(
-      within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save schedule' })
-    ).toBeInTheDocument();
+    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
   });
 
   // Signed out the read is disabled, so the modal it opens would sit on "Loading your schedule"
@@ -100,5 +105,58 @@ describe('SetScheduleBanner', () => {
     await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
 
     await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
+  });
+});
+
+// Both ways the banner leaves take the focused control with it. Focus goes up to the header's
+// calendar — the schedule's standing home — rather than dropping to the page.
+describe('SetScheduleBanner focus hand-off', () => {
+  function Harness() {
+    const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
+    return (
+      <>
+        <button ref={scheduleButtonRef} type="button">
+          Header calendar
+        </button>
+        <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
+      </>
+    );
+  }
+
+  const setupWithHeader = () => ({ user: userEvent.setup(), ...render(<Harness />) });
+
+  it('moves focus to the header calendar when dismissed', async () => {
+    const { user } = setupWithHeader();
+    await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
+
+    await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Header calendar' })).toHaveFocus();
+  });
+
+  it('returns focus to the header calendar after a save, which then retires the banner', async () => {
+    const { user, rerender } = setupWithHeader();
+    await user.click(await screen.findByRole('button', { name: 'Set my schedule' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save schedule' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const header = screen.getByRole('button', { name: 'Header calendar' });
+    await waitFor(() => expect(header).toHaveFocus());
+
+    // The save lands and the banner retires. Focus was never on it, so nothing is lost.
+    mocks.isSet = true;
+    rerender(<Harness />);
+    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(header).toHaveFocus();
+  });
+
+  // Cancel does not retire anything, so focus goes back where it came from, as any dialog's does.
+  it('still returns focus to its own button on Cancel', async () => {
+    const { user } = setupWithHeader();
+    const opener = await screen.findByRole('button', { name: 'Set my schedule' });
+    await user.click(opener);
+    await user.click(await screen.findByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 });

@@ -5,7 +5,7 @@ import * as React from 'react';
 import { useAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
 
-import { useDebugDebatesPageEnabled, useFeatureFlag, usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { validateSpaceId } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
@@ -22,6 +22,7 @@ import { clearEnteringDebate, useEnteringDebateId, useEnteringDebatePending } fr
 import { type DebateGatewayPauseReason, useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
 import { useDebateRequestAlert } from './debate-request-alert';
+import { useDebateRequestReceipts } from './debate-request-receipts';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
 import { debateRematchPath } from './debate-routes';
 import {
@@ -114,7 +115,7 @@ export function DebateCoordinator() {
   //
   // The polling gates in `hooks.ts` deliberately did NOT move with it — a hidden tab should stop
   // refetching even though it is still present. Splitting those two is GEO-2842.
-  const debatePresence = useDebatePresence();
+  const visiblePresence = useDebatePresence();
   // The strict half of presence. Mounted beside the gateway because it answers the question the
   // gateway's heartbeat cannot: that heartbeat proves a tab exists, this proves someone is in
   // front of it. geo-chat ranks matchmaking by it and never gates on it.
@@ -125,6 +126,21 @@ export function DebateCoordinator() {
   );
   // Exactly one tab: visible *and* focused. See the rematch routing effect below.
   const hasAttention = useDebateAttention();
+  const activityQuery = useDebateActivity();
+  const currentUserId = useCurrentGeoChatUserId();
+  const activity = activityQuery.data ?? null;
+  // Hiding the tab drops presence after a short grace (GEO-3119), but never at the cost of the
+  // viewer's own pending things: geo-chat refuses an accept from an offline requester, hides their
+  // request from its recipient, and ends a debate-again session whose people went offline. So while
+  // the viewer is waiting on a request they sent, or is in a debate or debate-again session, they stay
+  // online. They are still not *requestable* while hidden — geo-chat decides that separately.
+  const holdsPresence = Boolean(
+    activity?.outbound_request ||
+    (activity?.challenge?.status === 'pending' && activity.challenge.requester.user_id === currentUserId) ||
+    activity?.rematch ||
+    activity?.debate
+  );
+  const debatePresence = visiblePresence || holdsPresence;
   const gateway = useDebateGateway(
     geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
@@ -137,9 +153,6 @@ export function DebateCoordinator() {
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey
   );
-  const activityQuery = useDebateActivity();
-  const currentUserId = useCurrentGeoChatUserId();
-  const activity = activityQuery.data ?? null;
   const debate = activeDebate(activity);
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge expires the way a request does, so the same filter owns both — otherwise the popup
@@ -230,19 +243,30 @@ export function DebateCoordinator() {
     [challengeForViewerId, incomingRequests]
   );
   useDebateRequestAlert(pendingIncomingIds);
+  // Whether each of those reached this screen, and whether anyone was there (GEO-3119).
+  const pendingIncomingReceipts = React.useMemo(
+    () => [
+      ...(challengeForViewerId ? [{ kind: 'challenge' as const, id: challengeForViewerId }] : []),
+      ...incomingRequests
+        .filter(request => request.status === 'pending')
+        .map(request => ({ kind: 'claim_request' as const, id: request.id })),
+    ],
+    [challengeForViewerId, incomingRequests]
+  );
+  useDebateRequestReceipts(
+    geoChatAuth.ready && geoChatAuth.authenticated,
+    pendingIncomingReceipts,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
+  );
 
   // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
   // cannot offer a room that would refuse the join.
   const atRoom = isDebateRoomPath(pathname);
-  // Behind the flags that can produce a room at all, so a signed-in viewer who has never touched
-  // debates does not poll for rooms every 30s.
-  const debugDebatesEnabled = useDebugDebatesPageEnabled();
-  const peerAvailabilityEnabled = usePeerAvailabilityEnabled();
-  const roomsFeatureEnabled = debugDebatesEnabled || peerAvailabilityEnabled;
-  const upcomingRoomsQuery = useUpcomingDebateRooms(roomsFeatureEnabled && !atRoom);
+  const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
-  const finishedRoomIds = useFinishedRoomIds(upcomingRooms, roomsFeatureEnabled && !atRoom);
+  const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
   // A room whose debate already happened is never offered again.
   const joinableRooms = React.useMemo(
     () => upcomingRooms.filter(room => room.joinable && !finishedRoomIds.has(room.room_id)),
@@ -262,13 +286,9 @@ export function DebateCoordinator() {
   // Only loaded rooms prove a session is not room-owned: every guard below reads vacuously safe on
   // `[]`, so routing on an unloaded list pushes a room's own session into the ordinary picker.
   // A 404 is the exception -- no rooms endpoint means no room can own one.
-  // With the feature off nothing is asked for, so there is nothing to wait on and routing behaves
-  // as it did before rooms existed.
   const roomsQueryError = upcomingRoomsQuery.error;
   const roomsKnown =
-    !roomsFeatureEnabled ||
-    upcomingRoomsQuery.isSuccess ||
-    (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
+    upcomingRoomsQuery.isSuccess || (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
   const refetchUpcomingRooms = upcomingRoomsQuery.refetch;
   // One refetch per session before routing on it, and a tick so the effect re-runs even when the
   // refetch changes nothing.
@@ -399,7 +419,6 @@ export function DebateCoordinator() {
     joinableRooms,
     pathname,
     roomsKnown,
-    roomsFeatureEnabled,
     roomSessionsReported,
     refetchUpcomingRooms,
     roomSessionIds,

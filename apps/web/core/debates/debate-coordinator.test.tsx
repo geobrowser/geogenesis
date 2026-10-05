@@ -20,6 +20,9 @@ const mocks = vi.hoisted(() => ({
   // Whether this tab is the focused one. jsdom reports no focus, so the real store would make
   // every routing case here look like a background tab.
   hasAttention: true,
+  /** The visibility-backed presence the gateway would report on its own (GEO-3119). */
+  visiblePresence: true,
+  gatewayPresence: vi.fn(),
   prompts: [] as DebateSharePrompt[],
   promptsFetching: false,
   mediaMutate: vi.fn(),
@@ -47,8 +50,6 @@ const mocks = vi.hoisted(() => ({
   upcomingRooms: [] as UpcomingDebateRoom[],
   /** False is a first load still in flight, which is not the same as no rooms. */
   roomsSettled: true,
-  /** The flags that make rooms reachable at all; off, nothing is polled and nothing is waited on. */
-  roomsFeature: true,
   roomsError: null as Error | null,
   finishedRoomIds: new Set<string>() as ReadonlySet<string>,
   refetchRooms: vi.fn(() => Promise.resolve()),
@@ -93,18 +94,30 @@ vi.mock('./rooms/hooks', () => ({
   useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
+// The banner names the opponent from the request that booked the room; that read is its own concern.
+vi.mock('./rooms/room-opponent', async importOriginal => ({
+  ...(await importOriginal<typeof import('./rooms/room-opponent')>()),
+  useUpcomingRoomOpponent: () => null,
+}));
+
 vi.mock('./debate-attention', () => ({
-  useDebatePresence: () => true,
+  useDebatePresence: () => mocks.visiblePresence,
   useDebateAttention: () => mocks.hasAttention,
 }));
 
+// Receipts are their own concern (debate-request-receipts.test.tsx); here they would only fetch.
+vi.mock('./debate-request-receipts', () => ({ useDebateRequestReceipts: () => undefined }));
+
 vi.mock('./debate-gateway', () => ({
-  useDebateGateway: () => ({
-    status: mocks.gatewayPaused ? 'degraded' : 'ready',
-    paused: mocks.gatewayPaused,
-    pauseReason: mocks.gatewayPauseReason,
-    capabilities: [],
-  }),
+  useDebateGateway: (_enabled: boolean, _token: unknown, _accountKey: unknown, presence: boolean) => {
+    mocks.gatewayPresence(presence);
+    return {
+      status: mocks.gatewayPaused ? 'degraded' : 'ready',
+      paused: mocks.gatewayPaused,
+      pauseReason: mocks.gatewayPauseReason,
+      capabilities: [],
+    };
+  },
   useDebateGatewayScope: () => undefined,
 }));
 
@@ -142,8 +155,6 @@ vi.mock('./debate-return-navigation', () => ({
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
   useFeatureFlag: (id: string) => (id === 'debateDebugging' ? mocks.debateDebugging : false),
-  useDebugDebatesPageEnabled: () => mocks.roomsFeature,
-  usePeerAvailabilityEnabled: () => false,
 }));
 
 beforeEach(() => {
@@ -167,11 +178,12 @@ beforeEach(() => {
   mocks.pathname = '/space/space-1/debates';
   mocks.upcomingRooms = [];
   mocks.roomsSettled = true;
-  mocks.roomsFeature = true;
   mocks.roomsError = null;
   mocks.finishedRoomIds = new Set();
   mocks.refetchRooms.mockReset().mockResolvedValue(undefined);
   mocks.hasAttention = true;
+  mocks.visiblePresence = true;
+  mocks.gatewayPresence.mockReset();
   mocks.prompts = [];
   mocks.promptsFetching = false;
   mocks.authenticated = true;
@@ -513,6 +525,28 @@ describe('DebateCoordinator', () => {
     expect(screen.getByRole('button', { name: 'Explore claims' })).toBeInTheDocument();
   });
 
+  // GEO-3119: a hidden tab goes offline after thirty seconds, but never at the cost of the viewer's
+  // own request. geo-chat refuses an accept from an offline requester.
+  it('keeps a hidden requester online while their challenge waits for an answer', () => {
+    mocks.visiblePresence = false;
+    mocks.currentUserId = 'user-requester';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(mocks.gatewayPresence).toHaveBeenLastCalledWith(true);
+  });
+
+  it('lets a hidden tab go offline when nothing of the viewer is pending', () => {
+    mocks.visiblePresence = false;
+    mocks.currentUserId = 'user-recipient';
+    mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
+
+    render(<DebateCoordinator />);
+
+    expect(mocks.gatewayPresence).toHaveBeenLastCalledWith(false);
+  });
+
   it('does not interrupt the sender of a challenge while it waits to be answered', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.activity = { ...idleActivity(), challenge: pendingChallenge() };
@@ -641,16 +675,16 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    expect(await screen.findByText('Someone is waiting for you now')).toBeInTheDocument();
+    expect(await screen.findByText('Your opponent is waiting')).toBeInTheDocument();
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
   // Urgency comes from the server's own `due` and `others_present`, so this and the Requests tab
   // cannot disagree about what is happening.
   it.each([
-    ['someone is already inside', { others_present: true, due: true }, 'Someone is waiting for you now'],
-    ['the start has passed', { others_present: false, due: true }, 'Your debate is starting now'],
-    ['it is merely open', { others_present: false, due: false }, /^Your debate starts at /],
+    ['someone is already inside', { others_present: true, due: true }, 'Your opponent is waiting'],
+    ['the start has passed', { others_present: false, due: true }, /^Scheduled for \d+ mins? ago$/],
+    ['nobody has arrived', { others_present: false, due: false }, 'Your opponent hasn’t joined yet'],
   ])('says the right thing when %s', async (_label, row, expected) => {
     mocks.pathname = '/space/space-1/claims';
     mocks.upcomingRooms = [upcomingRoom(row)];
@@ -669,7 +703,7 @@ describe('DebateCoordinator', () => {
 
     render(<DebateCoordinator />);
 
-    await waitFor(() => expect(screen.queryByText('Your scheduled debate')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByText('Your debate room is open')).not.toBeInTheDocument());
   });
 
   // GEO-2941 bans automatic redirects into the debate-again flow, and a room's session is the exact
@@ -745,13 +779,12 @@ describe('DebateCoordinator', () => {
     );
   });
 
-  // The flags are per browser, so a room booked on another device is invisible here and the room
-  // list cannot rule one out. The session's own space is what proves it: geo-chat gives a room
+  // The room list can lag the session (or miss a room it no longer lists), so it cannot be the only
+  // thing that rules one out. The session's own space is what proves it: geo-chat gives a room
   // session the `debates` sentinel rather than a space, and the rematch route 404s on it.
   it('never routes a room-held session, even with no room list to check it against', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
-    mocks.roomsFeature = false;
     const activity = activityWithRematch('browsing');
     mocks.activity = {
       ...activity,
@@ -762,23 +795,6 @@ describe('DebateCoordinator', () => {
     render(<DebateCoordinator />);
 
     await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
-  });
-
-  // Nothing is asked for with the feature off, so there is nothing to wait on: the push has to
-  // behave exactly as it did before rooms existed.
-  it('routes without waiting when rooms are switched off entirely', async () => {
-    mocks.currentUserId = 'user-requester';
-    mocks.pathname = '/space/space-1/claims';
-    mocks.roomsFeature = false;
-    mocks.roomsSettled = false;
-    const activity = activityWithRematch('browsing');
-    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
-
-    render(<DebateCoordinator />);
-
-    await waitFor(() =>
-      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
-    );
   });
 
   // The other half of the same guard: suppressing the push for *any* session while a room happened

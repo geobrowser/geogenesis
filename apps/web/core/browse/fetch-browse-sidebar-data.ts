@@ -33,6 +33,26 @@ export type BrowseSidebarData = {
   featuredError?: boolean;
 };
 
+/**
+ * Every space a browse payload lets this reader see, once each: featured first, then the spaces
+ * they edit, then the ones they belong to. The Explore route narrows a `spaceIds` request to these
+ * rows and the feed's space menu offers them, so both read the list from here rather than each
+ * assembling it — a menu built another way could offer a space the route then silently drops.
+ */
+export function browseSidebarVisibleSpaces(
+  browse: Pick<BrowseSidebarData, 'featured' | 'editorOf' | 'memberOf'>
+): BrowseSpaceRow[] {
+  const seen = new Set<string>();
+  const rows: BrowseSpaceRow[] = [];
+  for (const row of [...browse.featured, ...browse.editorOf, ...browse.memberOf]) {
+    const key = normId(row.id);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    rows.push(row);
+  }
+  return rows;
+}
+
 function toBrowseSpaceRow(space: FeaturedSpace): BrowseSpaceRow {
   return {
     id: space.spaceId,

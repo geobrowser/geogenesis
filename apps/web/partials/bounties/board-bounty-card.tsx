@@ -32,9 +32,11 @@ export const BOARD_GRID_CLASS = 'grid grid-cols-[repeat(auto-fill,minmax(min(340
 export type BoardInterestBindings = {
   interestedIds: ReadonlySet<string>;
   isInterestLoading: boolean;
+  /** The viewer's interest was read successfully — not merely finished loading. */
+  isInterestKnown: boolean;
   canRegisterInterest: boolean;
   pendingBountyId: string | null;
-  onRegisterInterest: (bounty: SpaceBounty) => void;
+  onRegisterInterest: (bounty: SpaceBounty) => Promise<boolean>;
 };
 
 /**
@@ -61,6 +63,7 @@ export function BoardBountyCard({ bounty, interest }: { bounty: BoardBounty; int
           isInterested={interest.interestedIds.has(bounty.id)}
           isPending={interest.pendingBountyId === bounty.id}
           isInterestLoading={interest.isInterestLoading}
+          isInterestKnown={interest.isInterestKnown}
           canRegisterInterest={interest.canRegisterInterest}
           onRegisterInterest={interest.onRegisterInterest}
         />

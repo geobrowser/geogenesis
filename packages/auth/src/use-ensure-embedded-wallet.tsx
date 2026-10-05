@@ -1,3 +1,4 @@
+import './ensure-web-storage.js';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
 
@@ -51,7 +52,7 @@ const RETRY_DELAY_MS = 2_000;
 export function useEnsureEmbeddedWallet() {
   const { setActiveWallet } = useSetActiveWallet();
   const { wallets, ready: walletsReady } = useWallets();
-  const { authenticated, user } = usePrivy();
+  const { authenticated, user, isModalOpen } = usePrivy();
   const { createWallet } = useCreateWallet();
 
   const createWalletRef = useRef(createWallet);
@@ -105,6 +106,15 @@ export function useEnsureEmbeddedWallet() {
     // `createWallet` rejecting -- Privy errors when one already exists -- and if hydration outlasts
     // the retry delay, an existing account can burn all three attempts before its wallet appears.
     if (!authenticated || !walletsReady || embeddedWallet || accountHasEmbeddedWallet) return;
+    // The modal login flips `authenticated` *before* it provisions the `createOnLogin` wallet: its
+    // account-create screen only starts once the user exists, and runs inside the still-open modal.
+    // `linkedAccounts` cannot cover that window -- the wallet does not exist yet -- so asking here
+    // raced Privy's own request. Whichever landed second was refused with "A user cannot have more
+    // than one ethereum embedded and one imported wallet", and when ours won, the refused one was
+    // Privy's, which shows that message as a "Something went wrong" modal over a fresh sign-up.
+    // Waiting for the modal to close lets Privy finish; this stays the fallback for headless logins,
+    // which never open it, and for a modal flow whose own create failed.
+    if (isModalOpen) return;
     if (createAttempts >= MAX_ATTEMPTS || createInFlightRef.current) return;
 
     let cancelled = false;
@@ -120,7 +130,14 @@ export function useEnsureEmbeddedWallet() {
       .catch((error: unknown) => {
         // Either something else created it first — in which case `embeddedWallet` is about to appear
         // and the guard above stops us — or it genuinely failed and we try again.
-        if (cancelled) return;
+        //
+        // A cancelled attempt still counts. `isModalOpen` is a dependency, so a create that opens
+        // Privy's modal tears this effect down mid-flight, and closing the modal runs it again. Left
+        // uncounted, a persistent failure would retry on every close with the budget never spent.
+        if (cancelled) {
+          setCreateAttempts(attempts => attempts + 1);
+          return;
+        }
         // Logged, because the whole reason this file exists is that its failures were invisible: the
         // symptom was onboarding never appearing, with nothing in the app pointing at why. Matches
         // how `useSmartAccount` reports its own init failures.
@@ -135,7 +152,7 @@ export function useEnsureEmbeddedWallet() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, walletsReady, embeddedWallet, accountHasEmbeddedWallet, createAttempts]);
+  }, [authenticated, walletsReady, embeddedWallet, accountHasEmbeddedWallet, isModalOpen, createAttempts]);
 
   // `walletToActivate` is read through a ref so that a new object for the same address does not
   // re-run this; the address is the dependency.

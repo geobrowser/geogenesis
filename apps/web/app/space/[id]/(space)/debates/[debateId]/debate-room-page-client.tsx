@@ -1303,6 +1303,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * debate settles whether they are the participant's only copy (GEO-2955).
    */
   const detachLocalRecorder = React.useCallback(() => {
+    // Stopped, not discarded: otherwise its streamer keeps the whole recording and its timer alive.
+    void liveRecordingStreamRef.current?.detach();
     liveRecordingStreamRef.current = null;
     return discardLocalRecorder();
   }, [discardLocalRecorder]);
