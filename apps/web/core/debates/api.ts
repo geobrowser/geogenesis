@@ -1952,11 +1952,7 @@ export async function listUpcomingDebateRooms(
   });
 }
 
-/* -------------------------------------------------------------------------------------------------
- * Debate lobbies (GEO-3128, web GEO-3131/GEO-3133)
- *
- * A many-person room on the debate-room door. Ids in bodies are dashless; path ids take either.
- * -----------------------------------------------------------------------------------------------*/
+/* Debate lobbies (GEO-3128): many-person rooms. Body ids are dashless; path ids take either. */
 
 /** geo-chat spells uuids with and without dashes; query keys use this one form. */
 export function dashlessId(id: string) {
