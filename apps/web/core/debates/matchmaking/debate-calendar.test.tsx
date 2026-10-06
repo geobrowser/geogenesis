@@ -132,6 +132,14 @@ vi.mock('./use-person-facts', () => ({
 }));
 // The header's own controls and the filter bar have their own suites; these are about the week.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => null }));
+vi.mock('./claims-tab', () => ({
+  SpaceTopicFilters: ({ leading }: { leading?: React.ReactNode }) => (
+    <div>
+      {leading}
+      <button type="button">Space menu</button>
+    </div>
+  ),
+}));
 vi.mock('./space-filter-pills', () => ({
   SpaceFilterPills: ({ onSpaceToggle }: { onSpaceToggle: (spaceId: string) => void }) => (
     <button type="button" onClick={() => onSpaceToggle('space-1')}>
@@ -516,6 +524,19 @@ describe('DebateCalendar', () => {
     render(<DebateCalendar />);
 
     expect(screen.getByText(/Narrow by space to see others/)).toBeInTheDocument();
+  });
+
+  it('filters by space with pills on a desktop and the menu on a phone', () => {
+    const { unmount } = render(<DebateCalendar />);
+    expect(screen.getByRole('button', { name: 'Pick a space' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Space menu' })).toBeNull();
+    unmount();
+
+    mocks.isPhone = true;
+    render(<DebateCalendar />);
+    expect(screen.getByRole('button', { name: 'Space menu' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick a space' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Search people' })).toBeInTheDocument();
   });
 
   it('lists the week by day on a phone', () => {

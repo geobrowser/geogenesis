@@ -24,6 +24,7 @@ import { speakerLabel } from '../playback-utils';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
+import { SpaceTopicFilters } from './claims-tab';
 import {
   type CalendarFilter,
   type CalendarOpenedFrom,
@@ -501,41 +502,52 @@ function DebateCalendarBody({
   // The viewer's own debates keep the week on screen even with nobody else free in it.
   const ownDebatesThisWeek = debates.some(debate => cellOf(debate.start, days) !== null);
 
+  // One set of props for both forms of the space filter: pills on a desktop, the hub's menu on a phone.
+  const spaceFilter = {
+    analyticsSurface: 'calendar',
+    facetSpaces,
+    spaceIds,
+    onSpaceToggle: (spaceId: string) => {
+      onSpaceToggle(spaceId);
+      changeFilter('space');
+    },
+    onSpacesClear: () => {
+      onSpacesClear();
+      changeFilter('space');
+    },
+    countsPending: peopleQuery.isLoading || publishableSpacesPending || personRecordsPending,
+  } as const;
+  const searchField = (
+    <div className="w-[260px] shrink-0 md:w-full">
+      <Input
+        withSearchIcon
+        value={search}
+        onChange={event => setSearch(event.currentTarget.value)}
+        placeholder="Search people"
+        aria-label="Search people"
+      />
+    </div>
+  );
+
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-3 border-b border-grey-02 px-6 py-3 md:px-4">
         {outboundChallenge ? (
           <DebateChallengeCard challenge={outboundChallenge} role="requester" analyticsSurface="calendar" />
         ) : null}
-        {/* Pills on the left, search on the right. On a phone the search goes on top, full width,
-            and the pills scroll sideways under it. */}
-        <div className="flex items-center gap-3 md:flex-col-reverse md:items-stretch">
-          <SpaceFilterPills
-            className="min-w-0 flex-1"
-            analyticsSurface="calendar"
-            facetSpaces={facetSpaces}
-            spaceIds={spaceIds}
-            onSpaceToggle={spaceId => {
-              onSpaceToggle(spaceId);
-              changeFilter('space');
-            }}
-            onSpacesClear={() => {
-              onSpacesClear();
-              changeFilter('space');
-            }}
-            loading={peopleQuery.isLoading || publishableSpacesPending}
-            countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
-          />
-          <div className="w-[260px] shrink-0 md:w-full">
-            <Input
-              withSearchIcon
-              value={search}
-              onChange={event => setSearch(event.currentTarget.value)}
-              placeholder="Search people"
-              aria-label="Search people"
+        {/* A row of pills needs a desktop's width; a phone keeps the menu, under a full-width search. */}
+        {isPhone ? (
+          <SpaceTopicFilters {...spaceFilter} leading={searchField} />
+        ) : (
+          <div className="flex items-center gap-3">
+            <SpaceFilterPills
+              {...spaceFilter}
+              className="min-w-0 flex-1"
+              loading={peopleQuery.isLoading || publishableSpacesPending}
             />
+            {searchField}
           </div>
-        </div>
+        )}
       </div>
 
       {!viewerHasSchedule && !schedule.isLoading ? (

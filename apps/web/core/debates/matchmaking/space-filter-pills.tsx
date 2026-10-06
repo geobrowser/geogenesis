@@ -96,11 +96,8 @@ export function SpaceFilterPills({
     <div
       role="group"
       aria-label="Filter by space"
-      // Phones scroll the row sideways instead of stacking lines of pills above the day list.
-      className={cx(
-        'flex flex-wrap items-center gap-2 md:-mx-4 md:[scrollbar-width:none] md:flex-nowrap md:overflow-x-auto md:px-4 md:[&::-webkit-scrollbar]:hidden',
-        className
-      )}
+      // Desktop only: a phone's calendar keeps the hub's space menu instead.
+      className={cx('flex flex-wrap items-center gap-2', className)}
     >
       <HubPillButton
         variant={spaceIds.length === 0 ? 'primary' : 'secondary'}
