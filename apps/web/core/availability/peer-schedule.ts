@@ -152,15 +152,19 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
  *
  * A trailing part-slot still counts — a debate runs six to eight minutes, so the last 30 minutes
  * of a block is as usable as the first. There is deliberately no "unbookable" state here.
+ *
+ * `after` skips to the first start later than it, on the window's own grid. Filtering afterwards
+ * would not do: a window that began more than a day ago fills the ceiling with past starts first.
  */
-export function slotStarts(slot: ScheduleOverlapSlot): Date[] {
+export function slotStarts(slot: ScheduleOverlapSlot, { after }: { after?: number } = {}): Date[] {
   const start = Date.parse(slot.start);
   const end = Date.parse(slot.end);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
 
   const step = SLOT_MINUTES * 60_000;
+  const first = after === undefined || after < start ? start : start + (Math.floor((after - start) / step) + 1) * step;
   const starts: Date[] = [];
-  for (let instant = start; instant < end && starts.length < MAX_CHIPS_PER_SLOT; instant += step) {
+  for (let instant = first; instant < end && starts.length < MAX_CHIPS_PER_SLOT; instant += step) {
     starts.push(new Date(instant));
   }
   return starts;

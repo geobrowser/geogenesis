@@ -113,7 +113,7 @@ function personSchedule(
   const own: ChipSlot[] = [];
   let available = 0;
   for (const window of candidate.their_windows) {
-    const starts = slotStarts(window).filter(instant => upcoming(instant.getTime()));
+    const starts = slotStarts(window, { after: now }).filter(instant => upcoming(instant.getTime()));
     available += starts.length;
     if (starts.length === 0 || own.length === INLINE_SLOTS) continue;
     own.push({
@@ -946,11 +946,9 @@ function SharedTimes({
           type="button"
           aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}${slot.viewerIsFree ? ", you're both free" : ''}`}
           data-viewer-free={slot.viewerIsFree || undefined}
-          // The shared label keeps the analytics series this chip has always fed.
-          {...hubAnalyticsAttributes(
-            slot.viewerIsFree === false ? 'Free time' : 'Shared time',
-            'open_peer_availability'
-          )}
+          // Only a time the viewer is free for too is shared, which keeps the series these chips have
+          // always fed. A viewer with no hours (`viewerIsFree` unset) shares none.
+          {...hubAnalyticsAttributes(slot.viewerIsFree ? 'Shared time' : 'Free time', 'open_peer_availability')}
           onClick={event => onPick(slot.start, event.currentTarget)}
           className={cx(
             'rounded-full border px-2 py-0.5 text-footnote transition-colors hover:border-text',

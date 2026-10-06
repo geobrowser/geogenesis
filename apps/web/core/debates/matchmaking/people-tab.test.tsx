@@ -1935,6 +1935,36 @@ describe('Online only', () => {
       expect(chips[0].textContent).not.toContain(time(next - 1_800_000));
     });
 
+    it('keeps the next half hour of a long stretch that began more than a day ago', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        // A list loaded long ago in a background tab: free since 25 hours back, for 30 hours. The
+        // first 48 half hours are all past, and the stretch is still open.
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(-25, 60)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      expect(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
+    });
+
+    it('does not count their own free times as shared in analytics', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(26, 2)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const [chip] = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chip).toHaveAttribute('data-geo-analytics-label', 'Debate hub Free time');
+    });
+
     it('lets an away person be scheduled', async () => {
       mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
       mocks.schedulable = {
@@ -1972,6 +2002,7 @@ describe('Online only', () => {
       const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
       expect(chips).toHaveLength(1);
       expect(chips[0]).toHaveAttribute('data-viewer-free', 'true');
+      expect(chips[0]).toHaveAttribute('data-geo-analytics-label', 'Debate hub Shared time');
       expect(chips[0].getAttribute('aria-label')).toMatch(/you're both free$/);
     });
 
@@ -1990,6 +2021,7 @@ describe('Online only', () => {
       chips.forEach(chip => {
         expect(chip).not.toHaveAttribute('data-viewer-free');
         expect(chip.getAttribute('aria-label')).not.toMatch(/both free/);
+        expect(chip).toHaveAttribute('data-geo-analytics-label', 'Debate hub Free time');
       });
       expect(screen.queryByRole('button', { name: 'More times for Ona' })).not.toBeInTheDocument();
     });
