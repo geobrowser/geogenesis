@@ -6,6 +6,7 @@ import { useSearchParams } from 'next/navigation';
 
 import { localTimezone } from '~/core/availability/blocks';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import { safeInternalHref } from '~/core/debates/debate-return-navigation';
 import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
@@ -13,6 +14,7 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 
+import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Input } from '~/design-system/input';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
@@ -20,7 +22,7 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
-import { type DebatePerson, type SchedulablePerson, type ScheduledDebateRequest } from '../api';
+import { type DebatePerson, type ScheduledDebateRequest } from '../api';
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
@@ -43,6 +45,7 @@ import {
   FIND_A_TIME_WEEKS,
   type FreeSlot,
   SLOT_MS,
+  cellOf,
   freeSlotsByUser,
   ownDebates,
   viewerFreeSlots,
@@ -51,13 +54,14 @@ import {
   weekRangeLabel,
   weekStart,
 } from './find-a-time-model';
-import { FIND_A_TIME_FROM_PARAM, safeReturnPath } from './find-a-time-route';
+import { FIND_A_TIME_FROM_PARAM } from './find-a-time-route';
 import { FindATimeWeek, FindATimeWeekSkeleton } from './find-a-time-week';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
+import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubPillButton } from './hub-pill-button';
-import { HubMessage, isSignInRequired } from './hub-states';
-import { PersonRow, type PersonSchedule, SetAvailabilityNotice } from './people-tab';
+import { HubMessage, HubQueryState } from './hub-states';
+import { INLINE_SLOTS, PersonRow, type PersonSchedule, SetAvailabilityNotice, schedulableAsPerson } from './people-tab';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useLiveRequestBlock } from './use-live-request-block';
@@ -69,23 +73,8 @@ const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
 const EMPTY_REQUESTS: ScheduledDebateRequest[] = [];
 
-/** Chips a row offers before "More times". */
-const INLINE_SLOTS = 3;
-
 /** Matches `md:` in styles.css: phones get the list by day instead of the grid. */
 const PHONE_QUERY = '(max-width: 767px)';
-
-/** An offline person in the roster's shape, as the People tab draws them (GEO-2937). */
-function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
-  return {
-    ...user,
-    online: false,
-    available_to_debate: false,
-    in_debate: false,
-    online_since: null,
-    can_challenge: false,
-  };
-}
 
 /**
  * A row's chips: the given half-hours, and whether they have more beyond them. `viewerIsFree` only
@@ -130,7 +119,8 @@ export function FindATime() {
     },
   });
   const searchParams = useSearchParams();
-  const returnPath = safeReturnPath(searchParams?.get(FIND_A_TIME_FROM_PARAM) ?? null);
+  const from = searchParams?.get(FIND_A_TIME_FROM_PARAM);
+  const returnPath = from ? safeInternalHref(from) : null;
   const backHref = toDebatesPanel({ pathname: returnPath ?? undefined });
   const isPhone = useMediaQuery(PHONE_QUERY);
 
@@ -156,11 +146,10 @@ export function FindATime() {
       <header className="flex flex-wrap items-center justify-between gap-3 px-6 pt-4 pb-2 md:px-4">
         <Link
           href={backHref}
-          data-geo-analytics-label="Find a time Back to Debates"
-          data-geo-analytics-intent="navigate_debates_hub"
+          {...debateActionAnalyticsAttributes('calendar', 'Back to Debates', 'navigate_debates_hub')}
           className="inline-flex items-center gap-1.5 text-metadataMedium text-grey-04 transition-colors hover:text-text"
         >
-          <BackChevron />
+          <ArrowLeft />
           Back to Debates
         </Link>
         <HubHeaderControls />
@@ -184,7 +173,7 @@ export function FindATime() {
       ) : !authenticated ? (
         <HubMessage
           action={
-            <HubPillButton variant="primary" onClick={() => promptSignIn()}>
+            <HubPillButton analyticsSurface="calendar" variant="primary" onClick={() => promptSignIn()}>
               Sign in
             </HubPillButton>
           }
@@ -232,7 +221,7 @@ function FindATimeBody({
   // geo-chat, which can reach the people the cap left out; below it, everyone is already in hand.
   const [capped, setCapped] = React.useState(false);
   const schedulableQuery = useSchedulablePeople(true, {
-    full: true,
+    calendar: true,
     spaces: capped ? spaceIds : EMPTY_SPACE_IDS,
   });
   const serverNarrowed = capped && spaceIds.length > 0;
@@ -524,22 +513,15 @@ function FindATimeBody({
   const filteredOut = !nobodyFree && cells.size === 0;
   const timezone = localTimezone();
 
-  const state = loadError
-    ? 'error'
-    : loading
-      ? 'loading'
-      : nobodyFree && debates.every(debate => !inWeek(debate.start, days))
-        ? 'nobody'
-        : filteredOut && debates.every(debate => !inWeek(debate.start, days))
-          ? 'filtered'
-          : 'week';
+  // The viewer's own debates keep the week on screen even with nobody else free in it.
+  const ownDebatesThisWeek = debates.some(debate => cellOf(debate.start, days) !== null);
 
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-3 border-b border-grey-02 px-6 py-3 md:px-4">
         {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
         <SpaceTopicFilters
-          analyticsSurface="hub"
+          analyticsSurface="calendar"
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -566,7 +548,7 @@ function FindATimeBody({
                     setOnlyViewerFree(next);
                     changeFilter('only_viewer_free');
                   }}
-                  analyticsSurface="hub"
+                  analyticsSurface="calendar"
                 />
               ) : null}
             </div>
@@ -590,7 +572,8 @@ function FindATimeBody({
       <div className="flex flex-wrap items-center gap-2 px-6 py-3 md:px-4">
         <HubPillButton
           aria-label="Previous week"
-          analyticsLabel="Find a time Previous week"
+          analyticsSurface="calendar"
+          analyticsLabel="Debate calendar Previous week"
           disabled={weekOffset === 0}
           onClick={() => goToWeek(weekOffset - 1, 'previous')}
           className="w-7 px-0"
@@ -599,7 +582,8 @@ function FindATimeBody({
         </HubPillButton>
         <HubPillButton
           aria-label="Next week"
-          analyticsLabel="Find a time Next week"
+          analyticsSurface="calendar"
+          analyticsLabel="Debate calendar Next week"
           disabled={weekOffset >= FIND_A_TIME_WEEKS - 1}
           onClick={() => goToWeek(weekOffset + 1, 'next')}
           className="w-7 px-0"
@@ -609,11 +593,7 @@ function FindATimeBody({
         <Text as="span" variant="listSemibold" className="px-1" aria-live="polite">
           {weekRangeLabel(days)}
         </Text>
-        <HubPillButton
-          analyticsLabel="Find a time Today"
-          disabled={weekOffset === 0}
-          onClick={() => goToWeek(0, 'today')}
-        >
+        <HubPillButton analyticsSurface="calendar" disabled={weekOffset === 0} onClick={() => goToWeek(0, 'today')}>
           Today
         </HubPillButton>
         <span className="flex-1" />
@@ -635,51 +615,50 @@ function FindATimeBody({
         </Text>
       ) : null}
       <div className="px-6 pb-6 md:px-4">
-        {state === 'error' ? (
-          <HubMessage action={<HubPillButton onClick={() => void schedulableQuery.refetch()}>Try again</HubPillButton>}>
-            {isSignInRequired(loadError) ? 'Sign in again to see who’s free.' : 'Couldn’t load who’s free.'}
-          </HubMessage>
-        ) : state === 'loading' ? (
-          <FindATimeWeekSkeleton />
-        ) : state === 'nobody' ? (
-          <HubMessage
-            note={<DebateHoursNote live />}
-            action={
-              weekOffset < FIND_A_TIME_WEEKS - 1 ? (
-                <HubPillButton variant="primary" onClick={() => goToWeek(weekOffset + 1, 'next')}>
-                  Next week
-                </HubPillButton>
-              ) : undefined
-            }
-          >
-            Nobody has open times this week.
-          </HubMessage>
-        ) : state === 'filtered' ? (
-          <HubMessage action={<HubPillButton onClick={clearFilters}>Clear filters</HubPillButton>}>
-            Nobody who matches those filters is free this week.
-          </HubMessage>
-        ) : isPhone ? (
-          <FindATimeDayList
-            days={days}
-            cells={cells}
-            debates={debates}
-            opponentName={opponentName}
-            renderRow={renderRow}
-          />
-        ) : (
-          <FindATimeWeek
-            days={days}
-            cells={cells}
-            debates={debates}
-            viewerFree={viewerHasSchedule ? viewerFree : null}
-            peopleByUser={peopleByUser}
-            slotsByUser={slotsByUser}
-            opponentName={opponentName}
-            renderRow={renderRow}
-            onBook={openBooking}
-            now={now}
-          />
-        )}
+        <HubQueryState
+          analyticsSurface="calendar"
+          isLoading={loading}
+          loadingFallback={<FindATimeWeekSkeleton />}
+          error={loadError}
+          failureReason={schedulableQuery.failureReason}
+          onRetry={() => void schedulableQuery.refetch()}
+          isEmpty={(nobodyFree || filteredOut) && !ownDebatesThisWeek}
+          // Filters hiding everyone has an undo; nobody being free this week has somewhere to go.
+          emptyMessage={
+            filteredOut ? 'Nobody who matches those filters is free this week.' : 'Nobody has open times this week.'
+          }
+          emptyNote={filteredOut ? undefined : <DebateHoursNote live />}
+          emptyAction={
+            filteredOut
+              ? { label: 'Clear filters', onClick: clearFilters }
+              : weekOffset < FIND_A_TIME_WEEKS - 1
+                ? { label: 'Next week', onClick: () => goToWeek(weekOffset + 1, 'next') }
+                : undefined
+          }
+        >
+          {isPhone ? (
+            <FindATimeDayList
+              days={days}
+              cells={cells}
+              debates={debates}
+              opponentName={opponentName}
+              renderRow={renderRow}
+            />
+          ) : (
+            <FindATimeWeek
+              days={days}
+              cells={cells}
+              debates={debates}
+              viewerFree={viewerHasSchedule ? viewerFree : null}
+              peopleByUser={peopleByUser}
+              slotsByUser={slotsByUser}
+              opponentName={opponentName}
+              renderRow={renderRow}
+              onBook={openBooking}
+              now={now}
+            />
+          )}
+        </HubQueryState>
       </div>
 
       <PeerAvailabilityBookingModal
@@ -697,10 +676,6 @@ function FindATimeBody({
       />
     </div>
   );
-}
-
-function inWeek(at: number, days: Date[]) {
-  return at >= days[0].getTime() && at < days[days.length - 1].getTime();
 }
 
 function Legend({ viewerHasSchedule }: { viewerHasSchedule: boolean }) {
@@ -725,13 +700,5 @@ function Legend({ viewerHasSchedule }: { viewerHasSchedule: boolean }) {
         Requested
       </li>
     </ul>
-  );
-}
-
-function BackChevron() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <path d="M15 18l-6-6 6-6" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
   );
 }

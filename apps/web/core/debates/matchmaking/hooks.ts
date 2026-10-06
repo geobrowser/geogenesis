@@ -190,17 +190,17 @@ export const FIND_A_TIME_DAYS = 14;
 /**
  * Everyone with free time this week, online or not, shared slots first (GEO-2937).
  *
- * `full` is Find a time's read (GEO-3152): a fortnight, in its own cache entry. Every person carries
+ * `calendar` is the calendar page's read (GEO-3152): a fortnight, in its own cache entry. Every person carries
  * their whole free time as `their_windows` (geo-chat#204); the People tab reads only `slots`.
  */
 export function useSchedulablePeople(
   enabled: boolean,
-  { full = false, spaces = EMPTY_SPACES }: { full?: boolean; spaces?: string[] } = {}
+  { calendar = false, spaces = EMPTY_SPACES }: { calendar?: boolean; spaces?: string[] } = {}
 ) {
-  const days = full ? FIND_A_TIME_DAYS : SCHEDULABLE_DAYS;
+  const days = calendar ? FIND_A_TIME_DAYS : SCHEDULABLE_DAYS;
   // Only Find a time narrows on the server, and only once the unfiltered list hit its cap: below
   // that, every candidate is already in hand and the space menu filters them where they are.
-  const serverSpaces = React.useMemo(() => (full ? [...spaces].sort() : EMPTY_SPACES), [full, spaces]);
+  const serverSpaces = React.useMemo(() => (calendar ? [...spaces].sort() : EMPTY_SPACES), [calendar, spaces]);
   // Find a time reads `their_windows`, which `limit` never caps; it only trims the shared `slots`.
   const limit = SCHEDULABLE_SLOTS;
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
@@ -209,11 +209,11 @@ export function useSchedulablePeople(
   const query = useQuery({
     ...debateQueryNetworkOptions,
     ...viewerReadRetryOptions(accountKey),
-    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit, full, serverSpaces),
+    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit, calendar, serverSpaces),
     queryFn: ({ signal }) =>
       listSchedulablePeople({ days, limit, spaces: serverSpaces }, getPrivyIdentityToken, accountKey, signal),
     // A new space selection keeps the last week drawn while the narrowed one loads.
-    placeholderData: full ? keepPreviousData : undefined,
+    placeholderData: calendar ? keepPreviousData : undefined,
     enabled: queryEnabled,
   });
 

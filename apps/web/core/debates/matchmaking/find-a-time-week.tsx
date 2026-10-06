@@ -30,6 +30,7 @@ import {
   timeRangeLabel,
   viewerFreeInHour,
 } from './find-a-time-model';
+import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 import { useDebatesHub } from './use-debates-hub';
 
@@ -278,8 +279,7 @@ export function FindATimeWeek({
                                 type="button"
                                 tabIndex={-1}
                                 aria-label={`Everyone free then: ${people.length} people`}
-                                data-geo-analytics-label="Find a time More people"
-                                data-geo-analytics-intent="open_find_a_time_hour"
+                                {...debateActionAnalyticsAttributes('calendar', 'More people', 'open_find_a_time_hour')}
                                 onClick={() => openHourAt(key)}
                                 className="-ml-2 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-grey-02 text-footnoteMedium text-grey-04 ring-2 ring-white"
                               >
@@ -402,8 +402,7 @@ function Face({
       type="button"
       tabIndex={-1}
       aria-label={`${name}${live ? ', online now' : away ? ', away' : person.in_debate ? ', in a debate' : ''}. Book a time`}
-      data-geo-analytics-label="Find a time Face"
-      data-geo-analytics-intent="open_peer_availability"
+      {...debateActionAnalyticsAttributes('calendar', 'Face', 'open_peer_availability')}
       onPointerDown={event => {
         pointerType.current = event.pointerType;
       }}
@@ -491,8 +490,7 @@ function DebateBlock({
     <button
       type="button"
       // The Requests tab is where a scheduled debate is answered, moved, cancelled or joined.
-      data-geo-analytics-label="Find a time Own debate"
-      data-geo-analytics-intent="open_debate_requests"
+      {...debateActionAnalyticsAttributes('calendar', 'Own debate', 'open_debate_requests')}
       onClick={event => {
         event.stopPropagation();
         open('requests');

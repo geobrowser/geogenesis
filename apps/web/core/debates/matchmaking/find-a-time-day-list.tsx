@@ -112,7 +112,11 @@ function OwnDebateRow({
           {timeRangeLabel(debate.start, debate.end)} · {state}
         </Text>
       </div>
-      <HubPillButton analyticsLabel="Find a time Own debate" onClick={() => open('requests')}>
+      <HubPillButton
+        analyticsSurface="calendar"
+        analyticsLabel="Debate calendar Own debate"
+        onClick={() => open('requests')}
+      >
         Open
       </HubPillButton>
     </li>

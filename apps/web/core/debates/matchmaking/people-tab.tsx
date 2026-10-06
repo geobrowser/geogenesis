@@ -69,7 +69,7 @@ const EMPTY_MATCH_COUNTS = new Map<string, number>();
 const EMPTY_USER_IDS: ReadonlySet<string> = new Set();
 
 /** Times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
-const INLINE_SLOTS = 3;
+export const INLINE_SLOTS = 3;
 
 /** `viewerIsFree` as on the booking week's chips; unset when the viewer has no hours to compare. */
 type ChipSlot = ScheduleOverlapSlot & { viewerIsFree?: boolean };
@@ -117,7 +117,7 @@ function personSchedule(
  * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
  * them like anyone else. Not requestable: nobody here can take a request right now.
  */
-function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
+export function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
   return {
     ...user,
     online: false,
@@ -875,7 +875,7 @@ function SharedTimes({
 }
 
 /** "Today 3:00 PM", "Tomorrow 9:30 AM", "Thu 6:00 PM" — the range is one week, so a weekday is unambiguous. */
-export function formatSlot(iso: string, now: Date = new Date()): string {
+function formatSlot(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
   const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const dayDiff = Math.round(

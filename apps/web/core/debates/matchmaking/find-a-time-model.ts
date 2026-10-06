@@ -18,8 +18,9 @@ import {
   mondayOf,
   weekDates,
 } from '~/core/availability/blocks';
-import { zonedWallClockInstant } from '~/core/availability/peer-schedule';
+import { slotStarts, zonedWallClockInstant } from '~/core/availability/peer-schedule';
 import type { SchedulablePeopleResponse, ScheduledDebateRequest } from '~/core/debates/api';
+import { opponentOf } from '~/core/debates/rooms/room-opponent';
 import { normId } from '~/core/utils/norm-id';
 
 export const SLOT_MS = SLOT_MINUTES * 60_000;
@@ -50,16 +51,12 @@ export function freeSlotsByUser(response: SchedulablePeopleResponse, now: number
   const byUser = new Map<string, FreeSlot[]>();
 
   for (const person of response.people) {
-    const slots: FreeSlot[] = [];
-    for (const window of person.their_windows ?? []) {
-      const start = Date.parse(window.start);
-      const end = Date.parse(window.end);
-      if (Number.isNaN(start) || Number.isNaN(end)) continue;
-      let steps = 0;
-      for (let at = start; at + SLOT_MS <= end && steps < MAX_SLOTS_PER_WINDOW; at += SLOT_MS, steps++) {
-        if (at > now) slots.push({ start: at, viewerFree: window.viewer_free });
-      }
-    }
+    const slots: FreeSlot[] = (person.their_windows ?? []).flatMap(window =>
+      slotStarts(window, { after: now, max: MAX_SLOTS_PER_WINDOW }).map(start => ({
+        start: start.getTime(),
+        viewerFree: window.viewer_free,
+      }))
+    );
     slots.sort((left, right) => left.start - right.start);
     if (slots.length > 0) byUser.set(normId(person.user.user_id), slots);
   }
@@ -214,20 +211,15 @@ export function ownDebates(
     const start = Date.parse(request.scheduled_start_at);
     const end = Date.parse(request.scheduled_end_at);
     if (Number.isNaN(start) || Number.isNaN(end)) continue;
-    const opponent = request.participants.find(participant => !sameUser(participant.user_id, viewerUserId));
     debates.push({
       requestId: request.request_id,
       start,
       end,
       state: request.status === 'accepted' ? 'booked' : request.viewer_must_answer ? 'asked' : 'requested',
-      opponentUserId: opponent?.user_id ?? null,
+      opponentUserId: opponentOf(request, viewerUserId),
     });
   }
   return debates.sort((left, right) => left.start - right.start);
-}
-
-function sameUser(left: string, right: string | null) {
-  return right !== null && normId(left) === normId(right);
 }
 
 /** The first hour, from midnight, that anything in the week happens in; null for an empty week. */

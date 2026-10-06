@@ -189,7 +189,7 @@ describe('FindATime', () => {
   it("shows everyone's free time to a viewer with no schedule, and nudges without blocking", () => {
     render(<FindATime />);
 
-    expect(mocks.schedulableOptions[0]).toEqual({ full: true, spaces: [] });
+    expect(mocks.schedulableOptions[0]).toEqual({ calendar: true, spaces: [] });
     expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
     expect(screen.getByText(/Set your availability so others can book you too/)).toBeInTheDocument();
     expect(mocks.capture).toHaveBeenCalledWith('find_a_time_opened', {
@@ -300,13 +300,14 @@ describe('FindATime', () => {
     expect(mocks.capture).toHaveBeenCalledWith('find_a_time_week_changed', { direction: 'next' });
   });
 
-  it('tells filters hiding everyone apart from nobody being free', () => {
+  it('tells filters hiding everyone apart from nobody being free', async () => {
     render(<FindATime />);
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search people' }), { target: { value: 'zz' } });
-    expect(screen.getByText('Nobody who matches those filters is free this week.')).toBeInTheDocument();
+    // The hub's states cross-fade, so the message lands once the grid has gone.
+    expect(await screen.findByText('Nobody who matches those filters is free this week.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
-    expect(cell(/free: Elena/)).toBeInTheDocument();
+    expect(await screen.findByRole('gridcell', { name: /free: Elena/ })).toBeInTheDocument();
   });
 
   it('offers a retry when the list fails to load', () => {
