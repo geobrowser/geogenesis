@@ -25,7 +25,7 @@ import { Text } from '~/design-system/text';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
-import { findATimeHref } from './find-a-time-route';
+import { calendarHref } from './debate-calendar-route';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
 import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
@@ -409,11 +409,11 @@ function CalendarButton() {
   const pathname = usePathname();
   return (
     <Link
-      href={findATimeHref(pathname)}
+      href={calendarHref(pathname)}
       onClick={close}
-      aria-label="Calendar: find a time to debate"
+      aria-label="Calendar"
       data-geo-analytics-label="Debate hub Calendar"
-      data-geo-analytics-intent="open_find_a_time"
+      data-geo-analytics-intent="open_debate_calendar"
       className={hubPillClassName('secondary', 'gap-1.5 md:w-7 md:px-0 [&_svg]:shrink-0')}
     >
       <Calendar />

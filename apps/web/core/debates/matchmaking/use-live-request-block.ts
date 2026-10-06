@@ -9,7 +9,7 @@ import { useUnexpiredRequests } from './use-request-countdown';
 
 /**
  * Whether the viewer can send a live request right now, and if not, why — the People tab's rule,
- * shared with Find a time (GEO-3152) so a Debate button greys out for the same reasons in both.
+ * shared with the calendar (GEO-3152) so a Debate button greys out for the same reasons in both.
  */
 export function useLiveRequestBlock(
   activity: DebateActivity | undefined,

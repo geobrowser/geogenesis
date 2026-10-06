@@ -1005,7 +1005,7 @@ export type SchedulablePeopleResponse = {
  * Everyone, online or not, with free time in the window; those sharing a slot with the viewer come
  * first (GEO-2937).
  *
- * `spaces` narrows who is considered by membership, server-side; Find a time sends it once the
+ * `spaces` narrows who is considered by membership, server-side; the calendar sends it once the
  * unfiltered list hits its cap.
  */
 export async function listSchedulablePeople(

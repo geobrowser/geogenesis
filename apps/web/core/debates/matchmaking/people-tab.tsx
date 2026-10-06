@@ -580,11 +580,11 @@ export function PersonRow({
   schedule?: PersonSchedule;
   /**
    * Times to offer as chips on a row that is not offline, which `schedule` would redraw as one.
-   * Find a time (GEO-3152) lists online people by their free time too.
+   * The calendar (GEO-3152) lists online people by their free time too.
    */
   times?: PersonSchedule;
   /**
-   * Where every week this row opens says it came from. Find a time sets one for the whole row; the
+   * Where every week this row opens says it came from. The calendar sets one for the whole row; the
    * People tab leaves it unset, and each control names its own.
    */
   entry?: ScheduleEntry;

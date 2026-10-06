@@ -29,20 +29,17 @@ import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
 import { SpaceTopicFilters } from './claims-tab';
-import { DebateHoursNote } from './debate-hours-note';
-import { type ClaimMatch } from './disagreement-counts';
-import { FilterSwitch } from './filter-switch';
 import {
-  type FindATimeFilter,
-  type FindATimeOpenedFrom,
-  findATimeFilterChanged,
-  findATimeOpened,
-  findATimeWeekChanged,
-} from './find-a-time-analytics';
-import { FindATimeDayList } from './find-a-time-day-list';
+  type CalendarFilter,
+  type CalendarOpenedFrom,
+  calendarFilterChanged,
+  calendarOpened,
+  calendarWeekChanged,
+} from './debate-calendar-analytics';
+import { CalendarDayList } from './debate-calendar-day-list';
 import {
+  CALENDAR_WEEKS,
   type CellPerson,
-  FIND_A_TIME_WEEKS,
   type FreeSlot,
   SLOT_MS,
   cellOf,
@@ -53,9 +50,12 @@ import {
   weekDays,
   weekRangeLabel,
   weekStart,
-} from './find-a-time-model';
-import { FIND_A_TIME_FROM_PARAM } from './find-a-time-route';
-import { FindATimeWeek, FindATimeWeekSkeleton } from './find-a-time-week';
+} from './debate-calendar-model';
+import { CALENDAR_FROM_PARAM } from './debate-calendar-route';
+import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
+import { DebateHoursNote } from './debate-hours-note';
+import { type ClaimMatch } from './disagreement-counts';
+import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
@@ -100,7 +100,7 @@ type Booking = {
 };
 
 /**
- * Find a time to debate (GEO-3152): everyone's free time this week and next, as a week grid, so a
+ * The debate calendar (GEO-3152): everyone's free time this week and next, as a week grid, so a
  * viewer can find someone to debate without setting a schedule of their own first.
  *
  * A view over the People tab's parts rather than a second implementation of them: the rows are
@@ -108,18 +108,18 @@ type Booking = {
  * time picked, and Debate now is the same challenge. What is new is the grid, its cards and the
  * viewer's own debates drawn on it.
  */
-export function FindATime() {
+export function DebateCalendar() {
   const { authenticated, ready } = useGeoChatAuth();
   const promptSignIn = usePrivySignIn(undefined, {
     analytics: {
       component: 'debate_matchmaking',
-      auth_control: 'find_a_time',
+      auth_control: 'calendar',
       auth_continuation: 'repeat',
       auth_intent: 'start_debate',
     },
   });
   const searchParams = useSearchParams();
-  const from = searchParams?.get(FIND_A_TIME_FROM_PARAM);
+  const from = searchParams?.get(CALENDAR_FROM_PARAM);
   const returnPath = from ? safeInternalHref(from) : null;
   const backHref = toDebatesPanel({ pathname: returnPath ?? undefined });
   const isPhone = useMediaQuery(PHONE_QUERY);
@@ -129,13 +129,13 @@ export function FindATime() {
 
   // Once per visit, when what it reports is known: signed out, or signed in with the viewer's own
   // schedule read. Fired before that, `viewer_has_schedule` would be a guess.
-  const openedFrom: FindATimeOpenedFrom = returnPath ? 'hub' : 'direct';
+  const openedFrom: CalendarOpenedFrom = returnPath ? 'hub' : 'direct';
   const reportedOpen = React.useRef(false);
   const scheduleSettled = !authenticated || schedule.data !== undefined || schedule.isError;
   React.useEffect(() => {
     if (!ready || !scheduleSettled || reportedOpen.current) return;
     reportedOpen.current = true;
-    findATimeOpened({
+    calendarOpened({
       openedFrom,
       viewerHasSchedule: authenticated ? (schedule.isError ? null : schedule.isSet) : null,
     });
@@ -157,7 +157,7 @@ export function FindATime() {
 
       <div className="flex flex-col gap-1 border-b border-grey-02 px-6 pb-3 md:px-4">
         <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
-          Find a time to debate
+          Debate calendar
         </Text>
         <Text as="p" variant="metadata" color="grey-04">
           {viewerHasSchedule
@@ -168,7 +168,7 @@ export function FindATime() {
 
       {!ready ? (
         <div className="px-6 py-6 md:px-4">
-          <FindATimeWeekSkeleton />
+          <CalendarWeekSkeleton />
         </div>
       ) : !authenticated ? (
         <HubMessage
@@ -181,13 +181,13 @@ export function FindATime() {
           Sign in to see who&rsquo;s free to debate this week and book a time.
         </HubMessage>
       ) : (
-        <FindATimeBody isPhone={isPhone} viewerHasSchedule={viewerHasSchedule} schedule={schedule} />
+        <DebateCalendarBody isPhone={isPhone} viewerHasSchedule={viewerHasSchedule} schedule={schedule} />
       )}
     </div>
   );
 }
 
-function FindATimeBody({
+function DebateCalendarBody({
   isPhone,
   viewerHasSchedule,
   schedule,
@@ -396,7 +396,7 @@ function FindATimeBody({
     for (const spaceId of spaceIds) if (!counts.has(normId(spaceId))) counts.set(normId(spaceId), 0);
     return [...counts].map(([id, count]) => ({ id, name: null, count }));
   }, [allPeople, debateSpacesByPerson, passesSearch, slotsByUser, spaceIds]);
-  const changeFilter = (filter: FindATimeFilter) => findATimeFilterChanged(filter);
+  const changeFilter = (filter: CalendarFilter) => calendarFilterChanged(filter);
   const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
     offeredSpaces,
     spaceIds,
@@ -497,8 +497,8 @@ function FindATimeBody({
   );
 
   const goToWeek = (next: number, direction: 'previous' | 'next' | 'today') => {
-    setWeekOffset(Math.max(0, Math.min(FIND_A_TIME_WEEKS - 1, next)));
-    findATimeWeekChanged(direction);
+    setWeekOffset(Math.max(0, Math.min(CALENDAR_WEEKS - 1, next)));
+    calendarWeekChanged(direction);
   };
   const clearFilters = () => {
     setSearch('');
@@ -564,7 +564,7 @@ function FindATimeBody({
                 ? 'Set your availability so others can book you too.'
                 : 'Set your availability so others can book you too, and to see which of these times you share.'
             }
-            surface="find_a_time"
+            surface="calendar"
           />
         </div>
       ) : null}
@@ -584,7 +584,7 @@ function FindATimeBody({
           aria-label="Next week"
           analyticsSurface="calendar"
           analyticsLabel="Debate calendar Next week"
-          disabled={weekOffset >= FIND_A_TIME_WEEKS - 1}
+          disabled={weekOffset >= CALENDAR_WEEKS - 1}
           onClick={() => goToWeek(weekOffset + 1, 'next')}
           className="w-7 px-0"
         >
@@ -618,7 +618,7 @@ function FindATimeBody({
         <HubQueryState
           analyticsSurface="calendar"
           isLoading={loading}
-          loadingFallback={<FindATimeWeekSkeleton />}
+          loadingFallback={<CalendarWeekSkeleton />}
           error={loadError}
           failureReason={schedulableQuery.failureReason}
           onRetry={() => void schedulableQuery.refetch()}
@@ -631,13 +631,13 @@ function FindATimeBody({
           emptyAction={
             filteredOut
               ? { label: 'Clear filters', onClick: clearFilters }
-              : weekOffset < FIND_A_TIME_WEEKS - 1
+              : weekOffset < CALENDAR_WEEKS - 1
                 ? { label: 'Next week', onClick: () => goToWeek(weekOffset + 1, 'next') }
                 : undefined
           }
         >
           {isPhone ? (
-            <FindATimeDayList
+            <CalendarDayList
               days={days}
               cells={cells}
               debates={debates}
@@ -645,7 +645,7 @@ function FindATimeBody({
               renderRow={renderRow}
             />
           ) : (
-            <FindATimeWeek
+            <CalendarWeek
               days={days}
               cells={cells}
               debates={debates}

@@ -182,11 +182,11 @@ const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
 const SCHEDULABLE_SLOTS = 48 + 3;
 
 /**
- * Find a time's window (GEO-3152): this week and next, which from a Sunday is fourteen days out.
+ * The calendar's window (GEO-3152): this week and next, which from a Sunday is fourteen days out.
  * geo-chat's range is inclusive and counts from today's UTC date, so the far edge can run a day
  * past next Sunday; the grid drops anything outside the two weeks it draws.
  */
-export const FIND_A_TIME_DAYS = 14;
+export const CALENDAR_DAYS = 14;
 /**
  * Everyone with free time this week, online or not, shared slots first (GEO-2937).
  *
@@ -197,11 +197,11 @@ export function useSchedulablePeople(
   enabled: boolean,
   { calendar = false, spaces = EMPTY_SPACES }: { calendar?: boolean; spaces?: string[] } = {}
 ) {
-  const days = calendar ? FIND_A_TIME_DAYS : SCHEDULABLE_DAYS;
-  // Only Find a time narrows on the server, and only once the unfiltered list hit its cap: below
+  const days = calendar ? CALENDAR_DAYS : SCHEDULABLE_DAYS;
+  // Only the calendar narrows on the server, and only once the unfiltered list hit its cap: below
   // that, every candidate is already in hand and the space menu filters them where they are.
   const serverSpaces = React.useMemo(() => (calendar ? [...spaces].sort() : EMPTY_SPACES), [calendar, spaces]);
-  // Find a time reads `their_windows`, which `limit` never caps; it only trims the shared `slots`.
+  // The calendar reads `their_windows`, which `limit` never caps; it only trims the shared `slots`.
   const limit = SCHEDULABLE_SLOTS;
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const queryEnabled = enabled && authenticated;

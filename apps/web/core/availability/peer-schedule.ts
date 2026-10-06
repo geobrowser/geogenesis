@@ -195,7 +195,7 @@ function windowStart(now: Date, zone: string | undefined): Date {
 
 /**
  * {@link wallClockInstant} for a zone as stored: `local`, empty or unknown fall back to the
- * browser's own. Find a time (GEO-3152) resolves the viewer's saved schedule with it.
+ * browser's own. The calendar (GEO-3152) resolves the viewer's saved schedule with it.
  */
 export function zonedWallClockInstant(wallAsUtc: number, zone: string | undefined): Date {
   return wallClockInstant(wallAsUtc, usableZone(zone));

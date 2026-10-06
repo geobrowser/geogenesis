@@ -15,7 +15,7 @@ import {
   weekDays,
   weekRangeLabel,
   weekStart,
-} from './find-a-time-model';
+} from './debate-calendar-model';
 
 // Wednesday 7 Oct 2026, 10:00 local.
 const NOW = new Date(2026, 9, 7, 10, 0);

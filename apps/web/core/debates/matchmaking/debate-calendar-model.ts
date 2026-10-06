@@ -1,5 +1,5 @@
 /**
- * Find a time's week (GEO-3152), as plain data: who is free in which hour of which day, in the
+ * The calendar's week (GEO-3152), as plain data: who is free in which hour of which day, in the
  * viewer's own zone.
  *
  * The browser's zone rather than the one the viewer's schedule was saved in. The page is read here
@@ -28,13 +28,13 @@ export const DAYS_IN_WEEK = 7;
 export const HOURS_IN_DAY = 24;
 
 /** This week and next. The list's window is a fortnight, and navigation stops at its edge. */
-export const FIND_A_TIME_WEEKS = 2;
+export const CALENDAR_WEEKS = 2;
 
 /**
  * A ceiling on the slots one wire window may expand into, so a malformed range cannot lock the
  * render loop up. A fortnight of back-to-back half-hours is 672.
  */
-const MAX_SLOTS_PER_WINDOW = FIND_A_TIME_WEEKS * DAYS_IN_WEEK * 48;
+const MAX_SLOTS_PER_WINDOW = CALENDAR_WEEKS * DAYS_IN_WEEK * 48;
 
 /** One bookable half-hour of someone's. */
 export type FreeSlot = {
@@ -153,7 +153,7 @@ export function viewerFreeSlots(
 
   // A week either side of the drawn two: the viewer's zone and the browser's can disagree about
   // which date it is, and a slot near midnight belongs to whichever week it lands in here.
-  for (let offset = -1; offset <= FIND_A_TIME_WEEKS; offset++) {
+  for (let offset = -1; offset <= CALENDAR_WEEKS; offset++) {
     const dates = weekDates(weekStart(now, offset)).map(isoDate);
     for (const day of effectiveAvailability(blocks, dates)) {
       const [year, month, date] = day.date.split('-').map(Number);

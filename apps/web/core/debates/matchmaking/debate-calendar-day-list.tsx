@@ -15,21 +15,21 @@ import {
   cellKey,
   cellOf,
   timeRangeLabel,
-} from './find-a-time-model';
+} from './debate-calendar-model';
 import { HubPillButton } from './hub-pill-button';
 import { useDebatesHub } from './use-debates-hub';
 
 type RenderRow = (userKey: string, slots: FreeSlot[], entry: ScheduleEntry) => React.ReactNode;
 
 /**
- * Find a time on a phone (GEO-3152): the same week, as a list grouped by day. One row per person
+ * The calendar on a phone (GEO-3152): the same week, as a list grouped by day. One row per person
  * per day, their half-hours that day as chips, in the same order an hour's list uses; the viewer's
  * own debates sit among them at their time.
  *
  * A grid seven columns wide does not fit a phone, and hover cards need a pointer. Each row here
  * already is the card, so there is nothing to open.
  */
-export function FindATimeDayList({
+export function CalendarDayList({
   days,
   cells,
   debates,
@@ -83,7 +83,7 @@ export function FindATimeDayList({
                 <OwnDebateRow key={debate.requestId} debate={debate} opponentName={opponentName} />
               ))}
               {day.people.map(({ userKey, slots }) => (
-                <React.Fragment key={userKey}>{renderRow(userKey, slots, 'find_a_time_card')}</React.Fragment>
+                <React.Fragment key={userKey}>{renderRow(userKey, slots, 'calendar_card')}</React.Fragment>
               ))}
             </ul>
           </section>

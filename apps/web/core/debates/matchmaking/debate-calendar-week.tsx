@@ -15,7 +15,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebatePerson } from '../api';
 import { speakerLabel } from '../playback-utils';
-import { findATimeHourOpened, findATimePersonViewed } from './find-a-time-analytics';
+import { calendarHourOpened, calendarPersonViewed } from './debate-calendar-analytics';
 import {
   type CellPerson,
   DAYS_IN_WEEK,
@@ -29,7 +29,7 @@ import {
   hourStart,
   timeRangeLabel,
   viewerFreeInHour,
-} from './find-a-time-model';
+} from './debate-calendar-model';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
 import { useDebatesHub } from './use-debates-hub';
@@ -72,7 +72,7 @@ type Card = { key: string; userKey: string; slots: FreeSlot[] };
  *   between hours, Enter opens the one in focus.
  * - The viewer's own debates are blocks in their hour: solid booked, dashed requested.
  */
-export function FindATimeWeek({
+export function CalendarWeek({
   days,
   cells,
   debates,
@@ -129,7 +129,7 @@ export function FindATimeWeek({
     const show = () => {
       cardAnchor.current = anchor;
       setCard(current => {
-        if (current?.key !== next.key || current.userKey !== next.userKey) findATimePersonViewed();
+        if (current?.key !== next.key || current.userKey !== next.userKey) calendarPersonViewed();
         return next;
       });
     };
@@ -147,7 +147,7 @@ export function FindATimeWeek({
     clearCardTimer();
     setCard(null);
     setOpenHour(key);
-    findATimeHourOpened(people.length);
+    calendarHourOpened(people.length);
   };
 
   const focusCell = (day: number, hour: number) => {
@@ -269,7 +269,7 @@ export function FindATimeWeek({
                                   onBook={anchor => {
                                     clearCardTimer();
                                     setCard(null);
-                                    onBook(userKey, anchor, 'find_a_time_slot', new Date(slots[0].start).toISOString());
+                                    onBook(userKey, anchor, 'calendar_slot', new Date(slots[0].start).toISOString());
                                   }}
                                 />
                               );
@@ -279,7 +279,7 @@ export function FindATimeWeek({
                                 type="button"
                                 tabIndex={-1}
                                 aria-label={`Everyone free then: ${people.length} people`}
-                                {...debateActionAnalyticsAttributes('calendar', 'More people', 'open_find_a_time_hour')}
+                                {...debateActionAnalyticsAttributes('calendar', 'More people', 'open_calendar_hour')}
                                 onClick={() => openHourAt(key)}
                                 className="-ml-2 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-grey-02 text-footnoteMedium text-grey-04 ring-2 ring-white"
                               >
@@ -343,7 +343,7 @@ export function FindATimeWeek({
                 {renderRow(
                   card.userKey,
                   card.slots.length > 0 ? card.slots : (slotsByUser.get(card.userKey) ?? []),
-                  'find_a_time_card'
+                  'calendar_card'
                 )}
               </ul>
             </Popover.Content>
@@ -463,7 +463,7 @@ function HourPeople({
       </div>
       <ul className="min-h-0 overflow-y-auto px-4">
         {people.map(({ userKey, slots }) => (
-          <React.Fragment key={userKey}>{renderRow(userKey, slots, 'find_a_time_hour')}</React.Fragment>
+          <React.Fragment key={userKey}>{renderRow(userKey, slots, 'calendar_hour')}</React.Fragment>
         ))}
       </ul>
     </>
@@ -509,7 +509,7 @@ function DebateBlock({
 }
 
 /** The grid's frame with faces still to come: filters and the week stay put while it loads. */
-export function FindATimeWeekSkeleton() {
+export function CalendarWeekSkeleton() {
   const filled = new Set(['1:2', '2:1', '2:4', '3:0', '3:3', '3:5', '4:2', '4:6']);
   return (
     <div aria-busy="true" aria-label="Loading who is free" className="overflow-hidden rounded-lg border border-grey-02">

@@ -20,7 +20,7 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
    */
   rescheduleRequestId?: string | null;
   /**
-   * A new request the server accepted, before the requests list has been read again. Find a time
+   * A new request the server accepted, before the requests list has been read again. The calendar
    * (GEO-3152) draws it on its week straight away with this.
    */
   onRequested?: (request: ScheduledDebateRequest) => void;

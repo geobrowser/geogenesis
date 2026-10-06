@@ -27,7 +27,7 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
 
 /**
  * Everything a person row says about someone beyond presence: matches with the viewer, their record,
- * and the debate spaces they are active in. Shared by the People tab and Find a time (GEO-3152), so
+ * and the debate spaces they are active in. Shared by the People tab and the calendar (GEO-3152), so
  * the same person reads the same in both, and ranks the same: most matches first.
  *
  * `rosterUnavailable`: the caller's list has not answered yet. An empty list then is a fallback, not

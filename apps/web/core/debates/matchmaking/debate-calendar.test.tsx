@@ -112,7 +112,7 @@ vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
 }));
 vi.mock('~/partials/availability/availability-modal', () => ({ AvailabilityModal: () => null }));
 
-const { FindATime } = await import('./find-a-time');
+const { DebateCalendar } = await import('./debate-calendar');
 
 // Wednesday 7 Oct 2026, 10:00 local.
 const NOW = new Date(2026, 9, 7, 10, 0);
@@ -176,10 +176,10 @@ afterEach(() => {
 
 const cell = (name: RegExp) => screen.getByRole('gridcell', { name });
 
-describe('FindATime', () => {
+describe('DebateCalendar', () => {
   it('asks a signed-out viewer to sign in instead of drawing an empty week', () => {
     mocks.authenticated = false;
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
@@ -187,19 +187,19 @@ describe('FindATime', () => {
   });
 
   it("shows everyone's free time to a viewer with no schedule, and nudges without blocking", () => {
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     expect(mocks.schedulableOptions[0]).toEqual({ calendar: true, spaces: [] });
     expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
     expect(screen.getByText(/Set your availability so others can book you too/)).toBeInTheDocument();
-    expect(mocks.capture).toHaveBeenCalledWith('find_a_time_opened', {
+    expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_opened', {
       opened_from: 'direct',
       viewer_has_schedule: false,
     });
   });
 
   it('books the clicked time through the existing modal, with the time picked', () => {
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     fireEvent.click(within(cell(/Thursday.*free: Elena/)).getByRole('button', { name: /Elena/ }));
 
@@ -207,7 +207,7 @@ describe('FindATime', () => {
     expect(mocks.bookingProps).toMatchObject({
       userId: '11',
       initialSelectedStart: at(8, 18),
-      entry: 'find_a_time_slot',
+      entry: 'calendar_slot',
     });
   });
 
@@ -223,7 +223,7 @@ describe('FindATime', () => {
       [normId(summary('15', 'Eli').profile_space_id), [match(1), match(2), match(3)]],
       [normId(summary('13', 'Cy').profile_space_id), [match(4)]],
     ]);
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     const crowded = cell(/Thursday.*free: Eli, Cy, Ana and 2 more/);
     expect(within(crowded).getByRole('button', { name: /Everyone free then: 5 people/ })).toHaveTextContent('+2');
@@ -239,11 +239,11 @@ describe('FindATime', () => {
       'Ben',
       'Dee',
     ]);
-    expect(mocks.capture).toHaveBeenCalledWith('find_a_time_hour_opened', { people_count: 5 });
+    expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_hour_opened', { people_count: 5 });
   });
 
   it('opens the hour from anywhere in the cell, including beside the faces', () => {
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     const thursday = cell(/Thursday.*free: Elena/);
     // The strip the faces sit in, not the cell itself: where most clicks land.
@@ -258,7 +258,7 @@ describe('FindATime', () => {
     mocks.blocks = [{ id: 'r', kind: 'recurring', weekday: 3, start: 18 * 60, end: 18 * 60 + 30 }];
     mocks.scheduleZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     mocks.schedulable = response([free('11', 'Elena', [thursdaySix])], { viewer_has_schedule: true });
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     fireEvent.click(cell(/Thursday.*free: Elena/));
     const list = screen.getByRole('dialog', { name: /Free Thursday/ });
@@ -285,7 +285,7 @@ describe('FindATime', () => {
         viewer_must_answer: false,
       },
     ];
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     fireEvent.click(screen.getByRole('button', { name: /Requested · Elena/ }));
     expect(mocks.openHub).toHaveBeenCalledWith('requests');
@@ -293,15 +293,15 @@ describe('FindATime', () => {
 
   it('says when nobody is free this week, and offers the next', () => {
     mocks.schedulable = response([]);
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     expect(screen.getByText('Nobody has open times this week.')).toBeInTheDocument();
     fireEvent.click(screen.getByText('Next week'));
-    expect(mocks.capture).toHaveBeenCalledWith('find_a_time_week_changed', { direction: 'next' });
+    expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_week_changed', { direction: 'next' });
   });
 
   it('tells filters hiding everyone apart from nobody being free', async () => {
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     fireEvent.change(screen.getByRole('textbox', { name: 'Search people' }), { target: { value: 'zz' } });
     // The hub's states cross-fade, so the message lands once the grid has gone.
@@ -313,7 +313,7 @@ describe('FindATime', () => {
   it('offers a retry when the list fails to load', () => {
     mocks.schedulable = undefined;
     mocks.schedulableError = new Error('down');
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
     expect(mocks.schedulableRefetch).toHaveBeenCalled();
@@ -321,14 +321,14 @@ describe('FindATime', () => {
 
   it('says when the list was capped, and points at the space filter', () => {
     mocks.schedulable = response([free('11', 'Elena', [thursdaySix])], { truncated: true });
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     expect(screen.getByText(/Narrow by space to see others/)).toBeInTheDocument();
   });
 
   it('lists the week by day on a phone', () => {
     mocks.isPhone = true;
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     expect(screen.queryByRole('grid')).not.toBeInTheDocument();
     const thursday = screen.getByRole('region', { name: /Thu/ });
@@ -337,18 +337,21 @@ describe('FindATime', () => {
 
   it('goes back to the page it came from, with the debates panel open', () => {
     mocks.searchParams = new URLSearchParams({ from: '/space/abc/debates' });
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
       'href',
       expect.stringMatching(/^\/space\/abc\/debates\?modal=debates/)
     );
-    expect(mocks.capture).toHaveBeenCalledWith('find_a_time_opened', expect.objectContaining({ opened_from: 'hub' }));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_calendar_opened',
+      expect.objectContaining({ opened_from: 'hub' })
+    );
   });
 
   it('never goes back off-site', () => {
     mocks.searchParams = new URLSearchParams({ from: '//evil.example' });
-    render(<FindATime />);
+    render(<DebateCalendar />);
 
     expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
       'href',
