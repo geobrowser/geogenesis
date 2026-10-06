@@ -240,9 +240,9 @@ export function FindATimeWeek({
                         aria-haspopup={people.length > 0 ? 'dialog' : undefined}
                         onFocus={() => setFocused({ day, hour })}
                         onKeyDown={event => onCellKeyDown(event, day, hour)}
-                        onClick={event => {
-                          if (event.target === event.currentTarget) openHourAt(key);
-                        }}
+                        // Anywhere in the cell opens the hour. A face books instead and a block of
+                        // the viewer's own opens Requests; both stop the click on their way out.
+                        onClick={() => openHourAt(key)}
                         className={cx(
                           'flex min-h-16 min-w-0 flex-col justify-center gap-1 border-r border-grey-01 px-2 py-1.5 outline-none last:border-r-0 focus-visible:ring-2 focus-visible:ring-ctaPrimary focus-visible:ring-inset',
                           shaded ? 'bg-green/10' : past ? 'bg-grey-01/50' : 'bg-white',
@@ -254,7 +254,7 @@ export function FindATimeWeek({
                           <DebateBlock key={debate.requestId} debate={debate} opponentName={opponentName} />
                         ))}
                         {people.length > 0 ? (
-                          <div className="flex items-center" onClick={event => event.stopPropagation()}>
+                          <div className="flex items-center">
                             {people.slice(0, FACES_PER_CELL).map(({ userKey, slots }) => {
                               const person = peopleByUser.get(userKey);
                               if (!person) return null;
@@ -416,6 +416,7 @@ function Face({
       onFocus={event => onHover(event.currentTarget)}
       onBlur={onLeave}
       onClick={event => {
+        event.stopPropagation();
         if (pointerType.current === 'touch') onTap(event.currentTarget);
         else onBook(event.currentTarget);
       }}

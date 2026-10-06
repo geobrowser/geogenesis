@@ -238,6 +238,16 @@ describe('FindATime', () => {
     expect(mocks.capture).toHaveBeenCalledWith('find_a_time_hour_opened', { people_count: 5 });
   });
 
+  it('opens the hour from anywhere in the cell, including beside the faces', () => {
+    render(<FindATime />);
+
+    const thursday = cell(/Thursday.*free: Elena/);
+    // The strip the faces sit in, not the cell itself: where most clicks land.
+    fireEvent.click(within(thursday).getByRole('button', { name: /Elena/ }).parentElement!);
+    expect(screen.getByRole('dialog', { name: /Free Thursday/ })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog', { name: 'Book Elena' })).not.toBeInTheDocument();
+  });
+
   it("draws the viewer's own requests and booked debates on the week", () => {
     mocks.scheduled = [
       {
