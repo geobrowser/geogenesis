@@ -5,6 +5,7 @@ import {
   hostAfterChange,
   hostsLabel,
   isAlreadyInAnotherLobby,
+  lobbyErrorMessage,
   lobbyScheduleLabel,
   lobbyTimeLabel,
   notYetOpenLabel,
@@ -122,5 +123,40 @@ describe('another lobby', () => {
         })
       )
     ).toBe('0000000000000000000000000000abce');
+  });
+});
+
+describe('lobbyErrorMessage', () => {
+  const refused = (code: string, status = 409, details: Record<string, unknown> | null = null) =>
+    new GeoChatRequestError(`raw ${code}`, code, status, null, details);
+
+  it('never shows the server message', () => {
+    expect(lobbyErrorMessage(refused('rate_limited', 429), 'x')).not.toContain('raw');
+    expect(lobbyErrorMessage(refused('lobby_limit_reached', 409, { limit: 5 }), 'x')).toBe(
+      'You already have 5 lobbies open or scheduled. End one to open another.'
+    );
+    expect(lobbyErrorMessage(refused('lobby_limit_reached'), 'x')).not.toContain('raw');
+    for (const code of [
+      'lobby_host_required',
+      'lobby_connection_in_use',
+      'lobby_name_required',
+      'lobby_name_too_long',
+      'lobby_name_invalid',
+      'lobby_start_in_past',
+      'lobby_start_too_far',
+      'lobby_already_open',
+      'lobby_closed',
+      'lobby_banned',
+      'lobby_not_found',
+    ]) {
+      const message = lobbyErrorMessage(refused(code), 'fallback');
+      expect(message).not.toContain('raw');
+      expect(message).not.toBe('fallback');
+    }
+  });
+
+  it('falls back for an unknown code or a network failure', () => {
+    expect(lobbyErrorMessage(refused('something_new'), 'Could not join.')).toBe('Could not join.');
+    expect(lobbyErrorMessage(new TypeError('Failed to fetch'), 'Could not join.')).toBe('Could not join.');
   });
 });

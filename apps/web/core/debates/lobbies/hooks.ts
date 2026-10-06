@@ -17,7 +17,7 @@ import {
 } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useConnectionId } from '../rooms/hooks';
-import { isAlreadyInAnotherLobby, otherLobbyIdFrom } from './lobby-format';
+import { isAlreadyInAnotherLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
@@ -212,10 +212,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
           setState({ status: 'confirm_leave_other', otherLobbyId: otherLobbyIdFrom(error) });
           return;
         }
-        setState({
-          status: 'failed',
-          message: error instanceof GeoChatRequestError ? error.message : 'Could not join this lobby.',
-        });
+        setState({ status: 'failed', message: lobbyErrorMessage(error, 'Could not join this lobby. Try again.') });
       }
     },
     [accountKey, connectionId, enqueue, lobbyId, store]

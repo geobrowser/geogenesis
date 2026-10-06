@@ -12,12 +12,7 @@ import { Text } from '~/design-system/text';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useScrollLock } from '../use-scroll-lock';
 import { useCreateDebateLobby } from './hooks';
-import { lobbyScheduleLabel } from './lobby-format';
-
-/** geo-chat's limit, in characters (code points, not UTF-16 units). */
-const NAME_MAX_CHARS = 120;
-/** geo-chat schedules at most this far ahead. */
-const MAX_SCHEDULE_AHEAD_DAYS = 30;
+import { MAX_SCHEDULE_AHEAD_DAYS, NAME_MAX_CHARS, lobbyErrorMessage, lobbyScheduleLabel } from './lobby-format';
 
 /** `<input type="datetime-local">` reads and writes local wall time without a zone. */
 export function toDateTimeLocalValue(at: Date) {
@@ -175,7 +170,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
 
             {formError || create.error ? (
               <Text as="p" variant="footnote" color="red-01">
-                {formError ?? create.error?.message}
+                {formError ?? lobbyErrorMessage(create.error, 'Could not open the lobby. Try again.')}
               </Text>
             ) : null}
 

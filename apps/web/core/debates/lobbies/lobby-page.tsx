@@ -30,6 +30,7 @@ import {
   hostAfterChange,
   hostsLabel,
   isHosting,
+  lobbyErrorMessage,
   notYetOpenLabel,
   personName,
   remindedLabel,
@@ -145,12 +146,12 @@ function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
       </div>
       {end.isError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {end.error.message}
+          {lobbyErrorMessage(end.error, 'Could not cancel the lobby. Try again.')}
         </Text>
       ) : null}
       {reminder.isError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {reminder.error.message}
+          {lobbyErrorMessage(reminder.error, 'Could not update your reminder. Try again.')}
         </Text>
       ) : null}
     </LobbyShell>
@@ -286,7 +287,7 @@ function LobbyRoom({
         </div>
         {end.isError ? (
           <Text as="p" variant="footnote" color="red-01">
-            {end.error.message}
+            {lobbyErrorMessage(end.error, 'Could not end the lobby. Try again.')}
           </Text>
         ) : null}
       </div>

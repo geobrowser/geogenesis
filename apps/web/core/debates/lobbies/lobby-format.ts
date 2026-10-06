@@ -7,6 +7,11 @@ import {
   dashlessId,
 } from '../api';
 
+/** geo-chat's limit, in characters (code points, not UTF-16 units). */
+export const NAME_MAX_CHARS = 120;
+/** geo-chat schedules at most this far ahead. */
+export const MAX_SCHEDULE_AHEAD_DAYS = 30;
+
 /** Stands in for a person the graph has no name for yet. */
 export const UNNAMED_PERSON = 'Someone';
 
@@ -114,4 +119,42 @@ export function otherLobbyIdFrom(error: GeoChatRequestError) {
   const fromDetails = error.details?.current_lobby_id;
   if (typeof fromDetails === 'string' && fromDetails) return dashlessId(fromDetails);
   return /lobby ([0-9a-f]{32})\b/i.exec(error.message)?.[1]?.toLowerCase() ?? null;
+}
+
+/** What to tell someone geo-chat refused, by its error code; `fallback` for anything else. */
+export function lobbyErrorMessage(error: unknown, fallback: string): string {
+  if (!(error instanceof GeoChatRequestError)) return fallback;
+  if (error.status === 429) return 'That was a lot of tries at once. Wait a moment and try again.';
+  switch (error.code) {
+    case 'lobby_limit_reached': {
+      const limit = error.details?.limit;
+      return typeof limit === 'number'
+        ? `You already have ${limit} lobbies open or scheduled. End one to open another.`
+        : 'You have too many lobbies open or scheduled. End one to open another.';
+    }
+    case 'lobby_host_required':
+      return 'Only a host can do that.';
+    case 'lobby_connection_in_use':
+      return 'This tab is signed in as someone else. Reload the page and try again.';
+    case 'lobby_name_required':
+      return 'Name the lobby.';
+    case 'lobby_name_too_long':
+      return `Keep the name to ${NAME_MAX_CHARS} characters.`;
+    case 'lobby_name_invalid':
+      return 'Remove the special formatting characters from the name.';
+    case 'lobby_start_in_past':
+      return 'Pick a time in the future.';
+    case 'lobby_start_too_far':
+      return `Pick a time within ${MAX_SCHEDULE_AHEAD_DAYS} days.`;
+    case 'lobby_already_open':
+      return 'This lobby is open now. Join it instead.';
+    case 'lobby_closed':
+      return 'This lobby has closed.';
+    case 'lobby_banned':
+      return 'You can’t join this lobby.';
+    case 'lobby_not_found':
+      return 'This lobby no longer exists.';
+    default:
+      return fallback;
+  }
 }
