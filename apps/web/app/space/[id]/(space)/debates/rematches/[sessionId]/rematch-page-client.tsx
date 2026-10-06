@@ -1553,22 +1553,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [opponentPositionOf, viewerPositionOf]
   );
 
-  /** Their rows with "Hide agreed" applied — the same list back when it is off, so memos hold. */
-  const withoutAgreed = React.useCallback(
-    (rows: DebateRematchClaim[]) => (hideAgreed ? rows.filter(claim => !isAgreed(claim)) : rows),
-    [hideAgreed, isAgreed]
-  );
-
   /**
-   * Their positions as the tab's badge and the landing count them. Not what the list draws, which
-   * holds a claim agreed with *on* the tab rather than dropping it under the press — see
-   * `visibleClaims`.
+   * Their positions as the tab's badge, the landing and the filter menus count them. Not what the
+   * list draws, which holds a claim agreed with *on* the tab rather than dropping it under the press
+   * — see `visibleClaims`.
    */
-  const opponentClaimsShown = React.useMemo(() => withoutAgreed(opponentClaims), [opponentClaims, withoutAgreed]);
-  // Memoized because `debatedClaims` hands it on by identity, as it does every other tab's.
-  const opponentDebatedShown = React.useMemo(
-    () => withoutAgreed(opponentClaimsSplit.debated),
-    [opponentClaimsSplit.debated, withoutAgreed]
+  const opponentClaimsShown = React.useMemo(
+    () => (hideAgreed ? opponentClaims.filter(claim => !isAgreed(claim)) : opponentClaims),
+    [hideAgreed, isAgreed, opponentClaims]
   );
 
   /**
@@ -1837,7 +1829,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     tab === 'matches'
       ? NO_CLAIMS
       : tab === 'opponent'
-        ? opponentDebatedShown
+        ? opponentClaimsSplit.debated
         : tab === 'related'
           ? relatedClaimsSplit.debated
           : tab === 'debate'
@@ -1909,6 +1901,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // nothing in, landing them on an empty list behind a filter they never set. The cost is a second
   // request — the list loads unfiltered, then again narrowed — which is the price of not defaulting
   // to nothing.
+  // On their tab, without the claims "Hide agreed" takes out: a menu counting them offered a space or
+  // topic whose only claims are hidden, and picking it emptied the list. The list itself still reads
+  // `claims`, so a claim agreed with on screen is held rather than dropped — see `visibleClaims`.
+  const facetClaims = tab === 'opponent' ? opponentClaimsShown : claims;
   const offeredSpaces = React.useMemo(
     () =>
       graphFiltered
@@ -1916,11 +1912,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
             .map(space => ({ id: space.id, name: null, count: space.count }))
         : countBy(
-            claims
+            facetClaims
               .filter(claim => passesTopics(claim) && passesSearch(claim))
               .map(claim => ({ id: claim.claim.space_id, name: null }))
           ),
-    [canPublishDebateIn, claims, graphFiltered, passesSearch, passesTopics, spaceAllowlist, taggedSpaceFacet.spaces]
+    [
+      canPublishDebateIn,
+      facetClaims,
+      graphFiltered,
+      passesSearch,
+      passesTopics,
+      spaceAllowlist,
+      taggedSpaceFacet.spaces,
+    ]
   );
 
   // A space picked while the gates were still passing everything has to be let go once they reject
@@ -1945,7 +1949,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const facetTopics = React.useMemo(() => {
     if (graphFiltered) return orderFacetOptions(taggedTopicFacet.topics, topicIds);
     const source = countBy(
-      claims
+      facetClaims
         .filter(claim => passesSpace(claim) && passesSearch(claim) && passesTopics(claim))
         .flatMap(claim =>
           (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).map(topic => ({
@@ -1956,7 +1960,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     );
     return orderFacetOptions(source, topicIds);
   }, [
-    claims,
+    facetClaims,
     graphFiltered,
     passesSearch,
     passesSpace,
@@ -1985,7 +1989,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   /**
    * The already-debated rows under the same filters the viewer has set.
    */
-  const visibleDebatedClaims = React.useMemo(
+  const narrowedDebatedClaims = React.useMemo(
     () =>
       graphFiltered
         ? debatedClaims
@@ -2102,8 +2106,23 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     holdMs: null,
     resetKey: sessionId,
   });
-  /** Their tab has rows and the switch is hiding every one of them. */
-  const agreedEverything = hidesAgreed && visibleClaims.length === 0 && narrowedClaims.length > 0;
+  // The folded already-debated rows too, and through the hold for the same reason: their cards carry
+  // the same position control, and the last one leaving takes the whole section with it.
+  const visibleDebatedClaims = useCollapseAnswered(narrowedDebatedClaims, {
+    keyOf: claimRowKey,
+    answeredStateOf: agreedStateOf,
+    enabled: hidesAgreed,
+    holdMs: null,
+    resetKey: sessionId,
+  });
+  /**
+   * The switch is what left the new claims empty: it hid every one, or it hid every debated one and
+   * there were no new ones. Either way the way out is the switch, not the filters or another tab.
+   */
+  const agreedEverything =
+    hidesAgreed &&
+    visibleClaims.length === 0 &&
+    (narrowedClaims.length > 0 || (visibleDebatedClaims.length === 0 && narrowedDebatedClaims.length > 0));
 
   const hasFilters = Boolean(debouncedSearch || (!searchOnly && (spaceIds.length || topicIds.length)));
 
@@ -2834,7 +2853,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               : collapsedEverything
                 ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
                 : agreedEverything
-                  ? `You and ${remoteName} agree on every claim here. Turn off “Hide agreed” to see them.`
+                  ? visibleDebatedClaims.length > 0
+                    ? `You and ${remoteName} agree on every claim here you haven’t debated. Turn off “Hide agreed” to see them.`
+                    : `You and ${remoteName} agree on every claim here. Turn off “Hide agreed” to see them.`
                   : hasFilters
                     ? 'No claims match these filters.'
                     : claims.length === 0 && debatedClaims.length > 0

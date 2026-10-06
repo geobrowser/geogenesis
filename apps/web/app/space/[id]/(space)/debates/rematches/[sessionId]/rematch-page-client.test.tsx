@@ -2221,6 +2221,81 @@ describe('DebateRematchPageClient', () => {
 
         expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
       });
+
+      // Their already-debated claims carry the same position control, so they get the same hold.
+      it('keeps an already-debated claim you agree with while it is on screen', async () => {
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+        mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+        fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
+        expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+
+        mocks.positions = [...mocks.positions, position('profile-local', CLAIM_SHARED, SPACE_1, false)];
+        rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+        await settleExit();
+
+        expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+      });
+
+      it('says so when it hides every debated claim and there are no new ones', async () => {
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+        mocks.positions = [
+          position('profile-local', CLAIM_SHARED, SPACE_1, false),
+          position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(await screen.findByText(/You and Salina agree on every claim here\./)).toBeInTheDocument();
+        expect(screen.queryByText(/hasn’t responded yet/)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Show agreed claims' }));
+
+        expect(await screen.findByText('You and Salina have already debated every claim here.')).toBeInTheDocument();
+      });
+
+      // The new claims are all agreed, but a debated one is still listed below: "every claim here"
+      // would be contradicted by the section under it.
+      it('says it hid only the new ones when a debated claim is still listed', async () => {
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+        mocks.entities = [sharedEntity(), { ...sharedEntity(), id: AGREED, name: 'A claim you both agree on' }];
+        mocks.positions = [
+          position('profile-local', CLAIM_SHARED, SPACE_1, true),
+          position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+          position('profile-local', AGREED, SPACE_1, true),
+          position('profile-remote', AGREED, SPACE_1, true),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(
+          await screen.findByText(
+            'You and Salina agree on every claim here you haven’t debated. Turn off “Hide agreed” to see them.'
+          )
+        ).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: /Already debated with Salina/ })).toBeInTheDocument();
+      });
+
+      // A space whose only claims are hidden would be offered with a count and empty the list.
+      it('leaves the spaces of hidden claims out of the menu', async () => {
+        threeClaims();
+        mocks.entities = [sharedEntity(), publishedEntity(AGREED, 'A claim you both agree on')];
+        mocks.positions = [
+          position('profile-local', CLAIM_SHARED, SPACE_1, true),
+          position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+          position('profile-local', AGREED, SPACE_2, true),
+          position('profile-remote', AGREED, SPACE_2, true),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+        expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+
+        expect(spacesOffered()).toBe(1);
+
+        fireEvent.click(screen.getByRole('switch', SWITCH));
+        expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
+        expect(spacesOffered()).toBe(2);
+      });
     });
 
     // A pair with no match land on their positions, but Matches is still in the strip — and when
