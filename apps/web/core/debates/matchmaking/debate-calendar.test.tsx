@@ -733,6 +733,8 @@ describe('DebateCalendar, admin view (GEO-2943)', () => {
     const rows = within(details).getAllByRole('listitem');
     expect(rows[0]).toHaveTextContent(/Ana.*Sent.*Accepted/);
     expect(rows[1]).toHaveTextContent(/Raj.*Received.*Pending/);
+    // An image avatar fills its parent: the box around it is what keeps it 28px.
+    expect(rows[0].querySelector('.h-7.w-7.overflow-hidden')).not.toBeNull();
   });
 
   it('narrows to the matches that need attention', () => {

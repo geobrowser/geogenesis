@@ -299,7 +299,10 @@ function DebaterRow({ debater, summary }: { debater: AdminDebater; summary: Deba
   const href = summary && validateSpaceId(summary.profile_space_id) ? NavUtils.toSpace(summary.profile_space_id) : null;
   return (
     <li className="flex items-center gap-2">
-      <Avatar avatarUrl={summary?.avatar_cid ?? null} value={summary?.profile_space_id ?? debater.userId} size={28} />
+      {/* An image avatar fills its parent, so the box sets the size; `size` only reaches the generated one. */}
+      <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full">
+        <Avatar avatarUrl={summary?.avatar_cid ?? null} value={summary?.profile_space_id ?? debater.userId} size={28} />
+      </div>
       <div className="flex min-w-0 flex-1 flex-col">
         {href ? (
           <Link href={href} className="truncate text-metadataMedium hover:underline">
