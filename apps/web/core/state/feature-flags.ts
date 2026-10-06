@@ -52,14 +52,13 @@ export const featureFlagDefinitions = [
   {
     id: 'lobbyJoining',
     label: 'Debate lobbies: joining',
-    description:
-      'The Live debate lobbies card in the debates panel and the lobby page at /debate/{id} (GEO-3127). Off: a lobby link says lobbies are not available.',
+    description: 'See and join live debate lobbies from the debates panel.',
     enabledByDefault: false,
   },
   {
     id: 'lobbyHosting',
     label: 'Debate lobbies: hosting',
-    description: 'Open a lobby now or schedule one, from the lobbies card (GEO-3127). Needs lobby joining on too.',
+    description: 'Open a lobby or schedule one for later. Needs joining on too.',
     enabledByDefault: false,
   },
   {
