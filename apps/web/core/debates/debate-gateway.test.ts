@@ -268,7 +268,6 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD' } },
       [
         ['debates', 'account', 'user-a', 'lobby', 'abcd'],
-        ['debates', 'account', 'user-a', 'current-lobby'],
       ],
     ],
   ])('maps %s events to their authoritative query families', async (_label, event, expectedKeys) => {

@@ -2151,20 +2151,6 @@ export async function setDebateLobbyReminder(
   });
 }
 
-/** The open lobby the viewer is in now, if any. */
-export async function getCurrentDebateLobby(
-  getPrivyIdentityToken: GetPrivyIdentityToken,
-  accountKey: string | null,
-  signal?: AbortSignal
-) {
-  return geoChatRequest<{ current_lobby_id: string | null }>('/me/debate-lobby', {
-    auth: true,
-    getPrivyIdentityToken,
-    accountKey,
-    signal,
-  });
-}
-
 /* -------------------------------------------------------------------------------------------------
  * Matchmaking hub (GEO-2514)
  * -----------------------------------------------------------------------------------------------*/

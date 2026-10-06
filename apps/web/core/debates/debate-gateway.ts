@@ -479,7 +479,6 @@ export class DebateGatewayClient {
       // GEO-3131. Sent to the lobby's present members.
       case 'debate.lobby_changed':
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
-        this.queueAccountQuery('current-lobby');
         break;
     }
   }
@@ -553,8 +552,7 @@ export class DebateGatewayClient {
       | 'upcoming-rooms'
       | 'room'
       | 'lobbies'
-      | 'lobby'
-      | 'current-lobby',
+      | 'lobby',
     id?: string
   ) {
     if (!this.accountKey) return;
