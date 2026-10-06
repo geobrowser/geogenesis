@@ -6,6 +6,7 @@ import {
   useAudioPlayback,
   useConnectionState,
   useLocalParticipant,
+  useLocalParticipantPermissions,
   useParticipants,
   useRoomContext,
 } from '@livekit/components-react';
@@ -13,7 +14,15 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
-import { ConnectionState, MediaDeviceFailure, type Room, type RoomOptions } from 'livekit-client';
+import {
+  ConnectionState,
+  MediaDeviceFailure,
+  ParticipantEvent,
+  type Room,
+  type RoomOptions,
+  Track,
+  type TrackPublication,
+} from 'livekit-client';
 
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
@@ -292,6 +301,27 @@ function ConnectedVoice({
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
   const participants = useParticipants();
 
+  // A host's move to listeners revokes publishing in LiveKit at once, before the lobby refetch
+  // brings the new role and a listen-only token; the mic goes down now.
+  const permissions = useLocalParticipantPermissions();
+  const mayPublish = canPublish && permissions?.canPublish !== false;
+  React.useEffect(() => {
+    if (!canPublish || mayPublish) return;
+    onMicChoice(false);
+    void localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
+  }, [canPublish, localParticipant, mayPublish, onMicChoice]);
+
+  // A host's mute arrives as a muted track; remembering it keeps a reconnect from unmuting.
+  React.useEffect(() => {
+    const onMuted = (publication: TrackPublication) => {
+      if (publication.source === Track.Source.Microphone) onMicChoice(false);
+    };
+    localParticipant.on(ParticipantEvent.TrackMuted, onMuted);
+    return () => {
+      localParticipant.off(ParticipantEvent.TrackMuted, onMuted);
+    };
+  }, [localParticipant, onMicChoice]);
+
   const states = React.useMemo<LobbyVoiceStates>(() => {
     const speaking = new Set<string>();
     const micOn = new Set<string>();
@@ -327,7 +357,7 @@ function ConnectedVoice({
     <LobbyVoiceContext.Provider value={states}>
       {notice ? (
         <VoiceBar notice={notice} />
-      ) : canPublish ? (
+      ) : mayPublish ? (
         <VoiceBar
           notice={{
             message: micFailure
