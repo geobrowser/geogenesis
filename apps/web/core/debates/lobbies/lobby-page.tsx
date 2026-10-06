@@ -46,6 +46,7 @@ export const LOBBY_COPY = {
   closed: 'This lobby has closed.',
   findDebate: 'Find a debate',
   otherLobby: 'You’re in another lobby. Joining this one leaves it.',
+  movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
 } as const;
 
 /** `/debate/{id}` when the room is a lobby and `lobbyJoining` is off. */
@@ -188,6 +189,9 @@ function AdmittedLobby({
     );
   }
 
+  if (state.status === 'moved')
+    return <MovedToOtherLobby lobby={lobby} otherLobbyId={state.otherLobbyId} onJoin={join} />;
+
   if (state.status === 'left') {
     return (
       <LobbyShell>
@@ -208,6 +212,39 @@ function AdmittedLobby({
   }
 
   return <LobbyRoom lobby={lobby} state={state} onRetry={() => void join(false)} onLeave={() => void leave()} />;
+}
+
+/** Another tab joined a different lobby, which took this tab out of this one. */
+function MovedToOtherLobby({
+  lobby,
+  otherLobbyId,
+  onJoin,
+}: {
+  lobby: DebateLobbyView;
+  otherLobbyId: string | null;
+  onJoin: () => Promise<void>;
+}) {
+  const other = useDebateLobby(otherLobbyId ?? '', otherLobbyId !== null).data;
+
+  return (
+    <LobbyShell>
+      <LobbyTitle lobby={lobby} />
+      <Text as="p" variant="metadata">
+        {LOBBY_COPY.movedToOther(other?.name ?? null)}
+      </Text>
+      <div className="flex flex-wrap gap-2">
+        {otherLobbyId ? (
+          <Link href={debateRoomPath(otherLobbyId)} className={hubPillClassName('primary')}>
+            Go to that lobby
+          </Link>
+        ) : null}
+        {/* Asks before leaving the other lobby, like any join while in one. */}
+        <HubPillButton analyticsLabel="Lobby join here instead" onClick={() => void onJoin()}>
+          Join here instead
+        </HubPillButton>
+      </div>
+    </LobbyShell>
+  );
 }
 
 function LobbyRoom({

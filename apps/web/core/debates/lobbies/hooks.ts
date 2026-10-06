@@ -150,6 +150,8 @@ export type LobbyPresenceState =
   | { status: 'joined' }
   /** Present in another open lobby; joining this one leaves it, so the viewer is asked first. */
   | { status: 'confirm_leave_other'; otherLobbyId: string | null }
+  /** Joined another lobby from another tab, which dropped this one; no automatic rejoin. */
+  | { status: 'moved'; otherLobbyId: string | null }
   | { status: 'left' }
   | { status: 'failed'; message: string };
 
@@ -183,8 +185,9 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
     return next;
   }, []);
 
+  // `afterLapse`: this tab's lease was dropped rather than the viewer asking to join.
   const join = React.useCallback(
-    async (leaveOtherLobby = false) => {
+    async (leaveOtherLobby = false, afterLapse = false) => {
       const generation = generationRef.current;
       sentRef.current = true;
       setState({ status: 'joining' });
@@ -209,7 +212,8 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
         joinedRef.current = false;
         sentRef.current = false;
         if (isAlreadyInAnotherLobby(error)) {
-          setState({ status: 'confirm_leave_other', otherLobbyId: otherLobbyIdFrom(error) });
+          // Offering to join back here would silently drop the other tab.
+          setState({ status: afterLapse ? 'moved' : 'confirm_leave_other', otherLobbyId: otherLobbyIdFrom(error) });
           return;
         }
         setState({ status: 'failed', message: lobbyErrorMessage(error, 'Could not join this lobby. Try again.') });
@@ -268,7 +272,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
         accountKey
       )
         .then(heartbeat => {
-          if (joinedRef.current && !heartbeat.connection_present) void join(false);
+          if (joinedRef.current && !heartbeat.connection_present) void join(false, true);
         })
         .catch(error => {
           const delay = rateLimitDelayMs(error);

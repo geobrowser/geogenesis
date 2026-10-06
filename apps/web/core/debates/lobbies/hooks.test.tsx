@@ -130,6 +130,33 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(joins()).toHaveLength(2));
   });
 
+  // Another tab joined a different lobby with leave_other_lobby, dropping this tab's lease.
+  it('says the viewer moved when a rejoin after a lapse finds another lobby', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({ connection_present: false, voice_away_at: null });
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    api.setDebateLobbyPresence.mockRejectedValueOnce(
+      new GeoChatRequestError('x', 'already_in_another_lobby', 409, null, {
+        current_lobby_id: '000000000000000000000000000000ab',
+      })
+    );
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+    });
+
+    await waitFor(() =>
+      expect(result.current.state).toEqual({ status: 'moved', otherLobbyId: '000000000000000000000000000000ab' })
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS * 2);
+    });
+    // No further joins and no heartbeats; the viewer chooses.
+    expect(joins()).toHaveLength(2);
+    expect(api.sendDebateLobbyHeartbeat).toHaveBeenCalledTimes(1);
+  });
+
   // A join answered after Leave must not put the viewer back.
   it('keeps Leave when the join it raced resolves afterwards', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
