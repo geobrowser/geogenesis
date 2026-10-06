@@ -8,10 +8,16 @@ import {
   lobbyErrorMessage,
   lobbyScheduleLabel,
   lobbyTimeLabel,
+  memberActions,
+  moderationErrorMessage,
+  moderationLogLabel,
+  moderationNoticeText,
   notYetOpenLabel,
   otherLobbyIdFrom,
   personName,
+  raisedHands,
   rosterOrder,
+  sinceLabel,
 } from './lobby-format';
 
 function member(userId: string, role: DebateLobbyRole, actingHost = false): DebateLobbyMember {
@@ -168,5 +174,112 @@ describe('lobbyErrorMessage', () => {
   it('falls back for an unknown code or a network failure', () => {
     expect(lobbyErrorMessage(refused('something_new'), 'Could not join.')).toBe('Could not join.');
     expect(lobbyErrorMessage(new TypeError('Failed to fetch'), 'Could not join.')).toBe('Could not join.');
+  });
+});
+
+describe('memberActions (GEO-3134)', () => {
+  const host = { hosting: true, role: 'host' as const, creator: false };
+  const creatorHost = { ...host, creator: true };
+  const acting = { hosting: true, role: 'speaker' as const, creator: false };
+  const target = (role: DebateLobbyRole, creator = false) => ({ role, creator });
+
+  it('gives a non-host nothing, even a host by role who is away', () => {
+    expect(memberActions({ hosting: false, role: 'speaker', creator: false }, target('speaker'), false)).toEqual([]);
+    expect(memberActions({ hosting: false, role: 'host', creator: true }, target('speaker'), false)).toEqual([]);
+  });
+
+  it('offers a host the full menu on a speaker and on a listener', () => {
+    expect(memberActions(host, target('speaker'), false)).toEqual([
+      'promote',
+      'mute',
+      'move-to-listeners',
+      'remove',
+      'ban',
+    ]);
+    expect(memberActions(host, target('listener'), false)).toEqual(['promote', 'move-to-speakers', 'remove', 'ban']);
+  });
+
+  it('offers only Remove as host on another host, and never on the creator unless the viewer is it', () => {
+    expect(memberActions(host, target('host'), false)).toEqual(['remove-host']);
+    expect(memberActions(host, target('host', true), false)).toEqual([]);
+    expect(memberActions(creatorHost, target('host'), false)).toEqual(['remove-host']);
+  });
+
+  it('lets a host step down, the creator included', () => {
+    expect(memberActions(host, target('host'), true)).toEqual(['remove-host']);
+    expect(memberActions(creatorHost, target('host', true), true)).toEqual(['remove-host']);
+  });
+
+  it('keeps who hosts away from the acting host', () => {
+    expect(memberActions(acting, target('speaker'), false)).toEqual(['mute', 'move-to-listeners', 'remove', 'ban']);
+    expect(memberActions(acting, target('host'), false)).toEqual([]);
+    expect(memberActions(acting, target('speaker'), true)).toEqual([]);
+  });
+});
+
+describe('raisedHands', () => {
+  it('lists raised hands oldest first', () => {
+    const members = [
+      { ...member('a', 'listener'), hand_raised_at: '2026-10-05T10:02:00Z' },
+      member('b', 'listener'),
+      { ...member('c', 'listener'), hand_raised_at: '2026-10-05T10:01:00Z' },
+    ];
+    expect(raisedHands(members).map(m => m.user_id)).toEqual(['c', 'a']);
+  });
+});
+
+describe('moderation copy', () => {
+  it('reads lobby_not_present as needing to be in the lobby', () => {
+    expect(moderationErrorMessage(new GeoChatRequestError('raw', 'lobby_not_present', 409))).toBe(
+      'Join the lobby to moderate.'
+    );
+    expect(moderationErrorMessage(new GeoChatRequestError('raw', 'lobby_target_is_host', 409))).toBe(
+      'Remove them as host first.'
+    );
+    expect(moderationErrorMessage(new GeoChatRequestError('raw', 'unknown_code', 500))).toBe(
+      'That didn’t work. Try again.'
+    );
+  });
+
+  it('maps every moderation refusal', () => {
+    for (const code of [
+      'lobby_member_not_found',
+      'lobby_target_is_self',
+      'lobby_target_is_host',
+      'lobby_creator_host',
+      'lobby_last_host',
+      'lobby_target_banned',
+      'lobby_target_not_in_voice',
+      'lobby_not_listener',
+    ]) {
+      expect(lobbyErrorMessage(new GeoChatRequestError('raw', code, 409), 'fallback')).not.toBe('fallback');
+    }
+  });
+
+  it('tells the viewer what a host did, except kick and ban, which have screens', () => {
+    expect(moderationNoticeText('mute')).toBe('A host muted you. Unmute when you’re ready.');
+    expect(moderationNoticeText('move_to_listeners')).toMatch(/listeners/);
+    expect(moderationNoticeText('kick')).toBeNull();
+    expect(moderationNoticeText('ban')).toBeNull();
+  });
+
+  it('labels log entries', () => {
+    const adam = { user_id: 'aa-1', profile_space_id: 's', display_name: 'Adam', avatar_cid: null };
+    const sam = { user_id: 'bb', profile_space_id: 's', display_name: 'Sam', avatar_cid: null };
+    expect(moderationLogLabel({ action: 'mute', actor: adam, target: sam })).toBe('Adam muted Sam');
+    expect(moderationLogLabel({ action: 'move_to_listeners', actor: adam, target: sam })).toBe(
+      'Adam moved Sam to listeners'
+    );
+    expect(moderationLogLabel({ action: 'remove_host', actor: adam, target: { ...adam, user_id: 'AA1' } })).toBe(
+      'Adam stepped down as host'
+    );
+    expect(moderationLogLabel({ action: 'promote', actor: null, target: sam })).toBe('Sam started hosting');
+    expect(moderationLogLabel({ action: 'end', actor: adam, target: null })).toBe('Adam ended the lobby');
+  });
+
+  it('says how long a hand has been up', () => {
+    const now = Date.parse('2026-10-05T10:05:00Z');
+    expect(sinceLabel('2026-10-05T10:04:40Z', now)).toBe('20 s');
+    expect(sinceLabel('2026-10-05T10:02:00Z', now)).toBe('3 min');
   });
 });

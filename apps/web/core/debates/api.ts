@@ -523,6 +523,92 @@ export type DebateClaim = {
   updated_at: string;
 };
 
+/* Moderation (GEO-3134). geo-chat enforces every rule; a refusal comes back as its error code. */
+
+/** The path segment of each per-member action. */
+export type DebateLobbyMemberAction =
+  'mute' | 'move-to-listeners' | 'move-to-speakers' | 'remove' | 'ban' | 'unban' | 'promote' | 'remove-host';
+
+/** Returns the caller's view. Hosting from inside the lobby only: `409 lobby_not_present` otherwise. */
+export async function moderateDebateLobbyMember(
+  lobbyId: string,
+  userId: string,
+  action: DebateLobbyMemberAction,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/members/${userId}/${action}`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Raising is for a connected listener; lowering is always allowed. */
+export async function setDebateLobbyHand(
+  lobbyId: string,
+  raised: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/hand`, {
+    method: raised ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export type DebateLobbyBan = {
+  user: DebateLobbyPerson;
+  /** The role an unban restores. */
+  role: DebateLobbyRole;
+  banned_at: string;
+  /** `null` once their account is deleted. */
+  banned_by: DebateLobbyPerson | null;
+};
+
+/** Latest first. Hosts only; a host by role can still read it once the lobby has ended. */
+export async function getDebateLobbyBans(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<{ banned: DebateLobbyBan[] }>(`/debate-lobbies/${lobbyId}/bans`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+export type DebateLobbyModerationEntry = {
+  id: number;
+  action: DebateLobbyModerationAction;
+  /** `null` for an automatic acting host change, or once the account is deleted. */
+  actor: DebateLobbyPerson | null;
+  /** `null` for `end`. */
+  target: DebateLobbyPerson | null;
+  at: string;
+};
+
+/** The latest 200, newest first. Hosts only, like the bans list. */
+export async function getDebateLobbyModerationLog(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<{ entries: DebateLobbyModerationEntry[] }>(`/debate-lobbies/${lobbyId}/moderation-log`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 /* -------------------------------------------------------------------------------------------------
  * Matchmaking hub (GEO-2514)
  * -----------------------------------------------------------------------------------------------*/
@@ -2221,7 +2307,13 @@ export type DebateLobbyMember = {
   /** Left to debate; still listed, without host powers, until back or it expires. */
   stepped_out: boolean;
   in_debate: boolean;
+  /** A listener's raised hand (GEO-3134). Absent from a geo-chat that predates moderation. */
+  hand_raised_at?: string | null;
 };
+
+/** What a host did to someone, as `viewer.last_moderation` and the log spell it (GEO-3134). */
+export type DebateLobbyModerationAction =
+  'mute' | 'move_to_listeners' | 'move_to_speakers' | 'kick' | 'ban' | 'unban' | 'promote' | 'remove_host' | 'end';
 
 export type DebateLobbyView = {
   lobby_id: string;
@@ -2251,6 +2343,10 @@ export type DebateLobbyView = {
     /** This viewer has a live connection here; `false` while stepped out. */
     connected: boolean;
     stepped_out: boolean;
+    /** GEO-3134; absent from a geo-chat that predates moderation. */
+    hand_raised_at?: string | null;
+    /** The latest action another person took on the viewer here; never `end`. */
+    last_moderation?: { action: DebateLobbyModerationAction; at: string } | null;
   };
 };
 

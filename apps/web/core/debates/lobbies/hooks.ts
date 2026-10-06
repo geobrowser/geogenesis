@@ -97,7 +97,7 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
 }
 
 /** Writes a returned view into the lobby's cache entry and marks the list stale. */
-function useStoreLobbyView() {
+export function useStoreLobbyView() {
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
 
