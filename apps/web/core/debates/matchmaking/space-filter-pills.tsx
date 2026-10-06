@@ -77,10 +77,16 @@ export function SpaceFilterPills({
     : ordered.filter((space, index) => index < SPACE_PILLS_BEFORE_MORE || isSelected(space.id));
   const hiddenCount = ordered.length - shown.length;
 
-  if (ordered.length === 0) {
-    if (!loading) return null;
+  // Names still on their way keep the skeleton row up. Pills drawn with a placeholder where the name
+  // goes are wider than most real names ("AI"), so a full row of them wrapped to a second line for a
+  // moment and then snapped back to one.
+  const namesPending = labelsLoading && shown.some(space => !spaceLabel(labelsById, space.id));
+
+  if (ordered.length === 0 || namesPending) {
+    if (ordered.length === 0 && !loading) return null;
     return (
-      <div className={cx('flex flex-wrap items-center gap-2', className)} aria-hidden>
+      // One line at any width: a skeleton has no reason to wrap.
+      <div className={cx('flex items-center gap-2 overflow-hidden', className)} aria-hidden>
         {Array.from({ length: SKELETON_PILLS }, (_, index) => (
           <Skeleton key={index} className="h-7 w-24 rounded-full" />
         ))}
@@ -111,16 +117,12 @@ export function SpaceFilterPills({
       </button>
       {shown.map(space => {
         const label = spaceLabel(labelsById, space.id);
-        const pending = !label && labelsLoading;
         const on = isSelected(space.id);
         return (
           <button
             key={space.id}
             type="button"
             aria-pressed={on}
-            // Picking a space nobody can name yet filters the week to something the viewer can't
-            // read back off the row. The wait is short.
-            disabled={pending}
             onClick={() => onSpaceToggle(space.id)}
             className={hubPillClassName(on ? 'primary' : 'secondary', 'gap-1.5 pl-1.5')}
             {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Space pill', 'filter')}
@@ -128,11 +130,7 @@ export function SpaceFilterPills({
             <span className="block size-4 shrink-0 overflow-hidden rounded-sm bg-grey-02">
               <Avatar avatarUrl={label?.image ?? null} value={space.id} size={16} />
             </span>
-            {pending ? (
-              <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
-            ) : (
-              <span className="max-w-[160px] truncate">{label?.name ?? 'Space'}</span>
-            )}
+            <span className="max-w-[160px] truncate">{label?.name ?? 'Space'}</span>
             <span
               className={cx(
                 'tabular-nums transition-opacity',

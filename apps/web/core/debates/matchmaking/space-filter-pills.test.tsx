@@ -5,15 +5,20 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { SPACE_PILLS_BEFORE_MORE, SpaceFilterPills } from './space-filter-pills';
 
+const labels = vi.hoisted(() => ({ loading: false }));
+
 vi.mock('~/core/hooks/use-space-labels', () => ({
-  useSpaceLabels: (ids: string[]) => ({
-    labelsById: new Map(ids.map(id => [id, { name: `Name ${id}`, image: null }])),
-    isLoading: false,
-  }),
+  useSpaceLabels: (ids: string[]) =>
+    labels.loading
+      ? { labelsById: new Map(), isLoading: true }
+      : { labelsById: new Map(ids.map(id => [id, { name: `Name ${id}`, image: null }])), isLoading: false },
   spaceLabel: (labels: Map<string, unknown>, id: string) => labels.get(id) ?? null,
 }));
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  labels.loading = false;
+});
 
 const spaces = (n: number) => Array.from({ length: n }, (_, index) => ({ id: `s${index}`, count: n - index }));
 
@@ -125,5 +130,22 @@ describe('SpaceFilterPills', () => {
       'data-geo-analytics-intent',
       'filter_debate_calendar'
     );
+  });
+
+  // Placeholder-width names made a full row wrap to two lines for a moment.
+  it('keeps the one-line skeleton up until the names arrive', () => {
+    labels.loading = true;
+    const { container } = render(
+      <SpaceFilterPills
+        analyticsSurface="calendar"
+        facetSpaces={spaces(6)}
+        spaceIds={[]}
+        onSpaceToggle={() => {}}
+        onSpacesClear={() => {}}
+      />
+    );
+
+    expect(screen.queryByRole('group')).toBeNull();
+    expect(container.firstChild).not.toHaveClass('flex-wrap');
   });
 });
