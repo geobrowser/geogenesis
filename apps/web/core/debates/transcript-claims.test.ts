@@ -546,6 +546,36 @@ describe('published timecodes', () => {
     expect(all[0].highlightScore).toBeNull();
   });
 
+  it.each([0, 1])('keeps a score at the boundary, %d', score => {
+    const values = [{ propertyId: '580ba596988144a79716cd38a891319b', float: score }];
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+    expect(all[0].highlightScore).toBe(score);
+  });
+
+  /**
+   * Block order is publish position, which is random, so "the first statement's score" would be a
+   * coin toss. The strongest statement answers "does this claim matter"; the row's other
+   * per-statement fields stay the first statement's, as `restated` documents.
+   */
+  it("gives a claim stated in two turns the highest of its statements' scores", () => {
+    const SCORE = '580ba596988144a79716cd38a891319b';
+    const scored = (score: number | null) => (score === null ? [] : [{ propertyId: SCORE, float: score }]);
+    const two = (first: number | null, second: number | null) =>
+      group(
+        response([
+          { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1', offsets: scored(first) }] },
+          { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1', offsets: scored(second) }] },
+        ])
+      ).all[0];
+
+    expect(two(0.3, 0.8)).toMatchObject({ restated: true, highlightScore: 0.8 });
+    expect(two(0.8, 0.3)).toMatchObject({ restated: true, highlightScore: 0.8 });
+    // One unscored statement does not erase the other's score, whichever comes first.
+    expect(two(null, 0.6).highlightScore).toBe(0.6);
+    expect(two(0.6, null).highlightScore).toBe(0.6);
+    expect(two(null, null).highlightScore).toBeNull();
+  });
+
   it('carries the block each claim was said in, so its turn can be located on the recording', () => {
     const { all, blocks } = group(
       response([

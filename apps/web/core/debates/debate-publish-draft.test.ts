@@ -925,6 +925,32 @@ describe('buildDebatePublishDraft', () => {
       expect(relationsFrom(draft, statement)).toEqual([]);
     });
 
+    it('carries the score through the real publish op pipeline as a float, exactly', async () => {
+      const scores = [0.62, 1e-7, 0, 1, 0.1 + 0.2, 0.9999999999999999];
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: scores.map((highlightScore, i) => ({
+            text: `Scored claim ${i}`,
+            isFactual: false,
+            turnIndex: 0,
+            highlightScore,
+          })),
+        }),
+        { createEntityId: ID.createEntityId }
+      );
+      const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
+      // Ids travel as 16-byte arrays in the ops; compare the property as hex.
+      const hex = (bytes: unknown) =>
+        Array.from(Object.values(bytes as Record<string, number>), byte => byte.toString(16).padStart(2, '0')).join('');
+      const published = ops
+        .flatMap(op => (op.type === 'updateEntity' && Array.isArray(op.set) ? op.set : []))
+        .filter(set => hex(set.property) === CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID)
+        .map(set => set.value);
+      // One float per scored claim, the same double in and out: a change to how FLOAT values are
+      // converted (a string, an integer, `|| 0` eating a value) would show up here.
+      expect(published).toEqual(scores.map(value => ({ type: 'float', value })));
+    });
+
     // The player ranks by this, so a stand-in would rank.
     it.each([
       ['no score', undefined],

@@ -75,6 +75,11 @@ export type DebateExtractedClaimsClaim = {
 export type DebateExtractedClaimsResponse = {
   turns: DebateExtractedClaimsTurn[];
   claims: DebateExtractedClaimsClaim[];
+  /**
+   * `provider/model` of the run that scored the claims, or null when none did (scoring off, or
+   * failed). Read only to tell those two apart in the log below; absent on older payloads.
+   */
+  highlight_model?: string | null;
 };
 
 /**
@@ -96,6 +101,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     }));
   const droppedTopics: unknown[] = [];
   const droppedStableIds: unknown[] = [];
+  const droppedScores: unknown[] = [];
   const claims: DebateClaimInput[] = (Array.isArray(response.claims) ? response.claims : []).map(claim => ({
     text: claim.text,
     isFactual: claim.is_factual ?? null,
@@ -108,7 +114,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     topics: decodeTopics(claim.topics, droppedTopics),
     isContestable: claim.is_contestable === true,
     timing: decodeTiming(claim.start_ms, claim.end_ms),
-    highlightScore: decodeHighlightScore(claim.highlight_score),
+    highlightScore: decodeHighlightScore(claim.highlight_score, droppedScores),
     stance: decodeStance(claim.stance),
   }));
   if (droppedTopics.length > 0) {
@@ -125,6 +131,24 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     console.warn('[debate-acceptor] dropping extracted-claim entity ids that are not entity ids', {
       count: droppedStableIds.length,
       sample: droppedStableIds.slice(0, 5),
+    });
+  }
+  if (droppedScores.length > 0) {
+    // A score that is present but not a number in [0, 1] is drift — a retyped field upstream
+    // would otherwise publish every debate unscored with nothing in the logs to say why.
+    console.warn('[debate-acceptor] dropping extracted-claim highlight scores that are not in [0, 1]', {
+      count: droppedScores.length,
+      sample: droppedScores.slice(0, 5),
+    });
+  }
+  if (claims.length > 0) {
+    // Scores are written once: a debate published unscored stays unscored (no backfill), so the
+    // count has to be visible here. `model` null with claims present means scoring did not run
+    // or failed upstream; a model with zero scored means the field was dropped on the way.
+    console.log('[debate-acceptor] highlight scores decoded', {
+      claims: claims.length,
+      scored: claims.filter(claim => claim.highlightScore !== null).length,
+      model: typeof response.highlight_model === 'string' ? response.highlight_model : null,
     });
   }
   return { transcriptTurns, claims };
@@ -169,10 +193,14 @@ function decodeTiming(startMs: unknown, endMs: unknown): { startMs: number; endM
 /**
  * `highlight_score` → a score, only when it is a finite number in [0, 1]. Anything else is null,
  * so nothing is published: the player ranks claims by this, and a malformed value would rank.
+ * Null and absent are the ordinary "not scored"; a present value that fails is recorded in
+ * `dropped` so the decoder can say so.
  */
-function decodeHighlightScore(score: unknown): number | null {
-  if (typeof score !== 'number') return null;
-  return publishableHighlightScore(score);
+function decodeHighlightScore(score: unknown, dropped: unknown[]): number | null {
+  if (score === null || score === undefined) return null;
+  const accepted = typeof score === 'number' ? publishableHighlightScore(score) : null;
+  if (accepted === null) dropped.push(score);
+  return accepted;
 }
 
 /**

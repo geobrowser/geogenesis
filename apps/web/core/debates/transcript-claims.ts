@@ -44,6 +44,12 @@ export type TranscriptClaim = {
    * judged by extraction-api's `claims.score_highlights`. Compare within one debate; the live
    * layer uses it to show the few claims that matter. Null for debates published before scoring
    * shipped (2026-10) and for a claim geo-chat could not score.
+   *
+   * For a {@link restated} claim this is the highest score among its statements. Each statement
+   * has its own score on its own relation entity, and the row is deduped to one — the first in
+   * block order, which is a random publish position — so taking that one would make "does this
+   * claim matter" a coin toss between the statements. The highest answers the question the
+   * consumer asks; the other per-statement fields on this row stay the first statement's.
    */
   highlightScore: number | null;
   /**
@@ -60,8 +66,9 @@ export type TranscriptClaim = {
    * `find-or-create` links an existing claim rather than minting a second, so one entity really can
    * be two statements by two speakers — see the grouping tests. This row is deduped, though, and
    * carries only the *first* relation's block, offsets and relation entity. Rather than let that
-   * silently stand in for both statements, the flag says the row cannot answer "when" or "who", and
-   * the surfaces that assert either decline it: {@link resolveClaimTimings} gives it no timing, so
+   * silently stand in for both statements, the flag says the row cannot answer "when" or "who"
+   * ({@link highlightScore} is the exception: it takes the highest of the statements), and the
+   * surfaces that assert either decline it: {@link resolveClaimTimings} gives it no timing, so
    * no card is drawn over a face and no timecode is printed beside a row, and the backfill scripts
    * skip it rather than writing one occurrence and leaving the other unplaced.
    *
@@ -329,6 +336,11 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
           // A second turn for a claim already seen. The same relation repeated inside one block is
           // just noise and does not count — see `restated`.
           row.restated = true;
+          // The strongest statement's score stands for the claim — see `highlightScore`.
+          const score = publishedHighlightScore(claim.entity?.valuesList);
+          if (score !== null && (row.highlightScore === null || score > row.highlightScore)) {
+            row.highlightScore = score;
+          }
         }
 
         const authorKey = authorSpaceId ? uuidToHex(authorSpaceId) : '';

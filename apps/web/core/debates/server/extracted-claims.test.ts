@@ -115,19 +115,44 @@ describe('decodeExtractedClaims highlight score', () => {
     expect(claims[0].highlightScore).toBe(0.62);
   });
 
+  it.each([0, 1])('keeps a score at the boundary, %d', score => {
+    const { claims } = decodeExtractedClaims({ turns: [turn], claims: [claim({ highlight_score: score })] });
+    expect(claims[0].highlightScore).toBe(score);
+  });
+
   it.each([
-    ['absent (a payload from before scoring)', {}],
-    ['null (geo-chat did not score it)', { highlight_score: null }],
-    ['a string', { highlight_score: '0.62' }],
-    ['over 1', { highlight_score: 1.5 }],
-    ['negative', { highlight_score: -0.2 }],
-    ['not finite', { highlight_score: Number.POSITIVE_INFINITY }],
-  ])('decodes no score when it is %s', (_label, extra) => {
+    ['absent (a payload from before scoring)', {}, false],
+    ['null (geo-chat did not score it)', { highlight_score: null }, false],
+    ['a string', { highlight_score: '0.62' }, true],
+    ['over 1', { highlight_score: 1.5 }, true],
+    ['negative', { highlight_score: -0.2 }, true],
+    ['not finite', { highlight_score: Number.POSITIVE_INFINITY }, true],
+  ])('decodes no score when it is %s', (_label, extra, drift) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const { claims } = decodeExtractedClaims({
       turns: [turn],
       claims: [claim(extra) as Parameters<typeof decodeExtractedClaims>[0]['claims'][number]],
     });
     expect(claims[0].highlightScore).toBeNull();
+    // Absent and null are ordinary; a present value that is not a score is drift and is said.
+    const said = warn.mock.calls.some(([message]) => String(message).includes('highlight scores'));
+    expect(said).toBe(drift);
+    warn.mockRestore();
+  });
+
+  it('logs how many claims were scored and by what, so an unscored debate is visible', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    decodeExtractedClaims({
+      turns: [turn],
+      claims: [claim({ highlight_score: 0.62 }), claim({ highlight_score: null })],
+      highlight_model: 'perplexity/pplx-decider-v1-27b',
+    });
+    expect(log).toHaveBeenCalledWith('[debate-acceptor] highlight scores decoded', {
+      claims: 2,
+      scored: 1,
+      model: 'perplexity/pplx-decider-v1-27b',
+    });
+    log.mockRestore();
   });
 });
 

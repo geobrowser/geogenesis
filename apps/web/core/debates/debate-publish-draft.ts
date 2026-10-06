@@ -583,7 +583,10 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           // Only a measured span is written — the app reads these as a to-the-second certainty.
           // How much the claim carries the debate, on the same relation entity: like the offsets it
           // is a fact about this statement in this debate, not about the claim. Only a real score
-          // is written — the player ranks by it, so a stand-in would rank.
+          // is written — the player ranks by it, so a stand-in would rank. Like the offsets, it is
+          // the FIRST extraction's for this (block, claim): two extractions in one turn that
+          // resolve to one entity share one relation, and the later one's score is not consulted
+          // even when the first had none.
           const highlightScore = publishableHighlightScore(claim.highlightScore);
           if (highlightScore !== null) {
             setFloat(statement.id, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, highlightScore);
