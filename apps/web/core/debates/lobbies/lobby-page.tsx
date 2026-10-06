@@ -38,6 +38,8 @@ import {
   remindedLabel,
   rosterOrder,
 } from './lobby-format';
+import { LobbyMemberMenu } from './lobby-member-actions';
+import { LobbyHandControl, LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
 import { LobbyRequestDebate } from './lobby-request-debate';
 import { LobbyVoice, useLobbyVoiceStates } from './lobby-voice';
 
@@ -46,6 +48,7 @@ const HANDOFF_NOTICE_MS = 8_000;
 export const LOBBY_COPY = {
   unavailable: 'Lobbies are not available right now.',
   banned: 'You can’t join this lobby.',
+  bannedFrom: (name: string) => `A host has blocked you from ${name}.`,
   ended: 'This lobby has ended.',
   closed: 'This lobby has closed.',
   findDebate: 'Find a debate',
@@ -89,13 +92,28 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
 
   switch (lobby.access.status) {
     case 'banned':
-      return <LobbyNotice action={findDebateAction}>{LOBBY_COPY.banned}</LobbyNotice>;
-    case 'closed':
       return (
+        <LobbyNotice action={findDebateAction}>
+          {LOBBY_COPY.banned} {LOBBY_COPY.bannedFrom(lobby.name)}
+        </LobbyNotice>
+      );
+    case 'closed': {
+      const notice = (
         <LobbyNotice action={findDebateAction}>
           {lobby.access.reason === 'ended' ? LOBBY_COPY.ended : LOBBY_COPY.closed}
         </LobbyNotice>
       );
+      // Hosts can still look up who was banned and what was done.
+      if (lobby.viewer.role !== 'host') return notice;
+      return (
+        <>
+          {notice}
+          <div className="mx-auto w-full max-w-xl px-4 pb-8">
+            <LobbyHostLists lobby={lobby} />
+          </div>
+        </>
+      );
+    }
     case 'not_yet_open':
       return <NotYetOpen lobby={lobby} />;
     case 'admitted':
@@ -175,6 +193,7 @@ function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: 
 
   // Until the refetch moves the page to the lobby's new access.
   if (state.status === 'dropped') {
+    if (state.reason === 'removed') return <LobbyRemovedNotice onRejoin={() => void join(false)} />;
     return <LobbyNotice action={findDebateAction}>{LOBBY_COPY[state.reason]}</LobbyNotice>;
   }
 
@@ -283,6 +302,7 @@ function LobbyRoom({
   const [confirmingEnd, setConfirmingEnd] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const handoff = useHandoffNotice(lobby);
+  const moderationNotice = useModerationNotice(lobby.viewer);
 
   const hosts = lobby.members.filter(isHosting);
   const isHost = lobby.viewer.hosting;
@@ -300,8 +320,8 @@ function LobbyRoom({
       </Text>
     ) : (
       <>
-        <RosterSection label="Speakers" members={speakers} isViewer={isViewer} />
-        <RosterSection label="Listeners" members={listeners} isViewer={isViewer} />
+        <RosterSection label="Speakers" lobby={lobby} members={speakers} isViewer={isViewer} />
+        <RosterSection label="Listeners" lobby={lobby} members={listeners} isViewer={isViewer} />
       </>
     );
 
@@ -374,6 +394,18 @@ function LobbyRoom({
         </div>
       ) : null}
 
+      {moderationNotice ? (
+        <div role="status" className="rounded-md bg-grey-01 px-3 py-2">
+          <Text as="p" variant="footnote" color="text">
+            {moderationNotice}
+          </Text>
+        </div>
+      ) : null}
+
+      {state.status === 'joined' && lobby.viewer.role === 'listener' && !lobby.viewer.hosting ? (
+        <LobbyHandControl lobby={lobby} />
+      ) : null}
+
       {state.status === 'stepped_out' ? (
         <div className="flex flex-wrap items-center gap-2">
           <Text as="p" variant="footnote" color="text">
@@ -412,6 +444,8 @@ function LobbyRoom({
       ) : (
         people
       )}
+
+      {isHost ? <LobbyHostLists lobby={lobby} /> : null}
     </LobbyShell>
   );
 }
@@ -423,10 +457,12 @@ function publishes(member: DebateLobbyMember) {
 
 function RosterSection({
   label,
+  lobby,
   members,
   isViewer,
 }: {
   label: string;
+  lobby: DebateLobbyView;
   members: DebateLobbyMember[];
   isViewer: (member: DebateLobbyMember) => boolean;
 }) {
@@ -438,14 +474,22 @@ function RosterSection({
       </Text>
       <ul className="flex flex-col divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white">
         {members.map(member => (
-          <RosterRow key={member.user_id} member={member} isViewer={isViewer(member)} />
+          <RosterRow key={member.user_id} lobby={lobby} member={member} isViewer={isViewer(member)} />
         ))}
       </ul>
     </section>
   );
 }
 
-function RosterRow({ member, isViewer }: { member: DebateLobbyMember; isViewer: boolean }) {
+function RosterRow({
+  lobby,
+  member,
+  isViewer,
+}: {
+  lobby: DebateLobbyView;
+  member: DebateLobbyMember;
+  isViewer: boolean;
+}) {
   const voice = useLobbyVoiceStates();
   const voiceId = dashlessId(member.user_id).toLowerCase();
   const speaking = voice.speaking.has(voiceId);
@@ -488,6 +532,7 @@ function RosterRow({ member, isViewer }: { member: DebateLobbyMember; isViewer: 
       >
         {member.acting_host ? 'Hosting' : ROLE_LABEL[member.role]}
       </span>
+      <LobbyMemberMenu lobby={lobby} member={member} isSelf={isViewer} micOn={showMic ? micOn : undefined} />
     </li>
   );
 }
