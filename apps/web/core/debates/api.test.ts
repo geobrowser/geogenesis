@@ -27,6 +27,7 @@ import {
   notifyClaimResponseIndexed,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
+  saveOpenRoundPick,
   unhideDebate,
   updateDebateAvailability,
 } from './api';
@@ -785,6 +786,50 @@ describe('turn yields', () => {
         body: JSON.stringify({ ended_at_ms: 1_784_542_272_505 }),
       })
     );
+  });
+});
+
+describe('open round picks (GEO-3175)', () => {
+  it('puts the pick to the addressed round and returns the debate built for the caller', async () => {
+    const debate = { id: 'debate-1', status: 'in_progress', open_rounds: { round_index: 0, my_pick: 'rebut' } };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(debate), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(saveOpenRoundPick('debate-1', 0, 'rebut', vi.fn(), 'user-a')).resolves.toEqual(debate);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/rounds/0/pick',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: {
+          Authorization: 'Bearer access-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pick: 'rebut' }),
+      })
+    );
+  });
+
+  it('surfaces the contract’s refusal codes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'round_already_resolved', message: 'Round 0 has resolved.' } }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(saveOpenRoundPick('debate-1', 0, 'end', vi.fn(), 'user-a')).rejects.toMatchObject({
+      code: 'round_already_resolved',
+      status: 409,
+    });
   });
 });
 

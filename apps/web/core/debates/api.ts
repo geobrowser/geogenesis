@@ -257,6 +257,78 @@ export type Debate = {
    * absence means "unknown", never "fine".
    */
   media?: DebateListingMediaState | null;
+  /**
+   * Open rounds (GEO-3166), built for the viewer. Present only when `turn_format_id` is
+   * `"open_rounds"`, in every status; absent on every fixed format, so absence means "fixed".
+   * The contract is geo-chat `docs/open-rounds-contract.md`. Read timing through
+   * `core/debates/open-rounds`, never by re-deriving it from these fields.
+   */
+  open_rounds?: DebateOpenRounds;
+};
+
+export type OpenRoundPick = 'rebut' | 'end';
+export type OpenRoundsPhase = 'speaking' | 'deciding' | 'result' | 'finished';
+export type OpenRoundResolution = 'both_picked' | 'deadline';
+export type OpenRoundTurnRole = 'opening' | 'rebuttal';
+
+/** A slot's pick once its round has resolved. `null` means it never picked, which counted as End. */
+export type OpenRoundRevealedPick = {
+  participant_slot: ParticipantSlot;
+  pick: OpenRoundPick | null;
+};
+
+/** Every set and change of a pick, in order (for playback and analytics). */
+export type OpenRoundPickEvent = {
+  participant_slot: ParticipantSlot;
+  pick: OpenRoundPick;
+  previous_pick: OpenRoundPick | null;
+  turn_index: number;
+  during_decision: boolean;
+  at: string;
+};
+
+/** A resolved round. Only resolved rounds are listed, so nothing here is ever blind. */
+export type OpenRoundHistoryEntry = {
+  round_index: number;
+  ended_at?: string | null;
+  decision_deadline_at?: string | null;
+  decision_resolved_at: string;
+  outcome: OpenRoundPick;
+  resolution: OpenRoundResolution;
+  picks: OpenRoundRevealedPick[];
+  pick_events?: OpenRoundPickEvent[];
+};
+
+/**
+ * The per-viewer `open_rounds` block (contract §4). `phase` is the server's reading at `as_of`; the
+ * room advances it locally from the timestamps, so read the room's phase rather than this field.
+ */
+export type DebateOpenRounds = {
+  as_of: string;
+  max_rebuttal_rounds: number;
+  rebuttal_turn_ms: number;
+  decision_window_ms: number;
+  result_window_ms: number;
+  /** The round this block describes. In `result` it is the round that just resolved. */
+  round_index: number;
+  phase: OpenRoundsPhase;
+  /** `round_index == max_rebuttal_rounds`: no pick, and its last turn goes straight to thanking. */
+  is_final_round: boolean;
+  can_pick: boolean;
+  round_ends_at: string | null;
+  decision_deadline_at: string | null;
+  decision_resolved_at: string | null;
+  /** `decision_resolved_at + result_window_ms`: the next turn, or thanking. */
+  next_phase_starts_at: string | null;
+  my_pick: OpenRoundPick | null;
+  /** A boolean for debaters; `null` for spectators and listings. Never the pick itself. */
+  opponent_has_picked: boolean | null;
+  outcome: OpenRoundPick | null;
+  resolution: OpenRoundResolution | null;
+  revealed_picks: OpenRoundRevealedPick[] | null;
+  /** One per entry of `turn_durations_ms`. */
+  turn_roles: OpenRoundTurnRole[];
+  rounds: OpenRoundHistoryEntry[];
 };
 
 export type DebateListingMediaState = {
@@ -1495,6 +1567,31 @@ export async function endDebateTurn(
   return geoChatRequest<Debate>(`/debates/${debateId}/turns/${turnIndex}/end`, {
     method: 'POST',
     body: { ended_at_ms: endedAtMs },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Saves the viewer's Rebut / End pick for an open round (contract §5). Idempotent, changeable until
+ * the round resolves, and answers with the full Debate built for the caller, so `my_pick` reflects
+ * the save. `roundIndex` is in the path so a late retry can never land on the next round.
+ *
+ * Refusals throw `GeoChatRequestError` carrying the contract's codes: `round_not_open`,
+ * `round_has_no_pick`, `round_already_resolved` (re-fetch for the outcome), `open_rounds_not_enabled`,
+ * `invalid_round_pick`, `debate_forbidden`, `debate_not_found`.
+ */
+export async function saveOpenRoundPick(
+  debateId: string,
+  roundIndex: number,
+  pick: OpenRoundPick,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<Debate>(`/debates/${debateId}/rounds/${roundIndex}/pick`, {
+    method: 'PUT',
+    body: { pick },
     auth: true,
     getPrivyIdentityToken,
     accountKey,
