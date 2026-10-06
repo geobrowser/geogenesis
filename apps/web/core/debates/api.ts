@@ -251,6 +251,20 @@ export type Debate = {
   cancellation_reason: string | null;
   recording_cancelled_at: string | null;
   recording_cancelled_by: string | null;
+  /**
+   * Media processing state (GEO-2985). Sent by `GET /spaces/{id}/debates` only, and only by a
+   * geo-chat new enough to know it; absent on every by-id read and from an older geo-chat, so
+   * absence means "unknown", never "fine".
+   */
+  media?: DebateListingMediaState | null;
+};
+
+export type DebateListingMediaState = {
+  /** `queued` | `running` | `succeeded` | `failed`, or null when no job has been enqueued. */
+  job_status: string | null;
+  has_final_video: boolean;
+  /** No video will be produced without an operator requeue: the job failed for good, or succeeded with no `final_video`. */
+  terminal: boolean;
 };
 
 export type DebateActivity = {

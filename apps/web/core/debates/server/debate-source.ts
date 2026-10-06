@@ -167,15 +167,40 @@ export class DebateNotPublishableError extends Error {
 }
 
 /**
- * The finished debates in a space, as candidate ids for the publish sweep. Cancelled debates and
- * debates still inside their settlement window are excluded; media-readiness is re-checked per
- * debate by {@link loadDebatePublishSource}. Server-side (unauthenticated) read — the cron sweep
- * has no user session.
+ * The finished debates in a space, as candidate ids for the publish sweep. Cancelled debates,
+ * debates still inside their settlement window, and debates whose media is terminally failed are
+ * excluded; media-readiness is re-checked per debate by {@link loadDebatePublishSource}.
+ * Server-side (unauthenticated) read — the cron sweep has no user session.
  */
 export async function listSweepCandidateDebateIds(spaceId: string): Promise<string[]> {
   const response = await geoChatGet<SpaceDebatesResponse>(`/spaces/${spaceId}/debates`);
   const now = Date.now();
-  return response.debates.filter(debate => isDebatePublishableNow(debate, now)).map(debate => debate.id);
+  return response.debates
+    .filter(debate => isDebatePublishableNow(debate, now) && !isDebateMediaTerminal(debate))
+    .map(debate => debate.id);
+}
+
+/**
+ * Whether the listing says this debate's media will never produce a video (GEO-2985): the job
+ * failed after spending its retries, or succeeded without a `final_video`. Mirrors the two
+ * `media_failed` throws in {@link loadDebatePublishSource}, so the sweep stops re-loading debates
+ * it already knows it cannot publish — before this, every one was re-read and re-logged every five
+ * minutes, forever.
+ *
+ * False when the listing carries no `media` (a geo-chat older than the field): the debate stays a
+ * candidate and the per-debate media read decides, exactly as before. An operator requeue puts the
+ * job back to `queued`, which clears `terminal`, so a recovered debate re-enters the sweep on its own.
+ *
+ * Kept out of {@link isDebatePublishableNow} on purpose: that is the opt-out gate the early claims
+ * sweep shares, and media state is not part of it.
+ */
+export function isDebateMediaTerminal(debate: Debate): boolean {
+  const media = debate.media;
+  if (!media) return false;
+  if (media.terminal === true) return true;
+  // Derived again from the parts, so a listing that reports the job but not the summary flag
+  // still skips the same debates the per-debate check would reject.
+  return media.job_status === 'failed' || (media.job_status === 'succeeded' && media.has_final_video === false);
 }
 
 /**
