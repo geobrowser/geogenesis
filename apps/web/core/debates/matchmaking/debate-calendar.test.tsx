@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -318,6 +318,18 @@ describe('DebateCalendar', () => {
       'Dee',
     ]);
     expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_hour_opened', { people_count: 5 });
+  });
+
+  it('records whose card opened, once, when a face is hovered', async () => {
+    render(<DebateCalendar />);
+
+    const face = cell(/Thursday.*free: Elena/).querySelector('span[aria-hidden]')!;
+    fireEvent.pointerEnter(face, { pointerType: 'mouse' });
+
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_person_viewed', { peer_user_id: '11' })
+    );
+    expect(mocks.capture.mock.calls.filter(([name]) => name === 'debate_calendar_person_viewed')).toHaveLength(1);
   });
 
   it('opens the hour, not a booking, when a face itself is clicked', () => {

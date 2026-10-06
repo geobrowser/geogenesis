@@ -42,3 +42,8 @@ export function calendarFilterChanged(filter: CalendarFilter) {
 export function calendarHourOpened(peopleCount: number) {
   capture('debate_calendar_hour_opened', { people_count: peopleCount });
 }
+
+/** A face's card opened. Whose, so the data can say which people get looked at and not booked. */
+export function calendarPersonViewed(peerUserId: string) {
+  capture('debate_calendar_person_viewed', { peer_user_id: peerUserId });
+}

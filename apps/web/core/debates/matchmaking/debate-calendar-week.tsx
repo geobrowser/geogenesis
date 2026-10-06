@@ -15,7 +15,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebatePerson } from '../api';
 import { speakerLabel } from '../playback-utils';
-import { calendarHourOpened } from './debate-calendar-analytics';
+import { calendarHourOpened, calendarPersonViewed } from './debate-calendar-analytics';
 import {
   type CellPerson,
   DAYS_IN_WEEK,
@@ -38,6 +38,10 @@ import { useDebatesHub } from './use-debates-hub';
 /** Faces drawn in a cell before the rest collapse into "+N". */
 const FACES_PER_CELL = 3;
 
+/** How long a face's card waits before opening on hover, and before closing once the pointer leaves. */
+const CARD_OPEN_DELAY_MS = 250;
+const CARD_CLOSE_DELAY_MS = 200;
+
 const GRID_COLUMNS = 'grid-cols-[4rem_repeat(7,minmax(0,1fr))]';
 
 type RenderRow = (userKey: string, slots: FreeSlot[], entry: ScheduleEntry) => React.ReactNode;
@@ -50,19 +54,23 @@ type Props = {
   /** The cells the viewer is free in (`viewerFreeCellKeys`), or null with no schedule to shade. */
   viewerFreeCells: ReadonlySet<string> | null;
   peopleByUser: ReadonlyMap<string, DebatePerson>;
+  slotsByUser: ReadonlyMap<string, FreeSlot[]>;
   opponentName: (userId: string | null) => string | null;
   renderRow: RenderRow;
   now: number;
 };
 
+type Card = { key: string; userKey: string; slots: FreeSlot[] };
+
 /**
  * The week as a grid (GEO-3152): a column per day, a row per hour, and in each cell the faces of
  * everyone free for some of that hour, most matches first.
  *
- * - The cell opens everyone free then, as People tab rows. The faces are only a preview of who
- *   is in it, not targets of their own: a click anywhere in the cell, on a face or beside it,
- *   opens the hour. It is also how the keyboard gets in: arrows move between hours, Enter opens
- *   the one in focus.
+ * - A face opens that person's row as a card on mouse hover. It is not a click target of its
+ *   own: the faces are small and packed, so a click on one, like anywhere else in the cell,
+ *   opens everyone free then, as People tab rows.
+ * - The cell is also how the keyboard gets in: arrows move between hours, Enter opens the one
+ *   in focus.
  * - The viewer's own debates are blocks in their hour: solid booked, dashed requested.
  */
 export function CalendarWeek({
@@ -71,6 +79,7 @@ export function CalendarWeek({
   debates,
   viewerFreeCells,
   peopleByUser,
+  slotsByUser,
   opponentName,
   renderRow,
   now,
@@ -120,9 +129,40 @@ export function CalendarWeek({
   );
   const [openHour, setOpenHour] = React.useState<string | null>(null);
 
+  const [card, setCard] = React.useState<Card | null>(null);
+  // Which card is showing, read when the next one opens. A ref rather than the state updater:
+  // updaters can run twice, and the analytics call in here must not.
+  const shownCard = React.useRef<Card | null>(null);
+  shownCard.current = card;
+  const cardAnchor = React.useRef<HTMLElement | null>(null);
+  const cardTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearCardTimer = () => {
+    if (cardTimer.current) clearTimeout(cardTimer.current);
+    cardTimer.current = null;
+  };
+  React.useEffect(() => clearCardTimer, []);
+  const showCard = (next: Card, anchor: HTMLElement, delay: number) => {
+    clearCardTimer();
+    const show = () => {
+      cardAnchor.current = anchor;
+      const shown = shownCard.current;
+      const person = peopleByUser.get(next.userKey);
+      if (person && (shown?.key !== next.key || shown.userKey !== next.userKey)) calendarPersonViewed(person.user_id);
+      setCard(next);
+    };
+    if (delay === 0) show();
+    else cardTimer.current = setTimeout(show, delay);
+  };
+  const hideCard = () => {
+    clearCardTimer();
+    cardTimer.current = setTimeout(() => setCard(null), CARD_CLOSE_DELAY_MS);
+  };
+
   const openHourAt = (key: string) => {
     const people = cells.get(key) ?? [];
     if (people.length === 0) return;
+    clearCardTimer();
+    setCard(null);
     setOpenHour(key);
     calendarHourOpened(people.length);
   };
@@ -246,9 +286,17 @@ export function CalendarWeek({
                         ))}
                         {people.length > 0 ? (
                           <div className="flex items-center">
-                            {people.slice(0, FACES_PER_CELL).map(({ userKey }) => {
+                            {people.slice(0, FACES_PER_CELL).map(({ userKey, slots }) => {
                               const person = peopleByUser.get(userKey);
-                              return person ? <Face key={userKey} person={person} /> : null;
+                              if (!person) return null;
+                              return (
+                                <Face
+                                  key={userKey}
+                                  person={person}
+                                  onHover={anchor => showCard({ key, userKey, slots }, anchor, CARD_OPEN_DELAY_MS)}
+                                  onLeave={hideCard}
+                                />
+                              );
                             })}
                             {people.length > FACES_PER_CELL ? (
                               <span
@@ -289,6 +337,39 @@ export function CalendarWeek({
           ))}
         </div>
       </div>
+
+      <Popover.Root
+        open={card !== null}
+        onOpenChange={open => {
+          if (!open) setCard(null);
+        }}
+      >
+        <Popover.Anchor virtualRef={cardAnchor as React.RefObject<HTMLElement>} />
+        {card ? (
+          <Popover.Portal>
+            <Popover.Content
+              side="bottom"
+              align="start"
+              sideOffset={6}
+              collisionPadding={16}
+              // A hover card: reading it should not take focus from where the viewer was.
+              onOpenAutoFocus={event => event.preventDefault()}
+              onPointerEnter={clearCardTimer}
+              onPointerLeave={hideCard}
+              aria-label={peopleByUser.get(card.userKey) ? speakerLabel(peopleByUser.get(card.userKey)!) : 'Person'}
+              className="z-100 w-[360px] max-w-[calc(100vw-32px)] rounded-xl border border-grey-02 bg-white px-3 shadow-lg"
+            >
+              <ul>
+                {renderRow(
+                  card.userKey,
+                  card.slots.length > 0 ? card.slots : (slotsByUser.get(card.userKey) ?? []),
+                  'calendar_card'
+                )}
+              </ul>
+            </Popover.Content>
+          </Popover.Portal>
+        ) : null}
+      </Popover.Root>
     </div>
   );
 }
@@ -333,15 +414,30 @@ function cellLabel(
 }
 
 /**
- * One face in a cell. Decoration, not a control: the cell's label already names who is free, and
- * a click on it falls through to the cell, which opens the hour.
+ * One face in a cell. A mouse hover opens the person's card; it is not a control, so a click (or a
+ * tap, which has no hover) falls through to the cell, which opens the hour. The cell's label
+ * already names who is free, so the face stays out of the accessibility tree.
  */
-function Face({ person }: { person: DebatePerson }) {
+function Face({
+  person,
+  onHover,
+  onLeave,
+}: {
+  person: DebatePerson;
+  onHover: (anchor: HTMLElement) => void;
+  onLeave: () => void;
+}) {
   const away = Boolean(person.away);
   const live = person.online && !away && !person.in_debate;
   return (
     <span
       aria-hidden
+      onPointerEnter={event => {
+        if (event.pointerType === 'mouse') onHover(event.currentTarget);
+      }}
+      onPointerLeave={event => {
+        if (event.pointerType === 'mouse') onLeave();
+      }}
       className={cx(
         'relative h-[30px] w-[30px] shrink-0 overflow-hidden rounded-full ring-2 ring-white not-first:-ml-2',
         live && 'outline-2 outline-offset-2 outline-green',

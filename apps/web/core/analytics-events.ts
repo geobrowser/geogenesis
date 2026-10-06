@@ -26,6 +26,7 @@ export type AnalyticsEventName =
   | 'debate_calendar_filter_changed'
   | 'debate_calendar_hour_opened'
   | 'debate_calendar_opened'
+  | 'debate_calendar_person_viewed'
   | 'debate_calendar_week_changed'
   | 'debate_exposed'
   | 'debate_navigation'

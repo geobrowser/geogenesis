@@ -42,7 +42,7 @@ export type ScheduleEntry =
   | 'requests_reschedule'
   /** A row in one hour's list of everyone free then, on the calendar's week grid (GEO-3152). */
   | 'calendar_hour'
-  /** A row in the calendar's phone list (once also the hover card a face opened). */
+  /** The card a face on the calendar opens on hover, and the phone list's rows. */
   | 'calendar_card';
 
 /** Which control opened the viewer's own schedule editor. */
