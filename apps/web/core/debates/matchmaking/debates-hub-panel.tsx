@@ -64,8 +64,8 @@ const MOBILE_SHEET_TOP_OFFSET_PX = 120;
 // separately, by `DEFAULT_TAB` in use-debates-hub — it happens to agree with this order, but
 // reordering here does not move it.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'lobby', label: 'Lobby' },
-  { id: 'people', label: 'People' },
+  { id: 'lobby', label: 'Live' },
+  { id: 'people', label: 'Schedule' },
   { id: 'explore', label: 'Explore' },
   // "My", because the debate-again picker beside it lists two people's positions and says whose
   // each is (GEO-3148). One word for one list on both surfaces.
