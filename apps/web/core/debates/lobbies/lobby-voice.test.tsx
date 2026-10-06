@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -197,6 +197,30 @@ describe('LobbyVoice', () => {
     setJoined(true);
     await screen.findByRole('button', { name: /mute/i });
     expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(1);
+  });
+
+  // The mic is published before Connected, so its refusal reaches `onError` mid-connect.
+  it('keeps the room for listening when the mic is blocked, and lets Unmute try again', async () => {
+    renderVoice();
+    await screen.findByRole('button', { name: /mute/i });
+    const blocked = new DOMException('Permission denied', 'NotAllowedError');
+    act(() => (mocks.roomProps!.onError as (error: Error) => void)(blocked));
+
+    expect(await screen.findByText('Your microphone isn’t available.')).toBeTruthy();
+    expect(screen.queryByText('Voice could not connect.')).toBeNull();
+    expect(mocks.roomProps).toMatchObject({ audio: false });
+
+    fireEvent.click(screen.getByRole('button', { name: /Unmute/ }));
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
+    expect(mocks.roomProps).toMatchObject({ audio: true });
+  });
+
+  it('still fails the connection on a connection error', async () => {
+    renderVoice();
+    await screen.findByRole('button', { name: /mute/i });
+    const failed = Object.assign(new Error('could not establish signal connection'), { name: 'ConnectionError' });
+    act(() => (mocks.roomProps!.onError as (error: Error) => void)(failed));
+    expect(await screen.findByText('Voice could not connect.')).toBeTruthy();
   });
 
   it('asks before taking voice from another tab', async () => {

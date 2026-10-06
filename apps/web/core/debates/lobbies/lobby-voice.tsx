@@ -168,11 +168,20 @@ export function LobbyVoice({
     connectedRef.current = true;
     setConnectFailed(false);
   }, []);
-  const handleError = React.useCallback(() => {
+  // `<LiveKitRoom>` publishes the mic on SignalConnected, before Connected, and sends a refusal here
+  // too. A blocked or missing mic leaves the room up for listening; only a connection failure doesn't.
+  const handleError = React.useCallback((error: Error) => {
+    const micProblem = micFailureOf(error);
+    if (micProblem) return setMicFailure(micProblem);
     if (!connectedRef.current) setConnectFailed(true);
   }, []);
   const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure) => {
     setMicFailure(failure ?? null);
+  }, []);
+  // Unmuting tries the mic again, so a permission granted since can take effect.
+  const handleMicChoice = React.useCallback((enabled: boolean) => {
+    setMicChoice(enabled);
+    if (enabled) setMicFailure(null);
   }, []);
 
   // Not connected unless the room below says so.
@@ -222,7 +231,7 @@ export function LobbyVoice({
         canPublish={data.can_publish}
         micFailure={micFailure}
         roomRef={roomRef}
-        onMicChoice={setMicChoice}
+        onMicChoice={handleMicChoice}
         onRetry={retry}
         onConnectedChange={onConnectedChange}
       >
@@ -231,6 +240,14 @@ export function LobbyVoice({
       <RoomAudioRenderer />
     </LiveKitRoom>
   );
+}
+
+/** A mic that could not be opened, as opposed to a connection that failed. */
+function micFailureOf(error: Error): MediaDeviceFailure | null {
+  if (error.name === 'OverconstrainedError') return MediaDeviceFailure.NotFound;
+  const failure = MediaDeviceFailure.getFailure(error);
+  // `getFailure` answers `Other` for any named error, connection errors included.
+  return failure && failure !== MediaDeviceFailure.Other ? failure : null;
 }
 
 type VoiceNotice = { message: string; actionLabel?: string; onAction?: () => void };
@@ -319,7 +336,7 @@ function ConnectedVoice({
                 ? 'You’re on the mic'
                 : 'You’re muted',
           }}
-          mic={{ on: isMicrophoneEnabled && !micFailure, disabled: Boolean(micFailure), onToggle: setMicrophone }}
+          mic={{ on: isMicrophoneEnabled && !micFailure, onToggle: setMicrophone }}
         />
       ) : (
         <VoiceBar notice={{ message: 'You’re listening' }} />
@@ -334,7 +351,7 @@ function VoiceBar({
   mic,
 }: {
   notice: VoiceNotice;
-  mic?: { on: boolean; disabled: boolean; onToggle: (enabled: boolean) => void };
+  mic?: { on: boolean; onToggle: (enabled: boolean) => void };
 }) {
   return (
     <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2">
@@ -343,7 +360,6 @@ function VoiceBar({
           variant={mic.on ? 'secondary' : 'primary'}
           analyticsLabel={mic.on ? 'Lobby mute' : 'Lobby unmute'}
           aria-pressed={!mic.on}
-          disabled={mic.disabled}
           onClick={() => mic.onToggle(!mic.on)}
         >
           <span className="inline-flex items-center gap-1.5">
