@@ -436,9 +436,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const reportedRecorderFailuresRef = React.useRef(new Set<string>());
+  // The recording's timeslices, for a recorder with no live stream only (no signed-in user when it
+  // started). With one, the stream holds them, and lets go of each once it is uploaded.
   const recordingChunksRef = React.useRef<Blob[]>([]);
   // GEO-2955. The recording made durable while it is made: every timeslice to IndexedDB, and to
-  // R2 part by part. The in-memory chunks above stay the source of the upload at the end.
+  // R2 part by part. It is also the only place this tab keeps the timeslices, so memory stays
+  // bounded however long the debate runs: one that is in a confirmed part is let go of.
   const liveRecordingStreamRef = React.useRef<LiveRecordingStream | null>(null);
   // The streamed upload shares the upstream with the call, so it stands down while the call
   // struggles. Set from LiveKit's own quality reports for the local participant.
@@ -490,7 +493,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingPersistencePromiseRef = React.useRef<Promise<boolean> | null>(null);
   const persistedRecordingDebateIdRef = React.useRef<string | null>(null);
   const stoppedRecordingRef = React.useRef<{
-    blob: Blob;
+    /** The whole recording, when it was not streamed; a streamed one is read from the stream. */
+    blob: Blob | null;
     mimeType: string;
     startedAtMs: number;
     endedAtMs: number;
@@ -1120,10 +1124,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // `startDebateRecorder` reports the `error` itself; this only clears the pill.
         recorder.addEventListener('error', () => setCapturing(false), { once: true });
         recorder.ondataavailable = event => {
-          if (event.data.size > 0) {
-            recordingChunksRef.current.push(event.data);
-            liveRecordingStreamRef.current?.append(event.data, serverNowRef.current());
-          }
+          if (event.data.size === 0) return;
+          // One home per recording, decided when it started: the stream if there is one, which lets
+          // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
+          const live = liveRecordingStreamRef.current;
+          if (live) live.append(event.data, serverNowRef.current());
+          else recordingChunksRef.current.push(event.data);
         };
       },
     });
@@ -1180,10 +1186,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const endedAtMs = recordingEndedAtRef.current;
     if (!recorder || !startedAtMs || !endedAtMs) return false;
 
+    const liveStream = liveRecordingStreamRef.current;
     if (!stoppedRecordingRef.current) {
       const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
-      const blob = new Blob(recordingChunksRef.current, { type: mimeType });
-      if (blob.size === 0) return false;
+      const blob = liveStream ? null : new Blob(recordingChunksRef.current, { type: mimeType });
+      if ((blob ? blob.size : (liveStream?.size() ?? 0)) === 0) return false;
       const videoSettings = localMediaStreamRef.current?.getVideoTracks()[0]?.getSettings?.();
       stoppedRecordingRef.current = {
         blob,
@@ -1199,15 +1206,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
 
     const recording = stoppedRecordingRef.current;
-    // Whatever went out during the debate is handed to the queue, which sends only the rest.
-    const multipart = (await liveRecordingStreamRef.current?.finish()) ?? null;
+    // Whatever went out during the debate is handed to the queue, which sends only the rest — and,
+    // for a streamed recording, stores only the rest: the stream no longer holds the parts it sent.
+    const multipart = (await liveStream?.finish()) ?? null;
+    const bytes = liveStream?.recording() ?? null;
+    const storedBytes = bytes ? bytes.size - bytes.availableFrom : (recording.blob?.size ?? 0);
     const storage = await estimateRecordingStorage();
     if (storage?.quota !== undefined && storage.usage !== undefined) {
       const availableBytes = storage.quota - storage.usage;
-      if (availableBytes < recording.blob.size) {
+      if (availableBytes < storedBytes) {
         console.warn('[DebateRecording] browser storage estimate is below recording size', {
           availableBytes,
-          recordingBytes: recording.blob.size,
+          recordingBytes: storedBytes,
         });
       }
     }
@@ -1216,7 +1226,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       await enqueueDebateRecordingUpload({
         userId: localParticipant.user_id,
         debateId: debate.id,
-        blob: recording.blob,
+        ...(bytes ? { recording: bytes } : { blob: recording.blob ?? new Blob([], { type: recording.mimeType }) }),
         mimeType: recording.mimeType,
         startedAtMs: recording.startedAtMs,
         endedAtMs: recording.endedAtMs,
