@@ -11,6 +11,8 @@ type PreparationStatus = 'preparing' | 'ready' | 'error';
 
 export type SocialVideoHandoffMethod = 'native_share' | 'download';
 
+export type SocialVideoHandoffOutcome = SocialVideoHandoffMethod | 'unshareable';
+
 export type PreparedSocialVideo = {
   status: PreparationStatus;
   previewUrl: string | null;
@@ -183,13 +185,15 @@ export async function handoffPreparedSocialVideo({
   text,
   file,
   downloadUrl,
+  onUnshareable,
 }: {
   debateId: string;
   title: string;
   text?: string;
   file: File;
   downloadUrl: string;
-}): Promise<SocialVideoHandoffMethod> {
+  onUnshareable?: () => void;
+}): Promise<SocialVideoHandoffOutcome> {
   const method = getPreparedSocialVideoHandoffMethod(file);
 
   try {
@@ -216,16 +220,23 @@ export async function handoffPreparedSocialVideo({
         // does: the retry button then looks like a remedy and is a dead end.
         if (!isUnretryableShareError(error)) throw error;
 
-        downloadPreparedVideo(downloadUrl, file.name);
+        if (onUnshareable) onUnshareable();
+        else downloadPreparedVideo(downloadUrl, file.name);
+
+        const outcome: SocialVideoHandoffOutcome = onUnshareable ? 'unshareable' : 'download';
         captureSocialVideoEvent('debate_social_video_handoff_resolved', {
           debate_id: debateId,
-          method: 'download',
+          method: outcome,
           // So the rate of this is visible rather than inferred from an absence of share events.
           fell_back_from: 'native_share',
           error_name: errorName(error),
         });
-        return 'download';
+        return outcome;
       }
+    } else if (onUnshareable) {
+      onUnshareable();
+      captureSocialVideoEvent('debate_social_video_handoff_resolved', { debate_id: debateId, method: 'unshareable' });
+      return 'unshareable';
     } else {
       downloadPreparedVideo(downloadUrl, file.name);
     }

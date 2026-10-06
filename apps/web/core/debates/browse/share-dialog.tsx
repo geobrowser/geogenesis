@@ -19,7 +19,6 @@ import { Link } from '~/design-system/icons/link';
 import { LinkedIn } from '~/design-system/icons/linkedin';
 import { Reddit } from '~/design-system/icons/reddit';
 import { RetrySmall } from '~/design-system/icons/retry-small';
-import { Upload } from '~/design-system/icons/upload';
 import { XIcon } from '~/design-system/icons/x';
 import { Spinner } from '~/design-system/spinner';
 
@@ -68,6 +67,11 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const [canShareVideo, setCanShareVideo] = React.useState(false);
   React.useEffect(() => setCanShareVideo(canNativeShareVideo()), []);
 
+  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
+  React.useEffect(() => setIsTouchDevice(window.matchMedia?.('(pointer: coarse)').matches ?? false), []);
+
+  const sharingRef = React.useRef(false);
+
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`;
 
   const shareMessage = (maxLength: number) => {
@@ -106,12 +110,62 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     );
   };
 
-  const onX = () => {
+  const canShareVideoToX =
+    canShareVideo && isTouchDevice && download.status === 'ready' && !!download.file && !!download.downloadUrl;
+
+  const onXLink = () => {
     const url = shareUrl();
     const text = shareMessage(X_TWEET_MAX - url.length - 1);
     handoffShare('x', () =>
       openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`)
     );
+  };
+
+  const shareVideoToX = async () => {
+    if (!download.file || !download.downloadUrl) return;
+
+    if (sharingRef.current) return;
+    sharingRef.current = true;
+
+    const url = shareUrl();
+    const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
+    try {
+      let fellBackToComposer = false;
+      const method = await handoffPreparedSocialVideo({
+        debateId: debate.id,
+        title: debate.claim.claim,
+        text: `${shareMessage(X_TWEET_MAX - url.length - 1)} ${url}`,
+        file: download.file,
+        downloadUrl: download.downloadUrl,
+        onUnshareable: () => {
+          fellBackToComposer = true;
+          onXLink();
+        },
+      });
+
+      if (fellBackToComposer || method !== 'native_share') return;
+      operation.succeeded({ method: 'share_video' });
+      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'share_video' });
+      onOpenChange(false);
+    } catch (error) {
+      if (isAbortError(error)) {
+        // They dismissed the share sheet. Not a failure, and not something to report.
+        operation.succeeded({ method: 'share_video_dismissed' });
+        return;
+      }
+      operation.failed('unavailable');
+      setToast(<span>Could not share the video.</span>);
+    } finally {
+      sharingRef.current = false;
+    }
+  };
+
+  const onX = () => {
+    if (canShareVideoToX) {
+      void shareVideoToX();
+      return;
+    }
+    onXLink();
   };
 
   const onLinkedIn = () => {
@@ -137,29 +191,6 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     }
   };
 
-  const onShareVideo = async () => {
-    if (download.status === 'error') {
-      download.retry();
-      setToast(<span>{download.error ?? 'Could not prepare the video to share.'}</span>);
-      return;
-    }
-    if (download.status !== 'ready' || !download.file || !download.downloadUrl) return;
-    const url = shareUrl();
-    try {
-      await handoffPreparedSocialVideo({
-        debateId: debate.id,
-        title: debate.claim.claim,
-        text: `${shareMessage(X_TWEET_MAX - url.length - 1)} ${url}`,
-        file: download.file,
-        downloadUrl: download.downloadUrl,
-      });
-      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'share_video' });
-      onOpenChange(false);
-    } catch (error) {
-      if (!isAbortError(error)) setToast(<span>Could not share the video.</span>);
-    }
-  };
-
   return (
     <Root open={open} onOpenChange={onOpenChange}>
       <Portal>
@@ -172,7 +203,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
           }}
           className="fixed top-1/2 left-1/2 z-[1001] -translate-x-1/2 -translate-y-1/2 focus:outline-hidden"
         >
-          <div className="flex w-[368px] max-w-[calc(100vw-2rem)] flex-col rounded-xl bg-white px-6 py-5 shadow-card">
+          <div className="flex h-[142px] w-[316px] max-w-[calc(100vw-2rem)] flex-col rounded-xl bg-white px-6 py-5 shadow-card">
             <div className="relative flex items-center justify-center">
               <Title className="m-0 text-[22.4px] leading-[21px] font-medium tracking-[-0.672px] text-[#212B2E]">
                 Share
@@ -187,7 +218,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
               </button>
             </div>
 
-            <div className="mt-5 flex flex-wrap justify-center gap-4 gap-y-4">
+            <div className="mt-5 flex justify-center gap-4">
               <ShareAction label="Reddit" ariaLabel="Share on Reddit" onClick={onReddit} tile={<Reddit />} />
               <ShareAction label="X" ariaLabel="Share on X" onClick={onX} tile={<XTile />} />
               <ShareAction label="Linkedin" ariaLabel="Share on LinkedIn" onClick={onLinkedIn} tile={<LinkedIn />} />
@@ -220,27 +251,6 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
                           <RetrySmall />
                         ) : (
                           <Download />
-                        )
-                      }
-                    />
-                  }
-                />
-              )}
-              {socialVideoReady && canShareVideo && (
-                <ShareAction
-                  label={download.status === 'error' ? 'Retry' : 'Share video'}
-                  ariaLabel={download.status === 'error' ? 'Retry preparing debate video' : 'Share debate video'}
-                  onClick={onShareVideo}
-                  disabled={download.status === 'preparing'}
-                  tile={
-                    <GlyphTile
-                      icon={
-                        download.status === 'preparing' ? (
-                          <Spinner />
-                        ) : download.status === 'error' ? (
-                          <RetrySmall />
-                        ) : (
-                          <Upload />
                         )
                       }
                     />

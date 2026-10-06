@@ -79,6 +79,55 @@ describe('handoffPreparedSocialVideo', () => {
     });
   });
 
+  // The caller can say what to do instead of downloading.
+  it('calls back instead of downloading when the browser refuses the share', async () => {
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockRejectedValue(new DOMException('Permission denied', 'NotAllowedError'));
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+    const onUnshareable = vi.fn();
+
+    await expect(
+      handoffPreparedSocialVideo({
+        debateId: 'debate-1',
+        title: 'Debates are useful',
+        file: preparedFile,
+        downloadUrl: 'blob:https://geo.test/social-video',
+        onUnshareable,
+      })
+    ).resolves.toBe('unshareable');
+
+    expect(onUnshareable).toHaveBeenCalledTimes(1);
+    expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
+      debate_id: 'debate-1',
+      method: 'unshareable',
+      fell_back_from: 'native_share',
+      error_name: 'NotAllowedError',
+    });
+  });
+
+  // And where the probe already said no, there is nothing to attempt — the same choice, made before
+  // any share call rather than after a refusal.
+  it('calls back instead of downloading when the payload is not shareable at all', async () => {
+    mocks.canShare.mockReturnValue(false);
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+    const onUnshareable = vi.fn();
+
+    await expect(
+      handoffPreparedSocialVideo({
+        debateId: 'debate-1',
+        title: 'Debates are useful',
+        file: preparedFile,
+        downloadUrl: 'blob:https://geo.test/social-video',
+        onUnshareable,
+      })
+    ).resolves.toBe('unshareable');
+
+    expect(onUnshareable).toHaveBeenCalledTimes(1);
+    expect(mocks.share).not.toHaveBeenCalled();
+  });
+
   // The one refusal that must not fall back: closing the share sheet is a decision, and quietly
   // downloading the file instead would override it.
   it('does not download when the person cancels the share sheet', async () => {
