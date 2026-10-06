@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { motion } from 'framer-motion';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 
 import {
   type DebateParticipantSummary,
@@ -11,6 +12,7 @@ import {
   type ScheduledDebateRequest,
   type UpcomingDebateRoom,
 } from '~/core/debates/api';
+import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
@@ -257,6 +259,8 @@ function UpcomingRow({
   // The room's session is created on first join, so a non-null one means someone has been in even
   // if they have since left and `others_present` no longer says so.
   const cancellable = requestId !== null && !room.others_present && !room.rematch_session_id;
+  const router = useRouter();
+  const roomPath = debateRoomPath(room.room_id);
 
   return (
     <ScheduleCard
@@ -282,7 +286,8 @@ function UpcomingRow({
           <div className="flex flex-col gap-2">
             {room.joinable && (
               <Link
-                href={debateRoomPath(room.room_id)}
+                href={roomPath}
+                onClick={debateEntryClick(() => router.push(roomPath))}
                 className={JOIN_PILL}
                 {...hubAnalyticsAttributes('Join scheduled debate', 'join_scheduled_debate')}
               >

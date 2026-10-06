@@ -11,6 +11,7 @@ import { Text } from '~/design-system/text';
 import { ThreadAvatar } from '~/partials/comments/thread-avatar';
 
 import type { UpcomingDebateRoom } from '../api';
+import { routeIntoDebate } from '../lobbies/step-out';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { useServerClock } from '../matchmaking/use-request-countdown';
 import { LOBBY_JOIN_PROMPT, ROOM_JOIN_PROMPT } from './room-copy';
@@ -105,7 +106,10 @@ export function DebateRoomJoinPrompt({ room, onNotNow }: { room: UpcomingDebateR
               {...debateActionAnalyticsAttributes('room-join-prompt', 'Join', 'join_scheduled_debate')}
               onClick={() => {
                 setJoining(true);
-                startJoining(() => router.push(debateRoomPath(room.room_id)));
+                const go = () => startJoining(() => router.push(debateRoomPath(room.room_id)));
+                // Moving to another lobby is a normal leave, not a step-out.
+                if (isLobby) go();
+                else routeIntoDebate(go);
               }}
               className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white transition-opacity hover:opacity-90 disabled:opacity-70"
             >
