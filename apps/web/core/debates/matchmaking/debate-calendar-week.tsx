@@ -195,7 +195,7 @@ export function CalendarWeek({
           <div
             role="columnheader"
             aria-label={`Time, ${offsets.join(' then ')}`}
-            className="flex flex-col justify-end border-r border-grey-01 px-2 pb-1.5 text-[11px] leading-tight whitespace-nowrap text-grey-04 tabular-nums"
+            className="flex flex-col justify-end border-r border-grey-01 px-2 pb-1.5 text-footnote whitespace-nowrap text-grey-04 tabular-nums"
           >
             {offsets.map(label => (
               <span key={label} aria-hidden>

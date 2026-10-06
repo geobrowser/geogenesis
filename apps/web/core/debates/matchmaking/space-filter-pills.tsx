@@ -7,12 +7,12 @@ import cx from 'classnames';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 
-import { Avatar } from '~/design-system/avatar';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
-import { hubPillClassName } from './hub-pill-button';
-import { formatFacetCount } from './topic-facets';
+import { SpaceThumb } from './hub-facet-rail';
+import { HubPillButton } from './hub-pill-button';
+import { formatFacetCount, orderFacetOptions } from './topic-facets';
 
 /**
  * Spaces drawn before the row folds the rest behind "N more". Enough for the handful of spaces that
@@ -60,10 +60,8 @@ export function SpaceFilterPills({
 }: Props) {
   const [expanded, setExpanded] = React.useState(false);
 
-  const ordered = React.useMemo(
-    () => [...facetSpaces].sort((a, b) => b.count - a.count || a.id.localeCompare(b.id)),
-    [facetSpaces]
-  );
+  // No selection passed: picked spaces keep their count position rather than being pinned first.
+  const ordered = React.useMemo(() => orderFacetOptions(facetSpaces, []), [facetSpaces]);
   const ids = React.useMemo(() => ordered.map(space => space.id), [ordered]);
   const { labelsById, isLoading: labelsLoading } = useSpaceLabels(ids);
 
@@ -104,32 +102,30 @@ export function SpaceFilterPills({
         className
       )}
     >
-      <button
-        type="button"
+      <HubPillButton
+        variant={spaceIds.length === 0 ? 'primary' : 'secondary'}
         aria-pressed={spaceIds.length === 0}
         onClick={() => {
           if (spaceIds.length > 0) onSpacesClear();
         }}
-        className={hubPillClassName(spaceIds.length === 0 ? 'primary' : 'secondary')}
+        // Spread after the button's own analytics props, so these filter attributes win over its action ones.
         {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'All spaces pill', 'filter')}
       >
         All spaces
-      </button>
+      </HubPillButton>
       {shown.map(space => {
         const label = spaceLabel(labelsById, space.id);
         const on = isSelected(space.id);
         return (
-          <button
+          <HubPillButton
             key={space.id}
-            type="button"
+            variant={on ? 'primary' : 'secondary'}
             aria-pressed={on}
             onClick={() => onSpaceToggle(space.id)}
-            className={hubPillClassName(on ? 'primary' : 'secondary', 'gap-1.5 pl-1.5')}
+            className="gap-1.5 pl-1.5"
             {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Space pill', 'filter')}
           >
-            <span className="block size-4 shrink-0 overflow-hidden rounded-sm bg-grey-02">
-              <Avatar avatarUrl={label?.image ?? null} value={space.id} size={16} />
-            </span>
+            <SpaceThumb spaceId={space.id} image={label?.image ?? null} />
             <span className="max-w-[160px] truncate">{label?.name ?? 'Space'}</span>
             <span
               className={cx(
@@ -140,7 +136,7 @@ export function SpaceFilterPills({
             >
               {formatFacetCount(space.count)}
             </span>
-          </button>
+          </HubPillButton>
         );
       })}
       {hiddenCount > 0 || (expanded && ordered.length > SPACE_PILLS_BEFORE_MORE) ? (

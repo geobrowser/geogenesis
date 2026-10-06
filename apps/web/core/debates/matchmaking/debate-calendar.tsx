@@ -116,7 +116,6 @@ export function DebateCalendar() {
   });
   const searchParams = useSearchParams();
   const from = searchParams?.get(CALENDAR_FROM_PARAM);
-  const returnPath = from ? safeInternalHref(from) : null;
   const isPhone = useMediaQuery(PHONE_QUERY);
 
   const schedule = useDebateSchedule();
@@ -124,7 +123,7 @@ export function DebateCalendar() {
 
   // Once per visit, when what it reports is known: signed out, or signed in with the viewer's own
   // schedule read. Fired before that, `viewer_has_schedule` would be a guess.
-  const openedFrom: CalendarOpenedFrom = returnPath ? 'hub' : 'direct';
+  const openedFrom: CalendarOpenedFrom = from && safeInternalHref(from) ? 'hub' : 'direct';
   const reportedOpen = React.useRef(false);
   const scheduleSettled = !authenticated || schedule.data !== undefined || schedule.isError;
   React.useEffect(() => {

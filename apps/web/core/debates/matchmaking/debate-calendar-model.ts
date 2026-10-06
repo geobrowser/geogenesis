@@ -139,7 +139,7 @@ export function weekCells(
  *
  * Resolved here from their saved blocks, in the zone they were saved in, rather than read off other
  * people's windows: an hour the viewer is free in but nobody else is still has to be shaded, and
- * "Only times I'm free" has to agree with the shading exactly. Their booked debates are not taken
+ * the green chips have to agree with the shading exactly. Their booked debates are not taken
  * out; those are drawn over the hour anyway.
  */
 export function viewerFreeSlots(

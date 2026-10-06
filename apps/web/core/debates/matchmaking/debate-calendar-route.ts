@@ -1,4 +1,4 @@
-/** Where the calendar was opened from. Only read for `debate_calendar_opened`'s `opened_from` now. */
+/** Where the calendar was opened from, read for `debate_calendar_opened`'s `opened_from`. */
 export const CALENDAR_FROM_PARAM = 'from';
 export const CALENDAR_PATH = '/matchmaking/calendar';
 
