@@ -248,6 +248,18 @@ describe('DebateCalendar', () => {
     });
   });
 
+  it('runs Sunday to Saturday, with a line at the current time in today', () => {
+    render(<DebateCalendar />);
+
+    const headers = screen.getAllByRole('columnheader').slice(1);
+    expect(headers[0]).toHaveTextContent(/Sun\s*4/);
+    expect(headers[6]).toHaveTextContent(/Sat\s*10/);
+    // Wednesday 10:00 sharp: the top of Wednesday's 10 o'clock row.
+    const line = screen.getByTestId('calendar-now-line');
+    expect(line.closest('[role="gridcell"]')).toHaveAccessibleName(/^Wednesday, October 7, 10:00 AM/);
+    expect(line).toHaveStyle({ top: '0%' });
+  });
+
   it('books the clicked time through the existing modal, with the time picked', () => {
     render(<DebateCalendar />);
 

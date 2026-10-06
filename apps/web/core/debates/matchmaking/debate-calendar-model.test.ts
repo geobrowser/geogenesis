@@ -81,21 +81,24 @@ describe('freeSlotsByUser', () => {
 });
 
 describe('week', () => {
-  it('starts on the local Monday and offers this week and next', () => {
-    expect(weekStart(NOW, 0)).toEqual(new Date(2026, 9, 5));
-    expect(weekStart(NOW, 1)).toEqual(new Date(2026, 9, 12));
+  it('starts on the local Sunday and offers this week and next', () => {
+    expect(weekStart(NOW, 0)).toEqual(new Date(2026, 9, 4));
+    expect(weekStart(NOW, 1)).toEqual(new Date(2026, 9, 11));
+    // A Sunday is the first day of its own week, not the last of the one before.
+    expect(weekStart(new Date(2026, 9, 4, 23, 0), 0)).toEqual(new Date(2026, 9, 4));
     const range = weekRangeLabel(weekDays(weekStart(NOW, 0)));
-    expect(range).toMatch(/5/);
-    expect(range).toMatch(/11/);
+    expect(range).toMatch(/4/);
+    expect(range).toMatch(/10/);
     expect(range).toMatch(/Oct/);
     expect(range).toMatch(/2026/);
   });
 
   it('places an instant in its day and local hour, and nothing outside the week', () => {
     const days = weekDays(weekStart(NOW, 0));
-    expect(cellOf(at(8, 18, 30), days)).toEqual({ day: 3, hour: 18 });
-    expect(cellOf(at(12, 9), days)).toBeNull();
-    expect(cellOf(at(4, 23), days)).toBeNull();
+    expect(cellOf(at(8, 18, 30), days)).toEqual({ day: 4, hour: 18 });
+    expect(cellOf(at(4, 0), days)).toEqual({ day: 0, hour: 0 });
+    expect(cellOf(at(11, 9), days)).toBeNull();
+    expect(cellOf(at(3, 23), days)).toBeNull();
   });
 });
 
@@ -121,7 +124,7 @@ describe('weekCells', () => {
       order: (left, right) => matches[right.userKey] - matches[left.userKey],
     });
 
-    expect(cells.get('3:18')).toEqual([
+    expect(cells.get('4:18')).toEqual([
       { userKey: 'many', slots: [{ start: at(8, 18, 30), viewerFree: false }] },
       {
         userKey: 'few',
@@ -135,7 +138,7 @@ describe('weekCells', () => {
 
   it('keeps only half-hours the viewer is free for when asked', () => {
     const cells = weekCells(slots, days, { include: () => true, onlyViewerFree: true, order: () => 0 });
-    expect(cells.get('3:18')?.map(cell => cell.userKey)).toEqual(['few', 'hidden']);
+    expect(cells.get('4:18')?.map(cell => cell.userKey)).toEqual(['few', 'hidden']);
   });
 });
 

@@ -13,6 +13,7 @@
 import {
   type AvailabilityBlock,
   SLOT_MINUTES,
+  addDays,
   effectiveAvailability,
   isoDate,
   mondayOf,
@@ -66,10 +67,12 @@ export function freeSlotsByUser(response: SchedulablePeopleResponse, now: number
   return byUser;
 }
 
-/** Local midnight on the Monday `weekOffset` weeks from the one `now` falls in. */
+/**
+ * Local midnight on the Sunday `weekOffset` weeks from the one `now` falls in. The grid reads Sunday
+ * to Saturday, like a wall calendar; saved schedules are still Monday-first (`mondayOf`).
+ */
 export function weekStart(now: Date, weekOffset: number): Date {
-  const monday = mondayOf(now);
-  return new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() + weekOffset * DAYS_IN_WEEK);
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + weekOffset * DAYS_IN_WEEK);
 }
 
 /** The seven local midnights of a week, plus the eighth, which closes it. */
@@ -154,9 +157,11 @@ export function viewerFreeSlots(
   if (!blocks || blocks.length === 0) return free;
 
   // A week either side of the drawn two: the viewer's zone and the browser's can disagree about
-  // which date it is, and a slot near midnight belongs to whichever week it lands in here.
+  // which date it is, and a slot near midnight belongs to whichever week it lands in here. Monday
+  // weeks, not the grid's Sunday ones: a recurring block's `weekday` counts from Monday.
+  const monday = mondayOf(now);
   for (let offset = -1; offset <= CALENDAR_WEEKS; offset++) {
-    const dates = weekDates(weekStart(now, offset)).map(isoDate);
+    const dates = weekDates(addDays(monday, offset * DAYS_IN_WEEK)).map(isoDate);
     for (const day of effectiveAvailability(blocks, dates)) {
       const [year, month, date] = day.date.split('-').map(Number);
       for (const [start, end] of day.ranges) {
