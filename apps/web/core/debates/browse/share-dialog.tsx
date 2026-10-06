@@ -153,7 +153,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
         file: download.file,
         downloadUrl: download.downloadUrl,
       });
-      captureShare('share_video');
+      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'share_video' });
       onOpenChange(false);
     } catch (error) {
       if (!isAbortError(error)) setToast(<span>Could not share the video.</span>);

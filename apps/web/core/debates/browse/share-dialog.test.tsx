@@ -15,7 +15,10 @@ vi.mock('~/core/debates/hooks', () => ({
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
 vi.mock('../social-video-share', () => ({
+  canNativeShareVideo: () => false,
   downloadPreparedVideo: mocks.download,
+  handoffPreparedSocialVideo: vi.fn(),
+  isAbortError: () => false,
   usePreparedSocialVideo: () => ({
     status: mocks.status,
     downloadUrl: 'blob:video',
