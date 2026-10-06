@@ -174,6 +174,10 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   const store = useStoreLobbyView();
   const connectionId = useConnectionId();
   const [state, setState] = React.useState<LobbyPresenceState>({ status: 'idle' });
+  const statusRef = React.useRef(state.status);
+  React.useEffect(() => {
+    statusRef.current = state.status;
+  }, [state.status]);
 
   // A token refresh must not re-run the effects below.
   const tokenRef = React.useRef(getPrivyIdentityToken);
@@ -270,10 +274,14 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   }, []);
 
   const stepOut = React.useCallback(async () => {
-    if (!sentRef.current) return;
+    // The server can step the viewer out first (the debate's start reaches the heartbeat before
+    // the routing), and the lobby must still be where the debate returns to.
+    const steppedOutAlready = statusRef.current === 'stepped_out';
+    if (!sentRef.current && !steppedOutAlready) return;
     rememberLobbyReturnDestination(lobbyId);
     // Only a press on the coming debate's end card may skip the stepped-out prompt.
     clearLobbyRejoin();
+    if (!sentRef.current) return;
     stopWithout({ status: 'stepped_out' });
     try {
       store(

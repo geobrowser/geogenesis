@@ -231,6 +231,28 @@ describe('useLobbyPresence', () => {
     expect(joins()).toHaveLength(1);
   });
 
+  it('still returns to the lobby when the server stepped the viewer out before the routing', async () => {
+    const { result } = await goneAfterBeat('stepped_out');
+    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+
+    const go = vi.fn();
+    act(() => routeIntoDebate(go));
+    await waitFor(() => expect(go).toHaveBeenCalled());
+    expect(consumeDebateReturnDestination()).toBe('/debate/lobby1');
+    expect(api.stepOutOfDebateLobby).not.toHaveBeenCalled();
+  });
+
+  it('does not record the lobby for a viewer who left it', async () => {
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    await act(() => result.current.leave());
+
+    const go = vi.fn();
+    act(() => routeIntoDebate(go));
+    await waitFor(() => expect(go).toHaveBeenCalled());
+    expect(consumeDebateReturnDestination()).toBeNull();
+  });
+
   it('does not let a rejoin left over from an earlier debate skip the prompt', async () => {
     // A Back press whose leave failed, then an arrival that never consumed it.
     requestLobbyRejoin('lobby1');
