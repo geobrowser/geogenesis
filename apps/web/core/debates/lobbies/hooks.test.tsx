@@ -230,6 +230,31 @@ describe('useLobbyPresence', () => {
     });
   });
 
+  // Stepped out by the server from another tab: the view arrives before the next beat.
+  it('checks at once when the view says the viewer stepped out', async () => {
+    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+      connection_present: false,
+      voice_away_at: null,
+      reason: 'stepped_out',
+    });
+    // One client across rerenders, as in the app.
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result, rerender } = renderHook(
+      ({ steppedOut, present }) => useLobbyPresence('lobby1', true, steppedOut, present),
+      {
+        wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+        initialProps: { steppedOut: false, present: false },
+      }
+    );
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    rerender({ steppedOut: false, present: true });
+    expect(api.sendDebateLobbyHeartbeat).not.toHaveBeenCalled();
+
+    rerender({ steppedOut: true, present: false });
+    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+    expect(api.sendDebateLobbyHeartbeat).toHaveBeenCalledTimes(1);
+  });
+
   // A join answered after Leave must not put the viewer back.
   it('keeps Leave when the join it raced resolves afterwards', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });

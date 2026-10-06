@@ -182,7 +182,7 @@ export type LobbyPresenceState =
  * Presence in one lobby: joins once admitted, heartbeats while joined, and leaves on unmount,
  * `pagehide` or Leave. A lapsed lease (viewer not present in a heartbeat's view) joins again.
  */
-export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut = false) {
+export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut = false, present = false) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
@@ -323,6 +323,8 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
     else void join(false);
   }, [admitted, join, status, steppedOut]);
 
+  const beatNowRef = React.useRef<(() => void) | null>(null);
+
   const onGone = React.useCallback(
     (heartbeat: DebateLobbyHeartbeat) => {
       switch (heartbeat.reason) {
@@ -383,14 +385,23 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
     const onVisible = () => {
       if (document.visibilityState === 'visible' && Date.now() - lastBeat >= VISIBLE_BEAT_MIN_GAP_MS) beat();
     };
+    beatNowRef.current = beat;
     const interval = setInterval(beat, LOBBY_HEARTBEAT_MS);
     document.addEventListener('visibilitychange', onVisible);
     return () => {
       clearInterval(interval);
+      beatNowRef.current = null;
       if (retry) clearTimeout(retry);
       document.removeEventListener('visibilitychange', onVisible);
     };
   }, [accountKey, admitted, connectionId, lobbyId, onGone, status]);
+
+  // A view saying this viewer is out (`debate.lobby_changed`) beats at once rather than waiting for
+  // the interval, which a hidden tab throttles, so a server step-out takes the mic down promptly.
+  // The beat's `reason` decides, since a view fetched before a rejoin can be stale.
+  React.useEffect(() => {
+    if ((steppedOut || !present) && joinedRef.current) beatNowRef.current?.();
+  }, [present, steppedOut]);
 
   // Leave on navigation away and on tab close. A bfcache restore joins again. Callbacks are read
   // through refs so a changed identity never runs the cleanup, which would send a leave.

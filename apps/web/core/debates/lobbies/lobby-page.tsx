@@ -65,7 +65,12 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const lobbyQuery = useDebateLobby(lobbyId);
   const lobby = lobbyQuery.data ?? null;
   const admitted = lobby?.access.status === 'admitted';
-  const presence = useLobbyPresence(lobbyId, admitted, lobby?.viewer.stepped_out ?? false);
+  const presence = useLobbyPresence(
+    lobbyId,
+    admitted,
+    lobby?.viewer.stepped_out ?? false,
+    lobby?.viewer.present ?? false
+  );
   // `debate.lobby_changed` only reaches people inside; until then this page hears opening,
   // arrivals and end through the matchmaking scope's `debate.lobbies_changed`.
   const waitingOutside =
