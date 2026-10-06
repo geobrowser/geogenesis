@@ -11,7 +11,7 @@ import { createPortal } from 'react-dom';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
-import { requestsModal } from '~/core/deep-links/modal-deep-link';
+import { requestsModal, urlWithoutModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
@@ -407,9 +407,13 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 function CalendarButton() {
   const { close } = useDebatesHub();
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Without the panel's own trigger, which Back to Debates puts back itself. The fragment is read
+  // from the location: neither hook carries it.
+  const from = urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash);
   return (
     <Link
-      href={calendarHref(pathname)}
+      href={calendarHref(from)}
       onClick={close}
       aria-label="Calendar"
       data-geo-analytics-label="Debate hub Calendar"

@@ -284,7 +284,11 @@ export function CalendarWeek({
                                 tabIndex={-1}
                                 aria-label={`Everyone free then: ${people.length} people`}
                                 {...debateActionAnalyticsAttributes('calendar', 'More people', 'open_calendar_hour')}
-                                onClick={() => openHourAt(key)}
+                                onClick={event => {
+                                  // Like a face or a debate block: the cell around it opens the hour too, and once is enough.
+                                  event.stopPropagation();
+                                  openHourAt(key);
+                                }}
                                 className="-ml-2 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-grey-02 text-footnoteMedium text-grey-04 ring-2 ring-white"
                               >
                                 +{people.length - FACES_PER_CELL}

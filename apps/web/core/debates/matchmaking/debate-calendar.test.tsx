@@ -97,9 +97,20 @@ vi.mock('./use-person-facts', () => ({
 // The header's own controls and the filter bar have their own suites; these are about the week.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => null }));
 vi.mock('./claims-tab', () => ({
-  SpaceTopicFilters: ({ leading, trailing }: { leading?: React.ReactNode; trailing?: React.ReactNode }) => (
+  SpaceTopicFilters: ({
+    leading,
+    trailing,
+    onSpaceToggle,
+  }: {
+    leading?: React.ReactNode;
+    trailing?: React.ReactNode;
+    onSpaceToggle: (spaceId: string) => void;
+  }) => (
     <div>
       {leading}
+      <button type="button" onClick={() => onSpaceToggle('space-1')}>
+        Pick a space
+      </button>
       {trailing}
     </div>
   ),
@@ -278,6 +289,31 @@ describe('DebateCalendar', () => {
     expect(within(list).getByRole('button', { name: /6:30 PM$/ })).not.toHaveClass('border-green');
   });
 
+  it('records one hour opened when +N opens it', () => {
+    mocks.schedulable = response(['11', '12', '13', '14', '15'].map(id => free(id, `Person ${id}`, [thursdaySix])));
+    render(<DebateCalendar />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Everyone free then: 5 people/ }));
+
+    expect(screen.getByRole('dialog', { name: /Free Thursday/ })).toBeInTheDocument();
+    const opened = mocks.capture.mock.calls.filter(([name]) => name === 'debate_calendar_hour_opened');
+    expect(opened).toEqual([['debate_calendar_hour_opened', { people_count: 5 }]]);
+  });
+
+  it('does not carry an open hour over to another week', () => {
+    // Free at the same hour both weeks, so the grid stays up and only the week under it changes.
+    mocks.schedulable = response([free('11', 'Elena', [thursdaySix, [at(15, 18), at(15, 19)]])]);
+    render(<DebateCalendar />);
+
+    fireEvent.click(cell(/Thursday.*free: Elena/));
+    expect(screen.getByRole('dialog', { name: /Free Thursday/ })).toBeInTheDocument();
+
+    // A press that skips the pointer-down Radix closes popovers on, the way a programmatic change would.
+    fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
+
+    expect(screen.queryByRole('dialog', { name: /Free Thursday/ })).not.toBeInTheDocument();
+  });
+
   it("draws the viewer's own requests and booked debates on the week", () => {
     mocks.scheduled = [
       {
@@ -322,6 +358,24 @@ describe('DebateCalendar', () => {
     expect(await screen.findByRole('gridcell', { name: /free: Elena/ })).toBeInTheDocument();
   });
 
+  it('records Clear filters as one clear, not as a space change too', async () => {
+    render(<DebateCalendar />);
+
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search people' }), { target: { value: 'zz' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+
+    const filters = mocks.capture.mock.calls.filter(([name]) => name === 'debate_calendar_filter_changed');
+    expect(filters).toEqual([['debate_calendar_filter_changed', { filter: 'clear' }]]);
+  });
+
+  it("records the viewer's own space pick", () => {
+    render(<DebateCalendar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a space' }));
+
+    expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_filter_changed', { filter: 'space' });
+  });
+
   it('offers a retry when the list fails to load', () => {
     mocks.schedulable = undefined;
     mocks.schedulableError = new Error('down');
@@ -358,6 +412,16 @@ describe('DebateCalendar', () => {
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_calendar_opened',
       expect.objectContaining({ opened_from: 'hub' })
+    );
+  });
+
+  it("restores the page's own query and fragment on the way back", () => {
+    mocks.searchParams = new URLSearchParams({ from: '/space/abc?proposal=1#votes' });
+    render(<DebateCalendar />);
+
+    expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
+      'href',
+      '/space/abc?proposal=1&modal=debates#votes'
     );
   });
 

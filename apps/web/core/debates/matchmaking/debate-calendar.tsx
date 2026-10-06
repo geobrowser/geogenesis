@@ -400,10 +400,9 @@ function DebateCalendarBody({
   const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
     offeredSpaces,
     spaceIds,
-    setSpaceIds: next => {
-      setSpaceIds(next);
-      changeFilter('space');
-    },
+    // The plain setter: the menu also writes the selection itself, and those writes are not the
+    // viewer changing a filter. The viewer's own presses are recorded where they happen, below.
+    setSpaceIds,
     memberSpaceIds: null,
     pending: peopleQuery.isLoading || spaceActivityUnavailable,
     seedSpent: true,
@@ -523,8 +522,14 @@ function DebateCalendarBody({
         <SpaceTopicFilters
           analyticsSurface="calendar"
           spaceIds={spaceIds}
-          onSpaceToggle={onSpaceToggle}
-          onSpacesClear={onSpacesClear}
+          onSpaceToggle={spaceId => {
+            onSpaceToggle(spaceId);
+            changeFilter('space');
+          }}
+          onSpacesClear={() => {
+            onSpacesClear();
+            changeFilter('space');
+          }}
           facetSpaces={facetSpaces}
           countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
           leading={
@@ -646,6 +651,9 @@ function DebateCalendarBody({
             />
           ) : (
             <CalendarWeek
+              // A week of its own: the open hour, the card and its timer, and the focused cell all
+              // belong to the week they were opened on, so moving weeks starts them afresh.
+              key={days[0].getTime()}
               days={days}
               cells={cells}
               debates={debates}

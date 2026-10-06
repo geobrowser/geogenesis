@@ -466,6 +466,15 @@ describe('DebatesHubPanel', () => {
     expect(mocks.updateAvailability).toHaveBeenCalledWith(true);
   });
 
+  it("sends Calendar's way back to this page with its own query, but not the panel's", () => {
+    mocks.pathname = '/space/abc';
+    mocks.searchParams = new URLSearchParams('proposal=1&modal=debates&modalTarget=people');
+    renderOpen();
+
+    const href = screen.getByRole('link', { name: /^Calendar/ }).getAttribute('href') ?? '';
+    expect(new URL(href, 'https://geo.local').searchParams.get('from')).toBe('/space/abc?proposal=1');
+  });
+
   it('heads the panel with one availability pill and one Calendar, in that order', () => {
     renderOpen();
 
