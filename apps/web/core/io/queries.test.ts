@@ -650,6 +650,22 @@ describe('indexVoteRowsByObject', () => {
     expect(votedAtByObjectId[CLAIM]).toBe('2026-08-06T00:00:00.000Z');
   });
 
+  /** GEO-3158. Interested on a topic is a follow; it must not shadow an upvote on the same topic. */
+  it('ignores an Interested row even when it is the newest', () => {
+    const TOPIC = '22222222222222222222222222222222';
+    const { voteKindByObjectId, votedAtByObjectId, objectIds } = indexVoteRowsByObject([
+      { objectId: TOPIC, voteKind: 3, votedAt: '2026-10-06T00:00:00.000Z' },
+      { objectId: TOPIC, voteKind: 0, votedAt: '2026-10-01T00:00:00.000Z' },
+    ]);
+
+    expect(voteKindByObjectId[TOPIC]).toBe(0);
+    expect(votedAtByObjectId[TOPIC]).toBe('2026-10-01T00:00:00.000Z');
+    expect(objectIds).toEqual([TOPIC]);
+    expect(
+      indexVoteRowsByObject([{ objectId: TOPIC, voteKind: 3, votedAt: '2026-10-06T00:00:00.000Z' }]).objectIds
+    ).toEqual([]);
+  });
+
   it('reports nothing for an entity whose only row is retired', () => {
     const { voteKindByObjectId } = indexVoteRowsByObject([
       { objectId: CLAIM, voteKind: 2, votedAt: '2026-08-06T00:00:00.000Z' },

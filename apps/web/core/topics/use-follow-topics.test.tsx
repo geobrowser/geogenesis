@@ -3,29 +3,42 @@ import { act, renderHook } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { decodeFunctionData } from 'viem';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { followedTopicsQueryKey } from '~/core/io/subgraph/fetch-followed-topics';
+import { interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import type { Relation } from '~/core/types';
+import { PERMISSIONLESS_ACTIONS, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 
 import type { FollowedTopicRelation } from './follow-ops';
+import type { InterestedTopicRow } from './interested';
 import { useFollowTopics } from './use-follow-topics';
 
 const mocks = vi.hoisted(() => ({
   makeProposal: vi.fn(),
   reconcile: vi.fn(),
   fetchFollowedTopics: vi.fn(),
+  fetchInterestedTopics: vi.fn(),
+  sendUserOperation: vi.fn(),
   personalSpaceId: '11111111111111111111111111111111' as string | null,
 }));
 
 vi.mock('~/core/hooks/use-publish', () => ({ usePublish: () => ({ makeProposal: mocks.makeProposal }) }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isLoading: false }),
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: true, isLoading: false }),
+}));
+vi.mock('~/core/hooks/use-smart-account', () => ({
+  useSmartAccount: () => ({ smartAccount: { sendUserOperation: mocks.sendUserOperation } }),
 }));
 vi.mock('~/core/bounties/reconcile-store', () => ({ reconcileDeletedRelations: mocks.reconcile }));
 vi.mock('~/core/io/subgraph/fetch-followed-topics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/io/subgraph/fetch-followed-topics')>()),
   fetchFollowedTopics: mocks.fetchFollowedTopics,
+}));
+vi.mock('~/core/io/subgraph/fetch-interested-topics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/io/subgraph/fetch-interested-topics')>()),
+  fetchInterestedTopics: mocks.fetchInterestedTopics,
 }));
 
 const SPACE = '11111111111111111111111111111111';
@@ -44,21 +57,46 @@ function proposal(call = 0): ProposalArgs {
   return mocks.makeProposal.mock.calls[call][0];
 }
 
-function setup(rows: FollowedTopicRelation[] = []) {
+function setup(rows: FollowedTopicRelation[] = [], interested: InterestedTopicRow[] = []) {
   mocks.fetchFollowedTopics.mockResolvedValue(rows);
+  mocks.fetchInterestedTopics.mockResolvedValue(interested);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
   const { result } = renderHook(() => useFollowTopics(), { wrapper });
   const cached = () => client.getQueryData<FollowedTopicRelation[]>(followedTopicsQueryKey(SPACE));
-  return { result, cached };
+  const cachedInterested = () => client.getQueryData<InterestedTopicRow[]>(interestedTopicsQueryKey(SPACE));
+  return { result, cached, cachedInterested };
+}
+
+/** The action and entity of every call in the user operation sent `call`-th. */
+function sentActions(call = 0) {
+  const { calls } = mocks.sendUserOperation.mock.calls[call][0] as { calls: { data: `0x${string}` }[] };
+  return calls.map(({ data }) => {
+    const { args } = decodeFunctionData({ abi: SpaceRegistryAbi, data });
+    const [, to, action, topic] = args as readonly [string, string, string, string, string, string];
+    return { to, action, entity: topic.slice(10, 42) };
+  });
 }
 
 describe('useFollowTopics', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.personalSpaceId = SPACE;
+  });
+
+  it('with the Interested flag off, never reads or writes Interested', async () => {
+    publishSucceeds();
+    const { result } = setup();
+
+    await act(async () => {
+      await result.current.follow([{ id: TOPIC_A }]);
+    });
+
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(mocks.fetchInterestedTopics).not.toHaveBeenCalled();
+    expect(mocks.sendUserOperation).not.toHaveBeenCalled();
   });
 
   it('publishes one edit for several topics and adds them to the cache', async () => {
@@ -167,5 +205,116 @@ describe('useFollowTopics', () => {
     expect(ok).toBe(false);
     expect(mocks.makeProposal).not.toHaveBeenCalled();
     expect(result.current.canFollow).toBe(false);
+  });
+});
+
+describe('useFollowTopics with NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED (GEO-3158)', () => {
+  const OTHER_SPACE = '44444444444444444444444444444444';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.personalSpaceId = SPACE;
+    vi.stubEnv('NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED', 'true');
+    mocks.sendUserOperation.mockResolvedValue('0xhash');
+  });
+  afterEach(() => vi.unstubAllEnvs());
+
+  it('follows by writing Interested in one user operation, and no Following relation', async () => {
+    const { result, cachedInterested } = setup();
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.follow([{ id: TOPIC_A, name: 'Energy' }, { id: TOPIC_B }]);
+    });
+
+    expect(ok).toBe(true);
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(mocks.sendUserOperation).toHaveBeenCalledTimes(1);
+    expect(sentActions()).toEqual([
+      { to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.INTERESTED, entity: TOPIC_A },
+      { to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.INTERESTED, entity: TOPIC_B },
+    ]);
+    expect(cachedInterested()?.map(row => row.objectId)).toEqual([TOPIC_A, TOPIC_B]);
+  });
+
+  it('skips a topic already followed through an old Following relation', async () => {
+    const { result } = setup([{ id: 'row-1', spaceId: SPACE, toEntityId: TOPIC_A }]);
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.follow([{ id: TOPIC_A }]);
+    });
+
+    expect(ok).toBe(true);
+    expect(mocks.sendUserOperation).not.toHaveBeenCalled();
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
+  it('returns false and leaves the cache alone when the user operation fails', async () => {
+    mocks.sendUserOperation.mockRejectedValue(new Error('bundler said no'));
+    const { result, cachedInterested } = setup();
+
+    let ok = true;
+    await act(async () => {
+      ok = await result.current.follow([{ id: TOPIC_A }]);
+    });
+
+    expect(ok).toBe(false);
+    expect(cachedInterested()).toEqual([]);
+  });
+
+  it('unfollows a relation-only follow by removing the relation, as today', async () => {
+    publishSucceeds();
+    const { result, cached } = setup([{ id: 'row-1', spaceId: SPACE, toEntityId: TOPIC_A }]);
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.unfollow([TOPIC_A]);
+    });
+
+    expect(ok).toBe(true);
+    expect(proposal().relations.map(r => r.id)).toEqual(['row-1']);
+    expect(mocks.reconcile).toHaveBeenCalledWith(proposal().relations);
+    expect(mocks.sendUserOperation).not.toHaveBeenCalled();
+    expect(cached()).toEqual([]);
+  });
+
+  it('unfollows a topic held both ways by removing the relation and clearing every Interested', async () => {
+    publishSucceeds();
+    const { result, cached, cachedInterested } = setup(
+      [{ id: 'row-1', spaceId: SPACE, toEntityId: TOPIC_A }],
+      [
+        { objectId: TOPIC_A, spaceId: SPACE },
+        { objectId: TOPIC_A, spaceId: OTHER_SPACE },
+        { objectId: TOPIC_B, spaceId: SPACE },
+      ]
+    );
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.unfollow([TOPIC_A]);
+    });
+
+    expect(ok).toBe(true);
+    expect(proposal().relations.map(r => r.id)).toEqual(['row-1']);
+    expect(sentActions()).toEqual([
+      { to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.UNINTERESTED, entity: TOPIC_A },
+      { to: `0x${OTHER_SPACE}`, action: PERMISSIONLESS_ACTIONS.UNINTERESTED, entity: TOPIC_A },
+    ]);
+    expect(cached()).toEqual([]);
+    expect(cachedInterested()).toEqual([{ objectId: TOPIC_B, spaceId: SPACE }]);
+  });
+
+  it('unfollows an Interested-only follow with no edit at all', async () => {
+    const { result } = setup([], [{ objectId: TOPIC_A, spaceId: SPACE }]);
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.unfollow([TOPIC_A]);
+    });
+
+    expect(ok).toBe(true);
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(sentActions()).toEqual([{ to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.UNINTERESTED, entity: TOPIC_A }]);
   });
 });
