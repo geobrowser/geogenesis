@@ -155,8 +155,14 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
  *
  * `after` skips to the first start later than it, on the window's own grid. Filtering afterwards
  * would not do: a window that began more than a day ago fills the ceiling with past starts first.
+ *
+ * `max` raises that ceiling for a reader that draws whole windows rather than a day of chips: Find
+ * a time's fortnight (GEO-3152), where a merged window can run past midnight.
  */
-export function slotStarts(slot: ScheduleOverlapSlot, { after }: { after?: number } = {}): Date[] {
+export function slotStarts(
+  slot: ScheduleOverlapSlot,
+  { after, max = MAX_CHIPS_PER_SLOT }: { after?: number; max?: number } = {}
+): Date[] {
   const start = Date.parse(slot.start);
   const end = Date.parse(slot.end);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
@@ -164,7 +170,7 @@ export function slotStarts(slot: ScheduleOverlapSlot, { after }: { after?: numbe
   const step = SLOT_MINUTES * 60_000;
   const first = after === undefined || after < start ? start : start + (Math.floor((after - start) / step) + 1) * step;
   const starts: Date[] = [];
-  for (let instant = first; instant < end && starts.length < MAX_CHIPS_PER_SLOT; instant += step) {
+  for (let instant = first; instant < end && starts.length < max; instant += step) {
     starts.push(new Date(instant));
   }
   return starts;
@@ -185,6 +191,14 @@ function dayColumns(now: Date, viewerZone: string | undefined, peerZone: string 
 function windowStart(now: Date, zone: string | undefined): Date {
   const [year, month, day] = zonedParts(now, 'UTC').date.split('-').map(Number);
   return wallClockInstant(Date.UTC(year, month - 1, day), zone);
+}
+
+/**
+ * {@link wallClockInstant} for a zone as stored: `local`, empty or unknown fall back to the
+ * browser's own. The calendar (GEO-3152) resolves the viewer's saved schedule with it.
+ */
+export function zonedWallClockInstant(wallAsUtc: number, zone: string | undefined): Date {
+  return wallClockInstant(wallAsUtc, usableZone(zone));
 }
 
 /**

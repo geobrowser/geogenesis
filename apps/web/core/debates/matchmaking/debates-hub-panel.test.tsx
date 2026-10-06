@@ -457,12 +457,31 @@ describe('DebatesHubPanel', () => {
     expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
   });
 
-  it('toggles availability from the panel header', () => {
+  it('toggles availability from the panel header', async () => {
     renderOpen();
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Available to debate' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Your availability/ }));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Available now' }));
 
     expect(mocks.updateAvailability).toHaveBeenCalledWith(true);
+  });
+
+  it("sends Calendar's way back to this page with its own query, but not the panel's", () => {
+    mocks.pathname = '/space/abc';
+    mocks.searchParams = new URLSearchParams('proposal=1&modal=debates&modalTarget=people');
+    renderOpen();
+
+    const href = screen.getByRole('link', { name: /^Calendar/ }).getAttribute('href') ?? '';
+    expect(new URL(href, 'https://geo.local').searchParams.get('from')).toBe('/space/abc?proposal=1');
+  });
+
+  it('heads the panel with one availability pill and one Calendar, in that order', () => {
+    renderOpen();
+
+    const pill = screen.getByRole('button', { name: /^Your availability/ });
+    const calendar = screen.getByRole('link', { name: /^Calendar/ });
+    expect(Boolean(pill.compareDocumentPosition(calendar) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.queryByRole('switch', { name: 'Available to debate' })).not.toBeInTheDocument();
   });
 
   it('explains that matchmaking is not deployed yet when the endpoint 404s', () => {

@@ -146,8 +146,16 @@ export const debateQueryKeys = {
   /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
   schedulablePeopleRoot: (accountKey: string | null) =>
     ['debates', 'account', accountKey, 'schedulable-people'] as const,
-  schedulablePeople: (accountKey: string | null, days: number, limit: number) =>
-    ['debates', 'account', accountKey, 'schedulable-people', days, limit] as const,
+  schedulablePeople: (
+    accountKey: string | null,
+    days: number,
+    limit: number,
+    calendar = false,
+    spaces: string[] = []
+  ) =>
+    calendar
+      ? (['debates', 'account', accountKey, 'schedulable-people', days, limit, 'calendar', spaces.join(',')] as const)
+      : (['debates', 'account', accountKey, 'schedulable-people', days, limit] as const),
   /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
   peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
     ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,

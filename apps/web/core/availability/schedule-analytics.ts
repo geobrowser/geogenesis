@@ -39,7 +39,13 @@ export type ScheduleEntry =
   /** A scheduling email's "Choose different time", which moves a request rather than making one. */
   | 'reschedule_link'
   /** "Reschedule" on an accepted debate in the Requests tab, which moves it the same way. */
-  | 'requests_reschedule';
+  | 'requests_reschedule'
+  /** A face on the calendar's week grid (GEO-3152), which opens their week at that hour. */
+  | 'calendar_slot'
+  /** A row in one hour's list of everyone free then, on the calendar. */
+  | 'calendar_hour'
+  /** The card a face on the calendar opens on hover or tap, and the phone list's rows. */
+  | 'calendar_card';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =
@@ -49,7 +55,9 @@ export type ScheduleEditorSurface =
   /** The set-schedule banner under that header, which only introduces it. */
   | 'hub_banner'
   | 'people_tab'
-  | 'availability_link';
+  | 'availability_link'
+  /** The calendar's own prompt and its Edit my times (GEO-3152). */
+  | 'calendar';
 
 /** Every event that knows how the week was opened says so the same way, `unknown` included. */
 function entryProperty(entry: ScheduleEntry | null | undefined) {

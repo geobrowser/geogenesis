@@ -1,6 +1,6 @@
 'use client';
 
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -181,9 +181,27 @@ export function useDebatePeople(enabled: boolean) {
 const SCHEDULABLE_DAYS = PEER_SCHEDULE_DAYS - 1;
 const SCHEDULABLE_SLOTS = 48 + 3;
 
-/** Everyone with free time this week, online or not, shared slots first (GEO-2937). */
-export function useSchedulablePeople(enabled: boolean) {
-  const days = SCHEDULABLE_DAYS;
+/**
+ * The calendar's window (GEO-3152): this week and next, which from a Sunday is fourteen days out.
+ * geo-chat's range is inclusive and counts from today's UTC date, so the far edge can run a day
+ * past next Sunday; the grid drops anything outside the two weeks it draws.
+ */
+export const CALENDAR_DAYS = 14;
+/**
+ * Everyone with free time this week, online or not, shared slots first (GEO-2937).
+ *
+ * `calendar` is the calendar page's read (GEO-3152): a fortnight, in its own cache entry. Every person carries
+ * their whole free time as `their_windows` (geo-chat#204); the People tab reads only `slots`.
+ */
+export function useSchedulablePeople(
+  enabled: boolean,
+  { calendar = false, spaces = EMPTY_SPACES }: { calendar?: boolean; spaces?: string[] } = {}
+) {
+  const days = calendar ? CALENDAR_DAYS : SCHEDULABLE_DAYS;
+  // Only the calendar narrows on the server, and only once the unfiltered list hit its cap: below
+  // that, every candidate is already in hand and the space menu filters them where they are.
+  const serverSpaces = React.useMemo(() => (calendar ? [...spaces].sort() : EMPTY_SPACES), [calendar, spaces]);
+  // The calendar reads `their_windows`, which `limit` never caps; it only trims the shared `slots`.
   const limit = SCHEDULABLE_SLOTS;
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const queryEnabled = enabled && authenticated;
@@ -191,8 +209,11 @@ export function useSchedulablePeople(enabled: boolean) {
   const query = useQuery({
     ...debateQueryNetworkOptions,
     ...viewerReadRetryOptions(accountKey),
-    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit),
-    queryFn: ({ signal }) => listSchedulablePeople({ days, limit }, getPrivyIdentityToken, accountKey, signal),
+    queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit, calendar, serverSpaces),
+    queryFn: ({ signal }) =>
+      listSchedulablePeople({ days, limit, spaces: serverSpaces }, getPrivyIdentityToken, accountKey, signal),
+    // A new space selection keeps the last week drawn while the narrowed one loads.
+    placeholderData: calendar ? keepPreviousData : undefined,
     enabled: queryEnabled,
   });
 
@@ -212,6 +233,7 @@ export function useSchedulablePeople(enabled: boolean) {
 }
 
 const EMPTY_SUMMARIES: DebateParticipantSummary[] = [];
+const EMPTY_SPACES: string[] = [];
 
 export function useMatchmakingClaims(query: MatchmakingClaimsQuery, enabled: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
