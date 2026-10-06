@@ -77,7 +77,7 @@ function lobby(role: 'host' | 'speaker' | 'listener' = 'speaker'): DebateLobbyVi
       hosting: role === 'host',
       reminded: false,
       voice_away_at: null,
-      present: true,
+      connected: true,
       stepped_out: false,
     },
   };
@@ -185,7 +185,7 @@ describe('LobbyVoice', () => {
     expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(2);
   });
 
-  // Another of the viewer's connections makes `viewer.present` true before this tab's join lands;
+  // Another of the viewer's connections makes `viewer.connected` true before this tab's join lands;
   // a mint then would be refused for this connection.
   it('waits for this tab’s own join before minting', async () => {
     const { setJoined } = renderVoice(lobby(), vi.fn(), false);

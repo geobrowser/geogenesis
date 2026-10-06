@@ -70,12 +70,12 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
     lobbyId,
     admitted,
     lobby?.viewer.stepped_out ?? false,
-    lobby?.viewer.present ?? false
+    lobby?.viewer.connected ?? false
   );
   // `debate.lobby_changed` only reaches people inside; until then this page hears opening,
   // arrivals and end through the matchmaking scope's `debate.lobbies_changed`.
   const waitingOutside =
-    lobby !== null && !lobby.viewer.present && (admitted || lobby.access.status === 'not_yet_open');
+    lobby !== null && !lobby.viewer.connected && (admitted || lobby.access.status === 'not_yet_open');
   useMatchmakingScope(waitingOutside);
 
   if (!lobby) {
@@ -107,7 +107,7 @@ function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
   const end = useEndDebateLobby(lobby.lobby_id);
   const [confirmingCancel, setConfirmingCancel] = React.useState(false);
   const reminded = lobby.viewer.reminded;
-  // Nobody is present before it opens, so `viewer.hosting` is false; a stored host may still cancel.
+  // Nobody is connected before it opens, so `viewer.hosting` is false; a stored host may still cancel.
   const canCancel = lobby.viewer.role === 'host';
 
   return (

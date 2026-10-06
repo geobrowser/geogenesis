@@ -1960,7 +1960,8 @@ export function dashlessId(id: string) {
   return id.replace(/-/g, '').toLowerCase();
 }
 
-export type DebateLobbyRole = 'host' | 'speaker' | 'listener' | 'banned';
+/** A ban is not a role; it shows as `access: { status: 'banned' }`. */
+export type DebateLobbyRole = 'host' | 'speaker' | 'listener';
 
 export type DebateLobbyAccess =
   | { status: 'admitted' }
@@ -1977,7 +1978,7 @@ export type DebateLobbyMember = {
   creator: boolean;
   /** Hosting for now because no host is present. `role` stays their own. */
   acting_host: boolean;
-  present_since: string;
+  on_roster_since: string;
   /** Left to debate; still listed, without host powers, until back or it expires. */
   stepped_out: boolean;
   in_debate: boolean;
@@ -1997,7 +1998,7 @@ export type DebateLobbyView = {
   /** Moves when the acting host changes. */
   hosts_changed_at: string | null;
   reminder_count: number;
-  /** Present and stepped-out members, longest-present first. Empty for a banned viewer. */
+  /** The roster, stepped-out members included, longest there first. Empty for a banned viewer. */
   members: DebateLobbyMember[];
   viewer: {
     /** `null` before the viewer's first join. */
@@ -2008,8 +2009,8 @@ export type DebateLobbyView = {
     reminded: boolean;
     /** While in this lobby's voice: when voice stops holding off Away without input. */
     voice_away_at: string | null;
-    /** This viewer holds a lease; `false` while stepped out. */
-    present: boolean;
+    /** This viewer has a live connection here; `false` while stepped out. */
+    connected: boolean;
     stepped_out: boolean;
   };
 };
@@ -2036,8 +2037,8 @@ export type DebateLobbySummary = {
   debating_count: number;
   reminder_count: number;
   viewer_reminded: boolean;
-  /** The viewer is in this lobby now. */
-  viewer_present: boolean;
+  /** On the roster, stepped out included. */
+  viewer_on_roster: boolean;
 };
 
 export type DebateLobbiesResponse = { lobbies: DebateLobbySummary[] };
@@ -2111,7 +2112,7 @@ export type DebateLobbyGoneReason = 'lapsed' | 'moved' | 'stepped_out' | 'ended'
 
 export type DebateLobbyHeartbeat = {
   /** This connection's lease is live; when `false`, `reason` says why. */
-  connection_present: boolean;
+  connection_alive: boolean;
   voice_away_at: string | null;
   reason: DebateLobbyGoneReason | null;
   /** Dashless; the lobby they are in now, with `moved`. */

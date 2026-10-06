@@ -77,17 +77,16 @@ export const ROLE_LABEL: Record<DebateLobbyRole, string> = {
   host: 'Host',
   speaker: 'Speaker',
   listener: 'Listener',
-  banned: 'Banned',
 };
 
-const ROLE_ORDER: Record<DebateLobbyRole, number> = { host: 0, speaker: 1, listener: 2, banned: 3 };
+const ROLE_ORDER: Record<DebateLobbyRole, number> = { host: 0, speaker: 1, listener: 2 };
 
-/** Hosting now: a host, or the acting host while no host is present. */
+/** Hosting now: a host, or the acting host while no host is connected. */
 export function isHosting(member: Pick<DebateLobbyMember, 'role' | 'acting_host'>) {
   return member.role === 'host' || member.acting_host;
 }
 
-/** Hosting first, then speakers, then listeners; server order (longest-present) within each. */
+/** Hosting first, then speakers, then listeners; server order (longest on the roster) within each. */
 export function rosterOrder(members: DebateLobbyMember[]) {
   const rank = (member: DebateLobbyMember) => (isHosting(member) ? 0 : ROLE_ORDER[member.role]);
   return members
@@ -108,7 +107,7 @@ export function hostAfterChange(
   return lobby.members.find(member => member.acting_host) ?? lobby.members.find(isHosting) ?? null;
 }
 
-/** The join was refused because the viewer is present in another open lobby. */
+/** The join was refused because the viewer is in another open lobby. */
 export function isAlreadyInAnotherLobby(error: unknown): error is GeoChatRequestError {
   return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'already_in_another_lobby';
 }

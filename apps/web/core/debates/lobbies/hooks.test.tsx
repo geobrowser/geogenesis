@@ -33,7 +33,7 @@ function deferredJoin() {
   return (view: DebateLobbyView) => resolve(view);
 }
 
-function view(present: boolean, access: DebateLobbyView['access'] = { status: 'admitted' }): DebateLobbyView {
+function view(connected: boolean, access: DebateLobbyView['access'] = { status: 'admitted' }): DebateLobbyView {
   return {
     lobby_id: 'lobby1',
     name: 'Hour',
@@ -52,7 +52,7 @@ function view(present: boolean, access: DebateLobbyView['access'] = { status: 'a
       hosting: false,
       reminded: false,
       voice_away_at: null,
-      present,
+      connected,
       stepped_out: false,
     },
   };
@@ -68,7 +68,7 @@ const leaves = () => api.setDebateLobbyPresence.mock.calls.filter(([, body]) => 
 
 beforeEach(() => {
   api.setDebateLobbyPresence.mockImplementation(async (_id: string, body: { joined: boolean }) => view(body.joined));
-  api.sendDebateLobbyHeartbeat.mockResolvedValue({ connection_present: true, voice_away_at: null });
+  api.sendDebateLobbyHeartbeat.mockResolvedValue({ connection_alive: true, voice_away_at: null });
   api.stepOutOfDebateLobby.mockResolvedValue(view(false));
   api.endDebateLobbyStepOut.mockResolvedValue(view(false));
 });
@@ -77,7 +77,7 @@ beforeEach(() => {
 async function goneAfterBeat(reason: string, currentLobbyId: string | null = null) {
   vi.useFakeTimers({ shouldAdvanceTime: true });
   api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
-    connection_present: false,
+    connection_alive: false,
     voice_away_at: null,
     reason,
     current_lobby_id: currentLobbyId,
@@ -141,7 +141,7 @@ describe('useLobbyPresence', () => {
 
   it('heartbeats while joined and joins again when the lease lapsed', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
-    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({ connection_present: false, voice_away_at: null });
+    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({ connection_alive: false, voice_away_at: null });
     const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
 
@@ -240,24 +240,24 @@ describe('useLobbyPresence', () => {
   // Stepped out by the server from another tab: the view arrives before the next beat.
   it('checks at once when the view says the viewer stepped out', async () => {
     api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
-      connection_present: false,
+      connection_alive: false,
       voice_away_at: null,
       reason: 'stepped_out',
     });
     // One client across rerenders, as in the app.
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result, rerender } = renderHook(
-      ({ steppedOut, present }) => useLobbyPresence('lobby1', true, steppedOut, present),
+      ({ steppedOut, connected }) => useLobbyPresence('lobby1', true, steppedOut, connected),
       {
         wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
-        initialProps: { steppedOut: false, present: false },
+        initialProps: { steppedOut: false, connected: false },
       }
     );
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
-    rerender({ steppedOut: false, present: true });
+    rerender({ steppedOut: false, connected: true });
     expect(api.sendDebateLobbyHeartbeat).not.toHaveBeenCalled();
 
-    rerender({ steppedOut: true, present: false });
+    rerender({ steppedOut: true, connected: false });
     await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
     expect(api.sendDebateLobbyHeartbeat).toHaveBeenCalledTimes(1);
   });

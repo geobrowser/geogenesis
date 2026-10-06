@@ -67,7 +67,7 @@ export const MAX_TIMEOUT_MS = 2_147_483_647;
 
 /**
  * One lobby. Kept current by `debate.lobby_changed` and the heartbeat's own view. That event only
- * reaches present members, so a lobby not yet open is refetched at `opens_at`.
+ * reaches people in the lobby, so a lobby not yet open is refetched at `opens_at`.
  */
 export function useDebateLobby(lobbyId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
@@ -152,7 +152,7 @@ export type LobbyPresenceState =
   | { status: 'idle' }
   | { status: 'joining' }
   | { status: 'joined' }
-  /** Present in another open lobby; joining this one leaves it, so the viewer is asked first. */
+  /** In another open lobby; joining this one leaves it, so the viewer is asked first. */
   | { status: 'confirm_leave_other'; otherLobbyId: string | null }
   /** Joined another lobby from another tab, which dropped this one; no automatic rejoin. */
   | { status: 'moved'; otherLobbyId: string | null }
@@ -165,9 +165,9 @@ export type LobbyPresenceState =
 
 /**
  * Presence in one lobby: joins once admitted, heartbeats while joined, and leaves on unmount,
- * `pagehide` or Leave. A lapsed lease (viewer not present in a heartbeat's view) joins again.
+ * `pagehide` or Leave. A heartbeat answering `lapsed` joins again.
  */
-export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut = false, present = false) {
+export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut = false, connected = false) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
@@ -220,8 +220,8 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
         if (generation !== generationRef.current) return;
         store(view);
         // A lobby that would not admit answers with its view; the page renders its access.
-        joinedRef.current = view.viewer.present;
-        setState(view.viewer.present ? { status: 'joined' } : { status: 'idle' });
+        joinedRef.current = view.viewer.connected;
+        setState(view.viewer.connected ? { status: 'joined' } : { status: 'idle' });
       } catch (error) {
         if (generation !== generationRef.current) return;
         joinedRef.current = false;
@@ -354,7 +354,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
       )
         .then(heartbeat => {
           setVoiceAwayAt(heartbeat.voice_away_at);
-          if (joinedRef.current && !heartbeat.connection_present) onGone(heartbeat);
+          if (joinedRef.current && !heartbeat.connection_alive) onGone(heartbeat);
         })
         .catch(error => {
           const delay = rateLimitDelayMs(error);
@@ -382,8 +382,8 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   // the interval, which a hidden tab throttles, so a server step-out takes the mic down promptly.
   // The beat's `reason` decides, since a view fetched before a rejoin can be stale.
   React.useEffect(() => {
-    if ((steppedOut || !present) && joinedRef.current) beatNowRef.current?.();
-  }, [present, steppedOut]);
+    if ((steppedOut || !connected) && joinedRef.current) beatNowRef.current?.();
+  }, [connected, steppedOut]);
 
   // Leave on navigation away and on tab close. A bfcache restore joins again. Callbacks are read
   // through refs so a changed identity never runs the cleanup, which would send a leave.

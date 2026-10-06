@@ -69,7 +69,7 @@ export function LobbyVoice({
 }: {
   lobby: DebateLobbyView;
   connectionId: string;
-  /** This tab's own join has landed. `viewer.present` counts any of the viewer's connections. */
+  /** This tab's own join has landed. */
   joined: boolean;
   currentUserId: string | null;
   onConnectedChange: (connected: boolean) => void;
