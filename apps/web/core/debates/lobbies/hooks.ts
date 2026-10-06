@@ -197,6 +197,11 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
 
   // Joined per the last answer; drives the heartbeat.
   const joinedRef = React.useRef(false);
+  // This tab holds the lobby's voice connection; reported on each heartbeat.
+  const voiceConnectedRef = React.useRef(false);
+  const setVoiceConnected = React.useCallback((connected: boolean) => {
+    voiceConnectedRef.current = connected;
+  }, []);
   // A join was sent and no leave since, so leaving must be sent even if the join is in flight.
   const sentRef = React.useRef(false);
   // Bumped by Leave and unmount; a join answered under an older generation is dropped.
@@ -357,7 +362,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
       lastBeat = Date.now();
       void sendDebateLobbyHeartbeat(
         lobbyId,
-        { connection_id: connectionId, voice_connected: false },
+        { connection_id: connectionId, voice_connected: voiceConnectedRef.current },
         () => tokenRef.current(),
         accountKey
       )
@@ -418,5 +423,5 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
     };
   }, [enqueue]);
 
-  return { state, join, leave, leaveSteppedOut };
+  return { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected };
 }

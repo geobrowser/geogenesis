@@ -153,6 +153,21 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
       return 'You can’t join this lobby.';
     case 'lobby_not_found':
       return 'This lobby no longer exists.';
+    case 'lobby_stepped_out':
+      return 'You stepped out. Go back to the room to use voice.';
+    case 'lobby_not_present':
+      return 'You’re not in the lobby right now. Join it to use voice.';
+    case 'lobby_voice_full': {
+      const limit = error.details?.limit;
+      return typeof limit === 'number'
+        ? `Voice is full in this lobby (${limit} people). You can still follow along here.`
+        : 'Voice is full in this lobby. You can still follow along here.';
+    }
+    case 'voice_capacity_reached':
+      return 'Voice is busy right now. Try again in a minute.';
+    case 'voice_unavailable':
+    case 'livekit_not_configured':
+      return 'Voice is unavailable right now. Try again in a moment.';
     default:
       return fallback;
   }

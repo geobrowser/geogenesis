@@ -215,6 +215,21 @@ describe('useLobbyPresence', () => {
     expect(result.current.state.status).toBe('left');
   });
 
+  it('reports voice from the tab that holds it', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    act(() => result.current.setVoiceConnected(true));
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+    });
+    expect(api.sendDebateLobbyHeartbeat.mock.calls[0]![1]).toEqual({
+      connection_id: result.current.connectionId,
+      voice_connected: true,
+    });
+  });
+
   // A join answered after Leave must not put the viewer back.
   it('keeps Leave when the join it raced resolves afterwards', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });

@@ -2167,6 +2167,36 @@ export async function endDebateLobbyStepOut(
   });
 }
 
+export type DebateLobbyVoiceToken = {
+  token: string;
+  url: string;
+  room_name: string;
+  /** Hosts, the acting host and speakers; listeners subscribe only. */
+  can_publish: boolean;
+  /** Join with the mic off; set once the room is crowded. Always false for a listener. */
+  start_muted: boolean;
+  expires_at: string;
+};
+
+/**
+ * A LiveKit token for this lobby, for a connection holding a live lease. LiveKit refreshes it for
+ * a connected client, so a new one is needed only to connect or fully reconnect.
+ */
+export async function getDebateLobbyVoiceToken(
+  lobbyId: string,
+  body: { connection_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyVoiceToken>(`/debate-lobbies/${lobbyId}/voice-token`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
 /** Host only. Closes the lobby with reason `ended`. */
 export async function endDebateLobby(
   lobbyId: string,

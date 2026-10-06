@@ -148,11 +148,24 @@ describe('lobbyErrorMessage', () => {
       'lobby_closed',
       'lobby_banned',
       'lobby_not_found',
+      'lobby_stepped_out',
+      'lobby_not_present',
+      'lobby_voice_full',
+      'voice_capacity_reached',
+      'voice_unavailable',
+      'livekit_not_configured',
     ]) {
       const message = lobbyErrorMessage(refused(code), 'fallback');
       expect(message).not.toContain('raw');
       expect(message).not.toBe('fallback');
     }
+  });
+
+  it('names the per-lobby voice cap', () => {
+    expect(lobbyErrorMessage(refused('lobby_voice_full', 409, { limit: 40 }), 'x')).toContain('40 people');
+    expect(lobbyErrorMessage(refused('voice_capacity_reached', 503), 'x')).toBe(
+      'Voice is busy right now. Try again in a minute.'
+    );
   });
 
   it('falls back for an unknown code or a network failure', () => {
