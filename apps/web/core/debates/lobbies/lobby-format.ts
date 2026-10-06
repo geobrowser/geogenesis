@@ -207,11 +207,7 @@ export const MEMBER_ACTION_LABEL: Record<DebateLobbyMemberAction, string> = {
   'remove-host': 'Remove as host',
 };
 
-/**
- * The host actions the viewer may take on `member`, in menu order. geo-chat enforces the same
- * rules; this only hides what it would refuse. Unban lives on the banned list, since someone banned
- * is never on the roster.
- */
+/** Host actions the viewer may take on `member`, in menu order; geo-chat enforces the same rules. */
 export function memberActions(
   viewer: Pick<DebateLobbyView['viewer'], 'hosting' | 'role' | 'creator'>,
   member: Pick<DebateLobbyMember, 'role' | 'creator'>,
