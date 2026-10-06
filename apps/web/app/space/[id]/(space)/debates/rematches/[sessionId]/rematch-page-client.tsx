@@ -1553,14 +1553,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [opponentPositionOf, viewerPositionOf]
   );
 
+  /** Their rows with "Hide agreed" applied — the same list back when it is off, so memos hold. */
+  const withoutAgreed = React.useCallback(
+    (rows: DebateRematchClaim[]) => (hideAgreed ? rows.filter(claim => !isAgreed(claim)) : rows),
+    [hideAgreed, isAgreed]
+  );
+
   /**
-   * Their positions as the tab's badge and the landing count them: the agreed ones out while the
-   * switch is on. Not what the list draws, which holds a claim agreed with *on* the tab rather than
-   * dropping it under the press — see `visibleClaims`.
+   * Their positions as the tab's badge and the landing count them. Not what the list draws, which
+   * holds a claim agreed with *on* the tab rather than dropping it under the press — see
+   * `visibleClaims`.
    */
-  const opponentClaimsShown = React.useMemo(
-    () => (hideAgreed ? opponentClaims.filter(claim => !isAgreed(claim)) : opponentClaims),
-    [hideAgreed, isAgreed, opponentClaims]
+  const opponentClaimsShown = React.useMemo(() => withoutAgreed(opponentClaims), [opponentClaims, withoutAgreed]);
+  // Memoized because `debatedClaims` hands it on by identity, as it does every other tab's.
+  const opponentDebatedShown = React.useMemo(
+    () => withoutAgreed(opponentClaimsSplit.debated),
+    [opponentClaimsSplit.debated, withoutAgreed]
   );
 
   /**
@@ -1829,9 +1837,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     tab === 'matches'
       ? NO_CLAIMS
       : tab === 'opponent'
-        ? hideAgreed
-          ? opponentClaimsSplit.debated.filter(claim => !isAgreed(claim))
-          : opponentClaimsSplit.debated
+        ? opponentDebatedShown
         : tab === 'related'
           ? relatedClaimsSplit.debated
           : tab === 'debate'
@@ -2084,6 +2090,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * remembered as seen here. Both sides are on the session's rows, which have settled by the time
    * the tab lists anything, so no row is ever unknown.
    */
+  const hidesAgreed = tab === 'opponent' && hideAgreed;
   const agreedStateOf = React.useCallback(
     (claim: DebateRematchClaim): AnsweredState => (isAgreed(claim) ? 'answered' : 'unanswered'),
     [isAgreed]
@@ -2091,12 +2098,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const visibleClaims = useCollapseAnswered(browseVisibleClaims, {
     keyOf: claimRowKey,
     answeredStateOf: agreedStateOf,
-    enabled: tab === 'opponent' && hideAgreed,
+    enabled: hidesAgreed,
     holdMs: null,
     resetKey: sessionId,
   });
   /** Their tab has rows and the switch is hiding every one of them. */
-  const agreedEverything = tab === 'opponent' && hideAgreed && visibleClaims.length === 0 && narrowedClaims.length > 0;
+  const agreedEverything = hidesAgreed && visibleClaims.length === 0 && narrowedClaims.length > 0;
 
   const hasFilters = Boolean(debouncedSearch || (!searchOnly && (spaceIds.length || topicIds.length)));
 

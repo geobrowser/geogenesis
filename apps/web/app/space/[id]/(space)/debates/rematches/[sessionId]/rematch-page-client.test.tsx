@@ -2217,9 +2217,7 @@ describe('DebateRematchPageClient', () => {
 
         mocks.positions = [...mocks.positions, position('profile-local', OPPONENT_ONLY, SPACE_1, true)];
         rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-        await act(async () => {
-          await new Promise(resolve => setTimeout(resolve, HUB_CARD_EXIT_TRANSITION.duration * 1000 + 150));
-        });
+        await settleExit();
 
         expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
       });
@@ -4593,6 +4591,20 @@ async function settleTabSwap() {
   });
 }
 
+/**
+ * Waits out a collapsing card before asserting that a row is still on screen.
+ *
+ * A row leaving stays in the DOM while it fades, so `findByText` resolves on the ghost of one on
+ * its way out — and a case asserting "this must not leave" passes on the very thing it exists to
+ * catch. Only the "still here" assertions need it; "gone" ones are `waitFor`'d instead, which
+ * waits for the removal rather than racing it.
+ */
+async function settleExit() {
+  await act(async () => {
+    await new Promise(resolve => setTimeout(resolve, HUB_CARD_EXIT_TRANSITION.duration * 1000 + 150));
+  });
+}
+
 /** Opens the source menu on whichever option it is currently showing. */
 function openSourceMenu() {
   // The picker opens on the opponent's positions now (GEO-2861), where there is no source menu —
@@ -4822,20 +4834,6 @@ function claimSummary(id: string, claim: string) {
  */
 describe('Hide my positions', () => {
   const SWITCH = { name: 'Hide my positions' } as const;
-
-  /**
-   * Waits out a collapsing card before asserting that a row is still on screen.
-   *
-   * A row leaving stays in the DOM while it fades, so `findByText` resolves on the ghost of one on
-   * its way out — and a case asserting "this must not leave" passes on the very thing it exists to
-   * catch. Only the "still here" assertions need it; "gone" ones are `waitFor`'d instead, which
-   * waits for the removal rather than racing it.
-   */
-  async function settleExit() {
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, HUB_CARD_EXIT_TRANSITION.duration * 1000 + 150));
-    });
-  }
 
   /** The row the browse list carries for a claim, with the viewer's side on it or without. */
   function browsedClaim(viewerPosition: boolean | null) {
