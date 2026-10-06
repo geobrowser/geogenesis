@@ -33,6 +33,7 @@ import {
   useHandleDebateSharePrompt,
   useRejectDebateChallenge,
 } from './hooks';
+import { routeIntoDebate } from './lobbies/hooks';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
@@ -300,6 +301,7 @@ export function DebateCoordinator() {
   // One refetch per session before routing on it, and a tick so the effect re-runs even when the
   // refetch changes nothing.
   const checkedSessionRef = React.useRef<string | null>(null);
+  const routingToRef = React.useRef<string | null>(null);
   const [roomsChecked, setRoomsChecked] = React.useState(0);
   // `activeFlow` for the same reason every other prompt here carries it: a debate that overruns
   // into the next slot must not get a Join button floating over a recording, one click from
@@ -425,9 +427,13 @@ export function DebateCoordinator() {
       // A challenge's session carries its challenge's real space and still routes.
       if (!validateSpaceId(rematch.source_space_id)) return;
       const path = debateRematchPath(rematch);
-      if (pathname !== path) {
+      if (pathname !== path && routingToRef.current !== path) {
         rememberDebateReturnDestination();
-        router.push(path);
+        routingToRef.current = path;
+        routeIntoDebate(() => {
+          routingToRef.current = null;
+          router.push(path);
+        });
       }
     }
     // `hasAttention` is in here on purpose: an unfocused tab returns early above, and this is what

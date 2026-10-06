@@ -23,7 +23,7 @@ vi.mock('../hooks', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, stepOutBeforeDebate, useDebateLobby, useLobbyPresence } = await import('./hooks');
+const { LOBBY_HEARTBEAT_MS, routeIntoDebate, useDebateLobby, useLobbyPresence } = await import('./hooks');
 
 /** A presence call that resolves when the test says so. */
 function deferredJoin() {
@@ -189,7 +189,9 @@ describe('useLobbyPresence', () => {
     const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
 
-    await act(() => stepOutBeforeDebate());
+    const go = vi.fn();
+    act(() => routeIntoDebate(go));
+    await waitFor(() => expect(go).toHaveBeenCalled());
     expect(api.stepOutOfDebateLobby).toHaveBeenCalledWith(
       'lobby1',
       { connection_id: expect.any(String) },

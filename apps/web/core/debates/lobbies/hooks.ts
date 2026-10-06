@@ -36,13 +36,13 @@ const STEP_OUT_WAIT_MS = 2_000;
 let stepOutOfCurrentLobby: (() => Promise<void>) | null = null;
 
 /**
- * Before routing into a debate from a lobby: keeps the viewer on the roster rather than the
- * unmount's leave taking them off. geo-chat steps them out within ~2s regardless.
+ * Routes into a debate, stepping out of this tab's lobby first so the unmount's leave does not
+ * take the viewer off its roster. Synchronous outside a lobby.
  */
-export function stepOutBeforeDebate(): Promise<void> {
+export function routeIntoDebate(go: () => void) {
   const stepOut = stepOutOfCurrentLobby;
-  if (!stepOut) return Promise.resolve();
-  return Promise.race([stepOut(), new Promise<void>(resolve => setTimeout(resolve, STEP_OUT_WAIT_MS))]);
+  if (!stepOut) return go();
+  void Promise.race([stepOut(), new Promise<void>(resolve => setTimeout(resolve, STEP_OUT_WAIT_MS))]).then(go);
 }
 
 /** How long a 429 asks us to wait, or `null` for any other outcome. */
