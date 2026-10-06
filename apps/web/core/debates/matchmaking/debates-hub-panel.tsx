@@ -282,23 +282,21 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         <Text as="h2" variant="smallTitle">
           Debates
         </Text>
-        <div className="flex min-w-0 items-center gap-1">
-          <FindATimeButton />
-          <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
-            {onClose ? (
-              <button
-                type="button"
-                data-geo-analytics-label="Close debate hub"
-                data-geo-analytics-intent="close_debates_hub"
-                aria-label="Close debates"
-                onClick={onClose}
-                className={HUB_ICON_BUTTON_CLASS_NAME}
-              >
-                <CloseSmall />
-              </button>
-            ) : null}
-          </HubHeaderControls>
-        </div>
+        <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
+          <CalendarButton />
+          {onClose ? (
+            <button
+              type="button"
+              data-geo-analytics-label="Close debate hub"
+              data-geo-analytics-intent="close_debates_hub"
+              aria-label="Close debates"
+              onClick={onClose}
+              className={HUB_ICON_BUTTON_CLASS_NAME}
+            >
+              <CloseSmall />
+            </button>
+          ) : null}
+        </HubHeaderControls>
       </div>
 
       <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
@@ -404,12 +402,13 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 }
 
 /**
- * Find a time (GEO-3152): everyone's free time as a full-screen week. The panel closes on the way,
- * so it does not sit over the week it opened; "Back to Debates" there brings it back on this page.
+ * Calendar (GEO-3152): everyone's free time as a full-screen week. The panel closes on the way, so
+ * it does not sit over the week it opened; "Back to Debates" there brings it back on this page.
  *
- * Icon-only on a phone, where the sheet's header also carries Close and has no room for the label.
+ * The header's only calendar icon, so it always means everyone's week; your own times are under
+ * the availability pill beside it. Icon-only on a phone, where the sheet also carries Close.
  */
-function FindATimeButton() {
+function CalendarButton() {
   const { close } = useDebatesHub();
   const pathname = usePathname();
   return (
