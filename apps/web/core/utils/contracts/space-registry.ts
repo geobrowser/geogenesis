@@ -43,11 +43,19 @@ export const GOVERNANCE_ACTIONS = {
   SUBSPACE_TOPIC_REMOVED: '0x98ee515a05d2eb17f8e4c1e997a36ee6a8eca03af78d98943787935f9e39adda' as Hex,
 } as const;
 
-/** Permissionless action constants (keccak256 hashes) for curation votes */
+/** Permissionless action constants (keccak256 hashes) for curation votes, and Interested */
 export const PERMISSIONLESS_ACTIONS = {
   UPVOTED: '0x1fc04a8d9387c7bd1199a2a77c8e531a7a7b11991df5dcc8c9acb6abcb481725' as Hex,
   DOWNVOTED: '0xde8b897ce7cc541dacb388d5aabb3dc0fb7856920284f41582c15b5fc31a8662' as Hex,
   UNVOTED: '0x3bd4c337382f79aa5007a91169bb57723b5dd59e6b4bb60d20362bcc0d9d998b' as Hex,
+  /**
+   * keccak256('PERMISSIONLESS.INTERESTED'), vote kind 3 (GEO-3158). On a topic it is the topic follow.
+   * The SDK has no method for it yet, so the calldata is built in `~/core/topics/interested`. Only
+   * accepted on chain once registered with `setPermissionlessAction`; until then the flag stays off.
+   */
+  INTERESTED: '0x18e7bf94be2682e4578e3ba940e4fcc2efcb9767062e812cfa4656d7d35377d9' as Hex,
+  /** keccak256('PERMISSIONLESS.UNINTERESTED'): clears an Interested. There is no negative. */
+  UNINTERESTED: '0x7b8a4ef62d6765393827e9528a2d965c4ec8898864b8d0f6649c652c022b3864' as Hex,
 } as const;
 
 /**
