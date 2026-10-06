@@ -237,8 +237,8 @@ describe('useFollowTopics with NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED (GEO-3158)'
     expect(cachedInterested()?.map(row => row.objectId)).toEqual([TOPIC_A, TOPIC_B]);
   });
 
-  it('skips a topic already followed through an old Following relation', async () => {
-    const { result } = setup([{ id: 'row-1', spaceId: SPACE, toEntityId: TOPIC_A }]);
+  it('skips a topic already held Interested', async () => {
+    const { result } = setup([], [{ objectId: TOPIC_A, spaceId: SPACE }]);
 
     let ok = false;
     await act(async () => {
@@ -247,6 +247,17 @@ describe('useFollowTopics with NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED (GEO-3158)'
 
     expect(ok).toBe(true);
     expect(mocks.sendUserOperation).not.toHaveBeenCalled();
+  });
+
+  it('writes Interested for a topic followed only by an old Following relation, which no longer counts', async () => {
+    const { result } = setup([{ id: 'row-1', spaceId: SPACE, toEntityId: TOPIC_A }]);
+
+    await act(async () => {
+      await result.current.follow([{ id: TOPIC_A }]);
+    });
+
+    expect(sentActions()).toEqual([{ to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.INTERESTED, entity: TOPIC_A }]);
+    expect(mocks.fetchFollowedTopics).not.toHaveBeenCalled();
     expect(mocks.makeProposal).not.toHaveBeenCalled();
   });
 
@@ -263,25 +274,8 @@ describe('useFollowTopics with NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED (GEO-3158)'
     expect(cachedInterested()).toEqual([]);
   });
 
-  it('unfollows a relation-only follow by removing the relation, as today', async () => {
-    publishSucceeds();
-    const { result, cached } = setup([{ id: 'row-1', spaceId: SPACE, toEntityId: TOPIC_A }]);
-
-    let ok = false;
-    await act(async () => {
-      ok = await result.current.unfollow([TOPIC_A]);
-    });
-
-    expect(ok).toBe(true);
-    expect(proposal().relations.map(r => r.id)).toEqual(['row-1']);
-    expect(mocks.reconcile).toHaveBeenCalledWith(proposal().relations);
-    expect(mocks.sendUserOperation).not.toHaveBeenCalled();
-    expect(cached()).toEqual([]);
-  });
-
-  it('unfollows a topic held both ways by removing the relation and clearing every Interested', async () => {
-    publishSucceeds();
-    const { result, cached, cachedInterested } = setup(
+  it('unfollow clears every Interested on the topic and never touches relations', async () => {
+    const { result, cachedInterested } = setup(
       [{ id: 'row-1', spaceId: SPACE, toEntityId: TOPIC_A }],
       [
         { objectId: TOPIC_A, spaceId: SPACE },
@@ -296,16 +290,29 @@ describe('useFollowTopics with NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED (GEO-3158)'
     });
 
     expect(ok).toBe(true);
-    expect(proposal().relations.map(r => r.id)).toEqual(['row-1']);
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(mocks.reconcile).not.toHaveBeenCalled();
     expect(sentActions()).toEqual([
       { to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.UNINTERESTED, entity: TOPIC_A },
       { to: `0x${OTHER_SPACE}`, action: PERMISSIONLESS_ACTIONS.UNINTERESTED, entity: TOPIC_A },
     ]);
-    expect(cached()).toEqual([]);
     expect(cachedInterested()).toEqual([{ objectId: TOPIC_B, spaceId: SPACE }]);
   });
 
-  it('unfollows an Interested-only follow with no edit at all', async () => {
+  it('unfollow of a topic not held Interested sends nothing', async () => {
+    const { result } = setup([{ id: 'row-1', spaceId: SPACE, toEntityId: TOPIC_A }]);
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.unfollow([TOPIC_A]);
+    });
+
+    expect(ok).toBe(true);
+    expect(mocks.sendUserOperation).not.toHaveBeenCalled();
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+
+  it('unfollows with no edit at all', async () => {
     const { result } = setup([], [{ objectId: TOPIC_A, spaceId: SPACE }]);
 
     let ok = false;

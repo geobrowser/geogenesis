@@ -7,8 +7,9 @@ import * as React from 'react';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { fetchFollowedTopics, followedTopicsQueryKey } from '~/core/io/subgraph/fetch-followed-topics';
 import { fetchInterestedTopics, interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
+import { normId } from '~/core/utils/norm-id';
 
-import { isInterestedFollowEnabled, mergeFollowedTopicIds } from './interested';
+import { interestedTopicIds, isInterestedFollowEnabled } from './interested';
 
 export function followedTopicsQueryOptions(spaceId: string) {
   return queryOptions({
@@ -31,10 +32,9 @@ export function interestedTopicsQueryOptions(spaceId: string) {
  * Topics a personal space follows (default: the viewer's), as normalized ids. Disable follow
  * controls while `isLoading`, or an early click writes a duplicate row.
  *
- * With the Interested-follow flag on (GEO-3158), a topic is followed if the space has a
- * `Following` relation to it OR holds Interested on it, so follows made before the switch keep
- * working. `rows` stays the relations only: it is what an unfollow tombstones. Read `topicIds` for
- * "is this followed", never `rows`.
+ * With the Interested-follow flag on (GEO-3158), a topic is followed exactly when the space holds a
+ * current Interested on it. `Following` relations are not read at all and `rows` is empty: read
+ * `topicIds` for "is this followed", never `rows`.
  */
 export function useFollowedTopics(spaceId?: string) {
   const { personalSpaceId, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
@@ -43,7 +43,7 @@ export function useFollowedTopics(spaceId?: string) {
 
   const { data, isLoading } = useQuery({
     ...followedTopicsQueryOptions(targetSpaceId ?? ''),
-    enabled: !!targetSpaceId,
+    enabled: !!targetSpaceId && !interestedEnabled,
   });
   const { data: interested, isLoading: isLoadingInterested } = useQuery({
     ...interestedTopicsQueryOptions(targetSpaceId ?? ''),
@@ -51,13 +51,16 @@ export function useFollowedTopics(spaceId?: string) {
   });
 
   const topicIds = React.useMemo(
-    () => mergeFollowedTopicIds(data ?? [], interestedEnabled ? (interested ?? []) : []),
+    () =>
+      interestedEnabled
+        ? interestedTopicIds(interested ?? [])
+        : new Set((data ?? []).map(row => normId(row.toEntityId))),
     [data, interested, interestedEnabled]
   );
 
   return {
     topicIds,
-    rows: data ?? [],
-    isLoading: isLoading || (interestedEnabled && isLoadingInterested) || (!spaceId && isLoadingPersonalSpace),
+    rows: interestedEnabled ? [] : (data ?? []),
+    isLoading: (interestedEnabled ? isLoadingInterested : isLoading) || (!spaceId && isLoadingPersonalSpace),
   };
 }

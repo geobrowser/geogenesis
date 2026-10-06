@@ -4,7 +4,7 @@ import { encodeEntityVoteData, encodeEntityVoteTopic } from '~/core/utils/contra
 import { EMPTY_SIGNATURE, PERMISSIONLESS_ACTIONS, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 import { normId } from '~/core/utils/norm-id';
 
-import type { FollowedTopicRelation, TopicRef } from './follow-ops';
+import type { TopicRef } from './follow-ops';
 
 /**
  * GEO-3158. Interested is a public response, vote kind 3, and on a topic it IS the topic follow.
@@ -13,8 +13,10 @@ import type { FollowedTopicRelation, TopicRef } from './follow-ops';
 export const INTERESTED_VOTE_KIND = 3;
 
 /**
- * Whether topic follows write Interested instead of a `Following` relation, and read Interested as
- * a follow. Off unless set, and off it is exactly the relation-only behaviour from before.
+ * Whether topic follows are Interested instead of a `Following` relation. Off unless set, and off it
+ * is exactly the relation-only behaviour from before. It exists because Interested only works once
+ * `PERMISSIONLESS.INTERESTED` / `UNINTERESTED` are registered on the space registry; before that,
+ * every follow would revert on chain.
  *
  * Read at call time, not captured in a module constant, so a test can flip it. Next inlines the
  * literal `process.env.NEXT_PUBLIC_…` either way.
@@ -32,17 +34,12 @@ export type InterestedTopicRow = {
 };
 
 /**
- * The read rule: a topic is followed if the space has a `Following` relation to it OR a current
- * Interested on it. Holding both is still one followed topic.
+ * The read rule with the flag on: a topic is followed exactly when the space holds a current
+ * Interested on it. A `Following` relation counts for nothing (Preston, 6 Oct: old topic follows are
+ * dropped). Held in several spaces, it is still one followed topic.
  */
-export function mergeFollowedTopicIds(
-  relations: readonly Pick<FollowedTopicRelation, 'toEntityId'>[],
-  interested: readonly Pick<InterestedTopicRow, 'objectId'>[]
-): Set<string> {
-  const ids = new Set<string>();
-  for (const row of relations) ids.add(normId(row.toEntityId));
-  for (const row of interested) ids.add(normId(row.objectId));
-  return ids;
+export function interestedTopicIds(interested: readonly Pick<InterestedTopicRow, 'objectId'>[]): Set<string> {
+  return new Set(interested.map(row => normId(row.objectId)));
 }
 
 export type InterestedCall = { to: Hex; data: Hex };
@@ -78,7 +75,7 @@ export function encodeInterestedCall(args: {
 }
 
 /**
- * Interested calls for every topic not already followed by either route, deduped within the input,
+ * Interested calls for every topic not already followed, deduped within the input,
  * so a whole selection goes out as one user operation.
  *
  * Cast in the viewer's personal space, which is where their `Following` relations live: the space

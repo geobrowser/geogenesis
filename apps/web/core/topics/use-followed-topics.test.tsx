@@ -57,13 +57,14 @@ describe('useFollowedTopics', () => {
     expect(mocks.fetchInterestedTopics).not.toHaveBeenCalled();
   });
 
-  it('with it on, reads a topic as followed by a Following relation OR Interested, once each', async () => {
+  it('with it on, reads a topic as followed only by a current Interested, never by a relation', async () => {
     vi.stubEnv('NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED', 'true');
     const result = setup();
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.topicIds).toEqual(new Set([BY_RELATION, BY_INTERESTED, BOTH]));
-    // `rows` stays the relations: it is what an unfollow tombstones.
-    expect(result.current.rows.map(row => row.id)).toEqual(['row-1', 'row-2']);
+    expect(result.current.topicIds).toEqual(new Set([BY_INTERESTED, BOTH]));
+    // Old Following relations are dropped: not fetched, not returned.
+    expect(mocks.fetchFollowedTopics).not.toHaveBeenCalled();
+    expect(result.current.rows).toEqual([]);
   });
 });

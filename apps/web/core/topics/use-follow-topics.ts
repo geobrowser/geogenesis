@@ -28,8 +28,8 @@ import {
   type InterestedTopicRow,
   buildInterestedClearCalls,
   buildInterestedFollowCalls,
+  interestedTopicIds,
   isInterestedFollowEnabled,
-  mergeFollowedTopicIds,
 } from './interested';
 import { followedTopicsQueryOptions, interestedTopicsQueryOptions } from './use-followed-topics';
 
@@ -44,9 +44,10 @@ type FollowVariables =
  * mounted control are skipped. Resolves false when signed out, blocked, or the publish failed.
  *
  * With `NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED` (GEO-3158) a follow is an Interested instead: one
- * user operation for the whole selection, and no `Following` relation. A topic already followed by
- * either route is skipped. An unfollow removes both routes: it tombstones any `Following` relation
- * exactly as before, and clears any Interested. Flag off, nothing here reads or writes Interested.
+ * user operation for the whole selection, and no `Following` relation. Interested replaces the
+ * relation entirely, so neither path reads or writes relations: a follow skips topics already held
+ * Interested, and an unfollow clears every Interested on the topic. Old `Following` relations are
+ * left where they are and count for nothing. Flag off, nothing here reads or writes Interested.
  */
 export function useFollowTopics() {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
@@ -73,19 +74,7 @@ export function useFollowTopics() {
     }
   };
 
-  /** Removes `deleted` relation rows from the cache and adds `added`, keeping a racing refetch's rows. */
-  const updateRelationCache = (spaceId: string, rows: FollowedTopicRelation[], relations: Relation[]) => {
-    const deleted = new Set(relations.filter(r => r.isDeleted).map(r => r.id));
-    queryClient.setQueryData<FollowedTopicRelation[]>(followedTopicsQueryKey(spaceId), current =>
-      (current ?? rows).filter(row => !deleted.has(row.id))
-    );
-  };
-
-  const runInterested = async (
-    variables: FollowVariables,
-    rows: FollowedTopicRelation[],
-    interested: InterestedTopicRow[]
-  ): Promise<boolean> => {
+  const runInterested = async (variables: FollowVariables, interested: InterestedTopicRow[]): Promise<boolean> => {
     const { spaceId } = variables;
     // Interested is an on-chain response from the personal space, which must exist on chain.
     if (!isRegistered) return false;
@@ -96,7 +85,7 @@ export function useFollowTopics() {
         registry: SPACE_REGISTRY_ADDRESS_HEX,
         personalSpaceId: spaceId,
         topics: variables.topics,
-        followedTopicIds: mergeFollowedTopicIds(rows, interested),
+        followedTopicIds: interestedTopicIds(interested),
       });
       if (calls.length === 0) return true;
       if (!(await sendCalls(calls))) return false;
@@ -111,38 +100,20 @@ export function useFollowTopics() {
       return true;
     }
 
-    // Unfollow: a topic followed through an old `Following` relation loses the relation as before,
-    // and any Interested on it is cleared too, so neither route keeps it followed.
-    const relations = buildUnfollowRelations({ personalSpaceId: spaceId, rows, topicIds: variables.topicIds });
     const { calls, cleared } = buildInterestedClearCalls({
       registry: SPACE_REGISTRY_ADDRESS_HEX,
       personalSpaceId: spaceId,
       rows: interested,
       topicIds: variables.topicIds,
     });
+    if (calls.length === 0) return true;
+    if (!(await sendCalls(calls))) return false;
 
-    if (relations.length > 0) {
-      const ok = await publishOnce(makeProposal, {
-        values: [],
-        relations,
-        spaceId,
-        name: followEditName('Unfollow', relations),
-      });
-      if (!ok) return false;
-      reconcileDeletedRelations(relations);
-      await queryClient.cancelQueries({ queryKey: followedTopicsQueryKey(spaceId), exact: true });
-      updateRelationCache(spaceId, rows, relations);
-    }
-
-    if (calls.length > 0) {
-      if (!(await sendCalls(calls))) return false;
-      await queryClient.cancelQueries({ queryKey: interestedKey, exact: true });
-      const gone = new Set(cleared.map(row => `${normId(row.objectId)}:${normId(row.spaceId)}`));
-      queryClient.setQueryData<InterestedTopicRow[]>(interestedKey, current =>
-        (current ?? interested).filter(row => !gone.has(`${normId(row.objectId)}:${normId(row.spaceId)}`))
-      );
-    }
-
+    await queryClient.cancelQueries({ queryKey: interestedKey, exact: true });
+    const gone = new Set(cleared.map(row => `${normId(row.objectId)}:${normId(row.spaceId)}`));
+    queryClient.setQueryData<InterestedTopicRow[]>(interestedKey, current =>
+      (current ?? interested).filter(row => !gone.has(`${normId(row.objectId)}:${normId(row.spaceId)}`))
+    );
     return true;
   };
 
@@ -150,13 +121,13 @@ export function useFollowTopics() {
     mutationKey: FOLLOW_MUTATION_KEY,
     mutationFn: async (variables: FollowVariables) => {
       const { spaceId } = variables;
-      const queryKey = followedTopicsQueryKey(spaceId);
-      const rows = await queryClient.ensureQueryData(followedTopicsQueryOptions(spaceId));
-
       if (isInterestedFollowEnabled()) {
         const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
-        return runInterested(variables, rows, interested);
+        return runInterested(variables, interested);
       }
+
+      const queryKey = followedTopicsQueryKey(spaceId);
+      const rows = await queryClient.ensureQueryData(followedTopicsQueryOptions(spaceId));
 
       let added: FollowedTopicRelation[] = [];
       let relations: Relation[];

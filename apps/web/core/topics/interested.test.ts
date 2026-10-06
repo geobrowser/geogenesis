@@ -7,8 +7,8 @@ import {
   buildInterestedClearCalls,
   buildInterestedFollowCalls,
   encodeInterestedCall,
+  interestedTopicIds,
   isInterestedFollowEnabled,
-  mergeFollowedTopicIds,
 } from './interested';
 
 const REGISTRY = '0xCF13491802747e759e1BB8E364bc43045398d1DD';
@@ -40,22 +40,17 @@ describe('isInterestedFollowEnabled', () => {
   });
 });
 
-describe('mergeFollowedTopicIds (the read rule)', () => {
-  it('reads a topic as followed through a Following relation alone', () => {
-    expect(mergeFollowedTopicIds([{ toEntityId: TOPIC_A }], [])).toEqual(new Set([TOPIC_A]));
+describe('interestedTopicIds (the read rule with the flag on)', () => {
+  it('reads a topic as followed through a current Interested', () => {
+    expect(interestedTopicIds([{ objectId: TOPIC_B }])).toEqual(new Set([TOPIC_B]));
   });
 
-  it('reads a topic as followed through Interested alone', () => {
-    expect(mergeFollowedTopicIds([], [{ objectId: TOPIC_B }])).toEqual(new Set([TOPIC_B]));
+  it('counts a topic held Interested in several spaces once, whatever the id spelling', () => {
+    expect(interestedTopicIds([{ objectId: TOPIC_A }, { objectId: TOPIC_A_DASHED }])).toEqual(new Set([TOPIC_A]));
   });
 
-  it('counts a topic held both ways once, whatever the id spelling', () => {
-    const ids = mergeFollowedTopicIds([{ toEntityId: TOPIC_A_DASHED }], [{ objectId: TOPIC_A }]);
-    expect(ids).toEqual(new Set([TOPIC_A]));
-  });
-
-  it('reads nothing as followed with neither', () => {
-    expect(mergeFollowedTopicIds([], []).size).toBe(0);
+  it('reads nothing as followed without Interested', () => {
+    expect(interestedTopicIds([]).size).toBe(0);
   });
 });
 
@@ -110,14 +105,15 @@ describe('buildInterestedFollowCalls', () => {
     ]);
   });
 
-  it('skips a topic already followed by a Following relation or Interested', () => {
-    const { calls } = buildInterestedFollowCalls({
+  it('skips a topic already held Interested', () => {
+    const { calls, added } = buildInterestedFollowCalls({
       registry: REGISTRY,
       personalSpaceId: ME,
       topics: [{ id: TOPIC_A }, { id: TOPIC_B }],
-      followedTopicIds: mergeFollowedTopicIds([{ toEntityId: TOPIC_A_DASHED }], [{ objectId: TOPIC_B }]),
+      followedTopicIds: interestedTopicIds([{ objectId: TOPIC_B }]),
     });
-    expect(calls).toHaveLength(0);
+    expect(added.map(row => row.objectId)).toEqual([TOPIC_A]);
+    expect(calls).toHaveLength(1);
   });
 });
 
@@ -138,7 +134,7 @@ describe('buildInterestedClearCalls', () => {
     expect(calls.every(call => decode(call.data).action === PERMISSIONLESS_ACTIONS.UNINTERESTED)).toBe(true);
   });
 
-  it('has nothing to clear for a topic followed only through a relation', () => {
+  it('has nothing to clear for a topic not held Interested', () => {
     const { calls } = buildInterestedClearCalls({
       registry: REGISTRY,
       personalSpaceId: ME,
