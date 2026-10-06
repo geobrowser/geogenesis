@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 
 import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 import { withAcceptorLock } from '~/core/debates/server/acceptor-lock';
-import {
-  DebateNotPublishableError,
-  assertDebateMediaHostConfigured,
-  listSweepCandidateDebateIds,
-} from '~/core/debates/server/debate-source';
+import { DebateNotPublishableError, assertDebateMediaHostConfigured } from '~/core/debates/server/debate-source';
 import { listEditorSpaceIds } from '~/core/debates/server/editor-spaces';
+import { listPublishCandidateDebateIds } from '~/core/debates/server/publish-candidates';
 import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
 
 // The sweep can sign several on-chain publishes in one run, so give it room past the default.
@@ -34,8 +31,8 @@ const LOCK_WAIT_MS = 60_000;
  *
  * Vercel Cron hits this on a schedule (see vercel.json) with `Authorization: Bearer $CRON_SECRET`.
  * It discovers its own work: the acceptor can only publish into spaces it edits, so it enumerates
- * those from the graph, then for each lists that space's `complete` debates from geo-chat and
- * publishes them. Idempotent and self-healing: publishing skips debates already in the KG and
+ * those from the graph, then for each asks geo-chat for that space's publish candidates (every
+ * finished debate not yet seen in the graph, however old: GEO-3157) and publishes them. Idempotent and self-healing: publishing skips debates already in the KG and
  * leaves debates whose media is still processing for the next tick. It's the sole publisher: no
  * browser or public route is in the loop, so nothing depends on a participant keeping a tab open.
  */
@@ -93,7 +90,7 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
     if (budgetExhausted(attempted)) break;
     let debateIds: string[];
     try {
-      debateIds = await listSweepCandidateDebateIds(spaceId);
+      debateIds = await listPublishCandidateDebateIds(spaceId);
     } catch (error) {
       failed.push({ debateId: `space:${spaceId}`, error: error instanceof Error ? error.message : String(error) });
       continue;
