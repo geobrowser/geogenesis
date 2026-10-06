@@ -21,5 +21,12 @@ describe('lobbyRequestFor', () => {
     expect(lobbyRequestFor('  ', 'now', '', now)).toEqual({ error: 'Name the lobby.' });
     expect(lobbyRequestFor('Hour', 'later', '', now)).toEqual({ error: 'Pick a start time.' });
     expect(lobbyRequestFor('Hour', 'later', '2026-10-05T11:00', now)).toEqual({ error: 'Pick a time in the future.' });
+    expect(lobbyRequestFor('Hour', 'later', '2026-11-05T12:00', now)).toEqual({ error: 'Pick a time within 30 days.' });
+  });
+
+  // geo-chat counts characters; an emoji is two UTF-16 units but one character.
+  it('counts the name in characters', () => {
+    expect(lobbyRequestFor('😀'.repeat(120), 'now', '', now)).toEqual({ body: { name: '😀'.repeat(120) } });
+    expect(lobbyRequestFor('a'.repeat(121), 'now', '', now)).toEqual({ error: 'Keep the name to 120 characters.' });
   });
 });

@@ -14,8 +14,10 @@ import { useScrollLock } from '../use-scroll-lock';
 import { useCreateDebateLobby } from './hooks';
 import { lobbyScheduleLabel } from './lobby-format';
 
-/** geo-chat's limit, in characters. */
+/** geo-chat's limit, in characters (code points, not UTF-16 units). */
 const NAME_MAX_CHARS = 120;
+/** geo-chat schedules at most this far ahead. */
+const MAX_SCHEDULE_AHEAD_DAYS = 30;
 
 /** `<input type="datetime-local">` reads and writes local wall time without a zone. */
 export function toDateTimeLocalValue(at: Date) {
@@ -32,11 +34,14 @@ export function lobbyRequestFor(
 ): { body: { name: string; starts_at?: string } } | { error: string } {
   const trimmed = name.trim();
   if (!trimmed) return { error: 'Name the lobby.' };
-  if (trimmed.length > NAME_MAX_CHARS) return { error: `Keep the name under ${NAME_MAX_CHARS} characters.` };
+  if ([...trimmed].length > NAME_MAX_CHARS) return { error: `Keep the name to ${NAME_MAX_CHARS} characters.` };
   if (when === 'now') return { body: { name: trimmed } };
   const startsAt = new Date(startsAtLocal);
   if (!startsAtLocal || Number.isNaN(startsAt.getTime())) return { error: 'Pick a start time.' };
   if (startsAt.getTime() <= now) return { error: 'Pick a time in the future.' };
+  if (startsAt.getTime() > now + MAX_SCHEDULE_AHEAD_DAYS * 86_400_000) {
+    return { error: `Pick a time within ${MAX_SCHEDULE_AHEAD_DAYS} days.` };
+  }
   return { body: { name: trimmed, starts_at: startsAt.toISOString() } };
 }
 
@@ -136,13 +141,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
               <Text as="span" variant="footnoteMedium">
                 Name
               </Text>
-              <Input
-                value={name}
-                maxLength={NAME_MAX_CHARS}
-                placeholder="Debate hour"
-                onChange={event => setName(event.target.value)}
-                autoFocus
-              />
+              <Input value={name} placeholder="Debate hour" onChange={event => setName(event.target.value)} autoFocus />
             </label>
 
             <fieldset className="grid gap-2">
