@@ -2224,13 +2224,15 @@ describe('DebateRematchPageClient', () => {
 
       // Their already-debated claims carry the same position control, so they get the same hold.
       it('keeps an already-debated claim you agree with while it is on screen', async () => {
-        mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+        // geo-chat as well as the graph: agreement needs both, so both move together here.
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true, viewer_position: null }];
         mocks.positions = [position('profile-remote', CLAIM_SHARED, SPACE_1, false)];
         const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
         await showOpponentClaims();
         fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
         expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
 
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true, viewer_position: false }];
         mocks.positions = [...mocks.positions, position('profile-local', CLAIM_SHARED, SPACE_1, false)];
         rerender(<DebateRematchPageClient sessionId="rematch-1" />);
         await settleExit();
@@ -2239,7 +2241,7 @@ describe('DebateRematchPageClient', () => {
       });
 
       it('says so when it hides every debated claim and there are no new ones', async () => {
-        mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+        mocks.claims = [{ ...sharedClaim(), previously_debated: true, viewer_position: false }];
         mocks.positions = [
           position('profile-local', CLAIM_SHARED, SPACE_1, false),
           position('profile-remote', CLAIM_SHARED, SPACE_1, false),
@@ -2274,6 +2276,27 @@ describe('DebateRematchPageClient', () => {
           )
         ).toBeInTheDocument();
         expect(screen.getByRole('button', { name: /Already debated with Salina/ })).toBeInTheDocument();
+      });
+
+      /**
+       * A side switched somewhere else reaches geo-chat before the graph catches up. The card gates
+       * Request debate on geo-chat's copy, so a claim the graph still reads as agreed is one the
+       * viewer can request on — hiding it on the graph alone took a live button off the tab.
+       */
+      it('keeps a claim the graph still reads as agreed once geo-chat has the other side', async () => {
+        mocks.savedClaims = [];
+        // geo-chat: the viewer holds Agree (`sharedClaim`'s own participants). The graph: both Disagree.
+        mocks.claims = [sharedClaim()];
+        mocks.entities = [sharedEntity()];
+        mocks.positions = [
+          position('profile-local', CLAIM_SHARED, SPACE_1, false),
+          position('profile-remote', CLAIM_SHARED, SPACE_1, false),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('1')).toBeInTheDocument();
       });
 
       // A space whose only claims are hidden would be offered with a count and empty the list.

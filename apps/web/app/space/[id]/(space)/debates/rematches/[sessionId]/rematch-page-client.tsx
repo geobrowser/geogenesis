@@ -1543,14 +1543,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [opponentPositionOf, viewerPositionOf]
   );
 
-  /** Both of you hold the same side: nothing to debate. What "Hide agreed" takes off their tab. */
+  /**
+   * Both of you hold the same side: nothing to debate. What "Hide agreed" takes off their tab.
+   *
+   * Asked of both records of the viewer's side, and agreement only when neither says otherwise. The
+   * graph's (`viewerPositionOf`) carries this page's own in-flight answers; geo-chat's is what the
+   * card's Request debate is gated on. A side switched somewhere else reaches geo-chat while the
+   * graph is still behind, and hiding on the graph alone hid a claim whose button would be live.
+   * Where the two disagree the claim stays — showing a dead row for a moment is the cheaper mistake.
+   */
   const isAgreed = React.useCallback(
     (claim: DebateRematchClaim) => {
-      const mine = viewerPositionOf(claim);
+      const theirs = opponentPositionOf(claim);
+      if (theirs === null || viewerPositionOf(claim) !== theirs) return false;
+      const chat = chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id);
 
-      return mine !== null && mine === opponentPositionOf(claim);
+      return chat === undefined || chat === theirs;
     },
-    [opponentPositionOf, viewerPositionOf]
+    [chatPositionFor, opponentPositionOf, viewerPositionOf]
   );
 
   /**
