@@ -172,6 +172,11 @@ export function LobbyVoice({
 
   const data = token.data;
   const micIntent = Boolean(data?.can_publish) && (micChoice ?? !data?.start_muted);
+  // A listen-only token records the mic as off, so a later move to speakers or host starts muted.
+  const listenOnly = data !== undefined && !data.can_publish;
+  React.useEffect(() => {
+    if (listenOnly) setMicChoice(false);
+  }, [listenOnly]);
 
   const handleConnected = React.useCallback(() => {
     connectedRef.current = true;

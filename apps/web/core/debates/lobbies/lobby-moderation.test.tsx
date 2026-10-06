@@ -276,3 +276,12 @@ describe('useModerationNotice', () => {
     expect(result.current).toBe('A host muted you. Unmute when you’re ready.');
   });
 });
+
+describe('LobbyHandControl refusals', () => {
+  it('words a refused raise for the hand, not voice', async () => {
+    api.setDebateLobbyHand.mockRejectedValue(new GeoChatRequestError('raw', 'lobby_stepped_out', 409));
+    renderWith(<LobbyHandControl lobby={lobby({ role: 'listener', hosting: false })} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Raise hand' }));
+    expect(await screen.findByText('You stepped out. Go back to the room to raise your hand.')).toBeTruthy();
+  });
+});

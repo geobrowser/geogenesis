@@ -187,6 +187,26 @@ describe('LobbyVoice', () => {
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false);
   });
 
+  // GEO-3134: Move to speakers and Make host mint a publishing token; the mic stays off until a click.
+  it.each(['speaker', 'host'] as const)('starts muted after a listener becomes a %s', async role => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_publish: false }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (view: DebateLobbyView) => (
+      <QueryClientProvider client={client}>
+        <LobbyVoice lobby={view} connectionId="conn-1" joined currentUserId="u1" onConnectedChange={vi.fn()}>
+          <Speaking />
+        </LobbyVoice>
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(lobby('listener')));
+    await screen.findByText('You’re listening');
+
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_publish: true, start_muted: false }));
+    rerender(ui(lobby(role)));
+    await screen.findByRole('button', { name: /Unmute/ });
+    expect(mocks.roomProps).toMatchObject({ audio: false });
+  });
+
   it('remembers a host’s mute so a reconnect does not unmute', async () => {
     renderVoice();
     await screen.findByRole('button', { name: /mute/i });

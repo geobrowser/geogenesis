@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbyPerson, DebateLobbyView } from '../api';
+import { type DebateLobbyPerson, type DebateLobbyView, GeoChatRequestError } from '../api';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import {
   lobbyErrorMessage,
@@ -87,13 +87,21 @@ export function LobbyHandControl({ lobby }: { lobby: Pick<DebateLobbyView, 'lobb
       </div>
       <Text as="p" variant="footnote" color={hand.isError ? 'red-01' : 'grey-04'}>
         {hand.isError
-          ? lobbyErrorMessage(hand.error, 'Could not change your hand. Try again.')
+          ? handErrorMessage(hand.error)
           : raised
             ? 'Hosts can see your hand.'
             : 'Raise your hand to ask to speak.'}
       </Text>
     </div>
   );
+}
+
+function handErrorMessage(error: unknown) {
+  if (error instanceof GeoChatRequestError) {
+    if (error.code === 'lobby_not_present') return 'Join the lobby to raise your hand.';
+    if (error.code === 'lobby_stepped_out') return 'You stepped out. Go back to the room to raise your hand.';
+  }
+  return lobbyErrorMessage(error, 'Could not change your hand. Try again.');
 }
 
 type HostTab = 'hands' | 'banned' | 'log';
