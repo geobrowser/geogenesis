@@ -1,3 +1,5 @@
+import { normId } from '~/core/utils/norm-id';
+
 import type { ScheduledDebateRequest, ScheduledDebateStatus } from '../api';
 import { cellKey, cellOf } from './debate-calendar-model';
 
@@ -80,7 +82,9 @@ function answerOf(accepted: boolean | null, status: ScheduledDebateStatus): Deba
 function roleOf(userId: string, request: ScheduledDebateRequest): DebaterRole {
   // `invited_by_user_id` survives reschedules, so it still says who started this after the time moved.
   if (!request.invited_by_user_id) return 'admin';
-  return request.invited_by_user_id === userId ? 'sent' : 'received';
+  // Compared normalised: geo-chat writes participant ids without dashes and `invited_by_user_id`
+  // with them, so a plain comparison labelled every debater as having received the invite.
+  return normId(request.invited_by_user_id) === normId(userId) ? 'sent' : 'received';
 }
 
 /** Every request with a readable time, as the calendar draws it, earliest first. */

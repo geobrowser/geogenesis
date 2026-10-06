@@ -75,6 +75,19 @@ describe('adminDebates', () => {
     expect(needsAttention(arranged)).toBe(false);
   });
 
+  it('finds the sender when geo-chat writes the two ids in different shapes', () => {
+    const [debate] = adminDebates([
+      request({
+        invited_by_user_id: '019fedae-72b6-7ab2-927a-df044d57c511',
+        participants: [
+          { user_id: '019fedae72b67ab2927adf044d57c511', accepted: true },
+          { user_id: '019fedae72b67ab2927adf044d57c512', accepted: null },
+        ],
+      }),
+    ]);
+    expect(debate.debaters.map(debater => debater.role)).toEqual(['sent', 'received']);
+  });
+
   it('drops unreadable times and orders by start', () => {
     const debates = adminDebates([
       request({ request_id: 'late', scheduled_start_at: new Date(2026, 9, 9, 9).toISOString() }),
