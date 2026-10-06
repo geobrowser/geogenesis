@@ -8,6 +8,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
+import {
+  at as openRoundsAt,
+  deciding as openRoundsDeciding,
+  listening as openRoundsListening,
+  revealEnd as openRoundsRevealEnd,
+  roundOneSpeaking as openRoundsRoundOneSpeaking,
+} from '~/core/debates/open-rounds-fixtures';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } from './debate-room-page-client';
@@ -5041,6 +5048,72 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
     expect(mocks.debate.status).toBe('in_progress');
+  });
+
+  // GEO-3175. An Open rounds debate has no end until a round resolves End, so the recorder must not
+  // stop at the summed turn list, which only ever holds the rounds decided so far.
+  describe('open rounds recording (GEO-3175)', () => {
+    const rerenderAt = (view: ReturnType<typeof render>, time: string, debate: Debate) => {
+      vi.mocked(Date.now).mockReturnValue(openRoundsAt(time));
+      mocks.debate = debate;
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    };
+    const publishedThanking = () => mocks.setThankingDebate.mock.calls.some(([value]) => value !== null);
+
+    it('records through every decision and stops a post-roll after thanking starts', async () => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      mocks.liveStreamFinish.mockResolvedValue({
+        filename: 'recordings/debate-1/slot-1/user-a/1.local.webm',
+        uploadId: 'upload-1',
+        partSize: 5 * 1024 * 1024,
+        uploadedPartNumbers: [1],
+      });
+      installRecordingMocks();
+      vi.mocked(Date.now).mockReturnValue(openRoundsAt('20:01:30.000'));
+      const view = await renderLiveDebate(openRoundsListening());
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      // The opening's summed end plus the post-roll is 20:02:05. A fixed-turn recorder stopped here.
+      rerenderAt(view, '20:02:06.000', openRoundsDeciding({ my_pick: 'rebut' }));
+      rerenderAt(view, '20:02:40.000', openRoundsDeciding({ my_pick: 'rebut', opponent_has_picked: true }));
+      // Round 0 resolved Rebut, and round 1 runs.
+      rerenderAt(view, '20:03:00.000', openRoundsRoundOneSpeaking());
+      await act(async () => undefined);
+      expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+      expect(mocks.liveStreamFinish).not.toHaveBeenCalled();
+      expect(publishedThanking()).toBe(false);
+    });
+
+    it('arms the stop from the row that resolves End, and finishes the live stream only then', async () => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      installRecordingMocks();
+      vi.mocked(Date.now).mockReturnValue(openRoundsAt('20:02:03.000'));
+      const view = await renderLiveDebate(openRoundsDeciding());
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      // Resolved End at 20:02:05: thanking from 20:02:08, so the recording ends at 20:02:13.
+      rerenderAt(view, '20:02:12.900', openRoundsRevealEnd());
+      await act(async () => undefined);
+      expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+      expect(mocks.liveStreamFinish).not.toHaveBeenCalled();
+
+      rerenderAt(view, '20:02:13.001', openRoundsRevealEnd());
+      await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+      expect(mocks.liveStreamFinish).toHaveBeenCalledOnce();
+    });
+
+    it('does not show thanking when the room reloads during a decision', async () => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      installRecordingMocks();
+      // Past the deadline and still unresolved: the room waits for the server, it does not end.
+      vi.mocked(Date.now).mockReturnValue(openRoundsAt('20:02:11.000'));
+      await renderLiveDebate(openRoundsDeciding({ my_pick: 'end', opponent_has_picked: true }));
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+      await act(async () => undefined);
+
+      expect(publishedThanking()).toBe(false);
+      expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+    });
   });
 
   it('recognizes a durable queued recording after the debate room reloads', async () => {
