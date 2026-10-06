@@ -260,6 +260,34 @@ describe('DebateCalendar', () => {
     expect(line).toHaveStyle({ top: '0%' });
   });
 
+  it('opens this week on the current time, and other weeks on their first busy hour', () => {
+    // jsdom lays nothing out: give each hour row 64px, stacked in order, in a 384px viewport.
+    const ROW = 64;
+    const hourIndex = (element: HTMLElement) =>
+      element.getAttribute('role') === 'row' && element.parentElement?.getAttribute('role') === 'rowgroup'
+        ? Array.from(element.parentElement.children).indexOf(element)
+        : 0;
+    const spies = [
+      vi.spyOn(HTMLElement.prototype, 'offsetTop', 'get').mockImplementation(function (this: HTMLElement) {
+        return hourIndex(this) * ROW;
+      }),
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(ROW),
+      vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(384),
+    ];
+    vi.setSystemTime(new Date(2026, 9, 7, 10, 30));
+    mocks.schedulable = response([free('11', 'Elena', [thursdaySix, [at(15, 18), at(15, 19)]])]);
+    render(<DebateCalendar />);
+    const grid = screen.getAllByRole('rowgroup')[0];
+
+    // 10:30 is 672px down; a third of the viewport above it leaves 544px.
+    expect(grid.scrollTop).toBe(10 * ROW + ROW / 2 - 384 / 3);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
+    expect(screen.getAllByRole('rowgroup')[0].scrollTop).toBe(18 * ROW - 8);
+
+    spies.forEach(spy => spy.mockRestore());
+  });
+
   it('books the clicked time through the existing modal, with the time picked', () => {
     render(<DebateCalendar />);
 

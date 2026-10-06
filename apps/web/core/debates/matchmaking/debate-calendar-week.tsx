@@ -98,19 +98,27 @@ export function CalendarWeek({
     return byCell;
   }, [days, debates]);
 
-  // Opens at the first busy hour: all 24 are there, but most of a week is the middle of the night.
-  // Once per week shown, so new data landing does not yank the grid away from where it was read.
+  const nowCell = cellOf(now, days);
+  const todayIndex = nowCell?.day ?? -1;
+
+  // This week opens on the current time, a third of the way down, like a wall calendar: the hours
+  // before it are spent. Other weeks open at their first busy hour, since most of a week is the
+  // middle of the night. Once per week shown, so new data landing does not yank the grid away from
+  // where it was read, and the minute tick does not drag it along.
   const firstBusy = firstBusyHour(cells, debates, days);
   const weekKey = days[0].getTime();
   const scrolledFor = React.useRef<number | null>(null);
   React.useLayoutEffect(() => {
     if (scrolledFor.current === weekKey) return;
     const container = scrollRef.current;
-    const row = rowRefs.current[firstBusy ?? new Date(now).getHours()];
+    const row = rowRefs.current[nowCell?.hour ?? firstBusy ?? new Date(now).getHours()];
     if (!container || !row) return;
     scrolledFor.current = weekKey;
-    container.scrollTop = Math.max(0, row.offsetTop - container.offsetTop - 8);
-  }, [firstBusy, now, weekKey]);
+    const rowTop = row.offsetTop - container.offsetTop;
+    container.scrollTop = nowCell
+      ? Math.max(0, rowTop + (new Date(now).getMinutes() / 60) * row.offsetHeight - container.clientHeight / 3)
+      : Math.max(0, rowTop - 8);
+  }, [firstBusy, now, nowCell, weekKey]);
 
   const [focused, setFocused] = React.useState(() => ({ day: 0, hour: firstBusy ?? 9 }));
   const [openHour, setOpenHour] = React.useState<string | null>(null);
@@ -177,9 +185,6 @@ export function CalendarWeek({
       openHourAt(cellKey(day, hour));
     }
   };
-
-  const nowCell = cellOf(now, days);
-  const todayIndex = nowCell?.day ?? -1;
 
   return (
     <div className="overflow-x-auto rounded-lg border border-grey-02">
