@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -21,12 +21,16 @@ const mocks = vi.hoisted(() => ({
   blocks: [] as unknown[],
   scheduleZone: 'UTC',
   roster: [] as DebatePerson[],
+  rosterError: null as Error | null,
+  rosterRefetch: vi.fn(),
   schedulable: undefined as SchedulablePeopleResponse | undefined,
   schedulableLoading: false,
   schedulableError: null as Error | null,
   schedulableRefetch: vi.fn(),
   schedulableOptions: [] as unknown[],
   scheduled: [] as ScheduledDebateRequest[],
+  scheduledError: null as Error | null,
+  scheduledRefetch: vi.fn(),
   matchesByProfile: new Map<string, unknown[]>(),
   bookingProps: null as Record<string, unknown> | null,
   openHub: vi.fn(),
@@ -83,7 +87,12 @@ vi.mock('../hooks', () => ({
   useCreateDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock('./hooks', () => ({
-  useDebatePeople: () => ({ data: { people: mocks.roster }, isLoading: false }),
+  useDebatePeople: () => ({
+    data: mocks.rosterError ? undefined : { people: mocks.roster },
+    isLoading: false,
+    error: mocks.rosterError,
+    refetch: mocks.rosterRefetch,
+  }),
   useDebateRequests: () => ({ data: undefined }),
   useSchedulablePeople: (_enabled: boolean, options: unknown) => {
     mocks.schedulableOptions.push(options);
@@ -96,7 +105,13 @@ vi.mock('./hooks', () => ({
     };
   },
 }));
-vi.mock('../rooms/scheduling-hooks', () => ({ useScheduledDebates: () => ({ data: { requests: mocks.scheduled } }) }));
+vi.mock('../rooms/scheduling-hooks', () => ({
+  useScheduledDebates: () => ({
+    data: mocks.scheduledError ? undefined : { requests: mocks.scheduled },
+    error: mocks.scheduledError,
+    refetch: mocks.scheduledRefetch,
+  }),
+}));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'me' }));
 vi.mock('./use-geo-chat-user-summaries', () => ({ useGeoChatUserSummaries: () => [] }));
 vi.mock('./use-debates-hub', () => ({ useDebatesHub: () => ({ open: mocks.openHub, close: vi.fn() }) }));
@@ -188,11 +203,13 @@ beforeEach(() => {
     blocks: [],
     scheduleZone: 'UTC',
     roster: [],
+    rosterError: null,
     schedulable: response([free('11', 'Elena', [thursdaySix])]),
     schedulableLoading: false,
     schedulableError: null,
     schedulableOptions: [],
     scheduled: [],
+    scheduledError: null,
     matchesByProfile: new Map(),
     activity: undefined,
     bookingProps: null,
@@ -441,6 +458,60 @@ describe('DebateCalendar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Pick a space' }));
 
     expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_filter_changed', { filter: 'space' });
+  });
+
+  it('says nobody is free when the only free person is one the calendar never shows', () => {
+    // On the People tab's exclusion list: hidden from every list, so it cannot be a filter's doing.
+    mocks.schedulable = response([
+      {
+        ...free('11', 'Hidden', [thursdaySix]),
+        user: { ...summary('11', 'Hidden'), profile_space_id: '879dc356d44f41ffbefae156d1db31c2' },
+      },
+    ]);
+    render(<DebateCalendar />);
+
+    expect(screen.getByText('Nobody has open times this week.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
+  });
+
+  it('records a search again when the same words are typed after clearing it', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(NOW);
+    render(<DebateCalendar />);
+    const search = screen.getByRole('textbox', { name: 'Search people' });
+    const searches = () =>
+      mocks.capture.mock.calls.filter(
+        ([name, props]) => name === 'debate_calendar_filter_changed' && props.filter === 'search'
+      );
+
+    fireEvent.change(search, { target: { value: 'el' } });
+    act(() => vi.advanceTimersByTime(1_000));
+    fireEvent.change(search, { target: { value: '' } });
+    act(() => vi.advanceTimersByTime(1_000));
+    fireEvent.change(search, { target: { value: 'el' } });
+    act(() => vi.advanceTimersByTime(1_000));
+
+    expect(searches()).toHaveLength(2);
+  });
+
+  it("keeps the week up when who's online fails to load, and says so with a retry", () => {
+    mocks.rosterError = new Error('down');
+    render(<DebateCalendar />);
+
+    expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
+    expect(screen.getByText(/Couldn’t load who’s online/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.rosterRefetch).toHaveBeenCalled();
+  });
+
+  it("keeps the week up when the viewer's own debates fail to load, and says so with a retry", () => {
+    mocks.scheduledError = new Error('down');
+    render(<DebateCalendar />);
+
+    expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
+    expect(screen.getByText(/Couldn’t load your own debates/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(mocks.scheduledRefetch).toHaveBeenCalled();
   });
 
   it('offers a retry when the list fails to load', () => {

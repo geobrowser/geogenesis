@@ -147,6 +147,17 @@ describe('HubHeaderControls', () => {
     );
   });
 
+  it('attributes a schedule saved from the calendar to the calendar', async () => {
+    const user = userEvent.setup();
+    render(<HubHeaderControls analyticsSurface="calendar" />);
+
+    await user.click(pill());
+    await user.click(await screen.findByRole('button', { name: /^Set my availability/ }));
+    await screen.findByRole('dialog', { name: /schedule/i });
+
+    expect(new Set(mocks.saveSurfaces)).toEqual(new Set(['calendar']));
+  });
+
   // The panel hands this ref to the set-schedule banner, which sends focus here when it leaves.
   it('attaches a passed ref to the pill', () => {
     const ref = React.createRef<HTMLButtonElement>();

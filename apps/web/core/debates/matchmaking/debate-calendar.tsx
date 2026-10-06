@@ -358,8 +358,11 @@ function DebateCalendarBody({
   // Whether anyone at all is free this week, filters aside: the difference between "nobody is free"
   // and "your filters hid everyone", which have different ways forward.
   const unfilteredCells = React.useMemo(
-    () => weekCells(slotsWithViewer, days, { include: () => true, onlyViewerFree: false, order }),
-    [days, order, slotsWithViewer]
+    // Everyone the calendar can draw, which is not everyone geo-chat listed: the viewer and the
+    // People tab's exclusions are never drawn, so their free time cannot make an empty week look
+    // like the filters' doing.
+    () => weekCells(slotsWithViewer, days, { include: key => peopleByUser.has(key), onlyViewerFree: false, order }),
+    [days, order, peopleByUser, slotsWithViewer]
   );
 
   // Requests this page has just sent, until the list read returns them.
@@ -419,7 +422,12 @@ function DebateCalendarBody({
   // Search changes on every keystroke; one event per search, when it settles.
   const searchReported = React.useRef('');
   React.useEffect(() => {
-    if (!searchTerm || searchReported.current === searchTerm) return;
+    // Cleared, it forgets what it reported: the same words typed again later are a new search.
+    if (!searchTerm) {
+      searchReported.current = '';
+      return;
+    }
+    if (searchReported.current === searchTerm) return;
     const timer = setTimeout(() => {
       searchReported.current = searchTerm;
       changeFilter('search');
@@ -613,6 +621,18 @@ function DebateCalendarBody({
         </Text>
       </div>
 
+      {/* Not the error state: everyone's free time loaded and can still be booked. These are the
+          reads that only add to it, so a failure says what is missing and the week stays up. */}
+      {peopleQuery.error ? (
+        <PartialLoadNote onRetry={() => void peopleQuery.refetch()}>
+          Couldn&rsquo;t load who&rsquo;s online, so everyone shows as offline.
+        </PartialLoadNote>
+      ) : null}
+      {scheduled.error ? (
+        <PartialLoadNote onRetry={() => void scheduled.refetch()}>
+          Couldn&rsquo;t load your own debates, so they&rsquo;re missing from the week.
+        </PartialLoadNote>
+      ) : null}
       {blockedReason ? (
         <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
           {blockedReason}
@@ -688,6 +708,17 @@ function DebateCalendarBody({
         }
       />
     </div>
+  );
+}
+
+function PartialLoadNote({ children, onRetry }: { children: React.ReactNode; onRetry: () => void }) {
+  return (
+    <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
+      {children}{' '}
+      <button type="button" className="underline" onClick={onRetry}>
+        Retry
+      </button>
+    </Text>
   );
 }
 

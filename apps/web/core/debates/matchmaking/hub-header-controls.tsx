@@ -167,7 +167,13 @@ function AvailabilityMenu({
           </Popover.Portal>
         ) : null}
       </Popover.Root>
-      <OwnScheduleModal open={editing} onOpenChange={setEditing} openerRef={openerRef} surface="hub_header" />
+      <OwnScheduleModal
+        open={editing}
+        onOpenChange={setEditing}
+        openerRef={openerRef}
+        // Saves are attributed to the screen the editor was opened from, as its click label is.
+        surface={analyticsSurface === 'calendar' ? 'calendar' : 'hub_header'}
+      />
     </>
   );
 }
