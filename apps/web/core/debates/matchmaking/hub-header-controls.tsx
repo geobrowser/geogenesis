@@ -47,8 +47,8 @@ export function HubHeaderControls({
 /**
  * Your availability, as one small status pill (GEO-3152): a green dot and "Available" while you take
  * live requests, a grey one and "Not available" otherwise. It opens onto both halves of "when can
- * people debate me": the live switch for right now, and My availability, the weekly times others
- * book, plus the link that books you.
+ * people debate me": the live switch for right now, and Set / Edit my availability, the weekly
+ * times others book, plus the link that books you.
  *
  * It replaced a full-width "I'm available" switch and a calendar icon for the weekly editor, which
  * sat beside the Calendar button looking identical to it while meaning something else.
@@ -135,25 +135,23 @@ function AvailabilityMenu({ triggerRef }: { triggerRef?: React.RefObject<HTMLBut
                 </button>
               </div>
 
-              <div className="flex items-start gap-2.5 border-t border-grey-01 p-2.5">
-                <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-                  <span className="text-metadataMedium text-text">My availability</span>
-                  <span className="text-footnote text-grey-04">
-                    {summary ? `${summary} · others can book these` : 'Set the times others can book you for.'}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  {...hubAnalyticsAttributes('Schedule calendar', 'open_debate_schedule')}
-                  onClick={() => {
-                    setOpen(false);
-                    setEditing(true);
-                  }}
-                  className="text-metadataMedium text-text underline"
-                >
-                  {isSet ? 'Edit' : 'Set'}
-                </button>
-              </div>
+              {/* One row, one press, the way the copy-link row below it works. */}
+              <button
+                type="button"
+                {...hubAnalyticsAttributes('Schedule calendar', 'open_debate_schedule')}
+                onClick={() => {
+                  setOpen(false);
+                  setEditing(true);
+                }}
+                className="flex w-full flex-col gap-0.5 border-t border-grey-01 p-2.5 text-left transition-colors hover:bg-grey-01"
+              >
+                <span className="text-metadataMedium text-text">
+                  {isSet ? 'Edit my availability' : 'Set my availability'}
+                </span>
+                <span className="text-footnote text-grey-04">
+                  {summary ? `${summary} · others can book these` : 'The times others can book you for.'}
+                </span>
+              </button>
 
               <CopyBookingLink />
             </Popover.Content>

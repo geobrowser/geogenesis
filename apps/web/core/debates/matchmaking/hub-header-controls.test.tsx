@@ -100,6 +100,14 @@ describe('HubHeaderControls', () => {
     expect(screen.queryByTestId('schedule-unset-dot')).not.toBeInTheDocument();
   });
 
+  it('offers to set your availability when none is saved', async () => {
+    const user = userEvent.setup();
+    render(<HubHeaderControls />);
+
+    await user.click(pill());
+    expect(await screen.findByRole('button', { name: /^Set my availability/ })).toBeInTheDocument();
+  });
+
   it('reads My availability back and opens its editor, attributed to the header', async () => {
     mocks.isSet = true;
     mocks.blocks = [0, 1, 2, 3, 4].map(weekday => ({
@@ -114,10 +122,11 @@ describe('HubHeaderControls', () => {
 
     await user.click(pill());
     const menu = await screen.findByRole('dialog', { name: 'Your availability' });
-    expect(within(menu).getByText('My availability')).toBeInTheDocument();
-    expect(within(menu).getByText(/Mon–Fri 6 – 8pm/)).toBeInTheDocument();
+    // The whole row is the button, named for what it does.
+    const row = within(menu).getByRole('button', { name: /^Edit my availability/ });
+    expect(row).toHaveTextContent(/Mon–Fri 6 – 8pm/);
 
-    await user.click(within(menu).getByRole('button', { name: 'Edit' }));
+    await user.click(row);
     expect(
       within(await screen.findByRole('dialog', { name: /schedule/i })).getByRole('button', { name: 'Save schedule' })
     ).toBeInTheDocument();
