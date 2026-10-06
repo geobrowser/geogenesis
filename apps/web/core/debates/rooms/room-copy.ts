@@ -59,6 +59,13 @@ export const ROOM_JOIN_PROMPT = {
   notNow: 'Not now',
 } as const;
 
+/** The same banner for a lobby the viewer asked to be reminded of (GEO-3133). */
+export const LOBBY_JOIN_PROMPT = {
+  title: (name: string | undefined) => (name ? `${name} is open` : 'Your lobby is open'),
+  subtitle: 'A debate lobby you asked to be reminded of',
+  join: 'Join lobby',
+} as const;
+
 /**
  * Shown to someone who arrived before the door unlocked. The lead is read off the room rather than
  * written here, since geo-chat stores it per room and may change it for new ones.

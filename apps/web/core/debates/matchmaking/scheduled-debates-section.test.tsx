@@ -40,6 +40,8 @@ const ADA = {
   avatar_cid: null,
 };
 
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: vi.fn() }) }));
+
 vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
   useRespondToScheduledDebate: () => ({ mutate: mocks.respond, isPending: mocks.pending }),
   useCancelScheduledDebate: () => ({

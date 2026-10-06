@@ -50,6 +50,18 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'lobbyJoining',
+    label: 'Debate lobbies: joining',
+    description: 'See and join live debate lobbies from the debates panel.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'lobbyHosting',
+    label: 'Debate lobbies: hosting',
+    description: 'Open a lobby or schedule one for later. Needs joining on too.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
