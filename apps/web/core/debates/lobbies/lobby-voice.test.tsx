@@ -150,7 +150,6 @@ describe('LobbyVoice', () => {
     expect(mocks.roomProps).toMatchObject({ audio: false });
   });
 
-  // The local :8080 answers this while its LiveKit key is rejected.
   it('says voice is unavailable on a 503 and offers to try again', async () => {
     mocks.getDebateLobbyVoiceToken.mockRejectedValue(new GeoChatRequestError('raw', 'voice_capacity_reached', 503));
     renderVoice();
