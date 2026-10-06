@@ -412,7 +412,7 @@ describe('slotStarts', () => {
     ]);
   });
 
-  it('starts after `after` on the window own grid, however long ago the window began', () => {
+  it("starts after `after` on the window's own grid, however long ago the window began", () => {
     // Began three days back: counting from its start, the 48-entry ceiling ends long before now.
     const window = { start: '2026-10-03T10:00:00Z', end: '2026-10-06T12:00:00Z' };
     expect(starts(window, at('2026-10-06T10:40:00Z'))).toEqual([

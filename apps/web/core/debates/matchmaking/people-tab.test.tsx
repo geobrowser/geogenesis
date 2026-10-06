@@ -9,6 +9,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
+import { MUTUAL_SLOT, PEER_ONLY_SLOT } from '~/partials/availability/peer-availability';
+
 import {
   type DebateChallenge,
   type DebatePerson,
@@ -1543,6 +1545,9 @@ describe('Online only', () => {
     };
   }
 
+  /** Whether a chip wears every class of a look, as the booking week's own legend test checks. */
+  const wears = (element: Element, look: string) => look.split(' ').every(name => element.classList.contains(name));
+
   /** One of their free stretches, `hours` from now and `length` half hours long (geo-chat#204). */
   function windowIn(hours: number, length: number, viewerFree = false) {
     const first = slotIn(hours);
@@ -1892,6 +1897,9 @@ describe('Online only', () => {
       chips.forEach(chip => {
         expect(chip).not.toHaveAttribute('data-viewer-free');
         expect(chip.getAttribute('aria-label')).not.toMatch(/both free/);
+        // Plain: neither the week's green nor its dashed look, which would claim a comparison.
+        expect(chip).toHaveClass('border-grey-02');
+        expect(wears(chip, MUTUAL_SLOT) || wears(chip, PEER_ONLY_SLOT)).toBe(false);
       });
       expect(within(row).getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
@@ -2003,6 +2011,7 @@ describe('Online only', () => {
       expect(chips).toHaveLength(1);
       expect(chips[0]).toHaveAttribute('data-viewer-free', 'true');
       expect(chips[0]).toHaveAttribute('data-geo-analytics-label', 'Debate hub Shared time');
+      expect(wears(chips[0], MUTUAL_SLOT) && !wears(chips[0], PEER_ONLY_SLOT)).toBe(true);
       expect(chips[0].getAttribute('aria-label')).toMatch(/you're both free$/);
     });
 
@@ -2022,6 +2031,7 @@ describe('Online only', () => {
         expect(chip).not.toHaveAttribute('data-viewer-free');
         expect(chip.getAttribute('aria-label')).not.toMatch(/both free/);
         expect(chip).toHaveAttribute('data-geo-analytics-label', 'Debate hub Free time');
+        expect(wears(chip, PEER_ONLY_SLOT) && !wears(chip, MUTUAL_SLOT)).toBe(true);
       });
       expect(screen.queryByRole('button', { name: 'More times for Ona' })).not.toBeInTheDocument();
     });
