@@ -38,6 +38,7 @@ import {
   remindedLabel,
   rosterOrder,
 } from './lobby-format';
+import { LobbyRequestDebate } from './lobby-request-debate';
 import { LobbyVoice, useLobbyVoiceStates } from './lobby-voice';
 
 const HANDOFF_NOTICE_MS = 8_000;
@@ -478,6 +479,7 @@ function RosterRow({ member, isViewer }: { member: DebateLobbyMember; isViewer: 
           <MicrophoneIcon muted={!micOn} />
         </span>
       ) : null}
+      <LobbyRequestDebate member={member} />
       <span
         className={cx(
           'rounded-full px-2 py-0.5 text-footnoteMedium',
