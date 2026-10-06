@@ -117,6 +117,10 @@ export function CalendarWeek({
   const [openHour, setOpenHour] = React.useState<string | null>(null);
 
   const [card, setCard] = React.useState<Card | null>(null);
+  // Which card is showing, read when the next one opens. A ref rather than the state updater:
+  // updaters can run twice, and the analytics call in here must not.
+  const shownCard = React.useRef<Card | null>(null);
+  shownCard.current = card;
   const cardAnchor = React.useRef<HTMLElement | null>(null);
   const cardTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const clearCardTimer = () => {
@@ -128,10 +132,10 @@ export function CalendarWeek({
     clearCardTimer();
     const show = () => {
       cardAnchor.current = anchor;
-      setCard(current => {
-        if (current?.key !== next.key || current.userKey !== next.userKey) calendarPersonViewed();
-        return next;
-      });
+      const shown = shownCard.current;
+      const person = peopleByUser.get(next.userKey);
+      if (person && (shown?.key !== next.key || shown.userKey !== next.userKey)) calendarPersonViewed(person.user_id);
+      setCard(next);
     };
     if (delay === 0) show();
     else cardTimer.current = setTimeout(show, delay);

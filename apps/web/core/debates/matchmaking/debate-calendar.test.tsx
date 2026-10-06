@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -240,6 +240,18 @@ describe('DebateCalendar', () => {
       'Dee',
     ]);
     expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_hour_opened', { people_count: 5 });
+  });
+
+  it('records whose card opened, once, when a face is hovered', async () => {
+    render(<DebateCalendar />);
+
+    const face = within(cell(/Thursday.*free: Elena/)).getByRole('button', { name: /Elena/ });
+    fireEvent.pointerEnter(face, { pointerType: 'mouse' });
+
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_person_viewed', { peer_user_id: '11' })
+    );
+    expect(mocks.capture.mock.calls.filter(([name]) => name === 'debate_calendar_person_viewed')).toHaveLength(1);
   });
 
   it('opens the hour from anywhere in the cell, including beside the faces', () => {
