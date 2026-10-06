@@ -223,7 +223,6 @@ function FindATimeBody({
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [search, setSearch] = React.useState('');
   const [spaceIds, setSpaceIds] = React.useState<string[]>(EMPTY_SPACE_IDS);
-  const [onlineOnly, setOnlineOnly] = React.useState(false);
   const [onlyViewerFree, setOnlyViewerFree] = React.useState(false);
 
   // The full list caps how many people it considers. Past the cap a space selection is sent to
@@ -296,7 +295,7 @@ function FindATimeBody({
     [matchAnalysis]
   );
 
-  // Search and online only narrow who is drawn; the space filter narrows it client-side unless the
+  // Search narrows who is drawn; the space filter narrows it client-side unless the
   // server already did, in which case its membership answer stands.
   const searchTerm = search.trim().toLowerCase();
   const passesSearch = React.useCallback(
@@ -308,7 +307,6 @@ function FindATimeBody({
     (userKey: string) => {
       const person = peopleByUser.get(userKey);
       if (!person || !passesSearch(person)) return false;
-      if (onlineOnly && !person.online) return false;
       if (effectiveSpaceIds.length > 0 && !serverNarrowed) {
         const theirs = debateSpacesByPerson.get(person.profile_space_id) ?? [];
         const wanted = new Set(effectiveSpaceIds.map(normId));
@@ -316,7 +314,7 @@ function FindATimeBody({
       }
       return true;
     },
-    [debateSpacesByPerson, effectiveSpaceIds, onlineOnly, passesSearch, peopleByUser, serverNarrowed]
+    [debateSpacesByPerson, effectiveSpaceIds, passesSearch, peopleByUser, serverNarrowed]
   );
 
   // Most matches first, as the People tab orders people (GEO-3152 decision 8); then whoever can be
@@ -511,7 +509,6 @@ function FindATimeBody({
   };
   const clearFilters = () => {
     setSearch('');
-    setOnlineOnly(false);
     setOnlyViewerFree(false);
     onSpacesClear();
     changeFilter('clear');
@@ -568,15 +565,6 @@ function FindATimeBody({
                   analyticsSurface="hub"
                 />
               ) : null}
-              <FilterSwitch
-                label="Online only"
-                checked={onlineOnly}
-                onChange={next => {
-                  setOnlineOnly(next);
-                  changeFilter('online_only');
-                }}
-                analyticsSurface="hub"
-              />
             </div>
           }
         />

@@ -46,7 +46,7 @@ export function findATimeWeekChanged(direction: 'previous' | 'next' | 'today') {
   captureFindATime('find_a_time_week_changed', { direction });
 }
 
-export type FindATimeFilter = 'space' | 'search' | 'online_only' | 'only_viewer_free' | 'clear';
+export type FindATimeFilter = 'space' | 'search' | 'only_viewer_free' | 'clear';
 
 export function findATimeFilterChanged(filter: FindATimeFilter) {
   captureFindATime('find_a_time_filter_changed', { filter });

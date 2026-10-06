@@ -416,13 +416,13 @@ function FindATimeButton() {
     <Link
       href={findATimeHref(pathname)}
       onClick={close}
-      aria-label="Find a time to debate"
-      data-geo-analytics-label="Debate hub Find a time"
+      aria-label="Calendar: find a time to debate"
+      data-geo-analytics-label="Debate hub Calendar"
       data-geo-analytics-intent="open_find_a_time"
       className={hubPillClassName('secondary', 'gap-1.5 md:w-7 md:px-0 [&_svg]:shrink-0')}
     >
       <Calendar />
-      <span className="md:sr-only">Find a time</span>
+      <span className="md:sr-only">Calendar</span>
     </Link>
   );
 }
