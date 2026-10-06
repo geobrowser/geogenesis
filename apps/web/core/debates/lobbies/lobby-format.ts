@@ -113,11 +113,10 @@ export function isAlreadyInAnotherLobby(error: unknown): error is GeoChatRequest
   return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'already_in_another_lobby';
 }
 
-/** The other lobby's id: `details.current_lobby_id`, else the 409 message on an older geo-chat. */
+/** The other lobby's id, from the 409's `details.current_lobby_id`. */
 export function otherLobbyIdFrom(error: GeoChatRequestError) {
-  const fromDetails = error.details?.current_lobby_id;
-  if (typeof fromDetails === 'string' && fromDetails) return dashlessId(fromDetails);
-  return /lobby ([0-9a-f]{32})\b/i.exec(error.message)?.[1]?.toLowerCase() ?? null;
+  const id = error.details?.current_lobby_id;
+  return typeof id === 'string' && id ? dashlessId(id) : null;
 }
 
 /** What to tell someone geo-chat refused, by its error code; `fallback` for anything else. */

@@ -24,6 +24,8 @@ function member(userId: string, role: DebateLobbyRole, actingHost = false): Deba
     role,
     creator: false,
     present_since: '2026-10-05T10:00:00Z',
+    stepped_out: false,
+    in_debate: false,
   };
 }
 
@@ -105,24 +107,19 @@ describe('hostAfterChange', () => {
 });
 
 describe('another lobby', () => {
-  it('recognizes the 409 and reads the other lobby id from its message', () => {
-    const error = new GeoChatRequestError(
-      'you are already in lobby 0000000000000000000000000000ABCD; leave it to join this one',
-      'already_in_another_lobby',
-      409
-    );
+  it('recognizes the 409 and reads the other lobby id from its details', () => {
+    const error = new GeoChatRequestError('you are in another lobby', 'already_in_another_lobby', 409, null, {
+      current_lobby_id: '0000000000000000000000000000ABCD',
+    });
     expect(isAlreadyInAnotherLobby(error)).toBe(true);
     expect(otherLobbyIdFrom(error)).toBe('0000000000000000000000000000abcd');
     expect(isAlreadyInAnotherLobby(new GeoChatRequestError('x', 'lobby_closed', 409))).toBe(false);
-    expect(otherLobbyIdFrom(new GeoChatRequestError('no id', 'already_in_another_lobby', 409))).toBeNull();
-    // Structured field first.
+    // The message text is never parsed.
     expect(
       otherLobbyIdFrom(
-        new GeoChatRequestError('no id', 'already_in_another_lobby', 409, null, {
-          current_lobby_id: '0000000000000000000000000000ABCE',
-        })
+        new GeoChatRequestError('lobby 0000000000000000000000000000abce', 'already_in_another_lobby', 409)
       )
-    ).toBe('0000000000000000000000000000abce');
+    ).toBeNull();
   });
 });
 

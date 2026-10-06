@@ -20,6 +20,7 @@ import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import {
   type LobbyPresenceState,
+  MAX_TIMEOUT_MS,
   useDebateLobby,
   useDebateLobbyReminder,
   useEndDebateLobby,
@@ -586,5 +587,3 @@ function VoiceAwayWarning({ awayAt }: { awayAt: string | null }) {
     </div>
   );
 }
-
-const MAX_TIMEOUT_MS = 2_147_483_647;

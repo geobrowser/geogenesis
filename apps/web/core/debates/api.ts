@@ -1979,8 +1979,8 @@ export type DebateLobbyMember = {
   acting_host: boolean;
   present_since: string;
   /** Left to debate; still listed, without host powers, until back or it expires. */
-  stepped_out?: boolean;
-  in_debate?: boolean;
+  stepped_out: boolean;
+  in_debate: boolean;
 };
 
 export type DebateLobbyView = {
@@ -2010,7 +2010,7 @@ export type DebateLobbyView = {
     voice_away_at: string | null;
     /** This viewer holds a lease; `false` while stepped out. */
     present: boolean;
-    stepped_out?: boolean;
+    stepped_out: boolean;
   };
 };
 
@@ -2036,8 +2036,8 @@ export type DebateLobbySummary = {
   debating_count: number;
   reminder_count: number;
   viewer_reminded: boolean;
-  /** The viewer is in this lobby now. Missing on a geo-chat that predates it. */
-  viewer_present?: boolean;
+  /** The viewer is in this lobby now. */
+  viewer_present: boolean;
 };
 
 export type DebateLobbiesResponse = { lobbies: DebateLobbySummary[] };
@@ -2113,10 +2113,9 @@ export type DebateLobbyHeartbeat = {
   /** This connection's lease is live; when `false`, `reason` says why. */
   connection_present: boolean;
   voice_away_at: string | null;
-  /** Missing on a geo-chat that predates it, which meant `lapsed`. */
-  reason?: DebateLobbyGoneReason | null;
+  reason: DebateLobbyGoneReason | null;
   /** Dashless; the lobby they are in now, with `moved`. */
-  current_lobby_id?: string | null;
+  current_lobby_id: string | null;
 };
 
 /** Renews this connection's 120s lease. Rate limited to 30 a minute per person. */

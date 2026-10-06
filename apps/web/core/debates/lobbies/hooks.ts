@@ -63,7 +63,7 @@ export function useDebateLobbies(enabled = true) {
 /** Floor between refetches at `opens_at`, so a client clock ahead of the server cannot spin. */
 const OPENS_REFETCH_MIN_MS = 5_000;
 /** `setTimeout`'s ceiling; a later opening refetches early and schedules again. */
-const MAX_TIMEOUT_MS = 2_147_483_647;
+export const MAX_TIMEOUT_MS = 2_147_483_647;
 
 /**
  * One lobby. Kept current by `debate.lobby_changed` and the heartbeat's own view. That event only
@@ -327,7 +327,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
           void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobby(accountKey, lobbyId) });
           return;
         default:
-          // `lapsed`, or a geo-chat without reasons.
+          // `lapsed`.
           void join(false);
       }
     },

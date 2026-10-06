@@ -71,7 +71,15 @@ function lobby(role: 'host' | 'speaker' | 'listener' = 'speaker'): DebateLobbyVi
     hosts_changed_at: null,
     reminder_count: 0,
     members: [],
-    viewer: { role, creator: false, hosting: role === 'host', reminded: false, voice_away_at: null, present: true },
+    viewer: {
+      role,
+      creator: false,
+      hosting: role === 'host',
+      reminded: false,
+      voice_away_at: null,
+      present: true,
+      stepped_out: false,
+    },
   };
 }
 

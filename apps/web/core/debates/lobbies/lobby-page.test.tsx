@@ -15,6 +15,8 @@ function member(userId: string, role: DebateLobbyRole, actingHost = false): Deba
     role,
     creator: false,
     present_since: '2026-10-05T10:00:00Z',
+    stepped_out: false,
+    in_debate: false,
   };
 }
 

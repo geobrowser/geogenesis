@@ -46,7 +46,15 @@ function view(present: boolean, access: DebateLobbyView['access'] = { status: 'a
     hosts_changed_at: null,
     reminder_count: 0,
     members: [],
-    viewer: { role: 'speaker', creator: false, hosting: false, reminded: false, voice_away_at: null, present },
+    viewer: {
+      role: 'speaker',
+      creator: false,
+      hosting: false,
+      reminded: false,
+      voice_away_at: null,
+      present,
+      stepped_out: false,
+    },
   };
 }
 
@@ -111,11 +119,9 @@ describe('useLobbyPresence', () => {
 
   it('asks before leaving another lobby, then joins with leave_other_lobby', async () => {
     api.setDebateLobbyPresence.mockRejectedValueOnce(
-      new GeoChatRequestError(
-        'you are already in lobby 000000000000000000000000000000ab; leave it to join this one',
-        'already_in_another_lobby',
-        409
-      )
+      new GeoChatRequestError('you are in another lobby', 'already_in_another_lobby', 409, null, {
+        current_lobby_id: '000000000000000000000000000000AB',
+      })
     );
     const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
 
