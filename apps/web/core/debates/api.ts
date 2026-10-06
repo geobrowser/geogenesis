@@ -1829,6 +1829,11 @@ export type ScheduledDebateRequest = {
   participants: ScheduledDebateParticipant[];
   /** Whether the viewer is the one holding this up. */
   viewer_must_answer: boolean;
+  /**
+   * The time fell outside at least one debater's availability when the match was made. Only an
+   * admin can book such a time (GEO-2942), so only the admin calendar reads it.
+   */
+  outside_availability?: boolean;
 };
 
 export type ScheduledDebateRequestsResponse = {
@@ -1851,6 +1856,36 @@ export async function listScheduledDebates(
   signal?: AbortSignal
 ) {
   return geoChatRequest<ScheduledDebateRequestsResponse>('/me/scheduled-debates', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** What `/admin/scheduled-debates` answers: every request in the window, in any status. */
+export type AdminScheduledDebatesResponse = {
+  matches: ScheduledDebateRequest[];
+};
+
+/** geo-chat's own ceiling on one page of the admin list. */
+export const ADMIN_SCHEDULED_DEBATES_LIMIT = 200;
+
+/**
+ * Every scheduled debate starting at or after `from`, for the admin calendar (GEO-2943).
+ *
+ * Gated server-side on an allowlist of personal space ids (GEO-2967): a viewer not on it gets 403,
+ * and a deployment with no admins configured answers 503 to everyone. Either refusal is how the
+ * client learns the viewer is not an admin; there is no separate "am I an admin" read.
+ */
+export async function listAdminScheduledDebates(
+  { from, limit }: { from: string; limit: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from, limit: String(limit) });
+  return geoChatRequest<AdminScheduledDebatesResponse>(`/admin/scheduled-debates?${params.toString()}`, {
     auth: true,
     getPrivyIdentityToken,
     accountKey,

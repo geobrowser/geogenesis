@@ -42,7 +42,7 @@ const FACES_PER_CELL = 3;
 const CARD_OPEN_DELAY_MS = 250;
 const CARD_CLOSE_DELAY_MS = 200;
 
-const GRID_COLUMNS = 'grid-cols-[4rem_repeat(7,minmax(0,1fr))]';
+export const GRID_COLUMNS = 'grid-cols-[4rem_repeat(7,minmax(0,1fr))]';
 
 type RenderRow = (userKey: string, slots: FreeSlot[], entry: ScheduleEntry) => React.ReactNode;
 
@@ -393,7 +393,7 @@ export function CalendarWeek({
  * Where the clock is, as a red line across today's column, like a wall calendar's. It sits in the
  * current hour's cell, as far down it as the hour has gone; `now` ticks each minute, so it moves.
  */
-function NowLine({ now }: { now: number }) {
+export function NowLine({ now }: { now: number }) {
   return (
     <div
       aria-hidden

@@ -15,10 +15,12 @@ import {
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
+  ADMIN_SCHEDULED_DEBATES_LIMIT,
   type ScheduledDebateRequest,
   type ScheduledDebateResponseResult,
   cancelScheduledDebate,
   createScheduledDebate,
+  listAdminScheduledDebates,
   listScheduledDebates,
   rescheduleScheduledDebate,
   respondToScheduledDebate,
@@ -57,6 +59,43 @@ export function useScheduledDebates(enabled = true) {
     // Coming back to the tab is exactly when an answer is most likely to have landed already.
     refetchOnWindowFocus: true,
   });
+}
+
+/**
+ * Every scheduled debate from `from` onward, for the admin calendar (GEO-2943).
+ *
+ * Doubles as the admin check: a viewer off geo-chat's allowlist is refused (403, or 503 where no
+ * admins are configured), and `isAdmin` stays false, so the view never shows. The server is the
+ * only authority on who is an admin; nothing here can grant it.
+ */
+export function useAdminScheduledDebates(enabled: boolean, from: Date) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const present = useDebateVisibility();
+  const fromIso = from.toISOString();
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.adminScheduledDebates(accountKey, fromIso),
+    queryFn: ({ signal }) =>
+      listAdminScheduledDebates(
+        { from: fromIso, limit: ADMIN_SCHEDULED_DEBATES_LIMIT },
+        getPrivyIdentityToken,
+        accountKey,
+        signal
+      ),
+    enabled: enabled && authenticated,
+    // A refusal is the answer for everyone who is not an admin; polling it would ask again forever.
+    refetchInterval: query => (present && query.state.status === 'success' ? SCHEDULED_POLL_MS : false),
+    refetchOnWindowFocus: query => query.state.status === 'success',
+  });
+
+  return {
+    ...query,
+    isAdmin: query.data !== undefined,
+    /** Still finding out: the view switch waits rather than flashing in and out. */
+    isAdminPending: query.isPending && authenticated && enabled,
+    truncated: (query.data?.matches.length ?? 0) >= ADMIN_SCHEDULED_DEBATES_LIMIT,
+  };
 }
 
 export function useCreateScheduledDebate() {

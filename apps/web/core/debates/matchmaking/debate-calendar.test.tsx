@@ -34,10 +34,17 @@ const mocks = vi.hoisted(() => ({
   matchesByProfile: new Map<string, unknown[]>(),
   bookingProps: null as Record<string, unknown> | null,
   openHub: vi.fn(),
+  routerReplace: vi.fn(),
+  summaries: [] as unknown[],
+  admin: {} as Record<string, unknown>,
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
-vi.mock('next/navigation', () => ({ useSearchParams: () => mocks.searchParams, usePathname: () => '/' }));
+vi.mock('next/navigation', () => ({
+  useSearchParams: () => mocks.searchParams,
+  usePathname: () => '/matchmaking/calendar',
+  useRouter: () => ({ replace: mocks.routerReplace }),
+}));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
@@ -111,9 +118,10 @@ vi.mock('../rooms/scheduling-hooks', () => ({
     error: mocks.scheduledError,
     refetch: mocks.scheduledRefetch,
   }),
+  useAdminScheduledDebates: () => mocks.admin,
 }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'me' }));
-vi.mock('./use-geo-chat-user-summaries', () => ({ useGeoChatUserSummaries: () => [] }));
+vi.mock('./use-geo-chat-user-summaries', () => ({ useGeoChatUserSummaries: () => mocks.summaries }));
 vi.mock('./use-debates-hub', () => ({ useDebatesHub: () => ({ open: mocks.openHub, close: vi.fn() }) }));
 vi.mock('./use-person-facts', () => ({
   usePersonFacts: () => ({
@@ -131,7 +139,9 @@ vi.mock('./use-person-facts', () => ({
   }),
 }));
 // The header's own controls and the filter bar have their own suites; these are about the week.
-vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => null }));
+vi.mock('./hub-header-controls', () => ({
+  HubHeaderControls: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
+}));
 vi.mock('./claims-tab', () => ({
   SpaceTopicFilters: ({ leading }: { leading?: React.ReactNode }) => (
     <div>
@@ -188,6 +198,70 @@ const match = (n: number) => ({ claimId: `claim-${n}`, spaceId: 'space-1', respo
 
 const thursdaySix: [string, string] = [at(8, 18), at(8, 19)];
 
+function notAdmin() {
+  return { isAdmin: false, isAdminPending: false, data: undefined, error: null, isPending: false, truncated: false };
+}
+
+function adminWith(matches: ScheduledDebateRequest[]) {
+  return {
+    isAdmin: true,
+    isAdminPending: false,
+    data: { matches },
+    error: null,
+    failureReason: null,
+    isPending: false,
+    truncated: false,
+    refetch: vi.fn(),
+  };
+}
+
+function scheduledMatch(over: Partial<ScheduledDebateRequest>): ScheduledDebateRequest {
+  return {
+    request_id: 'req',
+    status: 'pending',
+    scheduled_start_at: at(8, 15),
+    scheduled_end_at: at(8, 15, 30),
+    invited_by_user_id: '11',
+    created_by_admin: false,
+    proposed_by_user_id: '11',
+    reschedule_count: 0,
+    room_id: null,
+    participants: [
+      { user_id: '11', accepted: true },
+      { user_id: '12', accepted: null },
+    ],
+    viewer_must_answer: false,
+    ...over,
+  };
+}
+
+const ADMIN_MATCHES = [
+  scheduledMatch({
+    request_id: 'confirmed',
+    status: 'accepted',
+    scheduled_start_at: at(8, 18),
+    scheduled_end_at: at(8, 18, 30),
+    participants: [
+      { user_id: '11', accepted: true },
+      { user_id: '12', accepted: true },
+    ],
+  }),
+  scheduledMatch({ request_id: 'waiting' }),
+  scheduledMatch({
+    request_id: 'admin-match',
+    scheduled_start_at: at(9, 12),
+    scheduled_end_at: at(9, 12, 30),
+    invited_by_user_id: null,
+    proposed_by_user_id: null,
+    created_by_admin: true,
+    outside_availability: true,
+    participants: [
+      { user_id: '12', accepted: null },
+      { user_id: '13', accepted: null },
+    ],
+  }),
+];
+
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
@@ -209,7 +283,10 @@ beforeEach(() => {
     matchesByProfile: new Map(),
     activity: undefined,
     bookingProps: null,
+    summaries: [],
+    admin: notAdmin(),
   });
+  mocks.routerReplace.mockReset();
   mocks.capture.mockReset();
   mocks.promptSignIn.mockReset();
   mocks.openHub.mockReset();
@@ -602,5 +679,84 @@ describe('DebateCalendar', () => {
 
     expect(screen.getByRole('heading', { level: 1, name: 'Debate calendar' })).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /Back to Debates/ })).toBeNull();
+  });
+});
+
+describe('DebateCalendar, admin view (GEO-2943)', () => {
+  beforeEach(() => {
+    mocks.summaries = [summary('11', 'Ana'), summary('12', 'Raj'), summary('13', 'Mia')];
+  });
+
+  it('offers no view switch to a viewer the admin list refused', () => {
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    render(<DebateCalendar />);
+
+    expect(screen.queryByRole('radiogroup', { name: 'Calendar view' })).not.toBeInTheDocument();
+    // A link to the admin view falls back to availability rather than an empty page.
+    expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
+  });
+
+  it('waits on the admin check before opening a link to the admin view', () => {
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    mocks.admin = { ...notAdmin(), isAdminPending: true, isPending: true };
+    render(<DebateCalendar />);
+
+    expect(screen.queryByRole('gridcell')).not.toBeInTheDocument();
+    expect(screen.queryByRole('radiogroup', { name: 'Calendar view' })).not.toBeInTheDocument();
+  });
+
+  it('gives an admin the switch, and puts the view in the URL', () => {
+    mocks.admin = adminWith(ADMIN_MATCHES);
+    mocks.searchParams = new URLSearchParams({ from: '/debates' });
+    render(<DebateCalendar />);
+
+    const availability = screen.getByRole('radio', { name: 'Availability' });
+    expect(availability).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(screen.getByRole('radio', { name: 'Debates' }));
+    expect(mocks.routerReplace).toHaveBeenCalledWith('/matchmaking/calendar?from=%2Fdebates&view=debates', {
+      scroll: false,
+    });
+  });
+
+  it('draws every scheduled debate by state, and opens each debater’s own answer', async () => {
+    mocks.admin = adminWith(ADMIN_MATCHES);
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    render(<DebateCalendar />);
+
+    expect(screen.getByRole('button', { name: /Ana vs Raj, Both accepted$/ })).toBeInTheDocument();
+    expect(
+      screen.getByRole('button', { name: /Raj vs Mia, Nobody answered, outside availability$/ })
+    ).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /Ana vs Raj, Waiting on one$/ }));
+    const details = await screen.findByRole('dialog');
+    const rows = within(details).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent(/Ana.*Sent.*Accepted/);
+    expect(rows[1]).toHaveTextContent(/Raj.*Received.*Pending/);
+  });
+
+  it('narrows to the matches that need attention', () => {
+    mocks.admin = adminWith(ADMIN_MATCHES);
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    render(<DebateCalendar />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Needs attention (2)' }));
+    expect(screen.queryByRole('button', { name: /Both accepted$/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Waiting on one$/ })).toBeInTheDocument();
+  });
+
+  it('lists the admin view by day on a phone', () => {
+    mocks.admin = adminWith(ADMIN_MATCHES);
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    mocks.isPhone = true;
+    render(<DebateCalendar />);
+
+    const thursday = screen.getByRole('region', { name: 'Thu 8' });
+    expect(
+      within(thursday)
+        .getAllByRole('listitem')
+        .filter(item => item.parentElement === thursday.querySelector('ul'))
+    ).toHaveLength(2);
+    expect(screen.getByRole('region', { name: 'Fri 9' })).toHaveTextContent(/Booked outside at least one debater/);
   });
 });

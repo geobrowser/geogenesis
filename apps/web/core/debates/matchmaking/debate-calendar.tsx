@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
@@ -21,8 +21,9 @@ import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-avail
 import { type DebatePerson, type ScheduledDebateRequest } from '../api';
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
-import { useScheduledDebates } from '../rooms/scheduling-hooks';
+import { useAdminScheduledDebates, useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { AdminDebatesBody, type CalendarView, CalendarViewSwitch } from './admin-debate-calendar';
 import { DebateChallengeCard } from './challenge-card';
 import { SpaceTopicFilters } from './claims-tab';
 import {
@@ -49,7 +50,7 @@ import {
   weekRangeLabel,
   weekStart,
 } from './debate-calendar-model';
-import { CALENDAR_FROM_PARAM } from './debate-calendar-route';
+import { CALENDAR_FROM_PARAM, CALENDAR_PATH, CALENDAR_VIEW_PARAM } from './debate-calendar-route';
 import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch } from './disagreement-counts';
@@ -116,8 +117,26 @@ export function DebateCalendar() {
     },
   });
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const from = searchParams?.get(CALENDAR_FROM_PARAM);
   const isPhone = useMediaQuery(PHONE_QUERY);
+
+  // Admins get a second view, of everyone's scheduled debates (GEO-2943). The admin list is also the
+  // admin check, so it is read for every signed-in viewer and refused for all but the allowlist.
+  // From the start of this week, once per visit: the week moving under an open page is not worth a
+  // second key.
+  const [adminFrom] = React.useState(() => weekStart(new Date(), 0));
+  const admin = useAdminScheduledDebates(authenticated, adminFrom);
+  const requestedView: CalendarView = searchParams?.get(CALENDAR_VIEW_PARAM) === 'debates' ? 'debates' : 'availability';
+  const view: CalendarView = admin.isAdmin ? requestedView : 'availability';
+  const changeView = (next: CalendarView) => {
+    const params = new URLSearchParams(searchParams?.toString());
+    if (next === 'debates') params.set(CALENDAR_VIEW_PARAM, next);
+    else params.delete(CALENDAR_VIEW_PARAM);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : (pathname ?? CALENDAR_PATH), { scroll: false });
+  };
 
   const schedule = useDebateSchedule();
   const viewerHasSchedule = authenticated ? schedule.isSet : false;
@@ -142,7 +161,9 @@ export function DebateCalendar() {
         <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
           Debate calendar
         </Text>
-        <HubHeaderControls analyticsSurface="calendar" />
+        <HubHeaderControls analyticsSurface="calendar">
+          {admin.isAdmin ? <CalendarViewSwitch view={view} onChange={changeView} /> : null}
+        </HubHeaderControls>
       </header>
 
       {!ready ? (
@@ -159,6 +180,13 @@ export function DebateCalendar() {
         >
           Sign in to see who&rsquo;s free to debate this week and book a time.
         </HubMessage>
+      ) : requestedView === 'debates' && admin.isAdminPending ? (
+        // A link to the admin view waits to learn whether it may open, rather than flashing the other.
+        <div className="px-6 py-6 md:px-4">
+          <CalendarWeekSkeleton />
+        </div>
+      ) : view === 'debates' ? (
+        <AdminDebatesBody isPhone={isPhone} admin={admin} />
       ) : (
         <DebateCalendarBody isPhone={isPhone} viewerHasSchedule={viewerHasSchedule} schedule={schedule} />
       )}
