@@ -28,6 +28,8 @@ import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
+import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   type FromThisDebateClaim,
@@ -2327,6 +2329,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const requestSpaceId = session?.request?.claim.space_id ?? null;
   if (session && requestSpaceId) requestSpaceRef.current = { sessionId: session.id, spaceId: requestSpaceId };
 
+  /** The converted debate this page has started walking into, so the effect below walks once. */
+  const enteringConvertedDebateRef = React.useRef<string | null>(null);
+  /** Set when another of the viewer's tabs took the converted debate (GEO-3149). */
+  const [convertedElsewhere, setConvertedElsewhere] = React.useState<{
+    debateId: string;
+    spaceId: string;
+    path: string;
+  } | null>(null);
+
   /**
    * The session is over and this page is about to navigate away — whoever ended it.
    *
@@ -2355,8 +2366,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       const remembered = requestSpaceRef.current?.sessionId === session.id ? requestSpaceRef.current.spaceId : null;
       const spaceId = validateSpaceId(session.source_space_id) ? session.source_space_id : remembered;
       if (!spaceId) return;
-      markEnteringDebate(session.converted_debate_id);
-      router.replace(`/space/${spaceId}/debates/${session.converted_debate_id}`);
+      const debateId = session.converted_debate_id;
+      if (enteringConvertedDebateRef.current === debateId) return;
+      enteringConvertedDebateRef.current = debateId;
+      const path = `/space/${spaceId}/debates/${debateId}`;
+      // GEO-3149. Every tab on this picker sees the conversion at once. Only the one the viewer is
+      // looking at walks into the room; the rest say where the debate went and offer the way in.
+      void claimDebateEntry(debateRoomClaimKey(debateId)).then(go => {
+        if (!go) {
+          setConvertedElsewhere({ debateId, spaceId, path });
+          return;
+        }
+        markEnteringDebate(debateId);
+        router.replace(path);
+      });
     } else if (session.status === 'ended' || session.status === 'expired') {
       // Never out of a room: geo-chat expires a `browsing` session once either party has been
       // offline 90 seconds, which is what waiting for someone looks like.
@@ -2532,6 +2555,21 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           };
         })
       : [];
+
+  if (convertedElsewhere) {
+    return (
+      <DebateOpenElsewhereScreen
+        claim={session?.request?.claim.claim}
+        onOpenHere={() => {
+          markEnteringDebate(convertedElsewhere.debateId);
+          router.replace(convertedElsewhere.path);
+        }}
+        // Not `back()`: behind this page is usually the room the session came from, which would
+        // only offer the same way in again.
+        onGoBack={() => router.replace(`/space/${convertedElsewhere.spaceId}/debates`)}
+      />
+    );
+  }
 
   const leaveButton = (
     <button

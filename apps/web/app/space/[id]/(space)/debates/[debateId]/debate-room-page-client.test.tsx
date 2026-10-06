@@ -474,8 +474,19 @@ beforeEach(() => {
   });
 });
 
+/**
+ * jsdom reports every document as visible, which since GEO-3149 is enough for a blocked tab to try
+ * reclaiming the room on its own. Tests about the tab that has no automatic rescue hide it.
+ */
+function setDocumentVisibility(state: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+}
+
 afterEach(async () => {
   cleanup();
+  // Drops the own property, restoring jsdom's prototype getter.
+  delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
+  window.localStorage.clear();
   clearDebateReturnDestination();
   await Promise.resolve();
   await Promise.resolve();
@@ -1845,8 +1856,9 @@ describe('DebateRoomPageClient', () => {
   // the takeover statuses suppresses the full-screen "already open in another tab" fallback, so
   // the intro has to carry the affordance itself.
   it('offers a way back when another tab holds the debate during the intro', async () => {
-    // Unfocused on purpose: a focused tab reclaims by itself, and this is about the case that has
-    // no automatic rescue. Left to the ambient value this passed alone and hung under load.
+    // Hidden on purpose: a tab in front of the viewer reclaims by itself, and this is about the case
+    // that has no automatic rescue. Left to the ambient value this passed alone and hung under load.
+    setDocumentVisibility('hidden');
     vi.spyOn(document, 'hasFocus').mockReturnValue(false);
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
@@ -2128,6 +2140,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('does not mint a token when another tab owns the participant connection', async () => {
+    setDocumentVisibility('hidden');
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
@@ -2212,6 +2225,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('takes over a connection-phase debate before minting a new token', async () => {
+    setDocumentVisibility('hidden');
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
@@ -2246,6 +2260,67 @@ describe('DebateRoomPageClient', () => {
     // looking at this one, so the focused tab issues the takeover itself.
     await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledOnce());
     await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('reclaims automatically from a visible but unfocused window, marking the request automatic', async () => {
+    // A window beside a video call: visible, never focused. GEO-3149 — a hidden tab must not hold
+    // the room against it, so it asks on its own; the owner decides by comparing attention.
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = {
+      ...readyDebate({ localReady: true, remoteReady: true }),
+      status: 'connecting',
+      connecting_started_at: '2099-07-02T00:00:00.000Z',
+      connecting_deadline_at: '2099-07-02T00:00:10.000Z',
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledWith({ automatic: true }));
+    await waitFor(() => expect(mocks.liveKitJoinMutateAsync).toHaveBeenCalledOnce());
+  });
+
+  it('never reclaims automatically from a hidden tab', async () => {
+    setDocumentVisibility('hidden');
+    vi.spyOn(document, 'hasFocus').mockReturnValue(false);
+    mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('This debate is already open in another tab.')).toBeInTheDocument();
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.ownershipRequestTakeover).not.toHaveBeenCalled();
+
+    // Turning to it is what reclaims it.
+    setDocumentVisibility('visible');
+    act(() => {
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    await waitFor(() => expect(mocks.ownershipRequestTakeover).toHaveBeenCalledWith({ automatic: true }));
+  });
+
+  it('refuses an automatic takeover from a tab no nearer the viewer, and honours an explicit one', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+
+    // Two windows side by side, both visible and unfocused: handing over here would only start a
+    // round of handing back.
+    await expect(
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 1, ownerPriority: 1, automatic: true }))
+    ).resolves.toBe(false);
+    expect(screen.queryByText('This debate moved to another tab.')).not.toBeInTheDocument();
+
+    let released: boolean | undefined;
+    await act(async () => {
+      released = await mocks.ownershipTakeoverHandler?.({ requesterPriority: 1, ownerPriority: 1, automatic: false });
+    });
+    expect(released).toBe(true);
   });
 
   it('does not auto-reclaim across devices after a duplicate-identity disconnect', async () => {
@@ -2333,6 +2408,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('keeps takeover available during a preflight ownership conflict', async () => {
+    setDocumentVisibility('hidden');
     const now = Date.parse('2026-07-02T00:00:05.000Z');
     vi.spyOn(Date, 'now').mockReturnValue(now);
     mocks.ownershipAcquire.mockResolvedValue({ acquired: false, waitedForLocalRelease: false });
@@ -2370,7 +2446,7 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledOnce());
 
     await expect(
-      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 }))
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2, automatic: false }))
     ).resolves.toBe(true);
     expect(mocks.roomDisconnect).toHaveBeenCalledOnce();
     expect(mocks.capture).toHaveBeenCalledOnce();
@@ -2443,7 +2519,7 @@ describe('DebateRoomPageClient', () => {
     now.mockReturnValue(Date.parse('2026-07-02T00:00:11.000Z'));
     monotonicNow.mockReturnValue(3_000);
     await expect(
-      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 }))
+      Promise.resolve(mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2, automatic: false }))
     ).resolves.toBe(false);
     expect(mocks.roomDisconnect).not.toHaveBeenCalled();
   });
@@ -2625,6 +2701,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   it('stays silent when our own teardown disconnects the room', async () => {
+    setDocumentVisibility('hidden');
     mocks.debate = {
       ...readyDebate({ localReady: true, remoteReady: true }),
       status: 'connecting',
@@ -2639,7 +2716,7 @@ describe('DebateRoomPageClient', () => {
     // emit Disconnected, so the CLIENT_INITIATED from our own room.disconnect() never reaches the
     // handler body — no "Lost connection" error, no drop metric.
     await act(async () => {
-      await mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2 });
+      await mocks.ownershipTakeoverHandler?.({ requesterPriority: 2, ownerPriority: 2, automatic: false });
     });
     mocks.capture.mockClear();
     act(() => emitRoomEvent('disconnected', 1));
@@ -4995,6 +5072,38 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/debate-2'));
     expect(screen.queryByRole('dialog', { name: 'Leaving the debate' })).not.toBeInTheDocument();
     expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
+  });
+
+  // GEO-3149: an idle room behind another tab used to follow the session too, so the viewer's
+  // tabs all walked into the next room together and a background one could end up holding it.
+  it('does not follow a converted rematch that another tab already took, and offers the way in', async () => {
+    setDocumentVisibility('hidden');
+    window.localStorage.setItem(
+      'geo:debate-tab-claim:debate:debate-2',
+      JSON.stringify({ tabId: 'the-other-tab', at: Date.now() })
+    );
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.rematch = { ...rematchSession('converted'), converted_debate_id: 'debate-2' };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Your debate is open in another tab.', {}, { timeout: 3_000 })).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/debate-2');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open it here' }));
+    expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/debate-2');
+  });
+
+  it('still follows from a background tab when no other tab took the next step', async () => {
+    setDocumentVisibility('hidden');
+    mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
+    mocks.rematch = rematchSession('browsing');
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'), {
+      timeout: 3_000,
+    });
   });
 
   it('enters the rematch browser after the live connection drops before the debate completes', async () => {

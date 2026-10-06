@@ -36,14 +36,27 @@ import {
   RecordingCircleButton,
   SpeakerIcon,
 } from '~/core/debates/debate-room-controls';
-import { DebateRoomHoldingScreen, DebateRoomLoadingState } from '~/core/debates/debate-room-holding-screens';
+import {
+  DebateOpenElsewhereScreen,
+  DebateRoomHoldingScreen,
+  DebateRoomLoadingState,
+} from '~/core/debates/debate-room-holding-screens';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
   createDebateRoomOwnershipCoordinator,
   debateRoomTabPriority,
+  shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
 import { debateRematchPath } from '~/core/debates/debate-routes';
+import {
+  type DebateTabClaimKey,
+  claimDebateEntry,
+  debateRematchDestinationClaimKey,
+  debateRoomClaimKey,
+  useHoldDebateTabClaim,
+  writeDebateTabClaim,
+} from '~/core/debates/debate-tab-claims';
 import { DebateVideoTile } from '~/core/debates/debate-video-tile';
 import { debateTurnRole } from '~/core/debates/formats';
 import {
@@ -345,6 +358,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [postJoinConnectionFailure, setPostJoinConnectionFailure] = React.useState(false);
   const [connectionConflictSource, setConnectionConflictSource] =
     React.useState<DebateRoomConnectionConflictSource | null>(null);
+  // GEO-3149. Where this tab would have followed the viewer next, had another of their tabs not
+  // got there first. Set, it replaces the room with a notice that offers the way in.
+  const [openElsewhere, setOpenElsewhere] = React.useState<{
+    destination: string;
+    claimKey: DebateTabClaimKey;
+  } | null>(null);
+  const followedDestinationRef = React.useRef<string | null>(null);
   const [remoteVideoReady, setRemoteVideoReady] = React.useState(false);
   /**
    * Whether the other side is in the LiveKit room at all, as distinct from whether their video has
@@ -404,12 +424,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // ended by our own teardown (leave, takeover, unmount) close no analytics event, so
   // debate_room_reconnecting counts can exceed the sum of the two closing events.
   const reconnectingStartedAtRef = React.useRef<number | null>(null);
-  // One auto-takeover per focus episode: spent when an attempt fires, re-armed only when the tab
+  // One auto-takeover per attention level: the tab priority the last attempt was made at, so a
+  // retry happens only once the tab moves nearer the viewer than that, re-armed when the tab
   // genuinely loses attention (or the conflict resolves). Generation numbers can't dedupe here —
   // connect() bumps the generation as its first statement, so any recorded value is stale
   // immediately. The in-flight flag additionally keeps overlapping attempts from superseding each
   // other's connection generation mid-handshake.
-  const autoTakeoverSpentRef = React.useRef(false);
+  const autoTakeoverAttemptedPriorityRef = React.useRef<number | null>(null);
   const autoTakeoverInFlightRef = React.useRef(false);
   const ownershipRef = React.useRef<DebateRoomOwnershipCoordinator | null>(null);
   const connectionInstanceIdRef = React.useRef('uncoordinated');
@@ -449,7 +470,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const publishedStreamRef = React.useRef<MediaStream | null>(null);
   const postJoinRecoveryAttemptsRef = React.useRef(0);
   const postJoinRecoveryTimerRef = React.useRef<number | null>(null);
-  const connectRef = React.useRef<(options?: { takeover?: boolean }) => Promise<void>>(() => Promise.resolve());
+  const connectRef = React.useRef<(options?: { takeover?: boolean; automatic?: boolean }) => Promise<void>>(() =>
+    Promise.resolve()
+  );
   const connectionFailureHandledRef = React.useRef(false);
   const reportedConflictGenerationRef = React.useRef<number | null>(null);
   const reportedRecoveryGenerationRef = React.useRef<number | null>(null);
@@ -789,6 +812,36 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     router.replace(`/space/${spaceId}/debates`);
   }, [router, spaceId]);
 
+  /**
+   * Moves this tab on to the next step of a debate-again session — unless another of the viewer's
+   * tabs already has it, in which case this one offers the way in instead (GEO-3149). Once per
+   * destination, since both the live and the idle room paths can arrive here for the same one.
+   */
+  const followDestination = React.useCallback(
+    async (destination: string, claimKey: DebateTabClaimKey) => {
+      if (followedDestinationRef.current === destination) return;
+      followedDestinationRef.current = destination;
+      const go = await claimDebateEntry(claimKey);
+      if (!mountedRef.current) return;
+      if (go) {
+        router.replace(destination);
+        return;
+      }
+      setOpenElsewhere({ destination, claimKey });
+    },
+    [router]
+  );
+
+  const openHere = React.useCallback(() => {
+    if (!openElsewhere) return;
+    writeDebateTabClaim(openElsewhere.claimKey);
+    router.replace(openElsewhere.destination);
+  }, [openElsewhere, router]);
+
+  // Tells the viewer's other tabs that this one has the room, for as long as it holds the
+  // connection: they offer a way in rather than a second copy of the room (GEO-3149).
+  useHoldDebateTabClaim(debateRoomClaimKey(debateId), roomState !== 'idle');
+
   React.useEffect(() => {
     serverNowRef.current = serverClock.now;
     markCapturingRef.current = () => void markCapturing.mutateAsync().catch(() => undefined);
@@ -947,26 +1000,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const coordinator = createDebateRoomOwnershipCoordinator({
       debateId,
       userId: currentUserId,
-      onTakeoverRequested: ({ requesterPriority, ownerPriority }) => {
+      onTakeoverRequested: takeover => {
         const status = debateStatusRef.current;
         const preflightStillPending =
           status === 'preflight' &&
           recordingStartedAtRef.current === null &&
           (preflightEndsAtMsRef.current === null || serverNowRef.current() < preflightEndsAtMsRef.current);
-        // A focused tab may pull the connection from an unfocused one while nothing has been
-        // recorded yet. Once recording starts the owner keeps the room: releasing would tear down
-        // an in-flight MediaRecorder, which cannot finish persisting inside the takeover budget.
-        // The status gate also protects live debates whose recording never managed to start
+        // Once recording starts the owner keeps the room: releasing would tear down an in-flight
+        // MediaRecorder, which cannot finish persisting inside the takeover budget. The status gate
+        // inside also protects live debates whose recording never managed to start
         // (recordingStartedAtRef stays null when MediaRecorder is unavailable).
-        const focusHandoff =
-          requesterPriority === 2 &&
-          ownerPriority < 2 &&
-          recordingStartedAtRef.current === null &&
-          (status === 'connecting' || status === 'preflight');
-        // `ready` is the pre-debate intro (GEO-2819): nothing is recorded and nothing is timed, so
-        // whichever tab the user is actually looking at should be free to take it.
-        const canReleaseOwnership =
-          status === 'ready' || status === 'connecting' || preflightStillPending || focusHandoff;
+        const canReleaseOwnership = shouldReleaseDebateRoom({
+          ...takeover,
+          status,
+          recordingStarted: recordingStartedAtRef.current !== null,
+          preflightStillPending,
+        });
         if (!canReleaseOwnership) return false;
 
         const generation = connectionGenerationRef.current + 1;
@@ -1334,7 +1383,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, []);
 
   const connect = React.useCallback(
-    async (options: { takeover?: boolean } = {}) => {
+    async (options: { takeover?: boolean; automatic?: boolean } = {}) => {
       const generation = connectionGenerationRef.current + 1;
       connectionGenerationRef.current = generation;
       const connectionStartedAt = performance.now();
@@ -1348,7 +1397,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       let ownsConnection: boolean | undefined;
       let waitedForLocalRelease = false;
       if (options.takeover) {
-        ownsConnection = await ownership?.requestTakeover();
+        ownsConnection = await ownership?.requestTakeover({ automatic: options.automatic });
       } else {
         const acquisition = await ownership?.acquire();
         ownsConnection = acquisition?.acquired;
@@ -1788,48 +1837,65 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     void connect({ takeover: true });
   }, [connect]);
 
-  // A blocked tab the user focuses reclaims the debate by itself instead of dead-ending on
+  // A blocked tab the viewer turns to reclaims the debate by itself instead of dead-ending on
   // "already open in another tab" until they find the Continue button. Limited to same-browser
   // conflict sources: reclaiming across devices (livekit_duplicate_identity) would evict a call
   // the user may be actively holding on their phone, so that stays behind the explicit click.
+  //
+  // GEO-3149: "turns to" now includes merely becoming visible, not only focused, so a window beside
+  // a video call (visible, never focused) is not held off by a hidden tab. The request is marked
+  // automatic and the owner honours it only when this tab is nearer the viewer than the owner is —
+  // see `shouldReleaseDebateRoom` — so two visible windows cannot pass the room back and forth.
   React.useEffect(() => {
     if (
       roomState !== 'idle' ||
       (connectionConflictSource !== 'web_lock_blocked' && connectionConflictSource !== 'ownership_released')
     ) {
       // The conflict resolved or changed shape; the next episode gets a fresh attempt.
-      autoTakeoverSpentRef.current = false;
+      autoTakeoverAttemptedPriorityRef.current = null;
       return;
     }
-    const attemptTakeover = () => {
-      if (autoTakeoverSpentRef.current || autoTakeoverInFlightRef.current) return;
+    const attemptTakeover = (priority: number) => {
+      if (autoTakeoverInFlightRef.current) return;
+      // Only worth repeating once the tab has moved nearer the viewer than the last attempt; any
+      // other retry would ask the same owner the same question.
+      const attemptedAt = autoTakeoverAttemptedPriorityRef.current;
+      if (attemptedAt !== null && priority <= attemptedAt) return;
       // Mirror the "Continue here" button's status gate: past preflight the owner refuses anyway
       // — or worse, hands over a live debate whose recording never managed to start.
       const status = debateStatusRef.current;
       if (status !== 'ready' && status !== 'connecting' && status !== 'preflight') return;
-      autoTakeoverSpentRef.current = true;
+      autoTakeoverAttemptedPriorityRef.current = priority;
       autoTakeoverInFlightRef.current = true;
-      void connectRef.current({ takeover: true }).finally(() => {
+      void connectRef.current({ takeover: true, automatic: true }).finally(() => {
         autoTakeoverInFlightRef.current = false;
       });
     };
     const handleAttentionChange = () => {
-      if (debateRoomTabPriority() !== 2) {
-        // Leaving focus re-arms the next attempt; browsers that fire redundant focus or
-        // visibilitychange events while the tab stays focused therefore cannot double-connect.
-        autoTakeoverSpentRef.current = false;
+      const priority = debateRoomTabPriority();
+      if (priority === 0) {
+        // Hidden again re-arms the next attempt; browsers that fire redundant focus or
+        // visibilitychange events while the tab stays put therefore cannot double-connect.
+        autoTakeoverAttemptedPriorityRef.current = null;
         return;
       }
-      attemptTakeover();
+      const attemptedAt = autoTakeoverAttemptedPriorityRef.current;
+      if (attemptedAt !== null && priority < attemptedAt) {
+        // Lost focus but still visible: the next gain of focus is worth another try.
+        autoTakeoverAttemptedPriorityRef.current = priority;
+        return;
+      }
+      attemptTakeover(priority);
     };
     window.addEventListener('focus', handleAttentionChange);
     // A window losing focus to another application fires blur without any visibilitychange.
     window.addEventListener('blur', handleAttentionChange);
     document.addEventListener('visibilitychange', handleAttentionChange);
-    // The conflict can land while this tab is already focused (it lost the connect race to a
-    // background tab that navigated earlier); reclaim immediately rather than waiting for a
-    // focus transition that will never come.
-    if (debateRoomTabPriority() === 2) attemptTakeover();
+    // The conflict can land while this tab is already in front of the viewer (it lost the connect
+    // race to a background tab that navigated earlier); reclaim immediately rather than waiting for
+    // an attention change that will never come.
+    const initialPriority = debateRoomTabPriority();
+    if (initialPriority > 0) attemptTakeover(initialPriority);
     return () => {
       window.removeEventListener('focus', handleAttentionChange);
       window.removeEventListener('blur', handleAttentionChange);
@@ -1952,6 +2018,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const session = rematchQuery.data;
       if (debate.rematch_session_id && (!session || session.status === 'deciding')) return;
       finalizedDebateRef.current = debate.id;
+      // This tab held the room, so it is the one the next step belongs to unless the viewer turns
+      // to another. Claimed now rather than after the save below, which can take long enough for a
+      // background tab idling in this room to decide nobody is coming and walk in first (GEO-3149).
+      const nextClaimKey = session && rematchDestination(session) ? debateRematchDestinationClaimKey(session) : null;
+      if (nextClaimKey) writeDebateTabClaim(nextClaimKey);
       // A cancelled recording was discarded locally and deleted server-side, so there is nothing
       // left to save — but the rematch it anchored still needs its navigation.
       if (debate.recording_cancelled_at === null) {
@@ -1964,8 +2035,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setRoomState('idle');
       }
       const destination = rematchDestination(session);
-      if (destination) {
-        router.replace(destination);
+      if (destination && session) {
+        await followDestination(destination, debateRematchDestinationClaimKey(session));
         return;
       }
       returnFromDebate();
@@ -1977,8 +2048,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       localTracksRef,
       locallyThanking,
       rematchQuery.data,
+      followDestination,
       returnFromDebate,
-      router,
     ]
   );
 
@@ -2313,8 +2384,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // Same rule as the connected room above: hold the thank-you screen for its full countdown
     // unless both debaters have already pressed Let's go.
     if (locallyThanking && !bothPressedDebateAgain) return;
-    router.replace(idleRematchDestination);
-  }, [bothPressedDebateAgain, idleRematchDestination, locallyThanking, router]);
+    const session = rematchQuery.data;
+    if (!session) return;
+    // This tab is idle in the room — another tab held it, or it dropped — so it follows only if no
+    // tab nearer the viewer has already gone on (GEO-3149).
+    void followDestination(idleRematchDestination, debateRematchDestinationClaimKey(session));
+  }, [bothPressedDebateAgain, followDestination, idleRematchDestination, locallyThanking, rematchQuery.data]);
 
   React.useEffect(() => {
     if (!debate || storagePersistenceRequestedRef.current) return;
@@ -2519,6 +2594,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // With one, it is a dialog over the thank-you screen the opponent is about to return to, and
   // returning it here instead would unmount that screen and leave the backdrop on the app shell.
   if (recordingRemovalNotice && !rematchSurvivesCancellation) return recordingRemovalNotice;
+
+  if (openElsewhere) {
+    return (
+      <DebateOpenElsewhereScreen claim={debate?.claim.claim} onOpenHere={openHere} onGoBack={leaveConflictingRoom} />
+    );
+  }
 
   // The exit navigation is still running, and nothing else covers the app shell on this route.
   if (shouldHideTerminalDebate)

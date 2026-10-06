@@ -24,6 +24,7 @@ import { useDebateRequestAlert } from './debate-request-alert';
 import { useDebateRequestReceipts } from './debate-request-receipts';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
 import { debateRematchPath } from './debate-routes';
+import { debateRoomClaimKey, useForeignDebateTabClaim } from './debate-tab-claims';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -322,8 +323,14 @@ export function DebateCoordinator() {
   // out. Everything past `ready` falls through to the rejoin bar, which offers the way in without
   // offering a way to destroy it.
   const describable = (debate?.participants?.length ?? 0) >= 2;
+  // GEO-3149. When another of the viewer's tabs already has the room, this tab has nothing to ask:
+  // a modal here — with a Decline that cancels the debate for both — would sit in front of whichever
+  // tab the viewer next looks at. The rejoin bar offers the same way in without blocking anything.
+  const debateOpenInAnotherTab = useForeignDebateTabClaim(debate ? debateRoomClaimKey(debate.id) : null);
   const promptedDebate =
-    debate && debate.status === 'ready' && describable && !atDebate && !atDebateFlowPage ? debate : null;
+    debate && debate.status === 'ready' && describable && !atDebate && !atDebateFlowPage && !debateOpenInAnotherTab
+      ? debate
+      : null;
 
   // Held until a navigation commits, then released. Arriving at the room is the expected end, and
   // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
@@ -447,7 +454,7 @@ export function DebateCoordinator() {
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
       {debate && !atDebate && !atDebateFlowPage && !promptedDebate && !activity?.rematch && (
-        <DebateRejoinBar debate={debate} />
+        <DebateRejoinBar debate={debate} openInAnotherTab={debateOpenInAnotherTab} />
       )}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
           hub's Requests tab, and the rematch routing effect above walks them into the claim picker

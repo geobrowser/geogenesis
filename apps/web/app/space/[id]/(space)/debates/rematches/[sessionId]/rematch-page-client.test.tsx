@@ -3942,11 +3942,53 @@ describe('DebateRematchPageClient', () => {
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`));
     expect(mocks.markEnteringDebate).toHaveBeenCalledWith('debate-9');
-    expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`);
     expect(mocks.markEnteringDebate.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.replace.mock.invocationCallOrder[0]!
     );
+  });
+
+  // GEO-3149. Every tab on the picker sees the conversion; only one may walk into the room.
+  describe('with the picker open in more than one tab', () => {
+    afterEach(() => {
+      delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
+    });
+
+    it('stays put and offers the way in when another tab already took the debate', async () => {
+      Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => 'hidden' });
+      localStorage.setItem(
+        'geo:debate-tab-claim:debate:debate-9',
+        JSON.stringify({ tabId: 'the-other-tab', at: Date.now() })
+      );
+      mocks.session = session({ status: 'converted', converted_debate_id: 'debate-9' });
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      expect(
+        await screen.findByText('Your debate is open in another tab.', {}, { timeout: 3_000 })
+      ).toBeInTheDocument();
+      expect(mocks.replace).not.toHaveBeenCalled();
+      expect(mocks.markEnteringDebate).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Open it here' }));
+      expect(mocks.markEnteringDebate).toHaveBeenCalledWith('debate-9');
+      expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`);
+    });
+
+    it('walks in from the focused tab even when another tab claimed the debate', async () => {
+      vi.spyOn(document, 'hasFocus').mockReturnValue(true);
+      localStorage.setItem(
+        'geo:debate-tab-claim:debate:debate-9',
+        JSON.stringify({ tabId: 'the-other-tab', at: Date.now() })
+      );
+      mocks.session = session({ status: 'converted', converted_debate_id: 'debate-9' });
+
+      render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`));
+      expect(screen.queryByText('Your debate is open in another tab.')).not.toBeInTheDocument();
+    });
   });
 
   // geo-chat stores `debates` as the source space of every room session and every profile
@@ -3972,7 +4014,7 @@ describe('DebateRematchPageClient', () => {
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`);
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates/debate-9`));
   });
 
   // The component is reused across sessions rather than remounted, so a remembered space has to
