@@ -93,6 +93,7 @@ function chipsFor(slots: FreeSlot[], all: FreeSlot[] | undefined): PersonSchedul
     slots: slots.slice(0, INLINE_SLOTS).map(slot => ({
       start: new Date(slot.start).toISOString(),
       end: new Date(slot.start + SLOT_MS).toISOString(),
+      viewerFree: slot.viewerFree,
     })),
     truncated: slots.length > INLINE_SLOTS || (all?.length ?? 0) > slots.length,
   };

@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { type AnalyticsProperties } from '~/core/analytics';
@@ -23,6 +24,7 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
+import { MUTUAL_SLOT } from '~/partials/availability/peer-availability';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
 import {
@@ -68,7 +70,12 @@ const EMPTY_USER_IDS: ReadonlySet<string> = new Set();
 /** Shared times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
 const INLINE_SLOTS = 3;
 
-export type PersonSchedule = { slots: ScheduleOverlapSlot[]; truncated: boolean };
+/**
+ * `viewerFree` marks a chip as a time the viewer is free for too, drawn green the way the booking
+ * modal draws it. Unset means unknown, and the chip stays plain: the People tab's chips are all
+ * shared times already, so it never sets it.
+ */
+export type PersonSchedule = { slots: (ScheduleOverlapSlot & { viewerFree?: boolean })[]; truncated: boolean };
 
 /**
  * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
@@ -799,10 +806,13 @@ function SharedTimes({
         <button
           key={slot.start}
           type="button"
-          aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}`}
+          aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}${slot.viewerFree ? ", you're free too" : ''}`}
           {...hubAnalyticsAttributes('Shared time', 'open_peer_availability')}
           onClick={event => onPick(slot.start, event.currentTarget)}
-          className="rounded-full border border-grey-02 px-2 py-0.5 text-footnote text-text transition-colors hover:border-text"
+          className={cx(
+            'rounded-full border px-2 py-0.5 text-footnote text-text transition-colors hover:border-text',
+            slot.viewerFree ? MUTUAL_SLOT : 'border-grey-02'
+          )}
         >
           {formatSlot(slot.start)}
         </button>

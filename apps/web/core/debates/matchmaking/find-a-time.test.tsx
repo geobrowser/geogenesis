@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   isPhone: false,
   searchParams: new URLSearchParams(),
   scheduleIsSet: false,
+  blocks: [] as unknown[],
+  scheduleZone: 'UTC',
   roster: [] as DebatePerson[],
   schedulable: undefined as SchedulablePeopleResponse | undefined,
   schedulableLoading: false,
@@ -48,9 +50,9 @@ vi.mock('~/design-system/prefetch-link', () => ({
 vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'me' }),
   useDebateSchedule: () => ({
-    blocks: [],
+    blocks: mocks.blocks,
     isSet: mocks.scheduleIsSet,
-    data: { is_set: mocks.scheduleIsSet, schedule: { timezone: 'UTC' } },
+    data: { is_set: mocks.scheduleIsSet, schedule: { timezone: mocks.scheduleZone } },
     isLoading: false,
     isError: false,
     refetch: vi.fn(),
@@ -151,6 +153,8 @@ beforeEach(() => {
     isPhone: false,
     searchParams: new URLSearchParams(),
     scheduleIsSet: false,
+    blocks: [],
+    scheduleZone: 'UTC',
     roster: [],
     schedulable: response([free('11', 'Elena', [thursdaySix])]),
     schedulableLoading: false,
@@ -246,6 +250,20 @@ describe('FindATime', () => {
     fireEvent.click(within(thursday).getByRole('button', { name: /Elena/ }).parentElement!);
     expect(screen.getByRole('dialog', { name: /Free Thursday/ })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Book Elena' })).not.toBeInTheDocument();
+  });
+
+  it('marks the chips for times the viewer is free too, as the booking modal does', () => {
+    mocks.scheduleIsSet = true;
+    // Thursday 18:00-18:30 only, saved in the browser's own zone so it means 18:00 here.
+    mocks.blocks = [{ id: 'r', kind: 'recurring', weekday: 3, start: 18 * 60, end: 18 * 60 + 30 }];
+    mocks.scheduleZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    mocks.schedulable = response([free('11', 'Elena', [thursdaySix])], { viewer_has_schedule: true });
+    render(<FindATime />);
+
+    fireEvent.click(cell(/Thursday.*free: Elena/));
+    const list = screen.getByRole('dialog', { name: /Free Thursday/ });
+    expect(within(list).getByRole('button', { name: /6:00 PM, you're free too$/ })).toHaveClass('border-green');
+    expect(within(list).getByRole('button', { name: /6:30 PM$/ })).not.toHaveClass('border-green');
   });
 
   it("draws the viewer's own requests and booked debates on the week", () => {
