@@ -24,7 +24,7 @@ vi.mock('../hooks', async importOriginal => ({
 
 const { GeoChatRequestError } = await import('../api');
 const { LOBBY_HEARTBEAT_MS, useDebateLobby, useLobbyPresence } = await import('./hooks');
-const { requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
+const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
 
 /** A presence call that resolves when the test says so. */
@@ -229,6 +229,27 @@ describe('useLobbyPresence', () => {
     const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
     expect(joins()).toHaveLength(1);
+  });
+
+  it('does not let a rejoin left over from an earlier debate skip the prompt', async () => {
+    // A Back press whose leave failed, then an arrival that never consumed it.
+    requestLobbyRejoin('lobby1');
+    const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    act(() => routeIntoDebate(vi.fn()));
+    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+    unmount();
+
+    const back = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
+    await waitFor(() => expect(back.result.current.state.status).toBe('stepped_out'));
+    expect(joins()).toHaveLength(1);
+  });
+
+  it('clears a rejoin flag on an arrival that was not stepped out', async () => {
+    requestLobbyRejoin('lobby1');
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    expect(consumeLobbyRejoin('lobby1')).toBe(false);
   });
 
   it('still waits when the rejoin was asked for another lobby', async () => {

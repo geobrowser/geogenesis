@@ -47,11 +47,20 @@ export function requestLobbyRejoin(lobbyId: string) {
 
 /** Whether a rejoin was requested for this lobby; clears it either way. */
 export function consumeLobbyRejoin(lobbyId: string): boolean {
+  let requested: string | null = null;
   try {
-    const requested = window.sessionStorage.getItem(rejoinKey);
-    window.sessionStorage.removeItem(rejoinKey);
-    return requested === lobbyId;
+    requested = window.sessionStorage.getItem(rejoinKey);
   } catch {
     return false;
+  }
+  clearLobbyRejoin();
+  return requested === lobbyId;
+}
+
+export function clearLobbyRejoin() {
+  try {
+    window.sessionStorage.removeItem(rejoinKey);
+  } catch {
+    // Nothing to clear when storage is unavailable.
   }
 }
