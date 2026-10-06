@@ -2,11 +2,13 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { useAtom } from 'jotai';
 
 import { type AnalyticsProperties } from '~/core/analytics';
 import { personProfileOpened } from '~/core/analytics';
-import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
+import { SLOT_MINUTES } from '~/core/availability/blocks';
+import { PEER_SCHEDULE_DAYS, slotStarts } from '~/core/availability/peer-schedule';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -23,6 +25,7 @@ import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AvailabilityModal } from '~/partials/availability/availability-modal';
+import { MUTUAL_SLOT, PEER_ONLY_SLOT } from '~/partials/availability/peer-availability';
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
 import { activeDebate } from '../activity-state';
@@ -77,10 +80,50 @@ const EMPTY_MATCHES: ClaimMatch[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
 const EMPTY_USER_IDS: ReadonlySet<string> = new Set();
 
-/** Shared times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
+/** Times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
 const INLINE_SLOTS = 3;
 
-type PersonSchedule = { slots: ScheduleOverlapSlot[]; truncated: boolean };
+/** `viewerIsFree` as on the booking week's chips; unset when the viewer has no hours to compare. */
+type ChipSlot = ScheduleOverlapSlot & { viewerIsFree?: boolean };
+
+type PersonSchedule = { slots: ChipSlot[]; truncated: boolean };
+
+/**
+ * The chips on an offline row (GEO-3154). Times they share with the viewer when there are any, as
+ * before. Otherwise their own next free times, one per stretch so three chips are not one afternoon,
+ * which is all a viewer with no schedule can be offered.
+ */
+function personSchedule(
+  candidate: SchedulablePerson,
+  viewerHasSchedule: boolean,
+  now: number,
+  weekEnds: number
+): PersonSchedule {
+  const upcoming = (start: number) => start > now && start < weekEnds;
+  const shared = candidate.slots.filter(slot => upcoming(Date.parse(slot.start)));
+  if (shared.length > 0 || !candidate.their_windows) {
+    return {
+      slots: shared.slice(0, INLINE_SLOTS).map(slot => ({ ...slot, viewerIsFree: viewerHasSchedule || undefined })),
+      truncated: candidate.truncated || shared.length > INLINE_SLOTS,
+    };
+  }
+
+  // geo-chat drops windows that have started, but one can start between fetches: its first chip is
+  // then the next half hour still ahead, on the same grid the week draws.
+  const own: ChipSlot[] = [];
+  let available = 0;
+  for (const window of candidate.their_windows) {
+    const starts = slotStarts(window, { after: now }).filter(instant => upcoming(instant.getTime()));
+    available += starts.length;
+    if (starts.length === 0 || own.length === INLINE_SLOTS) continue;
+    own.push({
+      start: starts[0].toISOString(),
+      end: new Date(starts[0].getTime() + SLOT_MINUTES * 60_000).toISOString(),
+      viewerIsFree: viewerHasSchedule ? window.viewer_free : undefined,
+    });
+  }
+  return { slots: own, truncated: available > own.length };
+}
 
 /**
  * An offline person drawn in the roster's shape, so search, the space filter and match counts treat
@@ -106,8 +149,8 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
  * `ProfileDebateButton` on a person's home space — `DebateCoordinator` owns the resulting dialog.
  *
  * With "Online only" off, the default, offline people with free time this week are listed too,
- * ranked by matches alongside everyone online, each with any times they share with the viewer and a
- * Schedule button in place of the request (GEO-2937).
+ * ranked by matches alongside everyone online, each with a few of their free times and a Schedule
+ * button in place of the request (GEO-2937). That includes a viewer with no hours set (GEO-3154).
  *
  * `dense` (live rail): no sticky chrome; search stays so you can still find a name.
  */
@@ -185,10 +228,11 @@ export function PeopleTab({
     }
 
     const onRoster = new Set(onlinePeople.map(person => normId(person.user_id)));
-    // geo-chat lists everyone with free time this week, online or not, and nobody while the viewer
-    // has no hours of their own. An away person on it can be booked; one off it would open an empty
-    // week, or skip the viewer's own "set your availability" gate, so their row offers no Schedule.
+    // geo-chat lists everyone with free time this week, online or not, whether or not the viewer
+    // has hours of their own (GEO-3153). An away person on it can be booked; one off it has no free
+    // time, so their week would open empty and their row offers no Schedule.
     const schedulable = new Set(schedulableQuery.data.people.map(candidate => normId(candidate.user.user_id)));
+    const viewerHasSchedule = schedulableQuery.data.viewer_has_schedule;
     // geo-chat's window follows the UTC date, which west of UTC can run a day past the modal's week.
     const today = new Date(now);
     const weekEnds = new Date(today.getFullYear(), today.getMonth(), today.getDate() + PEER_SCHEDULE_DAYS).getTime();
@@ -196,16 +240,9 @@ export function PeopleTab({
     for (const candidate of schedulableQuery.data.people) {
       const key = normId(candidate.user.user_id);
       if (onRoster.has(key) || isExcludedFromPeopleTab(candidate.user.profile_space_id)) continue;
-      const upcoming = candidate.slots.filter(slot => {
-        const start = Date.parse(slot.start);
-        return start > now && start < weekEnds;
-      });
-      // Kept with no shared times left: geo-chat lists everyone with free time, and Schedule
+      // Kept with no times left to draw: geo-chat lists everyone with free time, and Schedule
       // still opens their week, where the viewer can book outside their own hours.
-      byUser.set(key, {
-        slots: upcoming.slice(0, INLINE_SLOTS),
-        truncated: candidate.truncated || upcoming.length > INLINE_SLOTS,
-      });
+      byUser.set(key, personSchedule(candidate, viewerHasSchedule, now, weekEnds));
       offline.push(schedulableAsPerson(candidate));
     }
     return { offlinePeople: offline, schedulesByUser: byUser, schedulableUserIds: schedulable };
@@ -482,7 +519,7 @@ export function PeopleTab({
         {viewerHasNoSchedule ? <SetAvailabilityNotice /> : null}
         {showOffline && schedulableQuery.error ? (
           <Text as="p" variant="footnote" color="grey-04" className="pb-2">
-            Couldn&rsquo;t load who&rsquo;s free at your times.{' '}
+            Couldn&rsquo;t load who&rsquo;s free this week.{' '}
             <button type="button" className="underline" onClick={() => void schedulableQuery.refetch()}>
               Retry
             </button>
@@ -510,7 +547,9 @@ export function PeopleTab({
                 ? 'Nobody available matches that search.'
                 : 'Nobody available matches those filters.'
               : showOffline
-                ? 'Nobody is online or free at the same times as you.'
+                ? // Not "at the same times as you": geo-chat lists everyone free this week, shared
+                  // or not, and a viewer with no hours has no times to share (GEO-3154).
+                  'Nobody is online or free to debate this week.'
                 : 'Nobody is available to debate right now.'
           }
           // GEO-2840 scopes this to the nobody-online case, which is exactly the other side of that
@@ -651,9 +690,9 @@ function PersonRow({
   matchesBySpace?: ReadonlyMap<string, number>;
   claimNamesById: ReadonlyMap<string, string | null>;
   claimNamesLoading: boolean;
-  /** Set only for an offline row: their upcoming times shared with the viewer. */
+  /** Set only for an offline row: a few of their upcoming free times, shared ones first. */
   schedule?: PersonSchedule;
-  /** Whether an away person has free time the viewer can book, which needs both to have hours set. */
+  /** Whether an away person has free time the viewer can book. The viewer needs no hours of their own. */
   canScheduleAway: boolean;
   /** Fetched once for the whole list, so a row never asks for its own. Null until that lands. */
   record: PersonRecord | null;
@@ -882,8 +921,11 @@ function PersonRow({
 }
 
 /**
- * The first few times an offline person and the viewer are both free, in the viewer's zone. A pick
- * opens their week with that slot selected, which is where the request is confirmed.
+ * A few of an offline person's free times, in the viewer's zone. A pick opens their week with that
+ * slot selected, which is where the request is confirmed.
+ *
+ * For a viewer with hours, the week's own looks say which are shared: green when both are free,
+ * dashed when only they are. A viewer with no hours shares nothing, so their chips stay plain.
  */
 function SharedTimes({
   personName,
@@ -902,10 +944,20 @@ function SharedTimes({
         <button
           key={slot.start}
           type="button"
-          aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}`}
-          {...hubAnalyticsAttributes('Shared time', 'open_peer_availability')}
+          aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}${slot.viewerIsFree ? ", you're both free" : ''}`}
+          data-viewer-free={slot.viewerIsFree || undefined}
+          // Only a time the viewer is free for too is shared, which keeps the series these chips have
+          // always fed. A viewer with no hours (`viewerIsFree` unset) shares none.
+          {...hubAnalyticsAttributes(slot.viewerIsFree ? 'Shared time' : 'Free time', 'open_peer_availability')}
           onClick={event => onPick(slot.start, event.currentTarget)}
-          className="rounded-full border border-grey-02 px-2 py-0.5 text-footnote text-text transition-colors hover:border-text"
+          className={cx(
+            'rounded-full border px-2 py-0.5 text-footnote transition-colors hover:border-text',
+            slot.viewerIsFree === undefined
+              ? 'border-grey-02 text-text'
+              : slot.viewerIsFree
+                ? MUTUAL_SLOT
+                : PEER_ONLY_SLOT
+          )}
         >
           {formatSlot(slot.start)}
         </button>
@@ -940,8 +992,8 @@ function formatSlot(iso: string, now: Date = new Date()): string {
 }
 
 /**
- * Shown with "Online only" off when the viewer has no availability saved: geo-chat then matches
- * nobody, and the list would otherwise read as nobody being free (GEO-2937, GEO-2936).
+ * Shown with "Online only" off when the viewer has no availability saved (GEO-2937, GEO-2936).
+ * Offline people are listed for them anyway (GEO-3154), so it says what hours do get them instead.
  */
 function SetAvailabilityNotice() {
   const [open, setOpen] = React.useState(false);
@@ -952,7 +1004,7 @@ function SetAvailabilityNotice() {
   return (
     <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-grey-01 p-3">
       <Text as="p" variant="footnote">
-        Set your availability to see offline people you can schedule a debate with.
+        Set your availability so others can schedule a debate with you, and to see which times you share.
       </Text>
       <HubPillButton
         analyticsLabel="Debate hub Set availability"

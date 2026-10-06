@@ -454,7 +454,7 @@ describe('DebatesHubPanel', () => {
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
     // Signed in, the list includes offline people free at shared times, so the empty copy says so.
-    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
   });
 
   it('toggles availability from the panel header', () => {
