@@ -22,6 +22,7 @@ import {
   listDebatePeople,
   listMatchmakingClaims,
   listNotInterestedClaims,
+  listUpcomingDebateRooms,
   markClaimNotInterested,
   notifyClaimResponseIndexed,
   resetGeoChatSession,
@@ -200,6 +201,21 @@ describe('debate availability', () => {
         body: JSON.stringify({ available_to_debate: false }),
       })
     );
+  });
+});
+
+describe('upcoming debate rooms', () => {
+  it('asks for reminded lobbies alongside debate rooms', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ rooms: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await listUpcomingDebateRooms(vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/me/debate-rooms?include=lobbies', expect.anything());
   });
 });
 

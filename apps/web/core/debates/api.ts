@@ -1944,7 +1944,8 @@ export async function listUpcomingDebateRooms(
   accountKey: string | null,
   signal?: AbortSignal
 ) {
-  return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms', {
+  // Lobby rows are opt-in, so bundles that predate lobbies never see them; `lobbyJoining` gates them here.
+  return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms?include=lobbies', {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
