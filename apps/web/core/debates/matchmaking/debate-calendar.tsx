@@ -45,6 +45,7 @@ import {
   cellOf,
   freeSlotsByUser,
   ownDebates,
+  viewerFreeCellKeys,
   viewerFreeSlots,
   weekCells,
   weekDays,
@@ -152,7 +153,7 @@ export function DebateCalendar() {
           <ArrowLeft />
           Back to Debates
         </Link>
-        <HubHeaderControls />
+        <HubHeaderControls analyticsSurface="calendar" />
       </header>
 
       <div className="flex flex-col gap-1 border-b border-grey-02 px-6 pb-3 md:px-4">
@@ -349,6 +350,7 @@ function DebateCalendarBody({
   }, [slotsByUser, viewerFree, viewerHasSchedule]);
 
   const days = React.useMemo(() => weekDays(weekStart(new Date(now), weekOffset)), [now, weekOffset]);
+  const viewerFreeCells = React.useMemo(() => viewerFreeCellKeys(viewerFree, days), [days, viewerFree]);
   const cells = React.useMemo(
     () => weekCells(slotsWithViewer, days, { include, onlyViewerFree: viewerHasSchedule && onlyViewerFree, order }),
     [days, include, onlyViewerFree, order, slotsWithViewer, viewerHasSchedule]
@@ -454,6 +456,7 @@ function DebateCalendarBody({
       return (
         <PersonRow
           key={person.user_id}
+          analyticsSurface="calendar"
           person={person}
           matches={matches}
           matchesBySpace={
@@ -518,7 +521,9 @@ function DebateCalendarBody({
   return (
     <div className="flex flex-col">
       <div className="flex flex-col gap-3 border-b border-grey-02 px-6 py-3 md:px-4">
-        {outboundChallenge ? <DebateChallengeCard challenge={outboundChallenge} role="requester" /> : null}
+        {outboundChallenge ? (
+          <DebateChallengeCard challenge={outboundChallenge} role="requester" analyticsSurface="calendar" />
+        ) : null}
         <SpaceTopicFilters
           analyticsSurface="calendar"
           spaceIds={spaceIds}
@@ -657,7 +662,7 @@ function DebateCalendarBody({
               days={days}
               cells={cells}
               debates={debates}
-              viewerFree={viewerHasSchedule ? viewerFree : null}
+              viewerFreeCells={viewerHasSchedule ? viewerFreeCells : null}
               peopleByUser={peopleByUser}
               slotsByUser={slotsByUser}
               opponentName={opponentName}

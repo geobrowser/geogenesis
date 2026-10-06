@@ -17,7 +17,7 @@ import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-p
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth, useUpdateDebateAvailability } from '../hooks';
-import { hubAnalyticsAttributes } from './hub-analytics';
+import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
 import { hubPillClassName } from './hub-pill-button';
 
 /** How long "Link copied" stays before the row reads as a link again. */
@@ -30,15 +30,18 @@ const COPIED_MS = 2000;
  */
 export function HubHeaderControls({
   scheduleButtonRef,
+  analyticsSurface = 'hub',
   children,
 }: {
   /** The set-schedule banner sends focus here when it retires. */
   scheduleButtonRef?: React.RefObject<HTMLButtonElement | null>;
+  /** Whose clicks these are: the hub's, or the calendar's on its own page. */
+  analyticsSurface?: DebateAnalyticsSurface;
   children?: React.ReactNode;
 }) {
   return (
     <div className="flex min-w-0 items-center gap-1">
-      <AvailabilityMenu triggerRef={scheduleButtonRef} />
+      <AvailabilityMenu triggerRef={scheduleButtonRef} analyticsSurface={analyticsSurface} />
       {children}
     </div>
   );
@@ -56,7 +59,13 @@ export function HubHeaderControls({
  * With no weekly times saved, the pill carries the brand-purple dot the old calendar icon did, so a
  * viewer who closed the set-schedule banner still has something quiet asking.
  */
-function AvailabilityMenu({ triggerRef }: { triggerRef?: React.RefObject<HTMLButtonElement | null> }) {
+function AvailabilityMenu({
+  triggerRef,
+  analyticsSurface,
+}: {
+  triggerRef?: React.RefObject<HTMLButtonElement | null>;
+  analyticsSurface: DebateAnalyticsSurface;
+}) {
   const { authenticated } = useGeoChatAuth();
   const { data: activity } = useDebateActivity(authenticated);
   const updateAvailability = useUpdateDebateAvailability();
@@ -81,7 +90,7 @@ function AvailabilityMenu({ triggerRef }: { triggerRef?: React.RefObject<HTMLBut
             ref={openerRef}
             type="button"
             aria-label={`Your availability: ${available ? 'available' : 'not available'}${scheduleUnset ? ', weekly times not set' : ''}`}
-            {...hubAnalyticsAttributes('Availability menu', 'open_availability_menu')}
+            {...debateActionAnalyticsAttributes(analyticsSurface, 'Availability menu', 'open_availability_menu')}
             className={hubPillClassName('secondary', cx('relative gap-1.5 px-2.5', !available && 'text-grey-04'))}
           >
             <span aria-hidden className={cx('h-2 w-2 shrink-0 rounded-full', available ? 'bg-green' : 'bg-grey-03')} />
@@ -138,7 +147,7 @@ function AvailabilityMenu({ triggerRef }: { triggerRef?: React.RefObject<HTMLBut
               {/* One row, one press, the way the copy-link row below it works. */}
               <button
                 type="button"
-                {...hubAnalyticsAttributes('Schedule calendar', 'open_debate_schedule')}
+                {...debateActionAnalyticsAttributes(analyticsSurface, 'Schedule calendar', 'open_debate_schedule')}
                 onClick={() => {
                   setOpen(false);
                   setEditing(true);

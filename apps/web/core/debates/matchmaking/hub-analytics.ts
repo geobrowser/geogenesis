@@ -58,17 +58,23 @@ const FILTER_INTENTS = {
   calendar: 'filter_debate_calendar',
 } as const satisfies Record<DebateAnalyticsSurface, string>;
 
+/**
+ * A control's analytics label on a surface, `Debate hub Request debate` on the hub. For a label
+ * pinned to keep a series going through a copy change, so every surface pins it the same way.
+ */
+export function debateAnalyticsLabel(surface: DebateActionAnalyticsSurface, action: string) {
+  return `${ACTION_SURFACE_ANALYTICS[surface].labelPrefix} ${action}`;
+}
+
 /** Stable metadata for actions shared across debate surfaces. */
 export function debateActionAnalyticsAttributes(
   surface: DebateActionAnalyticsSurface,
   action: string,
   intent?: string
 ) {
-  const analytics = ACTION_SURFACE_ANALYTICS[surface];
-
   return {
-    'data-geo-analytics-label': `${analytics.labelPrefix} ${action}`,
-    'data-geo-analytics-intent': intent ?? analytics.actionIntent,
+    'data-geo-analytics-label': debateAnalyticsLabel(surface, action),
+    'data-geo-analytics-intent': intent ?? ACTION_SURFACE_ANALYTICS[surface].actionIntent,
   } as const;
 }
 

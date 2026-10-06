@@ -50,7 +50,7 @@ import { DebateHoursNote } from './debate-hours-note';
 import type { ClaimMatch } from './disagreement-counts';
 import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
-import { hubAnalyticsAttributes } from './hub-analytics';
+import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes, debateAnalyticsLabel } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
@@ -568,6 +568,7 @@ export function PersonRow({
   disabledReason,
   onRequireSignIn,
   onSeeTimes,
+  analyticsSurface = 'hub',
 }: {
   person: DebatePerson;
   /** Distinct claims on which this person and the viewer hold comparable, opposite positions. */
@@ -606,6 +607,8 @@ export function PersonRow({
    * would fail at the token exchange with an error the viewer can do nothing about.
    */
   onRequireSignIn?: (properties?: AnalyticsProperties) => void;
+  /** Whose clicks these are. The People tab's are the hub's; the calendar passes its own. */
+  analyticsSurface?: DebateAnalyticsSurface;
   onSeeTimes: (
     peer: { userId: string; name: string },
     opener: HTMLElement | null,
@@ -678,7 +681,9 @@ export function PersonRow({
           <Link
             href={profileHref}
             onClick={() =>
-              personProfileOpened(person.profile_space_id, null, { interaction_surface: 'debates_hub_people' })
+              personProfileOpened(person.profile_space_id, null, {
+                interaction_surface: analyticsSurface === 'calendar' ? 'debate_calendar' : 'debates_hub_people',
+              })
             }
             className="min-w-0"
           >
@@ -706,6 +711,7 @@ export function PersonRow({
         ) : null}
         {chips ? (
           <SharedTimes
+            analyticsSurface={analyticsSurface}
             personName={speakerLabel(person)}
             schedule={chips}
             onPick={(start, opener) =>
@@ -731,7 +737,7 @@ export function PersonRow({
             // Every row carries this control, so the visible label alone leaves a screen reader or
             // voice control with a list of identical targets.
             aria-label={`See times for ${speakerLabel(person)}`}
-            {...hubAnalyticsAttributes('See times', 'open_peer_availability')}
+            {...debateActionAnalyticsAttributes(analyticsSurface, 'See times', 'open_peer_availability')}
             onClick={event =>
               onRequireSignIn
                 ? onRequireSignIn({
@@ -757,7 +763,8 @@ export function PersonRow({
           // Never disabled by the viewer's live request state, for the same reason "See times" is not.
           <HubPillButton
             aria-label={`Schedule a debate with ${speakerLabel(person)}`}
-            analyticsLabel="Debate hub Schedule debate"
+            analyticsSurface={analyticsSurface}
+            analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Schedule debate')}
             analyticsIntent="open_peer_availability"
             onClick={event => openSchedule(event.currentTarget)}
           >
@@ -769,7 +776,8 @@ export function PersonRow({
             // pill and their own text-derived analytics labels.
             variant={unrequestable ? 'secondary' : 'primary'}
             // Pinned to the old label so the analytics series survives the copy change to "Debate now".
-            analyticsLabel={unrequestable ? undefined : 'Debate hub Request debate'}
+            analyticsSurface={analyticsSurface}
+            analyticsLabel={unrequestable ? undefined : debateAnalyticsLabel(analyticsSurface, 'Request debate')}
             onClick={() =>
               onRequireSignIn
                 ? onRequireSignIn({
@@ -825,10 +833,12 @@ export function PersonRow({
  * dashed when only they are. A viewer with no hours shares nothing, so their chips stay plain.
  */
 function SharedTimes({
+  analyticsSurface,
   personName,
   schedule,
   onPick,
 }: {
+  analyticsSurface: DebateAnalyticsSurface;
   personName: string;
   schedule: PersonSchedule;
   onPick: (start: string | undefined, opener: HTMLElement) => void;
@@ -845,7 +855,11 @@ function SharedTimes({
           data-viewer-free={slot.viewerIsFree || undefined}
           // Only a time the viewer is free for too is shared, which keeps the series these chips have
           // always fed. A viewer with no hours (`viewerIsFree` unset) shares none.
-          {...hubAnalyticsAttributes(slot.viewerIsFree ? 'Shared time' : 'Free time', 'open_peer_availability')}
+          {...debateActionAnalyticsAttributes(
+            analyticsSurface,
+            slot.viewerIsFree ? 'Shared time' : 'Free time',
+            'open_peer_availability'
+          )}
           onClick={event => onPick(slot.start, event.currentTarget)}
           className={cx(
             'rounded-full border px-2 py-0.5 text-footnote transition-colors hover:border-text',
@@ -863,7 +877,7 @@ function SharedTimes({
         <button
           type="button"
           aria-label={`More times for ${personName}`}
-          {...hubAnalyticsAttributes('More times', 'open_peer_availability')}
+          {...debateActionAnalyticsAttributes(analyticsSurface, 'More times', 'open_peer_availability')}
           onClick={event => onPick(undefined, event.currentTarget)}
           className="px-1 text-footnote text-grey-04 transition-colors hover:text-text"
         >
@@ -902,6 +916,8 @@ export function SetAvailabilityNotice({
   const [open, setOpen] = React.useState(false);
   const { blocks, isError, refetch } = useDebateSchedule();
   const saveSchedule = useSaveDebateSchedule({ surface });
+  // The prompt's clicks belong to the screen it sits on, as its saves already do.
+  const analyticsSurface: DebateAnalyticsSurface = surface === 'calendar' ? 'calendar' : 'hub';
   const openerRef = React.useRef<HTMLElement | null>(null);
 
   return (
@@ -910,7 +926,8 @@ export function SetAvailabilityNotice({
         {message}
       </Text>
       <HubPillButton
-        analyticsLabel="Debate hub Set availability"
+        analyticsSurface={analyticsSurface}
+        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Set availability')}
         analyticsIntent="open_debate_schedule"
         onClick={event => {
           openerRef.current = event.currentTarget;

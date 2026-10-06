@@ -9,7 +9,7 @@ import {
   firstBusyHour,
   freeSlotsByUser,
   ownDebates,
-  viewerFreeInHour,
+  viewerFreeCellKeys,
   viewerFreeSlots,
   weekCells,
   weekDays,
@@ -150,8 +150,10 @@ describe('viewerFreeSlots', () => {
     expect(free.has(Date.UTC(2026, 9, 8, 19, 0))).toBe(false);
     // Next week too.
     expect(free.has(Date.UTC(2026, 9, 15, 18, 0))).toBe(true);
-    expect(viewerFreeInHour(free, Date.UTC(2026, 9, 8, 18, 0))).toBe(true);
-    expect(viewerFreeInHour(free, Date.UTC(2026, 9, 8, 17, 0))).toBe(false);
+    const keys = viewerFreeCellKeys(free, weekDays(weekStart(NOW, 0)));
+    const thursday = cellOf(Date.UTC(2026, 9, 8, 18, 0), weekDays(weekStart(NOW, 0)));
+    expect(thursday && keys.has(`${thursday.day}:${thursday.hour}`)).toBe(true);
+    expect(keys.size).toBe(1);
   });
 
   it('is empty without a schedule', () => {

@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   promptSignIn: vi.fn(),
   capture: vi.fn(),
+  personProfileOpened: vi.fn(),
+  activity: undefined as unknown,
   isPhone: false,
   searchParams: new URLSearchParams(),
   scheduleIsSet: false,
@@ -30,7 +32,7 @@ const mocks = vi.hoisted(() => ({
   openHub: vi.fn(),
 }));
 
-vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: vi.fn() }));
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
 vi.mock('next/navigation', () => ({ useSearchParams: () => mocks.searchParams, usePathname: () => '/' }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
@@ -40,8 +42,25 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => ({
   useSpaceLabels: () => ({ labelsById: new Map() }),
 }));
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href, className }: { children: React.ReactNode; href: string; className?: string }) => (
-    <a href={href} className={className}>
+  PrefetchLink: ({
+    children,
+    href,
+    className,
+    onClick,
+  }: {
+    children: React.ReactNode;
+    href: string;
+    className?: string;
+    onClick?: () => void;
+  }) => (
+    <a
+      href={href}
+      className={className}
+      onClick={event => {
+        event.preventDefault();
+        onClick?.();
+      }}
+    >
       {children}
     </a>
   ),
@@ -58,7 +77,9 @@ vi.mock('../hooks', () => ({
     refetch: vi.fn(),
   }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn() }),
-  useDebateActivity: () => ({ data: undefined }),
+  useDebateActivity: () => ({ data: mocks.activity }),
+  useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
+  useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
 }));
 vi.mock('./hooks', () => ({
@@ -173,6 +194,7 @@ beforeEach(() => {
     schedulableOptions: [],
     scheduled: [],
     matchesByProfile: new Map(),
+    activity: undefined,
     bookingProps: null,
   });
   mocks.capture.mockReset();
@@ -312,6 +334,51 @@ describe('DebateCalendar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Next week' }));
 
     expect(screen.queryByRole('dialog', { name: /Free Thursday/ })).not.toBeInTheDocument();
+  });
+
+  it("labels the rows' clicks as the calendar's, not the hub's", () => {
+    render(<DebateCalendar />);
+
+    fireEvent.click(cell(/Thursday.*free: Elena/));
+    const list = screen.getByRole('dialog', { name: /Free Thursday/ });
+    expect(within(list).getByRole('button', { name: /^Schedule a debate with Elena$/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Schedule debate'
+    );
+    expect(within(list).getAllByRole('button', { name: /^Schedule a debate with Elena .+/ })[0]).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Free time'
+    );
+
+    fireEvent.click(within(list).getByRole('link', { name: 'Elena' }));
+    expect(mocks.personProfileOpened).toHaveBeenCalledWith(expect.any(String), null, {
+      interaction_surface: 'debate_calendar',
+    });
+  });
+
+  it("labels the set-availability prompt and a pending request's cancel as the calendar's", () => {
+    mocks.activity = {
+      challenge: {
+        id: 'c1',
+        status: 'pending',
+        source_space_id: 'space-1',
+        requester: { user_id: 'me', profile_space_id: 'profile-me', display_name: 'You', avatar_cid: null },
+        recipient: summary('11', 'Elena'),
+        rematch_session_id: null,
+        created_at: new Date(NOW.getTime() - 60_000).toISOString(),
+        expires_at: new Date(NOW.getTime() + 25 * 60_000).toISOString(),
+      },
+    };
+    render(<DebateCalendar />);
+
+    expect(screen.getByRole('button', { name: 'Set availability' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Set availability'
+    );
+    expect(screen.getByRole('button', { name: 'Cancel request' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Cancel request'
+    );
   });
 
   it("draws the viewer's own requests and booked debates on the week", () => {

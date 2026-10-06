@@ -28,7 +28,6 @@ import {
   hourLabel,
   hourStart,
   timeRangeLabel,
-  viewerFreeInHour,
 } from './debate-calendar-model';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
@@ -50,8 +49,8 @@ type Props = {
   days: Date[];
   cells: ReadonlyMap<string, CellPerson[]>;
   debates: OwnDebate[];
-  /** The viewer's own free half-hours, or null when they have no schedule to shade. */
-  viewerFree: ReadonlySet<number> | null;
+  /** The cells the viewer is free in (`viewerFreeCellKeys`), or null with no schedule to shade. */
+  viewerFreeCells: ReadonlySet<string> | null;
   peopleByUser: ReadonlyMap<string, DebatePerson>;
   slotsByUser: ReadonlyMap<string, FreeSlot[]>;
   opponentName: (userId: string | null) => string | null;
@@ -76,7 +75,7 @@ export function CalendarWeek({
   days,
   cells,
   debates,
-  viewerFree,
+  viewerFreeCells,
   peopleByUser,
   slotsByUser,
   opponentName,
@@ -229,7 +228,7 @@ export function CalendarWeek({
                 const people = cells.get(key) ?? [];
                 const own = debatesByCell.get(key) ?? [];
                 const start = hourStart(days, day, hour);
-                const shaded = viewerFree !== null && viewerFreeInHour(viewerFree, start);
+                const shaded = viewerFreeCells?.has(key) ?? false;
                 const past = start + 60 * 60_000 <= now;
                 return (
                   <Popover.Root key={key} open={openHour === key} onOpenChange={open => setOpenHour(open ? key : null)}>

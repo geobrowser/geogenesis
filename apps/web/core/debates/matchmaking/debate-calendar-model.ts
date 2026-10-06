@@ -32,9 +32,11 @@ export const CALENDAR_WEEKS = 2;
 
 /**
  * A ceiling on the slots one wire window may expand into, so a malformed range cannot lock the
- * render loop up. A fortnight of back-to-back half-hours is 672.
+ * render loop up. A fortnight of back-to-back half-hours is 672, but a local fortnight the clocks go
+ * back in is an hour longer, so the ceiling carries a day of slack; the grid drops anything past
+ * the drawn weeks anyway.
  */
-const MAX_SLOTS_PER_WINDOW = CALENDAR_WEEKS * DAYS_IN_WEEK * 48;
+const MAX_SLOTS_PER_WINDOW = (CALENDAR_WEEKS * DAYS_IN_WEEK + 1) * 48;
 
 /** One bookable half-hour of someone's. */
 export type FreeSlot = {
@@ -167,9 +169,20 @@ export function viewerFreeSlots(
   return free;
 }
 
-/** Whether any of the viewer's own free half-hours starts in this hour. */
-export function viewerFreeInHour(free: ReadonlySet<number>, hourStart: number): boolean {
-  return free.has(hourStart) || free.has(hourStart + SLOT_MS);
+/**
+ * The cells of a week the viewer is free in, bucketed exactly as everyone else's slots are.
+ *
+ * Bucketing the instants, rather than rebuilding each row's wall-clock hour and looking that up:
+ * the day the clocks go forward has no 2am, a 2am built from the calendar comes back as 3am, and
+ * the skipped row would be shaded with 3am's time.
+ */
+export function viewerFreeCellKeys(free: ReadonlySet<number>, days: Date[]): Set<string> {
+  const keys = new Set<string>();
+  for (const at of free) {
+    const cell = cellOf(at, days);
+    if (cell) keys.add(cellKey(cell.day, cell.hour));
+  }
+  return keys;
 }
 
 /** The instant an hour of a drawn day starts. */

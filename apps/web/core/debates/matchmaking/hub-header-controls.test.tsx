@@ -133,6 +133,20 @@ describe('HubHeaderControls', () => {
     expect(new Set(mocks.saveSurfaces)).toEqual(new Set(['hub_header']));
   });
 
+  it("labels its clicks as the surface it sits on, the hub's by default", async () => {
+    const user = userEvent.setup();
+    const { rerender } = render(<HubHeaderControls />);
+    expect(pill()).toHaveAttribute('data-geo-analytics-label', 'Debate hub Availability menu');
+
+    rerender(<HubHeaderControls analyticsSurface="calendar" />);
+    expect(pill()).toHaveAttribute('data-geo-analytics-label', 'Debate calendar Availability menu');
+    await user.click(pill());
+    expect(await screen.findByRole('button', { name: /^Set my availability/ })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Schedule calendar'
+    );
+  });
+
   // The panel hands this ref to the set-schedule banner, which sends focus here when it leaves.
   it('attaches a passed ref to the pill', () => {
     const ref = React.createRef<HTMLButtonElement>();
