@@ -98,7 +98,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
  * every Debate control, so an activity payload reported without its participants would otherwise
  * leave the viewer with no way in and no way out.
  */
-export function DebateRejoinBar({ debate }: { debate: Debate }) {
+export function DebateRejoinBar({ debate, openInAnotherTab = false }: { debate: Debate; openInAnotherTab?: boolean }) {
   const router = useRouter();
   const [joining, setJoining] = React.useState(false);
   const [, startJoining] = React.useTransition();
@@ -116,10 +116,14 @@ export function DebateRejoinBar({ debate }: { debate: Debate }) {
         className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full bg-text py-2 pr-2 pl-4 text-white shadow-card transition-opacity hover:opacity-90 disabled:opacity-70"
       >
         <Text as="span" variant="metadata" color="white" className="truncate">
-          {debate.status === 'ready' ? 'Your debate is ready' : 'Your debate is under way'}
+          {openInAnotherTab
+            ? 'Your debate is open in another tab'
+            : debate.status === 'ready'
+              ? 'Your debate is ready'
+              : 'Your debate is under way'}
         </Text>
         <span className="shrink-0 rounded-full bg-white px-3 py-0.5 text-metadata text-text">
-          {joining ? 'Joining…' : 'Join'}
+          {joining ? 'Joining…' : openInAnotherTab ? 'Open here' : 'Join'}
         </span>
       </button>
     </div>
