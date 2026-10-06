@@ -9,7 +9,7 @@
  * intersection kept for surfaces wanting a few suggested times. That is what lets the grid show
  * their availability and style it by the viewer's, instead of filtering by it.
  */
-import type { ScheduleOverlapResponse } from '~/core/debates/api';
+import type { ScheduleOverlapResponse, ScheduleOverlapSlot } from '~/core/debates/api';
 
 import { SLOT_MINUTES, addDays, formatTime, isoDate } from './blocks';
 
@@ -118,7 +118,7 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
   const byDate = new Map(days.map(day => [day.date, day]));
 
   for (const slot of schedule.slots) {
-    for (const instant of chipStarts(slot)) {
+    for (const instant of slotStarts(slot)) {
       const viewer = zonedParts(instant, viewerZone);
       const day = byDate.get(viewer.date);
       // Outside the drawn week. The server bounds this with `days`, but it counts from its own
@@ -143,15 +143,17 @@ export function peerScheduleDays(schedule: PeerSchedule, now: Date = new Date())
 }
 
 /**
- * A wire slot as the chips it offers.
+ * A wire slot, or a merged window of them, as the chips it offers. The People tab reads its
+ * offline rows' times through this too (GEO-3154), so a chip there is always one this grid draws.
  *
- * Stepping by {@link SLOT_MINUTES} rather than trusting one entry to be one chip. The endpoint
- * sends slot-sized entries today, so this is a no-op; it earns its keep if that ever changes.
+ * Stepping by {@link SLOT_MINUTES} rather than trusting one entry to be one chip. The week's
+ * endpoint sends slot-sized entries, where this is a no-op; the free-people list sends merged
+ * windows (geo-chat#204), where it is what splits them back into bookable times.
  *
  * A trailing part-slot still counts — a debate runs six to eight minutes, so the last 30 minutes
  * of a block is as usable as the first. There is deliberately no "unbookable" state here.
  */
-function chipStarts(slot: PeerSlot): Date[] {
+export function slotStarts(slot: ScheduleOverlapSlot): Date[] {
   const start = Date.parse(slot.start);
   const end = Date.parse(slot.end);
   if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];

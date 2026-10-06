@@ -1519,11 +1519,13 @@ describe('PeopleTab filters', () => {
 });
 
 describe('Online only', () => {
-  /** A 30-minute slot `hours` from now, on the half hour, spelled as chrono does: no milliseconds. */
+  /** An instant spelled as chrono does: no milliseconds. */
+  const wire = (at: Date) => at.toISOString().replace('.000Z', 'Z');
+
+  /** A 30-minute slot `hours` from now, on the half hour. */
   function slotIn(hours: number) {
     const start = new Date(Date.now() + hours * 3_600_000);
     start.setUTCMinutes(start.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
-    const wire = (at: Date) => at.toISOString().replace('.000Z', 'Z');
     return { start: wire(start), end: wire(new Date(start.getTime() + 30 * 60_000)) };
   }
 
@@ -1544,7 +1546,7 @@ describe('Online only', () => {
   /** One of their free stretches, `hours` from now and `length` half hours long (geo-chat#204). */
   function windowIn(hours: number, length: number, viewerFree = false) {
     const first = slotIn(hours);
-    const end = new Date(Date.parse(first.start) + length * 30 * 60_000).toISOString().replace('.000Z', 'Z');
+    const end = wire(new Date(Date.parse(first.start) + length * 30 * 60_000));
     return { start: first.start, end, viewer_free: viewerFree };
   }
 

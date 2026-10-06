@@ -7,7 +7,8 @@ import { useAtom } from 'jotai';
 
 import { type AnalyticsProperties } from '~/core/analytics';
 import { personProfileOpened } from '~/core/analytics';
-import { PEER_SCHEDULE_DAYS } from '~/core/availability/peer-schedule';
+import { SLOT_MINUTES } from '~/core/availability/blocks';
+import { PEER_SCHEDULE_DAYS, slotStarts } from '~/core/availability/peer-schedule';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -82,10 +83,8 @@ const EMPTY_USER_IDS: ReadonlySet<string> = new Set();
 /** Times drawn on an offline row; the rest are behind "More times" (GEO-2937). */
 const INLINE_SLOTS = 3;
 
-const SLOT_MS = 30 * 60_000;
-
-/** `shared`: the viewer is free then too. Unset when the viewer has no hours to share. */
-type ChipSlot = ScheduleOverlapSlot & { shared?: boolean };
+/** `viewerIsFree` as on the booking week's chips; unset when the viewer has no hours to compare. */
+type ChipSlot = ScheduleOverlapSlot & { viewerIsFree?: boolean };
 
 type PersonSchedule = { slots: ChipSlot[]; truncated: boolean };
 
@@ -100,36 +99,30 @@ function personSchedule(
   now: number,
   weekEnds: number
 ): PersonSchedule {
-  const inWeek = (start: number) => start > now && start < weekEnds;
-  const shared = candidate.slots.filter(slot => inWeek(Date.parse(slot.start)));
+  const upcoming = (start: number) => start > now && start < weekEnds;
+  const shared = candidate.slots.filter(slot => upcoming(Date.parse(slot.start)));
   if (shared.length > 0 || !candidate.their_windows) {
     return {
-      slots: shared.slice(0, INLINE_SLOTS).map(slot => ({ ...slot, shared: viewerHasSchedule || undefined })),
+      slots: shared.slice(0, INLINE_SLOTS).map(slot => ({ ...slot, viewerIsFree: viewerHasSchedule || undefined })),
       truncated: candidate.truncated || shared.length > INLINE_SLOTS,
     };
   }
 
-  // geo-chat drops windows that have started, but one can start between fetches: offer its next
-  // half hour rather than a time already gone.
+  // geo-chat drops windows that have started, but one can start between fetches: its first chip is
+  // then the next half hour still ahead, on the same grid the week draws.
   const own: ChipSlot[] = [];
-  let remaining = 0;
+  let available = 0;
   for (const window of candidate.their_windows) {
-    const windowStart = Date.parse(window.start);
-    const windowEnd = Date.parse(window.end);
-    const first =
-      windowStart > now ? windowStart : windowStart + (Math.floor((now - windowStart) / SLOT_MS) + 1) * SLOT_MS;
-    const lastStart = Math.min(windowEnd - SLOT_MS, weekEnds - 1);
-    if (first > lastStart) continue;
-    remaining += Math.floor((lastStart - first) / SLOT_MS) + 1;
-    if (own.length < INLINE_SLOTS) {
-      own.push({
-        start: new Date(first).toISOString(),
-        end: new Date(first + SLOT_MS).toISOString(),
-        shared: viewerHasSchedule ? window.viewer_free : undefined,
-      });
-    }
+    const starts = slotStarts(window).filter(instant => upcoming(instant.getTime()));
+    available += starts.length;
+    if (starts.length === 0 || own.length === INLINE_SLOTS) continue;
+    own.push({
+      start: starts[0].toISOString(),
+      end: new Date(starts[0].getTime() + SLOT_MINUTES * 60_000).toISOString(),
+      viewerIsFree: viewerHasSchedule ? window.viewer_free : undefined,
+    });
   }
-  return { slots: own, truncated: remaining > own.length };
+  return { slots: own, truncated: available > own.length };
 }
 
 /**
@@ -951,14 +944,21 @@ function SharedTimes({
         <button
           key={slot.start}
           type="button"
-          aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}${slot.shared ? ", you're both free" : ''}`}
-          data-viewer-free={slot.shared || undefined}
+          aria-label={`Schedule a debate with ${personName} ${formatSlot(slot.start)}${slot.viewerIsFree ? ", you're both free" : ''}`}
+          data-viewer-free={slot.viewerIsFree || undefined}
           // The shared label keeps the analytics series this chip has always fed.
-          {...hubAnalyticsAttributes(slot.shared === false ? 'Free time' : 'Shared time', 'open_peer_availability')}
+          {...hubAnalyticsAttributes(
+            slot.viewerIsFree === false ? 'Free time' : 'Shared time',
+            'open_peer_availability'
+          )}
           onClick={event => onPick(slot.start, event.currentTarget)}
           className={cx(
             'rounded-full border px-2 py-0.5 text-footnote transition-colors hover:border-text',
-            slot.shared === undefined ? 'border-grey-02 text-text' : slot.shared ? MUTUAL_SLOT : PEER_ONLY_SLOT
+            slot.viewerIsFree === undefined
+              ? 'border-grey-02 text-text'
+              : slot.viewerIsFree
+                ? MUTUAL_SLOT
+                : PEER_ONLY_SLOT
           )}
         >
           {formatSlot(slot.start)}
