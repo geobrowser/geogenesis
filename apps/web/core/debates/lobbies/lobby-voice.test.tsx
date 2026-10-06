@@ -160,6 +160,15 @@ describe('LobbyVoice', () => {
     expect(screen.getByTestId('states')).toBeTruthy();
   });
 
+  // Tokens live 60s and count against the caps until used, so a full reconnect mints anew.
+  it('mints a new token for Try again rather than reusing one', async () => {
+    mocks.getDebateLobbyVoiceToken.mockRejectedValueOnce(new GeoChatRequestError('raw', 'voice_unavailable', 503));
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    await screen.findByRole('button', { name: /mute/i });
+    expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(2);
+  });
+
   it('asks before taking voice from another tab', async () => {
     mocks.acquired = false;
     renderVoice();
