@@ -1784,7 +1784,8 @@ export async function rejectDebateChallenge(
 
 /** Why a room stopped accepting joins. A closed room is a tombstone, not a 404. */
 /** `rescheduled`: the debate moved to a new time, and accepting it books a different room. */
-export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled' | 'rescheduled';
+/** `ended`: a host ended the lobby (GEO-3128). */
+export type DebateRoomClosedReason = 'completed' | 'empty_idle' | 'no_show' | 'cancelled' | 'rescheduled' | 'ended';
 
 /**
  * May the viewer open this room right now. Carried in a 200 body rather than an HTTP status, so a
@@ -1808,6 +1809,8 @@ export type DebateRoomWaiting =
 
 export type DebateRoomView = {
   room_id: string;
+  /** Never withheld. A lobby answers `not_a_participant` here; read it from `/debate-lobbies/{id}`. */
+  kind?: 'debate' | 'lobby';
   access: DebateRoomAccess;
   starts_at: string;
   opens_at: string;
@@ -1845,6 +1848,10 @@ export type UpcomingDebateRoom = {
    * before anyone joins, `undefined` on a geo-chat that predates the field.
    */
   rematch_session_id?: string | null;
+  /** `lobby` for a lobby the viewer asked to be reminded of. Missing on a geo-chat that predates it. */
+  kind?: 'debate' | 'lobby';
+  /** The lobby's name. Absent for a two-person room. */
+  name?: string;
 };
 
 export type UpcomingDebateRoomsResponse = {
@@ -2034,11 +2041,286 @@ export async function listUpcomingDebateRooms(
   accountKey: string | null,
   signal?: AbortSignal
 ) {
-  return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms', {
+  // Lobby rows are opt-in, so bundles that predate lobbies never see them; `lobbyJoining` gates them here.
+  return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms?include=lobbies', {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/* Debate lobbies (GEO-3128): many-person rooms. Body ids are dashless; path ids take either. */
+
+/** geo-chat spells uuids with and without dashes; query keys use this one form. */
+export function dashlessId(id: string) {
+  return id.replace(/-/g, '').toLowerCase();
+}
+
+/** A ban is not a role; it shows as `access: { status: 'banned' }`. */
+export type DebateLobbyRole = 'host' | 'speaker' | 'listener';
+
+export type DebateLobbyAccess =
+  | { status: 'admitted' }
+  | { status: 'not_yet_open'; opens_at: string }
+  | { status: 'closed'; reason: DebateRoomClosedReason }
+  | { status: 'banned' };
+
+export type DebateLobbyMember = {
+  user_id: string;
+  profile_space_id: string;
+  display_name: string | null;
+  avatar_cid: string | null;
+  role: DebateLobbyRole;
+  creator: boolean;
+  /** Hosting for now because no host is present. `role` stays their own. */
+  acting_host: boolean;
+  on_roster_since: string;
+  /** Left to debate; still listed, without host powers, until back or it expires. */
+  stepped_out: boolean;
+  in_debate: boolean;
+};
+
+export type DebateLobbyView = {
+  lobby_id: string;
+  name: string;
+  access: DebateLobbyAccess;
+  starts_at: string;
+  opens_at: string;
+  scheduled: boolean;
+  /** `null` once the creator's account is deleted. */
+  created_by: string | null;
+  /** Hosts while no host is present; `null` whenever a host is in. */
+  acting_host_id: string | null;
+  /** Moves when the acting host changes. */
+  hosts_changed_at: string | null;
+  reminder_count: number;
+  /** The roster, stepped-out members included, longest there first. Empty for a banned viewer. */
+  members: DebateLobbyMember[];
+  viewer: {
+    /** `null` before the viewer's first join. */
+    role: DebateLobbyRole | null;
+    creator: boolean;
+    /** Host powers now: a host, or the acting host. Gate host tools on this, not `role`. */
+    hosting: boolean;
+    reminded: boolean;
+    /** While in this lobby's voice: when voice stops holding off Away without input. */
+    voice_away_at: string | null;
+    /** This viewer has a live connection here; `false` while stepped out. */
+    connected: boolean;
+    stepped_out: boolean;
+  };
+};
+
+export type DebateLobbyPerson = {
+  user_id: string;
+  profile_space_id: string;
+  display_name: string | null;
+  avatar_cid: string | null;
+};
+
+export type DebateLobbySummary = {
+  lobby_id: string;
+  name: string;
+  scheduled: boolean;
+  starts_at: string;
+  opens_at: string;
+  open: boolean;
+  /** Every host, present or not, creator first, then the acting host. */
+  hosts: DebateLobbyPerson[];
+  headcount: number;
+  /** Up to five present people, longest-present first. */
+  avatars: DebateLobbyPerson[];
+  debating_count: number;
+  reminder_count: number;
+  viewer_reminded: boolean;
+  /** On the roster, stepped out included. */
+  viewer_on_roster: boolean;
+};
+
+export type DebateLobbiesResponse = { lobbies: DebateLobbySummary[] };
+
+export async function listDebateLobbies(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbiesResponse>('/debate-lobbies', {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** 404 `lobby_not_found` for an id that is not a lobby, which includes a two-person room. */
+export async function getDebateLobby(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** Without `starts_at` the lobby opens now. A start opens it 10 minutes early. */
+export async function createDebateLobby(
+  body: { name: string; starts_at?: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>('/debate-lobbies', {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Join or leave on one connection. A join while in another open lobby is `409
+ * already_in_another_lobby` unless `leave_other_lobby` confirms leaving it.
+ */
+export async function setDebateLobbyPresence(
+  lobbyId: string,
+  body: { connection_id: string; joined: boolean; leave_other_lobby?: boolean },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  keepalive = false
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/presence`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    keepalive,
+  });
+}
+
+/** Why a heartbeat's connection is out of the lobby. Only `lapsed` should join again. */
+export type DebateLobbyGoneReason = 'lapsed' | 'moved' | 'stepped_out' | 'ended' | 'banned' | 'removed';
+
+export type DebateLobbyHeartbeat = {
+  /** This connection's lease is live; when `false`, `reason` says why. */
+  connection_alive: boolean;
+  voice_away_at: string | null;
+  reason: DebateLobbyGoneReason | null;
+  /** Dashless; the lobby they are in now, with `moved`. */
+  current_lobby_id: string | null;
+};
+
+/** Renews this connection's 120s lease. Rate limited to 30 a minute per person. */
+export async function sendDebateLobbyHeartbeat(
+  lobbyId: string,
+  body: { connection_id: string; voice_connected: boolean },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyHeartbeat>(`/debate-lobbies/${lobbyId}/heartbeat`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Drops this connection's lease but keeps the viewer on the roster, before routing into a debate.
+ * `409 lobby_not_present` when it held none. Joining again ends it.
+ */
+export async function stepOutOfDebateLobby(
+  lobbyId: string,
+  body: { connection_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/step-out`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Stepped out, leave for good. Does nothing when not stepped out. */
+export async function endDebateLobbyStepOut(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/step-out`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+export type DebateLobbyVoiceToken = {
+  token: string;
+  url: string;
+  room_name: string;
+  /** Hosts, the acting host and speakers; listeners subscribe only. */
+  can_publish: boolean;
+  /** Join with the mic off; set once the room is crowded. Always false for a listener. */
+  start_muted: boolean;
+  expires_at: string;
+};
+
+/**
+ * A LiveKit token for this lobby, for a connection holding a live lease. LiveKit refreshes it for
+ * a connected client, so a new one is needed only to connect or fully reconnect.
+ */
+export async function getDebateLobbyVoiceToken(
+  lobbyId: string,
+  body: { connection_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyVoiceToken>(`/debate-lobbies/${lobbyId}/voice-token`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Host only. Closes the lobby with reason `ended`. */
+export async function endDebateLobby(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/end`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Remind me. Setting it is `409 lobby_already_open` or `409 lobby_closed` when too late. */
+export async function setDebateLobbyReminder(
+  lobbyId: string,
+  reminded: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/reminder`, {
+    method: reminded ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 
@@ -2500,13 +2782,22 @@ export class GeoChatRequestError extends Error {
   status: number;
   /** From `Retry-After`, where geo-chat sent one. */
   retryAfterMs: number | null;
+  /** geo-chat's optional `error.details`, e.g. `current_lobby_id` on `already_in_another_lobby`. */
+  details: Record<string, unknown> | null;
 
-  constructor(message: string, code: string | null, status: number, retryAfterMs: number | null = null) {
+  constructor(
+    message: string,
+    code: string | null,
+    status: number,
+    retryAfterMs: number | null = null,
+    details: Record<string, unknown> | null = null
+  ) {
     super(message);
     this.name = 'GeoChatRequestError';
     this.code = code;
     this.status = status;
     this.retryAfterMs = retryAfterMs;
+    this.details = details;
   }
 }
 
@@ -2652,13 +2943,17 @@ export async function retryDebatePhaseBoundaryRequest<T>(request: () => Promise<
 
 async function requestError(response: Response) {
   let code: string | null = null;
+  let details: Record<string, unknown> | null = null;
   let message = `${response.status} ${response.statusText}`;
   try {
     const responseBody = (await response.text()).trim();
     if (responseBody) {
       try {
-        const body = JSON.parse(responseBody) as { error?: { code?: string; message?: string } };
+        const body = JSON.parse(responseBody) as {
+          error?: { code?: string; message?: string; details?: Record<string, unknown> };
+        };
         code = body.error?.code ?? null;
+        details = body.error?.details ?? null;
         message = body.error?.message || message;
       } catch {
         message = responseBody;
@@ -2667,7 +2962,13 @@ async function requestError(response: Response) {
   } catch {
     // fall back to the status line built above
   }
-  return new GeoChatRequestError(message, code, response.status, retryAfterMs(response.headers?.get('retry-after')));
+  return new GeoChatRequestError(
+    message,
+    code,
+    response.status,
+    retryAfterMs(response.headers?.get('retry-after')),
+    details
+  );
 }
 
 /** `Retry-After` in milliseconds, given as delay-seconds or an HTTP date. */

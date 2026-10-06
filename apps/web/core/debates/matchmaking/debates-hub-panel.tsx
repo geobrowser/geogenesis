@@ -23,6 +23,7 @@ import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
+import { LiveLobbiesCard } from '../lobbies/lobbies-card';
 import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { calendarHref } from './debate-calendar-route';
@@ -363,6 +364,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
           <>
+            <LiveLobbiesCard />
             <HubSwap activeKey={activeTab}>
               {activeTab === 'requests' ? (
                 <RequestsTab />

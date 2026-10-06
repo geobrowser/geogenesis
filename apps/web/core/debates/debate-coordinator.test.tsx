@@ -9,6 +9,8 @@ import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } fr
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
+  /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
+  roomAtPath: null as { kind: 'debate' | 'lobby' } | null,
   activity: null as DebateActivity | null,
   requests: { outbound: null, incoming: [] } as DebateRequestsResponse,
   acceptRequestMutate: vi.fn(),
@@ -38,6 +40,7 @@ const mocks = vi.hoisted(() => ({
   gatewayPaused: false,
   gatewayPauseReason: null as string | null,
   debateDebugging: false,
+  lobbyJoining: false,
   currentUserId: 'user-for' as string | null,
   // What the token exchange answers with when the stored session hasn't been written yet.
   resolvedUserId: null as string | null,
@@ -90,6 +93,7 @@ vi.mock('./rooms/hooks', () => ({
     refetch: mocks.refetchRooms,
   }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
+  useDebateRoom: () => ({ data: mocks.roomAtPath ?? undefined }),
 }));
 
 // The banner names the opponent from the request that booked the room; that read is its own concern.
@@ -152,11 +156,13 @@ vi.mock('./debate-return-navigation', () => ({
 
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
-  useFeatureFlag: (id: string) => (id === 'debateDebugging' ? mocks.debateDebugging : false),
+  useFeatureFlag: (id: string) =>
+    id === 'debateDebugging' ? mocks.debateDebugging : id === 'lobbyJoining' ? mocks.lobbyJoining : false,
 }));
 
 beforeEach(() => {
   sessionStorage.clear();
+  mocks.roomAtPath = null;
   mocks.push.mockReset();
   mocks.mediaMutate.mockReset();
   mocks.handleMutate.mockReset();
@@ -188,6 +194,7 @@ beforeEach(() => {
   mocks.gatewayPaused = false;
   mocks.gatewayPauseReason = null;
   mocks.debateDebugging = false;
+  mocks.lobbyJoining = false;
   mocks.currentUserId = 'user-for';
   mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
@@ -842,6 +849,21 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(screen.queryByText(/Your debate/)).not.toBeInTheDocument());
   });
 
+  // A reminded lobby stays in the list after it opens, including while the viewer is in it.
+  it('does not offer the lobby on screen, only another one', async () => {
+    mocks.lobbyJoining = true;
+    mocks.pathname = '/debate/lobby-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    mocks.upcomingRooms = [upcomingRoom({ room_id: 'lobby1', kind: 'lobby', name: 'Here' })];
+
+    const { rerender } = render(<DebateCoordinator />);
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Join lobby' })).not.toBeInTheDocument());
+
+    mocks.upcomingRooms = [...mocks.upcomingRooms, upcomingRoom({ room_id: 'lobby2', kind: 'lobby', name: 'Next' })];
+    rerender(<DebateCoordinator />);
+    expect(await screen.findByRole('button', { name: 'Join lobby' })).toBeInTheDocument();
+  });
+
   it('snoozes a room for the session on Not now', async () => {
     mocks.pathname = '/space/space-1/claims';
     mocks.upcomingRooms = [upcomingRoom()];
@@ -873,6 +895,24 @@ describe('DebateCoordinator', () => {
       await waitFor(() => expect(mocks.push).not.toHaveBeenCalled());
     }
   );
+
+  // GEO-3131. A lobby shares the room path but is where people wait between debates, so a
+  // challenge or request accepted there must take them into the picker.
+  it('routes a browsing rematch out of a lobby', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/debate/room-1';
+    mocks.roomAtPath = { kind: 'lobby' };
+    const activity = activityWithRematch('browsing');
+    mocks.activity = {
+      ...activity,
+      rematch: { ...activity.rematch!, source_debate_id: null, status: 'browsing' },
+      challenge: null,
+    };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  });
 
   // Nor may anything app-wide sit over a room, which is open for as long as the pair are in it.
   it('does not offer a rejoin bar over a debate room', async () => {
