@@ -28,6 +28,7 @@ import {
   hourLabel,
   hourStart,
   timeRangeLabel,
+  weekOffsetLabels,
 } from './debate-calendar-model';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
@@ -179,6 +180,7 @@ export function CalendarWeek({
   };
 
   const todayIndex = cellOf(now, days)?.day ?? -1;
+  const offsets = weekOffsetLabels(days);
 
   return (
     <div className="overflow-x-auto rounded-lg border border-grey-02">
@@ -189,7 +191,18 @@ export function CalendarWeek({
         className="min-w-[900px]"
       >
         <div role="row" className={cx('grid border-b border-grey-02 bg-white', GRID_COLUMNS)}>
-          <div role="columnheader" aria-label="Time" className="border-r border-grey-01" />
+          {/* The zone's offset, bottom of the time column's head, as Google Calendar has it. */}
+          <div
+            role="columnheader"
+            aria-label={`Time, ${offsets.join(' then ')}`}
+            className="flex flex-col justify-end border-r border-grey-01 px-2 pb-1.5 text-[11px] leading-tight whitespace-nowrap text-grey-04 tabular-nums"
+          >
+            {offsets.map(label => (
+              <span key={label} aria-hidden>
+                {label}
+              </span>
+            ))}
+          </div>
           {days.slice(0, DAYS_IN_WEEK).map((date, day) => (
             <div
               key={date.getTime()}

@@ -527,37 +527,20 @@ describe('DebateCalendar', () => {
     expect(within(thursday).getByText('Elena')).toBeInTheDocument();
   });
 
-  it('goes back to the page it came from, with the debates panel open', () => {
+  it('reports an open from the hub when it carries where it came from', () => {
     mocks.searchParams = new URLSearchParams({ from: '/space/abc/debates' });
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
-      'href',
-      expect.stringMatching(/^\/space\/abc\/debates\?modal=debates/)
-    );
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_calendar_opened',
       expect.objectContaining({ opened_from: 'hub' })
     );
   });
 
-  it("restores the page's own query and fragment on the way back", () => {
-    mocks.searchParams = new URLSearchParams({ from: '/space/abc?proposal=1#votes' });
+  it('heads the page with its title and no back link', () => {
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
-      'href',
-      '/space/abc?proposal=1&modal=debates#votes'
-    );
-  });
-
-  it('never goes back off-site', () => {
-    mocks.searchParams = new URLSearchParams({ from: '//evil.example' });
-    render(<DebateCalendar />);
-
-    expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
-      'href',
-      expect.stringMatching(/^\/explore\?/)
-    );
+    expect(screen.getByRole('heading', { level: 1, name: 'Debate calendar' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Back to Debates/ })).toBeNull();
   });
 });

@@ -24,6 +24,7 @@ export const SPACE_PILLS_BEFORE_MORE = 8;
 const SKELETON_PILLS = 4;
 
 type Props = {
+  className?: string;
   analyticsSurface: DebateAnalyticsSurface;
   facetSpaces: { id: string; count: number }[];
   spaceIds: string[];
@@ -48,6 +49,7 @@ type Props = {
  * space facet is never narrowed by itself), so the order holds still while the viewer works the row.
  */
 export function SpaceFilterPills({
+  className,
   analyticsSurface,
   facetSpaces,
   spaceIds,
@@ -78,7 +80,7 @@ export function SpaceFilterPills({
   if (ordered.length === 0) {
     if (!loading) return null;
     return (
-      <div className="flex flex-wrap items-center gap-2" aria-hidden>
+      <div className={cx('flex flex-wrap items-center gap-2', className)} aria-hidden>
         {Array.from({ length: SKELETON_PILLS }, (_, index) => (
           <Skeleton key={index} className="h-7 w-24 rounded-full" />
         ))}
@@ -91,7 +93,10 @@ export function SpaceFilterPills({
       role="group"
       aria-label="Filter by space"
       // Phones scroll the row sideways instead of stacking lines of pills above the day list.
-      className="flex flex-wrap items-center gap-2 md:-mx-4 md:[scrollbar-width:none] md:flex-nowrap md:overflow-x-auto md:px-4 md:[&::-webkit-scrollbar]:hidden"
+      className={cx(
+        'flex flex-wrap items-center gap-2 md:-mx-4 md:[scrollbar-width:none] md:flex-nowrap md:overflow-x-auto md:px-4 md:[&::-webkit-scrollbar]:hidden',
+        className
+      )}
     >
       <button
         type="button"

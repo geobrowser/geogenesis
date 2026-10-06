@@ -6,7 +6,7 @@ import type { SchedulablePeopleResponse } from '~/core/debates/api';
 // Pinned, so these mean the same on any machine: a UTC runner has no clock changes to test.
 process.env.TZ = 'America/Los_Angeles';
 
-const { freeSlotsByUser, viewerFreeCellKeys, viewerFreeSlots, weekDays, weekStart } =
+const { freeSlotsByUser, viewerFreeCellKeys, viewerFreeSlots, weekDays, weekOffsetLabels, weekStart } =
   await import('./debate-calendar-model');
 
 const local = (year: number, month: number, day: number, hour: number, minute = 0) =>
@@ -47,5 +47,10 @@ describe('the calendar across clock changes', () => {
 
     expect(keys.has('6:3')).toBe(true);
     expect(keys.has('6:2')).toBe(false);
+  });
+
+  it("heads the time column with the zone's offset, both of them in the week the clocks change", () => {
+    expect(weekOffsetLabels(weekDays(weekStart(new Date(local(2026, 10, 7, 10)), 0)))).toEqual(['GMT-07']);
+    expect(weekOffsetLabels(weekDays(weekStart(new Date(local(2026, 10, 28, 10)), 0)))).toEqual(['GMT-07', 'GMT-08']);
   });
 });

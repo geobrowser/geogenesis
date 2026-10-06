@@ -117,7 +117,6 @@ describe('weekCells', () => {
   it('lists everyone free in an hour once, with their half-hours in it, most matches first', () => {
     const cells = weekCells(slots, days, {
       include: key => key !== 'hidden',
-      onlyViewerFree: false,
       order: (left, right) => matches[right.userKey] - matches[left.userKey],
     });
 
@@ -131,11 +130,6 @@ describe('weekCells', () => {
         ],
       },
     ]);
-  });
-
-  it('keeps only half-hours the viewer is free for when asked', () => {
-    const cells = weekCells(slots, days, { include: () => true, onlyViewerFree: true, order: () => 0 });
-    expect(cells.get('3:18')?.map(cell => cell.userKey)).toEqual(['few', 'hidden']);
   });
 });
 
