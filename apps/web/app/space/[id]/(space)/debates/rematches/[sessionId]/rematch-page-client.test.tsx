@@ -927,13 +927,14 @@ beforeEach(() => {
   mocks.entityHydrations.length = 0;
   mocks.singleHydrationErrorFor = null;
   localStorage.clear();
-  // Both standing preferences off, so every list below is the whole of what its fixture put in it.
+  // The standing preferences off, so every list below is the whole of what its fixture put in it.
   //
   // They ship *on* (GEO-2863), and the cases that are about the defaults set them back. Every other
   // case here is about something else — search, topics, sections, allowed spaces — and one that has
   // to reason about which of its own rows a default removed is a case about two things.
   localStorage.setItem('rematchMatchesOnly', 'false');
   localStorage.setItem('rematchHideMyPositions', 'false');
+  localStorage.setItem('rematchHideAgreed', 'false');
 
   clearDebateReturnDestination();
   mocks.replace.mockReset();
@@ -2138,6 +2139,90 @@ describe('DebateRematchPageClient', () => {
 
       expect(screen.getByRole('button', { name: /^Their positions/ })).toHaveAttribute('aria-pressed', 'true');
       expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+    });
+
+    /**
+     * "Hide agreed": on their tab, the claims you hold the same side on are a dead end — there is
+     * nothing to debate — so they are out of the way by default. The matches and the claims only
+     * they have answered stay, because those are what the tab is for.
+     */
+    describe('Hide agreed', () => {
+      const SWITCH = { name: 'Hide agreed' } as const;
+
+      beforeEach(() => {
+        localStorage.setItem('rematchHideAgreed', 'true');
+      });
+
+      it('is on by default and leaves out the claims you agree on', async () => {
+        // Taken away rather than restored, so this is the atom's default and not the value above.
+        localStorage.removeItem('rematchHideAgreed');
+        threeClaims();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'true');
+        expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+        expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+        await waitFor(() => expect(screen.queryByText('A claim you both agree on')).toBeNull());
+        // The badge counts what the tab shows.
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('2')).toBeInTheDocument();
+      });
+
+      it('brings them back when it is turned off', async () => {
+        threeClaims();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        fireEvent.click(screen.getByRole('switch', SWITCH));
+
+        expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
+        expect(within(screen.getByRole('button', { name: /^Their positions/ })).getByText('3')).toBeInTheDocument();
+      });
+
+      it('is only on their tab', async () => {
+        threeClaims();
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
+
+        expect(screen.queryByRole('switch', SWITCH)).toBeNull();
+      });
+
+      it('says so, with a way out, when you agree on everything of theirs', async () => {
+        mocks.savedClaims = [];
+        mocks.claims = [];
+        mocks.entities = [{ ...sharedEntity(), id: AGREED, name: 'A claim you both agree on' }];
+        mocks.positions = [
+          position('profile-local', AGREED, SPACE_1, true),
+          position('profile-remote', AGREED, SPACE_1, true),
+        ];
+        render(<DebateRematchPageClient sessionId="rematch-1" />);
+        await showOpponentClaims();
+
+        expect(await screen.findByText(/You and Salina agree on every claim here/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Show agreed claims' }));
+
+        expect(await screen.findByText('A claim you both agree on')).toBeInTheDocument();
+        expect(screen.getByRole('switch', SWITCH)).toHaveAttribute('aria-checked', 'false');
+      });
+
+      // Taking their side on the tab must not pull the card out from under the press — and the
+      // side just taken may be one the viewer is about to flip.
+      it('keeps a claim you agree with while it is on screen', async () => {
+        mocks.savedClaims = [];
+        mocks.claims = [];
+        mocks.entities = [{ ...sharedEntity(), id: OPPONENT_ONLY, name: 'A claim only Salina answered' }];
+        mocks.positions = [position('profile-remote', OPPONENT_ONLY, SPACE_1, true)];
+        const { rerender } = render(<DebateRematchPageClient sessionId="rematch-1" />);
+        expect(await screen.findByText('A claim only Salina answered')).toBeInTheDocument();
+
+        mocks.positions = [...mocks.positions, position('profile-local', OPPONENT_ONLY, SPACE_1, true)];
+        rerender(<DebateRematchPageClient sessionId="rematch-1" />);
+        await act(async () => {
+          await new Promise(resolve => setTimeout(resolve, HUB_CARD_EXIT_TRANSITION.duration * 1000 + 150));
+        });
+
+        expect(screen.getByText('A claim only Salina answered')).toBeInTheDocument();
+      });
     });
 
     // A pair with no match land on their positions, but Matches is still in the strip — and when

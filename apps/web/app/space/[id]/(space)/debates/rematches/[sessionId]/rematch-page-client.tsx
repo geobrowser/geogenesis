@@ -58,7 +58,7 @@ import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/
 import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
-import { HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
+import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ScrollableTabRow } from '~/core/debates/matchmaking/scrollable-tab-row';
 import {
@@ -120,7 +120,7 @@ import { Text } from '~/design-system/text';
 
 import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
-import { rematchHideMyPositionsAtom } from '~/atoms';
+import { rematchHideAgreedAtom, rematchHideMyPositionsAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 const NO_CLAIMS: DebateRematchClaim[] = [];
@@ -322,6 +322,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const [landing, setLanding] = React.useState<{ sessionId: string; tab: PickerTab } | null>(null);
   const [hideMyPositions, setHideMyPositions] = useAtom(rematchHideMyPositionsAtom);
+  const [hideAgreed, setHideAgreed] = useAtom(rematchHideAgreedAtom);
   // Left unset until the viewer picks one: Recommended is the best default when a curator has put
   // something together for this pairing, and it doesn't exist otherwise. Deciding in state would
   // fix the default before that lookup settles.
@@ -1542,6 +1543,26 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [opponentPositionOf, viewerPositionOf]
   );
 
+  /** Both of you hold the same side: nothing to debate. What "Hide agreed" takes off their tab. */
+  const isAgreed = React.useCallback(
+    (claim: DebateRematchClaim) => {
+      const mine = viewerPositionOf(claim);
+
+      return mine !== null && mine === opponentPositionOf(claim);
+    },
+    [opponentPositionOf, viewerPositionOf]
+  );
+
+  /**
+   * Their positions as the tab's badge and the landing count them: the agreed ones out while the
+   * switch is on. Not what the list draws, which holds a claim agreed with *on* the tab rather than
+   * dropping it under the press — see `visibleClaims`.
+   */
+  const opponentClaimsShown = React.useMemo(
+    () => (hideAgreed ? opponentClaims.filter(claim => !isAgreed(claim)) : opponentClaims),
+    [hideAgreed, isAgreed, opponentClaims]
+  );
+
   /**
    * GEO-3148. The Matches tab: the opponent's positions that you hold the other side of, not yet
    * debated between you. Every one shows Request debate, which is why the cards need no badge.
@@ -1594,8 +1615,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   // "Debate now" = claims the opponent has responded to; the tab badge counts them.
   const opponentPositionCount = React.useMemo(
-    () => opponentClaims.filter(claim => opponentPositionOf(claim) !== null).length,
-    [opponentClaims, opponentPositionOf]
+    () => opponentClaimsShown.filter(claim => opponentPositionOf(claim) !== null).length,
+    [opponentClaimsShown, opponentPositionOf]
   );
 
   /** The viewer's own, counted off the same list the tab draws — see `opponentPositionCount`. */
@@ -1700,7 +1721,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ['related', listLandingState(relatedClaimsSettling, relatedClaims.length)],
     // Here a failure *is* something to land on: the tab draws it with a retry, where landing on
     // Explore would hide it.
-    ['opponent', opponentTabError ? 'filled' : listLandingState(opponentLandingPending, opponentClaims.length)],
+    // Counted with "Hide agreed" applied, so a pair who agree on everything of theirs are not landed
+    // on a tab that opens empty.
+    ['opponent', opponentTabError ? 'filled' : listLandingState(opponentLandingPending, opponentClaimsShown.length)],
   ];
   const landingNow = landedForSession ?? resolveLandingTab(landingStates);
 
@@ -1722,7 +1745,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         matches: matchClaims.length,
         debateClaims: debateClaimCount,
         related: relatedClaims.length,
-        theirPositions: opponentClaims.length,
+        theirPositions: opponentClaimsShown.length,
       }),
     sessionId
   );
@@ -1806,7 +1829,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     tab === 'matches'
       ? NO_CLAIMS
       : tab === 'opponent'
-        ? opponentClaimsSplit.debated
+        ? hideAgreed
+          ? opponentClaimsSplit.debated.filter(claim => !isAgreed(claim))
+          : opponentClaimsSplit.debated
         : tab === 'related'
           ? relatedClaimsSplit.debated
           : tab === 'debate'
@@ -2035,7 +2060,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Kept for good rather than folded after a moment — see `holdMs`. A claim answered here is one
   // the viewer is a press away from requesting a debate on, so the switch hides the backlog they
   // arrived with and never the position they just took.
-  const visibleClaims = useCollapseAnswered(narrowedClaims, {
+  const browseVisibleClaims = useCollapseAnswered(narrowedClaims, {
     keyOf: claimRowKey,
     answeredStateOf,
     enabled: hidesAnswered,
@@ -2048,6 +2073,30 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // lookup that would classify it is still out.
     classifying: rowsInFlight,
   });
+
+  /**
+   * "Hide agreed" on their tab, through the same hook so it keeps the same promise: the agreed
+   * claims the viewer arrived with are hidden, and one they agree with *here* stays. Taking a side
+   * under the cursor and having the card vanish reads as the press missing, and the side they took
+   * may be one they are about to flip.
+   *
+   * Its own instance rather than a second state on the one above, so a claim seen on Explore is not
+   * remembered as seen here. Both sides are on the session's rows, which have settled by the time
+   * the tab lists anything, so no row is ever unknown.
+   */
+  const agreedStateOf = React.useCallback(
+    (claim: DebateRematchClaim): AnsweredState => (isAgreed(claim) ? 'answered' : 'unanswered'),
+    [isAgreed]
+  );
+  const visibleClaims = useCollapseAnswered(browseVisibleClaims, {
+    keyOf: claimRowKey,
+    answeredStateOf: agreedStateOf,
+    enabled: tab === 'opponent' && hideAgreed,
+    holdMs: null,
+    resetKey: sessionId,
+  });
+  /** Their tab has rows and the switch is hiding every one of them. */
+  const agreedEverything = tab === 'opponent' && hideAgreed && visibleClaims.length === 0 && narrowedClaims.length > 0;
 
   const hasFilters = Boolean(debouncedSearch || (!searchOnly && (spaceIds.length || topicIds.length)));
 
@@ -2700,6 +2749,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                       checked={hideMyPositions}
                       onChange={setHideMyPositions}
                     />
+                  ) : tab === 'opponent' ? (
+                    <HideAgreedSwitch analyticsSurface="rematch" checked={hideAgreed} onChange={setHideAgreed} />
                   ) : null
                 }
                 leading={
@@ -2775,32 +2826,34 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ? searchingMessage
               : collapsedEverything
                 ? 'You’ve answered every claim here. Turn off “Hide my positions” to see them, or pick another space or topic.'
-                : hasFilters
-                  ? 'No claims match these filters.'
-                  : claims.length === 0 && debatedClaims.length > 0
-                    ? `You and ${remoteName} have already debated every claim here.`
-                    : tab === 'matches'
-                      ? debatedMatchCount > 0
-                        ? `You’ve already debated every claim you and ${remoteName} disagree on. Pick a side on another of their claims to find a new one.`
-                        : opponentHasPositions
-                          ? `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
-                          : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
-                      : tab === 'opponent'
-                        ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
-                        : tab === 'debate'
-                          ? debateExtractionRunning
-                            ? 'Pulling the claims out of your debate. They appear here as they’re found.'
-                            : 'No claims from this debate are left to debate.'
-                          : tab === 'related'
-                            ? // Reachable even though the tab only appears when neighbours were found: every
-                              // one of them can still be ruled out by this session — already debated, or in a
-                              // space that cannot carry a published debate.
-                              'No related claims are left to debate.'
-                            : source === 'recommended'
-                              ? `Nothing recommended for you and ${remoteName} yet.`
-                              : source === 'mine'
-                                ? 'You haven’t taken a position on any claims yet.'
-                                : 'No other eligible claims are available yet.'
+                : agreedEverything
+                  ? `You and ${remoteName} agree on every claim here. Turn off “Hide agreed” to see them.`
+                  : hasFilters
+                    ? 'No claims match these filters.'
+                    : claims.length === 0 && debatedClaims.length > 0
+                      ? `You and ${remoteName} have already debated every claim here.`
+                      : tab === 'matches'
+                        ? debatedMatchCount > 0
+                          ? `You’ve already debated every claim you and ${remoteName} disagree on. Pick a side on another of their claims to find a new one.`
+                          : opponentHasPositions
+                            ? `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
+                            : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
+                        : tab === 'opponent'
+                          ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                          : tab === 'debate'
+                            ? debateExtractionRunning
+                              ? 'Pulling the claims out of your debate. They appear here as they’re found.'
+                              : 'No claims from this debate are left to debate.'
+                            : tab === 'related'
+                              ? // Reachable even though the tab only appears when neighbours were found: every
+                                // one of them can still be ruled out by this session — already debated, or in a
+                                // space that cannot carry a published debate.
+                                'No related claims are left to debate.'
+                              : source === 'recommended'
+                                ? `Nothing recommended for you and ${remoteName} yet.`
+                                : source === 'mine'
+                                  ? 'You haven’t taken a position on any claims yet.'
+                                  : 'No other eligible claims are available yet.'
           }
           // Each dead end has its own way out. Ordered by how much the viewer has to give up:
           // clearing their filters, then leaving the tab or the source they picked.
@@ -2809,33 +2862,35 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ? undefined
               : collapsedEverything
                 ? { label: 'Show my positions', onClick: () => setHideMyPositions(false) }
-                : hasFilters
-                  ? {
-                      label: 'Clear filters',
-                      onClick: () => {
-                        setSearch('');
-                        // The menu's own clear row, so this counts as choosing the unfiltered list and
-                        // the default cannot put its spaces back.
-                        onSpacesClear();
-                        setTopicIds([]);
-                      },
-                    }
-                  : tab === 'matches'
-                    ? // Their positions is where a match is made, and where the debated ones are kept.
-                      // With none of those there is nothing of theirs to oppose, and the catalogue is
-                      // the way on.
-                      opponentHasPositions
-                      ? { label: `See ${remoteFirstName}’s positions`, onClick: () => setTab('opponent') }
-                      : { label: 'Explore claims', onClick: () => setTab('explore') }
-                    : tab === 'opponent'
-                      ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
-                        // resolve, and the catalogue next door is the whole of the way out of it.
-                        { label: 'Explore claims', onClick: () => setTab('explore') }
-                      : source === 'mine'
-                        ? // The same dead end one tab over: a viewer who has answered nothing
-                          // cannot fill this list from here, and the whole corpus is next door.
-                          { label: 'Show all claims', onClick: () => setTab('explore') }
-                        : undefined
+                : agreedEverything
+                  ? { label: 'Show agreed claims', onClick: () => setHideAgreed(false) }
+                  : hasFilters
+                    ? {
+                        label: 'Clear filters',
+                        onClick: () => {
+                          setSearch('');
+                          // The menu's own clear row, so this counts as choosing the unfiltered list and
+                          // the default cannot put its spaces back.
+                          onSpacesClear();
+                          setTopicIds([]);
+                        },
+                      }
+                    : tab === 'matches'
+                      ? // Their positions is where a match is made, and where the debated ones are kept.
+                        // With none of those there is nothing of theirs to oppose, and the catalogue is
+                        // the way on.
+                        opponentHasPositions
+                        ? { label: `See ${remoteFirstName}’s positions`, onClick: () => setTab('opponent') }
+                        : { label: 'Explore claims', onClick: () => setTab('explore') }
+                      : tab === 'opponent'
+                        ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
+                          // resolve, and the catalogue next door is the whole of the way out of it.
+                          { label: 'Explore claims', onClick: () => setTab('explore') }
+                        : source === 'mine'
+                          ? // The same dead end one tab over: a viewer who has answered nothing
+                            // cannot fill this list from here, and the whole corpus is next door.
+                            { label: 'Show all claims', onClick: () => setTab('explore') }
+                          : undefined
           }
         >
           {showsSections ? (
