@@ -206,8 +206,8 @@ const FIND_A_TIME_SLOTS = FIND_A_TIME_DAYS * 48;
 /**
  * Everyone with free time this week, online or not, shared slots first (GEO-2937).
  *
- * `full` is Find a time (GEO-3152): a fortnight, listed even when the viewer has no schedule, with
- * each person's whole free time. Its own cache entry, so the People tab's answer is untouched.
+ * `full` is Find a time's read (GEO-3152): a fortnight, in its own cache entry. Every person carries
+ * their whole free time as `their_windows` (geo-chat#204); the People tab reads only `slots`.
  */
 export function useSchedulablePeople(
   enabled: boolean,
@@ -226,7 +226,7 @@ export function useSchedulablePeople(
     ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.schedulablePeople(accountKey, days, limit, full, serverSpaces),
     queryFn: ({ signal }) =>
-      listSchedulablePeople({ days, limit, full, spaces: serverSpaces }, getPrivyIdentityToken, accountKey, signal),
+      listSchedulablePeople({ days, limit, spaces: serverSpaces }, getPrivyIdentityToken, accountKey, signal),
     // A new space selection keeps the last week drawn while the narrowed one loads.
     placeholderData: full ? keepPreviousData : undefined,
     enabled: queryEnabled,
