@@ -6,7 +6,7 @@ import type { SchedulablePeopleResponse } from '~/core/debates/api';
 // Pinned, so these mean the same on any machine: a UTC runner has no clock changes to test.
 process.env.TZ = 'America/Los_Angeles';
 
-const { freeSlotsByUser, viewerFreeCellKeys, viewerFreeSlots, weekDays, weekStart } =
+const { freeSlotsByUser, viewerFreeCellKeys, viewerFreeSlots, weekDays, weekOffsetLabels, weekStart } =
   await import('./debate-calendar-model');
 
 const local = (year: number, month: number, day: number, hour: number, minute = 0) =>
@@ -48,5 +48,21 @@ describe('the calendar across clock changes', () => {
 
     expect(keys.has('0:3')).toBe(true);
     expect(keys.has('0:2')).toBe(false);
+  });
+
+  it("heads the time column with the zone's offset", () => {
+    expect(weekOffsetLabels(weekDays(weekStart(new Date(local(2026, 10, 7, 10)), 0)))).toEqual(['GMT-07']);
+    // US clocks change on a Sunday, the first day of a week, so even that week carries one offset.
+    expect(weekOffsetLabels(weekDays(weekStart(new Date(local(2026, 11, 4, 10)), 0)))).toEqual(['GMT-08']);
+  });
+
+  // Israel's clocks go forward on a Friday (27 Mar 2026), inside a Sunday-first week.
+  it('names both offsets in a week the clocks change mid-week', () => {
+    process.env.TZ = 'Asia/Jerusalem';
+    try {
+      expect(weekOffsetLabels(weekDays(weekStart(new Date(2026, 2, 25, 10), 0)))).toEqual(['GMT+02', 'GMT+03']);
+    } finally {
+      process.env.TZ = 'America/Los_Angeles';
+    }
   });
 });

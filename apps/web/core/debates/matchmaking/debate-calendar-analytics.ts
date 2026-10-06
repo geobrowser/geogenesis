@@ -33,7 +33,7 @@ export function calendarWeekChanged(direction: 'previous' | 'next' | 'today') {
   capture('debate_calendar_week_changed', { direction });
 }
 
-export type CalendarFilter = 'space' | 'search' | 'only_viewer_free' | 'clear';
+export type CalendarFilter = 'space' | 'search' | 'clear';
 
 export function calendarFilterChanged(filter: CalendarFilter) {
   capture('debate_calendar_filter_changed', { filter });

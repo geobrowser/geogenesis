@@ -110,11 +110,9 @@ export function weekCells(
   days: Date[],
   {
     include,
-    onlyViewerFree,
     order,
   }: {
     include: (userKey: string) => boolean;
-    onlyViewerFree: boolean;
     order: (left: CellPerson, right: CellPerson) => number;
   }
 ): Map<string, CellPerson[]> {
@@ -123,7 +121,6 @@ export function weekCells(
   for (const [userKey, slots] of slotsByUser) {
     if (!include(userKey)) continue;
     for (const slot of slots) {
-      if (onlyViewerFree && !slot.viewerFree) continue;
       const cell = cellOf(slot.start, days);
       if (!cell) continue;
       const key = cellKey(cell.day, cell.hour);
@@ -145,7 +142,7 @@ export function weekCells(
  *
  * Resolved here from their saved blocks, in the zone they were saved in, rather than read off other
  * people's windows: an hour the viewer is free in but nobody else is still has to be shaded, and
- * "Only times I'm free" has to agree with the shading exactly. Their booked debates are not taken
+ * the green chips have to agree with the shading exactly. Their booked debates are not taken
  * out; those are drawn over the hour anyway.
  */
 export function viewerFreeSlots(
@@ -276,4 +273,30 @@ export function hourLabel(hour: number): string {
 export function timeRangeLabel(start: number, end: number): string {
   const time = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   return `${time(start)} – ${time(end)}`;
+}
+
+/**
+ * The viewer's UTC offset over a week, the way Google Calendar heads its time column: `GMT-07`,
+ * `GMT+05:30`. The grid is drawn in the browser's own zone, so this is that zone's offset.
+ *
+ * Two labels for a week a clock change falls in, start's first, so the column doesn't claim one
+ * offset for the days on the far side of the change. Read at noon, clear of any change's own hour.
+ */
+export function weekOffsetLabels(days: Date[]): string[] {
+  const labels: string[] = [];
+  for (const day of days) {
+    const noon = new Date(day.getFullYear(), day.getMonth(), day.getDate(), 12);
+    const label = gmtOffsetLabel(noon);
+    if (!labels.includes(label)) labels.push(label);
+  }
+  return labels;
+}
+
+export function gmtOffsetLabel(date: Date): string {
+  const minutes = -date.getTimezoneOffset();
+  if (minutes === 0) return 'GMT';
+  const abs = Math.abs(minutes);
+  const hours = String(Math.floor(abs / 60)).padStart(2, '0');
+  const rest = abs % 60;
+  return `GMT${minutes > 0 ? '+' : '-'}${hours}${rest ? `:${String(rest).padStart(2, '0')}` : ''}`;
 }

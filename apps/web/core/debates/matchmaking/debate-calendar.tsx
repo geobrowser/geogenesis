@@ -4,19 +4,15 @@ import * as React from 'react';
 
 import { useSearchParams } from 'next/navigation';
 
-import { localTimezone } from '~/core/availability/blocks';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
-import { toDebatesPanel } from '~/core/debates/debates-panel-deep-link';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 
-import { ArrowLeft } from '~/design-system/icons/arrow-left';
 import { Input } from '~/design-system/input';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
@@ -49,6 +45,7 @@ import {
   viewerFreeSlots,
   weekCells,
   weekDays,
+  weekOffsetLabels,
   weekRangeLabel,
   weekStart,
 } from './debate-calendar-model';
@@ -56,14 +53,13 @@ import { CALENDAR_FROM_PARAM } from './debate-calendar-route';
 import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch } from './disagreement-counts';
-import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
-import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubPillButton } from './hub-pill-button';
 import { HubMessage, HubQueryState } from './hub-states';
 import { INLINE_SLOTS, PersonRow, type PersonSchedule, SetAvailabilityNotice, schedulableAsPerson } from './people-tab';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
+import { SpaceFilterPills } from './space-filter-pills';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useLiveRequestBlock } from './use-live-request-block';
 import { usePersonFacts } from './use-person-facts';
@@ -121,8 +117,6 @@ export function DebateCalendar() {
   });
   const searchParams = useSearchParams();
   const from = searchParams?.get(CALENDAR_FROM_PARAM);
-  const returnPath = from ? safeInternalHref(from) : null;
-  const backHref = toDebatesPanel({ pathname: returnPath ?? undefined });
   const isPhone = useMediaQuery(PHONE_QUERY);
 
   const schedule = useDebateSchedule();
@@ -130,7 +124,7 @@ export function DebateCalendar() {
 
   // Once per visit, when what it reports is known: signed out, or signed in with the viewer's own
   // schedule read. Fired before that, `viewer_has_schedule` would be a guess.
-  const openedFrom: CalendarOpenedFrom = returnPath ? 'hub' : 'direct';
+  const openedFrom: CalendarOpenedFrom = from && safeInternalHref(from) ? 'hub' : 'direct';
   const reportedOpen = React.useRef(false);
   const scheduleSettled = !authenticated || schedule.data !== undefined || schedule.isError;
   React.useEffect(() => {
@@ -144,28 +138,12 @@ export function DebateCalendar() {
 
   return (
     <div className="flex w-full flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 px-6 pt-4 pb-2 md:px-4">
-        <Link
-          href={backHref}
-          {...debateActionAnalyticsAttributes('calendar', 'Back to Debates', 'navigate_debates_hub')}
-          className="inline-flex items-center gap-1.5 text-metadataMedium text-grey-04 transition-colors hover:text-text"
-        >
-          <ArrowLeft />
-          Back to Debates
-        </Link>
-        <HubHeaderControls analyticsSurface="calendar" />
-      </header>
-
-      <div className="flex flex-col gap-1 border-b border-grey-02 px-6 pb-3 md:px-4">
+      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-grey-02 px-6 pt-4 pb-3 md:px-4">
         <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
           Debate calendar
         </Text>
-        <Text as="p" variant="metadata" color="grey-04">
-          {viewerHasSchedule
-            ? "Everyone's open times. Shaded hours are times you're free too."
-            : "Everyone's open times. Click a time to book it."}
-        </Text>
-      </div>
+        <HubHeaderControls analyticsSurface="calendar" />
+      </header>
 
       {!ready ? (
         <div className="px-6 py-6 md:px-4">
@@ -216,7 +194,6 @@ function DebateCalendarBody({
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [search, setSearch] = React.useState('');
   const [spaceIds, setSpaceIds] = React.useState<string[]>(EMPTY_SPACE_IDS);
-  const [onlyViewerFree, setOnlyViewerFree] = React.useState(false);
 
   // The full list caps how many people it considers. Past the cap a space selection is sent to
   // geo-chat, which can reach the people the cap left out; below it, everyone is already in hand.
@@ -335,8 +312,8 @@ function DebateCalendarBody({
     () => (viewerHasSchedule ? viewerFreeSlots(schedule.blocks, scheduleZone, new Date(today)) : new Set<number>()),
     [schedule.blocks, scheduleZone, today, viewerHasSchedule]
   );
-  // The viewer's own free time is the one source for both the shading and "Only times I'm free",
-  // so the two cannot disagree.
+  // The viewer's own free time is the one source for both the shading and the green chips, so the
+  // two cannot disagree.
   const slotsWithViewer = React.useMemo(() => {
     if (!viewerHasSchedule) return slotsByUser;
     const flagged = new Map<string, FreeSlot[]>();
@@ -352,8 +329,8 @@ function DebateCalendarBody({
   const days = React.useMemo(() => weekDays(weekStart(new Date(now), weekOffset)), [now, weekOffset]);
   const viewerFreeCells = React.useMemo(() => viewerFreeCellKeys(viewerFree, days), [days, viewerFree]);
   const cells = React.useMemo(
-    () => weekCells(slotsWithViewer, days, { include, onlyViewerFree: viewerHasSchedule && onlyViewerFree, order }),
-    [days, include, onlyViewerFree, order, slotsWithViewer, viewerHasSchedule]
+    () => weekCells(slotsWithViewer, days, { include, order }),
+    [days, include, order, slotsWithViewer]
   );
   // Whether anyone at all is free this week, filters aside: the difference between "nobody is free"
   // and "your filters hid everyone", which have different ways forward.
@@ -361,7 +338,7 @@ function DebateCalendarBody({
     // Everyone the calendar can draw, which is not everyone geo-chat listed: the viewer and the
     // People tab's exclusions are never drawn, so their free time cannot make an empty week look
     // like the filters' doing.
-    () => weekCells(slotsWithViewer, days, { include: key => peopleByUser.has(key), onlyViewerFree: false, order }),
+    () => weekCells(slotsWithViewer, days, { include: key => peopleByUser.has(key), order }),
     [days, order, peopleByUser, slotsWithViewer]
   );
 
@@ -512,7 +489,6 @@ function DebateCalendarBody({
   };
   const clearFilters = () => {
     setSearch('');
-    setOnlyViewerFree(false);
     onSpacesClear();
     changeFilter('clear');
   };
@@ -521,10 +497,37 @@ function DebateCalendarBody({
   const loadError = schedulableQuery.error && !schedulableQuery.data ? schedulableQuery.error : null;
   const nobodyFree = unfilteredCells.size === 0;
   const filteredOut = !nobodyFree && cells.size === 0;
-  const timezone = localTimezone();
+  const offsets = weekOffsetLabels(days);
 
   // The viewer's own debates keep the week on screen even with nobody else free in it.
   const ownDebatesThisWeek = debates.some(debate => cellOf(debate.start, days) !== null);
+
+  // One set of props for both forms of the space filter: pills on a desktop, the hub's menu on a phone.
+  const spaceFilter = {
+    analyticsSurface: 'calendar',
+    facetSpaces,
+    spaceIds,
+    onSpaceToggle: (spaceId: string) => {
+      onSpaceToggle(spaceId);
+      changeFilter('space');
+    },
+    onSpacesClear: () => {
+      onSpacesClear();
+      changeFilter('space');
+    },
+    countsPending: peopleQuery.isLoading || publishableSpacesPending || personRecordsPending,
+  } as const;
+  const searchField = (
+    <div className="w-[260px] shrink-0 md:w-full">
+      <Input
+        withSearchIcon
+        value={search}
+        onChange={event => setSearch(event.currentTarget.value)}
+        placeholder="Search people"
+        aria-label="Search people"
+      />
+    </div>
+  );
 
   return (
     <div className="flex flex-col">
@@ -532,46 +535,19 @@ function DebateCalendarBody({
         {outboundChallenge ? (
           <DebateChallengeCard challenge={outboundChallenge} role="requester" analyticsSurface="calendar" />
         ) : null}
-        <SpaceTopicFilters
-          analyticsSurface="calendar"
-          spaceIds={spaceIds}
-          onSpaceToggle={spaceId => {
-            onSpaceToggle(spaceId);
-            changeFilter('space');
-          }}
-          onSpacesClear={() => {
-            onSpacesClear();
-            changeFilter('space');
-          }}
-          facetSpaces={facetSpaces}
-          countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
-          leading={
-            <div className="w-[260px] md:w-full">
-              <Input
-                withSearchIcon
-                value={search}
-                onChange={event => setSearch(event.currentTarget.value)}
-                placeholder="Search people"
-                aria-label="Search people"
-              />
-            </div>
-          }
-          trailing={
-            <div className="flex flex-wrap items-center gap-4">
-              {viewerHasSchedule ? (
-                <FilterSwitch
-                  label="Only times I'm free"
-                  checked={onlyViewerFree}
-                  onChange={next => {
-                    setOnlyViewerFree(next);
-                    changeFilter('only_viewer_free');
-                  }}
-                  analyticsSurface="calendar"
-                />
-              ) : null}
-            </div>
-          }
-        />
+        {/* A row of pills needs a desktop's width; a phone keeps the menu, under a full-width search. */}
+        {isPhone ? (
+          <SpaceTopicFilters {...spaceFilter} leading={searchField} />
+        ) : (
+          <div className="flex items-center gap-3">
+            <SpaceFilterPills
+              {...spaceFilter}
+              className="min-w-0 flex-1"
+              loading={peopleQuery.isLoading || publishableSpacesPending}
+            />
+            {searchField}
+          </div>
+        )}
       </div>
 
       {!viewerHasSchedule && !schedule.isLoading ? (
@@ -616,9 +592,13 @@ function DebateCalendarBody({
         </HubPillButton>
         <span className="flex-1" />
         <Legend viewerHasSchedule={viewerHasSchedule} />
-        <Text as="span" variant="footnote" color="grey-04">
-          {timezone === 'local' ? 'Your local time' : timezone}
-        </Text>
+        {/* The week grid carries the offset at the top of its time column; the day list has no
+            time column, so a phone shows it here. */}
+        {isPhone ? (
+          <Text as="span" variant="footnote" color="grey-04">
+            {offsets.join(' / ')}
+          </Text>
+        ) : null}
       </div>
 
       {/* Not the error state: everyone's free time loaded and can still be booked. These are the

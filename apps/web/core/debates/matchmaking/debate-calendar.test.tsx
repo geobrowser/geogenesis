@@ -133,22 +133,18 @@ vi.mock('./use-person-facts', () => ({
 // The header's own controls and the filter bar have their own suites; these are about the week.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => null }));
 vi.mock('./claims-tab', () => ({
-  SpaceTopicFilters: ({
-    leading,
-    trailing,
-    onSpaceToggle,
-  }: {
-    leading?: React.ReactNode;
-    trailing?: React.ReactNode;
-    onSpaceToggle: (spaceId: string) => void;
-  }) => (
+  SpaceTopicFilters: ({ leading }: { leading?: React.ReactNode }) => (
     <div>
       {leading}
-      <button type="button" onClick={() => onSpaceToggle('space-1')}>
-        Pick a space
-      </button>
-      {trailing}
+      <button type="button">Space menu</button>
     </div>
+  ),
+}));
+vi.mock('./space-filter-pills', () => ({
+  SpaceFilterPills: ({ onSpaceToggle }: { onSpaceToggle: (spaceId: string) => void }) => (
+    <button type="button" onClick={() => onSpaceToggle('space-1')}>
+      Pick a space
+    </button>
   ),
 }));
 vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({
@@ -569,6 +565,19 @@ describe('DebateCalendar', () => {
     expect(screen.getByText(/Narrow by space to see others/)).toBeInTheDocument();
   });
 
+  it('filters by space with pills on a desktop and the menu on a phone', () => {
+    const { unmount } = render(<DebateCalendar />);
+    expect(screen.getByRole('button', { name: 'Pick a space' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Space menu' })).toBeNull();
+    unmount();
+
+    mocks.isPhone = true;
+    render(<DebateCalendar />);
+    expect(screen.getByRole('button', { name: 'Space menu' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Pick a space' })).toBeNull();
+    expect(screen.getByRole('textbox', { name: 'Search people' })).toBeInTheDocument();
+  });
+
   it('lists the week by day on a phone', () => {
     mocks.isPhone = true;
     render(<DebateCalendar />);
@@ -578,37 +587,20 @@ describe('DebateCalendar', () => {
     expect(within(thursday).getByText('Elena')).toBeInTheDocument();
   });
 
-  it('goes back to the page it came from, with the debates panel open', () => {
+  it('reports an open from the hub when it carries where it came from', () => {
     mocks.searchParams = new URLSearchParams({ from: '/space/abc/debates' });
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
-      'href',
-      expect.stringMatching(/^\/space\/abc\/debates\?modal=debates/)
-    );
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_calendar_opened',
       expect.objectContaining({ opened_from: 'hub' })
     );
   });
 
-  it("restores the page's own query and fragment on the way back", () => {
-    mocks.searchParams = new URLSearchParams({ from: '/space/abc?proposal=1#votes' });
+  it('heads the page with its title and no back link', () => {
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
-      'href',
-      '/space/abc?proposal=1&modal=debates#votes'
-    );
-  });
-
-  it('never goes back off-site', () => {
-    mocks.searchParams = new URLSearchParams({ from: '//evil.example' });
-    render(<DebateCalendar />);
-
-    expect(screen.getByRole('link', { name: /Back to Debates/ })).toHaveAttribute(
-      'href',
-      expect.stringMatching(/^\/explore\?/)
-    );
+    expect(screen.getByRole('heading', { level: 1, name: 'Debate calendar' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /Back to Debates/ })).toBeNull();
   });
 });

@@ -12,7 +12,7 @@ export const metadata: Metadata = {
 };
 
 export default function CalendarRoutePage() {
-  // `DebateCalendar` reads its return path from the query string.
+  // `DebateCalendar` reads where it was opened from off the query string.
   return (
     <React.Suspense
       fallback={
