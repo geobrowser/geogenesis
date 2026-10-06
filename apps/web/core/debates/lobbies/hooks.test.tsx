@@ -242,6 +242,28 @@ describe('useLobbyPresence', () => {
     expect(api.stepOutOfDebateLobby).not.toHaveBeenCalled();
   });
 
+  it('returns to the lobby when the server step-out and the routing land in the same tick', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+      connection_alive: false,
+      voice_away_at: null,
+      reason: 'stepped_out',
+      current_lobby_id: null,
+    });
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    const go = vi.fn();
+    // One act, so nothing renders between the heartbeat's answer and the routing.
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+      routeIntoDebate(go);
+    });
+    await waitFor(() => expect(go).toHaveBeenCalled());
+    expect(consumeDebateReturnDestination()).toBe('/debate/lobby1');
+    expect(api.stepOutOfDebateLobby).not.toHaveBeenCalled();
+  });
+
   it('does not record the lobby for a viewer who left it', async () => {
     const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
     await waitFor(() => expect(result.current.state.status).toBe('joined'));

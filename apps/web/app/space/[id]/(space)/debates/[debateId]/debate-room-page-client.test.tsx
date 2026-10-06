@@ -6,7 +6,11 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
-import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import {
+  clearDebateReturnDestination,
+  rememberDebateReturnDestination,
+  rememberLobbyReturnDestination,
+} from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import {
   at as openRoundsAt,
@@ -5260,6 +5264,19 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.clearDebateActivity).toHaveBeenCalledWith('debate-1');
     expect(mocks.back).toHaveBeenCalledOnce();
     expect(mocks.replace).not.toHaveBeenCalled();
+    view.unmount();
+  });
+
+  it('returns to the lobby the viewer stepped out of after leaving an active debate', async () => {
+    setHistoryLength(2);
+    rememberLobbyReturnDestination('lobby-1');
+    const view = await renderLiveDebate();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.abortMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.replace).toHaveBeenCalledWith('/debate/lobby-1');
+    expect(mocks.back).not.toHaveBeenCalled();
     view.unmount();
   });
 
