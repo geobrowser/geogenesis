@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -283,17 +283,10 @@ describe('DebateCalendar', () => {
     expect(screen.getAllByRole('rowgroup')[0].scrollTop).toBe(18 * ROW - 8);
   });
 
-  it('books the clicked time through the existing modal, with the time picked', () => {
+  it('draws faces as pictures, not buttons, so the cell is the only target', () => {
     render(<DebateCalendar />);
 
-    fireEvent.click(within(cell(/Thursday.*free: Elena/)).getByRole('button', { name: /Elena/ }));
-
-    expect(screen.getByRole('dialog', { name: 'Book Elena' })).toBeInTheDocument();
-    expect(mocks.bookingProps).toMatchObject({
-      userId: '11',
-      initialSelectedStart: at(8, 18),
-      entry: 'calendar_slot',
-    });
+    expect(within(cell(/Thursday.*free: Elena/)).queryAllByRole('button')).toHaveLength(0);
   });
 
   it('collapses a crowded hour and lists everyone in it, most matches first', () => {
@@ -311,7 +304,7 @@ describe('DebateCalendar', () => {
     render(<DebateCalendar />);
 
     const crowded = cell(/Thursday.*free: Eli, Cy, Ana and 2 more/);
-    expect(within(crowded).getByRole('button', { name: /Everyone free then: 5 people/ })).toHaveTextContent('+2');
+    expect(crowded).toHaveTextContent('+2');
 
     fireEvent.click(crowded);
     const list = screen.getByRole('dialog', { name: /Free Thursday/ });
@@ -327,24 +320,13 @@ describe('DebateCalendar', () => {
     expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_hour_opened', { people_count: 5 });
   });
 
-  it('records whose card opened, once, when a face is hovered', async () => {
-    render(<DebateCalendar />);
-
-    const face = within(cell(/Thursday.*free: Elena/)).getByRole('button', { name: /Elena/ });
-    fireEvent.pointerEnter(face, { pointerType: 'mouse' });
-
-    await waitFor(() =>
-      expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_person_viewed', { peer_user_id: '11' })
-    );
-    expect(mocks.capture.mock.calls.filter(([name]) => name === 'debate_calendar_person_viewed')).toHaveLength(1);
-  });
-
-  it('opens the hour from anywhere in the cell, including beside the faces', () => {
+  it('opens the hour, not a booking, when a face itself is clicked', () => {
     render(<DebateCalendar />);
 
     const thursday = cell(/Thursday.*free: Elena/);
-    // The strip the faces sit in, not the cell itself: where most clicks land.
-    fireEvent.click(within(thursday).getByRole('button', { name: /Elena/ }).parentElement!);
+    const face = thursday.querySelector('span[aria-hidden]');
+    expect(face).not.toBeNull();
+    fireEvent.click(face!);
     expect(screen.getByRole('dialog', { name: /Free Thursday/ })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Book Elena' })).not.toBeInTheDocument();
   });
@@ -363,11 +345,11 @@ describe('DebateCalendar', () => {
     expect(within(list).getByRole('button', { name: /6:30 PM$/ })).not.toHaveClass('border-green');
   });
 
-  it('records one hour opened when +N opens it', () => {
+  it('records one hour opened when +N is clicked', () => {
     mocks.schedulable = response(['11', '12', '13', '14', '15'].map(id => free(id, `Person ${id}`, [thursdaySix])));
     render(<DebateCalendar />);
 
-    fireEvent.click(screen.getByRole('button', { name: /Everyone free then: 5 people/ }));
+    fireEvent.click(screen.getByText('+2'));
 
     expect(screen.getByRole('dialog', { name: /Free Thursday/ })).toBeInTheDocument();
     const opened = mocks.capture.mock.calls.filter(([name]) => name === 'debate_calendar_hour_opened');

@@ -664,10 +664,8 @@ function DebateCalendarBody({
               debates={debates}
               viewerFreeCells={viewerHasSchedule ? viewerFreeCells : null}
               peopleByUser={peopleByUser}
-              slotsByUser={slotsByUser}
               opponentName={opponentName}
               renderRow={renderRow}
-              onBook={openBooking}
               now={now}
             />
           )}

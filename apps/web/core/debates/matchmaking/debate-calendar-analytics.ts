@@ -4,7 +4,7 @@ import { capture } from '~/core/analytics';
  * The calendar's screen-level events (GEO-3152).
  *
  * Bookings are not here. They go through the booking modal's own scheduling events, with the
- * `entry` saying which part of this screen opened it (`calendar_slot` / `_hour` / `_card`), so a
+ * `entry` saying which part of this screen opened it (`calendar_hour` / `calendar_card`), so a
  * booking is counted once, the same way wherever it came from. Debate now is the hub's existing
  * `start_debate` action, told apart by its page path.
  *
@@ -41,9 +41,4 @@ export function calendarFilterChanged(filter: CalendarFilter) {
 
 export function calendarHourOpened(peopleCount: number) {
   capture('debate_calendar_hour_opened', { people_count: peopleCount });
-}
-
-/** A face's card opened. Whose, so the data can say which people get looked at and not booked. */
-export function calendarPersonViewed(peerUserId: string) {
-  capture('debate_calendar_person_viewed', { peer_user_id: peerUserId });
 }
