@@ -9,7 +9,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
-import { type DebateChallenge, type DebatePerson, GeoChatRequestError, type SchedulablePeopleResponse } from '../api';
+import {
+  type DebateChallenge,
+  type DebatePerson,
+  GeoChatRequestError,
+  type SchedulablePeopleResponse,
+  type SchedulablePerson,
+} from '../api';
 import type { ClaimPickerEntity } from '../claim-picker-page';
 import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
@@ -593,7 +599,7 @@ describe('PeopleTab', () => {
     mocks.people = [];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
 
     cleanup();
@@ -636,7 +642,7 @@ describe('PeopleTab', () => {
 
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'artur' } });
 
-    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
     // Clearing a search that excluded nobody would put the same empty list back.
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
@@ -1521,13 +1527,25 @@ describe('Online only', () => {
     return { start: wire(start), end: wire(new Date(start.getTime() + 30 * 60_000)) };
   }
 
-  function schedulable(userId: string, name: string, slots: Array<{ start: string; end: string }>, truncated = false) {
+  function schedulable(
+    userId: string,
+    name: string,
+    slots: Array<{ start: string; end: string }>,
+    truncated = false
+  ): SchedulablePerson {
     return {
       user: { user_id: userId, profile_space_id: `profile-${userId}`, display_name: name, avatar_cid: null },
       online: false,
       slots,
       truncated,
     };
+  }
+
+  /** One of their free stretches, `hours` from now and `length` half hours long (geo-chat#204). */
+  function windowIn(hours: number, length: number, viewerFree = false) {
+    const first = slotIn(hours);
+    const end = new Date(Date.parse(first.start) + length * 30 * 60_000).toISOString().replace('.000Z', 'Z');
+    return { start: first.start, end, viewer_free: viewerFree };
   }
 
   it('is off by default, so offline people are listed alongside online ones', () => {
@@ -1598,11 +1616,11 @@ describe('Online only', () => {
     expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
   });
 
-  // Schedule on an away row has to lead somewhere: with no free time of theirs, or no hours of the
-  // viewer's, geo-chat leaves them off the schedulable list and the week would open empty.
+  // Schedule on an away row has to lead somewhere: with no free time of theirs, geo-chat leaves
+  // them off the schedulable list and the week would open empty.
   it.each([
     ['they have no free time this week', { viewer_has_schedule: true }],
-    ['the viewer has no hours set', { viewer_has_schedule: false }],
+    ['the viewer has no hours set and they have no free time', { viewer_has_schedule: false }],
   ])('draws an away person with a disabled Away pill when %s', (_, overrides) => {
     mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
     mocks.schedulable = { viewer_timezone: 'UTC', truncated: false, people: [], ...overrides };
@@ -1828,6 +1846,151 @@ describe('Online only', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
+    // Offline people are listed without hours now (GEO-3154), so it no longer promises them.
+    expect(screen.queryByText(/to see offline people/)).not.toBeInTheDocument();
+    expect(screen.getByText(/so others can schedule a debate with you/)).toBeInTheDocument();
+    expect(screen.queryByText(/at the same times as you/)).not.toBeInTheDocument();
+  });
+
+  it('does not tell a viewer with no hours that their times failed to load', () => {
+    mocks.people = [];
+    mocks.useSchedulablePeople.mockImplementation(() => ({
+      data: undefined,
+      isLoading: false,
+      error: new Error('down'),
+      refetch: vi.fn(),
+    }));
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText(/Couldn.t load who.s free this week/)).toBeInTheDocument();
+    expect(screen.queryByText(/your times/)).not.toBeInTheDocument();
+  });
+
+  describe('a viewer with no hours set (GEO-3154)', () => {
+    it('lists offline people with their own next free times, one per stretch, and Schedule', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        people: [
+          {
+            ...schedulable('user-away', 'Ona', []),
+            their_windows: [windowIn(25, 4), windowIn(30, 2), windowIn(50, 2), windowIn(70, 2)],
+          },
+        ],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const row = screen.getByRole('listitem');
+      expect(within(row).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeInTheDocument();
+      const chips = within(row).getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chips).toHaveLength(3);
+      // Nothing is shared without hours, so no chip claims it is.
+      chips.forEach(chip => {
+        expect(chip).not.toHaveAttribute('data-viewer-free');
+        expect(chip.getAttribute('aria-label')).not.toMatch(/both free/);
+      });
+      expect(within(row).getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
+    });
+
+    it('opens their week on a picked free time', async () => {
+      const stretch = windowIn(26, 2);
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [stretch] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const [chip] = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      fireEvent.click(chip);
+
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+      expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-away');
+    });
+
+    it('offers the next half hour of a stretch that has already begun, never one gone', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        // Began an hour ago and runs two more: the chip is the coming half hour.
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(-1, 6)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const began = Date.parse(windowIn(-1, 6).start);
+      const next = began + (Math.floor((Date.now() - began) / 1_800_000) + 1) * 1_800_000;
+      const time = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chips).toHaveLength(1);
+      expect(chips[0].textContent).toContain(time(next));
+      expect(chips[0].textContent).not.toContain(time(next - 1_800_000));
+    });
+
+    it('lets an away person be scheduled', async () => {
+      mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        people: [{ ...schedulable('user-them', 'Arturas', []), online: true, their_windows: [windowIn(26, 2)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const row = screen.getByRole('listitem');
+      fireEvent.click(within(row).getByRole('button', { name: 'Schedule a debate with Arturas' }));
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+      expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+    });
+  });
+
+  describe('a viewer with hours set', () => {
+    it('keeps shared times first and marks them shared', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: 'UTC',
+        viewer_has_schedule: true,
+        truncated: false,
+        people: [
+          {
+            ...schedulable('user-away', 'Ona', [slotIn(30)]),
+            // An earlier stretch of theirs alone does not push the shared time off the row.
+            their_windows: [windowIn(25, 2), windowIn(30, 1, true)],
+          },
+        ],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chips).toHaveLength(1);
+      expect(chips[0]).toHaveAttribute('data-viewer-free', 'true');
+      expect(chips[0].getAttribute('aria-label')).toMatch(/you're both free$/);
+    });
+
+    it('falls back to their own free times, unmarked as shared, when they share none', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: 'UTC',
+        viewer_has_schedule: true,
+        truncated: false,
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(25, 1), windowIn(28, 1)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chips).toHaveLength(2);
+      chips.forEach(chip => {
+        expect(chip).not.toHaveAttribute('data-viewer-free');
+        expect(chip.getAttribute('aria-label')).not.toMatch(/both free/);
+      });
+      expect(screen.queryByRole('button', { name: 'More times for Ona' })).not.toBeInTheDocument();
+    });
   });
 
   it('keeps someone with no upcoming shared times, schedulable but with no times drawn', () => {

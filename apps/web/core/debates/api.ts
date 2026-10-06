@@ -979,12 +979,22 @@ export type SchedulablePerson = {
   slots: ScheduleOverlapSlot[];
   /** More overlap exists than `limit` returned. */
   truncated: boolean;
+  /**
+   * All of their free time still ahead (geo-chat#204, GEO-3153), whether or not the viewer shares it, merged into
+   * continuous windows, each flagged with whether the viewer is free for it. Committed time is
+   * already taken out, and `limit` never caps it. Absent on deployments that predate it, which is
+   * not the same as an empty week.
+   */
+  their_windows?: AnnotatedSlot[];
 };
 
 /** What `/matchmaking/schedulable-people` answers. */
 export type SchedulablePeopleResponse = {
   viewer_timezone: string;
-  /** False means the viewer has no availability saved, and `people` is then always empty. */
+  /**
+   * False means the viewer has no availability saved. Since geo-chat#204 (GEO-3153) `people` is still
+   * filled for them, so this flag, not an empty list, is what says so. Older builds sent nobody.
+   */
   viewer_has_schedule: boolean;
   people: SchedulablePerson[];
   /** The server's candidate scan was capped. */
