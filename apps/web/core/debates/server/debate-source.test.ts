@@ -228,6 +228,7 @@ describe('loadDebatePublishSource media gating', () => {
         topics: [],
         isContestable: false,
         timing: { startMs: 0, endMs: 9_000 },
+        highlightScore: null,
         stance: 'supports',
       },
       {
@@ -239,6 +240,7 @@ describe('loadDebatePublishSource media gating', () => {
         topics: [],
         isContestable: false,
         timing: null,
+        highlightScore: null,
         stance: null,
       },
     ]);

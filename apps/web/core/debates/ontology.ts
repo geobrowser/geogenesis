@@ -134,6 +134,19 @@ export const CLAIM_START_OFFSET_PROPERTY_ID = 'a1d1cb557b184238ba0ec78ba7f289fb'
 export const CLAIM_END_OFFSET_PROPERTY_ID = '79a677b597f84ca8a1cf24eef7837b61';
 
 /**
+ * How much a claim carries its debate: the probability, judged by extraction-api's
+ * `claims.score_highlights` over the whole transcript, that the debate's claim list would
+ * misrepresent the debate without it. 0–1, compared within one debate; the player uses it to
+ * show the few claims that matter rather than every one.
+ *
+ * Lives on the same block → claim relation entity as the offsets, for the same reason: it is a
+ * fact about this claim *in this debate*, and a claim reused across debates can carry a
+ * different score in each. Float, in the Geo root space; created by Preston on 2026-10-02 as
+ * "Quality score" and renamed "Highlight score" on 2026-10-05.
+ */
+export const CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID = '580ba596988144a79716cd38a891319b';
+
+/**
  * The typing that says a relation points at a *span* of its target rather than the whole of it.
  *
  * A relation entity carrying offsets is typed `Selector` and given a `Target property` naming the

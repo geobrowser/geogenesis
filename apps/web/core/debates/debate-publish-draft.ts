@@ -12,6 +12,7 @@ import {
   BLOCKS_PROPERTY_ID,
   CLAIM_ADDRESSES_PROPERTY_ID,
   CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_OPPOSES_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
   CLAIM_SUPPORTS_PROPERTY_ID,
@@ -127,6 +128,14 @@ export type DebateClaimInput = {
    * this is null whenever geo-chat did not measure it, and the app falls back to matching.
    */
   timing?: { startMs: number; endMs: number } | null;
+  /**
+   * How much this claim carries the debate — geo-chat's `highlight_score`, the probability that
+   * the debate's claim list would misrepresent the debate without it (0–1). Written onto the
+   * block → claim relation entity beside the offsets, where the player ranks claims by it. Null
+   * whenever geo-chat did not score the claim (scoring off, or that claim's request failed), and
+   * nothing is written.
+   */
+  highlightScore?: number | null;
   /**
    * GEO-3142: the claim's stance toward the debated claim, written as one Supports / Opposes /
    * Addresses relation from the claim to `claimEntityId`. Null/absent writes none: payloads from
@@ -288,6 +297,9 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
 
   const setInteger = (entityId: string, propertyId: string, value: number) => {
     values.push(makeIntegerValue({ entityId, entityName: null, propertyId, value, spaceId: input.spaceId }));
+  };
+  const setFloat = (entityId: string, propertyId: string, value: number) => {
+    values.push(makeFloatValue({ entityId, entityName: null, propertyId, value, spaceId: input.spaceId }));
   };
 
   // One Topics relation per (entity, topic). `relate` does not dedupe, and a reused claim can appear
@@ -569,6 +581,16 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           // claim stated in two turns has two moments. Typed Selector → Debate videos, the graph's
           // shape for "this relation points at a span of its target" (the one `Reply to` uses).
           // Only a measured span is written — the app reads these as a to-the-second certainty.
+          // How much the claim carries the debate, on the same relation entity: like the offsets it
+          // is a fact about this statement in this debate, not about the claim. Only a real score
+          // is written — the player ranks by it, so a stand-in would rank. Like the offsets, it is
+          // the FIRST extraction's for this (block, claim): two extractions in one turn that
+          // resolve to one entity share one relation, and the later one's score is not consulted
+          // even when the first had none.
+          const highlightScore = publishableHighlightScore(claim.highlightScore);
+          if (highlightScore !== null) {
+            setFloat(statement.id, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, highlightScore);
+          }
           const timing = publishableTiming(claim.timing);
           if (timing) {
             setInteger(statement.id, CLAIM_START_OFFSET_PROPERTY_ID, timing.startMs);
@@ -808,6 +830,17 @@ export function publishableTiming(timing: DebateClaimInput['timing']): { startMs
   return { startMs, endMs };
 }
 
+/**
+ * A claim's highlight score if it is a finite number in [0, 1], else null. Same stance as
+ * {@link publishableTiming}: the decoder refuses anything else already, and the publisher refuses
+ * it again because a bad value here is ranked by, and nothing downstream can demote it.
+ */
+export function publishableHighlightScore(score: DebateClaimInput['highlightScore']): number | null {
+  if (typeof score !== 'number' || !Number.isFinite(score)) return null;
+  if (score < 0 || score > 1) return null;
+  return score;
+}
+
 /** Dashless, lower-case — the form ids are compared in, so one entity is one key. */
 function normalizeId(id: string): string {
   return id.replace(/-/g, '').toLowerCase();
@@ -858,6 +891,32 @@ function makeIntegerValue({
     id: ID.createValueId({ entityId, propertyId, spaceId }),
     entity: { id: entityId, name: entityName },
     property: { id: propertyId, name: null, dataType: INTEGER_DATA_TYPE },
+    value: String(value),
+    spaceId,
+    isLocal: true,
+    hasBeenPublished: false,
+  };
+}
+
+const FLOAT_DATA_TYPE: DataType = 'FLOAT';
+
+function makeFloatValue({
+  entityId,
+  entityName,
+  propertyId,
+  value,
+  spaceId,
+}: {
+  entityId: string;
+  entityName: string | null;
+  propertyId: string;
+  value: number;
+  spaceId: string;
+}): Value {
+  return {
+    id: ID.createValueId({ entityId, propertyId, spaceId }),
+    entity: { id: entityId, name: entityName },
+    property: { id: propertyId, name: null, dataType: FLOAT_DATA_TYPE },
     value: String(value),
     spaceId,
     isLocal: true,
