@@ -1977,6 +1977,9 @@ export type DebateLobbyMember = {
   /** Hosting for now because no host is present. `role` stays their own. */
   acting_host: boolean;
   present_since: string;
+  /** Left to debate; still listed, without host powers, until back or it expires. */
+  stepped_out?: boolean;
+  in_debate?: boolean;
 };
 
 export type DebateLobbyView = {
@@ -1993,7 +1996,7 @@ export type DebateLobbyView = {
   /** Moves when the acting host changes. */
   hosts_changed_at: string | null;
   reminder_count: number;
-  /** Present members, longest-present first. Empty for a banned viewer. */
+  /** Present and stepped-out members, longest-present first. Empty for a banned viewer. */
   members: DebateLobbyMember[];
   viewer: {
     /** `null` before the viewer's first join. */
@@ -2004,7 +2007,9 @@ export type DebateLobbyView = {
     reminded: boolean;
     /** While in this lobby's voice: when voice stops holding off Away without input. */
     voice_away_at: string | null;
+    /** This viewer holds a lease; `false` while stepped out. */
     present: boolean;
+    stepped_out?: boolean;
   };
 };
 
@@ -2100,10 +2105,17 @@ export async function setDebateLobbyPresence(
   });
 }
 
+/** Why a heartbeat's connection is out of the lobby. Only `lapsed` should join again. */
+export type DebateLobbyGoneReason = 'lapsed' | 'moved' | 'stepped_out' | 'ended' | 'banned' | 'removed';
+
 export type DebateLobbyHeartbeat = {
-  /** This connection's lease is live. `false`: it lapsed or was dropped, so join again. */
+  /** This connection's lease is live; when `false`, `reason` says why. */
   connection_present: boolean;
   voice_away_at: string | null;
+  /** Missing on a geo-chat that predates it, which meant `lapsed`. */
+  reason?: DebateLobbyGoneReason | null;
+  /** Dashless; the lobby they are in now, with `moved`. */
+  current_lobby_id?: string | null;
 };
 
 /** Renews this connection's 120s lease. Rate limited to 30 a minute per person. */
@@ -2116,6 +2128,39 @@ export async function sendDebateLobbyHeartbeat(
   return geoChatRequest<DebateLobbyHeartbeat>(`/debate-lobbies/${lobbyId}/heartbeat`, {
     method: 'POST',
     body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Drops this connection's lease but keeps the viewer on the roster, before routing into a debate.
+ * `409 lobby_not_present` when it held none. Joining again ends it.
+ */
+export async function stepOutOfDebateLobby(
+  lobbyId: string,
+  body: { connection_id: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/step-out`, {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Stepped out, leave for good. Does nothing when not stepped out. */
+export async function endDebateLobbyStepOut(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/step-out`, {
+    method: 'DELETE',
     auth: true,
     getPrivyIdentityToken,
     accountKey,

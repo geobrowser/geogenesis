@@ -46,6 +46,8 @@ export const LOBBY_COPY = {
   closed: 'This lobby has closed.',
   findDebate: 'Find a debate',
   otherLobby: 'You’re in another lobby. Joining this one leaves it.',
+  removed: 'You were removed from this lobby.',
+  steppedOut: 'You stepped out to debate. You’re still on the roster.',
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
 } as const;
 
@@ -61,7 +63,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const lobbyQuery = useDebateLobby(lobbyId);
   const lobby = lobbyQuery.data ?? null;
   const admitted = lobby?.access.status === 'admitted';
-  const presence = useLobbyPresence(lobbyId, admitted);
+  const presence = useLobbyPresence(lobbyId, admitted, lobby?.viewer.stepped_out ?? false);
   // `debate.lobby_changed` only reaches people inside; until then this page hears opening,
   // arrivals and end through the matchmaking scope's `debate.lobbies_changed`.
   const waitingOutside =
@@ -159,14 +161,13 @@ function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
   );
 }
 
-function AdmittedLobby({
-  lobby,
-  presence,
-}: {
-  lobby: DebateLobbyView;
-  presence: { state: LobbyPresenceState; join: (leaveOther?: boolean) => Promise<void>; leave: () => Promise<void> };
-}) {
-  const { state, join, leave } = presence;
+function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: ReturnType<typeof useLobbyPresence> }) {
+  const { state, join, leave, leaveSteppedOut } = presence;
+
+  // Until the refetch moves the page to the lobby's new access.
+  if (state.status === 'dropped') {
+    return <LobbyNotice action={findDebateAction}>{LOBBY_COPY[state.reason]}</LobbyNotice>;
+  }
 
   if (state.status === 'confirm_leave_other') {
     return (
@@ -211,7 +212,14 @@ function AdmittedLobby({
     );
   }
 
-  return <LobbyRoom lobby={lobby} state={state} onRetry={() => void join(false)} onLeave={() => void leave()} />;
+  return (
+    <LobbyRoom
+      lobby={lobby}
+      state={state}
+      onRetry={() => void join(false)}
+      onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
+    />
+  );
 }
 
 /** Another tab joined a different lobby, which took this tab out of this one. */
@@ -337,7 +345,16 @@ function LobbyRoom({
         </div>
       ) : null}
 
-      {state.status === 'failed' ? (
+      {state.status === 'stepped_out' ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Text as="p" variant="footnote" color="text">
+            {LOBBY_COPY.steppedOut}
+          </Text>
+          <HubPillButton variant="primary" analyticsLabel="Lobby back to the room" onClick={onRetry}>
+            Back to the room
+          </HubPillButton>
+        </div>
+      ) : state.status === 'failed' ? (
         <div className="flex items-center gap-2">
           <Text as="p" variant="footnote" color="red-01">
             {state.message}
@@ -389,6 +406,11 @@ function RosterRow({ member, isViewer }: { member: DebateLobbyMember; isViewer: 
             {isViewer ? ' (you)' : ''}
           </Text>
         </Link>
+        {member.in_debate || member.stepped_out ? (
+          <Text as="p" variant="footnote" color="grey-04">
+            {member.in_debate ? 'In a debate' : 'Stepped out'}
+          </Text>
+        ) : null}
       </div>
       <span
         className={cx(

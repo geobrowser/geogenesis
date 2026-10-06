@@ -5,15 +5,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
+  type DebateLobbyHeartbeat,
   type DebateLobbyView,
   GeoChatRequestError,
   createDebateLobby,
+  dashlessId,
   endDebateLobby,
+  endDebateLobbyStepOut,
   getDebateLobby,
   listDebateLobbies,
   sendDebateLobbyHeartbeat,
   setDebateLobbyPresence,
   setDebateLobbyReminder,
+  stepOutOfDebateLobby,
 } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useConnectionId } from '../rooms/hooks';
@@ -25,6 +29,21 @@ export const LOBBY_HEARTBEAT_MS = 15_000;
 const VISIBLE_BEAT_MIN_GAP_MS = 30_000;
 /** For a 429 without `Retry-After`. */
 const RATE_LIMIT_FALLBACK_MS = 5_000;
+/** Routing into a debate waits at most this long for the step-out; the server catches up anyway. */
+const STEP_OUT_WAIT_MS = 2_000;
+
+/** The lobby this tab is in, so routing into a debate can step out first. One per tab. */
+let stepOutOfCurrentLobby: (() => Promise<void>) | null = null;
+
+/**
+ * Before routing into a debate from a lobby: keeps the viewer on the roster rather than the
+ * unmount's leave taking them off. geo-chat steps them out within ~2s regardless.
+ */
+export function stepOutBeforeDebate(): Promise<void> {
+  const stepOut = stepOutOfCurrentLobby;
+  if (!stepOut) return Promise.resolve();
+  return Promise.race([stepOut(), new Promise<void>(resolve => setTimeout(resolve, STEP_OUT_WAIT_MS))]);
+}
 
 /** How long a 429 asks us to wait, or `null` for any other outcome. */
 export function rateLimitDelayMs(error: unknown) {
@@ -152,6 +171,10 @@ export type LobbyPresenceState =
   | { status: 'confirm_leave_other'; otherLobbyId: string | null }
   /** Joined another lobby from another tab, which dropped this one; no automatic rejoin. */
   | { status: 'moved'; otherLobbyId: string | null }
+  /** Left to debate, still on the roster; "Back to the room" joins again. */
+  | { status: 'stepped_out' }
+  /** Taken out by the server; the refetched access says the rest. */
+  | { status: 'dropped'; reason: 'ended' | 'banned' | 'removed' }
   | { status: 'left' }
   | { status: 'failed'; message: string };
 
@@ -159,7 +182,8 @@ export type LobbyPresenceState =
  * Presence in one lobby: joins once admitted, heartbeats while joined, and leaves on unmount,
  * `pagehide` or Leave. A lapsed lease (viewer not present in a heartbeat's view) joins again.
  */
-export function useLobbyPresence(lobbyId: string, admitted: boolean) {
+export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut = false) {
+  const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
   const connectionId = useConnectionId();
@@ -185,9 +209,8 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
     return next;
   }, []);
 
-  // `afterLapse`: this tab's lease was dropped rather than the viewer asking to join.
   const join = React.useCallback(
-    async (leaveOtherLobby = false, afterLapse = false) => {
+    async (leaveOtherLobby = false) => {
       const generation = generationRef.current;
       sentRef.current = true;
       setState({ status: 'joining' });
@@ -212,8 +235,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
         joinedRef.current = false;
         sentRef.current = false;
         if (isAlreadyInAnotherLobby(error)) {
-          // After a lapse, joining back here would drop the other tab's lobby.
-          setState({ status: afterLapse ? 'moved' : 'confirm_leave_other', otherLobbyId: otherLobbyIdFrom(error) });
+          setState({ status: 'confirm_leave_other', otherLobbyId: otherLobbyIdFrom(error) });
           return;
         }
         setState({ status: 'failed', message: lobbyErrorMessage(error, 'Could not join this lobby. Try again.') });
@@ -246,14 +268,82 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
     }
   }, [enqueue, sendLeave, store]);
 
-  // Auto-join once admitted, unless the viewer left or is being asked about another lobby.
+  // Out of the lobby without a leave: stops the heartbeat and the unmount's leave.
+  const stopWithout = React.useCallback((next: LobbyPresenceState) => {
+    generationRef.current += 1;
+    sentRef.current = false;
+    joinedRef.current = false;
+    setState(next);
+  }, []);
+
+  const stepOut = React.useCallback(async () => {
+    if (!sentRef.current) return;
+    stopWithout({ status: 'stepped_out' });
+    try {
+      store(
+        await enqueue(() =>
+          stepOutOfDebateLobby(lobbyId, { connection_id: connectionId }, () => tokenRef.current(), accountKey)
+        )
+      );
+    } catch {
+      // `lobby_not_present`, or the server steps them out from the debate itself.
+    }
+  }, [accountKey, connectionId, enqueue, lobbyId, stopWithout, store]);
+
+  /** Stepped out, leave for good. */
+  const leaveSteppedOut = React.useCallback(async () => {
+    stopWithout({ status: 'left' });
+    try {
+      store(await enqueue(() => endDebateLobbyStepOut(lobbyId, () => tokenRef.current(), accountKey)));
+    } catch {
+      // Step-out expires on its own.
+    }
+  }, [accountKey, enqueue, lobbyId, stopWithout, store]);
+
+  React.useEffect(() => {
+    stepOutOfCurrentLobby = stepOut;
+    return () => {
+      if (stepOutOfCurrentLobby === stepOut) stepOutOfCurrentLobby = null;
+    };
+  }, [stepOut]);
+
+  // Auto-join once admitted, unless the viewer left, is being asked about another lobby, or
+  // stepped out, where going back is their call.
   const status = state.status;
   React.useEffect(() => {
-    if (admitted && status === 'idle') void join(false);
-  }, [admitted, join, status]);
+    if (!admitted || status !== 'idle') return;
+    if (steppedOut) setState({ status: 'stepped_out' });
+    else void join(false);
+  }, [admitted, join, status, steppedOut]);
 
-  // Heartbeat while joined. `connection_present` false means this tab's lease lapsed or was
-  // dropped: join again; the join's view says if the lobby has since closed. A tab coming back
+  const onGone = React.useCallback(
+    (heartbeat: DebateLobbyHeartbeat) => {
+      switch (heartbeat.reason) {
+        case 'moved':
+          stopWithout({
+            status: 'moved',
+            otherLobbyId: heartbeat.current_lobby_id ? dashlessId(heartbeat.current_lobby_id) : null,
+          });
+          return;
+        case 'stepped_out':
+          stopWithout({ status: 'stepped_out' });
+          void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobby(accountKey, lobbyId) });
+          return;
+        case 'ended':
+        case 'banned':
+        case 'removed':
+          stopWithout({ status: 'dropped', reason: heartbeat.reason });
+          void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobby(accountKey, lobbyId) });
+          return;
+        default:
+          // `lapsed`, or a geo-chat without reasons.
+          void join(false);
+      }
+    },
+    [accountKey, join, lobbyId, queryClient, stopWithout]
+  );
+
+  // Heartbeat while joined; `reason` says what a dropped connection does next. A tab coming back
   // from the background beats at once, since its timers may have been throttled.
   React.useEffect(() => {
     if (status !== 'joined' || !admitted) return;
@@ -272,7 +362,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
         accountKey
       )
         .then(heartbeat => {
-          if (joinedRef.current && !heartbeat.connection_present) void join(false, true);
+          if (joinedRef.current && !heartbeat.connection_present) onGone(heartbeat);
         })
         .catch(error => {
           const delay = rateLimitDelayMs(error);
@@ -292,7 +382,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
       if (retry) clearTimeout(retry);
       document.removeEventListener('visibilitychange', onVisible);
     };
-  }, [accountKey, admitted, connectionId, join, lobbyId, status]);
+  }, [accountKey, admitted, connectionId, lobbyId, onGone, status]);
 
   // Leave on navigation away and on tab close. A bfcache restore joins again. Callbacks are read
   // through refs so a changed identity never runs the cleanup, which would send a leave.
@@ -328,5 +418,5 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
     };
   }, [enqueue]);
 
-  return { state, join, leave };
+  return { state, join, leave, leaveSteppedOut };
 }

@@ -11,6 +11,8 @@ const api = vi.hoisted(() => ({
   setDebateLobbyPresence: vi.fn(),
   sendDebateLobbyHeartbeat: vi.fn(),
   getDebateLobby: vi.fn(),
+  stepOutOfDebateLobby: vi.fn(),
+  endDebateLobbyStepOut: vi.fn(),
 }));
 
 vi.mock('../api', async importOriginal => ({ ...(await importOriginal<typeof import('../api')>()), ...api }));
@@ -21,7 +23,7 @@ vi.mock('../hooks', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, useDebateLobby, useLobbyPresence } = await import('./hooks');
+const { LOBBY_HEARTBEAT_MS, stepOutBeforeDebate, useDebateLobby, useLobbyPresence } = await import('./hooks');
 
 /** A presence call that resolves when the test says so. */
 function deferredJoin() {
@@ -58,7 +60,26 @@ const leaves = () => api.setDebateLobbyPresence.mock.calls.filter(([, body]) => 
 beforeEach(() => {
   api.setDebateLobbyPresence.mockImplementation(async (_id: string, body: { joined: boolean }) => view(body.joined));
   api.sendDebateLobbyHeartbeat.mockResolvedValue({ connection_present: true, voice_away_at: null });
+  api.stepOutOfDebateLobby.mockResolvedValue(view(false));
+  api.endDebateLobbyStepOut.mockResolvedValue(view(false));
 });
+
+/** Joined, then one heartbeat that says the connection is gone for `reason`. */
+async function goneAfterBeat(reason: string, currentLobbyId: string | null = null) {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+    connection_present: false,
+    voice_away_at: null,
+    reason,
+    current_lobby_id: currentLobbyId,
+  });
+  const hook = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+  await waitFor(() => expect(hook.result.current.state.status).toBe('joined'));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+  });
+  return hook;
+}
 
 afterEach(async () => {
   cleanup();
@@ -131,30 +152,65 @@ describe('useLobbyPresence', () => {
   });
 
   // Another tab joined a different lobby with leave_other_lobby, dropping this tab's lease.
-  it('says the viewer moved when a rejoin after a lapse finds another lobby', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({ connection_present: false, voice_away_at: null });
-    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
-    await waitFor(() => expect(result.current.state.status).toBe('joined'));
-    api.setDebateLobbyPresence.mockRejectedValueOnce(
-      new GeoChatRequestError('x', 'already_in_another_lobby', 409, null, {
-        current_lobby_id: '000000000000000000000000000000ab',
-      })
-    );
-
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
-    });
-
+  it('says the viewer moved, without rejoining, on reason moved', async () => {
+    const { result } = await goneAfterBeat('moved', '000000000000000000000000000000AB');
     await waitFor(() =>
       expect(result.current.state).toEqual({ status: 'moved', otherLobbyId: '000000000000000000000000000000ab' })
     );
     await act(async () => {
       await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS * 2);
     });
-    // No further joins and no heartbeats; the viewer chooses.
-    expect(joins()).toHaveLength(2);
+    expect(joins()).toHaveLength(1);
     expect(api.sendDebateLobbyHeartbeat).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays stepped out, and sends no leave on unmount, on reason stepped_out', async () => {
+    const { result, unmount } = await goneAfterBeat('stepped_out');
+    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+    unmount();
+    await act(async () => {});
+    expect(joins()).toHaveLength(1);
+    expect(leaves()).toHaveLength(0);
+  });
+
+  it('stops on reason ended rather than rejoining', async () => {
+    const { result } = await goneAfterBeat('ended');
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'ended' }));
+    expect(joins()).toHaveLength(1);
+  });
+
+  it('rejoins on reason lapsed', async () => {
+    await goneAfterBeat('lapsed');
+    await waitFor(() => expect(joins()).toHaveLength(2));
+  });
+
+  // Otherwise the unmount's leave takes the viewer off the roster before the server steps them out.
+  it('steps out before routing into a debate, and does not leave on unmount', async () => {
+    const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    await act(() => stepOutBeforeDebate());
+    expect(api.stepOutOfDebateLobby).toHaveBeenCalledWith(
+      'lobby1',
+      { connection_id: expect.any(String) },
+      expect.any(Function),
+      'acct'
+    );
+    expect(result.current.state.status).toBe('stepped_out');
+
+    unmount();
+    await act(async () => {});
+    expect(leaves()).toHaveLength(0);
+  });
+
+  it('waits for the viewer to go back after stepping out, then leaves for good on Leave', async () => {
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+    expect(joins()).toHaveLength(0);
+
+    await act(() => result.current.leaveSteppedOut());
+    expect(api.endDebateLobbyStepOut).toHaveBeenCalledTimes(1);
+    expect(result.current.state.status).toBe('left');
   });
 
   // A join answered after Leave must not put the viewer back.
