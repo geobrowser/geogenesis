@@ -212,7 +212,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean) {
         joinedRef.current = false;
         sentRef.current = false;
         if (isAlreadyInAnotherLobby(error)) {
-          // Offering to join back here would silently drop the other tab.
+          // After a lapse, joining back here would drop the other tab's lobby.
           setState({ status: afterLapse ? 'moved' : 'confirm_leave_other', otherLobbyId: otherLobbyIdFrom(error) });
           return;
         }

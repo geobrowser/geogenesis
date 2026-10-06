@@ -97,9 +97,8 @@ export function rosterOrder(members: DebateLobbyMember[]) {
 }
 
 /**
- * Who hosts after the server moved `hosts_changed_at` past `seen`, for "X is hosting now". It is
- * stamped when the acting host changes, which follows a hostless gap, so rosters are not diffed.
- * `seen` is `undefined` before the first view; `null` with nobody hosting.
+ * Who hosts once `hosts_changed_at` moves past `seen` (`undefined` before the first view). A
+ * handoff always follows a hostless view, so the stamp is read rather than the roster.
  */
 export function hostAfterChange(
   seen: string | null | undefined,
