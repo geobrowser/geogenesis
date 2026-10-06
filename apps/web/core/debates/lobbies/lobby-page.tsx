@@ -400,6 +400,7 @@ function LobbyRoom({
         <LobbyVoice
           lobby={lobby}
           connectionId={voice.connectionId}
+          joined={state.status === 'joined'}
           currentUserId={currentUserId}
           onConnectedChange={voice.setVoiceConnected}
         >

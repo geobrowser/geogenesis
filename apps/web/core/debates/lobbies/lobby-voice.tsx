@@ -62,12 +62,15 @@ const ROOM_OPTIONS: RoomOptions = {
 export function LobbyVoice({
   lobby,
   connectionId,
+  joined,
   currentUserId,
   onConnectedChange,
   children,
 }: {
   lobby: DebateLobbyView;
   connectionId: string;
+  /** This tab's own join has landed. `viewer.present` counts any of the viewer's connections. */
+  joined: boolean;
   currentUserId: string | null;
   onConnectedChange: (connected: boolean) => void;
   children: React.ReactNode;
@@ -122,12 +125,13 @@ export function LobbyVoice({
     };
   }, [currentUserId, lobbyId]);
 
-  // Minted right before connecting; LiveKit refreshes it while connected.
+  // Minted right before connecting, once this connection holds a lease; LiveKit refreshes it while
+  // connected. Disabled during a lapse's rejoin, which keeps the token and the live room.
   const token = useQuery({
     queryKey: voiceTokenKey(accountKey, lobbyId, canPublish),
     queryFn: () =>
       getDebateLobbyVoiceToken(lobbyId, { connection_id: connectionId }, getPrivyIdentityToken, accountKey),
-    enabled: authenticated && ownership === 'owned' && lobby.viewer.present,
+    enabled: authenticated && ownership === 'owned' && joined,
     staleTime: Infinity,
     gcTime: 0,
     retry: false,

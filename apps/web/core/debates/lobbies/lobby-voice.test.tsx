@@ -92,15 +92,23 @@ function Speaking() {
   return <p data-testid="states">{`speaking:${[...speaking].join(',')} mic:${[...micOn].join(',')}`}</p>;
 }
 
-function renderVoice(view = lobby(), onConnectedChange = vi.fn()) {
+function renderVoice(view = lobby(), onConnectedChange = vi.fn(), joined = true) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(
+  const ui = (isJoined: boolean) => (
     <QueryClientProvider client={client}>
-      <LobbyVoice lobby={view} connectionId="conn-1" currentUserId="u1" onConnectedChange={onConnectedChange}>
+      <LobbyVoice
+        lobby={view}
+        connectionId="conn-1"
+        joined={isJoined}
+        currentUserId="u1"
+        onConnectedChange={onConnectedChange}
+      >
         <Speaking />
       </LobbyVoice>
     </QueryClientProvider>
   );
+  const result = render(ui(joined));
+  return { ...result, setJoined: (next: boolean) => result.rerender(ui(next)) };
 }
 
 beforeEach(() => {
@@ -167,6 +175,28 @@ describe('LobbyVoice', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     await screen.findByRole('button', { name: /mute/i });
     expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(2);
+  });
+
+  // Another of the viewer's connections makes `viewer.present` true before this tab's join lands;
+  // a mint then would be refused for this connection.
+  it('waits for this tab’s own join before minting', async () => {
+    const { setJoined } = renderVoice(lobby(), vi.fn(), false);
+    await screen.findByText('Connecting voice…');
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(mocks.getDebateLobbyVoiceToken).not.toHaveBeenCalled();
+
+    setJoined(true);
+    await screen.findByRole('button', { name: /mute/i });
+    expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps the room through a lapse’s rejoin without minting again', async () => {
+    const { setJoined } = renderVoice();
+    await screen.findByRole('button', { name: /mute/i });
+    setJoined(false);
+    setJoined(true);
+    await screen.findByRole('button', { name: /mute/i });
+    expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(1);
   });
 
   it('asks before taking voice from another tab', async () => {
