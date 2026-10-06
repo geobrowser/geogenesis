@@ -27,9 +27,9 @@ import {
 import {
   ROLE_LABEL,
   hereLabel,
+  hostAfterChange,
   hostsLabel,
   isHosting,
-  newHostAfterHandoff,
   notYetOpenLabel,
   personName,
   remindedLabel,
@@ -224,7 +224,7 @@ function LobbyRoom({
   const end = useEndDebateLobby(lobby.lobby_id);
   const [confirmingEnd, setConfirmingEnd] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
-  const handoff = useHandoffNotice(lobby.members);
+  const handoff = useHandoffNotice(lobby);
 
   const hosts = lobby.members.filter(isHosting);
   const isHost = lobby.viewer.hosting;
@@ -364,16 +364,16 @@ function RosterRow({ member, isViewer }: { member: DebateLobbyMember; isViewer: 
   );
 }
 
-/** "X is hosting now" for a few seconds after hosting passes to someone new. */
-function useHandoffNotice(members: DebateLobbyMember[]) {
-  const previousRef = React.useRef<DebateLobbyMember[] | null>(null);
+/** "X is hosting now" for a few seconds after hosting changes hands. */
+export function useHandoffNotice(lobby: Pick<DebateLobbyView, 'hosts_changed_at' | 'members'>) {
+  const seenRef = React.useRef<string | null | undefined>(undefined);
   const [notice, setNotice] = React.useState<DebateLobbyMember | null>(null);
 
   React.useEffect(() => {
-    const next = newHostAfterHandoff(previousRef.current, members);
-    previousRef.current = members;
+    const next = hostAfterChange(seenRef.current, lobby);
+    seenRef.current = lobby.hosts_changed_at;
     if (next) setNotice(next);
-  }, [members]);
+  }, [lobby]);
 
   // Keyed on the notice, so a later roster change cannot cancel the clear.
   React.useEffect(() => {

@@ -2,6 +2,7 @@ import {
   type DebateLobbyMember,
   type DebateLobbyPerson,
   type DebateLobbyRole,
+  type DebateLobbyView,
   GeoChatRequestError,
   dashlessId,
 } from '../api';
@@ -90,25 +91,17 @@ export function rosterOrder(members: DebateLobbyMember[]) {
     .map(({ member }) => member);
 }
 
-/** Ids of present members hosting now, sorted, for spotting a handoff between two views. */
-export function hostIds(members: DebateLobbyMember[]) {
-  return members
-    .filter(isHosting)
-    .map(member => member.user_id)
-    .sort();
-}
-
 /**
- * The host who took over, when the present hosts changed and none of the earlier ones remain.
- * `null` on the first view, or when an earlier host is still present.
+ * Who hosts after the server moved `hosts_changed_at` past `seen`, for "X is hosting now". It is
+ * stamped when the acting host changes, which follows a hostless gap, so rosters are not diffed.
+ * `seen` is `undefined` before the first view; `null` with nobody hosting.
  */
-export function newHostAfterHandoff(previous: DebateLobbyMember[] | null, next: DebateLobbyMember[]) {
-  if (!previous) return null;
-  const before = hostIds(previous);
-  const after = hostIds(next);
-  if (before.length === 0 || after.length === 0) return null;
-  if (after.some(id => before.includes(id))) return null;
-  return next.find(member => member.user_id === after[0]) ?? null;
+export function hostAfterChange(
+  seen: string | null | undefined,
+  lobby: Pick<DebateLobbyView, 'hosts_changed_at' | 'members'>
+) {
+  if (seen === undefined || !lobby.hosts_changed_at || lobby.hosts_changed_at === seen) return null;
+  return lobby.members.find(member => member.acting_host) ?? lobby.members.find(isHosting) ?? null;
 }
 
 /** The join was refused because the viewer is present in another open lobby. */

@@ -2,11 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { type DebateLobbyMember, type DebateLobbyRole, GeoChatRequestError } from '../api';
 import {
+  hostAfterChange,
   hostsLabel,
   isAlreadyInAnotherLobby,
   lobbyScheduleLabel,
   lobbyTimeLabel,
-  newHostAfterHandoff,
   notYetOpenLabel,
   otherLobbyIdFrom,
   personName,
@@ -89,17 +89,17 @@ describe('rosterOrder', () => {
   });
 });
 
-describe('newHostAfterHandoff', () => {
-  it('names the new host only when every earlier host is gone', () => {
-    const before = [member('a', 'host'), member('b', 'speaker')];
-    expect(newHostAfterHandoff(null, before)).toBeNull();
-    expect(newHostAfterHandoff(before, [member('b', 'host')])?.user_id).toBe('b');
-    // A second host promoted while the first stays is not a handoff.
-    expect(newHostAfterHandoff(before, [member('a', 'host'), member('b', 'host')])).toBeNull();
-    // Roles never change on a handoff; the speaker who takes over is the acting host.
-    expect(newHostAfterHandoff(before, [member('b', 'speaker', true)])?.user_id).toBe('b');
-    // Hostless: nobody to announce.
-    expect(newHostAfterHandoff(before, [member('b', 'listener')])).toBeNull();
+describe('hostAfterChange', () => {
+  const lobby = (stamp: string | null, members: DebateLobbyMember[]) => ({ hosts_changed_at: stamp, members });
+
+  it('names whoever hosts once the stamp moves, and nobody on the first view', () => {
+    expect(hostAfterChange(undefined, lobby('t1', [member('b', 'speaker', true)]))).toBeNull();
+    expect(hostAfterChange('t1', lobby('t1', [member('b', 'speaker', true)]))).toBeNull();
+    expect(hostAfterChange(null, lobby('t1', [member('b', 'speaker', true)]))?.user_id).toBe('b');
+    // The acting host ends when a host returns; the host is named.
+    expect(hostAfterChange('t1', lobby('t2', [member('a', 'host'), member('b', 'speaker')]))?.user_id).toBe('a');
+    // The acting host left with nobody to take over.
+    expect(hostAfterChange('t2', lobby('t3', [member('c', 'listener')]))).toBeNull();
   });
 });
 
