@@ -72,7 +72,7 @@ export function freeSlotsByUser(response: SchedulablePeopleResponse, now: number
  * to Saturday, like a wall calendar; saved schedules are still Monday-first (`mondayOf`).
  */
 export function weekStart(now: Date, weekOffset: number): Date {
-  return new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay() + weekOffset * DAYS_IN_WEEK);
+  return addDays(now, weekOffset * DAYS_IN_WEEK - now.getDay());
 }
 
 /** The seven local midnights of a week, plus the eighth, which closes it. */
@@ -194,6 +194,11 @@ export function viewerFreeCellKeys(free: ReadonlySet<number>, days: Date[]): Set
 export function hourStart(days: Date[], day: number, hour: number): number {
   const date = days[day];
   return new Date(date.getFullYear(), date.getMonth(), date.getDate(), hour).getTime();
+}
+
+/** How far through its hour an instant is, from 0 at the top of the hour towards 1. */
+export function hourProgress(at: number): number {
+  return new Date(at).getMinutes() / 60;
 }
 
 /** One of the viewer's own debates, as the grid draws it. */

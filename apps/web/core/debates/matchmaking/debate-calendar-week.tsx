@@ -26,6 +26,7 @@ import {
   cellOf,
   firstBusyHour,
   hourLabel,
+  hourProgress,
   hourStart,
   timeRangeLabel,
 } from './debate-calendar-model';
@@ -100,6 +101,7 @@ export function CalendarWeek({
 
   const nowCell = cellOf(now, days);
   const todayIndex = nowCell?.day ?? -1;
+  const nowHour = nowCell?.hour ?? null;
 
   // This week opens on the current time, a third of the way down, like a wall calendar: the hours
   // before it are spent. Other weeks open at their first busy hour, since most of a week is the
@@ -111,16 +113,20 @@ export function CalendarWeek({
   React.useLayoutEffect(() => {
     if (scrolledFor.current === weekKey) return;
     const container = scrollRef.current;
-    const row = rowRefs.current[nowCell?.hour ?? firstBusy ?? new Date(now).getHours()];
+    const row = rowRefs.current[nowHour ?? firstBusy ?? new Date(now).getHours()];
     if (!container || !row) return;
     scrolledFor.current = weekKey;
     const rowTop = row.offsetTop - container.offsetTop;
-    container.scrollTop = nowCell
-      ? Math.max(0, rowTop + (new Date(now).getMinutes() / 60) * row.offsetHeight - container.clientHeight / 3)
-      : Math.max(0, rowTop - 8);
-  }, [firstBusy, now, nowCell, weekKey]);
+    container.scrollTop = Math.max(
+      0,
+      nowHour === null ? rowTop - 8 : rowTop + hourProgress(now) * row.offsetHeight - container.clientHeight / 3
+    );
+  }, [firstBusy, now, nowHour, weekKey]);
 
-  const [focused, setFocused] = React.useState(() => ({ day: 0, hour: firstBusy ?? 9 }));
+  // The keyboard enters where the grid opened, so the first Tab does not scroll it away.
+  const [focused, setFocused] = React.useState(() =>
+    nowCell ? { day: nowCell.day, hour: nowCell.hour } : { day: 0, hour: firstBusy ?? 9 }
+  );
   const [openHour, setOpenHour] = React.useState<string | null>(null);
 
   const [card, setCard] = React.useState<Card | null>(null);
@@ -374,13 +380,12 @@ export function CalendarWeek({
  * current hour's cell, as far down it as the hour has gone; `now` ticks each minute, so it moves.
  */
 function NowLine({ now }: { now: number }) {
-  const minutes = new Date(now).getMinutes();
   return (
     <div
       aria-hidden
       data-testid="calendar-now-line"
       className="pointer-events-none absolute inset-x-0 z-10 h-0.5 -translate-y-1/2 bg-red-01"
-      style={{ top: `${(minutes / 60) * 100}%` }}
+      style={{ top: `${hourProgress(now) * 100}%` }}
     >
       <div className="absolute top-1/2 -left-1.5 h-3 w-3 -translate-y-1/2 rounded-full bg-red-01" />
     </div>

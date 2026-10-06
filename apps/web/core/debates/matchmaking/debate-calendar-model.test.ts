@@ -8,6 +8,7 @@ import {
   cellOf,
   firstBusyHour,
   freeSlotsByUser,
+  hourProgress,
   ownDebates,
   viewerFreeCellKeys,
   viewerFreeSlots,
@@ -99,6 +100,13 @@ describe('week', () => {
     expect(cellOf(at(4, 0), days)).toEqual({ day: 0, hour: 0 });
     expect(cellOf(at(11, 9), days)).toBeNull();
     expect(cellOf(at(3, 23), days)).toBeNull();
+  });
+});
+
+describe('hourProgress', () => {
+  it('is how far through its hour an instant is', () => {
+    expect(hourProgress(at(7, 10))).toBe(0);
+    expect(hourProgress(at(7, 10, 45))).toBe(0.75);
   });
 });
 
