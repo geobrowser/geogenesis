@@ -132,23 +132,11 @@ vi.mock('./use-person-facts', () => ({
 }));
 // The header's own controls and the filter bar have their own suites; these are about the week.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => null }));
-vi.mock('./claims-tab', () => ({
-  SpaceTopicFilters: ({
-    leading,
-    trailing,
-    onSpaceToggle,
-  }: {
-    leading?: React.ReactNode;
-    trailing?: React.ReactNode;
-    onSpaceToggle: (spaceId: string) => void;
-  }) => (
-    <div>
-      {leading}
-      <button type="button" onClick={() => onSpaceToggle('space-1')}>
-        Pick a space
-      </button>
-      {trailing}
-    </div>
+vi.mock('./space-filter-pills', () => ({
+  SpaceFilterPills: ({ onSpaceToggle }: { onSpaceToggle: (spaceId: string) => void }) => (
+    <button type="button" onClick={() => onSpaceToggle('space-1')}>
+      Pick a space
+    </button>
   ),
 }));
 vi.mock('~/partials/availability/peer-availability-booking-modal', () => ({

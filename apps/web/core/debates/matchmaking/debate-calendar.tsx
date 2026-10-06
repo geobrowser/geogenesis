@@ -28,7 +28,6 @@ import { speakerLabel } from '../playback-utils';
 import { useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { DebateChallengeCard } from './challenge-card';
-import { SpaceTopicFilters } from './claims-tab';
 import {
   type CalendarFilter,
   type CalendarOpenedFrom,
@@ -64,6 +63,7 @@ import { HubPillButton } from './hub-pill-button';
 import { HubMessage, HubQueryState } from './hub-states';
 import { INLINE_SLOTS, PersonRow, type PersonSchedule, SetAvailabilityNotice, schedulableAsPerson } from './people-tab';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
+import { SpaceFilterPills } from './space-filter-pills';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useLiveRequestBlock } from './use-live-request-block';
 import { usePersonFacts } from './use-person-facts';
@@ -532,8 +532,34 @@ function DebateCalendarBody({
         {outboundChallenge ? (
           <DebateChallengeCard challenge={outboundChallenge} role="requester" analyticsSurface="calendar" />
         ) : null}
-        <SpaceTopicFilters
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="w-[260px] md:w-full">
+            <Input
+              withSearchIcon
+              value={search}
+              onChange={event => setSearch(event.currentTarget.value)}
+              placeholder="Search people"
+              aria-label="Search people"
+            />
+          </div>
+          {viewerHasSchedule ? (
+            <>
+              <div className="flex-1" aria-hidden />
+              <FilterSwitch
+                label="Only times I'm free"
+                checked={onlyViewerFree}
+                onChange={next => {
+                  setOnlyViewerFree(next);
+                  changeFilter('only_viewer_free');
+                }}
+                analyticsSurface="calendar"
+              />
+            </>
+          ) : null}
+        </div>
+        <SpaceFilterPills
           analyticsSurface="calendar"
+          facetSpaces={facetSpaces}
           spaceIds={spaceIds}
           onSpaceToggle={spaceId => {
             onSpaceToggle(spaceId);
@@ -543,34 +569,8 @@ function DebateCalendarBody({
             onSpacesClear();
             changeFilter('space');
           }}
-          facetSpaces={facetSpaces}
+          loading={peopleQuery.isLoading || publishableSpacesPending}
           countsPending={peopleQuery.isLoading || publishableSpacesPending || personRecordsPending}
-          leading={
-            <div className="w-[260px] md:w-full">
-              <Input
-                withSearchIcon
-                value={search}
-                onChange={event => setSearch(event.currentTarget.value)}
-                placeholder="Search people"
-                aria-label="Search people"
-              />
-            </div>
-          }
-          trailing={
-            <div className="flex flex-wrap items-center gap-4">
-              {viewerHasSchedule ? (
-                <FilterSwitch
-                  label="Only times I'm free"
-                  checked={onlyViewerFree}
-                  onChange={next => {
-                    setOnlyViewerFree(next);
-                    changeFilter('only_viewer_free');
-                  }}
-                  analyticsSurface="calendar"
-                />
-              ) : null}
-            </div>
-          }
         />
       </div>
 
