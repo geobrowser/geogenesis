@@ -39,18 +39,30 @@ describe('the calendar across clock changes', () => {
     expect(slots.at(-1)?.start).toBe(local(2026, 11, 8, 23, 30));
   });
 
-  // Clocks go forward at 02:00 on Sun 14 Mar 2027: that day has no 2am hour to shade.
+  // Clocks go forward at 02:00 on Sun 14 Mar 2027: that day has no 2am hour to shade. It opens the
+  // grid's second week, while the saved schedule calls it the seventh day of the first.
   it('shades the hour a free half-hour is in, not an hour the clocks skipped', () => {
     const now = new Date(2027, 2, 10, 10, 0);
     const blocks: AvailabilityBlock[] = [{ id: 'r', kind: 'recurring', weekday: 6, start: 3 * 60, end: 3 * 60 + 30 }];
-    const keys = viewerFreeCellKeys(viewerFreeSlots(blocks, 'America/Los_Angeles', now), weekDays(weekStart(now, 0)));
+    const keys = viewerFreeCellKeys(viewerFreeSlots(blocks, 'America/Los_Angeles', now), weekDays(weekStart(now, 1)));
 
-    expect(keys.has('6:3')).toBe(true);
-    expect(keys.has('6:2')).toBe(false);
+    expect(keys.has('0:3')).toBe(true);
+    expect(keys.has('0:2')).toBe(false);
   });
 
-  it("heads the time column with the zone's offset, both of them in the week the clocks change", () => {
+  it("heads the time column with the zone's offset", () => {
     expect(weekOffsetLabels(weekDays(weekStart(new Date(local(2026, 10, 7, 10)), 0)))).toEqual(['GMT-07']);
-    expect(weekOffsetLabels(weekDays(weekStart(new Date(local(2026, 10, 28, 10)), 0)))).toEqual(['GMT-07', 'GMT-08']);
+    // US clocks change on a Sunday, the first day of a week, so even that week carries one offset.
+    expect(weekOffsetLabels(weekDays(weekStart(new Date(local(2026, 11, 4, 10)), 0)))).toEqual(['GMT-08']);
+  });
+
+  // Israel's clocks go forward on a Friday (27 Mar 2026), inside a Sunday-first week.
+  it('names both offsets in a week the clocks change mid-week', () => {
+    process.env.TZ = 'Asia/Jerusalem';
+    try {
+      expect(weekOffsetLabels(weekDays(weekStart(new Date(2026, 2, 25, 10), 0)))).toEqual(['GMT+02', 'GMT+03']);
+    } finally {
+      process.env.TZ = 'America/Los_Angeles';
+    }
   });
 });

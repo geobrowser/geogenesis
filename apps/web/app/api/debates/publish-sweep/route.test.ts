@@ -25,11 +25,11 @@ vi.mock('~/core/debates/server/editor-spaces', () => ({
   listEditorSpaceIds: async () => mocks.editorSpaceIds,
 }));
 
-// `DebateNotPublishableError` stays real: the route branches on `instanceof`, so a stubbed class
-// would send every outcome down the generic-failure path and the test would prove nothing.
-vi.mock('~/core/debates/server/debate-source', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/debates/server/debate-source')>()),
-  listSweepCandidateDebateIds: async (spaceId: string) => mocks.candidates[spaceId] ?? [],
+// Candidate discovery is stubbed; its paging and fallback are covered in `publish-candidates.test.ts`.
+// `debate-source` is left unmocked so `DebateNotPublishableError` stays real: the route branches on
+// `instanceof`, so a stubbed class would send every outcome down the generic-failure path.
+vi.mock('~/core/debates/server/publish-candidates', () => ({
+  listPublishCandidateDebateIds: async (spaceId: string) => mocks.candidates[spaceId] ?? [],
 }));
 
 vi.mock('~/core/debates/server/publish-debate', () => ({

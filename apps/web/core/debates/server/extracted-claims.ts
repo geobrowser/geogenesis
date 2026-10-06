@@ -80,6 +80,13 @@ export type DebateExtractedClaimsResponse = {
    * failed). Read only to tell those two apart in the log below; absent on older payloads.
    */
   highlight_model?: string | null;
+  /**
+   * GEO-2870: present while geo-chat's paraphrase dedup is still running over these claims, as the
+   * RFC 3339 instant by which it will have settled. Until then a claim listed here may yet be merged
+   * into another and leave the list, so nothing may be published early from it. geo-chat removes it
+   * when the pass ends; absent when no pass runs (`EXTRACTION_PER_TURN` off) and on older payloads.
+   */
+  dedup_pending_until?: string | null;
 };
 
 /**
@@ -90,6 +97,8 @@ export type DebateExtractedClaimsResponse = {
 export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): {
   transcriptTurns: DebatePublishTurn[];
   claims: DebateClaimInput[];
+  /** See {@link decodeDedupPendingUntil}. */
+  dedupPendingUntil: number | null;
 } {
   const transcriptTurns: DebatePublishTurn[] = [...response.turns]
     .sort((a, b) => a.turn_index - b.turn_index)
@@ -151,7 +160,30 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
       model: typeof response.highlight_model === 'string' ? response.highlight_model : null,
     });
   }
-  return { transcriptTurns, claims };
+  return { transcriptTurns, claims, dedupPendingUntil: decodeDedupPendingUntil(response.dedup_pending_until) };
+}
+
+/**
+ * `dedup_pending_until` → epoch milliseconds, or null when there is no marker. A marker that is
+ * present but unreadable is `Infinity` — never settled — and logged: publishing early is only ever
+ * an optimisation (the full publish writes the same claims), while a claim published and then merged
+ * away stays on the graph for good. geo-chat reads its own marker the same way.
+ */
+export function decodeDedupPendingUntil(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  const at = typeof value === 'string' ? Date.parse(value) : Number.NaN;
+  if (Number.isNaN(at)) {
+    console.warn('[debate-acceptor] unreadable dedup_pending_until; holding the claims for the full publish', {
+      value,
+    });
+    return Number.POSITIVE_INFINITY;
+  }
+  return at;
+}
+
+/** Whether claims carrying `dedupPendingUntil` may be published at `now`. */
+export function isDedupSettled(dedupPendingUntil: number | null | undefined, now: number): boolean {
+  return dedupPendingUntil === null || dedupPendingUntil === undefined || now >= dedupPendingUntil;
 }
 
 /**

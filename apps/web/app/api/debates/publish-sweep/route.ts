@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 
 import { getDebateAcceptorConfig } from '~/core/debates/server/acceptor-config';
 import { withAcceptorLock } from '~/core/debates/server/acceptor-lock';
-import {
-  DebateNotPublishableError,
-  assertDebateMediaHostConfigured,
-  listSweepCandidateDebateIds,
-} from '~/core/debates/server/debate-source';
+import { DebateNotPublishableError, assertDebateMediaHostConfigured } from '~/core/debates/server/debate-source';
 import { listEditorSpaceIds } from '~/core/debates/server/editor-spaces';
+import { listPublishCandidateDebateIds } from '~/core/debates/server/publish-candidates';
 import { publishDebateAsAcceptor } from '~/core/debates/server/publish-debate';
 
 // The sweep can sign several on-chain publishes in one run, so give it room past the default.
@@ -34,8 +31,8 @@ const LOCK_WAIT_MS = 60_000;
  *
  * Vercel Cron hits this on a schedule (see vercel.json) with `Authorization: Bearer $CRON_SECRET`.
  * It discovers its own work: the acceptor can only publish into spaces it edits, so it enumerates
- * those from the graph, then for each lists that space's `complete` debates from geo-chat and
- * publishes them. Idempotent and self-healing: publishing skips debates already in the KG and
+ * those from the graph, then for each asks geo-chat for that space's publish candidates (every
+ * finished debate not yet seen in the graph, however old: GEO-3157) and publishes them. Idempotent and self-healing: publishing skips debates already in the KG and
  * leaves debates whose media is still processing for the next tick. It's the sole publisher: no
  * browser or public route is in the loop, so nothing depends on a participant keeping a tab open.
  */
@@ -93,7 +90,7 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
     if (budgetExhausted(attempted)) break;
     let debateIds: string[];
     try {
-      debateIds = await listSweepCandidateDebateIds(spaceId);
+      debateIds = await listPublishCandidateDebateIds(spaceId);
     } catch (error) {
       failed.push({ debateId: `space:${spaceId}`, error: error instanceof Error ? error.message : String(error) });
       continue;
@@ -118,9 +115,10 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
         if (error instanceof DebateNotPublishableError) {
           if (error.code === 'media_failed') {
             // Terminal: the worker has spent its retries, so no later tick will publish this.
-            // Collected rather than logged here — the sweep runs every five minutes and these
-            // debates never leave the list, so a line each would be a few hundred a day per stuck
-            // debate. One aggregate line below carries the same information without the noise.
+            // Candidate discovery drops debates the listing already reports as terminal
+            // (GEO-2985), so this only catches ones it could not see: a geo-chat older than the
+            // listing's `media` field, or a job that died between the listing and this read.
+            // Collected rather than logged here; one aggregate line below carries it.
             mediaFailed.push(debateId);
           } else if (error.code === 'media_not_ready' || error.code === 'not_complete') {
             // Media still processing or lifecycle state changed — retry next tick.

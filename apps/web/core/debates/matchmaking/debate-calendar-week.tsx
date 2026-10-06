@@ -26,6 +26,7 @@ import {
   cellOf,
   firstBusyHour,
   hourLabel,
+  hourProgress,
   hourStart,
   timeRangeLabel,
   weekOffsetLabels,
@@ -99,21 +100,34 @@ export function CalendarWeek({
     return byCell;
   }, [days, debates]);
 
-  // Opens at the first busy hour: all 24 are there, but most of a week is the middle of the night.
-  // Once per week shown, so new data landing does not yank the grid away from where it was read.
+  const nowCell = cellOf(now, days);
+  const todayIndex = nowCell?.day ?? -1;
+  const nowHour = nowCell?.hour ?? null;
+
+  // This week opens on the current time, a third of the way down, like a wall calendar: the hours
+  // before it are spent. Other weeks open at their first busy hour, since most of a week is the
+  // middle of the night. Once per week shown, so new data landing does not yank the grid away from
+  // where it was read, and the minute tick does not drag it along.
   const firstBusy = firstBusyHour(cells, debates, days);
   const weekKey = days[0].getTime();
   const scrolledFor = React.useRef<number | null>(null);
   React.useLayoutEffect(() => {
     if (scrolledFor.current === weekKey) return;
     const container = scrollRef.current;
-    const row = rowRefs.current[firstBusy ?? new Date(now).getHours()];
+    const row = rowRefs.current[nowHour ?? firstBusy ?? new Date(now).getHours()];
     if (!container || !row) return;
     scrolledFor.current = weekKey;
-    container.scrollTop = Math.max(0, row.offsetTop - container.offsetTop - 8);
-  }, [firstBusy, now, weekKey]);
+    const rowTop = row.offsetTop - container.offsetTop;
+    container.scrollTop = Math.max(
+      0,
+      nowHour === null ? rowTop - 8 : rowTop + hourProgress(now) * row.offsetHeight - container.clientHeight / 3
+    );
+  }, [firstBusy, now, nowHour, weekKey]);
 
-  const [focused, setFocused] = React.useState(() => ({ day: 0, hour: firstBusy ?? 9 }));
+  // The keyboard enters where the grid opened, so the first Tab does not scroll it away.
+  const [focused, setFocused] = React.useState(() =>
+    nowCell ? { day: nowCell.day, hour: nowCell.hour } : { day: 0, hour: firstBusy ?? 9 }
+  );
   const [openHour, setOpenHour] = React.useState<string | null>(null);
 
   const [card, setCard] = React.useState<Card | null>(null);
@@ -179,7 +193,6 @@ export function CalendarWeek({
     }
   };
 
-  const todayIndex = cellOf(now, days)?.day ?? -1;
   const offsets = weekOffsetLabels(days);
 
   return (
@@ -243,6 +256,7 @@ export function CalendarWeek({
                 const start = hourStart(days, day, hour);
                 const shaded = viewerFreeCells?.has(key) ?? false;
                 const past = start + 60 * 60_000 <= now;
+                const isNowCell = nowCell?.day === day && nowCell.hour === hour;
                 return (
                   <Popover.Root key={key} open={openHour === key} onOpenChange={open => setOpenHour(open ? key : null)}>
                     <Popover.Anchor asChild>
@@ -261,12 +275,13 @@ export function CalendarWeek({
                         // the viewer's own opens Requests; both stop the click on their way out.
                         onClick={() => openHourAt(key)}
                         className={cx(
-                          'flex min-h-16 min-w-0 flex-col justify-center gap-1 border-r border-grey-01 px-2 py-1.5 outline-none last:border-r-0 focus-visible:ring-2 focus-visible:ring-ctaPrimary focus-visible:ring-inset',
+                          'relative flex min-h-16 min-w-0 flex-col justify-center gap-1 border-r border-grey-01 px-2 py-1.5 outline-none last:border-r-0 focus-visible:ring-2 focus-visible:ring-ctaPrimary focus-visible:ring-inset',
                           shaded ? 'bg-green/10' : past ? 'bg-grey-01/50' : 'bg-white',
                           people.length > 0 && 'cursor-pointer hover:bg-grey-01',
                           openHour === key && 'ring-1 ring-text ring-inset'
                         )}
                       >
+                        {isNowCell ? <NowLine now={now} /> : null}
                         {own.map(debate => (
                           <DebateBlock key={debate.requestId} debate={debate} opponentName={opponentName} />
                         ))}
@@ -370,6 +385,23 @@ export function CalendarWeek({
           </Popover.Portal>
         ) : null}
       </Popover.Root>
+    </div>
+  );
+}
+
+/**
+ * Where the clock is, as a red line across today's column, like a wall calendar's. It sits in the
+ * current hour's cell, as far down it as the hour has gone; `now` ticks each minute, so it moves.
+ */
+function NowLine({ now }: { now: number }) {
+  return (
+    <div
+      aria-hidden
+      data-testid="calendar-now-line"
+      className="pointer-events-none absolute inset-x-0 z-10 h-0.5 -translate-y-1/2 bg-red-01"
+      style={{ top: `${hourProgress(now) * 100}%` }}
+    >
+      <div className="absolute top-1/2 -left-1.5 h-3 w-3 -translate-y-1/2 rounded-full bg-red-01" />
     </div>
   );
 }

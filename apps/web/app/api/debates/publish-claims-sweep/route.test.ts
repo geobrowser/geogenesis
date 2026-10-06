@@ -79,7 +79,7 @@ describe('early claims publish sweep', () => {
 
   it('publishes each recent debate’s claims and counts every outcome', async () => {
     mocks.editorSpaceIds = ['space-1', 'space-2'];
-    mocks.candidates = { 'space-1': ['d1', 'd2', 'd3'], 'space-2': ['d4', 'd5', 'd6'] };
+    mocks.candidates = { 'space-1': ['d1', 'd2', 'd3'], 'space-2': ['d4', 'd5', 'd7', 'd6'] };
     mocks.publish.mockImplementation(async (debateId: string) => {
       switch (debateId) {
         case 'd1':
@@ -92,6 +92,8 @@ describe('early claims publish sweep', () => {
           return { status: 'no_claims' };
         case 'd5':
           throw new DebateNotPublishableError('recording_cancelled', 'cancelled');
+        case 'd7':
+          return { status: 'dedup_pending' };
         default:
           throw new Error('rpc down');
       }
@@ -105,6 +107,7 @@ describe('early claims publish sweep', () => {
       published: [{ debateId: 'd1', claims: 2 }],
       upToDate: 1,
       noClaims: 1,
+      dedupPending: 1,
       debatePublished: 1,
       notEditor: 0,
       notPublishable: 1,

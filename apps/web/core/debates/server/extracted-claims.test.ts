@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { decodeExtractedClaims } from './extracted-claims';
+import { decodeDedupPendingUntil, decodeExtractedClaims, isDedupSettled } from './extracted-claims';
 
 const turn = { turn_index: 0, participant_slot: 0, attributed_space_id: 'space-a', speaker_name: 'A', text: 'hello' };
 
@@ -206,5 +206,32 @@ describe('decodeExtractedClaims stance (GEO-3142)', () => {
       ],
     });
     expect(claims.map(c => c.stance)).toEqual(['supports', 'opposes', 'addresses', null, null, null]);
+  });
+});
+
+describe('decodeExtractedClaims dedup marker', () => {
+  it('reads geo-chat’s instant, and no marker as settled', () => {
+    expect(
+      decodeExtractedClaims({ turns: [turn], claims: [], dedup_pending_until: '2026-10-06T12:02:30.000Z' })
+        .dedupPendingUntil
+    ).toBe(Date.parse('2026-10-06T12:02:30.000Z'));
+    expect(decodeExtractedClaims({ turns: [turn], claims: [] }).dedupPendingUntil).toBeNull();
+    expect(
+      decodeExtractedClaims({ turns: [turn], claims: [], dedup_pending_until: null }).dedupPendingUntil
+    ).toBeNull();
+  });
+
+  it('never settles an unreadable marker, and says so', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(decodeDedupPendingUntil('soon')).toBe(Number.POSITIVE_INFINITY);
+    expect(decodeDedupPendingUntil(17)).toBe(Number.POSITIVE_INFINITY);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(isDedupSettled(Number.POSITIVE_INFINITY, Date.now())).toBe(false);
+  });
+
+  it('settles at the instant', () => {
+    expect(isDedupSettled(100, 99)).toBe(false);
+    expect(isDedupSettled(100, 100)).toBe(true);
+    expect(isDedupSettled(null, 0)).toBe(true);
   });
 });

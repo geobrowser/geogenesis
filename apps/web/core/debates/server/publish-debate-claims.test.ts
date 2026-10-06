@@ -5,6 +5,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import type { Debate } from '../api';
 import type { DebateClaimInput, DebatePublishTurn } from '../debate-publish-draft';
 import { DebateNotPublishableError } from './debate-source';
+import { decodeDedupPendingUntil } from './extracted-claims';
 import {
   type PublishDebateClaimsDeps,
   isEarlyClaimPublishEnabled,
@@ -141,6 +142,44 @@ describe('publishDebateClaimsEarly', () => {
       debateId: DEBATE_ID,
       motionClaimEntityId: 'motion',
     });
+  });
+
+  it('publishes nothing while geo-chat’s paraphrase dedup may still merge a claim away', async () => {
+    const now = Date.parse('2026-10-06T12:00:00.000Z');
+    const loadEditableSpace = vi.fn(async () => SPACE_ROW);
+    const { deps: d, submit } = deps({
+      now: () => now,
+      loadEditableSpace,
+      loadClaims: async () => ({ transcriptTurns: turns, claims, dedupPendingUntil: now + 1 }),
+    });
+    expect(await publishDebateClaimsEarly(DEBATE_ID, d)).toEqual({ status: 'dedup_pending' });
+    expect(loadEditableSpace).not.toHaveBeenCalled();
+    expect(submit).not.toHaveBeenCalled();
+  });
+
+  it('publishes once the dedup marker lapses, or when there is none', async () => {
+    const now = Date.parse('2026-10-06T12:00:00.000Z');
+    for (const dedupPendingUntil of [now, now - 1, null, undefined]) {
+      const { deps: d } = deps({
+        now: () => now,
+        loadClaims: async () => ({ transcriptTurns: turns, claims, dedupPendingUntil }),
+      });
+      expect(await publishDebateClaimsEarly(DEBATE_ID, d)).toMatchObject({ status: 'published' });
+    }
+  });
+
+  it('holds an unreadable dedup marker for the full publish', async () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { deps: d, submit } = deps({
+      loadClaims: async () => ({
+        transcriptTurns: turns,
+        claims,
+        dedupPendingUntil: decodeDedupPendingUntil('soon'),
+      }),
+    });
+    expect(await publishDebateClaimsEarly(DEBATE_ID, d)).toEqual({ status: 'dedup_pending' });
+    expect(submit).not.toHaveBeenCalled();
+    warn.mockRestore();
   });
 
   it('reports no claims when geo-chat has none yet', async () => {
