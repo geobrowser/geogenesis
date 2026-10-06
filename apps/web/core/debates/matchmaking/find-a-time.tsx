@@ -87,13 +87,16 @@ function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
   };
 }
 
-/** A row's chips: the given half-hours, and whether they have more beyond them. */
-function chipsFor(slots: FreeSlot[], all: FreeSlot[] | undefined): PersonSchedule {
+/**
+ * A row's chips: the given half-hours, and whether they have more beyond them. `viewerIsFree` only
+ * for a viewer with hours, as on the People tab: without them every chip stays plain.
+ */
+function chipsFor(slots: FreeSlot[], all: FreeSlot[] | undefined, viewerHasSchedule: boolean): PersonSchedule {
   return {
     slots: slots.slice(0, INLINE_SLOTS).map(slot => ({
       start: new Date(slot.start).toISOString(),
       end: new Date(slot.start + SLOT_MS).toISOString(),
-      viewerFree: slot.viewerFree,
+      viewerIsFree: viewerHasSchedule ? slot.viewerFree : undefined,
     })),
     truncated: slots.length > INLINE_SLOTS || (all?.length ?? 0) > slots.length,
   };
@@ -458,7 +461,7 @@ function FindATimeBody({
       const person = peopleByUser.get(userKey);
       if (!person) return null;
       const all = slotsByUser.get(userKey);
-      const chips = slots.length > 0 ? chipsFor(slots, all) : undefined;
+      const chips = slots.length > 0 ? chipsFor(slots, all, viewerHasSchedule) : undefined;
       const matches: ClaimMatch[] = matchAnalysis.byProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES;
       return (
         <PersonRow
@@ -500,6 +503,7 @@ function FindATimeBody({
       popoverPortal,
       records,
       slotsByUser,
+      viewerHasSchedule,
     ]
   );
 

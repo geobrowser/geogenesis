@@ -262,7 +262,7 @@ describe('FindATime', () => {
 
     fireEvent.click(cell(/Thursday.*free: Elena/));
     const list = screen.getByRole('dialog', { name: /Free Thursday/ });
-    expect(within(list).getByRole('button', { name: /6:00 PM, you're free too$/ })).toHaveClass('border-green');
+    expect(within(list).getByRole('button', { name: /6:00 PM, you're both free$/ })).toHaveClass('border-green');
     expect(within(list).getByRole('button', { name: /6:30 PM$/ })).not.toHaveClass('border-green');
   });
 

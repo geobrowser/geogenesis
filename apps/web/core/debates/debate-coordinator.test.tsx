@@ -986,6 +986,30 @@ describe('DebateCoordinator', () => {
     await waitFor(() => expect(screen.getByText('Your debate is ready')).toBeInTheDocument());
   });
 
+  // GEO-3149. The room is already open in another of the viewer's tabs: a modal with Decline in
+  // front of this one would only get in the way, so the non-blocking bar offers the way in.
+  it('offers a link instead of the ready prompt when another tab has the room', async () => {
+    window.localStorage.setItem(
+      'geo:debate-tab-claim:debate:debate-1',
+      JSON.stringify({ tabId: 'the-other-tab', at: Date.now() })
+    );
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = {
+      ...activityWithDebate(),
+      rematch: null,
+      debate: { ...activityWithDebate().debate!, status: 'ready', participants: bothParticipants() },
+    };
+
+    try {
+      render(<DebateCoordinator />);
+
+      expect(await screen.findByRole('button', { name: /Your debate is open in another tab/ })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Decline' })).not.toBeInTheDocument();
+    } finally {
+      window.localStorage.removeItem('geo:debate-tab-claim:debate:debate-1');
+    }
+  });
+
   // The loop this stops: the room hides itself and returns whoever opens a debate whose recording
   // was cancelled, so routing into it from here bounced the viewer back and forth — the screen
   // flickered, and the opponent's "your debate was removed" dialog reappeared after Okay.

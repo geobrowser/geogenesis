@@ -262,10 +262,10 @@ describe('DebatesHubPanel', () => {
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
   // GEO-2861. Four tabs, and "My positions" is not one of them: it is a source inside Explore's
   // menu, one more answer to "which claims?" rather than a surface of its own.
-  it('offers Lobby, People, Explore, Positions and Requests, in that order', () => {
+  it('offers Lobby, People, Explore, My positions and Requests, in that order', () => {
     renderOpen('explore');
 
-    const order = ['Lobby', 'People', 'Explore', 'Positions', 'Requests'];
+    const order = ['Lobby', 'People', 'Explore', 'My positions', 'Requests'];
     const row = screen.getByRole('button', { name: /^Lobby/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
@@ -443,7 +443,7 @@ describe('DebatesHubPanel', () => {
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['Lobby', 'People', 'Explore', 'Positions', 'Requests'];
+    const order = ['Lobby', 'People', 'Explore', 'My positions', 'Requests'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
@@ -454,7 +454,7 @@ describe('DebatesHubPanel', () => {
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
     // Signed in, the list includes offline people free at shared times, so the empty copy says so.
-    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
   });
 
   it('toggles availability from the panel header', async () => {
@@ -508,15 +508,15 @@ describe('DebatesHubPanel', () => {
 
     expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Requests/ })).not.toBeInTheDocument();
-    // Positions joins them (GEO-2863). It was a source inside Explore's picker and left that menu
+    // My positions joins them (GEO-2863). It was a source inside Explore's picker and left that menu
     // signed out for exactly this reason, so promoting it to a tab promotes the rule with it.
-    expect(screen.queryByRole('button', { name: /Positions/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /positions/i })).not.toBeInTheDocument();
   });
 
-  it('draws Positions as its own tab once there is a viewer to have any', () => {
+  it('draws My positions as its own tab once there is a viewer to have any', () => {
     renderOpen('positions');
 
-    expect(screen.getByRole('button', { name: /^Positions/ })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: /^My positions/ })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
   });
 

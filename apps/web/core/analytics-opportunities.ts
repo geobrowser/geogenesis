@@ -1,10 +1,14 @@
 import { type AnalyticsEventName, capture } from './analytics';
 
 export type OpportunityEligibility = 'eligible' | 'authentication_required' | 'ineligible';
+/** The deploy a `feature_exposed` row came from, which the event requires. */
+export const ANALYTICS_BUILD_ID =
+  process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_BUILD_ID || 'unversioned';
+
 export const rankingFeature = {
   feature_id: 'ranking-submit',
   feature_version: 'ranking-compose-v1',
-  build_id: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_BUILD_ID || 'unversioned',
+  build_id: ANALYTICS_BUILD_ID,
   exposure_rule: 'foreground-control-50pct-1s-v1',
 };
 

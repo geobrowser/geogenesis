@@ -13,8 +13,8 @@ type SwitchProps = {
  * "Matches only" (GEO-2861) — claims where someone holding the opposite side is ready to debate.
  *
  * A named wrapper rather than a `FilterSwitch` at each call site, for the same reason as the one
- * below: the hub and the debate-again flow both draw it, and the label is what identifies the
- * setting to a viewer and to a test. Written once, it cannot drift between them.
+ * below: the label is what identifies the setting to a viewer and to a test. The hub's Lobby is the
+ * one surface left drawing it — the debate-again flow made matches a tab of their own (GEO-3148).
  */
 export function MatchesOnlySwitch({ checked, onChange, analyticsSurface }: SwitchProps) {
   return (

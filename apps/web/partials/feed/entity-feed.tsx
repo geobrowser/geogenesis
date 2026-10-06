@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 
+import { getCachedIdentityToken } from '~/core/auth/identity-token';
 import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
 import { useCachedBrowseSidebarData } from '~/core/browse/use-browse-sidebar-cache';
 import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
@@ -47,6 +48,9 @@ const SORT_LABELS: Record<ExplorePageSort, string> = {
 };
 
 const DEFAULT_SORT_OPTIONS: readonly ExplorePageSort[] = ['best', 'new', 'top'];
+
+/** GEO-3144. Read by the server too: Explore pages are interleaved for experiment groups only when set. */
+const FEED_INTERLEAVING_ENABLED = process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
 
 /**
  * The sorts a time range applies to.
@@ -133,6 +137,12 @@ type EntityFeedProps = {
    * cross-space browsing surface the panel was asked for.
    */
   titleOpensSidePanel?: boolean;
+  /**
+   * Send the signed-in viewer's Privy identity token with each page request (GEO-3140), so the
+   * server can personalize For you for a person it has verified rather than one the client names.
+   * Explore only; harmless where the server does not personalize.
+   */
+  sendIdentityToken?: boolean;
 };
 
 async function fetchFeedPage(
@@ -148,6 +158,7 @@ async function fetchFeedPage(
     followedTopicIds: readonly string[];
     fixedParams: Record<string, string>;
     cursor: string | undefined;
+    identityToken?: string | null;
   }
 ): Promise<ExploreFeedResult> {
   const sp = new URLSearchParams();
@@ -163,7 +174,10 @@ async function fetchFeedPage(
   if (params.followedTopicIds.length > 0) sp.set('followedTopicIds', params.followedTopicIds.join(','));
   for (const [key, value] of Object.entries(params.fixedParams)) sp.set(key, value);
   if (params.cursor) sp.set('cursor', params.cursor);
-  const res = await fetch(`${apiEndpoint}?${sp.toString()}`, { credentials: 'include' });
+  const res = await fetch(`${apiEndpoint}?${sp.toString()}`, {
+    credentials: 'include',
+    ...(params.identityToken ? { headers: { authorization: `Bearer ${params.identityToken}` } } : {}),
+  });
   if (!res.ok) {
     throw new Error('Feed failed');
   }
@@ -226,6 +240,7 @@ export function EntityFeed({
   dividerBeforeFeed = false,
   titleOpensSidePanel = false,
   claimCardVariant = 'feed',
+  sendIdentityToken = false,
 }: EntityFeedProps) {
   const [time, setTime] = React.useState<ExploreTime>(initialTime);
   const [sort, setSort] = React.useState<ExplorePageSort>(initialSort);
@@ -439,10 +454,16 @@ export function EntityFeed({
     ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
   ];
 
+  // Only where the server can use it, so no other page waits on Privy for a token: For you, and
+  // Best while interleaving is on (GEO-3144), which needs to know who is reading.
+  const wantsIdentityToken =
+    sendIdentityToken && smartAccountAddress !== null && (isForYou || (sort === 'best' && FEED_INTERLEAVING_ENABLED));
+
   const { data, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage, error } = useInfiniteQuery({
     queryKey,
-    queryFn: ({ pageParam }) =>
+    queryFn: async ({ pageParam }) =>
       fetchFeedPage(apiEndpoint, {
+        identityToken: wantsIdentityToken ? await getCachedIdentityToken() : null,
         sort,
         time: requestedTime,
         spaceIds: requestedSpaceIds,

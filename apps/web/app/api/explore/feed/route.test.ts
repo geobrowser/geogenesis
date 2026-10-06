@@ -6,7 +6,7 @@ import { NEWS_STORY_TYPE_ID } from '~/core/explore/explore-constants';
 
 import { GET } from './route';
 
-const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn() }));
+const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn(), viewer: vi.fn() }));
 
 vi.mock('~/core/explore/fetch-explore-feed', () => ({
   fetchExploreFeed: (args: unknown) => mocks.fetchFeed(args),
@@ -16,12 +16,20 @@ vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
     browse: { featured: [], editorOf: [], memberOf: [], documentationImage: null, personalSpaceId: null },
     memberOrEditorSpaceIds: [],
     walletAddress: null,
+    personalMemberSpaceId: null,
   }),
+}));
+vi.mock('~/core/explore/for-you/resolve-for-you-viewer', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/explore/for-you/resolve-for-you-viewer')>()),
+  resolveForYouViewer: (...args: unknown[]) => mocks.viewer(...args),
 }));
 
 beforeEach(() => {
   mocks.fetchFeed.mockReset();
   mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: null });
+  mocks.viewer.mockReset();
+  mocks.viewer.mockResolvedValue(null);
+  vi.unstubAllEnvs();
 });
 
 const sentArgs = () =>
@@ -30,6 +38,8 @@ const sentArgs = () =>
     typeIds: string[];
     excludeTypeIds?: string[];
     forYouTopicIds: string[];
+    cursor: string | null;
+    reorderWindow?: unknown;
   };
 
 describe('GET /api/explore/feed', () => {
@@ -71,5 +81,73 @@ describe('GET /api/explore/feed', () => {
     );
 
     expect(sentArgs().forYouTopicIds).toEqual([]);
+  });
+
+  describe('personalized For you (GEO-3140)', () => {
+    const item = (entityId: string, ranking?: object) => ({ entityId, ...(ranking ? { ranking } : {}) });
+
+    it('personalizes only for a verified viewer, ignoring followed topics', async () => {
+      mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
+      mocks.fetchFeed.mockResolvedValue({
+        items: [item('e1', { version: 'for-you-1.0+web.1', reason: null })],
+        nextCursor: 'w1:22:',
+        feed: { name: 'for-you', version: 'for-you-1.0+web.1' },
+      });
+      const response = await GET(
+        new Request(
+          'https://example.com/api/explore/feed?sort=for-you&followedTopicIds=8cb0a2b4adbf4627aa080cec5112099a'
+        )
+      );
+
+      expect(sentArgs().reorderWindow).toBeTypeOf('function');
+      expect(sentArgs().forYouTopicIds).toEqual([]);
+      expect(response.headers.get('cache-control')).toBe('private, no-store');
+      const body = await response.json();
+      expect(body.feed).toEqual({ name: 'for-you', version: 'for-you-1.0+web.1' });
+      // The pinned time rides in the cursor around the window cursor, and comes back off it.
+      expect(body.nextCursor).toMatch(/^p1:\d+:w1:22:$/);
+      await GET(
+        new Request(`https://example.com/api/explore/feed?sort=for-you&cursor=${encodeURIComponent(body.nextCursor)}`)
+      );
+      expect((mocks.fetchFeed.mock.calls[1]?.[0] as { cursor: string }).cursor).toBe('w1:22:');
+    });
+
+    it('falls back to the followed-topic stream for an unverified viewer', async () => {
+      const response = await GET(
+        new Request(
+          'https://example.com/api/explore/feed?sort=for-you&followedTopicIds=8cb0a2b4adbf4627aa080cec5112099a'
+        )
+      );
+
+      expect(sentArgs().reorderWindow).toBeUndefined();
+      expect(sentArgs().forYouTopicIds).toEqual(['8cb0a2b4adbf4627aa080cec5112099a']);
+      expect(response.headers.get('cache-control')).toBeNull();
+    });
+
+    it('does not even look for a viewer on Best while interleaving is off', async () => {
+      await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+      expect(mocks.viewer).not.toHaveBeenCalled();
+      expect(sentArgs().reorderWindow).toBeUndefined();
+    });
+
+    it('looks for a viewer on Best once interleaving is on', async () => {
+      vi.stubEnv('NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED', 'true');
+      mocks.viewer.mockResolvedValue('aaaaaaaa000040008000000000000001');
+      await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+      expect(sentArgs().reorderWindow).toBeTypeOf('function');
+    });
+
+    it('names the version on every card of a Best page', async () => {
+      mocks.fetchFeed.mockResolvedValue({
+        items: [item('e1'), item('e2')],
+        nextCursor: null,
+        feed: { name: 'best', version: 'best-1' },
+      });
+      const body = await (await GET(new Request('https://example.com/api/explore/feed?sort=best'))).json();
+
+      expect(body.items.map((i: { ranking: { version: string } }) => i.ranking.version)).toEqual(['best-1', 'best-1']);
+    });
   });
 });

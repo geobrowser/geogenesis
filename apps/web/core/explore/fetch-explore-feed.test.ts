@@ -333,6 +333,65 @@ describe('a type selection filters server-side (GEO-2885)', () => {
   });
 });
 
+describe('a window reorder (GEO-3140 For you, GEO-3144 interleaving)', () => {
+  const claims = Array.from({ length: 30 }, (_, i) => entity(`c${i}`, CLAIM_TYPE_ID));
+
+  it("names Best's version when nothing replaces it", async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const result = await fetchExploreFeed({ ...feedArgs, typeIds: [CLAIM_TYPE_ID] });
+    expect(result.feed).toEqual({ name: 'best', version: 'best-1' });
+  });
+
+  it("serves the reordered window, through Best's own diversity pass, under the reorder's name", async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const seen: string[][] = [];
+    const result = await fetchExploreFeed({
+      ...feedArgs,
+      typeIds: [CLAIM_TYPE_ID],
+      reorderWindow: async (rows, { windowKey, arrange }) => {
+        seen.push([windowKey, ...rows.map(r => r.entityId)]);
+        return { rows: arrange([...rows].reverse()), feed: { name: 'for-you', version: 'for-you-1.0+web.1' } };
+      },
+    });
+    expect(seen[0]?.slice(0, 2)).toEqual(['', 'c0']);
+    expect(result.feed).toEqual({ name: 'for-you', version: 'for-you-1.0+web.1' });
+    expect(result.items[0]?.entityId).toBe('c29');
+    expect(result.items).toHaveLength(22);
+  });
+
+  it('cuts later pages from the same reordered window, without repeats', async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const reorderWindow = async (rows: { entityId: string }[]) => ({
+      rows: [...rows].reverse() as never,
+      feed: { name: 'for-you' as const, version: 'v' },
+    });
+    const first = await fetchExploreFeed({ ...feedArgs, typeIds: [CLAIM_TYPE_ID], reorderWindow });
+    const second = await fetchExploreFeed({
+      ...feedArgs,
+      typeIds: [CLAIM_TYPE_ID],
+      reorderWindow,
+      cursor: first.nextCursor,
+    });
+    const all = [...first.items, ...second.items].map(i => i.entityId);
+    expect(new Set(all).size).toBe(30);
+  });
+
+  it('falls back to Best when the reorder declines', async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const result = await fetchExploreFeed({ ...feedArgs, typeIds: [CLAIM_TYPE_ID], reorderWindow: async () => null });
+    expect(result.feed?.name).toBe('best');
+    expect(result.items[0]?.entityId).toBe('c0');
+  });
+
+  it('is not consulted on New', async () => {
+    windows.queue = [windowOf(claims, { hasNextPage: false, endCursor: null })];
+    const reorderWindow = vi.fn();
+    const result = await fetchExploreFeed({ ...feedArgs, sort: 'new', typeIds: [CLAIM_TYPE_ID], reorderWindow });
+    expect(reorderWindow).not.toHaveBeenCalled();
+    expect(result.feed).toBeUndefined();
+  });
+});
+
 describe('a complete contextual population', () => {
   it('exhausts relation pages, deduplicates source entities, and preserves all feed guards', async () => {
     windows.queue = [
