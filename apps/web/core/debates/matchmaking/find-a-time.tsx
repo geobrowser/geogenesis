@@ -53,7 +53,7 @@ import {
 } from './find-a-time-model';
 import { FIND_A_TIME_FROM_PARAM, safeReturnPath } from './find-a-time-route';
 import { FindATimeWeek, FindATimeWeekSkeleton } from './find-a-time-week';
-import { useDebatePeople, useDebateRequests, usePeerWeeks, useSchedulablePeople } from './hooks';
+import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubPillButton } from './hub-pill-button';
 import { HubMessage, isSignInRequired } from './hub-states';
@@ -258,35 +258,10 @@ function FindATimeBody({
     return byUser;
   }, [isViewer, peopleQuery.data]);
 
-  // A geo-chat whose list carries only shared times: each person's whole week is read the way their
-  // Schedule week reads it, one request each, until the list sends it in one answer.
-  const listedIds = React.useMemo(
-    () =>
-      schedulableQuery.data && !schedulableQuery.data.people.some(person => person.their_windows)
-        ? schedulableQuery.data.people.map(person => person.user.user_id)
-        : [],
-    [schedulableQuery.data]
+  const slotsByUser = React.useMemo(
+    () => (schedulableQuery.data ? freeSlotsByUser(schedulableQuery.data, now) : new Map<string, FreeSlot[]>()),
+    [now, schedulableQuery.data]
   );
-  const peerWeeks = usePeerWeeks(listedIds, listedIds.length > 0);
-  const listed = React.useMemo(
-    () =>
-      schedulableQuery.data && listedIds.length > 0
-        ? {
-            ...schedulableQuery.data,
-            people: schedulableQuery.data.people.map(person => ({
-              ...person,
-              their_windows: peerWeeks.byUser.get(normId(person.user.user_id)),
-            })),
-          }
-        : schedulableQuery.data,
-    [listedIds.length, peerWeeks.byUser, schedulableQuery.data]
-  );
-
-  const { slotsByUser, wholeWeekKnown } = React.useMemo(() => {
-    if (!listed) return { slotsByUser: new Map<string, FreeSlot[]>(), wholeWeekKnown: true };
-    const { byUser, wholeWeekKnown: known } = freeSlotsByUser(listed, now);
-    return { slotsByUser: byUser, wholeWeekKnown: known };
-  }, [listed, now]);
 
   const peopleByUser = React.useMemo(() => {
     const byUser = new Map<string, DebatePerson>(onlineByUser);
@@ -369,7 +344,7 @@ function FindATimeBody({
     [schedule.blocks, scheduleZone, today, viewerHasSchedule]
   );
   // The viewer's own free time is the one source for both the shading and "Only times I'm free",
-  // so the two cannot disagree. A geo-chat predating `their_windows` sends only shared times anyway.
+  // so the two cannot disagree.
   const slotsWithViewer = React.useMemo(() => {
     if (!viewerHasSchedule) return slotsByUser;
     const flagged = new Map<string, FreeSlot[]>();
@@ -666,16 +641,6 @@ function FindATimeBody({
           see others.
         </Text>
       ) : null}
-      {peerWeeks.pending > 0 ? (
-        <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4" aria-live="polite">
-          Loading everyone&rsquo;s free times…
-        </Text>
-      ) : !wholeWeekKnown && viewerHasSchedule ? (
-        <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
-          Some people show only the times you share. Their other free times are on their week: pick someone to see it.
-        </Text>
-      ) : null}
-
       <div className="px-6 pb-6 md:px-4">
         {state === 'error' ? (
           <HubMessage action={<HubPillButton onClick={() => void schedulableQuery.refetch()}>Try again</HubPillButton>}>

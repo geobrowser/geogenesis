@@ -43,28 +43,15 @@ export type FreeSlot = {
 };
 
 /**
- * Each listed person's bookable half-hours still ahead, soonest first, keyed by `normId(user_id)`.
- *
- * Read from `their_windows`, their whole free time. A geo-chat predating it sends only the times
- * shared with the viewer, in `slots`; those are drawn rather than nothing, and say so through
- * `wholeWeekKnown` so the page can tell the viewer this is not everyone's full week.
+ * Each listed person's bookable half-hours still ahead, soonest first, keyed by `normId(user_id)`,
+ * read from `their_windows`: their whole free time, whether or not the viewer shares it (geo-chat#204).
  */
-export function freeSlotsByUser(
-  response: SchedulablePeopleResponse,
-  now: number
-): { byUser: Map<string, FreeSlot[]>; wholeWeekKnown: boolean } {
+export function freeSlotsByUser(response: SchedulablePeopleResponse, now: number): Map<string, FreeSlot[]> {
   const byUser = new Map<string, FreeSlot[]>();
-  let wholeWeekKnown = response.people.length === 0 || response.people.some(person => person.their_windows);
 
   for (const person of response.people) {
-    const windows =
-      person.their_windows ??
-      // Shared times are, by definition, ones the viewer is free for.
-      person.slots.map(slot => ({ ...slot, viewer_free: true }));
-    if (!person.their_windows) wholeWeekKnown = false;
-
     const slots: FreeSlot[] = [];
-    for (const window of windows) {
+    for (const window of person.their_windows ?? []) {
       const start = Date.parse(window.start);
       const end = Date.parse(window.end);
       if (Number.isNaN(start) || Number.isNaN(end)) continue;
@@ -77,7 +64,7 @@ export function freeSlotsByUser(
     if (slots.length > 0) byUser.set(normId(person.user.user_id), slots);
   }
 
-  return { byUser, wholeWeekKnown };
+  return byUser;
 }
 
 /** Local midnight on the Monday `weekOffset` weeks from the one `now` falls in. */

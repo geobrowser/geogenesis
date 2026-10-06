@@ -38,7 +38,7 @@ function response(people: SchedulablePeopleResponse['people']): SchedulablePeopl
 
 describe('freeSlotsByUser', () => {
   it('expands each free window into its bookable half-hours, keeping the viewer flag', () => {
-    const { byUser, wholeWeekKnown } = freeSlotsByUser(
+    const byUser = freeSlotsByUser(
       response([
         person('a', {
           their_windows: [
@@ -50,7 +50,6 @@ describe('freeSlotsByUser', () => {
       NOW.getTime()
     );
 
-    expect(wholeWeekKnown).toBe(true);
     expect(byUser.get('a')).toEqual([
       { start: at(8, 18), viewerFree: true },
       { start: at(8, 18, 30), viewerFree: true },
@@ -59,7 +58,7 @@ describe('freeSlotsByUser', () => {
   });
 
   it('drops half-hours that have already started', () => {
-    const { byUser } = freeSlotsByUser(
+    const byUser = freeSlotsByUser(
       response([person('a', { their_windows: [{ start: iso(at(7, 9)), end: iso(at(7, 11)), viewer_free: false }] })]),
       NOW.getTime()
     );
@@ -67,18 +66,16 @@ describe('freeSlotsByUser', () => {
     expect(byUser.get('a')?.map(slot => slot.start)).toEqual([at(7, 10, 30)]);
   });
 
-  it('falls back to shared times on a geo-chat that predates their_windows, and says so', () => {
-    const { byUser, wholeWeekKnown } = freeSlotsByUser(
+  it('reads only their whole free time, never the shared slots on their own', () => {
+    const byUser = freeSlotsByUser(
       response([person('a', { slots: [{ start: iso(at(9, 15)), end: iso(at(9, 15, 30)) }] })]),
       NOW.getTime()
     );
-
-    expect(wholeWeekKnown).toBe(false);
-    expect(byUser.get('a')).toEqual([{ start: at(9, 15), viewerFree: true }]);
+    expect(byUser.has('a')).toBe(false);
   });
 
   it('leaves out people with nothing left to book', () => {
-    const { byUser } = freeSlotsByUser(response([person('a', { their_windows: [] })]), NOW.getTime());
+    const byUser = freeSlotsByUser(response([person('a', { their_windows: [] })]), NOW.getTime());
     expect(byUser.has('a')).toBe(false);
   });
 });

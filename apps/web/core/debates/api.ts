@@ -982,8 +982,8 @@ export type SchedulablePerson = {
   /**
    * All of their free time still ahead (geo-chat#204, GEO-3153), whether or not the viewer shares it, merged into
    * continuous windows, each flagged with whether the viewer is free for it. Committed time is
-   * already taken out, and `limit` never caps it. Absent on deployments that predate it, which is
-   * not the same as an empty week.
+   * already taken out, and `limit` never caps it. Optional only because builds before #204 omitted
+   * it; read a missing one as no free time.
    */
   their_windows?: AnnotatedSlot[];
 };
