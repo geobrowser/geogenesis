@@ -107,6 +107,30 @@ describe('decodeExtractedClaims timing (GEO-2958)', () => {
   });
 });
 
+describe('decodeExtractedClaims highlight score', () => {
+  const claim = (extra: Record<string, unknown>) => ({ text: 'A claim', is_factual: false, turn_index: 0, ...extra });
+
+  it("carries geo-chat's highlight_score onto the claim", () => {
+    const { claims } = decodeExtractedClaims({ turns: [turn], claims: [claim({ highlight_score: 0.62 })] });
+    expect(claims[0].highlightScore).toBe(0.62);
+  });
+
+  it.each([
+    ['absent (a payload from before scoring)', {}],
+    ['null (geo-chat did not score it)', { highlight_score: null }],
+    ['a string', { highlight_score: '0.62' }],
+    ['over 1', { highlight_score: 1.5 }],
+    ['negative', { highlight_score: -0.2 }],
+    ['not finite', { highlight_score: Number.POSITIVE_INFINITY }],
+  ])('decodes no score when it is %s', (_label, extra) => {
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [claim(extra) as Parameters<typeof decodeExtractedClaims>[0]['claims'][number]],
+    });
+    expect(claims[0].highlightScore).toBeNull();
+  });
+});
+
 describe('decodeExtractedClaims stable ids (GEO-2870 D1)', () => {
   it("carries geo-chat's entity_id as a dashless id, and null when absent or blank", () => {
     const { claims } = decodeExtractedClaims({

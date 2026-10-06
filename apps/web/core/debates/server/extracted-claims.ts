@@ -4,6 +4,7 @@ import {
   type ClaimStance,
   type DebateClaimInput,
   type DebatePublishTurn,
+  publishableHighlightScore,
   publishableTiming,
 } from '../debate-publish-draft';
 import { looksLikeEntityId } from './claim-reuse';
@@ -58,6 +59,12 @@ export type DebateExtractedClaimsClaim = {
   start_ms?: number | null;
   end_ms?: number | null;
   /**
+   * How much the claim carries the debate, 0–1: extraction-api's `claims.score_highlights`
+   * answer, carried by geo-chat when `EXTRACTION_HIGHLIGHT_SCORING` is on. Null when the claim
+   * was not scored, and absent on payloads from before scoring shipped.
+   */
+  highlight_score?: number | null;
+  /**
    * GEO-3142: the claim's stance toward the debated claim — `supports`, `opposes` or `addresses`
    * — judged by the extractor on what the claim says, not on the speaker's side. Null when the
    * extractor gave none; absent on payloads from before the classification shipped.
@@ -101,6 +108,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     topics: decodeTopics(claim.topics, droppedTopics),
     isContestable: claim.is_contestable === true,
     timing: decodeTiming(claim.start_ms, claim.end_ms),
+    highlightScore: decodeHighlightScore(claim.highlight_score),
     stance: decodeStance(claim.stance),
   }));
   if (droppedTopics.length > 0) {
@@ -156,6 +164,15 @@ export function decodeStance(stance: unknown): ClaimStance | null {
 function decodeTiming(startMs: unknown, endMs: unknown): { startMs: number; endMs: number } | null {
   if (typeof startMs !== 'number' || typeof endMs !== 'number') return null;
   return publishableTiming({ startMs, endMs });
+}
+
+/**
+ * `highlight_score` → a score, only when it is a finite number in [0, 1]. Anything else is null,
+ * so nothing is published: the player ranks claims by this, and a malformed value would rank.
+ */
+function decodeHighlightScore(score: unknown): number | null {
+  if (typeof score !== 'number') return null;
+  return publishableHighlightScore(score);
 }
 
 /**

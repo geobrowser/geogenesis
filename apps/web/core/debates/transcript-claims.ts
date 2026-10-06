@@ -2,6 +2,7 @@ import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import {
   CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
   NAME_PROPERTY_ID,
 } from '~/core/debates/ontology';
@@ -38,8 +39,16 @@ export type TranscriptClaim = {
    */
   publishedTiming: { startMs: number; endMs: number } | null;
   /**
-   * The id of the block → claim relation's own entity, which is where {@link publishedTiming} is
-   * read from and where a backfill writes it.
+   * How much this claim carries the debate, as published on the same relation entity: the
+   * probability (0–1) that the debate's claim list would misrepresent the debate without it,
+   * judged by extraction-api's `claims.score_highlights`. Compare within one debate; the live
+   * layer uses it to show the few claims that matter. Null for debates published before scoring
+   * shipped (2026-10) and for a claim geo-chat could not score.
+   */
+  highlightScore: number | null;
+  /**
+   * The id of the block → claim relation's own entity, which is where {@link publishedTiming} and
+   * {@link highlightScore} are read from and where a backfill writes them.
    *
    * From the same relation as {@link blockId} — the turn the claim was first seen on — so the two
    * always describe the same statement. Null only if the API omits it.
@@ -186,6 +195,25 @@ function publishedTiming(
   return { startMs, endMs };
 }
 
+/**
+ * The highlight score published on a block → claim relation entity, or null when it carries none.
+ *
+ * Float values arrive as numbers. Anything outside [0, 1] is discarded: the live layer ranks by
+ * this, and a value the publisher would never write is drift, not a very strong opinion.
+ */
+function publishedHighlightScore(
+  values: Array<{ propertyId: string; float?: number | null } | null> | null | undefined
+): number | null {
+  for (const value of values ?? []) {
+    if (!value || uuidToHex(value.propertyId) !== uuidToHex(CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID)) continue;
+    const score = value.float;
+    if (typeof score !== 'number' || !Number.isFinite(score)) continue;
+    if (score < 0 || score > 1) continue;
+    return score;
+  }
+  return null;
+}
+
 type ClaimEntityNaming = {
   name?: string | null;
   spaceIds?: Array<string | null> | null;
@@ -291,6 +319,7 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
             spaceId: resolved.spaceId,
             blockId: blockEntity.id,
             publishedTiming: publishedTiming(claim.entity?.valuesList),
+            highlightScore: publishedHighlightScore(claim.entity?.valuesList),
             relationEntityId: claim.entityId ?? null,
             restated: false,
           };

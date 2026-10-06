@@ -20,6 +20,7 @@ import {
   AUTHORS_PROPERTY_ID,
   CLAIM_ADDRESSES_PROPERTY_ID,
   CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_OPPOSES_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
   CLAIM_SUPPORTS_PROPERTY_ID,
@@ -882,6 +883,61 @@ describe('buildDebatePublishDraft', () => {
             (v.property.id === CLAIM_START_OFFSET_PROPERTY_ID || v.property.id === CLAIM_END_OFFSET_PROPERTY_ID)
         )
       ).toBe(false);
+    });
+
+    it('writes the highlight score onto the same relation entity as a Float, beside the offsets', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'Scored claim',
+              isFactual: false,
+              turnIndex: 0,
+              timing: { startMs: 16_680, endMs: 21_900 },
+              highlightScore: 0.62,
+            },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Scored claim');
+      expect(offsetsOn(draft, statement)).toEqual([
+        { property: CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, dataType: 'FLOAT', value: '0.62' },
+        { property: CLAIM_START_OFFSET_PROPERTY_ID, dataType: 'INTEGER', value: '16680' },
+        { property: CLAIM_END_OFFSET_PROPERTY_ID, dataType: 'INTEGER', value: '21900' },
+      ]);
+      // Not on the claim: a claim reused across debates carries a different score in each.
+      const claimId = claimIdByName(draft, 'Scored claim');
+      expect(
+        draft.values.some(v => v.entity.id === claimId && v.property.id === CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID)
+      ).toBe(false);
+    });
+
+    it('writes a score without a timing: the two are independent facts about the statement', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'Scored, untimed', isFactual: false, turnIndex: 0, highlightScore: 0 }] }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Scored, untimed');
+      expect(offsetsOn(draft, statement)).toEqual([
+        { property: CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, dataType: 'FLOAT', value: '0' },
+      ]);
+      expect(relationsFrom(draft, statement)).toEqual([]);
+    });
+
+    // The player ranks by this, so a stand-in would rank.
+    it.each([
+      ['no score', undefined],
+      ['a null score', null],
+      ['a score over 1', 1.2],
+      ['a negative score', -0.1],
+      ['a non-finite score', Number.NaN],
+    ])('writes no score for %s', (_label, highlightScore) => {
+      const draft = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'Unscored claim', isFactual: false, turnIndex: 0, highlightScore }] }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(offsetsOn(draft, statementOf(draft, 'Unscored claim'))).toEqual([]);
     });
 
     // Each of these would be published as a to-the-second certainty the app cannot demote.

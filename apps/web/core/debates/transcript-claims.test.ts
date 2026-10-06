@@ -18,10 +18,11 @@ type Claim = {
   /** null models a claim the graph reports no space for. */
   spaceId?: string | null;
   /**
-   * Values on the block → claim relation entity, where timecodes live. Integers arrive from the
-   * API as strings, so these fixtures are written as strings too.
+   * Values on the block → claim relation entity, where timecodes and the highlight score live.
+   * Integers arrive from the API as strings, so these fixtures are written as strings too; floats
+   * arrive as numbers.
    */
-  offsets?: Array<{ propertyId: string; integer?: string | null } | null>;
+  offsets?: Array<{ propertyId: string; integer?: string | null; float?: number | null } | null>;
 };
 
 type Block = {
@@ -519,6 +520,30 @@ describe('published timecodes', () => {
     const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
 
     expect(all[0].publishedTiming).toBeNull();
+  });
+
+  it('reads the highlight score off the relation entity, beside the offsets', () => {
+    const SCORE = '580ba596988144a79716cd38a891319b';
+    const { all } = group(
+      response([
+        {
+          id: 'block-1',
+          claims: [{ id: 'c1', offsets: [...offsets('134600', '143140'), { propertyId: SCORE, float: 0.62 }] }],
+        },
+      ])
+    );
+    expect(all[0].highlightScore).toBe(0.62);
+    expect(all[0].publishedTiming).toEqual({ startMs: 134600, endMs: 143140 });
+  });
+
+  it.each([
+    ['no score value', offsets('1000', '2000')],
+    ['a null score', [{ propertyId: '580ba596988144a79716cd38a891319b', float: null }]],
+    ['a score over 1', [{ propertyId: '580ba596988144a79716cd38a891319b', float: 1.5 }]],
+    ['a negative score', [{ propertyId: '580ba596988144a79716cd38a891319b', float: -0.5 }]],
+  ])('reports no highlight score for %s', (_label, values) => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+    expect(all[0].highlightScore).toBeNull();
   });
 
   it('carries the block each claim was said in, so its turn can be located on the recording', () => {
