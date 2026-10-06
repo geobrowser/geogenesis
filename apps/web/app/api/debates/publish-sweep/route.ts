@@ -118,9 +118,10 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
         if (error instanceof DebateNotPublishableError) {
           if (error.code === 'media_failed') {
             // Terminal: the worker has spent its retries, so no later tick will publish this.
-            // Collected rather than logged here — the sweep runs every five minutes and these
-            // debates never leave the list, so a line each would be a few hundred a day per stuck
-            // debate. One aggregate line below carries the same information without the noise.
+            // Candidate discovery drops debates the listing already reports as terminal
+            // (GEO-2985), so this only catches ones it could not see: a geo-chat older than the
+            // listing's `media` field, or a job that died between the listing and this read.
+            // Collected rather than logged here; one aggregate line below carries it.
             mediaFailed.push(debateId);
           } else if (error.code === 'media_not_ready' || error.code === 'not_complete') {
             // Media still processing or lifecycle state changed — retry next tick.
