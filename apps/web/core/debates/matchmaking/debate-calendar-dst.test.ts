@@ -39,13 +39,14 @@ describe('the calendar across clock changes', () => {
     expect(slots.at(-1)?.start).toBe(local(2026, 11, 8, 23, 30));
   });
 
-  // Clocks go forward at 02:00 on Sun 14 Mar 2027: that day has no 2am hour to shade.
+  // Clocks go forward at 02:00 on Sun 14 Mar 2027: that day has no 2am hour to shade. It opens the
+  // grid's second week, while the saved schedule calls it the seventh day of the first.
   it('shades the hour a free half-hour is in, not an hour the clocks skipped', () => {
     const now = new Date(2027, 2, 10, 10, 0);
     const blocks: AvailabilityBlock[] = [{ id: 'r', kind: 'recurring', weekday: 6, start: 3 * 60, end: 3 * 60 + 30 }];
-    const keys = viewerFreeCellKeys(viewerFreeSlots(blocks, 'America/Los_Angeles', now), weekDays(weekStart(now, 0)));
+    const keys = viewerFreeCellKeys(viewerFreeSlots(blocks, 'America/Los_Angeles', now), weekDays(weekStart(now, 1)));
 
-    expect(keys.has('6:3')).toBe(true);
-    expect(keys.has('6:2')).toBe(false);
+    expect(keys.has('0:3')).toBe(true);
+    expect(keys.has('0:2')).toBe(false);
   });
 });
