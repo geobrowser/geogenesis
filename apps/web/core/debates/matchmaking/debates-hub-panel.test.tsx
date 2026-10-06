@@ -262,10 +262,10 @@ describe('DebatesHubPanel', () => {
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
   // GEO-2861. Four tabs, and "My positions" is not one of them: it is a source inside Explore's
   // menu, one more answer to "which claims?" rather than a surface of its own.
-  it('offers Live, Schedule, Explore, My positions and Requests, in that order', () => {
+  it('offers Live, People, Explore, My positions and Requests, in that order', () => {
     renderOpen('explore');
 
-    const order = ['Live', 'Schedule', 'Explore', 'My positions', 'Requests'];
+    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
     const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
@@ -432,7 +432,7 @@ describe('DebatesHubPanel', () => {
   it('renders every tab and switches between them', async () => {
     renderOpen();
 
-    for (const label of ['Requests', 'Live', 'Explore', 'Schedule']) {
+    for (const label of ['Requests', 'Live', 'Explore', 'People']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
@@ -443,14 +443,14 @@ describe('DebatesHubPanel', () => {
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['Live', 'Schedule', 'Explore', 'My positions', 'Requests'];
+    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
       expect(Boolean(tab.compareDocumentPosition(next) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
     }
 
-    fireEvent.click(screen.getByRole('button', { name: /^Schedule/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^People/ }));
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
     // Signed in, the list includes offline people free at shared times, so the empty copy says so.
@@ -501,10 +501,10 @@ describe('DebatesHubPanel', () => {
     // on was `SIGNED_OUT_TABS` naming the contents while `TABS` quietly decided the order.
     const row = screen.getByRole('button', { name: 'Explore' }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
-    expect(labels).toEqual(['Explore', 'Schedule']);
+    expect(labels).toEqual(['Explore', 'People']);
 
     expect(screen.getByRole('button', { name: 'Explore' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Schedule' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
     expect(screen.queryByText('Sign in to find people to debate.')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Explore' })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
