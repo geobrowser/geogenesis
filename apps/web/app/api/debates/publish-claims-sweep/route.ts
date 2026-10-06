@@ -65,6 +65,7 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
   let attempted = 0;
   let upToDate = 0;
   let noClaims = 0;
+  let dedupPending = 0;
   let debatePublished = 0;
   let notEditor = 0;
   let notPublishable = 0;
@@ -94,6 +95,9 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
           case 'no_claims':
             noClaims += 1;
             break;
+          case 'dedup_pending':
+            dedupPending += 1;
+            break;
           case 'debate_published':
             debatePublished += 1;
             break;
@@ -116,5 +120,5 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
     }
   }
 
-  return { ok: true, published, upToDate, noClaims, debatePublished, notEditor, notPublishable, failed };
+  return { ok: true, published, upToDate, noClaims, dedupPending, debatePublished, notEditor, notPublishable, failed };
 }

@@ -460,7 +460,11 @@ async function buildDebateShareCard(
  */
 export async function loadDebateClaims(
   debateId: string
-): Promise<{ transcriptTurns: DebatePublishTurn[]; claims: DebateClaimInput[] } | null> {
+): Promise<{
+  transcriptTurns: DebatePublishTurn[];
+  claims: DebateClaimInput[];
+  dedupPendingUntil: number | null;
+} | null> {
   let response: DebateExtractedClaimsResponse;
   try {
     response = await geoChatGet<DebateExtractedClaimsResponse>(`/debates/${debateId}/claims`);
