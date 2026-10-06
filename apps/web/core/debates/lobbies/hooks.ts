@@ -19,10 +19,11 @@ import {
   setDebateLobbyReminder,
   stepOutOfDebateLobby,
 } from '../api';
+import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useConnectionId } from '../rooms/hooks';
 import { isAlreadyInAnotherLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
-import { registerLobbyStepOut } from './step-out';
+import { consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
@@ -270,6 +271,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
 
   const stepOut = React.useCallback(async () => {
     if (!sentRef.current) return;
+    rememberLobbyReturnDestination(lobbyId);
     stopWithout({ status: 'stepped_out' });
     try {
       store(
@@ -297,13 +299,13 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   }, [stepOut]);
 
   // Auto-join once admitted, unless the viewer left, is being asked about another lobby, or
-  // stepped out, where going back is their call.
+  // stepped out, where going back is their call unless the debate's end card already made it.
   const status = state.status;
   React.useEffect(() => {
     if (!admitted || status !== 'idle') return;
-    if (steppedOut) setState({ status: 'stepped_out' });
+    if (steppedOut && !consumeLobbyRejoin(lobbyId)) setState({ status: 'stepped_out' });
     else void join(false);
-  }, [admitted, join, status, steppedOut]);
+  }, [admitted, join, lobbyId, status, steppedOut]);
 
   const beatNowRef = React.useRef<(() => void) | null>(null);
 

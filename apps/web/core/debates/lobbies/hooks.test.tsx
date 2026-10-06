@@ -24,7 +24,8 @@ vi.mock('../hooks', async importOriginal => ({
 
 const { GeoChatRequestError } = await import('../api');
 const { LOBBY_HEARTBEAT_MS, useDebateLobby, useLobbyPresence } = await import('./hooks');
-const { routeIntoDebate } = await import('./step-out');
+const { requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
+const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
 
 /** A presence call that resolves when the test says so. */
 function deferredJoin() {
@@ -206,6 +207,7 @@ describe('useLobbyPresence', () => {
       'acct'
     );
     expect(result.current.state.status).toBe('stepped_out');
+    expect(consumeDebateReturnDestination()).toBe('/debate/lobby1');
 
     unmount();
     await act(async () => {});
@@ -220,6 +222,20 @@ describe('useLobbyPresence', () => {
     await act(() => result.current.leaveSteppedOut());
     expect(api.endDebateLobbyStepOut).toHaveBeenCalledTimes(1);
     expect(result.current.state.status).toBe('left');
+  });
+
+  it('joins on arrival when the debate’s end card asked to go back to this lobby', async () => {
+    requestLobbyRejoin('lobby1');
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    expect(joins()).toHaveLength(1);
+  });
+
+  it('still waits when the rejoin was asked for another lobby', async () => {
+    requestLobbyRejoin('lobby2');
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+    expect(joins()).toHaveLength(0);
   });
 
   it('reports voice from the tab that holds it', async () => {

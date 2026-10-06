@@ -74,6 +74,7 @@ import {
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
+import { BackToLobbyRow } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -3134,7 +3135,9 @@ function DebateRecordingModal({
               publishing={publishing}
               publishBusy={publishOptOutOffer.busy}
               onStopPublishing={() => setPublishOptOutRequest(publishOptOutOffer.debateId)}
-            />
+            >
+              <BackToLobbyRow onLeave={onLeave} disabled={leaveDisabled} />
+            </DebateAgainCard>
           )}
         </div>
 
@@ -3475,6 +3478,7 @@ function DebateAgainCard({
   publishing,
   publishBusy,
   onStopPublishing,
+  children,
 }: {
   opponentName: string;
   localConsented: boolean;
@@ -3487,6 +3491,8 @@ function DebateAgainCard({
   publishing: boolean | null;
   publishBusy: boolean;
   onStopPublishing: () => void;
+  /** Extra rows under the opponent's, e.g. the way back to a lobby. */
+  children?: React.ReactNode;
 }) {
   const countdownDescriptionId = React.useId();
   const consentLabel = localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!";
@@ -3555,6 +3561,7 @@ function DebateAgainCard({
           {remoteConsented ? 'Ready' : 'Waiting...'}
         </span>
       </CardRow>
+      {children}
     </section>
   );
 }
