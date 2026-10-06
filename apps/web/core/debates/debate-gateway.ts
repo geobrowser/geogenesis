@@ -509,6 +509,9 @@ export class DebateGatewayClient {
     }
     if (scope.scope === 'matchmaking') {
       this.queueMatchmakingSections();
+      // `debate.lobbies_changed` rides this scope too.
+      this.queueAccountQuery('lobbies');
+      this.queueAccountQuery('lobby');
       return;
     }
     this.queueQuery(['debates', 'detail', scope.debate_id]);

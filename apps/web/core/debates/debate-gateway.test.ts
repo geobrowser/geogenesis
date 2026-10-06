@@ -311,7 +311,7 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.receive('READY', readyPayload([{ scope: 'matchmaking' }]));
     await flushInvalidations();
 
-    for (const kind of ['people', 'matchmaking-claims', 'matches']) {
+    for (const kind of ['people', 'matchmaking-claims', 'matches', 'lobbies', 'lobby']) {
       expectInvalidated(invalidateQueries, {
         queryKey: ['debates', 'account', 'user-a', kind],
         refetchType: 'active',
