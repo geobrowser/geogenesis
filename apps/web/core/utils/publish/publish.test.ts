@@ -218,6 +218,44 @@ describe('prepareLocalDataForPublishing', () => {
       expect(setValue.type).toBe('schedule');
       expect(setValue.value).toBe(schedule);
     });
+
+    /**
+     * Two encodings reach this converter. `apply-inject-ops` writes JSON; `input-address` — the
+     * control that actually sets a location.
+     */
+    const pointOf = (value: string) => {
+      const result = prepareLocalDataForPublishing(
+        [createMockValue({ property: { id: IdUtils.generate(), name: 'Geo location', dataType: 'POINT' }, value })],
+        [],
+        'test-space'
+      );
+      const updateOp = result[0] as UpdateEntityOp;
+      return updateOp.set[0].value as { type: string; lon: number; lat: number };
+    };
+
+    it('should accept a POINT stored as JSON', () => {
+      expect(pointOf(JSON.stringify({ lon: 121, lat: 23.5 }))).toMatchObject({ type: 'point', lon: 121, lat: 23.5 });
+    });
+
+    it('should accept a POINT stored as JSON with x/y', () => {
+      expect(pointOf(JSON.stringify({ x: 121, y: 23.5 }))).toMatchObject({ type: 'point', lon: 121, lat: 23.5 });
+    });
+
+    it('should accept a POINT stored as a lat,lon string', () => {
+      expect(pointOf('23.5,121')).toMatchObject({ type: 'point', lon: 121, lat: 23.5 });
+    });
+
+    it('should accept the spaced form `formatCoordinates` writes', () => {
+      expect(pointOf('23.5, 121')).toMatchObject({ type: 'point', lon: 121, lat: 23.5 });
+    });
+
+    it('should refuse a bare number rather than publishing 0,0', () => {
+      expect(() => pointOf('23.5')).toThrow(/Invalid lon\/lat/);
+    });
+
+    it('should refuse a value that is neither encoding', () => {
+      expect(() => pointOf('somewhere near Taipei')).toThrow(/Invalid lon\/lat/);
+    });
   });
 
   describe('filtering', () => {
