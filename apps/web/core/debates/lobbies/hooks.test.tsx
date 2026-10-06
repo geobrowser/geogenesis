@@ -23,7 +23,8 @@ vi.mock('../hooks', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, routeIntoDebate, useDebateLobby, useLobbyPresence } = await import('./hooks');
+const { LOBBY_HEARTBEAT_MS, useDebateLobby, useLobbyPresence } = await import('./hooks');
+const { routeIntoDebate } = await import('./step-out');
 
 /** A presence call that resolves when the test says so. */
 function deferredJoin() {

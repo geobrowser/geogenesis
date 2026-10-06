@@ -22,6 +22,7 @@ import {
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useConnectionId } from '../rooms/hooks';
 import { isAlreadyInAnotherLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
+import { registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
@@ -29,22 +30,6 @@ export const LOBBY_HEARTBEAT_MS = 15_000;
 const VISIBLE_BEAT_MIN_GAP_MS = 30_000;
 /** For a 429 without `Retry-After`. */
 const RATE_LIMIT_FALLBACK_MS = 5_000;
-/** Routing into a debate waits at most this long for the step-out; the server catches up anyway. */
-const STEP_OUT_WAIT_MS = 2_000;
-
-/** The lobby this tab is in, so routing into a debate can step out first. One per tab. */
-let stepOutOfCurrentLobby: (() => Promise<void>) | null = null;
-
-/**
- * Routes into a debate, stepping out of this tab's lobby first so the unmount's leave does not
- * take the viewer off its roster. Synchronous outside a lobby.
- */
-export function routeIntoDebate(go: () => void) {
-  const stepOut = stepOutOfCurrentLobby;
-  if (!stepOut) return go();
-  void Promise.race([stepOut(), new Promise<void>(resolve => setTimeout(resolve, STEP_OUT_WAIT_MS))]).then(go);
-}
-
 /** How long a 429 asks us to wait, or `null` for any other outcome. */
 export function rateLimitDelayMs(error: unknown) {
   if (!(error instanceof GeoChatRequestError) || error.status !== 429) return null;
@@ -308,10 +293,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   }, [accountKey, enqueue, lobbyId, stopWithout, store]);
 
   React.useEffect(() => {
-    stepOutOfCurrentLobby = stepOut;
-    return () => {
-      if (stepOutOfCurrentLobby === stepOut) stepOutOfCurrentLobby = null;
-    };
+    return registerLobbyStepOut(stepOut);
   }, [stepOut]);
 
   // Auto-join once admitted, unless the viewer left, is being asked about another lobby, or

@@ -11,7 +11,7 @@ import { markEnteringDebate } from './debate-entry-intent';
 import { DebateRequestDialog } from './debate-request-dialog';
 import { debatePath } from './debate-routes';
 import { useAbortDebate, useClearDebateActivity } from './hooks';
-import { routeIntoDebate } from './lobbies/hooks';
+import { routeIntoDebate } from './lobbies/step-out';
 import { SpaceChip } from './matchmaking/matchmaking-claim-card';
 
 /**
