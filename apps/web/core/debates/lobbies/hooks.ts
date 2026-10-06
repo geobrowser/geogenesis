@@ -202,6 +202,8 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   const setVoiceConnected = React.useCallback((connected: boolean) => {
     voiceConnectedRef.current = connected;
   }, []);
+  // When voice stops keeping the viewer available without input, per the last heartbeat.
+  const [voiceAwayAt, setVoiceAwayAt] = React.useState<string | null>(null);
   // A join was sent and no leave since, so leaving must be sent even if the join is in flight.
   const sentRef = React.useRef(false);
   // Bumped by Leave and unmount; a join answered under an older generation is dropped.
@@ -367,6 +369,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
         accountKey
       )
         .then(heartbeat => {
+          setVoiceAwayAt(heartbeat.voice_away_at);
           if (joinedRef.current && !heartbeat.connection_present) onGone(heartbeat);
         })
         .catch(error => {
@@ -423,5 +426,5 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
     };
   }, [enqueue]);
 
-  return { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected };
+  return { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt };
 }

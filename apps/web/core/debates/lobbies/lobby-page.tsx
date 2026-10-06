@@ -11,7 +11,8 @@ import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbyMember, DebateLobbyView } from '../api';
+import { type DebateLobbyMember, type DebateLobbyView, dashlessId } from '../api';
+import { MicrophoneIcon } from '../debate-room-controls';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { sameId } from '../rooms/room-presence';
@@ -36,6 +37,7 @@ import {
   remindedLabel,
   rosterOrder,
 } from './lobby-format';
+import { LobbyVoice, useLobbyVoiceStates } from './lobby-voice';
 
 const HANDOFF_NOTICE_MS = 8_000;
 
@@ -162,7 +164,7 @@ function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
 }
 
 function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: ReturnType<typeof useLobbyPresence> }) {
-  const { state, join, leave, leaveSteppedOut } = presence;
+  const { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt } = presence;
 
   // Until the refetch moves the page to the lobby's new access.
   if (state.status === 'dropped') {
@@ -218,6 +220,7 @@ function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: 
       state={state}
       onRetry={() => void join(false)}
       onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
+      voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
     />
   );
 }
@@ -260,11 +263,13 @@ function LobbyRoom({
   state,
   onRetry,
   onLeave,
+  voice,
 }: {
   lobby: DebateLobbyView;
   state: LobbyPresenceState;
   onRetry: () => void;
   onLeave: () => void;
+  voice: { connectionId: string; setVoiceConnected: (connected: boolean) => void; awayAt: string | null };
 }) {
   const currentUserId = useCurrentGeoChatUserId();
   const end = useEndDebateLobby(lobby.lobby_id);
@@ -275,6 +280,23 @@ function LobbyRoom({
   const hosts = lobby.members.filter(isHosting);
   const isHost = lobby.viewer.hosting;
   const roster = rosterOrder(lobby.members);
+  const speakers = roster.filter(publishes);
+  const listeners = roster.filter(member => !publishes(member));
+  // Only while in the lobby: stepping out or leaving unmounts it, which disconnects.
+  const inVoice = state.status === 'joined' || state.status === 'joining';
+
+  const isViewer = (member: DebateLobbyMember) => currentUserId !== null && sameId(member.user_id, currentUserId);
+  const people =
+    roster.length === 0 ? (
+      <Text as="p" variant="metadata" color="grey-04">
+        Nobody’s here right now.
+      </Text>
+    ) : (
+      <>
+        <RosterSection label="Speakers" members={speakers} isViewer={isViewer} />
+        <RosterSection label="Listeners" members={listeners} isViewer={isViewer} />
+      </>
+    );
 
   const copyLink = async () => {
     try {
@@ -369,34 +391,66 @@ function LobbyRoom({
         </Text>
       ) : null}
 
-      <section className="flex flex-col gap-2" aria-label="People here">
-        <Text as="h2" variant="footnoteMedium" color="grey-04">
-          People here
-        </Text>
-        {roster.length === 0 ? (
-          <Text as="p" variant="metadata" color="grey-04">
-            Nobody’s here right now.
-          </Text>
-        ) : (
-          <ul className="flex flex-col divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white">
-            {roster.map(member => (
-              <RosterRow
-                key={member.user_id}
-                member={member}
-                isViewer={currentUserId !== null && sameId(member.user_id, currentUserId)}
-              />
-            ))}
-          </ul>
-        )}
-      </section>
+      {inVoice ? (
+        <LobbyVoice
+          lobby={lobby}
+          connectionId={voice.connectionId}
+          currentUserId={currentUserId}
+          onConnectedChange={voice.setVoiceConnected}
+        >
+          <VoiceAwayWarning awayAt={voice.awayAt} />
+          {people}
+        </LobbyVoice>
+      ) : (
+        people
+      )}
     </LobbyShell>
   );
 }
 
+/** Hosts, the acting host and speakers; they are the ones voice lets publish. */
+function publishes(member: DebateLobbyMember) {
+  return isHosting(member) || member.role === 'speaker';
+}
+
+function RosterSection({
+  label,
+  members,
+  isViewer,
+}: {
+  label: string;
+  members: DebateLobbyMember[];
+  isViewer: (member: DebateLobbyMember) => boolean;
+}) {
+  if (members.length === 0) return null;
+  return (
+    <section className="flex flex-col gap-2" aria-label={label}>
+      <Text as="h2" variant="footnoteMedium" color="grey-04">
+        {label} · {members.length}
+      </Text>
+      <ul className="flex flex-col divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white">
+        {members.map(member => (
+          <RosterRow key={member.user_id} member={member} isViewer={isViewer(member)} />
+        ))}
+      </ul>
+    </section>
+  );
+}
+
 function RosterRow({ member, isViewer }: { member: DebateLobbyMember; isViewer: boolean }) {
+  const voice = useLobbyVoiceStates();
+  const voiceId = dashlessId(member.user_id).toLowerCase();
+  const speaking = voice.speaking.has(voiceId);
+  // Mic state only means something for someone who can publish, in a room this tab is connected to.
+  const showMic = voice.connected && publishes(member) && !member.stepped_out;
+  const micOn = voice.micOn.has(voiceId);
+
   return (
     <li className="flex items-center gap-3 px-3 py-2" data-testid="lobby-roster-row">
-      <span className="h-8 w-8 shrink-0 overflow-hidden rounded-full">
+      <span
+        className={cx('h-8 w-8 shrink-0 overflow-hidden rounded-full', speaking && 'ring-2 ring-successTertiary')}
+        data-speaking={speaking || undefined}
+      >
         <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt={personName(member)} size={32} />
       </span>
       <div className="min-w-0 flex-1">
@@ -412,6 +466,11 @@ function RosterRow({ member, isViewer }: { member: DebateLobbyMember; isViewer: 
           </Text>
         ) : null}
       </div>
+      {showMic ? (
+        <span className={micOn ? 'text-green' : 'text-grey-04'} aria-label={micOn ? 'Mic on' : 'Muted'} role="img">
+          <MicrophoneIcon muted={!micOn} />
+        </span>
+      ) : null}
       <span
         className={cx(
           'rounded-full px-2 py-0.5 text-footnoteMedium',
@@ -486,3 +545,40 @@ function LobbyNotice({
     </div>
   );
 }
+
+/** How long before `voice_away_at` the warning shows. */
+const VOICE_AWAY_WARNING_MS = 2 * 60_000;
+
+/**
+ * Voice keeps a quiet listener available only with recent input; any click counts as input, so
+ * the button needs no handler of its own.
+ */
+function VoiceAwayWarning({ awayAt }: { awayAt: string | null }) {
+  const { connected } = useLobbyVoiceStates();
+  const at = awayAt ? Date.parse(awayAt) : Number.NaN;
+  const [now, setNow] = React.useState(() => Date.now());
+  // Hidden on the tap until the next heartbeat brings a later `voice_away_at`.
+  const [ackedAt, setAckedAt] = React.useState<number | null>(null);
+
+  React.useEffect(() => {
+    if (Number.isNaN(at)) return;
+    const until = at - VOICE_AWAY_WARNING_MS - Date.now();
+    if (until <= 0) return;
+    const timeout = setTimeout(() => setNow(Date.now()), Math.min(until, MAX_TIMEOUT_MS));
+    return () => clearTimeout(timeout);
+  }, [at]);
+
+  if (!connected || Number.isNaN(at) || ackedAt === at || now < at - VOICE_AWAY_WARNING_MS) return null;
+  return (
+    <div role="status" className="flex flex-wrap items-center gap-2 rounded-md bg-grey-01 px-3 py-2">
+      <Text as="p" variant="footnote" color="text">
+        {now >= at ? 'You show as away to others.' : 'You’ll show as away soon unless you’re still here.'}
+      </Text>
+      <HubPillButton analyticsLabel="Lobby voice still here" onClick={() => setAckedAt(at)}>
+        I’m still here
+      </HubPillButton>
+    </div>
+  );
+}
+
+const MAX_TIMEOUT_MS = 2_147_483_647;
