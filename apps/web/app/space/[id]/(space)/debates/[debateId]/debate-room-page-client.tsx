@@ -28,7 +28,6 @@ import {
   startDebateRecorder,
 } from '~/core/debates/debate-recorder';
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
-import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
   LeaveIcon,
@@ -48,6 +47,7 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
+import { DebateRoundIndicator, DebateRoundPips, rebuttalRoundsLabel } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
   type DebateTabClaimKey,
@@ -74,7 +74,7 @@ import {
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
-import { BackToLobbyRow } from '~/core/debates/lobbies/lobby-return';
+import { BackToLobbyRow, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -89,6 +89,7 @@ import {
   debateThankingStartsAtMs,
   debateTurnRoleForDebate,
   isDebatesLastTurn,
+  openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
@@ -327,6 +328,7 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
+  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
   const mediaSession = useDebateMediaSession();
   const mediaSessionKey = debateMediaSessionKey(debateId);
   const {
@@ -453,12 +455,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const reportedRecorderFailuresRef = React.useRef(new Set<string>());
-  // The recording's timeslices, for a recorder with no live stream only (no signed-in user when it
-  // started). With one, the stream holds them, and lets go of each once it is uploaded.
   const recordingChunksRef = React.useRef<Blob[]>([]);
   // GEO-2955. The recording made durable while it is made: every timeslice to IndexedDB, and to
-  // R2 part by part. It is also the only place this tab keeps the timeslices, so memory stays
-  // bounded however long the debate runs: one that is in a confirmed part is let go of.
+  // R2 part by part. The in-memory chunks above stay the source of the upload at the end.
   const liveRecordingStreamRef = React.useRef<LiveRecordingStream | null>(null);
   // The streamed upload shares the upstream with the call, so it stands down while the call
   // struggles. Set from LiveKit's own quality reports for the local participant.
@@ -510,8 +509,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingPersistencePromiseRef = React.useRef<Promise<boolean> | null>(null);
   const persistedRecordingDebateIdRef = React.useRef<string | null>(null);
   const stoppedRecordingRef = React.useRef<{
-    /** The whole recording, when it was not streamed; a streamed one is read from the stream. */
-    blob: Blob | null;
+    blob: Blob;
     mimeType: string;
     startedAtMs: number;
     endedAtMs: number;
@@ -807,7 +805,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       router.replace(`/space/${spaceId}/debates`);
     },
-    [clearDebateActivity, debateId, router, spaceId]
+    [clearDebateActivity, consumeDebateReturnDestination, debateId, router, spaceId]
   );
 
   /** The exit for a debate whose recording was cancelled — it can never be re-entered. */
@@ -831,7 +829,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     router.replace(`/space/${spaceId}/debates`);
-  }, [router, spaceId]);
+  }, [consumeDebateReturnDestination, router, spaceId]);
 
   /**
    * Moves this tab on to the next step of a debate-again session — unless another of the viewer's
@@ -1141,12 +1139,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // `startDebateRecorder` reports the `error` itself; this only clears the pill.
         recorder.addEventListener('error', () => setCapturing(false), { once: true });
         recorder.ondataavailable = event => {
-          if (event.data.size === 0) return;
-          // One home per recording, decided when it started: the stream if there is one, which lets
-          // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
-          const live = liveRecordingStreamRef.current;
-          if (live) live.append(event.data, serverNowRef.current());
-          else recordingChunksRef.current.push(event.data);
+          if (event.data.size > 0) {
+            recordingChunksRef.current.push(event.data);
+            liveRecordingStreamRef.current?.append(event.data, serverNowRef.current());
+          }
         };
       },
     });
@@ -1203,11 +1199,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const endedAtMs = recordingEndedAtRef.current;
     if (!recorder || !startedAtMs || !endedAtMs) return false;
 
-    const liveStream = liveRecordingStreamRef.current;
     if (!stoppedRecordingRef.current) {
       const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
-      const blob = liveStream ? null : new Blob(recordingChunksRef.current, { type: mimeType });
-      if ((blob ? blob.size : (liveStream?.size() ?? 0)) === 0) return false;
+      const blob = new Blob(recordingChunksRef.current, { type: mimeType });
+      if (blob.size === 0) return false;
       const videoSettings = localMediaStreamRef.current?.getVideoTracks()[0]?.getSettings?.();
       stoppedRecordingRef.current = {
         blob,
@@ -1223,18 +1218,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
 
     const recording = stoppedRecordingRef.current;
-    // Whatever went out during the debate is handed to the queue, which sends only the rest — and,
-    // for a streamed recording, stores only the rest: the stream no longer holds the parts it sent.
-    const multipart = (await liveStream?.finish()) ?? null;
-    const bytes = liveStream?.recording() ?? null;
-    const storedBytes = bytes ? bytes.size - bytes.availableFrom : (recording.blob?.size ?? 0);
+    // Whatever went out during the debate is handed to the queue, which sends only the rest.
+    const multipart = (await liveRecordingStreamRef.current?.finish()) ?? null;
     const storage = await estimateRecordingStorage();
     if (storage?.quota !== undefined && storage.usage !== undefined) {
       const availableBytes = storage.quota - storage.usage;
-      if (availableBytes < storedBytes) {
+      if (availableBytes < recording.blob.size) {
         console.warn('[DebateRecording] browser storage estimate is below recording size', {
           availableBytes,
-          recordingBytes: storedBytes,
+          recordingBytes: recording.blob.size,
         });
       }
     }
@@ -1243,7 +1235,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       await enqueueDebateRecordingUpload({
         userId: localParticipant.user_id,
         debateId: debate.id,
-        ...(bytes ? { recording: bytes } : { blob: recording.blob ?? new Blob([], { type: recording.mimeType }) }),
+        blob: recording.blob,
         mimeType: recording.mimeType,
         startedAtMs: recording.startedAtMs,
         endedAtMs: recording.endedAtMs,
@@ -2332,7 +2324,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     connectionFailureRedirectTimerRef.current = window.setTimeout(() => {
       router.replace(consumeDebateReturnDestination() ?? `/space/${spaceId}/questions`);
     }, connectionFailureRedirectDelayMs);
-  }, [router, spaceId]);
+  }, [consumeDebateReturnDestination, router, spaceId]);
 
   const reconcileConnectionDeadline = React.useCallback(async () => {
     const generation = connectionGenerationRef.current;
@@ -3114,6 +3106,23 @@ function DebateRecordingModal({
           {debate.claim.claim}
         </h1>
 
+        {/* Where the debate is and the way out, between the claim and the tiles (GEO-3174). A fixed
+            format has no rounds to count, so its row holds Leave alone. */}
+        <div className="mb-3 flex w-full max-w-[430px] items-center justify-between gap-2">
+          {countdown.openRounds && debate.open_rounds && (
+            <DebateRoundIndicator phase={countdown.openRounds} maxRounds={debate.open_rounds.max_rebuttal_rounds} />
+          )}
+          <RecordingCircleButton
+            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+            onClick={onLeave}
+            disabled={leaveDisabled}
+            className="ml-auto shrink-0"
+          >
+            <LeaveIcon />
+          </RecordingCircleButton>
+        </div>
+
         <div className="relative grid w-full max-w-[430px] gap-2">
           {orderedVideoTiles}
 
@@ -3135,6 +3144,7 @@ function DebateRecordingModal({
               publishing={publishing}
               publishBusy={publishOptOutOffer.busy}
               onStopPublishing={() => setPublishOptOutRequest(publishOptOutOffer.debateId)}
+              rebuttalRounds={openRebuttalRoundCount(debate)}
             >
               <BackToLobbyRow onLeave={onLeave} disabled={leaveDisabled} />
             </DebateAgainCard>
@@ -3162,17 +3172,6 @@ function DebateRecordingModal({
             )}
           </div>
         )}
-
-        <div className="mt-5 flex w-full max-w-[430px] justify-end">
-          <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            onClick={onLeave}
-            disabled={leaveDisabled}
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
-        </div>
       </main>
     </div>
   );
@@ -3478,6 +3477,7 @@ function DebateAgainCard({
   publishing,
   publishBusy,
   onStopPublishing,
+  rebuttalRounds,
   children,
 }: {
   opponentName: string;
@@ -3491,6 +3491,8 @@ function DebateAgainCard({
   publishing: boolean | null;
   publishBusy: boolean;
   onStopPublishing: () => void;
+  /** Rebuttal rounds the two unlocked (GEO-3180). Null for a fixed format, which leaves the row off. */
+  rebuttalRounds: number | null;
   /** Extra rows under the opponent's, e.g. the way back to a lobby. */
   children?: React.ReactNode;
 }) {
@@ -3499,6 +3501,17 @@ function DebateAgainCard({
 
   return (
     <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
+      {rebuttalRounds !== null && (
+        <>
+          <CardRow>
+            <Text as="span" variant="smallTitle" color="text" className="min-w-0 truncate">
+              {rebuttalRounds > 0 ? rebuttalRoundsLabel(rebuttalRounds) : 'Opening only'}
+            </Text>
+            {rebuttalRounds > 0 && <DebateRoundPips rounds={rebuttalRounds} className="shrink-0 text-text" />}
+          </CardRow>
+          <CardDivider />
+        </>
+      )}
       {publishing !== null && (
         <>
           <CardRow>

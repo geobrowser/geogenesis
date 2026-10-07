@@ -7,6 +7,7 @@ import {
   debateTurnRoleForDebate,
   isDebatesLastTurn,
   isOpenRoundsDebate,
+  openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundsRoomPhase,
 } from './open-rounds';
@@ -19,6 +20,7 @@ import {
   revealEnd,
   revealRebut,
   roundOneSpeaking,
+  thankingAfterEnd,
   timedOut,
 } from './open-rounds-fixtures';
 
@@ -258,5 +260,24 @@ describe('openRoundsRoomPhase', () => {
       roundIndex: 0,
       isFinalRound: false,
     });
+  });
+});
+
+describe('openRebuttalRoundCount', () => {
+  it('is null for a fixed format, which has no rounds to count', () => {
+    expect(openRebuttalRoundCount(fixedDebate([60_000, 60_000, 45_000, 45_000, 30_000, 30_000]))).toBeNull();
+  });
+
+  it('is zero for a debate that ended after the opening', () => {
+    expect(openRebuttalRoundCount(thankingAfterEnd())).toBe(0);
+  });
+
+  it('counts a round as soon as an Extend appends it', () => {
+    expect(openRebuttalRoundCount(revealRebut())).toBe(1);
+    expect(openRebuttalRoundCount(roundOneSpeaking())).toBe(1);
+  });
+
+  it('counts the cap round, which never resolves into rounds[]', () => {
+    expect(openRebuttalRoundCount(capRoundLastTurn())).toBe(10);
   });
 });
