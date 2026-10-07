@@ -260,10 +260,18 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.lobbies_changed', payload: { lobby_id: 'abc' } },
       [
         ['debates', 'account', 'user-a', 'lobbies'],
-        ['debates', 'account', 'user-a', 'my-lobby'],
         ['debates', 'account', 'user-a', 'lobby', 'abc'],
       ],
     ],
+    [
+      'own lobby standing',
+      { event_type: 'debate.my_lobby_changed', payload: { lobby_id: 'abc' } },
+      [
+        ['debates', 'account', 'user-a', 'lobbies'],
+        ['debates', 'account', 'user-a', 'my-lobby'],
+      ],
+    ],
+    ['an unknown type, which it ignores', { event_type: 'debate.later_changed', payload: { lobby_id: 'abc' } }, []],
     [
       'one lobby',
       { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD' } },
@@ -464,15 +472,29 @@ describe('DebateGatewayClient', () => {
       ['no lobby_card', {}],
       ['another status', { lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z' } }],
       ['a card without as_of', { lobby_card: { ...card('aa', 1, ''), as_of: undefined } }],
-    ])('refetches the list and the viewer’s lobby for %s', async (_label, extra) => {
+    ])('refetches the list, not the viewer’s own lobby, for %s', async (_label, extra) => {
       await started();
       queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
 
       await lobbiesChanged({ lobby_id: 'aa', ...extra });
 
       expectInvalidated(invalidateQueries, { queryKey: lobbiesKey, refetchType: 'active' });
-      expectInvalidated(invalidateQueries, { queryKey: myLobbyKey, refetchType: 'active' });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: myLobbyKey }));
       expect(cachedIds()).toEqual(['aa:3']);
+    });
+
+    it('leaves the lobby page to debate.lobby_changed while the viewer is connected there', async () => {
+      await started();
+      const lobbyKey = [...lobbiesKey.slice(0, 3), 'lobby', 'aa'];
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+      queryClient.setQueryData(lobbyKey, { viewer: { connected: true } });
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:01Z') });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbyKey }));
+
+      queryClient.setQueryData(lobbyKey, { viewer: { connected: false } });
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 5, '2026-10-07T12:00:02Z') });
+      expectInvalidated(invalidateQueries, { queryKey: lobbyKey, refetchType: 'active' });
     });
   });
 

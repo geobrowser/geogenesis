@@ -14,6 +14,7 @@ import {
 
 import {
   type DebateLobbiesResponse,
+  type DebateLobbyView,
   GeoChatRequestError,
   type GeoChatSession,
   type GetPrivyIdentityToken,
@@ -491,21 +492,40 @@ export class DebateGatewayClient {
       // is not inside, which `debate.lobby_changed` does not reach.
       case 'debate.lobbies_changed': {
         const patch = parseLobbyCardPatch(identifiers.lobby_card);
+        const lobbyId = identifiers.lobby_id ? dashlessId(identifiers.lobby_id) : null;
         if (!patch) {
-          // Card-less: create, open, close, or a change to this viewer's own standing.
+          // Card-less: a lobby was created, opened or closed.
           this.queueAccountQuery('lobbies');
-          this.queueAccountQuery('my-lobby');
+          if (lobbyId) this.queueAccountQuery('lobby', lobbyId);
         } else {
           this.holdLobbyPatch(patch);
+          if (lobbyId && !this.isInsideLobby(lobbyId)) this.queueAccountQuery('lobby', lobbyId);
         }
-        if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       }
+      // Sent to this viewer alone when their own standing in a lobby changes.
+      case 'debate.my_lobby_changed':
+        this.queueAccountQuery('lobbies');
+        this.queueAccountQuery('my-lobby');
+        break;
       // GEO-3131. Sent to the lobby's present members.
       case 'debate.lobby_changed':
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
     }
+  }
+
+  /** Connected to that lobby's page here, so `debate.lobby_changed` already keeps it current. */
+  private isInsideLobby(lobbyId: string) {
+    if (!this.accountKey) return false;
+    const view = this.queryClient.getQueryData<DebateLobbyView>([
+      'debates',
+      'account',
+      this.accountKey,
+      'lobby',
+      lobbyId,
+    ]);
+    return view?.viewer.connected === true;
   }
 
   /**
