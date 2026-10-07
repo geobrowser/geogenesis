@@ -44,7 +44,6 @@ const mocks = vi.hoisted(() => ({
   positions: [] as ParticipantPosition[],
   positionReads: [] as unknown[][],
   claimNames: new Map<string, string>(),
-  openSidePanel: vi.fn(),
   openProfile: vi.fn(),
   claimTopics: new Map<string, { id: string; name: string }[]>(),
   paramListeners: new Set<() => void>(),
@@ -71,9 +70,6 @@ vi.mock('next/navigation', async () => {
     }),
   };
 });
-vi.mock('~/core/hooks/use-entity-side-panel', () => ({
-  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel }),
-}));
 vi.mock('../participant-positions', () => ({
   useParticipantPositions: (participants: unknown[]) => {
     mocks.positionReads.push(participants);
@@ -372,7 +368,6 @@ beforeEach(() => {
   });
   mocks.openProfile.mockReset();
   mocks.paramListeners.clear();
-  mocks.openSidePanel.mockReset();
   mocks.routerReplace.mockReset();
   mocks.capture.mockReset();
   mocks.promptSignIn.mockReset();
@@ -975,6 +970,22 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(mocks.positionReads.at(-1)).toHaveLength(4);
   });
 
+  it('counts each tab on its pill, and what is picked of it', () => {
+    render(<DebateCalendar />);
+
+    expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People3$/);
+    // Claims come with everyone's positions, which wait for the panel.
+    expect(screen.getByRole('button', { name: 'Claims' })).toHaveTextContent(/^Claims$/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+    expect(screen.getByRole('button', { name: 'Claims' })).toHaveTextContent(/^Claims2$/);
+
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Phones should be banned in schools' }));
+    expect(screen.getByRole('button', { name: 'Claims, 1 picked' })).toHaveTextContent(/^Claims1 of 2$/);
+    // Picking a claim narrows People to those holding it, as the tab does.
+    expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People2$/);
+  });
+
   it('narrows the week to the people picked, and keeps them in the URL', () => {
     render(<DebateCalendar />);
     fireEvent.click(screen.getByRole('button', { name: 'People' }));
@@ -1090,16 +1101,6 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(within(people).queryByRole('checkbox', { name: 'Ana' })).not.toBeInTheDocument();
   });
 
-  it('opens a claim in the entity side panel without picking it', () => {
-    render(<DebateCalendar />);
-    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
-
-    fireEvent.click(within(panel()).getByRole('button', { name: 'Open claim: Phones should be banned in schools' }));
-
-    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_ONE, SPACE, false);
-    expect(mocks.searchParams.get('claims')).toBeNull();
-  });
-
   it('keeps picks from the URL on a reload', () => {
     mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}`, matches: '1' });
     render(<DebateCalendar />);
@@ -1141,14 +1142,12 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
       within(panel()).getByRole('button', { name: 'Close panel' }),
       within(panel()).getByRole('switch', { name: 'Matches only' }),
       within(panel()).getByRole('checkbox', { name: 'Phones should be banned in schools' }),
-      within(panel()).getByRole('button', { name: 'Open claim: Phones should be banned in schools' }),
     ].map(control => control.getAttribute('data-geo-analytics-label'));
     expect(labels).toEqual([
       'Debate calendar Panel People tab',
       'Debate calendar Close panel',
       'Debate calendar Matches only',
       'Debate calendar Claim pick',
-      'Debate calendar Open claim',
     ]);
   });
 

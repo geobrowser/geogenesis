@@ -6,7 +6,6 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -245,7 +244,6 @@ function DebateCalendarBody({
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
-  const { openSidePanel } = useEntitySidePanel();
 
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [spaceIds, setSpaceIds] = React.useState<string[]>(EMPTY_SPACE_IDS);
@@ -753,7 +751,14 @@ function DebateCalendarBody({
     },
     countsPending: peopleQuery.isLoading || publishableSpacesPending || personRecordsPending,
   } as const;
-  const narrowPills = <CalendarNarrowPills picks={effectivePicks} openTab={panelTab} onToggle={togglePanel} />;
+  const narrowPills = (
+    <CalendarNarrowPills
+      picks={effectivePicks}
+      counts={{ people: panelRows.people.length, claims: allPositionsReady ? panelRows.claims.length : null }}
+      openTab={panelTab}
+      onToggle={togglePanel}
+    />
+  );
   const panelBody = (
     withPicks: CalendarPicks,
     onPicksChange: (next: CalendarPicks) => void,
@@ -791,10 +796,6 @@ function DebateCalendarBody({
         onPickTime={(userKey, start, opener) => {
           onLeave();
           openBooking(userKey, isPhone ? null : opener, 'calendar_claim_match', start);
-        }}
-        onOpenClaim={(claimId, spaceId) => {
-          onLeave();
-          openSidePanel(claimId, spaceId, false);
         }}
       />
     );

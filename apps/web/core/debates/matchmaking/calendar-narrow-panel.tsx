@@ -17,7 +17,6 @@ import { CheckboxVisual } from '~/design-system/checkbox';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Close } from '~/design-system/icons/close';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
-import { SidePanel } from '~/design-system/icons/side-panel';
 import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
@@ -83,26 +82,37 @@ export type PanelPerson = PersonListRow<{
 /** The People and Claims pills on the calendar's filter row. */
 export function CalendarNarrowPills({
   picks,
+  counts,
   openTab,
   onToggle,
 }: {
   picks: CalendarPicks;
+  /**
+   * How many each tab lists, the same numbers its tab shows. `null` until known: the claims come
+   * with everyone's positions, which are read only once the panel first opens.
+   */
+  counts: { people: number | null; claims: number | null };
   /** The tab the panel is open on, if it is open. */
   openTab: NarrowTab | null;
   onToggle: (tab: NarrowTab) => void;
 }) {
-  const pill = (tab: NarrowTab, label: string, count: number, marker: boolean) => (
+  const pill = (tab: NarrowTab, label: string, picked: number, total: number | null, marker: boolean) => (
     <HubPillButton
       analyticsSurface="calendar"
       analyticsLabel={`Debate calendar ${label} filter`}
       analyticsIntent="filter_debate_calendar"
-      variant={count > 0 ? 'primary' : 'secondary'}
+      variant={picked > 0 ? 'primary' : 'secondary'}
       aria-pressed={openTab === tab}
-      aria-label={count > 0 ? `${label}, ${count} picked` : label}
+      aria-label={picked > 0 ? `${label}, ${picked} picked` : label}
       onClick={() => onToggle(tab)}
-      className={cx('gap-1.5', openTab === tab && count === 0 && 'bg-grey-01')}
+      className={cx('gap-1.5', openTab === tab && picked === 0 && 'bg-grey-01')}
     >
-      {count > 0 ? `${label} · ${count}` : label}
+      {label}
+      {picked > 0 || total !== null ? (
+        <span className={cx('tabular-nums', picked > 0 ? 'text-white/70' : 'text-grey-04')}>
+          {picked > 0 ? (total !== null ? `${picked} of ${total}` : picked) : total}
+        </span>
+      ) : null}
       {marker ? (
         <span aria-label="Matches only is on" role="img" className="size-1.5 shrink-0 rounded-full bg-purple" />
       ) : null}
@@ -111,8 +121,8 @@ export function CalendarNarrowPills({
 
   return (
     <div className="flex shrink-0 items-center gap-2">
-      {pill('people', 'People', picks.people.length, picks.matchesOnly)}
-      {pill('claims', 'Claims', picks.claims.length, false)}
+      {pill('people', 'People', picks.people.length, counts.people, picks.matchesOnly)}
+      {pill('claims', 'Claims', picks.claims.length, counts.claims, false)}
     </div>
   );
 }
@@ -132,7 +142,6 @@ type BodyProps = {
   labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
   onPickTime: (userKey: string, start: string, opener: HTMLElement) => void;
-  onOpenClaim: (claimId: string, spaceId: string) => void;
   /** The topics each claim carries in its own space, by claim key. */
   claimTopics: ReadonlyMap<string, readonly PanelTopic[]>;
   /** The claim keys each person holds a position on, by profile key. */
@@ -160,7 +169,6 @@ export function CalendarNarrowPanelBody({
   labelsById,
   popoverPortal,
   onPickTime,
-  onOpenClaim,
   claimTopics,
   heldByPerson,
   topicsPending,
@@ -350,7 +358,6 @@ export function CalendarNarrowPanelBody({
                 popoverPortal={popoverPortal}
                 onToggle={() => onPicksChange({ ...picks, claims: togglePick(picks.claims, claim.summary.key) })}
                 onPickTime={onPickTime}
-                onOpenClaim={onOpenClaim}
               />
             ))}
           </ul>
@@ -432,14 +439,12 @@ function ClaimRow({
   popoverPortal,
   onToggle,
   onPickTime,
-  onOpenClaim,
 }: {
   claim: PanelClaim;
   labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
   onToggle: () => void;
   onPickTime: BodyProps['onPickTime'];
-  onOpenClaim: BodyProps['onOpenClaim'];
 }) {
   const { summary } = claim;
   const space = spaceLabel(labelsById, summary.spaceId);
@@ -492,22 +497,10 @@ function ClaimRow({
             ) : null}
           </div>
           <span className="line-clamp-3 text-metadataMedium text-text">{name}</span>
-          <div className="flex items-end justify-between gap-2">
-            <span className="flex flex-wrap items-center gap-1.5">
-              {side(true)}
-              {side(false)}
-            </span>
-            <button
-              type="button"
-              aria-label={`Open claim: ${name}`}
-              title="Open claim"
-              {...panelAnalytics('Open claim', 'open_entity')}
-              onClick={() => onOpenClaim(summary.claimId, summary.spaceId)}
-              className={cx(HUB_ICON_BUTTON_CLASS_NAME, 'pointer-events-auto')}
-            >
-              <SidePanel />
-            </button>
-          </div>
+          <span className="flex flex-wrap items-center gap-1.5">
+            {side(true)}
+            {side(false)}
+          </span>
         </div>
       </div>
     </PickRow>
