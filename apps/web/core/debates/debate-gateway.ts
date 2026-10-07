@@ -144,6 +144,11 @@ export class DebateGatewayClient {
   private readonly confirmedScopes = new Set<string>();
   /** Retained scopes the server refused; not re-sent on this socket. Retried once per connection. */
   private readonly refusedScopes = new Set<string>();
+  /** Backoff for scopes whose subscription check failed transiently; reset once READY confirms them. */
+  private readonly subscriptionRetries = new Map<
+    string,
+    { attempt: number; timer: ReturnType<typeof setTimeout> | null }
+  >();
   private readonly recentEventIds = new Set<string>();
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
@@ -257,6 +262,7 @@ export class DebateGatewayClient {
     this.sentScopes.clear();
     this.confirmedScopes.clear();
     this.refusedScopes.clear();
+    this.clearSubscriptionRetries(true);
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
@@ -288,6 +294,7 @@ export class DebateGatewayClient {
       this.scopes.delete(key);
       this.sentScopes.delete(key);
       this.confirmedScopes.delete(key);
+      this.clearSubscriptionRetry(key);
       // The server never held a refused scope, so there is nothing to unsubscribe.
       if (this.refusedScopes.delete(key)) return;
       this.sendSubscription(scope, 'UNSUBSCRIBE');
@@ -310,6 +317,8 @@ export class DebateGatewayClient {
       this.sentScopes.clear();
       this.confirmedScopes.clear();
       this.refusedScopes.clear();
+      // READY re-sends every held scope; the attempt counts carry over so a failing check keeps backing off.
+      this.clearSubscriptionRetries(false);
       this.scheduleTokenRotation(session);
       this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
 
@@ -374,6 +383,8 @@ export class DebateGatewayClient {
           this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'subscription_limit' });
         } else if (this.refuseForbiddenScope(envelope.payload)) {
           // Only that scope is refused; the socket and every other subscription stay up.
+        } else if (this.retryFailedSubscriptionCheck(envelope.payload)) {
+          // Transient, and only for that scope; it is re-sent on its own backoff.
         } else if (this.canRecoverFromError()) {
           // Anything else is not known to be permanent, and parking here was a dead end: nothing in
           // this branch closes the socket, so heartbeats keep being acked, `heartbeatsAwaitingAck`
@@ -441,6 +452,7 @@ export class DebateGatewayClient {
     }
 
     for (const [key, scope] of readyScopes) {
+      this.clearSubscriptionRetry(key);
       if (!this.scopes.has(key) || this.confirmedScopes.has(key)) continue;
       this.confirmedScopes.add(key);
       this.queueScopeReconcile(scope);
@@ -912,14 +924,52 @@ export class DebateGatewayClient {
 
   /** `false` when the ERROR names no scope (older geo-chat, or a room), leaving the generic path. */
   private refuseForbiddenScope(payload: unknown) {
-    if (!isRecord(payload) || payload.code !== 'subscription_forbidden') return false;
-    const scope = parseScope(payload.subscription);
+    const scope = subscriptionErrorScope(payload, 'subscription_forbidden');
     if (!scope) return false;
     const key = scopeKey(scope);
     this.sentScopes.delete(key);
     this.confirmedScopes.delete(key);
+    this.clearSubscriptionRetry(key);
     if (this.scopes.has(key)) this.refusedScopes.add(key);
     return true;
+  }
+
+  /** `false` when the ERROR names no scope (older geo-chat), leaving the generic path. */
+  private retryFailedSubscriptionCheck(payload: unknown) {
+    const scope = subscriptionErrorScope(payload, 'subscription_check_failed');
+    if (!scope) return false;
+    const key = scopeKey(scope);
+    this.sentScopes.delete(key);
+    this.confirmedScopes.delete(key);
+    if (!this.scopes.has(key)) return true;
+
+    const retry = this.subscriptionRetries.get(key) ?? { attempt: 0, timer: null };
+    if (retry.timer) clearTimeout(retry.timer);
+    const baseDelay = Math.min(30_000, 1_000 * 2 ** retry.attempt);
+    const delay = Math.min(30_000, Math.round(baseDelay + baseDelay * 0.2 * this.random()));
+    retry.attempt += 1;
+    retry.timer = setTimeout(() => {
+      retry.timer = null;
+      const retained = this.scopes.get(key);
+      if (retained) this.sendSubscription(retained.scope, 'SUBSCRIBE');
+    }, delay);
+    this.subscriptionRetries.set(key, retry);
+    return true;
+  }
+
+  private clearSubscriptionRetry(key: string) {
+    const retry = this.subscriptionRetries.get(key);
+    if (retry?.timer) clearTimeout(retry.timer);
+    this.subscriptionRetries.delete(key);
+  }
+
+  /** Cancels pending re-sends; `resetBackoff` also forgets the attempt counts. */
+  private clearSubscriptionRetries(resetBackoff: boolean) {
+    for (const retry of this.subscriptionRetries.values()) {
+      if (retry.timer) clearTimeout(retry.timer);
+      retry.timer = null;
+    }
+    if (resetBackoff) this.subscriptionRetries.clear();
   }
 
   private canRecoverFromError() {
@@ -1195,6 +1245,12 @@ function parseScope(value: unknown): DebateGatewayScope | null {
     return { scope: 'matchmaking' };
   }
   return null;
+}
+
+/** The scope a subscription ERROR names, when geo-chat echoes one this client can send. */
+function subscriptionErrorScope(payload: unknown, code: 'subscription_forbidden' | 'subscription_check_failed') {
+  if (!isRecord(payload) || payload.code !== code) return null;
+  return parseScope(payload.subscription);
 }
 
 function isEventsLagged(payload: unknown) {

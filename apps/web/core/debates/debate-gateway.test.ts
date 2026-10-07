@@ -1692,6 +1692,125 @@ describe('DebateGatewayClient', () => {
     expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
   });
 
+  it('re-sends a scope whose check failed on its own backoff, without parking the gateway', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    const releaseDebate = client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    await flushInvalidations();
+
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    const debateSubscribes = () =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { scope: string }).scope === 'debate'
+      ).length;
+    expect(debateSubscribes()).toBe(1);
+
+    // A long outage: every re-send fails, and the gaps grow 1s, 2s, 4s, 8s.
+    for (const [index, delay] of [1_000, 2_000, 4_000, 8_000].entries()) {
+      sockets[0]!.receive('ERROR', failure);
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(debateSubscribes()).toBe(index + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(debateSubscribes()).toBe(index + 2);
+    }
+
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+
+    // The other scope keeps delivering.
+    invalidateQueries.mockClear();
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-space-1',
+      event_type: 'debate.state_changed',
+      payload: { space_id: 'space-1' },
+    });
+    await flushInvalidations();
+    expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space', 'space-1'], refetchType: 'active' });
+
+    // Releasing cancels the pending retry.
+    sockets[0]!.receive('ERROR', failure);
+    releaseDebate();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(debateSubscribes()).toBe(5);
+  });
+
+  it('resets the backoff once READY confirms the scope', async () => {
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    const subscribes = () => sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE').length;
+
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(subscribes()).toBe(3);
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'debate', debate_id: 'debate-1' }]));
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(subscribes()).toBe(4);
+  });
+
+  it('lets a reconnect re-send a scope whose check retry is pending, exactly once', async () => {
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    });
+
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(1);
+  });
+
+  it('keeps recycling the socket when a failed check names no scope', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.receive('ERROR', { code: 'subscription_check_failed', message: 'try again' });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+  });
+
   it('reconnects with a new session when the authenticated account changes', async () => {
     queryClient.setQueryData(['debates', 'account', 'user-a', 'activity'], { private: 'user-a' });
     client.start(
