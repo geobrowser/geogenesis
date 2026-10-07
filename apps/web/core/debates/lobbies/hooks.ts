@@ -348,6 +348,13 @@ export function useLobbyPresence(
     else void join(false);
   }, [admitted, join, lobbyId, removed, setState, status, steppedOut]);
 
+  // Unbanned after a ban this tab heard: the view is admitted again with `removed`, so the
+  // viewer gets the removed screen and its Rejoin rather than a stale ban.
+  const droppedBanned = state.status === 'dropped' && state.reason === 'banned';
+  React.useEffect(() => {
+    if (droppedBanned && admitted && removed) setState({ status: 'dropped', reason: 'removed' });
+  }, [admitted, droppedBanned, removed, setState]);
+
   const beatNowRef = React.useRef<(() => void) | null>(null);
 
   const onGone = React.useCallback(

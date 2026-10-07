@@ -551,3 +551,36 @@ describe('useLobbyPresence after a host removed the viewer', () => {
     expect(result.current.state.status).toBe('joined');
   });
 });
+
+// GEO-3134: an unban sends the target `debate.lobby_changed`; the refetch is admitted with `removed`.
+it('moves a ban this tab heard to the removed screen once unbanned, and Rejoin comes back', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+    connection_alive: false,
+    voice_away_at: null,
+    reason: 'banned',
+    current_lobby_id: null,
+  });
+  const { result, rerender } = renderHook(
+    ({ admitted, removed }) => useLobbyPresence('lobby1', admitted, false, false, removed),
+    { wrapper, initialProps: { admitted: true, removed: false } }
+  );
+  await waitFor(() => expect(result.current.state.status).toBe('joined'));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+  });
+  await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'banned' }));
+
+  // The refetch while banned: access banned, so not admitted.
+  rerender({ admitted: false, removed: true });
+  expect(result.current.state).toEqual({ status: 'dropped', reason: 'banned' });
+
+  // Unbanned.
+  rerender({ admitted: true, removed: true });
+  await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+  expect(joins()).toHaveLength(1);
+
+  await act(() => result.current.join(false, true));
+  expect(joins().at(-1)?.[1]).toMatchObject({ joined: true, rejoin: true });
+  expect(result.current.state.status).toBe('joined');
+});
