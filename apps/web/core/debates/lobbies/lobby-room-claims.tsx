@@ -2,7 +2,11 @@
 
 import * as React from 'react';
 
-import { claimRequestBlockedReason, debateRequestErrorMessage } from '~/core/claims/browse/use-claim-matchup';
+import {
+  claimRequestBlockedReason,
+  debateRequestErrorMessage,
+  useMissingIntentRecovery,
+} from '~/core/claims/browse/use-claim-matchup';
 
 import { type DebateLobbyClaim, type DebateLobbyView, dashlessId } from '../api';
 import { useDebateActivity } from '../hooks';
@@ -102,6 +106,11 @@ function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRo
   const { data: activity } = useDebateActivity(true);
   const { data: requests } = useDebateRequests(true);
   const createRequest = useCreateDebateRequest();
+  const recoverFromMissingIntent = useMissingIntentRecovery({
+    claimId: claim.claim_entity_id,
+    spaceId: claim.space_id,
+    viewerPosition: offer.viewerPosition,
+  });
   const blockedReason = claimRequestBlockedReason(activity, requests);
   // geo-chat refuses the request until it holds the viewer's side, which a vote from this list
   // reaches only once its response-indexed report returns and the list refetches.
@@ -110,11 +119,10 @@ function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRo
   return (
     <RequestDebateControl
       onRequest={() =>
-        createRequest.mutate({
-          space_id: claim.space_id,
-          claim_entity_id: claim.claim_entity_id,
-          lobby_id: dashlessId(lobbyId),
-        })
+        createRequest.mutate(
+          { space_id: claim.space_id, claim_entity_id: claim.claim_entity_id, lobby_id: dashlessId(lobbyId) },
+          { onError: recoverFromMissingIntent }
+        )
       }
       disabled={Boolean(blockedReason)}
       blockedReason={blockedReason}

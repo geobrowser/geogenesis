@@ -77,17 +77,63 @@ export function useClaimMatchup({
    */
   indexedViewerPosition?: boolean | null;
 }) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const matchesQuery = useMatchmakingMatches(enabled);
   const requestsQuery = useDebateRequests(enabled);
   const { data: activity } = useDebateActivity(enabled);
   const createRequest = useCreateDebateRequest();
+  const recoverFromMissingIntent = useMissingIntentRecovery({
+    claimId,
+    spaceId,
+    viewerPosition,
+    indexedViewerPosition,
+  });
 
-  // geo-chat holds no readiness for a side the chain does. The notification that should have made
-  // one either has not landed or never will — a readiness row marked withdrawn is not repaired by
-  // anything else — so send it again, then ask for readiness afresh whether or not it went through.
-  const recoverFromMissingIntent = () => {
+  // `enabled: false` only stops this query from *fetching*. React Query still hands back whatever
+  // another mounted caller has already put in the cache — and on the hub the Matches tab is one, so
+  // a claim disabled precisely because the graph cannot resolve it would find a cached match and
+  // offer a debate it cannot honour. Disabled has to mean no answer, not a stale one.
+  const match = !enabled
+    ? null
+    : ((matchesQuery.data?.matches ?? []).find(
+        candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
+      ) ?? null);
+
+  const blockedReason = claimRequestBlockedReason(activity, requestsQuery.data);
+
+  return {
+    match,
+    blockedReason,
+    isRequesting: createRequest.isPending,
+    requestError: debateRequestErrorMessage(createRequest.error, viewerPosition),
+    request: () =>
+      createRequest.mutate({ space_id: spaceId, claim_entity_id: claimId }, { onError: recoverFromMissingIntent }),
+  };
+}
+
+/**
+ * What to do when a claim request is refused as `intent_missing`: geo-chat holds no readiness for a
+ * side the chain does. The notification that should have made one either has not landed or never
+ * will — a readiness row marked withdrawn is not repaired by anything else — so send it again where
+ * the indexed side agrees with the pills, then ask for readiness afresh whether or not it went
+ * through. Pass the returned handler as the request's `onError`.
+ */
+export function useMissingIntentRecovery({
+  claimId,
+  spaceId,
+  viewerPosition,
+  indexedViewerPosition = null,
+}: {
+  claimId: string;
+  spaceId: string;
+  viewerPosition?: boolean | null;
+  /** See `useClaimMatchup`. Null only refreshes readiness. */
+  indexedViewerPosition?: boolean | null;
+}) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return (error: unknown) => {
+    if (!(error instanceof GeoChatRequestError) || error.code !== 'intent_missing') return;
     const refresh = () => {
       if (!accountKey) return;
       for (const queryKey of readinessQueryPrefixes(accountKey, spaceId)) {
@@ -108,34 +154,6 @@ export function useClaimMatchup({
     )
       .catch(() => {})
       .finally(refresh);
-  };
-
-  // `enabled: false` only stops this query from *fetching*. React Query still hands back whatever
-  // another mounted caller has already put in the cache — and on the hub the Matches tab is one, so
-  // a claim disabled precisely because the graph cannot resolve it would find a cached match and
-  // offer a debate it cannot honour. Disabled has to mean no answer, not a stale one.
-  const match = !enabled
-    ? null
-    : ((matchesQuery.data?.matches ?? []).find(
-        candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
-      ) ?? null);
-
-  const blockedReason = claimRequestBlockedReason(activity, requestsQuery.data);
-
-  return {
-    match,
-    blockedReason,
-    isRequesting: createRequest.isPending,
-    requestError: debateRequestErrorMessage(createRequest.error, viewerPosition),
-    request: () =>
-      createRequest.mutate(
-        { space_id: spaceId, claim_entity_id: claimId },
-        {
-          onError: error => {
-            if (error instanceof GeoChatRequestError && error.code === 'intent_missing') recoverFromMissingIntent();
-          },
-        }
-      ),
   };
 }
 

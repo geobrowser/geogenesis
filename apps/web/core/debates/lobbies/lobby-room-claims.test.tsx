@@ -10,6 +10,7 @@ import { LOBBY_ROOM_CLAIMS_COPY, LobbyRoomClaims, lobbyRoomClaimFrom } from './l
 const mocks = vi.hoisted(() => ({
   data: undefined as DebateLobbyClaims | undefined,
   mutate: vi.fn(),
+  recover: vi.fn(),
   activity: undefined as { available_to_debate: boolean; outbound_request?: unknown } | undefined,
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
@@ -27,6 +28,12 @@ vi.mock('./lobby-room-claims-hooks', async importOriginal => ({
     failureReason: null,
     refetch: vi.fn(),
   }),
+}));
+
+// Recovery itself is the side panel's, tested with it; here only that a refusal reaches it.
+vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/claims/browse/use-claim-matchup')>()),
+  useMissingIntentRecovery: () => mocks.recover,
 }));
 
 vi.mock('../hooks', () => ({ useDebateActivity: () => ({ data: mocks.activity }) }));
@@ -125,11 +132,10 @@ describe('LobbyRoomClaims', () => {
     expect(requests).toHaveLength(1);
 
     fireEvent.click(requests[0]!);
-    expect(mocks.mutate).toHaveBeenCalledWith({
-      space_id: 'space-1',
-      claim_entity_id: 'entity-b',
-      lobby_id: '0192abc',
-    });
+    expect(mocks.mutate).toHaveBeenCalledWith(
+      { space_id: 'space-1', claim_entity_id: 'entity-b', lobby_id: '0192abc' },
+      { onError: mocks.recover }
+    );
   });
 
   it('waits for geo-chat to hold a side the viewer just took before offering a request', () => {
