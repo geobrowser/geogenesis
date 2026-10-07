@@ -121,15 +121,15 @@ const roundZeroRebut: OpenRoundHistoryEntry = {
   ended_at: '2026-10-06T20:02:00.000Z',
   decision_deadline_at: '2026-10-06T20:02:10.000Z',
   decision_resolved_at: '2026-10-06T20:02:04.200Z',
-  outcome: 'rebut',
+  outcome: 'extend',
   resolution: 'both_picked',
   picks: [
-    { participant_slot: 1, pick: 'rebut' },
-    { participant_slot: 2, pick: 'rebut' },
+    { participant_slot: 1, pick: 'extend' },
+    { participant_slot: 2, pick: 'extend' },
   ],
 };
 
-/** 8.5: the reveal of a Rebut. The next round is already appended and starts at 20:02:07.2. */
+/** 8.5: the reveal of an Extend. The next round is already appended and starts at 20:02:07.2. */
 export function revealRebut(): Debate {
   return {
     ...baseDebate(),
@@ -144,9 +144,9 @@ export function revealRebut(): Debate {
       can_pick: false,
       decision_resolved_at: '2026-10-06T20:02:04.200Z',
       next_phase_starts_at: '2026-10-06T20:02:07.200Z',
-      my_pick: 'rebut',
+      my_pick: 'extend',
       opponent_has_picked: true,
-      outcome: 'rebut',
+      outcome: 'extend',
       resolution: 'both_picked',
       revealed_picks: roundZeroRebut.picks,
       turn_roles: ['opening', 'opening', 'rebuttal', 'rebuttal'],
@@ -172,7 +172,7 @@ export function roundOneSpeaking(): Debate {
   };
 }
 
-/** 8.6: the reveal of a split (Alice Rebut, Bob End). Thanking starts at 20:02:08. */
+/** 8.6: the reveal of a split (Alice Extend, Bob End). Thanking starts at 20:02:08. */
 export function revealEnd(): Debate {
   return {
     ...deciding(),
@@ -182,12 +182,12 @@ export function revealEnd(): Debate {
       can_pick: false,
       decision_resolved_at: '2026-10-06T20:02:05.000Z',
       next_phase_starts_at: '2026-10-06T20:02:08.000Z',
-      my_pick: 'rebut',
+      my_pick: 'extend',
       opponent_has_picked: true,
       outcome: 'end',
       resolution: 'both_picked',
       revealed_picks: [
-        { participant_slot: 1, pick: 'rebut' },
+        { participant_slot: 1, pick: 'extend' },
         { participant_slot: 2, pick: 'end' },
       ],
     }),
@@ -221,7 +221,7 @@ export function thankingAfterEnd(): Debate {
   };
 }
 
-/** 8.7: timed out (Alice Rebut, Bob never picked), resolved by the sweep at 20:02:11.3. */
+/** 8.7: timed out (Alice Extend, Bob never picked), resolved by the sweep at 20:02:11.3. */
 export function timedOut(): Debate {
   return {
     ...deciding(),
@@ -231,12 +231,12 @@ export function timedOut(): Debate {
       can_pick: false,
       decision_resolved_at: '2026-10-06T20:02:11.300Z',
       next_phase_starts_at: '2026-10-06T20:02:14.300Z',
-      my_pick: 'rebut',
+      my_pick: 'extend',
       opponent_has_picked: false,
       outcome: 'end',
       resolution: 'deadline',
       revealed_picks: [
-        { participant_slot: 1, pick: 'rebut' },
+        { participant_slot: 1, pick: 'extend' },
         { participant_slot: 2, pick: null },
       ],
     }),
@@ -244,7 +244,7 @@ export function timedOut(): Debate {
 }
 
 /**
- * 8.8: the cap round (round 10), Bob speaking its last turn. Every earlier round resolved Rebut
+ * 8.8: the cap round (round 10), Bob speaking its last turn. Every earlier round resolved Extend
  * 2 s after it ended, so each rebuttal round runs 45 + 45 s after a 5 s gap (2 s deciding, 3 s
  * reveal) — round `r ≥ 1` starts at 20:02:05 + (r − 1) × 95 s.
  */
@@ -258,11 +258,11 @@ export function capRoundLastTurn(): Debate {
       ended_at: iso(roundEndMs),
       decision_deadline_at: iso(roundEndMs + 10_000),
       decision_resolved_at: iso(resolvedAtMs),
-      outcome: 'rebut',
+      outcome: 'extend',
       resolution: 'both_picked',
       picks: [
-        { participant_slot: 1, pick: 'rebut' },
-        { participant_slot: 2, pick: 'rebut' },
+        { participant_slot: 1, pick: 'extend' },
+        { participant_slot: 2, pick: 'extend' },
       ],
     });
     roundEndMs = resolvedAtMs + 3_000 + 90_000;

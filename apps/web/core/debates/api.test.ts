@@ -791,7 +791,7 @@ describe('turn yields', () => {
 
 describe('open round picks (GEO-3175)', () => {
   it('puts the pick to the addressed round and returns the debate built for the caller', async () => {
-    const debate = { id: 'debate-1', status: 'in_progress', open_rounds: { round_index: 0, my_pick: 'rebut' } };
+    const debate = { id: 'debate-1', status: 'in_progress', open_rounds: { round_index: 0, my_pick: 'extend' } };
     const fetch = vi.fn().mockResolvedValue(
       new Response(JSON.stringify(debate), {
         status: 200,
@@ -800,7 +800,7 @@ describe('open round picks (GEO-3175)', () => {
     );
     vi.stubGlobal('fetch', fetch);
 
-    await expect(saveOpenRoundPick('debate-1', 0, 'rebut', vi.fn(), 'user-a')).resolves.toEqual(debate);
+    await expect(saveOpenRoundPick('debate-1', 0, 'extend', vi.fn(), 'user-a')).resolves.toEqual(debate);
 
     expect(fetch).toHaveBeenCalledWith(
       'http://localhost:8080/debates/debate-1/rounds/0/pick',
@@ -810,7 +810,7 @@ describe('open round picks (GEO-3175)', () => {
           Authorization: 'Bearer access-token',
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ pick: 'rebut' }),
+        body: JSON.stringify({ pick: 'extend' }),
       })
     );
   });

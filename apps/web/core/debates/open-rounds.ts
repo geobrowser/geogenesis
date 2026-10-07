@@ -5,7 +5,7 @@ import { type DebateTurnRole, debateTurnRole } from './formats';
  * The room's clock for Open rounds (GEO-3175), against geo-chat `docs/open-rounds-contract.md`.
  *
  * A fixed format knows its whole timeline at the start: the turns in `turn_durations_ms`, end to
- * end, then thanking. Open rounds does not. After each round both debaters pick Rebut or End, the
+ * end, then thanking. Open rounds does not. After each round both debaters pick Extend or End, the
  * round resolves, and only then does the server append the next round's turns — so the timeline
  * has a gap after every round (deciding, then a 3 s result window) and its end is unknown until a
  * round resolves End or the cap round is reached.
@@ -133,10 +133,10 @@ export function openRoundGapAfterTurn(
 
   const nextPhaseStartsAtMs = resolution.resolvedAtMs + openRounds.result_window_ms;
   const nextRoundAppended = turnIndex + 1 < debate.turn_durations_ms.length;
-  // A Rebut appends the next round in the same transaction that writes it, so a Rebut without the
+  // An Extend appends the next round in the same transaction that writes it, so an Extend without the
   // next round's turns is a payload that has not caught up; hold on the result rather than invent
   // turns or fall into thanking.
-  if (nowMs < nextPhaseStartsAtMs || (resolution.outcome === 'rebut' && !nextRoundAppended)) {
+  if (nowMs < nextPhaseStartsAtMs || (resolution.outcome === 'extend' && !nextRoundAppended)) {
     return {
       kind: 'hold',
       phase: {
@@ -173,14 +173,14 @@ function openRoundResolution(
     if (resolvedAtMs !== null) return { resolvedAtMs, outcome: openRounds.outcome };
   }
 
-  // The next round is already appended, so this one resolved Rebut, but its resolution time is
+  // The next round is already appended, so this one resolved Extend, but its resolution time is
   // missing. Take it from the next turn's server start when that is the running turn; otherwise
   // run the rounds end to end rather than stall.
   const nextTurnIndex = roundIndex * 2 + 2;
   if (nextTurnIndex < debate.turn_durations_ms.length) {
     const nextStartedAtMs = debate.current_turn_index === nextTurnIndex ? timestampMs(debate.turn_started_at) : null;
     const resolvedAtMs = nextStartedAtMs !== null ? nextStartedAtMs - openRounds.result_window_ms : roundEndedAtMs;
-    return { resolvedAtMs: Math.max(roundEndedAtMs, resolvedAtMs), outcome: 'rebut' };
+    return { resolvedAtMs: Math.max(roundEndedAtMs, resolvedAtMs), outcome: 'extend' };
   }
 
   return null;

@@ -266,7 +266,7 @@ export type Debate = {
   open_rounds?: DebateOpenRounds;
 };
 
-export type OpenRoundPick = 'rebut' | 'end';
+export type OpenRoundPick = 'extend' | 'end';
 export type OpenRoundsPhase = 'speaking' | 'deciding' | 'result' | 'finished';
 export type OpenRoundResolution = 'both_picked' | 'deadline';
 export type OpenRoundTurnRole = 'opening' | 'rebuttal';
@@ -1574,7 +1574,7 @@ export async function endDebateTurn(
 }
 
 /**
- * Saves the viewer's Rebut / End pick for an open round (contract §5). Idempotent, changeable until
+ * Saves the viewer's Extend / End pick for an open round (contract §5). Idempotent, changeable until
  * the round resolves, and answers with the full Debate built for the caller, so `my_pick` reflects
  * the save. `roundIndex` is in the path so a late retry can never land on the next round.
  *
