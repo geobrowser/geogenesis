@@ -163,22 +163,9 @@ vi.mock('~/core/debates/recording-stream', () => ({
   putRecordingPart: vi.fn(),
   startLiveRecordingStream: (options: { id: string }) => {
     mocks.startLiveStream(options);
-    // The stream is where a streamed recording's bytes live, so it hands them back at the end.
-    const chunks: Blob[] = [];
-    const size = () => chunks.reduce((total, chunk) => total + chunk.size, 0);
     return {
       id: options.id,
-      append: (chunk: Blob, chunkAtMs: number) => {
-        chunks.push(chunk);
-        mocks.liveStreamAppend(chunk, chunkAtMs);
-      },
-      size,
-      recording: () => ({
-        size: size(),
-        availableFrom: 0,
-        heldInMemory: true,
-        read: async (start: number, end: number) => new Blob(chunks).slice(start, end),
-      }),
+      append: mocks.liveStreamAppend,
       finish: mocks.liveStreamFinish,
       release: mocks.liveStreamRelease,
       abort: mocks.liveStreamAbort,
@@ -4894,7 +4881,7 @@ describe('DebateRoomPageClient', () => {
       expect.objectContaining({
         userId: 'user-a',
         debateId: 'debate-1',
-        recording: expect.objectContaining({ size: expect.any(Number), availableFrom: 0 }),
+        blob: expect.any(Blob),
         mimeType: 'video/webm',
       })
     );
