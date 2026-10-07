@@ -504,9 +504,11 @@ export class DebateGatewayClient {
         break;
       }
       // Sent to this viewer alone when their own standing in a lobby changes.
+      // A ban, unban or reminder can change the viewer's lobby page without a `debate.lobby_changed`.
       case 'debate.my_lobby_changed':
         this.queueAccountQuery('lobbies');
         this.queueAccountQuery('my-lobby');
+        if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
       case 'debate.lobby_changed':

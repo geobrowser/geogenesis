@@ -265,10 +265,11 @@ describe('DebateGatewayClient', () => {
     ],
     [
       'own lobby standing',
-      { event_type: 'debate.my_lobby_changed', payload: { lobby_id: 'abc' } },
+      { event_type: 'debate.my_lobby_changed', payload: { lobby_id: 'AB-C' } },
       [
         ['debates', 'account', 'user-a', 'lobbies'],
         ['debates', 'account', 'user-a', 'my-lobby'],
+        ['debates', 'account', 'user-a', 'lobby', 'abc'],
       ],
     ],
     ['an unknown type, which it ignores', { event_type: 'debate.later_changed', payload: { lobby_id: 'abc' } }, []],
