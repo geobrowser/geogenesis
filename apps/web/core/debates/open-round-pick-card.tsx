@@ -99,7 +99,7 @@ export function OpenRoundPickCard({
         <PickChoice
           choice="extend"
           label="Extend"
-          detail={`+${rebuttalSeconds} s each`}
+          detail={`+${rebuttalSeconds}s each`}
           selectedPick={selectedPick}
           disabled={disabled}
           onPick={pick}
