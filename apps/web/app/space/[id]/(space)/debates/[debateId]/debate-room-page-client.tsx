@@ -48,6 +48,7 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
+import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
   type DebateTabClaimKey,
@@ -3114,6 +3115,23 @@ function DebateRecordingModal({
           {debate.claim.claim}
         </h1>
 
+        {/* Where the debate is and the way out, between the claim and the tiles (GEO-3174). A fixed
+            format has no rounds to count, so its row holds Leave alone. */}
+        <div className="mb-3 flex w-full max-w-[430px] items-center justify-between gap-2">
+          {countdown.openRounds && debate.open_rounds && (
+            <DebateRoundIndicator phase={countdown.openRounds} maxRounds={debate.open_rounds.max_rebuttal_rounds} />
+          )}
+          <RecordingCircleButton
+            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+            onClick={onLeave}
+            disabled={leaveDisabled}
+            className="ml-auto shrink-0"
+          >
+            <LeaveIcon />
+          </RecordingCircleButton>
+        </div>
+
         <div className="relative grid w-full max-w-[430px] gap-2">
           {orderedVideoTiles}
 
@@ -3162,17 +3180,6 @@ function DebateRecordingModal({
             )}
           </div>
         )}
-
-        <div className="mt-5 flex w-full max-w-[430px] justify-end">
-          <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            onClick={onLeave}
-            disabled={leaveDisabled}
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
-        </div>
       </main>
     </div>
   );
