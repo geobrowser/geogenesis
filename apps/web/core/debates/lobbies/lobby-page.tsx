@@ -41,6 +41,7 @@ import {
 } from './lobby-format';
 import { LobbyMemberMenu } from './lobby-member-actions';
 import { LobbyHandControl, LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
+import { LobbyPersonName } from './lobby-people';
 import { LobbyRequestDebate } from './lobby-request-debate';
 import { LobbyVoice, useLobbyVoiceStates } from './lobby-voice';
 
@@ -519,12 +520,12 @@ function RosterRow({
         <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt={personName(member)} size={32} />
       </span>
       <div className="min-w-0 flex-1">
-        <Link href={NavUtils.toSpace(member.profile_space_id)} className="hover:underline">
+        <LobbyPersonName person={member} interactionSurface="lobby_roster">
           <Text as="span" variant="metadataMedium" className="truncate">
             {personName(member)}
             {isViewer ? ' (you)' : ''}
           </Text>
-        </Link>
+        </LobbyPersonName>
         {member.in_debate || member.stepped_out ? (
           <Text as="p" variant="footnote" color="grey-04" ellipsize>
             {member.in_debate ? <LobbyDebateSubject subject={member.in_debate_subject} /> : 'Stepped out'}
