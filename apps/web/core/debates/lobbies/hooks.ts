@@ -22,7 +22,7 @@ import {
 import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useConnectionId } from '../rooms/hooks';
-import { isAlreadyInAnotherLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
+import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
@@ -154,7 +154,7 @@ export type LobbyPresenceState =
   | { status: 'joining' }
   | { status: 'joined' }
   /** In another open lobby; joining this one leaves it, so the viewer is asked first. */
-  | { status: 'confirm_leave_other'; otherLobbyId: string | null }
+  | { status: 'confirm_leave_other'; otherLobbyId: string | null; rejoin?: true }
   /** Joined another lobby from another tab, which dropped this one; no automatic rejoin. */
   | { status: 'moved'; otherLobbyId: string | null }
   /** Left to debate, still on the roster; "Back to the room" joins again. */
@@ -216,7 +216,8 @@ export function useLobbyPresence(
   }, []);
 
   const join = React.useCallback(
-    async (leaveOtherLobby = false) => {
+    /** `rejoin` only from the removed screen's Rejoin: the viewer chose to come back. */
+    async (leaveOtherLobby = false, rejoin = false) => {
       const generation = generationRef.current;
       sentRef.current = true;
       setState({ status: 'joining' });
@@ -225,7 +226,12 @@ export function useLobbyPresence(
           retryOnceIfRateLimited(() =>
             setDebateLobbyPresence(
               lobbyId,
-              { connection_id: connectionId, joined: true, leave_other_lobby: leaveOtherLobby },
+              {
+                connection_id: connectionId,
+                joined: true,
+                leave_other_lobby: leaveOtherLobby,
+                ...(rejoin ? { rejoin: true } : {}),
+              },
               () => tokenRef.current(),
               accountKey
             )
@@ -240,8 +246,17 @@ export function useLobbyPresence(
         if (generation !== generationRef.current) return;
         joinedRef.current = false;
         sentRef.current = false;
+        // Any join, automatic or not, lands on the removed screen; only its Rejoin sends `rejoin`.
+        if (isRemovedFromLobby(error)) {
+          setState({ status: 'dropped', reason: 'removed' });
+          return;
+        }
         if (isAlreadyInAnotherLobby(error)) {
-          setState({ status: 'confirm_leave_other', otherLobbyId: otherLobbyIdFrom(error) });
+          setState({
+            status: 'confirm_leave_other',
+            otherLobbyId: otherLobbyIdFrom(error),
+            ...(rejoin ? { rejoin: true as const } : {}),
+          });
           return;
         }
         setState({ status: 'failed', message: lobbyErrorMessage(error, 'Could not join this lobby. Try again.') });

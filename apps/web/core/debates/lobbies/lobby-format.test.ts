@@ -251,6 +251,7 @@ describe('moderation copy', () => {
       'lobby_target_banned',
       'lobby_target_not_in_voice',
       'lobby_not_listener',
+      'lobby_removed',
     ]) {
       expect(lobbyErrorMessage(new GeoChatRequestError('raw', code, 409), 'fallback')).not.toBe('fallback');
     }

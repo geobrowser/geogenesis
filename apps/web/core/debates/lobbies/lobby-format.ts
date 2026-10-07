@@ -115,6 +115,11 @@ export function isAlreadyInAnotherLobby(error: unknown): error is GeoChatRequest
   return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'already_in_another_lobby';
 }
 
+/** The join was refused because a host removed the viewer; only an explicit Rejoin comes back. */
+export function isRemovedFromLobby(error: unknown): error is GeoChatRequestError {
+  return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'lobby_removed';
+}
+
 /** The other lobby's id, from the 409's `details.current_lobby_id`. */
 export function otherLobbyIdFrom(error: GeoChatRequestError) {
   const id = error.details?.current_lobby_id;
@@ -185,6 +190,8 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
       return 'Their mic isn’t on.';
     case 'lobby_not_listener':
       return 'Only listeners raise a hand.';
+    case 'lobby_removed':
+      return 'A host removed you from this lobby.';
     default:
       return fallback;
   }

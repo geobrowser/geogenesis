@@ -2425,11 +2425,12 @@ export async function createDebateLobby(
 
 /**
  * Join or leave on one connection. A join while in another open lobby is `409
- * already_in_another_lobby` unless `leave_other_lobby` confirms leaving it.
+ * already_in_another_lobby` unless `leave_other_lobby` confirms leaving it. A join after a host
+ * removed the viewer is `409 lobby_removed` unless `rejoin` says they chose to come back.
  */
 export async function setDebateLobbyPresence(
   lobbyId: string,
-  body: { connection_id: string; joined: boolean; leave_other_lobby?: boolean },
+  body: { connection_id: string; joined: boolean; leave_other_lobby?: boolean; rejoin?: boolean },
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
   keepalive = false

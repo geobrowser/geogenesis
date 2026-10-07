@@ -194,7 +194,7 @@ function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: 
 
   // Until the refetch moves the page to the lobby's new access.
   if (state.status === 'dropped') {
-    if (state.reason === 'removed') return <LobbyRemovedNotice onRejoin={() => void join(false)} />;
+    if (state.reason === 'removed') return <LobbyRemovedNotice onRejoin={() => void join(false, true)} />;
     return <LobbyNotice action={findDebateAction}>{LOBBY_COPY[state.reason]}</LobbyNotice>;
   }
 
@@ -206,7 +206,11 @@ function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: 
           {LOBBY_COPY.otherLobby}
         </Text>
         <div className="flex flex-wrap gap-2">
-          <HubPillButton variant="primary" analyticsLabel="Lobby join leaving other" onClick={() => void join(true)}>
+          <HubPillButton
+            variant="primary"
+            analyticsLabel="Lobby join leaving other"
+            onClick={() => void join(true, state.rejoin ?? false)}
+          >
             Join this lobby
           </HubPillButton>
           {state.otherLobbyId ? (

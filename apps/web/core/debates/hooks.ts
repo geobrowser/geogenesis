@@ -25,7 +25,6 @@ import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import {
   type Debate,
   type DebateActivity,
-  dashlessId,
   type DebateClaimsResponse,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
@@ -51,6 +50,7 @@ import {
   createDebateChallenge,
   createDebateRematchRequest,
   createLocalRecordingUpload,
+  dashlessId,
   endDebateTurn,
   getDebate,
   getDebateActivity,
