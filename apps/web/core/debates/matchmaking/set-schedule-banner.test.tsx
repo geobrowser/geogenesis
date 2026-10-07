@@ -54,7 +54,7 @@ describe('SetScheduleBanner', () => {
       'data-geo-analytics-label',
       'Debate hub Open schedule'
     );
-    expect(screen.getByText('Set your debate schedule')).toBeInTheDocument();
+    expect(screen.getByText('Debate schedule')).toBeInTheDocument();
     expect(screen.getByText(/You can change it any time in the dropdown above/)).toBeInTheDocument();
   });
 
@@ -89,7 +89,7 @@ describe('SetScheduleBanner', () => {
     mocks.blocks = [weekly];
     setup();
 
-    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
   });
 
@@ -98,7 +98,7 @@ describe('SetScheduleBanner', () => {
     mocks.isSet = true;
     setup();
 
-    expect(await screen.findByText('Set your debate schedule')).toBeInTheDocument();
+    expect(await screen.findByText('Debate schedule')).toBeInTheDocument();
   });
 
   it('comes back once every saved time is in the past', async () => {
@@ -106,7 +106,7 @@ describe('SetScheduleBanner', () => {
     mocks.blocks = [{ id: 'd', kind: 'dated', date: '2020-01-06', start: 540, end: 600 }];
     setup();
 
-    expect(await screen.findByText('Set your debate schedule')).toBeInTheDocument();
+    expect(await screen.findByText('Debate schedule')).toBeInTheDocument();
   });
 
   // Defaulting to "unset" before the read answers would flash the banner at everyone who already
@@ -115,7 +115,7 @@ describe('SetScheduleBanner', () => {
     mocks.loaded = false;
     setup();
 
-    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
   });
 
   // Signed out the read is disabled, so the modal it opens would sit on "Loading your schedule"
@@ -124,7 +124,7 @@ describe('SetScheduleBanner', () => {
     mocks.authenticated = false;
     setup();
 
-    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
   });
 

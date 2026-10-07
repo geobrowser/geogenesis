@@ -324,7 +324,7 @@ describe('DebateCalendar', () => {
     expect(mocks.schedulableOptions[0]).toEqual({ calendar: true, spaces: [] });
     expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
     // The debates panel's own callout, not a calendar-only notice.
-    expect(await screen.findByText('Set your debate schedule')).toBeInTheDocument();
+    expect(await screen.findByText('Debate schedule')).toBeInTheDocument();
     expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_opened', {
       opened_from: 'direct',
       viewer_has_schedule: false,

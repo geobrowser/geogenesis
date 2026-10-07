@@ -16,7 +16,7 @@ import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
 
 /**
- * "Set your debate schedule" — the callout at the top of the debates panel, above the tabs, whose
+ * "Debate schedule" — the callout at the top of the debates panel, above the tabs, whose
  * button opens the availability calendar (GEO-2936). The debate calendar page shows the same
  * callout above its week.
  *
@@ -68,9 +68,9 @@ function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
 
   return (
     <div className={cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-[#EFE2FF] p-4')}>
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex items-center justify-between gap-3">
         <Text as="h3" variant="smallTitle">
-          Set your debate schedule
+          Debate schedule
         </Text>
         <button
           ref={openerRef}
