@@ -22,13 +22,11 @@ import { Close } from '~/design-system/icons/close';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type { DebatePerson } from '../api';
 import { useDebateClaimResponse } from '../browse/use-debate-claim-response';
-import { useOpenDebaterProfile } from '../browse/use-open-debater-profile';
 import { useDebateClaims } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import {
@@ -36,20 +34,26 @@ import {
   type ClaimListRow,
   type ClaimSummary,
   type PanelTopic,
+  type PersonFacts,
   type PersonListRow,
   type TopicSets,
   coversTopics,
-  togglePick,
+  pickLabel,
   topicFacet,
 } from './calendar-narrowing';
 import type { FreeSlot } from './debate-calendar-model';
 import type { ClaimMatch } from './disagreement-counts';
-import { debateActionAnalyticsAttributes } from './hub-analytics';
+import {
+  debateActionAnalyticsAttributes,
+  debateAnalyticsLabel,
+  debateSurfaceAnalyticsAttributes,
+} from './hub-analytics';
 import { SpaceThumb } from './hub-facet-rail';
 import { HubMultiFilterMenu } from './hub-filter-menu';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { MatchesOnlySwitch } from './matches-only-switch';
-import { formatSlot } from './people-tab';
+import { SidePanelProfileName, formatSlot } from './people-tab';
+import { toggleId } from './topic-facets';
 
 export type NarrowTab = 'people' | 'claims';
 
@@ -58,10 +62,11 @@ const MATCH_TIME_CHIPS = 3;
 
 /**
  * Every control in the panel is labelled on the calendar's surface, so its clicks read apart from
- * the debates hub's (`Debate calendar …` against `Debate hub …`).
+ * the debates hub's (`Debate calendar …` against `Debate hub …`). Filters by default: most of the
+ * panel narrows the week; the few that act pass `'action'`.
  */
-const panelAnalytics = (action: string, intent = 'filter_debate_calendar') =>
-  debateActionAnalyticsAttributes('calendar', action, intent);
+const panelAnalytics = (action: string, kind: 'action' | 'filter' = 'filter') =>
+  debateSurfaceAnalyticsAttributes('calendar', action, kind);
 
 /** Someone who disagrees with the viewer on a claim, as the claim's dropdown lists them. */
 export type ClaimOpponent = {
@@ -76,14 +81,7 @@ export type PanelClaim = ClaimListRow & {
   opponents: ClaimOpponent[];
 };
 
-export type PanelPerson = PersonListRow<{
-  profileKey: string;
-  matchCount: number;
-  firstFree: number | null;
-  inSpaces: boolean;
-  person: DebatePerson;
-  matches: ClaimMatch[];
-}>;
+export type PanelPerson = PersonListRow<PersonFacts & { person: DebatePerson; matches: ClaimMatch[] }>;
 
 /** The People and Claims pills on the calendar's filter row. */
 export function CalendarNarrowPills({
@@ -101,8 +99,8 @@ export function CalendarNarrowPills({
   const pill = (tab: NarrowTab, label: string, picked: number, marker: boolean) => (
     <HubPillButton
       analyticsSurface="calendar"
-      analyticsLabel={`Debate calendar ${label} filter`}
-      analyticsIntent="filter_debate_calendar"
+      analyticsLabel={debateAnalyticsLabel('calendar', `${label} filter`)}
+      analyticsIntent={panelAnalytics(label)['data-geo-analytics-intent']}
       variant={picked > 0 ? 'primary' : 'secondary'}
       aria-pressed={openTab === tab}
       aria-label={picked > 0 ? `${label}, ${picked} picked` : label}
@@ -267,7 +265,7 @@ export function CalendarNarrowPanelBody({
           <button
             type="button"
             aria-label="Close panel"
-            {...panelAnalytics('Close panel', 'debate_calendar_action')}
+            {...panelAnalytics('Close panel', 'action')}
             onClick={onClose}
             className={HUB_ICON_BUTTON_CLASS_NAME}
           >
@@ -293,7 +291,7 @@ export function CalendarNarrowPanelBody({
             analytics={{ name: onClaims ? 'Claims topic' : 'People topic', surface: 'calendar' }}
             options={facet.map(topic => ({ value: topic.id, label: topic.name ?? 'Topic', count: topic.count }))}
             values={tabTopics}
-            onToggle={topicId => setTopics(current => ({ ...current, [tab]: togglePick(current[tab], topicId) }))}
+            onToggle={topicId => setTopics(current => ({ ...current, [tab]: toggleId(current[tab], topicId) }))}
             onClear={() => setTopics(current => ({ ...current, [tab]: [] }))}
             clearLabel="Any topic"
             countsPending={topicsPending}
@@ -337,8 +335,8 @@ export function CalendarNarrowPanelBody({
             {picks.matchesOnly && !narrowedByList ? (
               <HubPillButton
                 analyticsSurface="calendar"
-                analyticsLabel="Debate calendar Show everyone"
-                analyticsIntent="filter_debate_calendar"
+                analyticsLabel={debateAnalyticsLabel('calendar', 'Show everyone')}
+                analyticsIntent={panelAnalytics('Show everyone')['data-geo-analytics-intent']}
                 onClick={() => onPicksChange({ ...picks, matchesOnly: false })}
               >
                 Show everyone
@@ -353,7 +351,7 @@ export function CalendarNarrowPanelBody({
                 claim={claim}
                 labelsById={labelsById}
                 popoverPortal={popoverPortal}
-                onToggle={() => onPicksChange({ ...picks, claims: togglePick(picks.claims, claim.summary.key) })}
+                onToggle={() => onPicksChange({ ...picks, claims: toggleId(picks.claims, claim.summary.key) })}
                 onPickTime={onPickTime}
               />
             ))}
@@ -363,7 +361,7 @@ export function CalendarNarrowPanelBody({
             {visiblePeople.map(row => (
               <React.Fragment key={row.person.profileKey}>
                 {renderPerson(row, () =>
-                  onPicksChange({ ...picks, people: togglePick(picks.people, row.person.profileKey) })
+                  onPicksChange({ ...picks, people: toggleId(picks.people, row.person.profileKey) })
                 )}
               </React.Fragment>
             ))}
@@ -417,7 +415,7 @@ function PickRow({
         type="button"
         role="checkbox"
         aria-checked={selected}
-        aria-label={hidden ? `${label} (hidden by your other filters)` : label}
+        aria-label={pickLabel(label, hidden)}
         {...panelAnalytics(analyticsAction)}
         onClick={onToggle}
         className={cx(
@@ -578,7 +576,7 @@ function SidePills({
         aria-pressed={mine}
         aria-label={`${responsePositionLabel(position)}: ${vote.claimName}`}
         title={vote.titleFor(position)}
-        {...panelAnalytics(responsePositionLabel(position), 'vote')}
+        {...debateActionAnalyticsAttributes('calendar', responsePositionLabel(position), 'vote')}
         disabled={vote.disabled || vote.pending}
         aria-busy={vote.pending || undefined}
         onClick={() => vote.onRespond(position)}
@@ -618,7 +616,7 @@ function ClaimMatches({
         <button
           type="button"
           aria-label={`${count} ${count === 1 ? 'person disagrees' : 'people disagree'} with you on ${name}`}
-          {...panelAnalytics('Claim matches', 'debate_calendar_action')}
+          {...panelAnalytics('Claim matches', 'action')}
           className="inline-flex items-center gap-0.5 text-footnoteMedium whitespace-nowrap text-purple transition-opacity hover:opacity-75"
         >
           <span className="tabular-nums">{count}</span> {count === 1 ? 'match' : 'matches'}
@@ -653,7 +651,17 @@ function ClaimMatches({
                     {person.online && !person.away ? <OnlineDot faceSize={24} /> : null}
                   </span>
                   <span className="flex min-w-0 flex-col gap-1.5">
-                    <ProfileName person={person} />
+                    {validateSpaceId(person.profile_space_id) ? (
+                      <SidePanelProfileName
+                        person={person}
+                        href={NavUtils.toSpace(person.profile_space_id)}
+                        analyticsSurface="calendar"
+                      />
+                    ) : (
+                      <Text as="span" variant="metadataMedium" className="truncate">
+                        {speakerLabel(person)}
+                      </Text>
+                    )}
                     {slots.length > 0 ? (
                       <span className="flex flex-wrap gap-1">
                         {slots.slice(0, MATCH_TIME_CHIPS).map(slot => {
@@ -663,7 +671,12 @@ function ClaimMatches({
                               key={slot.start}
                               type="button"
                               aria-label={`Schedule a debate with ${speakerLabel(person)} ${formatSlot(start)}`}
-                              {...panelAnalytics('Claim match time', 'open_peer_availability')}
+                              // The intent the People tab's time chips carry: each opens the booking.
+                              {...debateActionAnalyticsAttributes(
+                                'calendar',
+                                'Claim match time',
+                                'open_peer_availability'
+                              )}
                               onClick={event => {
                                 setOpen(false);
                                 onPickTime(userKey, start, event.currentTarget);
@@ -688,29 +701,6 @@ function ClaimMatches({
         </Popover.Portal>
       ) : null}
     </Popover.Root>
-  );
-}
-
-/** A person's name, opening their profile in the entity side panel as the calendar's rows do. */
-function ProfileName({ person, className }: { person: DebatePerson; className?: string }) {
-  const name = speakerLabel(person);
-  const openProfile = useOpenDebaterProfile(person.profile_space_id, { interactionSurface: 'debate_calendar' });
-  if (!validateSpaceId(person.profile_space_id)) {
-    return (
-      <Text as="span" variant="metadataMedium" className={cx('truncate', className)}>
-        {name}
-      </Text>
-    );
-  }
-  return (
-    <Link
-      href={NavUtils.toSpace(person.profile_space_id)}
-      {...panelAnalytics('Person profile', 'open_profile')}
-      onClick={openProfile}
-      className={cx('min-w-0 truncate text-metadataMedium text-text hover:underline', className)}
-    >
-      {name}
-    </Link>
   );
 }
 

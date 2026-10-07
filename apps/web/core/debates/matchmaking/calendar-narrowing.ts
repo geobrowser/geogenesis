@@ -14,6 +14,7 @@
 import { normId } from '~/core/utils/norm-id';
 
 import type { ParticipantPositionsByClaim } from '../participant-positions';
+import { claimRowKey } from './claim-row-key';
 
 export type CalendarPicks = {
   /** `normId(profile_space_id)` of each picked person. */
@@ -29,8 +30,9 @@ export function hasPicks(picks: CalendarPicks): boolean {
   return picks.people.length > 0 || picks.claims.length > 0 || picks.matchesOnly;
 }
 
+/** The claim's row key (`claimRowKey`), so a pick names a claim the way every claims list does. */
 export function claimPickKey(spaceId: string, claimId: string): string {
-  return `${normId(spaceId)}:${normId(claimId)}`;
+  return claimRowKey({ claim: { space_id: spaceId, claim_entity_id: claimId } });
 }
 
 export function splitClaimPickKey(key: string): { spaceId: string; claimId: string } | null {
@@ -57,8 +59,6 @@ export type ClaimSummaries = {
   byKey: ReadonlyMap<string, ClaimSummary>;
   /** The claim keys each person holds a position on. */
   heldByPerson: ReadonlyMap<string, ReadonlySet<string>>;
-  /** Whether the viewer holds any position at all, which Matches only needs to mean anything. */
-  viewerHasPositions: boolean;
 };
 
 const EMPTY_SET: ReadonlySet<string> = new Set();
@@ -77,7 +77,6 @@ export function summarizeClaims(
   const viewerId = viewerProfileSpaceId ? normId(viewerProfileSpaceId) : null;
   const byKey = new Map<string, ClaimSummary>();
   const heldByPerson = new Map<string, Set<string>>();
-  let viewerHasPositions = false;
 
   type Draft = { claimId: string; spaceId: string; viewer: boolean | null; agree: Set<string>; disagree: Set<string> };
   const drafts = new Map<string, Draft>();
@@ -97,7 +96,6 @@ export function summarizeClaims(
       drafts.set(key, draft);
       if (isViewer) {
         draft.viewer = row.position;
-        viewerHasPositions = true;
         continue;
       }
       (row.position ? draft.agree : draft.disagree).add(profileId);
@@ -120,7 +118,7 @@ export function summarizeClaims(
     });
   }
 
-  return { byKey, heldByPerson, viewerHasPositions };
+  return { byKey, heldByPerson };
 }
 
 /**
@@ -263,8 +261,18 @@ export function personListRows<T extends PersonFacts>(
   );
 }
 
-export function togglePick(list: readonly string[], key: string): string[] {
-  return list.includes(key) ? list.filter(item => item !== key) : [...list, key];
+/**
+ * Matches only means nothing to a viewer who holds no position, so it is off for them whatever the
+ * URL or a phone's draft says; the switch says why. `viewerHasPositions` is `null` while unknown,
+ * which leaves the pick alone.
+ */
+export function withoutDeadMatchesOnly(picks: CalendarPicks, viewerHasPositions: boolean | null): CalendarPicks {
+  return picks.matchesOnly && viewerHasPositions === false ? { ...picks, matchesOnly: false } : picks;
+}
+
+/** A pickable row's accessible name, saying when the other filters are what hide it. */
+export function pickLabel(name: string, hidden: boolean): string {
+  return hidden ? `${name} (hidden by your other filters)` : name;
 }
 
 /**
@@ -366,11 +374,16 @@ export type TopicSets = ReadonlyArray<ReadonlyArray<PanelTopic>>;
  */
 export function coversTopics(sets: TopicSets, topicIds: readonly string[]): boolean {
   if (topicIds.length === 0) return true;
-  const wanted = topicIds.map(normId);
-  return sets.some(set => {
-    const carried = new Set(set.map(topic => normId(topic.id)));
-    return wanted.every(id => carried.has(id));
-  });
+  return coversNormalized(normalizeSets(sets), topicIds.map(normId));
+}
+
+/** Each set's topic ids, canonical, as a set: built once per item rather than once per question. */
+function normalizeSets(sets: TopicSets): Array<ReadonlySet<string>> {
+  return sets.map(set => new Set(set.map(topic => normId(topic.id))));
+}
+
+function coversNormalized(sets: ReadonlyArray<ReadonlySet<string>>, wanted: readonly string[]): boolean {
+  return wanted.length === 0 || sets.some(set => wanted.every(id => set.has(id)));
 }
 
 /**
@@ -387,10 +400,13 @@ export function topicFacet(
     for (const set of sets) for (const topic of set) topics.set(normId(topic.id), { ...topic, id: normId(topic.id) });
   }
   const pickedIds = new Set(picked.map(normId));
+  // Normalized once, and narrowed to what the current picks leave: every count is within those. The
+  // count itself still asks for one claim carrying the picks and the topic together, as a pick would.
+  const candidates = items.map(normalizeSets).filter(sets => coversNormalized(sets, [...pickedIds]));
   return [...topics.values()]
     .map(topic => ({
       ...topic,
-      count: items.filter(sets => coversTopics(sets, [...pickedIds, topic.id])).length,
+      count: candidates.filter(sets => coversNormalized(sets, [...pickedIds, topic.id])).length,
     }))
     .filter(topic => topic.count > 0 || pickedIds.has(topic.id))
     .sort((left, right) => right.count - left.count || (left.name ?? '').localeCompare(right.name ?? ''));

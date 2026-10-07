@@ -36,6 +36,7 @@ import {
 } from './calendar-narrow-panel';
 import {
   type CalendarPicks,
+  NO_PICKS,
   type PanelTopic,
   claimListRows,
   hasPicks,
@@ -43,7 +44,9 @@ import {
   narrowingSentence,
   passesPicks,
   personListRows,
+  splitClaimPickKey,
   summarizeClaims,
+  withoutDeadMatchesOnly,
 } from './calendar-narrowing';
 import { DebateChallengeCard } from './challenge-card';
 import { SpaceTopicFilters } from './claims-tab';
@@ -81,7 +84,7 @@ import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch } from './disagreement-counts';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
-import { debateActionAnalyticsAttributes } from './hub-analytics';
+import { debateSurfaceAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubPillButton } from './hub-pill-button';
 import { HubMessage, HubQueryState } from './hub-states';
@@ -333,14 +336,14 @@ function DebateCalendarBody({
     authenticated: true,
     rosterUnavailable: peopleQuery.data === undefined || schedulableQuery.data === undefined,
   });
-  const matchCount = React.useCallback(
-    (person: DebatePerson) => matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
-    [matchAnalysis]
-  );
 
   const profileMatchCount = React.useCallback(
     (profileKey: string) => matchAnalysis.byProfile.get(profileKey)?.length ?? 0,
     [matchAnalysis]
+  );
+  const matchCount = React.useCallback(
+    (person: DebatePerson) => profileMatchCount(normId(person.profile_space_id)),
+    [profileMatchCount]
   );
 
   // Everyone's positions, for the Claims tab and for claim picks: who holds which claim, on which
@@ -372,12 +375,12 @@ function DebateCalendarBody({
     [allPositions.byClaim, pool, viewerProfileSpaceId]
   );
 
-  // Matches only means nothing to a viewer with no positions, so it is off for them whatever the
-  // URL says; the switch says why.
-  const effectivePicks = React.useMemo<CalendarPicks>(
-    () => (picks.matchesOnly && viewerHasPositions === false ? { ...picks, matchesOnly: false } : picks),
-    [picks, viewerHasPositions]
+  /** Matches only stays off for a viewer with no positions, on the page and in a phone's draft. */
+  const guardPicks = React.useCallback(
+    (withPicks: CalendarPicks) => withoutDeadMatchesOnly(withPicks, viewerHasPositions),
+    [viewerHasPositions]
   );
+  const effectivePicks = React.useMemo(() => guardPicks(picks), [guardPicks, picks]);
   // A pick the data to judge it has not arrived for yet: the week waits rather than drawing people
   // the pick is about to hide.
   const picksPending =
@@ -603,7 +606,7 @@ function DebateCalendarBody({
   };
   const clearFilters = () => {
     onSpacesClear();
-    setPicks({ people: [], claims: [], matchesOnly: false });
+    setPicks(NO_PICKS);
     changeFilter('clear');
   };
   /** One event per change, naming which kind of pick it was. */
@@ -627,8 +630,10 @@ function DebateCalendarBody({
   const panelClaimIds = React.useMemo(() => {
     if (!wantAllPositions) return EMPTY_SPACE_IDS;
     const ids = new Set([...claimSummaries.byKey.values()].map(summary => normId(summary.claimId)));
-    for (const key of picks.claims) ids.add(key.split(':')[1] ?? '');
-    ids.delete('');
+    for (const key of picks.claims) {
+      const pick = splitClaimPickKey(key);
+      if (pick) ids.add(pick.claimId);
+    }
     return [...ids].sort();
   }, [claimSummaries, picks.claims, wantAllPositions]);
   const { entities: panelClaimEntities, isLoading: panelClaimEntitiesLoading } = useClaimEntitiesByIds(panelClaimIds);
@@ -661,12 +666,6 @@ function DebateCalendarBody({
         };
       }),
     [allPeople, inSpaces, matchAnalysis, profileMatchCount, slotsByUser]
-  );
-  /** Matches only stays off for a viewer with no positions, in a phone's draft as on the page. */
-  const guardPicks = React.useCallback(
-    (withPicks: CalendarPicks) =>
-      withPicks.matchesOnly && viewerHasPositions === false ? { ...withPicks, matchesOnly: false } : withPicks,
-    [viewerHasPositions]
   );
   const panelRowsFor = React.useCallback(
     (withPicks: CalendarPicks): { claims: PanelClaim[]; people: PanelPerson[] } => {
@@ -701,19 +700,21 @@ function DebateCalendarBody({
   // next free time is next week — so what the other week holds is worth knowing on this one.
   const otherWeekOffset = weekOffset === 0 ? 1 : 0;
   const weekLabel = (offset: number) => (offset === 0 ? 'this week' : 'next week');
-  const weekRange = React.useCallback(
-    (offset: number) => {
-      const bounds = weekDays(weekStart(new Date(now), offset));
-      return [bounds[0].getTime(), bounds[bounds.length - 1].getTime()] as const;
-    },
+  // Each week's bounds, worked out once a minute rather than once per person asked about.
+  const weekRanges = React.useMemo(
+    () =>
+      Array.from({ length: CALENDAR_WEEKS }, (_, offset) => {
+        const bounds = weekDays(weekStart(new Date(now), offset));
+        return [bounds[0].getTime(), bounds[bounds.length - 1].getTime()] as const;
+      }),
     [now]
   );
   const freeInWeek = React.useCallback(
     (userKey: string, offset: number) => {
-      const [start, end] = weekRange(offset);
+      const [start, end] = weekRanges[offset];
       return (slotsByUser.get(userKey) ?? []).some(slot => slot.start >= start && slot.start < end);
     },
-    [slotsByUser, weekRange]
+    [slotsByUser, weekRanges]
   );
   const freeThisWeek = React.useCallback(
     (userKey: string) => freeInWeek(userKey, weekOffset),
@@ -903,7 +904,7 @@ function DebateCalendarBody({
                 <>
                   <button
                     type="button"
-                    {...debateActionAnalyticsAttributes('calendar', 'Show other week', 'debate_calendar_action')}
+                    {...debateSurfaceAnalyticsAttributes('calendar', 'Show other week')}
                     className="underline transition-colors hover:text-text"
                     onClick={goToOtherWeek}
                   >
@@ -914,7 +915,7 @@ function DebateCalendarBody({
               ) : null}
               <button
                 type="button"
-                {...debateActionAnalyticsAttributes('calendar', 'Clear filters', 'filter_debate_calendar')}
+                {...debateSurfaceAnalyticsAttributes('calendar', 'Clear filters', 'filter')}
                 className="underline transition-colors hover:text-text"
                 onClick={clearFilters}
               >
@@ -966,7 +967,7 @@ function DebateCalendarBody({
                     ? `Nobody who matches those filters is free ${weekLabel(weekOffset)}, but ${drawnInOtherWeek} ${
                         drawnInOtherWeek === 1 ? 'is' : 'are'
                       } ${weekLabel(otherWeekOffset)}.`
-                    : 'Nobody who matches those filters is free this week.'
+                    : `Nobody who matches those filters is free ${weekLabel(weekOffset)}.`
                   : 'Nobody has open times this week.'
               }
               emptyNote={filteredOut ? undefined : <DebateHoursNote live />}

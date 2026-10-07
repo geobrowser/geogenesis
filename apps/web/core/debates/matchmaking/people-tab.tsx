@@ -46,13 +46,19 @@ import {
 } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { pickLabel } from './calendar-narrowing';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import type { ClaimMatch } from './disagreement-counts';
 import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
-import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes, debateAnalyticsLabel } from './hub-analytics';
+import {
+  type DebateAnalyticsSurface,
+  debateActionAnalyticsAttributes,
+  debateAnalyticsLabel,
+  debateSurfaceAnalyticsAttributes,
+} from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { offlinePerson } from './offline-person';
@@ -676,8 +682,8 @@ export function PersonRow({
           type="button"
           role="checkbox"
           aria-checked={pick.selected}
-          aria-label={pick.hidden ? `${speakerLabel(person)} (hidden by your other filters)` : speakerLabel(person)}
-          {...debateActionAnalyticsAttributes(analyticsSurface, 'Person pick', 'filter_debate_calendar')}
+          aria-label={pickLabel(speakerLabel(person), pick.hidden)}
+          {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Person pick', 'filter')}
           onClick={pick.onToggle}
           className="mt-2 flex size-4 items-center justify-center rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple"
         >
@@ -856,9 +862,10 @@ export function PersonRow({
 
 /**
  * A person's name that opens their profile in the entity side panel. Its own component so the
- * profile lookup behind it runs only for rows that ask for this, not for every People tab row.
+ * profile lookup behind it runs only for rows that ask for this, not for every People tab row; and
+ * exported for the calendar's other names (GEO-3220), so they open the same way.
  */
-function SidePanelProfileName({
+export function SidePanelProfileName({
   person,
   href,
   analyticsSurface,

@@ -51,7 +51,7 @@ const SEED_OILS_KEY = claimPickKey(HEALTH, SEED_OILS);
 
 describe('summarizeClaims', () => {
   it('sorts everyone on the calendar onto a side, and names who opposes the viewer', () => {
-    const { byKey, viewerHasPositions } = summarizeClaims(POSITIONS, VIEWER, POOL);
+    const { byKey } = summarizeClaims(POSITIONS, VIEWER, POOL);
 
     const phones = byKey.get(PHONES_KEY)!;
     expect(phones.viewerPosition).toBe(true);
@@ -59,7 +59,6 @@ describe('summarizeClaims', () => {
     expect([...phones.disagree]).toEqual([MAYA]);
     expect([...phones.opponents]).toEqual([MAYA]);
     expect(byKey.get(SEED_OILS_KEY)!.opponents.size).toBe(0);
-    expect(viewerHasPositions).toBe(true);
   });
 
   it('keeps a side apart per space: a position elsewhere is a different question', () => {
@@ -257,5 +256,7 @@ describe('topics', () => {
       { ...ai, count: 2 },
       { ...jobs, count: 1 },
     ]);
+    // AI on one claim and Health on another is not one claim in both, so Health counts nobody here.
+    expect(topicFacet([[[ai], [health]]], [ai.id])).toEqual([{ ...ai, count: 1 }]);
   });
 });

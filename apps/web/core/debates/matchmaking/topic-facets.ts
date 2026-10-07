@@ -229,7 +229,7 @@ export function orderFacetOptions<T extends { id: string; count: number }>(optio
  * filter changes, so there is no position here worth preserving — while the order things were
  * picked in is at least the viewer's own.
  */
-export function toggleId(selected: string[], id: string): string[] {
+export function toggleId(selected: readonly string[], id: string): string[] {
   // Compared canonically: a space id reaches the menu in whichever spelling its rows carried, so
   // unticking could otherwise add a second spelling of a space that was already picked instead of
   // removing it.
