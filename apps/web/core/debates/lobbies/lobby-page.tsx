@@ -26,12 +26,12 @@ import {
   useEndDebateLobby,
   useLobbyPresence,
 } from './hooks';
+import { LobbyDebateSubject } from './lobby-debate-subject';
 import {
   ROLE_LABEL,
   hereLabel,
   hostAfterChange,
   hostsLabel,
-  inDebateLabel,
   isHosting,
   lobbyErrorMessage,
   notYetOpenLabel,
@@ -527,7 +527,7 @@ function RosterRow({
         </Link>
         {member.in_debate || member.stepped_out ? (
           <Text as="p" variant="footnote" color="grey-04" ellipsize>
-            {member.in_debate ? inDebateLabel(member.in_debate_subject) : 'Stepped out'}
+            {member.in_debate ? <LobbyDebateSubject subject={member.in_debate_subject} /> : 'Stepped out'}
           </Text>
         ) : null}
       </div>
