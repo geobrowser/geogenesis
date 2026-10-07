@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DebateRoundIndicator, debateRoundIndicatorState } from './debate-round-indicator';
+import { DebateRoundIndicator } from './debate-round-indicator';
 import type { OpenRoundsRoomPhase } from './open-rounds';
 
 const speaking = (roundIndex: number): OpenRoundsRoomPhase => ({
@@ -22,7 +22,7 @@ const result = (roundIndex: number, outcome: 'extend' | 'end'): OpenRoundsRoomPh
 });
 
 function renderIndicator(phase: OpenRoundsRoomPhase, maxRounds = 10) {
-  render(<DebateRoundIndicator state={debateRoundIndicatorState(phase, maxRounds)} />);
+  render(<DebateRoundIndicator phase={phase} maxRounds={maxRounds} />);
   const pips = Array.from(document.querySelectorAll('[data-round-pip]')).map(pip => pip.getAttribute('data-round-pip'));
   return { pips };
 }
@@ -36,7 +36,7 @@ describe('DebateRoundIndicator', () => {
     expect(screen.getByText('Opening')).toBeInTheDocument();
     expect(screen.getByText('Opening. No rebuttal rounds yet. Another round is possible.')).toBeInTheDocument();
     expect(pips).toEqual(['0', 'next']);
-    expect(document.querySelector('[data-round-pip="0"]')).toHaveClass('bg-purple!');
+    expect(document.querySelector('[data-round-pip="0"]')).toHaveClass('bg-purple');
   });
 
   it('shows round N of the cap, one pip per round run, and highlights the current one', () => {
@@ -46,8 +46,8 @@ describe('DebateRoundIndicator', () => {
     expect(screen.getByText('of 10')).toBeInTheDocument();
     expect(screen.getByText('Round 4 of 10. 4 rebuttal rounds so far. Another round is possible.')).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', '2', '3', '4', 'next']);
-    expect(document.querySelector('[data-round-pip="4"]')).toHaveClass('bg-purple!');
-    expect(document.querySelector('[data-round-pip="3"]')).not.toHaveClass('bg-purple!');
+    expect(document.querySelector('[data-round-pip="4"]')).toHaveClass('bg-purple');
+    expect(document.querySelector('[data-round-pip="3"]')).not.toHaveClass('bg-purple');
   });
 
   it('reads the cap from the debate rather than assuming 10', () => {
@@ -65,7 +65,7 @@ describe('DebateRoundIndicator', () => {
     expect(pips).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
     // Halved past five rounds so round 10 fits beside Leave on a phone.
     expect(document.querySelector('[data-round-pip="10"]')).toHaveClass('w-1.5');
-    expect(document.querySelector('[data-round-pip="0"]')).toHaveClass('w-2.5!');
+    expect(document.querySelector('[data-round-pip="0"]')).toHaveClass('w-2.5');
   });
 
   it('keeps the resolved round during its reveal, and drops the next pip once it resolves End', () => {
@@ -85,6 +85,6 @@ describe('DebateRoundIndicator', () => {
     const { pips } = renderIndicator({ phase: 'finished', roundIndex: 3, isFinalRound: false });
 
     expect(pips).toEqual(['0', '1', '2', '3']);
-    expect(document.querySelector('.bg-purple\\!')).toBeNull();
+    expect(document.querySelector('.bg-purple')).toBeNull();
   });
 });

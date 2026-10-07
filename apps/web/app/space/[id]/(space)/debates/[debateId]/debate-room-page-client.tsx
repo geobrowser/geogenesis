@@ -48,7 +48,7 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
-import { DebateRoundIndicator, debateRoundIndicatorState } from '~/core/debates/debate-round-indicator';
+import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
   type DebateTabClaimKey,
@@ -3074,10 +3074,6 @@ function DebateRecordingModal({
       />
     </DebateVideoTile>
   );
-  const roundIndicator =
-    countdown.openRounds && debate.open_rounds
-      ? debateRoundIndicatorState(countdown.openRounds, debate.open_rounds.max_rebuttal_rounds)
-      : null;
   const dialogRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => dialogRef.current?.focus(), []);
   useScrollLock();
@@ -3122,13 +3118,15 @@ function DebateRecordingModal({
         {/* Where the debate is and the way out, between the claim and the tiles (GEO-3174). A fixed
             format has no rounds to count, so its row holds Leave alone. */}
         <div className="mb-3 flex w-full max-w-[430px] items-center justify-between gap-2">
-          {roundIndicator ? <DebateRoundIndicator state={roundIndicator} /> : <span />}
+          {countdown.openRounds && debate.open_rounds && (
+            <DebateRoundIndicator phase={countdown.openRounds} maxRounds={debate.open_rounds.max_rebuttal_rounds} />
+          )}
           <RecordingCircleButton
             ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
             title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
             onClick={onLeave}
             disabled={leaveDisabled}
-            className="shrink-0"
+            className="ml-auto shrink-0"
           >
             <LeaveIcon />
           </RecordingCircleButton>
