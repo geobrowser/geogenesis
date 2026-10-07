@@ -296,16 +296,16 @@ function ErrorRow({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** A host removed the viewer: say so and let them come back by choice. Never rejoins by itself. */
-export function LobbyRemovedNotice({ onRejoin }: { onRejoin: () => void }) {
+/** Removed, or unbanned since: say so and let them come back by choice. Never rejoins by itself. */
+export function LobbyRemovedNotice({ onRejoin, unbanned = false }: { onRejoin: () => void; unbanned?: boolean }) {
   return (
     <div className="flex min-h-[calc(100dvh-2.75rem)] items-center justify-center px-5 py-8" role="status">
       <div className="flex max-w-md flex-col gap-3 rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
         <Text as="h1" variant="bodySemibold">
-          A host removed you from this lobby
+          {unbanned ? 'A host lifted your ban' : 'A host removed you from this lobby'}
         </Text>
         <Text as="p" variant="metadata" color="grey-04">
-          You can rejoin, but please follow the hosts’ lead.
+          {unbanned ? 'Rejoin to come back.' : 'You can rejoin, but please follow the hosts’ lead.'}
         </Text>
         <div className="flex flex-wrap gap-2">
           <HubPillButton variant="primary" analyticsLabel="Lobby rejoin after removal" onClick={onRejoin}>

@@ -23,7 +23,8 @@ vi.mock('../hooks', async importOriginal => ({
 
 const { GeoChatRequestError } = await import('../api');
 const { LobbyMemberActions } = await import('./lobby-member-actions');
-const { LobbyHandControl, LobbyHostLists, useModerationNotice } = await import('./lobby-moderation');
+const { LobbyHandControl, LobbyHostLists, LobbyRemovedNotice, useModerationNotice } =
+  await import('./lobby-moderation');
 
 function member(userId: string, role: DebateLobbyRole, extra: Partial<DebateLobbyMember> = {}): DebateLobbyMember {
   return {
@@ -283,5 +284,22 @@ describe('LobbyHandControl refusals', () => {
     renderWith(<LobbyHandControl lobby={lobby({ role: 'listener', hosting: false })} />);
     fireEvent.click(screen.getByRole('button', { name: 'Raise hand' }));
     expect(await screen.findByText('You stepped out. Go back to the room to raise your hand.')).toBeTruthy();
+  });
+});
+
+describe('LobbyRemovedNotice', () => {
+  it('says the viewer was removed, and Rejoin comes back', () => {
+    const onRejoin = vi.fn();
+    renderWith(<LobbyRemovedNotice onRejoin={onRejoin} />);
+    expect(screen.getByText('A host removed you from this lobby')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Rejoin' }));
+    expect(onRejoin).toHaveBeenCalledTimes(1);
+  });
+
+  it('says the ban was lifted after an unban', () => {
+    renderWith(<LobbyRemovedNotice onRejoin={vi.fn()} unbanned />);
+    expect(screen.getByText('A host lifted your ban')).toBeTruthy();
+    expect(screen.getByText('Rejoin to come back.')).toBeTruthy();
+    expect(screen.queryByText('A host removed you from this lobby')).toBeNull();
   });
 });

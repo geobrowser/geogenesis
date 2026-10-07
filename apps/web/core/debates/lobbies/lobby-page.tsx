@@ -194,7 +194,14 @@ function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: 
 
   // Until the refetch moves the page to the lobby's new access.
   if (state.status === 'dropped') {
-    if (state.reason === 'removed') return <LobbyRemovedNotice onRejoin={() => void join(false, true)} />;
+    if (state.reason === 'removed') {
+      return (
+        <LobbyRemovedNotice
+          onRejoin={() => void join(false, true)}
+          unbanned={lobby.viewer.last_moderation?.action === 'unban'}
+        />
+      );
+    }
     return <LobbyNotice action={findDebateAction}>{LOBBY_COPY[state.reason]}</LobbyNotice>;
   }
 
