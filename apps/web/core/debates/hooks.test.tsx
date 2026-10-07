@@ -1277,6 +1277,33 @@ describe('authoritative mutation reconciliation', () => {
       expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
     });
 
+    it('sends a later pick only once the earlier one has answered, so the last tap is saved last', async () => {
+      const extendDebate = { id: 'debate-1', open_rounds: { my_pick: 'extend' } } as unknown as Debate;
+      const endDebate = { id: 'debate-1', open_rounds: { my_pick: 'end' } } as unknown as Debate;
+      let answerFirst!: (debate: Debate) => void;
+      mocks.saveOpenRoundPick
+        .mockReturnValueOnce(new Promise<Debate>(resolve => (answerFirst = resolve)))
+        .mockResolvedValueOnce(endDebate);
+      const { queryClient, result } = renderSavePick();
+
+      let saves!: Promise<unknown>;
+      act(() => {
+        saves = Promise.all([
+          result.current.mutateAsync({ roundIndex: 0, pick: 'extend' }),
+          result.current.mutateAsync({ roundIndex: 0, pick: 'end' }),
+        ]);
+      });
+      await act(async () => undefined);
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledOnce();
+
+      await act(async () => {
+        answerFirst(extendDebate);
+        await saves;
+      });
+      expect(mocks.saveOpenRoundPick.mock.calls.map(call => call[2])).toEqual(['extend', 'end']);
+      expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(endDebate);
+    });
+
     it('rejects any other failure once, without retrying', async () => {
       mocks.saveOpenRoundPick.mockRejectedValue(new GeoChatRequestError('Unavailable', 'service_unavailable', 503));
       const { result } = renderSavePick();

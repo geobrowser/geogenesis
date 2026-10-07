@@ -955,12 +955,17 @@ export function useEndDebateTurn(debateId: string) {
  *
  * `round_already_resolved` is not a failure: the round ended while the save was in flight, the room
  * is about to show the result, and the debate is re-read for it. It resolves `null`.
+ *
+ * Saves for one debate run one after another (`scope`). A debater who switches quickly sends two
+ * PUTs, and concurrent ones can reach the server, or answer, in either order — so the pick they
+ * switched away from could be what the server keeps, or what the cache shows last.
  */
 export function useSaveOpenRoundPick(debateId: string) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
+    scope: { id: `open-round-pick:${debateId}` },
     mutationFn: async ({ roundIndex, pick }: { roundIndex: number; pick: OpenRoundPick }) => {
       try {
         return await saveOpenRoundPick(debateId, roundIndex, pick, getPrivyIdentityToken, accountKey);
