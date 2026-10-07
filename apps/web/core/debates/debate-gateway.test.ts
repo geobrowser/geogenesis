@@ -1851,7 +1851,46 @@ describe('DebateGatewayClient', () => {
     expect(subscribes()).toBe(4);
   });
 
-  it('lets a reconnect re-send a scope whose check retry is pending, exactly once', async () => {
+  it('keeps a backing-off scope out of the reconnect burst until its retry is due', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    // Two failures: the next retry is due 2s after the second.
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[0]!.receive('ERROR', failure);
+
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    const subscribed = () =>
+      sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE').map(message => message.payload);
+    expect(subscribed()).toEqual([{ scope: 'space', space_id: 'space-1' }]);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(subscribed()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(subscribed()).toEqual([
+      { scope: 'space', space_id: 'space-1' },
+      { scope: 'debate', debate_id: 'debate-1' },
+    ]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(subscribed()).toHaveLength(2);
+  });
+
+  it('sends a check retry that came due while disconnected on the next READY, once', async () => {
     client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
     client.start(
       vi.fn(async () => 'privy-token'),

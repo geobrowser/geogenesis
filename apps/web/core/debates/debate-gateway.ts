@@ -266,7 +266,7 @@ export class DebateGatewayClient {
     this.sentScopes.clear();
     this.confirmedScopes.clear();
     this.refusedScopes.clear();
-    this.clearSubscriptionRetries(true);
+    this.clearSubscriptionRetries();
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
@@ -321,8 +321,7 @@ export class DebateGatewayClient {
       this.sentScopes.clear();
       this.confirmedScopes.clear();
       this.refusedScopes.clear();
-      // READY re-sends every held scope; the attempt counts carry over so a failing check keeps backing off.
-      this.clearSubscriptionRetries(false);
+      // Pending check retries keep their timers, so READY skips them and each goes out when due.
       this.scheduleTokenRotation(session);
       this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
 
@@ -957,6 +956,7 @@ export class DebateGatewayClient {
     const baseDelay = Math.min(30_000, 1_000 * 2 ** retry.attempt);
     const delay = Math.min(30_000, Math.round(baseDelay + baseDelay * 0.2 * this.random()));
     retry.attempt += 1;
+    // Survives a reconnect: a retry that comes due while no socket is ready is left to the next READY.
     retry.timer = setTimeout(() => {
       retry.timer = null;
       const retained = this.scopes.get(key);
@@ -972,13 +972,11 @@ export class DebateGatewayClient {
     this.subscriptionRetries.delete(key);
   }
 
-  /** Cancels pending re-sends; `resetBackoff` also forgets the attempt counts. */
-  private clearSubscriptionRetries(resetBackoff: boolean) {
+  private clearSubscriptionRetries() {
     for (const retry of this.subscriptionRetries.values()) {
       if (retry.timer) clearTimeout(retry.timer);
-      retry.timer = null;
     }
-    if (resetBackoff) this.subscriptionRetries.clear();
+    this.subscriptionRetries.clear();
   }
 
   /** `reconnectAttempt` resets on each successful flush, so repeated rejections get their own floor. */
