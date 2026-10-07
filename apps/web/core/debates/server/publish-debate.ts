@@ -16,10 +16,13 @@ import { Publish } from '~/core/utils/publish';
 import { buildDebatePublishDraft } from '../debate-publish-draft';
 import { type DebateAcceptorConfig, getDebateAcceptorConfig } from './acceptor-config';
 import { loadDebateClaimSpaceId, loadDebatePublishSource } from './debate-source';
+import { withDebatePublishLease } from './publish-lease';
 
 export type PublishDebateResult =
   | { status: 'published'; debateEntityId: string; spaceId: string; userOpHash: string }
   | { status: 'already_published'; debateEntityId: string; spaceId?: string }
+  /** Submitted within the publish lease and not in the graph yet: the indexer is behind. */
+  | { status: 'submission_pending'; debateEntityId: string }
   | { status: 'not_editor'; debateEntityId: string; spaceId: string }
   | { status: 'acceptor_not_configured' };
 
@@ -27,8 +30,12 @@ export type PublishDebateResult =
  * Publish a finished debate to the knowledge graph as the debate acceptor.
  *
  * Idempotent: the Debate entity id is derived deterministically from the debate id, so if it
- * already exists in the graph we skip re-publishing. Signs with the acceptor's private key
- * (never the participant's wallet), mirroring the browser publish flow in `use-publish.ts`.
+ * already exists in the graph we skip re-publishing. That check depends on the indexer, so a
+ * publish also takes a lease ({@link withDebatePublishLease}) that keeps the sweep from submitting
+ * the same debate again while the graph catches up, and every id in the edit is derived from the
+ * debate, so a republish that gets past both rewrites rather than duplicates. Signs with the
+ * acceptor's private key (never the participant's wallet), mirroring the browser publish flow in
+ * `use-publish.ts`.
  */
 export async function publishDebateAsAcceptor(debateId: string): Promise<PublishDebateResult> {
   const config = getDebateAcceptorConfig();
@@ -43,6 +50,22 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
     return { status: 'already_published', debateEntityId };
   }
 
+  const outcome = await withDebatePublishLease(debateId, markSubmitted =>
+    publishUnderLease(debateId, debateEntityId, config, markSubmitted)
+  );
+  if (!outcome.ran) {
+    console.log('[debate-acceptor] debate publish already submitted; waiting for the graph', { debateId });
+    return { status: 'submission_pending', debateEntityId };
+  }
+  return outcome.value;
+}
+
+async function publishUnderLease(
+  debateId: string,
+  debateEntityId: string,
+  config: DebateAcceptorConfig,
+  markSubmitted: () => void
+): Promise<PublishDebateResult> {
   // Only auto-publish into spaces the acceptor actually edits. Publishing needs editor rights (a
   // member can propose but not vote+execute), and attempting it elsewhere just reverts on-chain
   // (CanNotExecute). Checked before loading the publish source, which pins the share card to IPFS.
@@ -60,11 +83,15 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
     throw new Error(`Debate ${debateId} resolved to an empty edit.`);
   }
 
-  const userOpHash = await submitEditAsAcceptor(config, {
-    name: draft.debateName,
-    ops,
-    space: { id: space.id, type: space.type, address: space.address },
-  });
+  const userOpHash = await submitEditAsAcceptor(
+    config,
+    {
+      name: draft.debateName,
+      ops,
+      space: { id: space.id, type: space.type, address: space.address },
+    },
+    markSubmitted
+  );
 
   console.log('[debate-acceptor] published debate', {
     debateId,
@@ -112,10 +139,15 @@ export async function loadAcceptorEditableSpace(
   return { id: space.id, type: space.type, address: space.address };
 }
 
-/** Sign and submit one edit into `space` as the acceptor, returning the first user operation's hash. */
+/**
+ * Sign and submit one edit into `space` as the acceptor, returning the first user operation's hash.
+ * `onSubmitted` is called once the user operation that can make the edit land has been sent (the
+ * personal-space publish, or the acceptor's vote on a DAO proposal), whatever happens after.
+ */
 export async function submitEditAsAcceptor(
   config: DebateAcceptorConfig,
-  { name, ops, space }: { name: string; ops: Op[]; space: AcceptorSpace }
+  { name, ops, space }: { name: string; ops: Op[]; space: AcceptorSpace },
+  onSubmitted: () => void = () => {}
 ): Promise<string> {
   // geo-sdk beta.8 removed getSmartAccountWalletClient; the acceptor signs the
   // same ZeroDev EIP-7702 kernel flow as the browser, from its private key. The
@@ -134,7 +166,7 @@ export async function submitEditAsAcceptor(
     : GEO_NETWORK;
   const smartAccount = await generateZeroDevAccount({ signer, network });
 
-  return submitEdit({ name, author: config.spaceId, ops, space, smartAccount, rpcUrl: config.rpcUrl });
+  return submitEdit({ name, author: config.spaceId, ops, space, smartAccount, rpcUrl: config.rpcUrl, onSubmitted });
 }
 
 type SmartAccount = GeoWalletClient;
@@ -146,6 +178,7 @@ async function submitEdit({
   space,
   smartAccount,
   rpcUrl,
+  onSubmitted,
 }: {
   name: string;
   author: string;
@@ -153,6 +186,7 @@ async function submitEdit({
   space: { id: string; type: string; address: string };
   smartAccount: SmartAccount;
   rpcUrl?: string;
+  onSubmitted: () => void;
 }): Promise<string> {
   if (space.type === 'PERSONAL') {
     const { to, calldata } = await geo.personalSpaces.publishEdit({
@@ -161,7 +195,9 @@ async function submitEdit({
       ops,
       author,
     });
-    return sendUserOp(smartAccount, to, calldata);
+    const hash = await sendUserOp(smartAccount, to, calldata);
+    onSubmitted();
+    return hash;
   }
 
   // DAO space: the acceptor is an editor, so use FAST voting and auto vote + execute — otherwise the
@@ -185,6 +221,9 @@ async function submitEdit({
     vote: 'YES',
   });
   const voteHash = await sendUserOp(smartAccount, vote.to as `0x${string}`, vote.calldata as `0x${string}`);
+  // The vote, not the proposal, is what executes the edit: a proposal that never got its vote
+  // writes nothing, and the next tick should propose again rather than wait out the publish lease.
+  onSubmitted();
   await confirmUserOp(smartAccount, voteHash, 'vote');
 
   // The acceptor's own vote normally executes the proposal, leaving nothing to execute here.
