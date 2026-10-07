@@ -6,7 +6,7 @@ import { NEWS_STORY_TYPE_ID } from '~/core/explore/explore-constants';
 
 import { GET } from './route';
 
-const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn(), viewer: vi.fn() }));
+const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn(), viewer: vi.fn(), freshState: vi.fn() }));
 
 vi.mock('~/core/explore/fetch-explore-feed', () => ({
   fetchExploreFeed: (args: unknown) => mocks.fetchFeed(args),
@@ -19,6 +19,9 @@ vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
     personalMemberSpaceId: null,
   }),
 }));
+vi.mock('~/core/explore/fresh-slot/fresh-slot-store', () => ({
+  readServingFreshSlotState: () => mocks.freshState(),
+}));
 vi.mock('~/core/explore/for-you/resolve-for-you-viewer', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/explore/for-you/resolve-for-you-viewer')>()),
   resolveForYouViewer: (...args: unknown[]) => mocks.viewer(...args),
@@ -29,8 +32,12 @@ beforeEach(() => {
   mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: null });
   mocks.viewer.mockReset();
   mocks.viewer.mockResolvedValue(null);
+  mocks.freshState.mockReset();
+  mocks.freshState.mockResolvedValue({ config: FRESH_ON, revision: 4, updatedAt: null, updatedBy: null });
   vi.unstubAllEnvs();
 });
+
+const FRESH_ON = { enabled: true, cadence: 4, firstPosition: 3, maxPerPage: 3, freshnessHours: 48, perTypeCaps: {} };
 
 const sentArgs = () =>
   mocks.fetchFeed.mock.calls[0]?.[0] as {
@@ -40,9 +47,24 @@ const sentArgs = () =>
     forYouTopicIds: string[];
     cursor: string | null;
     reorderWindow?: unknown;
+    freshSlot?: { config: unknown; revision: number };
   };
 
 describe('GET /api/explore/feed', () => {
+  // GEO-3221. The live fresh slot config reaches Best, and only Best.
+  it("hands Best the fresh slot's live config", async () => {
+    await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+    expect(sentArgs().freshSlot).toEqual({ config: FRESH_ON, revision: 4 });
+  });
+
+  it.each(['new', 'top', 'for-you'])('does not read the fresh slot for %s', async sort => {
+    await GET(new Request(`https://example.com/api/explore/feed?sort=${sort}`));
+
+    expect(sentArgs().freshSlot).toBeUndefined();
+    expect(mocks.freshState).not.toHaveBeenCalled();
+  });
+
   it('serves debates and claims when the client sends no types', async () => {
     await GET(new Request('https://example.com/api/explore/feed?sort=best'));
 

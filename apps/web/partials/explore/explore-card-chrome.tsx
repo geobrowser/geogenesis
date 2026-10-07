@@ -61,6 +61,7 @@ export function ExploreCardSurface({
         feed_arm: item.ranking?.arm,
         feed_experiment_id: item.ranking?.experimentId,
         feed_exploration: item.ranking?.exploration || undefined,
+        feed_slot: item.ranking?.slot,
       }}
     >
       {children}
