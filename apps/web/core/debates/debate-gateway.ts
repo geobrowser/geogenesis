@@ -502,13 +502,15 @@ export class DebateGatewayClient {
     const stale =
       lastAsOf !== undefined && (patch.status === 'listed' ? patch.asOf <= lastAsOf : patch.asOf < lastAsOf);
 
+    const key = ['debates', 'account', this.accountKey, 'lobbies'];
     if (!stale) {
       this.lobbyCardAsOf.set(id, patch.asOf);
-      this.queryClient.setQueryData<DebateLobbiesResponse>(['debates', 'account', this.accountKey, 'lobbies'], list =>
+      this.queryClient.setQueryData<DebateLobbiesResponse>(key, list =>
         list ? applyLobbyCardPatch(list, patch) : list
       );
     }
-    return !patch.refill;
+    // A GET already in flight may predate the patch and would overwrite it; the flush cancels it.
+    return !patch.refill && this.queryClient.getQueryState(key)?.fetchStatus !== 'fetching';
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {

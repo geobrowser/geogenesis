@@ -374,6 +374,36 @@ describe('DebateGatewayClient', () => {
       expect(cachedIds()).toEqual(['bb:2']);
     });
 
+    it('does not let a GET in flight when a patch lands bring a removed lobby back', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+
+      const responses = [
+        { lobbies: [row('aa', 3), row('bb', 2)] },
+        { lobbies: [row('aa', 3), row('bb', 2)] },
+        { lobbies: [row('bb', 2)] },
+      ];
+      let release: () => void = () => undefined;
+      const fetchLobbies = vi.fn(async () => {
+        const response = responses[fetchLobbies.mock.calls.length - 1]!;
+        // The second GET read the list before the removal and lands after the patch.
+        if (fetchLobbies.mock.calls.length === 2) await new Promise<void>(done => (release = done));
+        return response;
+      });
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3', 'bb:2']));
+
+      void observer.refetch();
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z' } });
+      release();
+      await vi.runAllTicks();
+
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['bb:2']));
+      expect(fetchLobbies).toHaveBeenCalledTimes(3);
+      unsubscribe();
+    });
+
     it('applies a refill patch, then refetches the list once', async () => {
       await started();
       queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3), row('bb', 2)] });
