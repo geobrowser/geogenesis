@@ -1,6 +1,6 @@
 'use client';
 
-import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
+import { Content, Description, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
@@ -52,7 +52,9 @@ export function ScheduleDialog({
             took the taps meant for Clear all and Save. */}
         <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
         <Content
-          aria-describedby={undefined}
+          // Radix links a `Description` itself. With none, the link is cleared explicitly, which is
+          // also what keeps Radix from warning that the dialog is missing one.
+          {...(description ? {} : { 'aria-describedby': undefined })}
           onCloseAutoFocus={event => {
             if (!openerRef?.current) return;
             event.preventDefault();
@@ -88,9 +90,11 @@ export function ScheduleDialog({
                   </Text>
                 </Title>
                 {description ? (
-                  <Text as="p" variant="footnote" color="grey-04">
-                    {description}
-                  </Text>
+                  <Description asChild>
+                    <Text as="p" variant="footnote" color="grey-04">
+                      {description}
+                    </Text>
+                  </Description>
                 ) : null}
               </div>
               <div className="flex shrink-0 items-center gap-4">

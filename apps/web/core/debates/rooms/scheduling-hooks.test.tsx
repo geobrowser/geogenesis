@@ -94,6 +94,48 @@ describe('useAdminScheduledDebates', () => {
     expect(list).toHaveBeenCalledTimes(1);
   });
 
+  it('revokes the admin view when a later read is refused, even with the old list cached', async () => {
+    vi.useFakeTimers();
+    focusManager.setFocused(true);
+    const list = vi.spyOn(api, 'listAdminScheduledDebates').mockResolvedValue({ matches: [] });
+    const { result } = renderHook(() => useAdminScheduledDebates(true, from), { wrapper: wrapper() });
+    await vi.waitFor(() => expect(result.current.isAdmin).toBe(true));
+
+    list.mockRejectedValue(new GeoChatRequestError('no', 'scheduling_admin_required', 403));
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.waitFor(() => expect(result.current.isAdmin).toBe(false));
+  });
+
+  it('keeps the admin view through an expired session, which is not a refusal', async () => {
+    vi.useFakeTimers();
+    focusManager.setFocused(true);
+    const list = vi.spyOn(api, 'listAdminScheduledDebates').mockResolvedValue({ matches: [] });
+    const { result } = renderHook(() => useAdminScheduledDebates(true, from), { wrapper: wrapper() });
+    await vi.waitFor(() => expect(result.current.isAdmin).toBe(true));
+
+    list.mockRejectedValue(new GeoChatRequestError('expired', 'unauthorized', 401));
+    await vi.advanceTimersByTimeAsync(60_000 + 4_000);
+    expect(result.current.isAdmin).toBe(true);
+  });
+
+  it('keeps polling after a background read fails, and picks up the next answer', async () => {
+    vi.useFakeTimers();
+    focusManager.setFocused(true);
+    const list = vi.spyOn(api, 'listAdminScheduledDebates').mockResolvedValue({ matches: [] });
+    const { result } = renderHook(() => useAdminScheduledDebates(true, from), { wrapper: wrapper() });
+    await vi.waitFor(() => expect(result.current.isAdmin).toBe(true));
+
+    // The poll and both of its retries fail, which leaves the query in error with the old list.
+    list.mockRejectedValue(new GeoChatRequestError('down', 'internal', 500));
+    await vi.advanceTimersByTimeAsync(60_000 + 4_000);
+    await vi.waitFor(() => expect(result.current.isError).toBe(true));
+
+    const later = { matches: [{ request_id: 'later' } as ScheduledDebateRequest] };
+    list.mockResolvedValue(later);
+    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.waitFor(() => expect(result.current.data?.matches[0]?.request_id).toBe('later'));
+  });
+
   it('retries a failure that is not a refusal, so one bad request does not hide the admin view', async () => {
     vi.useFakeTimers();
     vi.spyOn(api, 'listAdminScheduledDebates')

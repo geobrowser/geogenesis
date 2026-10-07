@@ -21,7 +21,6 @@ import {
   type ScheduledDebateResponseResult,
   cancelScheduledDebate,
   createScheduledDebate,
-  isGeoChatRefusal,
   listAdminScheduledDebates,
   listScheduledDebates,
   rescheduleScheduledDebate,
@@ -87,27 +86,33 @@ export function useAdminScheduledDebates(enabled: boolean, from: Date) {
       ),
     enabled: enabled && authenticated,
     // A refusal is the answer for everyone who is not an admin: never retried or polled, or every
-    // visitor would ask again forever. Anything else (a blip, a 500) is not an answer, so an admin
-    // is not silently dropped to the Availability view by one bad request.
+    // visitor would ask again forever. Anything else (a blip, a 500, a session that expired) is not
+    // an answer: it is retried, and polling carries on past it, so an admin is neither dropped to
+    // the Availability view by one bad request nor left looking at a list that stopped updating.
     retry: (failureCount, error) => !isAdminRefusal(error) && failureCount < 2,
-    refetchInterval: query => (present && query.state.status === 'success' ? SCHEDULED_POLL_MS : false),
+    refetchInterval: query => (present && !isAdminRefusal(query.state.error) ? SCHEDULED_POLL_MS : false),
     refetchOnWindowFocus: query => !isAdminRefusal(query.state.error),
   });
 
   return {
     ...query,
-    isAdmin: query.data !== undefined,
+    // A refusal now outranks a list from before it: someone taken off the allowlist mid-visit stops
+    // seeing other people's matches, though React Query keeps the last answer it had.
+    isAdmin: query.data !== undefined && !isAdminRefusal(query.error),
     /** Still finding out: the view switch waits rather than flashing in and out. */
     isAdminPending: query.isPending && authenticated && enabled,
     truncated: (query.data?.matches.length ?? 0) >= ADMIN_SCHEDULED_DEBATES_LIMIT,
   };
 }
 
-/** Not on the allowlist (403), or no admins configured on this deployment (503). */
+/**
+ * geo-chat's answer that the viewer is not an admin: off the allowlist (403), or no admins on this
+ * deployment (503 `scheduling_admin_not_configured`). Deliberately not a 401: that is a session
+ * that expired or is still being registered, which says nothing about the allowlist and clears up.
+ */
 function isAdminRefusal(error: unknown) {
   return (
-    isGeoChatRefusal(error) ||
-    (error instanceof GeoChatRequestError && error.code === 'scheduling_admin_not_configured')
+    error instanceof GeoChatRequestError && (error.status === 403 || error.code === 'scheduling_admin_not_configured')
   );
 }
 
