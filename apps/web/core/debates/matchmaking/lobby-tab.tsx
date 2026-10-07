@@ -62,7 +62,12 @@ export function LobbyTab({
         ? 'empty'
         : 'filled';
 
-  const { showNarrowed, steppedBack, rearm } = useNarrowedDefault(matchesOnly, matchesState);
+  const { showNarrowed, rearm } = useNarrowedDefault(matchesOnly, matchesState);
+
+  // Whether the viewer pressed the switch off on this visit. An empty wider list they asked for
+  // just now is an answer to read; one they arrived on — stepped back from matches, or from a
+  // preference stored on another day — is a dead end to be moved out of.
+  const [choseWiderHere, setChoseWiderHere] = React.useState(false);
 
   /**
    * Once a session, and held outside this component because this component does not last.
@@ -105,6 +110,7 @@ export function LobbyTab({
       checked={showNarrowed}
       onChange={next => {
         rearm();
+        if (!next) setChoseWiderHere(true);
         setMatchesOnly(next);
       }}
     />
@@ -121,14 +127,14 @@ export function LobbyTab({
       layout={layout}
       scopePicker={scopePicker}
       trailing={toggle}
-      // The last rung of the same ladder. Having stepped back from matches to the wider list and
-      // found that empty too, there is nothing on this tab for the viewer to do, and Explore is the
-      // one place that always has something — it describes the corpus rather than the viewer.
+      // The last rung of the same ladder. Arriving on a wider list with nothing in it, there is
+      // nothing on this tab for the viewer to do, and Explore is the one place that always has
+      // something — it describes the corpus rather than the viewer.
       //
-      // Only on the automatic path. A viewer who turned the switch off themselves and found an
-      // empty Lobby asked a question and got an answer; moving them off the tab would be answering
-      // a different one. `steppedBack` is exactly "nobody chose this list".
-      onSettledEmpty={steppedBack && !leftForExplore ? showExplore : undefined}
+      // Not when they turned the switch off on this visit: that empty list is the answer to a
+      // question they just asked, and the button below it is enough of a way out.
+      onSettledEmpty={!choseWiderHere && !leftForExplore ? showExplore : undefined}
+      onExplore={() => onTabChange('explore')}
     />
   );
 }

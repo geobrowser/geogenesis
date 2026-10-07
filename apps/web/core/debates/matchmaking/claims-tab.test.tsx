@@ -1856,6 +1856,20 @@ describe('All claims reads the Debate tag', () => {
     await screen.findByText('Nobody is ready to debate you on a claim right now.');
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
   });
+
+  // With nobody ready to debate, the corpus is the one list with something on it, so an empty
+  // Lobby points there rather than leaving the viewer to find the tab.
+  it('offers Explore from an empty Lobby', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [];
+    mocks.claims = [];
+    const onExplore = vi.fn();
+    render(<ClaimsTab variant="lobby" onExplore={onExplore} />);
+
+    await screen.findByText('Nobody is ready to debate you on a claim right now.');
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    expect(onExplore).toHaveBeenCalled();
+  });
 });
 
 // GEO-2653. The menu is the server's topic facet, which describes every claim the current

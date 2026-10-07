@@ -289,13 +289,24 @@ describe('LobbyTab', () => {
     expect(returning.onTabChange).not.toHaveBeenCalled();
   });
 
-  // A viewer who turned the switch off and found an empty Lobby asked a question and got an answer.
-  // Moving them off the tab would be answering a different one.
-  it('stays put when the viewer chose the wider list themselves', () => {
+  // A preference stored on another day is not a question asked about today's list. Arriving on an
+  // empty Lobby with it off is the same dead end as stepping back onto one.
+  it('moves on to Explore when the stored preference is the wider list', () => {
     localStorage.setItem(STORAGE_KEY, 'false');
     mocks.widerEmpty = true;
 
     const { onTabChange } = renderLobby();
+
+    expect(onTabChange).toHaveBeenCalledWith('explore');
+  });
+
+  // A viewer who turned the switch off just now and found an empty Lobby asked a question and got
+  // an answer. Moving them off the tab would be answering a different one.
+  it('stays put when the viewer turns the switch off on this visit', () => {
+    mocks.widerEmpty = true;
+
+    const { onTabChange } = renderLobby();
+    fireEvent.click(toggle());
 
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
     expect(onTabChange).not.toHaveBeenCalled();

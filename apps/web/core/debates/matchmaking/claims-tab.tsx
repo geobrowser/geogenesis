@@ -210,6 +210,7 @@ export function ClaimsTab({
   trailing,
   warm = false,
   onSettledEmpty,
+  onExplore,
   layout = 'panel',
   scopePicker,
 }: {
@@ -224,6 +225,12 @@ export function ClaimsTab({
    * not fired for a filtered empty list, which is a question the viewer asked and got an answer to.
    */
   onSettledEmpty?: () => void;
+  /**
+   * Somewhere to go from an empty, unfiltered list. Lobby passes the Explore tab: with nobody ready
+   * to debate, the corpus is the one list that always has something on it, and the empty state
+   * should say so with a button rather than leave the viewer to find the tab.
+   */
+  onExplore?: () => void;
   /**
    * Run the queries, draw nothing (GEO-2863).
    *
@@ -1161,7 +1168,9 @@ export function ClaimsTab({
                         setTopicIds([]);
                       },
                     }
-                  : undefined
+                  : onExplore
+                    ? { label: 'Explore claims', onClick: onExplore }
+                    : undefined
           }
         >
           {/* One list, in the server's order. Splitting out the claims you'd already answered
