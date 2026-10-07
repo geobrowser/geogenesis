@@ -92,7 +92,7 @@ export function debateTimingSummary(format: DebateFormat) {
   return debateRoundSummaries(format).join(' · ');
 }
 
-function formatTurnDuration(durationMs: number) {
+export function formatTurnDuration(durationMs: number) {
   const seconds = Math.max(0, Math.round(durationMs / 1_000));
   if (seconds > 0 && seconds % 60 === 0) {
     return `${seconds / 60}m`;

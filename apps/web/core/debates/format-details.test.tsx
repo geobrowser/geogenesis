@@ -34,12 +34,13 @@ describe('DebateFormatDetails', () => {
     expect(container.textContent).not.toMatch(/clos/i);
   });
 
-  it('reads Open rounds from the block even when the format id is missing', () => {
+  it('reads Open rounds, and its rebuttal length, from the block even when the format id is missing', () => {
     const { container } = renderDetails({
       formatId: null,
-      openRounds: { max_rebuttal_rounds: 10, rebuttal_turn_ms: 45_000 },
+      openRounds: { max_rebuttal_rounds: 10, rebuttal_turn_ms: 30_000 },
     });
 
+    expect(screen.getByText('30s')).toBeInTheDocument();
     expect(screen.getByText('A round happens only if you both pick Extend. Up to 10 rounds.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/clos/i);
   });

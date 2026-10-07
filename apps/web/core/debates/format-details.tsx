@@ -9,10 +9,12 @@ import {
   debateFormatById,
   debateTurnRole,
   defaultDebateFormatId,
+  formatTurnDuration,
   isOpenRoundsFormatId,
   openRoundsDefaultRebuttalTurnMs,
   openRoundsOpeningTurnDurationsMs,
 } from './formats';
+import { speakerLabel } from './playback-utils';
 
 type FormatParticipant = {
   user_id: string;
@@ -41,34 +43,14 @@ export function DebateFormatDetails({
 }) {
   const firstParticipant = participants[0];
   if (!firstParticipant) return null;
-  const participantForTurn = (index: number) => participants[index % participants.length] ?? firstParticipant;
 
   // GEO-3173. Open rounds has two opening turns and then only the rebuttal rounds both debaters
   // pick, so listing turns up front would promise a closing turn that never happens.
-  if (openRounds || isOpenRoundsFormatId(formatId)) {
-    return (
-      <div className="grid">
-        {openRoundsOpeningTurnDurationsMs.map((durationMs, index) => (
-          <TurnRow
-            key={`open_rounds-${index}`}
-            durationMs={durationMs}
-            alternate={index % 2 === 1}
-            participant={participantForTurn(index)}
-            label={turnLabel(participantForTurn(index), currentUserId, 'opening')}
-          />
-        ))}
-        <OpenRoundsRebuttalRow
-          rebuttalTurnMs={openRounds?.rebuttal_turn_ms ?? openRoundsDefaultRebuttalTurnMs}
-          maxRebuttalRounds={openRounds?.max_rebuttal_rounds ?? null}
-        />
-      </div>
-    );
-  }
-
+  const isOpenRounds = Boolean(openRounds) || isOpenRoundsFormatId(formatId);
   // No id means the server default. An id this build does not know is not the default, though,
   // and showing the default's turns for it would describe a different debate.
-  const format = formatId ? debateFormatById(formatId) : debateFormatById(defaultDebateFormatId);
-  if (!format) {
+  const fixedFormat = isOpenRounds ? null : debateFormatById(formatId || defaultDebateFormatId);
+  if (!isOpenRounds && !fixedFormat) {
     return (
       <Text as="p" variant="metadata" color="grey-04" className="px-3 py-3">
         This version of Geo can’t show this debate’s format. Refresh to see its turns.
@@ -76,21 +58,33 @@ export function DebateFormatDetails({
     );
   }
 
+  const turns: { durationMs: number; role: DebateTurnRole }[] = fixedFormat
+    ? fixedFormat.turnDurationsMs.map((durationMs, index, all) => ({
+        durationMs,
+        role: debateTurnRole(index, all.length),
+      }))
+    : openRoundsOpeningTurnDurationsMs.map(durationMs => ({ durationMs, role: 'opening' }));
+
   return (
     <div className="grid">
-      {format.turnDurationsMs.map((durationMs, index) => (
-        <TurnRow
-          key={`${format.id}-${index}`}
-          durationMs={durationMs}
-          alternate={index % 2 === 1}
-          participant={participantForTurn(index)}
-          label={turnLabel(
-            participantForTurn(index),
-            currentUserId,
-            debateTurnRole(index, format.turnDurationsMs.length)
-          )}
+      {turns.map(({ durationMs, role }, index) => {
+        const participant = participants[index % participants.length] ?? firstParticipant;
+        return (
+          <TurnRow
+            key={index}
+            durationMs={durationMs}
+            alternate={index % 2 === 1}
+            participant={participant}
+            label={turnLabel(participant, currentUserId, role)}
+          />
+        );
+      })}
+      {isOpenRounds && (
+        <OpenRoundsRebuttalRow
+          rebuttalTurnMs={openRounds?.rebuttal_turn_ms ?? openRoundsDefaultRebuttalTurnMs}
+          maxRebuttalRounds={openRounds?.max_rebuttal_rounds ?? null}
         />
-      ))}
+      )}
     </div>
   );
 }
@@ -173,13 +167,4 @@ function turnLabel(participant: FormatParticipant, currentUserId: string, role: 
     default:
       return `${name} ${you ? 'respond' : 'responds'}`;
   }
-}
-
-function formatTurnDuration(durationMs: number) {
-  const seconds = Math.max(0, Math.round(durationMs / 1_000));
-  return seconds > 0 && seconds % 60 === 0 ? `${seconds / 60}m` : `${seconds}s`;
-}
-
-function speakerLabel(participant: FormatParticipant) {
-  return participant.display_name || participant.profile_space_id;
 }
