@@ -2116,13 +2116,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await followDestination(destination, debateRematchDestinationClaimKey(session));
         return;
       }
-      // Rematch is dead (`ended` or `expired`): exit forward so history back cannot remount this room.
-      // Only `ended` (opponent Leave) gets the notice — `expired` is also mutual no-rematch.
-      if ((session?.status === 'ended' || session?.status === 'expired') && !didLocallyLeaveRematch(session.id)) {
+      // Rematch is dead (`ended` or `expired`): exit forward so history back cannot remount this
+      // room — even when this viewer is the one who left.
+      if (session?.status === 'ended' || session?.status === 'expired') {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRemoteVideoReady(false);
-        if (session.status === 'ended') setOpponentLeftNotice({ recordingDiscarded: false });
+        if (session.status === 'ended' && !didLocallyLeaveRematch(session.id)) {
+          setOpponentLeftNotice({ recordingDiscarded: false });
+        }
         returnFromDebate({ forwardOnly: true });
         return;
       }
