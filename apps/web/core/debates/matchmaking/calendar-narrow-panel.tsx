@@ -7,8 +7,11 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { type SpaceLabel, spaceLabel } from '~/core/hooks/use-space-labels';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { useQueryEntity } from '~/core/sync/use-store';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -24,11 +27,14 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type { DebatePerson } from '../api';
+import { useDebateClaimResponse } from '../browse/use-debate-claim-response';
 import { useOpenDebaterProfile } from '../browse/use-open-debater-profile';
+import { useDebateClaims } from '../hooks';
 import { speakerLabel } from '../playback-utils';
 import {
   type CalendarPicks,
   type ClaimListRow,
+  type ClaimSummary,
   type PanelTopic,
   type PersonListRow,
   type TopicSets,
@@ -449,29 +455,6 @@ function ClaimRow({
   const { summary } = claim;
   const space = spaceLabel(labelsById, summary.spaceId);
   const name = claim.name?.trim() || 'Untitled claim';
-  const side = (position: boolean) => {
-    const count = (position ? summary.agree : summary.disagree).size;
-    const mine = summary.viewerPosition === position;
-    const opposing = summary.viewerPosition !== null && !mine;
-    return (
-      <span
-        className={cx(
-          'inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-footnote',
-          mine ? 'border-transparent bg-divider' : opposing ? 'border-purple bg-white' : 'border-dashed border-grey-03'
-        )}
-      >
-        <span className="shrink-0 text-text" aria-hidden>
-          <ResponsePositionIcon responseKind="stance" position={position} selected={mine} />
-        </span>
-        <span className="font-medium whitespace-nowrap text-text">
-          {mine ? 'You: ' : ''}
-          {responsePositionLabel(position)}
-        </span>
-        <span className="text-grey-04 tabular-nums">{count}</span>
-      </span>
-    );
-  };
-
   return (
     <PickRow
       label={name}
@@ -497,13 +480,129 @@ function ClaimRow({
             ) : null}
           </div>
           <span className="line-clamp-3 text-metadataMedium text-text">{name}</span>
-          <span className="flex flex-wrap items-center gap-1.5">
-            {side(true)}
-            {side(false)}
-          </span>
+          <ClaimSides summary={summary} name={name} />
         </div>
       </div>
     </PickRow>
+  );
+}
+
+/**
+ * A claim's two sides, with how many people on the calendar hold each, and the viewer's vote.
+ *
+ * The pills are the vote: pressing a side takes it, pressing the one held clears it, through the same
+ * `useDebateClaimResponse` the debate claim surfaces publish with. That reads the claim's response
+ * state, a few queries a claim, so a row only goes live once it is near the viewport — the tab lists
+ * every claim anyone on the calendar holds, hundreds of them. Until then it draws the same pills
+ * from the calendar's own read, unpressable.
+ *
+ * The counts stay the calendar's: people free in the next two weeks, the viewer left out. The vote
+ * lands in them too, through the positions read's overlay of the viewer's own pending writes.
+ */
+function ClaimSides({ summary, name }: { summary: ClaimSummary; name: string }) {
+  const { ref, nearViewport } = useNearViewport();
+  return (
+    <span ref={ref} className="flex flex-col gap-1">
+      {nearViewport ? (
+        <LiveClaimSides summary={summary} name={name} />
+      ) : (
+        <SidePills summary={summary} viewerPosition={summary.viewerPosition} />
+      )}
+    </span>
+  );
+}
+
+function LiveClaimSides({ summary, name }: { summary: ClaimSummary; name: string }) {
+  const { entity } = useQueryEntity({ id: summary.claimId, spaceId: summary.spaceId });
+  const rows = useDebateClaims(summary.spaceId, [summary.claimId], true);
+  const row = rows.data?.claims.find(claim => normId(claim.claim_entity_id) === normId(summary.claimId)) ?? null;
+  const { control } = useDebateClaimResponse({
+    claimId: summary.claimId,
+    spaceId: summary.spaceId,
+    row,
+    entity: entity ?? null,
+  });
+
+  return (
+    <>
+      <SidePills
+        summary={summary}
+        viewerPosition={control.viewerPosition}
+        vote={{
+          onRespond: control.respond,
+          disabled: !control.canRespond,
+          pending: control.isResponseSubmitting,
+          titleFor: control.actionTitle,
+          claimName: name,
+        }}
+      />
+      {control.responseError ? (
+        <Text as="p" variant="footnote" color="red-01">
+          {control.responseError}
+        </Text>
+      ) : null}
+    </>
+  );
+}
+
+function SidePills({
+  summary,
+  viewerPosition,
+  vote,
+}: {
+  summary: ClaimSummary;
+  viewerPosition: boolean | null;
+  vote?: {
+    onRespond: (position: boolean) => void;
+    disabled: boolean;
+    pending: boolean;
+    titleFor: (position: boolean) => string | undefined;
+    claimName: string;
+  };
+}) {
+  const side = (position: boolean) => {
+    const count = (position ? summary.agree : summary.disagree).size;
+    const mine = viewerPosition === position;
+    const opposing = viewerPosition !== null && !mine;
+    const className = cx(
+      'inline-flex h-6 items-center gap-1.5 rounded-full border px-2 text-footnote',
+      mine ? 'border-transparent bg-divider' : opposing ? 'border-purple bg-white' : 'border-dashed border-grey-03'
+    );
+    const content = (
+      <>
+        <span className="shrink-0 text-text" aria-hidden>
+          <ResponsePositionIcon responseKind="stance" position={position} selected={mine} />
+        </span>
+        <span className="font-medium whitespace-nowrap text-text">
+          {mine ? 'You: ' : ''}
+          {responsePositionLabel(position)}
+        </span>
+        <span className="text-grey-04 tabular-nums">{count}</span>
+      </>
+    );
+    if (!vote) return <span className={className}>{content}</span>;
+    return (
+      <button
+        type="button"
+        aria-pressed={mine}
+        aria-label={`${responsePositionLabel(position)}: ${vote.claimName}`}
+        title={vote.titleFor(position)}
+        {...panelAnalytics(responsePositionLabel(position), 'vote')}
+        disabled={vote.disabled || vote.pending}
+        aria-busy={vote.pending || undefined}
+        onClick={() => vote.onRespond(position)}
+        className={cx(className, 'pointer-events-auto transition-colors hover:border-text disabled:opacity-60')}
+      >
+        {content}
+      </button>
+    );
+  };
+
+  return (
+    <span className="flex flex-wrap items-center gap-1.5">
+      {side(true)}
+      {side(false)}
+    </span>
   );
 }
 

@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => ({
   positionReads: [] as unknown[][],
   claimNames: new Map<string, string>(),
   openProfile: vi.fn(),
+  respond: vi.fn(),
   claimTopics: new Map<string, { id: string; name: string }[]>(),
   paramListeners: new Set<() => void>(),
 }));
@@ -98,6 +99,22 @@ vi.mock('../claim-picker-page', async () => {
     }),
   };
 });
+// The vote reads the claim's response state; here the viewer's side comes from the positions mock.
+vi.mock('../browse/use-debate-claim-response', () => ({
+  useDebateClaimResponse: ({ claimId }: { claimId: string }) => ({
+    control: {
+      viewerPosition:
+        mocks.positions.find(row => row.claimId === claimId && row.profileSpaceId === mocks.personalSpaceId)
+          ?.position ?? null,
+      respond: (position: boolean) => mocks.respond(claimId, position),
+      canRespond: true,
+      isResponseSubmitting: false,
+      actionTitle: () => undefined,
+      responseError: null,
+    },
+  }),
+}));
+vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null }) }));
 // Resolving a profile reads the space; here it only has to be asked, with whose.
 vi.mock('../browse/use-open-debater-profile', () => ({
   useOpenDebaterProfile: (profileSpaceId: string) => (event: { preventDefault: () => void }) => {
@@ -156,6 +173,7 @@ vi.mock('../hooks', () => ({
   useAcceptDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
   useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
   useCreateDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
+  useDebateClaims: () => ({ data: undefined }),
 }));
 vi.mock('./hooks', () => ({
   useDebatePeople: () => ({
@@ -367,6 +385,7 @@ beforeEach(() => {
     claimTopics: new Map(),
   });
   mocks.openProfile.mockReset();
+  mocks.respond.mockReset();
   mocks.paramListeners.clear();
   mocks.routerReplace.mockReset();
   mocks.capture.mockReset();
@@ -970,7 +989,7 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(mocks.positionReads.at(-1)).toHaveLength(4);
   });
 
-  it('counts each tab on its pill, and what is picked of it', () => {
+  it('counts each tab on its pill, and steps the pills aside while the panel is open', () => {
     render(<DebateCalendar />);
 
     expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People3$/);
@@ -978,12 +997,35 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(screen.getByRole('button', { name: 'Claims' })).toHaveTextContent(/^Claims$/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
-    expect(screen.getByRole('button', { name: 'Claims' })).toHaveTextContent(/^Claims2$/);
+    // The panel's tabs are the switch now; the pills would only repeat them.
+    expect(screen.queryByRole('button', { name: 'Claims' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'People' })).not.toBeInTheDocument();
 
     fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Phones should be banned in schools' }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Close panel' }));
+
     expect(screen.getByRole('button', { name: 'Claims, 1 picked' })).toHaveTextContent(/^Claims1 of 2$/);
     // Picking a claim narrows People to those holding it, as the tab does.
     expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People2$/);
+  });
+
+  it("votes from a claim's side pills", () => {
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    const claims = within(panel()).getByRole('list', { name: 'Claims' });
+    // The viewer agrees on claim one, so that pill says so and is pressed.
+    expect(within(claims).getByRole('button', { name: 'Agree: Phones should be banned in schools' })).toHaveAttribute(
+      'aria-pressed',
+      'true'
+    );
+    const disagree = within(claims).getByRole('button', { name: 'Disagree: Homework does more harm than good' });
+    expect(disagree).toHaveAttribute('data-geo-analytics-label', 'Debate calendar Disagree');
+
+    fireEvent.click(disagree);
+
+    expect(mocks.respond).toHaveBeenCalledWith(CLAIM_TWO, false);
+    expect(mocks.searchParams.get('claims')).toBeNull();
   });
 
   it('narrows the week to the people picked, and keeps them in the URL', () => {
@@ -996,6 +1038,7 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(thursday()).toHaveAccessibleName(/Elena/);
     expect(thursday()).not.toHaveAccessibleName(/Marco/);
     expect(screen.getByText(/Showing the person you picked\./)).toBeInTheDocument();
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Close panel' }));
     expect(screen.getByRole('button', { name: 'People, 1 picked' })).toBeInTheDocument();
     expect(filterEvents()).toEqual([{ filter: 'person' }]);
   });

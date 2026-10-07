@@ -817,7 +817,9 @@ function DebateCalendarBody({
               className="min-w-0 flex-1"
               loading={peopleQuery.isLoading || publishableSpacesPending}
             />
-            {narrowPills}
+            {/* While the panel is open its tabs are the switch, so the pills step aside rather than
+                offer the same two choices twice. */}
+            {panelTab ? null : narrowPills}
           </div>
         )}
       </div>
