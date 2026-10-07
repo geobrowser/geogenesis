@@ -369,19 +369,22 @@ describe('DebateGatewayClient', () => {
       await started();
       queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3), row('bb', 2)] });
 
-      await lobbiesChanged({ lobby_id: 'AA', lobby_card: { status: 'removed' } });
+      await lobbiesChanged({ lobby_id: 'AA', lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z' } });
 
       expect(cachedIds()).toEqual(['bb:2']);
     });
 
-    it('keeps a removed lobby out when a late insert arrives', async () => {
+    it('applies a refill patch, then refetches the list once', async () => {
       await started();
-      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3), row('bb', 2)] });
 
-      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { status: 'removed' } });
-      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { ...card('bb', 1, '2026-10-07T12:00:09Z'), insert: true } });
+      await lobbiesChanged({
+        lobby_id: 'aa',
+        lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z', refill: true },
+      });
 
-      expect(cachedIds()).toEqual(['aa:3']);
+      expect(cachedIds()).toEqual(['bb:2']);
+      expectInvalidated(invalidateQueries, { queryKey: lobbiesKey, refetchType: 'active' });
     });
 
     it('drops patches no newer than a removal’s as_of', async () => {
@@ -400,6 +403,7 @@ describe('DebateGatewayClient', () => {
       ['no lobby_card', {}],
       ['an unknown status', { lobby_card: { status: 'later' } }],
       ['a listed card without as_of', { lobby_card: { ...card('aa', 1, ''), as_of: undefined } }],
+      ['a removal without as_of', { lobby_card: { status: 'removed' } }],
     ])('refetches the list for %s', async (_label, extra) => {
       await started();
       queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });

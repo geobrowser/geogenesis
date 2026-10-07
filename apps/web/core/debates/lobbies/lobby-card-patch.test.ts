@@ -29,19 +29,19 @@ function card(overrides: Partial<DebateLobbyCard> & { lobby_id: string }): Debat
 const ids = (list: { lobbies: DebateLobbySummary[] }) => list.lobbies.map(lobby => lobby.lobby_id);
 
 describe('parseLobbyCardPatch', () => {
-  it('reads a listed card', () => {
+  it('reads a listed card, with refill false when absent', () => {
     const lobby = card({ lobby_id: 'aa' });
     expect(parseLobbyCardPatch('aa', { status: 'listed', insert: true, as_of: '2026-10-07T12:00:03Z', lobby })).toEqual(
-      { status: 'listed', insert: true, asOf: Date.parse('2026-10-07T12:00:03Z'), lobby }
+      { status: 'listed', insert: true, asOf: Date.parse('2026-10-07T12:00:03Z'), refill: false, lobby }
     );
   });
 
-  it('reads a removal against the event’s lobby id', () => {
-    expect(parseLobbyCardPatch('aa', { status: 'removed' })).toEqual({ status: 'removed', lobbyId: 'aa', asOf: null });
-    expect(parseLobbyCardPatch('aa', { status: 'removed', as_of: '2026-10-07T12:00:03Z' })).toEqual({
+  it('reads a removal against the event’s lobby id, with its refill', () => {
+    expect(parseLobbyCardPatch('aa', { status: 'removed', as_of: '2026-10-07T12:00:03Z', refill: true })).toEqual({
       status: 'removed',
       lobbyId: 'aa',
       asOf: Date.parse('2026-10-07T12:00:03Z'),
+      refill: true,
     });
   });
 
@@ -50,12 +50,13 @@ describe('parseLobbyCardPatch', () => {
     ['an unknown status', { status: 'hidden' }],
     ['a listed card without as_of', { status: 'listed', lobby: card({ lobby_id: 'aa' }) }],
     ['a listed card without a lobby', { status: 'listed', as_of: '2026-10-07T12:00:03Z' }],
+    ['a removal without as_of', { status: 'removed' }],
   ])('is null for %s, so the caller refetches', (_label, value) => {
     expect(parseLobbyCardPatch('aa', value)).toBeNull();
   });
 
   it('is null for a removal with no lobby id', () => {
-    expect(parseLobbyCardPatch(undefined, { status: 'removed' })).toBeNull();
+    expect(parseLobbyCardPatch(undefined, { status: 'removed', as_of: '2026-10-07T12:00:03Z' })).toBeNull();
   });
 });
 
@@ -68,6 +69,7 @@ describe('applyLobbyCardPatch', () => {
     const next = applyLobbyCardPatch(list, {
       status: 'listed',
       insert: false,
+      refill: false,
       asOf,
       lobby: card({ lobby_id: 'aa', headcount: 4, name: 'Renamed' }),
     });
@@ -86,6 +88,7 @@ describe('applyLobbyCardPatch', () => {
     const next = applyLobbyCardPatch(list, {
       status: 'listed',
       insert: false,
+      refill: false,
       asOf,
       lobby: card({ lobby_id: '0192-ABCD', headcount: 9 }),
     });
@@ -98,9 +101,9 @@ describe('applyLobbyCardPatch', () => {
     const list = { lobbies: [summary({ lobby_id: 'aa' })] };
     const lobby = card({ lobby_id: 'bb', headcount: 3 });
 
-    expect(applyLobbyCardPatch(list, { status: 'listed', insert: false, asOf, lobby })).toBe(list);
+    expect(applyLobbyCardPatch(list, { status: 'listed', insert: false, refill: false, asOf, lobby })).toBe(list);
 
-    const inserted = applyLobbyCardPatch(list, { status: 'listed', insert: true, asOf, lobby });
+    const inserted = applyLobbyCardPatch(list, { status: 'listed', insert: true, refill: false, asOf, lobby });
     expect(ids(inserted)).toEqual(['bb', 'aa']);
     expect(inserted.lobbies[0]).toMatchObject({ viewer_reminded: false, viewer_on_roster: false });
   });
@@ -108,8 +111,10 @@ describe('applyLobbyCardPatch', () => {
   it('drops a removed row and leaves a list without it alone', () => {
     const list = { lobbies: [summary({ lobby_id: 'aa' }), summary({ lobby_id: 'bb' })] };
 
-    expect(ids(applyLobbyCardPatch(list, { status: 'removed', lobbyId: 'AA', asOf: null }))).toEqual(['bb']);
-    expect(applyLobbyCardPatch(list, { status: 'removed', lobbyId: 'cc', asOf: null })).toBe(list);
+    expect(ids(applyLobbyCardPatch(list, { status: 'removed', lobbyId: 'AA', asOf: 0, refill: false }))).toEqual([
+      'bb',
+    ]);
+    expect(applyLobbyCardPatch(list, { status: 'removed', lobbyId: 'cc', asOf: 0, refill: false })).toBe(list);
   });
 });
 

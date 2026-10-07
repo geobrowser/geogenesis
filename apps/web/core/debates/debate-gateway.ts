@@ -145,10 +145,7 @@ export class DebateGatewayClient {
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
-  /**
-   * The newest `lobby_card.as_of` seen per dashless lobby id, removals included, so a late patch is
-   * dropped. A removal without one is Infinity: a closed lobby does not reopen.
-   */
+  /** The newest `lobby_card.as_of` seen per dashless lobby id, removals included; older patches are dropped. */
   private readonly lobbyCardAsOf = new Map<string, number>();
 
   private snapshot: DebateGatewaySnapshot = {
@@ -495,24 +492,23 @@ export class DebateGatewayClient {
     }
   }
 
-  /** Patches the cached lobbies list in place. False when the event should refetch it instead. */
+  /** Patches the cached lobbies list in place. False when the event should refetch it as well. */
   private patchLobbies(patch: DebateLobbyCardPatch | null) {
     if (!patch || !this.accountKey) return false;
 
-    if (patch.status === 'listed') {
-      const id = dashlessId(patch.lobby.lobby_id);
-      const lastAsOf = this.lobbyCardAsOf.get(id);
-      if (lastAsOf !== undefined && patch.asOf <= lastAsOf) return true;
-      this.lobbyCardAsOf.set(id, patch.asOf);
-    } else {
-      const id = dashlessId(patch.lobbyId);
-      this.lobbyCardAsOf.set(id, Math.max(this.lobbyCardAsOf.get(id) ?? -Infinity, patch.asOf ?? Infinity));
-    }
+    // A removal wins a tie: a closed lobby does not reopen.
+    const id = dashlessId(patch.status === 'listed' ? patch.lobby.lobby_id : patch.lobbyId);
+    const lastAsOf = this.lobbyCardAsOf.get(id);
+    const stale =
+      lastAsOf !== undefined && (patch.status === 'listed' ? patch.asOf <= lastAsOf : patch.asOf < lastAsOf);
 
-    this.queryClient.setQueryData<DebateLobbiesResponse>(['debates', 'account', this.accountKey, 'lobbies'], list =>
-      list ? applyLobbyCardPatch(list, patch) : list
-    );
-    return true;
+    if (!stale) {
+      this.lobbyCardAsOf.set(id, patch.asOf);
+      this.queryClient.setQueryData<DebateLobbiesResponse>(['debates', 'account', this.accountKey, 'lobbies'], list =>
+        list ? applyLobbyCardPatch(list, patch) : list
+      );
+    }
+    return !patch.refill;
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {

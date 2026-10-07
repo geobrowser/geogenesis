@@ -3,27 +3,29 @@ import { type DebateLobbiesResponse, type DebateLobbySummary, dashlessId } from 
 /** `DebateLobbySummary` as broadcast: nothing about whoever receives it. */
 export type DebateLobbyCard = Omit<DebateLobbySummary, 'viewer_reminded' | 'viewer_on_roster'>;
 
+/** `refill`: the capped list changed shape, so refetch once after applying. */
 export type DebateLobbyCardPatch =
-  | { status: 'listed'; insert: boolean; asOf: number; lobby: DebateLobbyCard }
-  | { status: 'removed'; lobbyId: string; asOf: number | null };
+  | { status: 'listed'; insert: boolean; asOf: number; refill: boolean; lobby: DebateLobbyCard }
+  | { status: 'removed'; lobbyId: string; asOf: number; refill: boolean };
 
 /** `debate.lobbies_changed`'s `lobby_card`; `null` when absent or unreadable, which means refetch. */
 export function parseLobbyCardPatch(lobbyId: string | undefined, value: unknown): DebateLobbyCardPatch | null {
   if (!isRecord(value)) return null;
 
   const asOf = typeof value.as_of === 'string' ? Date.parse(value.as_of) : NaN;
-  if (value.status === 'removed') {
-    return lobbyId ? { status: 'removed', lobbyId, asOf: Number.isNaN(asOf) ? null : asOf } : null;
-  }
+  if (Number.isNaN(asOf)) return null;
+  const refill = value.refill === true;
+
+  if (value.status === 'removed') return lobbyId ? { status: 'removed', lobbyId, asOf, refill } : null;
   if (value.status !== 'listed') return null;
 
   const lobby = value.lobby;
-  if (Number.isNaN(asOf) || !isRecord(lobby) || typeof lobby.lobby_id !== 'string') return null;
+  if (!isRecord(lobby) || typeof lobby.lobby_id !== 'string') return null;
   if (typeof lobby.headcount !== 'number' || typeof lobby.starts_at !== 'string' || typeof lobby.open !== 'boolean') {
     return null;
   }
 
-  return { status: 'listed', insert: value.insert === true, asOf, lobby: lobby as DebateLobbyCard };
+  return { status: 'listed', insert: value.insert === true, asOf, refill, lobby: lobby as DebateLobbyCard };
 }
 
 /**
