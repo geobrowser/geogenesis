@@ -27,6 +27,7 @@ import {
   useOptimisticVoteChoice,
   useRemoveOptimisticVote,
 } from '~/partials/governance/optimistic-voted-atom';
+import { revalidateGovernanceProposals } from '~/partials/governance/revalidate-governance-proposals';
 
 import { Execute } from './execute';
 import { useCloseProposal } from './use-close-proposal';
@@ -134,13 +135,18 @@ export function AcceptOrReject({
   // subsequently-navigated route is harmless — it just refreshes wherever the
   // user is now.
   const onVoteSuccess = () => {
-    for (const delayMs of [800, 3_000, 7_000, 15_000, 30_000]) {
+    for (const delayMs of [800, 15_000]) {
       window.setTimeout(() => {
-        router.refresh();
-        // `router.refresh()` re-runs server components and leaves client caches alone, so the votes
-        // behind the comment attribution badges have to be invalidated by hand — otherwise an open
-        // comments panel keeps badging this voter with the vote they just changed (GEO-2907).
-        queryClient.invalidateQueries({ queryKey: proposalCommentVotesQueryKey(proposalId) });
+        void revalidateGovernanceProposals(spaceId)
+          .catch(() => {})
+          .finally(() => {
+            router.refresh();
+            // `router.refresh()` re-runs server components and leaves client caches alone, so the
+            // votes behind the comment attribution badges have to be invalidated by hand —
+            // otherwise an open comments panel keeps badging this voter with the vote they just
+            // changed (GEO-2907).
+            queryClient.invalidateQueries({ queryKey: proposalCommentVotesQueryKey(proposalId) });
+          });
       }, delayMs);
     }
   };
