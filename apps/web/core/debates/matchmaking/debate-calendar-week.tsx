@@ -38,6 +38,9 @@ import { useDebatesHub } from './use-debates-hub';
 /** Faces drawn in a cell before the rest collapse into "+N". */
 const FACES_PER_CELL = 3;
 
+/** A face and the "+N" after the faces: the same disc, each tucked under the one before it. */
+const FACE_CLASS_NAME = 'h-[30px] w-[30px] shrink-0 rounded-full ring-2 ring-white not-first:-ml-2';
+
 /** How long a face's card waits before opening on hover, and before closing once the pointer leaves. */
 const CARD_OPEN_DELAY_MS = 250;
 const CARD_CLOSE_DELAY_MS = 200;
@@ -57,7 +60,6 @@ type Props = {
   slotsByUser: ReadonlyMap<string, FreeSlot[]>;
   opponentName: (userId: string | null) => string | null;
   renderRow: RenderRow;
-  onBook: (userKey: string, opener: HTMLElement | null, entry: ScheduleEntry, initialStart?: string) => void;
   now: number;
 };
 
@@ -67,10 +69,11 @@ type Card = { key: string; userKey: string; slots: FreeSlot[] };
  * The week as a grid (GEO-3152): a column per day, a row per hour, and in each cell the faces of
  * everyone free for some of that hour, most matches first.
  *
- * - A face opens that person's row as a card on hover (or tap); clicking it books their first
- *   half-hour in that cell, through the same modal as the People tab, with the time picked.
- * - The cell itself opens everyone free then. It is also how the keyboard gets in: arrows move
- *   between hours, Enter opens the one in focus.
+ * - A face opens that person's row as a card on mouse hover. It is not a click target of its
+ *   own: the faces are small and packed, so a click on one, like anywhere else in the cell,
+ *   opens everyone free then, as People tab rows.
+ * - The cell is also how the keyboard gets in: arrows move between hours, Enter opens the one
+ *   in focus.
  * - The viewer's own debates are blocks in their hour: solid booked, dashed requested.
  */
 export function CalendarWeek({
@@ -82,7 +85,6 @@ export function CalendarWeek({
   slotsByUser,
   opponentName,
   renderRow,
-  onBook,
   now,
 }: Props) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -271,8 +273,8 @@ export function CalendarWeek({
                         aria-haspopup={people.length > 0 ? 'dialog' : undefined}
                         onFocus={() => setFocused({ day, hour })}
                         onKeyDown={event => onCellKeyDown(event, day, hour)}
-                        // Anywhere in the cell opens the hour. A face books instead and a block of
-                        // the viewer's own opens Requests; both stop the click on their way out.
+                        // Anywhere in the cell opens the hour, faces included. Only a block of the
+                        // viewer's own does something else: it opens Requests and stops the click.
                         onClick={() => openHourAt(key)}
                         className={cx(
                           'relative flex min-h-16 min-w-0 flex-col justify-center gap-1 border-r border-grey-01 px-2 py-1.5 outline-none last:border-r-0 focus-visible:ring-2 focus-visible:ring-ctaPrimary focus-visible:ring-inset',
@@ -296,30 +298,19 @@ export function CalendarWeek({
                                   person={person}
                                   onHover={anchor => showCard({ key, userKey, slots }, anchor, CARD_OPEN_DELAY_MS)}
                                   onLeave={hideCard}
-                                  onTap={anchor => showCard({ key, userKey, slots }, anchor, 0)}
-                                  onBook={anchor => {
-                                    clearCardTimer();
-                                    setCard(null);
-                                    onBook(userKey, anchor, 'calendar_slot', new Date(slots[0].start).toISOString());
-                                  }}
                                 />
                               );
                             })}
                             {people.length > FACES_PER_CELL ? (
-                              <button
-                                type="button"
-                                tabIndex={-1}
-                                aria-label={`Everyone free then: ${people.length} people`}
-                                {...debateActionAnalyticsAttributes('calendar', 'More people', 'open_calendar_hour')}
-                                onClick={event => {
-                                  // Like a face or a debate block: the cell around it opens the hour too, and once is enough.
-                                  event.stopPropagation();
-                                  openHourAt(key);
-                                }}
-                                className="-ml-2 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-grey-02 text-footnoteMedium text-grey-04 ring-2 ring-white"
+                              <span
+                                aria-hidden
+                                className={cx(
+                                  FACE_CLASS_NAME,
+                                  'flex items-center justify-center bg-grey-02 text-footnoteMedium text-grey-04'
+                                )}
                               >
                                 +{people.length - FACES_PER_CELL}
-                              </button>
+                              </span>
                             ) : null}
                           </div>
                         ) : null}
@@ -429,56 +420,40 @@ function cellLabel(
 }
 
 /**
- * One face in a cell. A mouse hover opens the card and a click books; a touch has no hover, so a
- * tap opens the card instead, and the card's own chips and buttons book.
+ * One face in a cell. A mouse hover opens the person's card; it is not a control, so a click (or a
+ * tap, which has no hover) falls through to the cell, which opens the hour. The cell's label
+ * already names who is free, so the face stays out of the accessibility tree.
  */
 function Face({
   person,
   onHover,
   onLeave,
-  onTap,
-  onBook,
 }: {
   person: DebatePerson;
   onHover: (anchor: HTMLElement) => void;
   onLeave: () => void;
-  onTap: (anchor: HTMLElement) => void;
-  onBook: (anchor: HTMLElement) => void;
 }) {
-  const pointerType = React.useRef<string>('mouse');
-  const name = speakerLabel(person);
   const away = Boolean(person.away);
   const live = person.online && !away && !person.in_debate;
   return (
-    <button
-      type="button"
-      tabIndex={-1}
-      aria-label={`${name}${live ? ', online now' : away ? ', away' : person.in_debate ? ', in a debate' : ''}. Book a time`}
-      {...debateActionAnalyticsAttributes('calendar', 'Face', 'open_peer_availability')}
-      onPointerDown={event => {
-        pointerType.current = event.pointerType;
-      }}
+    <span
+      aria-hidden
+      data-testid="calendar-face"
       onPointerEnter={event => {
         if (event.pointerType === 'mouse') onHover(event.currentTarget);
       }}
       onPointerLeave={event => {
         if (event.pointerType === 'mouse') onLeave();
       }}
-      onFocus={event => onHover(event.currentTarget)}
-      onBlur={onLeave}
-      onClick={event => {
-        event.stopPropagation();
-        if (pointerType.current === 'touch') onTap(event.currentTarget);
-        else onBook(event.currentTarget);
-      }}
       className={cx(
-        'relative h-[30px] w-[30px] shrink-0 overflow-hidden rounded-full ring-2 ring-white not-first:-ml-2',
+        FACE_CLASS_NAME,
+        'relative overflow-hidden',
         live && 'outline-2 outline-offset-2 outline-green',
         away && 'opacity-45'
       )}
     >
       <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={30} />
-    </button>
+    </span>
   );
 }
 
