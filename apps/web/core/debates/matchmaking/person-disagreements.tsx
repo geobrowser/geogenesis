@@ -23,6 +23,7 @@ export function PersonMatches({
   claimNamesLoading,
   labelsById,
   popoverPortal,
+  triggerAttributes,
 }: {
   personName: string;
   matches: ClaimMatch[];
@@ -30,6 +31,8 @@ export function PersonMatches({
   claimNamesLoading: boolean;
   labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
+  /** Analytics attributes for the trigger, where its surface labels its own clicks (GEO-3220). */
+  triggerAttributes?: Readonly<Record<`data-${string}`, string>>;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
   const count = matches.length;
@@ -41,6 +44,7 @@ export function PersonMatches({
         <button
           type="button"
           aria-label={`View ${count} matching ${count === 1 ? 'claim' : 'claims'} with ${personName}`}
+          {...triggerAttributes}
           className="inline-flex items-center gap-1 whitespace-nowrap text-purple transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple"
         >
           <span className="tabular-nums">{count}</span> {count === 1 ? 'match' : 'matches'}

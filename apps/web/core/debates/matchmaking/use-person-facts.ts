@@ -84,6 +84,22 @@ export function usePersonFacts(
   // same-key background poll is not placeholder data, so settled counts stay visible while polling.
   const matchesKnown =
     viewerProfileSpaceId !== null && !positionsLoading && !positionsArePlaceholderData && positionsError === null;
+  /**
+   * No answer at all yet, as opposed to `matchesKnown`'s "an answer for this exact roster". For a
+   * surface that waits on matches before drawing (the calendar's Matches only), which would
+   * otherwise wait again each time the polled roster changes and the held answer stands in.
+   */
+  const matchesLoading = viewerProfileSpaceId !== null && positionsLoading;
+  // Whether the viewer holds any position at all: without one, Matches only can never match (GEO-3220).
+  // The scoped read always carries the viewer's own rows. `null` while that is not known.
+  const viewerHasPositions = React.useMemo(() => {
+    if (!viewerProfileSpaceId || positionsLoading || positionsError !== null) return null;
+    const viewerId = normId(viewerProfileSpaceId);
+    for (const rows of positionsByClaim.values()) {
+      if (rows.some(row => normId(row.profileSpaceId) === viewerId)) return true;
+    }
+    return false;
+  }, [positionsByClaim, positionsError, positionsLoading, viewerProfileSpaceId]);
   const matchingClaimIds = React.useMemo(
     () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
     [matchAnalysis]
@@ -139,6 +155,8 @@ export function usePersonFacts(
   return {
     matchAnalysis,
     matchesKnown,
+    viewerHasPositions,
+    matchesLoading,
     matchingSpaceIds,
     matchingClaimNamesById,
     matchingClaimsLoading,

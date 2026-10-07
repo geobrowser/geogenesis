@@ -33,7 +33,11 @@ export function calendarWeekChanged(direction: 'previous' | 'next' | 'today') {
   capture('debate_calendar_week_changed', { direction });
 }
 
-export type CalendarFilter = 'space' | 'search' | 'clear';
+/**
+ * Which filter changed. `person`, `claim` and `matches_only` are the People and Claims panel's picks
+ * (GEO-3220); `search` was the people search box the panel replaced, kept so old rows still type.
+ */
+export type CalendarFilter = 'space' | 'search' | 'person' | 'claim' | 'matches_only' | 'clear';
 
 export function calendarFilterChanged(filter: CalendarFilter) {
   capture('debate_calendar_filter_changed', { filter });
