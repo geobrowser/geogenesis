@@ -2,12 +2,12 @@ import { CancelledError, QueryClient, QueryObserver } from '@tanstack/react-quer
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError, resetGeoChatSession } from './api';
+import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
-  return { ...actual, resetGeoChatSession: vi.fn() };
+  return { ...actual, resetGeoChatSession: vi.fn(), getStoredGeoChatAccessToken: vi.fn(() => null) };
 });
 
 type MessageHandler = (event: { data: unknown }) => void;
@@ -1150,6 +1150,71 @@ describe('DebateGatewayClient', () => {
     expect(sockets).toHaveLength(2);
   });
 
+  it('reconnects with a fresh session when the server says the token expired early', async () => {
+    vi.mocked(resetGeoChatSession).mockClear();
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    // Revoked while `expires_at` is still ten minutes out, and still the stored session.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('access token');
+    session = { ...session, access_token: 'fresh-token' };
+    sockets[0]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+
+    expect(resetGeoChatSession).toHaveBeenCalledTimes(1);
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'session' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(getSession).toHaveBeenCalledTimes(2);
+    expect(sockets[1]!.url).toContain('access_token=fresh-token');
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+
+    // A repeat inside the cooldown neither parks nor spins: it reconnects again, on a longer floor.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('fresh-token');
+    sockets[1]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+    expect(resetGeoChatSession).toHaveBeenCalledTimes(2);
+    expect(sockets[1]!.readyState).toBe(FakeWebSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(sockets).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sockets).toHaveLength(3);
+    sockets[2]!.open();
+    sockets[2]!.receive('READY', readyPayload([]));
+    expect(sockets[2]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'space', space_id: 'space-1' } })
+    );
+  });
+
+  it("keeps a newer stored session when the socket's token is rejected", async () => {
+    vi.mocked(resetGeoChatSession).mockClear();
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    // Another tab already refreshed: the stored session is newer than this socket's.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('other-tab-token');
+    session = { ...session, access_token: 'other-tab-token' };
+    sockets[0]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+
+    expect(resetGeoChatSession).not.toHaveBeenCalled();
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets[1]!.url).toContain('access_token=other-tab-token');
+  });
+
   it('cancels an in-flight snapshot before invalidating it', async () => {
     const cancelQueries = vi.spyOn(queryClient, 'cancelQueries').mockResolvedValue();
     client.start(
@@ -1573,6 +1638,387 @@ describe('DebateGatewayClient', () => {
     expect(sockets[1]!.readyState).toBe(FakeWebSocket.CLOSED);
     await vi.advanceTimersByTimeAsync(1_000);
     expect(sockets).toHaveLength(3);
+  });
+
+  it('drops only a refused scope that the ERROR names, keeping the socket and other scopes', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    const refusal = {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: 'private-debate' },
+    };
+    sockets[0]!.receive('ERROR', refusal);
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    // A later READY on the same socket does not re-send it.
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    expect(sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets).toHaveLength(1);
+
+    // A reconnect retries it once, and a second refusal still does not recycle.
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    const subscribed = () =>
+      sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE').map(message => message.payload);
+    expect(subscribed()).toEqual([
+      { scope: 'space', space_id: 'space-1' },
+      { scope: 'debate', debate_id: 'private-debate' },
+    ]);
+
+    sockets[1]!.receive('ERROR', refusal);
+    sockets[1]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    expect(sockets[1]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    expect(subscribed()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets).toHaveLength(2);
+  });
+
+  it('retries a refused scope once every holder has released it and it is retained again', async () => {
+    const release = client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: 'private-debate' },
+    });
+
+    release();
+    expect(sockets[0]!.sent.some(message => message.op === 'UNSUBSCRIBE')).toBe(false);
+
+    client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    expect(sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(2);
+  });
+
+  it('retries refused scopes after the account changes', async () => {
+    client.retainScope({ scope: 'matchmaking' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'authentication is required for resource subscriptions',
+      subscription: { scope: 'matchmaking' },
+    });
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-b'
+    );
+    await vi.runAllTicks();
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    expect(sockets[1]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'matchmaking' } })
+    );
+  });
+
+  it('keeps recycling the socket when the refusal names no client scope', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    // A room subscription, which this client never sends and cannot map to a scope.
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { space_id: 'space-1', room_id: 'room-1', room_kind: 'member', resume_after_seq: null },
+    });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+  });
+
+  it('re-sends a scope whose check failed on its own backoff, without parking the gateway', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    const releaseDebate = client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    await flushInvalidations();
+
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    const debateSubscribes = () =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { scope: string }).scope === 'debate'
+      ).length;
+    expect(debateSubscribes()).toBe(1);
+
+    // A long outage: every re-send fails, and the gaps grow 1s, 2s, 4s, 8s.
+    for (const [index, delay] of [1_000, 2_000, 4_000, 8_000].entries()) {
+      sockets[0]!.receive('ERROR', failure);
+      await vi.advanceTimersByTimeAsync(delay - 1);
+      expect(debateSubscribes()).toBe(index + 1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(debateSubscribes()).toBe(index + 2);
+    }
+
+    expect(sockets).toHaveLength(1);
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+
+    // The other scope keeps delivering.
+    invalidateQueries.mockClear();
+    sockets[0]!.receive('EVENT', {
+      event_id: 'event-space-1',
+      event_type: 'debate.state_changed',
+      payload: { space_id: 'space-1' },
+    });
+    await flushInvalidations();
+    expectInvalidated(invalidateQueries, { queryKey: ['debates', 'space', 'space-1'], refetchType: 'active' });
+
+    // Releasing cancels the pending retry.
+    sockets[0]!.receive('ERROR', failure);
+    releaseDebate();
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(debateSubscribes()).toBe(5);
+  });
+
+  it('does not let a READY for another scope re-send a scope waiting on its check backoff', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    client.retainScope({ scope: 'debate', debate_id: 'debate-b' });
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-b' },
+    });
+    const debateSubscribes = () =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { scope: string }).scope === 'debate'
+      ).length;
+
+    // Another scope's subscribe succeeds, and geo-chat answers with READY.
+    client.retainScope({ scope: 'space', space_id: 'space-2' });
+    sockets[0]!.receive(
+      'READY',
+      readyPayload([
+        { scope: 'space', space_id: 'space-1' },
+        { scope: 'space', space_id: 'space-2' },
+      ])
+    );
+    await vi.advanceTimersByTimeAsync(999);
+    expect(debateSubscribes()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(debateSubscribes()).toBe(2);
+  });
+
+  it('resets the backoff once READY confirms the scope', async () => {
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    const subscribes = () => sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE').length;
+
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(2_000);
+    expect(subscribes()).toBe(3);
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'debate', debate_id: 'debate-1' }]));
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(subscribes()).toBe(4);
+  });
+
+  it('keeps a backing-off scope out of the reconnect burst until its retry is due', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const failure = {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    };
+    // Two failures: the next retry is due 2s after the second.
+    sockets[0]!.receive('ERROR', failure);
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[0]!.receive('ERROR', failure);
+
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    const subscribed = () =>
+      sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE').map(message => message.payload);
+    expect(subscribed()).toEqual([{ scope: 'space', space_id: 'space-1' }]);
+
+    await vi.advanceTimersByTimeAsync(999);
+    expect(subscribed()).toHaveLength(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(subscribed()).toEqual([
+      { scope: 'space', space_id: 'space-1' },
+      { scope: 'debate', debate_id: 'debate-1' },
+    ]);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(subscribed()).toHaveLength(2);
+  });
+
+  it('sends a check retry that came due while disconnected on the next READY, once', async () => {
+    client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-1' },
+    });
+
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(1);
+  });
+
+  it('keeps recycling the socket when a failed check names no scope', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    sockets[0]!.receive('ERROR', { code: 'subscription_check_failed', message: 'try again' });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+  });
+
+  it('matches ERROR echoes to a retained debate scope whatever the id spelling', async () => {
+    const dashedUpper = '3F2B8C1A-9D4E-4A7B-B6C5-1E0F2A3B4C5D';
+    const dashless = '3f2b8c1a9d4e4a7bb6c51e0f2a3b4c5d';
+    const refusedDashed = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+    client.retainScope({ scope: 'debate', debate_id: dashedUpper });
+    client.retainScope({ scope: 'debate', debate_id: refusedDashed });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const subscribes = (debateId: string) =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { debate_id?: string }).debate_id === debateId
+      ).length;
+
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: dashless },
+    });
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: '7c9e6679742540de944be07fc1f90ae7' },
+    });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    // The retry goes out in the retained spelling; the refused scope stays refused through READY.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(subscribes(dashedUpper)).toBe(2);
+    sockets[0]!.receive('READY', readyPayload([]));
+    expect(subscribes(refusedDashed)).toBe(1);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it('confirms a retained space scope from a normalized READY and reconciles its own query keys', async () => {
+    const dashed = 'A1B2C3D4-E5F6-4789-8ABC-DEF012345678';
+    client.retainScope({ scope: 'space', space_id: dashed });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'a1b2c3d4e5f647898abcdef012345678' }]));
+    await flushInvalidations();
+    expectInvalidated(invalidateQueries, { queryKey: ['debates', 'claims', dashed], refetchType: 'active' });
+
+    // A check failure echoed in the zero-padded 32-byte form still finds it.
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'space', space_id: '0xa1b2c3d4e5f647898abcdef01234567800000000000000000000000000000000' },
+    });
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { space_id?: string }).space_id === dashed
+      )
+    ).toHaveLength(2);
   });
 
   it('reconnects with a new session when the authenticated account changes', async () => {
