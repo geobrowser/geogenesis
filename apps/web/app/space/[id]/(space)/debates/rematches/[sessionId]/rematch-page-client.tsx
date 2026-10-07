@@ -30,6 +30,7 @@ import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
+import { requestOpenRounds } from '~/core/debates/format-details';
 import { defaultDebateFormatId } from '~/core/debates/formats';
 import {
   type FromThisDebateClaim,
@@ -3024,6 +3025,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           participants={incomingRequestParticipants}
           currentUserId={currentUserId}
           formatId={incomingRequest.turn_format_id}
+          openRounds={requestOpenRounds(incomingRequest.max_rebuttal_rounds)}
           busy={acceptRequest.isPending || rejectRequest.isPending}
           error={
             acceptRequest.error instanceof Error

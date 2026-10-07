@@ -73,6 +73,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
       participants={debate.participants}
       currentUserId={currentUserId}
       formatId={debate.turn_format_id}
+      openRounds={debate.open_rounds}
       busy={abortDebate.isPending}
       error={declineError}
       actionsLayout="split"
