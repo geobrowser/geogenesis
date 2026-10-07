@@ -3317,6 +3317,11 @@ export async function getGeoChatSession(
   return request;
 }
 
+/** The access token every tab and request currently shares, if one is stored. */
+export function getStoredGeoChatAccessToken() {
+  return loadStoredSession()?.session.access_token ?? null;
+}
+
 export function resetGeoChatSession() {
   geoChatSessionEpoch += 1;
   geoChatSessionAccountKey = null;

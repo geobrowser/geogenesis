@@ -21,6 +21,7 @@ import {
   dashlessId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
+  getStoredGeoChatAccessToken,
   resetGeoChatSession,
 } from './api';
 import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
@@ -167,6 +168,8 @@ export class DebateGatewayClient {
   private getPrivyIdentityToken: GetPrivyIdentityToken | null = null;
   private accountKey: string | null = null;
   private socket: WebSocketLike | null = null;
+  /** The access token `socket` authenticated with. */
+  private socketAccessToken: string | null = null;
   private enabled = false;
   private hasReachedReady = false;
   private readyForDebates = false;
@@ -317,6 +320,7 @@ export class DebateGatewayClient {
 
       const socket = this.createWebSocket(gatewayWebSocketUrl(this.getApiBaseUrl(), session.access_token));
       this.socket = socket;
+      this.socketAccessToken = session.access_token;
       this.readyForDebates = false;
       this.sentScopes.clear();
       this.confirmedScopes.clear();
@@ -386,7 +390,8 @@ export class DebateGatewayClient {
           this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'subscription_limit' });
         } else if (isAuthenticationExpired(envelope.payload)) {
           // The cached session can still look unexpired, so drop it or the reconnect re-presents it.
-          resetGeoChatSession();
+          // Only if it is still this socket's: another tab may already have stored a newer one.
+          if (getStoredGeoChatAccessToken() === this.socketAccessToken) resetGeoChatSession();
           this.forceReconnect(socket, this.authExpiredReconnectDelayMs(), 'session');
         } else if (this.refuseForbiddenScope(envelope.payload)) {
           // Only that scope is refused; the socket and every other subscription stay up.

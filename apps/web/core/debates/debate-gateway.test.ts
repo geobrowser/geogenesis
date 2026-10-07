@@ -2,12 +2,12 @@ import { CancelledError, QueryClient, QueryObserver } from '@tanstack/react-quer
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { GeoChatRequestError, resetGeoChatSession } from './api';
+import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
-  return { ...actual, resetGeoChatSession: vi.fn() };
+  return { ...actual, resetGeoChatSession: vi.fn(), getStoredGeoChatAccessToken: vi.fn(() => null) };
 });
 
 type MessageHandler = (event: { data: unknown }) => void;
@@ -1162,7 +1162,8 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.receive('READY', readyPayload([]));
     await flushInvalidations();
 
-    // Revoked while `expires_at` is still ten minutes out.
+    // Revoked while `expires_at` is still ten minutes out, and still the stored session.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('access token');
     session = { ...session, access_token: 'fresh-token' };
     sockets[0]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
 
@@ -1178,6 +1179,7 @@ describe('DebateGatewayClient', () => {
     expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
 
     // A repeat inside the cooldown neither parks nor spins: it reconnects again, on a longer floor.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('fresh-token');
     sockets[1]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
     expect(resetGeoChatSession).toHaveBeenCalledTimes(2);
     expect(sockets[1]!.readyState).toBe(FakeWebSocket.CLOSED);
@@ -1190,6 +1192,27 @@ describe('DebateGatewayClient', () => {
     expect(sockets[2]!.sent).toContainEqual(
       expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'space', space_id: 'space-1' } })
     );
+  });
+
+  it("keeps a newer stored session when the socket's token is rejected", async () => {
+    vi.mocked(resetGeoChatSession).mockClear();
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    // Another tab already refreshed: the stored session is newer than this socket's.
+    vi.mocked(getStoredGeoChatAccessToken).mockReturnValueOnce('other-tab-token');
+    session = { ...session, access_token: 'other-tab-token' };
+    sockets[0]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+
+    expect(resetGeoChatSession).not.toHaveBeenCalled();
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(sockets[1]!.url).toContain('access_token=other-tab-token');
   });
 
   it('cancels an in-flight snapshot before invalidating it', async () => {
