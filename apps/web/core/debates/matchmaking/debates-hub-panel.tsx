@@ -11,10 +11,11 @@ import { createPortal } from 'react-dom';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { DEBATES_MODAL } from '~/core/debates/debates-panel-deep-link';
-import { requestsModal } from '~/core/deep-links/modal-deep-link';
+import { requestsModal, urlWithoutModal } from '~/core/deep-links/modal-deep-link';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 
+import { Calendar } from '~/design-system/icons/calendar';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
@@ -22,16 +23,20 @@ import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
+import { LiveLobbiesCard } from '../lobbies/lobbies-card';
 import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
+import { calendarHref } from './debate-calendar-route';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
+import { hubAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubSwap } from './hub-motion';
 import { hubClosesOnArrivalAt } from './hub-navigation';
-import { HUB_ICON_BUTTON_CLASS_NAME } from './hub-pill-button';
+import { HUB_ICON_BUTTON_CLASS_NAME, hubPillClassName } from './hub-pill-button';
 import { LobbyTab } from './lobby-tab';
 import { PeopleTab } from './people-tab';
 import { RequestsTab } from './requests-tab';
+import { ScrollableTabRow } from './scrollable-tab-row';
 import { SetScheduleBanner } from './set-schedule-banner';
 import { SIGNED_OUT_TABS } from './signed-out-tabs';
 import { useDebatesHub } from './use-debates-hub';
@@ -60,10 +65,12 @@ const MOBILE_SHEET_TOP_OFFSET_PX = 120;
 // separately, by `DEFAULT_TAB` in use-debates-hub — it happens to agree with this order, but
 // reordering here does not move it.
 const TABS: { id: DebatesHubTab; label: string }[] = [
-  { id: 'lobby', label: 'Lobby' },
+  { id: 'lobby', label: 'Live' },
   { id: 'people', label: 'People' },
   { id: 'explore', label: 'Explore' },
-  { id: 'positions', label: 'Positions' },
+  // "My", because the debate-again picker beside it lists two people's positions and says whose
+  // each is (GEO-3148). One word for one list on both surfaces.
+  { id: 'positions', label: 'My positions' },
   { id: 'requests', label: 'Requests' },
 ];
 
@@ -281,6 +288,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           Debates
         </Text>
         <HubHeaderControls scheduleButtonRef={scheduleButtonRef}>
+          <CalendarButton />
           {onClose ? (
             <button
               type="button"
@@ -302,50 +310,42 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
           restoration, so a row drawn before then is the signed-out one — a returning viewer would
           watch Matches and Requests appear, and a selected tab of theirs jump to Claims. */}
       <div className={cx('shrink-0 px-4', !ready && 'invisible')} aria-hidden={!ready}>
-        <div className="relative">
-          {/* The row is `w-max` so the labels never compress, and both panel shells are
-              `overflow-hidden` — so on a narrow phone whichever tab sits last is simply cut off
-              with no way to reach it. Scrolling costs nothing at the widths where everything
-              already fits, and Requests carries the badge, so it is the worst one to lose. */}
-          <div className="no-scrollbar overflow-x-auto">
-            {/* `gap-4` rather than `gap-6`: at the panel's 400px the five labels fill the row, so
-                Requests' badge sat past the right edge, in overflow a hidden scrollbar never
-                offers. */}
-            <div className="relative flex w-max items-center gap-4 pb-2">
-              {tabs.map(tab => (
-                <button
-                  key={tab.id}
-                  type="button"
-                  data-geo-analytics-label={`Debate hub ${tab.label} tab`}
-                  data-geo-analytics-intent="navigate_debates_hub"
-                  aria-current={activeTab === tab.id ? 'true' : undefined}
-                  onClick={() => changeTab(tab.id)}
-                  className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
-                >
-                  {tab.label}
-                  {tab.id === 'requests' && requestCount > 0 ? (
-                    <Badge>
-                      {requestCount}
-                      <span className="sr-only"> pending requests</span>
-                    </Badge>
-                  ) : null}
-                  {activeTab === tab.id && (
-                    <motion.div
-                      layoutId="debates-hub-tab-active-border"
-                      layout
-                      initial={false}
-                      transition={{ duration: 0.2 }}
-                      className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
-                    />
-                  )}
-                </button>
-              ))}
-            </div>
-          </div>
-          {/* Outside the scroll container so the rule spans the visible row rather than the
-              scrollable width. */}
-          <div className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
-        </div>
+        {/* The row is `w-max` so the labels never compress, and both panel shells are
+            `overflow-hidden` — so on a narrow phone whichever tab sits last would simply be cut
+            off. It scrolls instead, with a fade and an arrow on whichever side has more (GEO-3148):
+            "My positions" pushed the five labels past the panel's 400px, and a hidden scrollbar
+            alone never said there was anything to scroll to. `gap-4` rather than `gap-6` for the
+            same width (see #2603). */}
+        <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate hub" className="gap-4">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              type="button"
+              {...hubAnalyticsAttributes(`${tab.label} tab`, 'navigate_debates_hub')}
+              aria-current={activeTab === tab.id ? 'true' : undefined}
+              data-tab-active={activeTab === tab.id ? 'true' : undefined}
+              onClick={() => changeTab(tab.id)}
+              className={tabGroupTabLinkStyles({ active: activeTab === tab.id })}
+            >
+              {tab.label}
+              {tab.id === 'requests' && requestCount > 0 ? (
+                <Badge>
+                  {requestCount}
+                  <span className="sr-only"> pending requests</span>
+                </Badge>
+              ) : null}
+              {activeTab === tab.id && (
+                <motion.div
+                  layoutId="debates-hub-tab-active-border"
+                  layout
+                  initial={false}
+                  transition={{ duration: 0.2 }}
+                  className="absolute right-0 bottom-[-8px] left-0 z-100 h-px bg-text"
+                />
+              )}
+            </button>
+          ))}
+        </ScrollableTabRow>
       </div>
 
       {/* layoutScroll tells Motion to account for this element's scroll offset when it measures
@@ -364,6 +364,7 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
           <>
+            <LiveLobbiesCard />
             <HubSwap activeKey={activeTab}>
               {activeTab === 'requests' ? (
                 <RequestsTab />
@@ -395,6 +396,35 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
 
       {!ready || !filtersReconciled ? null : <ExpandToWorkspaceLink activeTab={activeTab} />}
     </div>
+  );
+}
+
+/**
+ * Calendar (GEO-3152): everyone's free time as a full-screen week. The panel closes on the way, so
+ * it does not sit over the week it opened; "Back to Debates" there brings it back on this page.
+ *
+ * The header's only calendar icon, so it always means everyone's week; your own times are under
+ * the availability pill beside it. Icon-only on a phone, where the sheet also carries Close.
+ */
+function CalendarButton() {
+  const { close } = useDebatesHub();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Without the panel's own trigger, which Back to Debates puts back itself. The fragment is read
+  // from the location: neither hook carries it.
+  const from = urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash);
+  return (
+    <Link
+      href={calendarHref(from)}
+      onClick={close}
+      aria-label="Calendar"
+      data-geo-analytics-label="Debate hub Calendar"
+      data-geo-analytics-intent="open_debate_calendar"
+      className={hubPillClassName('secondary', 'gap-1.5 md:w-7 md:px-0 [&_svg]:shrink-0')}
+    >
+      <Calendar />
+      <span className="md:sr-only">Calendar</span>
+    </Link>
   );
 }
 

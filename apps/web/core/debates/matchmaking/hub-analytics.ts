@@ -1,4 +1,5 @@
-export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates';
+/** `calendar` is the full-screen week everyone's free time is drawn on (GEO-3152). */
+export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'calendar';
 /**
  * Surfaces with actions but no filters. The last four are availability and scheduling's own
  * dialogs and prompts, which open from the hub and from outside it alike.
@@ -23,6 +24,10 @@ const ACTION_SURFACE_ANALYTICS = {
   'profile-debates': {
     labelPrefix: 'Profile debates',
     actionIntent: 'profile_debates_action',
+  },
+  calendar: {
+    labelPrefix: 'Debate calendar',
+    actionIntent: 'debate_calendar_action',
   },
   'request-popup': {
     labelPrefix: 'Debate request popup',
@@ -50,7 +55,16 @@ const FILTER_INTENTS = {
   hub: 'filter_debates_hub',
   rematch: 'filter_debate_rematch',
   'profile-debates': 'filter_profile_debates',
+  calendar: 'filter_debate_calendar',
 } as const satisfies Record<DebateAnalyticsSurface, string>;
+
+/**
+ * A control's analytics label on a surface, `Debate hub Request debate` on the hub. For a label
+ * pinned to keep a series going through a copy change, so every surface pins it the same way.
+ */
+export function debateAnalyticsLabel(surface: DebateActionAnalyticsSurface, action: string) {
+  return `${ACTION_SURFACE_ANALYTICS[surface].labelPrefix} ${action}`;
+}
 
 /** Stable metadata for actions shared across debate surfaces. */
 export function debateActionAnalyticsAttributes(
@@ -58,11 +72,9 @@ export function debateActionAnalyticsAttributes(
   action: string,
   intent?: string
 ) {
-  const analytics = ACTION_SURFACE_ANALYTICS[surface];
-
   return {
-    'data-geo-analytics-label': `${analytics.labelPrefix} ${action}`,
-    'data-geo-analytics-intent': intent ?? analytics.actionIntent,
+    'data-geo-analytics-label': debateAnalyticsLabel(surface, action),
+    'data-geo-analytics-intent': intent ?? ACTION_SURFACE_ANALYTICS[surface].actionIntent,
   } as const;
 }
 

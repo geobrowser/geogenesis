@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { rememberDebateReturnDestination } from './debate-return-navigation';
+import { debateRoomClaimKey, writeDebateTabClaim } from './debate-tab-claims';
 
 /**
  * The debate this tab is on its way into.
@@ -51,6 +52,9 @@ function set(debateId: string | null) {
 /** Call immediately before pushing into a debate room. */
 export function markEnteringDebate(debateId: string) {
   rememberDebateReturnDestination();
+  // Tells the viewer's other tabs this one is on its way in, so they offer a link rather than a
+  // second copy of the room (GEO-3149). The room keeps the claim fresh once it holds the connection.
+  writeDebateTabClaim(debateRoomClaimKey(debateId));
   set(debateId);
   expiry = setTimeout(() => {
     expiry = null;

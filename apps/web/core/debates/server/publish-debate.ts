@@ -14,7 +14,7 @@ import { isProposalExecuted } from '~/core/utils/contracts/proposal-execution';
 import { Publish } from '~/core/utils/publish';
 
 import { buildDebatePublishDraft } from '../debate-publish-draft';
-import { getDebateAcceptorConfig } from './acceptor-config';
+import { type DebateAcceptorConfig, getDebateAcceptorConfig } from './acceptor-config';
 import { loadDebateClaimSpaceId, loadDebatePublishSource } from './debate-source';
 
 export type PublishDebateResult =
@@ -47,6 +47,47 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
   // member can propose but not vote+execute), and attempting it elsewhere just reverts on-chain
   // (CanNotExecute). Checked before loading the publish source, which pins the share card to IPFS.
   const spaceId = await loadDebateClaimSpaceId(debateId);
+  const space = await loadAcceptorEditableSpace(spaceId, config, debateId);
+  if (!space) return { status: 'not_editor', debateEntityId, spaceId };
+
+  const { input } = await loadDebatePublishSource(debateId);
+  const draft = buildDebatePublishDraft(input);
+
+  const ops = await Effect.runPromise(
+    Publish.prepareLocalDataForPublishing(draft.values, draft.relations, input.spaceId)
+  );
+  if (ops.length === 0) {
+    throw new Error(`Debate ${debateId} resolved to an empty edit.`);
+  }
+
+  const userOpHash = await submitEditAsAcceptor(config, {
+    name: draft.debateName,
+    ops,
+    space: { id: space.id, type: space.type, address: space.address },
+  });
+
+  console.log('[debate-acceptor] published debate', {
+    debateId,
+    debateEntityId: draft.debateEntityId,
+    spaceId: input.spaceId,
+    userOpHash,
+  });
+
+  return { status: 'published', debateEntityId: draft.debateEntityId, spaceId: input.spaceId, userOpHash };
+}
+
+type AcceptorSpace = { id: string; type: string; address: string };
+
+/**
+ * The space, if the acceptor can publish into it: it loads, and the acceptor edits it. Null when the
+ * acceptor is not an editor — terminal, and logged as such. Shared by the full debate publish and
+ * the early claims publish, which write into the same space for the same reason.
+ */
+export async function loadAcceptorEditableSpace(
+  spaceId: string,
+  config: DebateAcceptorConfig,
+  debateId: string
+): Promise<AcceptorSpace | null> {
   const space = await Effect.runPromise(getSpace(spaceId));
   if (!space) {
     throw new Error(`Space ${spaceId} could not be loaded for debate publishing.`);
@@ -66,19 +107,16 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
       spaceType: space.type,
       acceptorSpaceId: config.spaceId,
     });
-    return { status: 'not_editor', debateEntityId, spaceId };
+    return null;
   }
+  return { id: space.id, type: space.type, address: space.address };
+}
 
-  const { input } = await loadDebatePublishSource(debateId);
-  const draft = buildDebatePublishDraft(input);
-
-  const ops = await Effect.runPromise(
-    Publish.prepareLocalDataForPublishing(draft.values, draft.relations, input.spaceId)
-  );
-  if (ops.length === 0) {
-    throw new Error(`Debate ${debateId} resolved to an empty edit.`);
-  }
-
+/** Sign and submit one edit into `space` as the acceptor, returning the first user operation's hash. */
+export async function submitEditAsAcceptor(
+  config: DebateAcceptorConfig,
+  { name, ops, space }: { name: string; ops: Op[]; space: AcceptorSpace }
+): Promise<string> {
   // geo-sdk beta.8 removed getSmartAccountWalletClient; the acceptor signs the
   // same ZeroDev EIP-7702 kernel flow as the browser, from its private key. The
   // env-driven GEO_NETWORK supplies chain + sponsorship; the acceptor-config
@@ -96,23 +134,7 @@ export async function publishDebateAsAcceptor(debateId: string): Promise<Publish
     : GEO_NETWORK;
   const smartAccount = await generateZeroDevAccount({ signer, network });
 
-  const userOpHash = await submitEdit({
-    name: draft.debateName,
-    author: config.spaceId,
-    ops,
-    space: { id: space.id, type: space.type, address: space.address },
-    smartAccount,
-    rpcUrl: config.rpcUrl,
-  });
-
-  console.log('[debate-acceptor] published debate', {
-    debateId,
-    debateEntityId: draft.debateEntityId,
-    spaceId: input.spaceId,
-    userOpHash,
-  });
-
-  return { status: 'published', debateEntityId: draft.debateEntityId, spaceId: input.spaceId, userOpHash };
+  return submitEdit({ name, author: config.spaceId, ops, space, smartAccount, rpcUrl: config.rpcUrl });
 }
 
 type SmartAccount = GeoWalletClient;

@@ -39,6 +39,7 @@ import {
   decodeActiveResponseDirection,
   entityResponseQueryVariables,
 } from '~/core/responses/entity-response';
+import { INTERESTED_VOTE_KIND } from '~/core/topics/interested';
 import { Entity, SearchResult } from '~/core/types';
 import { spacesFromRoutingProjections } from '~/core/utils/entity/entities';
 import { sortSpaceIdsByRank } from '~/core/utils/space/space-ranking';
@@ -1643,6 +1644,9 @@ export function indexVoteRowsByObject(nodes: readonly UserEntityVoteRow[]): {
 
   for (const node of nodes) {
     if (node.voteKind === RETIRED_VERACITY_VOTE_KIND) continue;
+    // Interested (GEO-3158) is a follow, not an up or down vote or a position, and always vote type
+    // 0. Newer than an upvote on the same topic, it would shadow it exactly as a retired row does.
+    if (node.voteKind === INTERESTED_VOTE_KIND) continue;
     const id = uuidToHex(node.objectId);
     if (id in voteKindByObjectId) continue;
     voteKindByObjectId[id] = node.voteKind;

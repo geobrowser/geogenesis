@@ -99,7 +99,25 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={cx(calibre.variable, geistMedium.variable)} suppressHydrationWarning>
+      <head>
+        <script
+          id="google-tag-manager"
+          dangerouslySetInnerHTML={{
+            __html:
+              "(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({'gtm.start':new Date().getTime(),event:'gtm.js'});var f=d.getElementsByTagName(s)[0],j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src='https://www.googletagmanager.com/gtm.js?id='+i+dl;f.parentNode.insertBefore(j,f);})(window,document,'script','dataLayer','GTM-KJQ3T7W9');",
+          }}
+        />
+      </head>
       <body>
+        <noscript>
+          <iframe
+            src="https://www.googletagmanager.com/ns.html?id=GTM-KJQ3T7W9"
+            height="0"
+            width="0"
+            style={{ display: 'none', visibility: 'hidden' }}
+            title="Google Tag Manager"
+          />
+        </noscript>
         <div className="relative">
           <Providers>
             <App>{children}</App>

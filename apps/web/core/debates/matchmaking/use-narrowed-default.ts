@@ -52,10 +52,10 @@ export function useNarrowedDefault(
   /**
    * Throws the decision away when it changes — this is a different list, about different people.
    *
-   * The debate-again flow passes its session id, because that page is *reused* when the route moves
-   * between rematches rather than remounted. Without it, a step back taken because one pair had no
-   * match carried into the next pair, who may have several; and a viewer who pressed the switch for
-   * one opponent had answered a question nobody asked about the next.
+   * For a surface *reused* across different lists rather than remounted — the debate-again page was
+   * one, until GEO-3148 gave it a Matches tab instead of this switch. Without it, a step back taken
+   * because one list had no match carried into the next, which may have several; and a viewer who
+   * pressed the switch for one had answered a question nobody asked about the other.
    *
    * Surfaces that die with their list — the hub's tabs — need none, and omitting it never resets.
    */

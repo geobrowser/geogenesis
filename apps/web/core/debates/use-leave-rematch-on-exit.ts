@@ -1,6 +1,7 @@
 import * as React from 'react';
 
 import type { DebateRematchSession } from './api';
+import { debateRematchClaimKey, debateTabId, hasOtherOpenDebateTab, holdOpenDebateTab } from './debate-tab-claims';
 
 /**
  * Leaving timers not yet fired, by session id.
@@ -20,17 +21,23 @@ const pendingExitLeaves = new Map<string, number>();
  * heartbeat that any open Geo tab keeps fresh, and the overrun one waits out the full browsing
  * window.
  *
- * Three exits keep the session:
+ * Four exits keep the session:
  * - **The hand-off into the converted debate.** `converted` is the one route away from here that
  *   the session was for.
  * - **A session already over, or already being left.** Nothing to end, and the Leave button's own
  *   request is in flight.
  * - **A room's session**, recognisable by having no browsing deadline. The room ends it when the
  *   room closes, and GEO-2941 forbids ending a conversation two people are still having.
+ * - **Another of the viewer's tabs still has this picker open.** Leaving ends the session for both
+ *   people, so a stray second tab navigating away must not take the session from under the tab
+ *   the viewer is still choosing in. Each picker tab holds a Web Lock named for itself while it is
+ *   mounted (`holdOpenDebateTab`); the browser drops it when the tab closes, so the last tab out
+ *   still leaves at once. Without Web Locks every exit leaves, as before.
  *
  * `pagehide` is deliberately not handled. It fires on a reload as well as a close, and nothing
  * available at that moment tells them apart, so leaving there would end the session whenever
- * someone refreshed. A closed tab is caught by the offline sweep once its heartbeat stops.
+ * someone refreshed. A closed tab sends nothing; if it was the last one, the session ends when
+ * the offline or overrun sweep reaches it.
  */
 export function useLeaveRematchOnExit({
   sessionId,
@@ -56,7 +63,13 @@ export function useLeaveRematchOnExit({
       pendingExitLeaves.delete(sessionId);
     }
 
+    const tabKey = debateRematchClaimKey(sessionId);
+    const tabId = debateTabId();
+    const releaseOpenTab = holdOpenDebateTab(tabKey, tabId);
+
     return () => {
+      // Released now, not in the timer: a remount that cancels the timer holds its own.
+      releaseOpenTab();
       // Deferred a tick so an immediate remount of the same session can cancel it.
       const timer = window.setTimeout(() => {
         pendingExitLeaves.delete(sessionId);
@@ -65,7 +78,9 @@ export function useLeaveRematchOnExit({
         if (current.status !== 'browsing' && current.status !== 'request_pending') return;
         if (current.browsing_expires_at === null) return;
         if (isExiting()) return;
-        leaveSession();
+        void hasOtherOpenDebateTab(tabKey, tabId).then(otherTabOpen => {
+          if (!otherTabOpen) leaveSession();
+        });
       }, 0);
       pendingExitLeaves.set(sessionId, timer);
     };

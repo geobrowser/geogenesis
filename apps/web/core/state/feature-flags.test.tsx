@@ -26,6 +26,8 @@ describe('feature flags', () => {
     // GEO-2914 hid the Explore side panel behind this rather than deleting it, so off is the
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
+    expect(defaultFeatureFlags.lobbyJoining).toBe(false);
+    expect(defaultFeatureFlags.lobbyHosting).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
@@ -34,6 +36,8 @@ describe('feature flags', () => {
       debateFormatSelector: false,
       exploreSidePanel: false,
       forYouFeed: false,
+      lobbyJoining: false,
+      lobbyHosting: false,
       bountiesTab: true,
     });
   });
@@ -51,6 +55,8 @@ describe('feature flags', () => {
       debateFormatSelector: false,
       exploreSidePanel: false,
       forYouFeed: false,
+      lobbyJoining: false,
+      lobbyHosting: false,
       bountiesTab: true,
     });
   });
@@ -77,6 +83,8 @@ describe('feature flags', () => {
       debateFormatSelector: true,
       exploreSidePanel: false,
       forYouFeed: false,
+      lobbyJoining: false,
+      lobbyHosting: false,
       bountiesTab: true,
     });
   });

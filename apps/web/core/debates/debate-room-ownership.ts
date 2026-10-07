@@ -5,6 +5,10 @@ type TakeoverRequest = {
   // Optional on the wire: tabs running a build that predates the field omit it, and the owner
   // assumes a focused requester so an old tab is never permanently unbeatable mid-deploy.
   requesterPriority?: DebateRoomTabPriority;
+  // GEO-3149. True when the requester is a blocked tab reclaiming the room on its own because the
+  // viewer turned to it, rather than the viewer pressing "Continue here". Absent on older builds,
+  // which only ever sent explicit or focus-driven requests, so absent reads as explicit.
+  automatic?: boolean;
 };
 
 type TakeoverResponse = {
@@ -19,6 +23,12 @@ type OwnershipMessage = TakeoverRequest | TakeoverResponse;
 export type DebateRoomTakeoverContext = {
   requesterPriority: DebateRoomTabPriority;
   ownerPriority: DebateRoomTabPriority;
+  automatic: boolean;
+};
+
+export type DebateRoomTakeoverOptions = {
+  /** The tab is reclaiming the room because the viewer turned to it, not because they asked. */
+  automatic?: boolean;
 };
 
 type CreateDebateRoomOwnershipCoordinatorOptions = {
@@ -33,7 +43,7 @@ export type DebateRoomOwnershipCoordinator = {
   readonly instanceId: string;
   readonly coordinationMode: DebateRoomOwnershipCoordinationMode;
   acquire: () => Promise<DebateRoomOwnershipAcquireResult>;
-  requestTakeover: () => Promise<boolean>;
+  requestTakeover: (options?: DebateRoomTakeoverOptions) => Promise<boolean>;
   release: () => Promise<void>;
   close: () => void;
   ownsConnection: () => boolean;
@@ -273,6 +283,7 @@ export function createDebateRoomOwnershipCoordinator({
       const takeoverContext: DebateRoomTakeoverContext = {
         requesterPriority: message.requesterPriority ?? 2,
         ownerPriority: getTabPriority(),
+        automatic: message.automatic === true,
       };
       void Promise.resolve(onTakeoverRequested(takeoverContext))
         .then(async released => {
@@ -291,7 +302,7 @@ export function createDebateRoomOwnershipCoordinator({
       return coordinationMode;
     },
     acquire: () => acquireLock(),
-    requestTakeover: async () => {
+    requestTakeover: async ({ automatic = false }: DebateRoomTakeoverOptions = {}) => {
       if (ownsConnection) return true;
       if (!lockManager || !lockRequestsAvailable) return (await acquireLock(true)).acquired;
       if (closed) return false;
@@ -316,6 +327,7 @@ export function createDebateRoomOwnershipCoordinator({
             requestId,
             requesterId: instanceId,
             requesterPriority: getTabPriority(),
+            automatic,
           } satisfies TakeoverRequest);
         } catch {
           window.clearTimeout(timeout);
@@ -361,4 +373,40 @@ async function waitForLocalReleaseBarriers(coordinationName: string, cancelled: 
 
 function createInstanceId() {
   return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+export type DebateRoomReleaseDecisionInput = DebateRoomTakeoverContext & {
+  status: string | null;
+  /** The owner's MediaRecorder has started; releasing now would tear an in-flight recording down. */
+  recordingStarted: boolean;
+  /** `preflight` with nothing recorded and its window still open. */
+  preflightStillPending: boolean;
+};
+
+/**
+ * Whether the tab holding a debate room hands it to another tab of the same browser that asked.
+ *
+ * Nothing is recorded or timed during the intro (`ready`) or the connecting window, so any tab may
+ * take the room then. Past that, a tab nearer the viewer's attention may still pull the room from
+ * one further away (focused over visible over hidden) until recording starts, which is what keeps a
+ * background tab from ever holding the room against the one the viewer is looking at (GEO-3149).
+ *
+ * An automatic request — a blocked tab reclaiming because the viewer turned to it — is honoured only
+ * when the requester really is nearer the viewer than the owner. Without that, two windows side by
+ * side (both visible, neither focused) would hand the room back and forth forever, each release
+ * re-arming the other's reclaim.
+ */
+export function shouldReleaseDebateRoom({
+  status,
+  recordingStarted,
+  preflightStillPending,
+  requesterPriority,
+  ownerPriority,
+  automatic,
+}: DebateRoomReleaseDecisionInput): boolean {
+  const requesterNearer = requesterPriority > ownerPriority;
+  if (automatic && !requesterNearer) return false;
+  if (status === 'ready' || status === 'connecting') return true;
+  if (status === 'preflight' && preflightStillPending) return true;
+  return requesterNearer && !recordingStarted && (status === 'connecting' || status === 'preflight');
 }

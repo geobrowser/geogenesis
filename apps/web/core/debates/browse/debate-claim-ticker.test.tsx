@@ -109,6 +109,7 @@ function claim(overrides: Partial<TimedClaim> = {}): TimedClaim {
     spaceId: CLAIM_SPACE,
     blockId: 'block-1',
     publishedTiming: null,
+    highlightScore: null,
     relationEntityId: 'relation-1',
     restated: false,
     timing: { startMs: 134_600, endMs: 143_140, confidence: 1, source: 'published' },

@@ -39,6 +39,20 @@ export function debateFormatById(id: string | null | undefined): DebateFormat | 
   return debateFormats.find(format => format.id === id) ?? null;
 }
 
+/**
+ * Open rounds (GEO-3166), against geo-chat `docs/open-rounds-contract.md`. It is not in
+ * `debateFormats` because a client cannot ask for it: the server assigns it through its rollout
+ * setting when a debate is created. These are its fixed opening turns and the rebuttal length the
+ * server uses when no debate payload says otherwise.
+ */
+export const OPEN_ROUNDS_FORMAT_ID = 'open_rounds';
+export const openRoundsOpeningTurnDurationsMs = [60_000, 60_000] as const;
+export const openRoundsDefaultRebuttalTurnMs = 45_000;
+
+export function isOpenRoundsFormatId(id: string | null | undefined) {
+  return id === OPEN_ROUNDS_FORMAT_ID;
+}
+
 export function isDebateFormatId(id: string | null | undefined): id is DebateFormatId {
   return debateFormatById(id) !== null;
 }
@@ -78,7 +92,7 @@ export function debateTimingSummary(format: DebateFormat) {
   return debateRoundSummaries(format).join(' · ');
 }
 
-function formatTurnDuration(durationMs: number) {
+export function formatTurnDuration(durationMs: number) {
   const seconds = Math.max(0, Math.round(durationMs / 1_000));
   if (seconds > 0 && seconds % 60 === 0) {
     return `${seconds / 60}m`;

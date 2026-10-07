@@ -1,5 +1,7 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
+import { v5 as uuidv5 } from 'uuid';
+
 import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import { ID } from '~/core/id';
@@ -8,8 +10,12 @@ import type { DataType, Relation, Value } from '~/core/types';
 import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
+  CLAIM_ADDRESSES_PROPERTY_ID,
   CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
+  CLAIM_OPPOSES_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
+  CLAIM_SUPPORTS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
@@ -56,6 +62,19 @@ export type DebatePublishTurn = {
   speakerSpaceEntityId: string;
   speakerName: string | null;
   text: string;
+};
+
+/**
+ * An extracted claim's stance toward the debate's motion (GEO-3142), as geo-chat's extractor
+ * judged it from the claim's content — not from the speaker's side.
+ */
+export type ClaimStance = 'supports' | 'opposes' | 'addresses';
+
+/** The relation each stance is published as, from the claim to the motion. */
+export const CLAIM_STANCE_PROPERTY_IDS: Record<ClaimStance, string> = {
+  supports: CLAIM_SUPPORTS_PROPERTY_ID,
+  opposes: CLAIM_OPPOSES_PROPERTY_ID,
+  addresses: CLAIM_ADDRESSES_PROPERTY_ID,
 };
 
 /** A topic entity to relate to via Topics. The name is for display only; publishing writes the id. */
@@ -109,6 +128,21 @@ export type DebateClaimInput = {
    * this is null whenever geo-chat did not measure it, and the app falls back to matching.
    */
   timing?: { startMs: number; endMs: number } | null;
+  /**
+   * How much this claim carries the debate — geo-chat's `highlight_score`, the probability that
+   * the debate's claim list would misrepresent the debate without it (0–1). Written onto the
+   * block → claim relation entity beside the offsets, where the player ranks claims by it. Null
+   * whenever geo-chat did not score the claim (scoring off, or that claim's request failed), and
+   * nothing is written.
+   */
+  highlightScore?: number | null;
+  /**
+   * GEO-3142: the claim's stance toward the debated claim, written as one Supports / Opposes /
+   * Addresses relation from the claim to `claimEntityId`. Null/absent writes none: payloads from
+   * before the classification, a verdict the extractor could not give, and a claim the stance
+   * policy found already linked to the motion (so a reused entity never gets a second one).
+   */
+  stance?: ClaimStance | null;
 };
 
 export type DebatePublishInput = {
@@ -119,6 +153,13 @@ export type DebatePublishInput = {
   /** The already-published Claim entity the debate argued. */
   claimEntityId: string;
   claimText: string;
+  /**
+   * What the debate argued. A question debate has no sides and no main claim, so its claims get
+   * no Supports / Opposes / Addresses relation, whatever stance they carry — they keep only their
+   * link to the question. Absent reads as `claim`, which every debate is until question debates
+   * ship.
+   */
+  subjectKind?: 'claim' | 'question';
   /**
    * The debated claim's Topics in this space, mirrored onto the Debate entity so the debate is
    * filed under the same topics as the claim it argued. Optional — omitted/empty publishes the
@@ -222,16 +263,26 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     propertyId,
     toEntityId,
     toEntityName,
+    stable = false,
   }: {
     fromEntity: { id: string; name: string | null };
     propertyId: string;
     toEntityId: string;
     toEntityName: string | null;
+    /**
+     * Derive the relation's ids from (from, property, to) instead of minting them — for the
+     * relations that describe a claim minted under geo-chat's stable id, which the early claims
+     * publish writes too. See {@link stableClaimRelationIds}.
+     */
+    stable?: boolean;
   }): { id: string; name: string | null } => {
-    const entityId = createEntityId();
+    const ids = stable
+      ? stableClaimRelationIds(fromEntity.id, propertyId, toEntityId)
+      : { id: createEntityId(), entityId: createEntityId() };
+    const entityId = ids.entityId;
     relations.push(
       makeRelation({
-        id: createEntityId(),
+        id: ids.id,
         entityId,
         position: createPosition(),
         spaceId: input.spaceId,
@@ -247,17 +298,20 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   const setInteger = (entityId: string, propertyId: string, value: number) => {
     values.push(makeIntegerValue({ entityId, entityName: null, propertyId, value, spaceId: input.spaceId }));
   };
+  const setFloat = (entityId: string, propertyId: string, value: number) => {
+    values.push(makeFloatValue({ entityId, entityName: null, propertyId, value, spaceId: input.spaceId }));
+  };
 
   // One Topics relation per (entity, topic). `relate` does not dedupe, and a reused claim can appear
   // behind several extracted claims carrying the same topic. Keyed on normalized ids so the dedupe
   // agrees with the reuse policy, which compares topics as hex: the same entity written once dashed
   // and once dashless is one edge.
   const topicEdges = new Set<string>();
-  const relateTopic = (fromEntity: { id: string; name: string | null }, topic: DebatePublishTopic) => {
+  const relateTopic = (fromEntity: { id: string; name: string | null }, topic: DebatePublishTopic, stable = false) => {
     const edge = `${normalizeId(fromEntity.id)}:${normalizeId(topic.id)}`;
     if (topicEdges.has(edge)) return;
     topicEdges.add(edge);
-    relate({ fromEntity, propertyId: TOPICS_PROPERTY_ID, toEntityId: topic.id, toEntityName: topic.name });
+    relate({ fromEntity, propertyId: TOPICS_PROPERTY_ID, toEntityId: topic.id, toEntityName: topic.name, stable });
   };
 
   // --- Debate entity ---
@@ -395,6 +449,13 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
     const sourcedClaims = new Set<string>();
     const debateTaggedClaims = new Set<string>();
     const mintedClaims = new Set<string>();
+    // One stance relation per (claim, motion), however many statements share the claim entity: a
+    // reused entity or a D1 stable id can sit behind several extracted claims. The first statement
+    // in transcript order decides; keyed like `debateTaggedClaims`, so verbatim twins from an
+    // older payload (fresh ids) also yield one verdict per text.
+    const stancedClaims = new Set<string>();
+    const writesStance = (input.subjectKind ?? 'claim') === 'claim';
+    const motionKey = normalizeId(input.claimEntityId);
 
     turns.forEach(turn => {
       const speakerName = turn.speakerName?.trim() ? turn.speakerName.trim() : 'Anonymous';
@@ -448,6 +509,13 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
         const stableClaimId = existingClaimId === null ? claim.stableEntityId?.trim() || null : null;
         const claimId = existingClaimId ?? stableClaimId ?? createEntityId();
         const claimRef = { id: claimId, name: claimEntityText };
+        // GEO-2870 option A: a claim under geo-chat's stable id may already be on the graph, put
+        // there by the early claims publish (`buildDebateClaimsDraft`) minutes after extraction. The
+        // relations describing it take ids derived from their endpoints, the same ids that publish
+        // used, so writing them again here updates those relations rather than adding second
+        // copies, and the Name and Is factual values are per-(entity, property) already. Whether or
+        // not the early publish ran, indexed, or ran twice, the claim ends up described once.
+        const isStable = stableClaimId !== null;
         // A stable id is shared by every statement of one claim, so the entity is minted once —
         // under the first statement's text — and the later statements only link to it.
         if (existingClaimId === null && !mintedClaims.has(normalizeId(claimId))) {
@@ -458,6 +526,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             propertyId: TYPES_PROPERTY_ID,
             toEntityId: CLAIM_TYPE_ID,
             toEntityName: 'Claim',
+            stable: isStable,
           });
           if (claim.isFactual !== null) {
             setBoolean(claimId, claimEntityText, CLAIM_IS_FACTUAL_PROPERTY_ID, claim.isFactual);
@@ -483,9 +552,22 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             propertyId: TAG_PROPERTY_ID,
             toEntityId: DEBATE_TAG_ID,
             toEntityName: 'Debate',
+            stable: isStable,
           });
         }
-        for (const topic of claim.topics ?? []) relateTopic(claimRef, topic);
+        for (const topic of claim.topics ?? []) relateTopic(claimRef, topic, isStable);
+        // Never from the motion to itself: the reuse policy refuses a reference to the motion,
+        // but a stable id is not checked against it, and a self-relation is never right.
+        if (writesStance && claim.stance && normalizeId(claimId) !== motionKey && !stancedClaims.has(tagKey)) {
+          stancedClaims.add(tagKey);
+          relate({
+            fromEntity: claimRef,
+            propertyId: CLAIM_STANCE_PROPERTY_IDS[claim.stance],
+            toEntityId: input.claimEntityId,
+            toEntityName: claimText,
+            stable: isStable,
+          });
+        }
         const blockClaimKey = `${blockId}:${claimId}`;
         if (!linkedBlockClaims.has(blockClaimKey)) {
           linkedBlockClaims.add(blockClaimKey);
@@ -499,6 +581,16 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           // claim stated in two turns has two moments. Typed Selector → Debate videos, the graph's
           // shape for "this relation points at a span of its target" (the one `Reply to` uses).
           // Only a measured span is written — the app reads these as a to-the-second certainty.
+          // How much the claim carries the debate, on the same relation entity: like the offsets it
+          // is a fact about this statement in this debate, not about the claim. Only a real score
+          // is written — the player ranks by it, so a stand-in would rank. Like the offsets, it is
+          // the FIRST extraction's for this (block, claim): two extractions in one turn that
+          // resolve to one entity share one relation, and the later one's score is not consulted
+          // even when the first had none.
+          const highlightScore = publishableHighlightScore(claim.highlightScore);
+          if (highlightScore !== null) {
+            setFloat(statement.id, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, highlightScore);
+          }
           const timing = publishableTiming(claim.timing);
           if (timing) {
             setInteger(statement.id, CLAIM_START_OFFSET_PROPERTY_ID, timing.startMs);
@@ -524,6 +616,7 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
             propertyId: SOURCES_PROPERTY_ID,
             toEntityId: debateEntityId,
             toEntityName: debateName,
+            stable: isStable,
           });
         }
       }
@@ -531,6 +624,168 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
   }
 
   return { debateEntityId, debateName, values, relations };
+}
+
+/**
+ * The UUIDv5 namespace for the relations that describe a claim minted under geo-chat's stable id.
+ * Fixed forever: changing it would re-derive every id, and the next publish would add second copies
+ * of relations the graph already holds.
+ */
+const STABLE_CLAIM_RELATION_NAMESPACE = '6f1d2c8e-3b0a-4f57-9a61-2e870a0c1a1d';
+
+/**
+ * GEO-2870 option A. Deterministic ids for one relation describing a claim minted under geo-chat's
+ * stable id (D1): its Types, its Debate tag, its Topics and its Sources edge to the Debate.
+ *
+ * A claim is now written twice — by the early claims publish minutes after extraction, and again by
+ * the full debate publish — and the two writes must not leave two Types or two Tags relations on
+ * the entity. The indexer keys relations on their id and upserts on conflict, so deriving the id
+ * from (from, property, to) makes the second write an update of the first. It also makes an early
+ * publish that ran twice (an overlapping sweep, a retry after an unconfirmed receipt) harmless.
+ *
+ * Only these relations: everything else in the debate edit is written once, by the full publish,
+ * which is itself idempotent on the Debate entity.
+ */
+export function stableClaimRelationIds(
+  fromEntityId: string,
+  propertyId: string,
+  toEntityId: string
+): { id: string; entityId: string } {
+  const key = `${normalizeId(fromEntityId)}:${normalizeId(propertyId)}:${normalizeId(toEntityId)}`;
+  return {
+    id: normalizeId(uuidv5(`${key}:relation`, STABLE_CLAIM_RELATION_NAMESPACE)),
+    entityId: normalizeId(uuidv5(`${key}:entity`, STABLE_CLAIM_RELATION_NAMESPACE)),
+  };
+}
+
+export type DebateClaimsPublishInput = {
+  /** The DAO space the debate will be published to (debate.claim.space_id, dashless). */
+  spaceId: string;
+  /**
+   * The turns the claims attach to, as {@link DebatePublishInput.transcriptTurns}. Only used to
+   * apply the full publish's own filter: a claim whose turn is missing or blank is never linked by
+   * the full publish, so it is not published early either.
+   */
+  transcriptTurns: DebatePublishTurn[];
+  /** The claims to describe. Only those under a stable id, with no graph reference, are written. */
+  claims: DebateClaimInput[];
+};
+
+export type DebateClaimsPublishDraft = {
+  /** The stable ids of the claims the draft writes, normalised, in the order they were said. */
+  claimIds: string[];
+  /** The first claim's text, for the edit's name. */
+  firstClaimText: string | null;
+  values: Value[];
+  relations: Relation[];
+};
+
+/**
+ * GEO-2870 option A: the early claims publish. Describes each claim minted under geo-chat's stable
+ * id — Name, Types → Claim, Is factual, the Debate tag when contestable, and its Topics — so it
+ * exists on the graph, and can be voted on and requested, long before the debate itself publishes.
+ *
+ * Writes nothing that names the debate: no transcript block, no Sources edge, no reference to the
+ * Debate entity id. The full publish adds those, and its idempotency check is whether the Debate
+ * entity exists, so this edit must never make it look as if it does.
+ *
+ * Exactly what {@link buildDebatePublishDraft} writes for the same claims, with the same relation
+ * ids ({@link stableClaimRelationIds}) and the same first-statement-wins text, so the later full
+ * publish rewrites these values and relations instead of duplicating them. Pure.
+ */
+export function buildDebateClaimsDraft(
+  input: DebateClaimsPublishInput,
+  options: Pick<BuildOptions, 'createPosition'> = {}
+): DebateClaimsPublishDraft {
+  const createPosition = options.createPosition ?? Position.generate;
+  const values: Value[] = [];
+  const relations: Relation[] = [];
+
+  const relate = (
+    fromEntity: { id: string; name: string | null },
+    propertyId: string,
+    to: { id: string; name: string | null }
+  ) => {
+    const ids = stableClaimRelationIds(fromEntity.id, propertyId, to.id);
+    relations.push(
+      makeRelation({
+        id: ids.id,
+        entityId: ids.entityId,
+        position: createPosition(),
+        spaceId: input.spaceId,
+        propertyId,
+        fromEntity,
+        toEntityId: to.id,
+        toEntityName: to.name,
+      })
+    );
+  };
+
+  // The full draft's order: turns in order (blank ones skipped), each turn's claims as given.
+  const turns = input.transcriptTurns.filter(turn => turn.text.trim().length > 0);
+  const claimsByTurnIndex = new Map<number, DebateClaimInput[]>();
+  for (const claim of input.claims) {
+    const list = claimsByTurnIndex.get(claim.turnIndex);
+    if (list) list.push(claim);
+    else claimsByTurnIndex.set(claim.turnIndex, [claim]);
+  }
+
+  const claimIds: string[] = [];
+  const minted = new Set<string>();
+  const tagged = new Set<string>();
+  const topicEdges = new Set<string>();
+  let firstClaimText: string | null = null;
+
+  for (const turn of turns) {
+    for (const claim of claimsByTurnIndex.get(turn.turnIndex) ?? []) {
+      const text = claim.text.trim();
+      if (text.length === 0) continue;
+      if (claim.existingClaimEntityId?.trim()) continue;
+      const stableId = claim.stableEntityId?.trim() || null;
+      if (stableId === null) continue;
+      const key = normalizeId(stableId);
+      const claimRef = { id: stableId, name: text };
+
+      if (!minted.has(key)) {
+        minted.add(key);
+        claimIds.push(key);
+        firstClaimText ??= text;
+        values.push(
+          makeTextValue({
+            entityId: stableId,
+            entityName: text,
+            propertyId: NAME_PROPERTY_ID,
+            value: text,
+            spaceId: input.spaceId,
+          })
+        );
+        relate(claimRef, TYPES_PROPERTY_ID, { id: CLAIM_TYPE_ID, name: 'Claim' });
+        if (claim.isFactual !== null) {
+          values.push(
+            makeBooleanValue({
+              entityId: stableId,
+              entityName: text,
+              propertyId: CLAIM_IS_FACTUAL_PROPERTY_ID,
+              value: claim.isFactual ? 'true' : 'false',
+              spaceId: input.spaceId,
+            })
+          );
+        }
+      }
+      if (claim.isContestable && !tagged.has(key)) {
+        tagged.add(key);
+        relate(claimRef, TAG_PROPERTY_ID, { id: DEBATE_TAG_ID, name: 'Debate' });
+      }
+      for (const topic of claim.topics ?? []) {
+        const edge = `${key}:${normalizeId(topic.id)}`;
+        if (topicEdges.has(edge)) continue;
+        topicEdges.add(edge);
+        relate(claimRef, TOPICS_PROPERTY_ID, { id: topic.id, name: topic.name });
+      }
+    }
+  }
+
+  return { claimIds, firstClaimText, values, relations };
 }
 
 /**
@@ -573,6 +828,17 @@ export function publishableTiming(timing: DebateClaimInput['timing']): { startMs
   if (!Number.isSafeInteger(startMs) || !Number.isSafeInteger(endMs)) return null;
   if (startMs < 0 || endMs <= startMs) return null;
   return { startMs, endMs };
+}
+
+/**
+ * A claim's highlight score if it is a finite number in [0, 1], else null. Same stance as
+ * {@link publishableTiming}: the decoder refuses anything else already, and the publisher refuses
+ * it again because a bad value here is ranked by, and nothing downstream can demote it.
+ */
+export function publishableHighlightScore(score: DebateClaimInput['highlightScore']): number | null {
+  if (typeof score !== 'number' || !Number.isFinite(score)) return null;
+  if (score < 0 || score > 1) return null;
+  return score;
 }
 
 /** Dashless, lower-case — the form ids are compared in, so one entity is one key. */
@@ -625,6 +891,32 @@ function makeIntegerValue({
     id: ID.createValueId({ entityId, propertyId, spaceId }),
     entity: { id: entityId, name: entityName },
     property: { id: propertyId, name: null, dataType: INTEGER_DATA_TYPE },
+    value: String(value),
+    spaceId,
+    isLocal: true,
+    hasBeenPublished: false,
+  };
+}
+
+const FLOAT_DATA_TYPE: DataType = 'FLOAT';
+
+function makeFloatValue({
+  entityId,
+  entityName,
+  propertyId,
+  value,
+  spaceId,
+}: {
+  entityId: string;
+  entityName: string | null;
+  propertyId: string;
+  value: number;
+  spaceId: string;
+}): Value {
+  return {
+    id: ID.createValueId({ entityId, propertyId, spaceId }),
+    entity: { id: entityId, name: entityName },
+    property: { id: propertyId, name: null, dataType: FLOAT_DATA_TYPE },
     value: String(value),
     spaceId,
     isLocal: true,

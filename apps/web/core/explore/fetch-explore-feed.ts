@@ -54,6 +54,7 @@ import {
   encodeExploreForYouCursor,
   nextExploreWindowCursor,
 } from './explore-window-cursor';
+import { BEST_FEED_VERSION, type FeedDescriptor } from './for-you/feed-version';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
 
 /**
@@ -82,7 +83,26 @@ export class ExploreSpaceScopeUnresolvedError extends Error {
 export type ExploreFeedResult = {
   items: ExploreFeedItem[];
   nextCursor: string | null;
+  /**
+   * The ranking that produced this page and its version (GEO-3140). Set on Best and on what the
+   * window hook replaced it with (For you, an interleaved page); absent on New and Top.
+   */
+  feed?: FeedDescriptor;
 };
+
+/**
+ * Replaces Best's ordering of one window (GEO-3140 For you, GEO-3144 interleaving).
+ *
+ * Handed the window's rows after the type and exclusion filters, in Best's rank order, and
+ * `arrange`, Best's own diversity pass (type mix then per-space quota), so whatever it returns
+ * keeps Best's composition rules. Null means "serve Best". It must be a pure function of the
+ * window for a given request context: pages are cut from one window by offset, so the same window
+ * has to come back in the same order on every request.
+ */
+export type ExploreWindowReorder = (
+  rows: ExploreFeedRow[],
+  context: { windowKey: string; arrange: (rows: ExploreFeedRow[]) => ExploreFeedRow[] }
+) => Promise<{ rows: ExploreFeedRow[]; feed: FeedDescriptor } | null>;
 
 /**
  * One disjoint branch of a contextual feed's complete population.
@@ -757,6 +777,12 @@ export async function fetchExploreFeed(args: {
    */
   forYouTopicIds?: readonly string[];
   /**
+   * GEO-3140 / GEO-3144. Re-orders each typed-Best window, after the filters and in place of
+   * Best's own ordering; see {@link ExploreWindowReorder}. Only consulted for Best with a type
+   * selection, the path Explore's default feed takes.
+   */
+  reorderWindow?: ExploreWindowReorder;
+  /**
    * Complete population branches for a contextual feed. When supplied, Best and New order this
    * full population from a compact index rather than applying one expensive combined predicate.
    */
@@ -939,18 +965,27 @@ export async function fetchExploreFeed(args: {
       ? applyTargetMix(rows, exploreItemTypeKey)
       : applyDiversityCap(rows, exploreItemTypeKey);
 
-  const orderWindow = (entities: ExploreCardEntity[]): ExploreFeedRow[] => {
-    const rows = windowRows(entities);
+  const bestFeed: FeedDescriptor = { name: 'best', version: BEST_FEED_VERSION };
+  const arrangeBest = (rows: ExploreFeedRow[]): ExploreFeedRow[] =>
+    applyPerSpaceQuota(mixTypes(rows), exploreItemSpaceKey);
 
+  const orderWindow = async (
+    entities: ExploreCardEntity[],
+    windowKey: string | null
+  ): Promise<{ rows: ExploreFeedRow[]; feed: FeedDescriptor | undefined }> => {
+    const rows = windowRows(entities);
+    if (args.sort !== 'best') return { rows, feed: undefined };
+    if (args.reorderWindow && bestFiltersServerSide) {
+      const replaced = await args.reorderWindow(rows, { windowKey: windowKey ?? '', arrange: arrangeBest });
+      if (replaced) return replaced;
+    }
     // "Best" is the only sort that reorders (GEO-2690). "New" is reverse-chronological and
     // an activity log that shuffles is simply wrong; "Top" is an explicit "rank by score"
     // request, and the crowding-out was measured on Best, which is also the default tab.
     // Two different crowding problems, two passes (GEO-2690 for type, GEO-2841 for space).
     // The space quota runs last so its guarantee is the one that holds outright; see
     // `applyPerSpaceQuota` for why that trade is the right way round.
-    if (args.sort !== 'best') return rows;
-
-    return applyPerSpaceQuota(mixTypes(rows), exploreItemSpaceKey);
+    return { rows: arrangeBest(rows), feed: bestFeed };
   };
 
   const forYouTopicIds = args.forYouTopicIds ?? [];
@@ -1005,7 +1040,8 @@ export async function fetchExploreFeed(args: {
   let extraScans = 0;
   let scanBudgetSpent = false;
   let page = await fetchWindow(windowAfter);
-  let ordered = orderWindow(page.entities);
+  let window = await orderWindow(page.entities, windowAfter);
+  let ordered = window.rows;
 
   const scanDeadline = Date.now() + MAX_EMPTY_WINDOW_SCAN_MS;
 
@@ -1022,7 +1058,8 @@ export async function fetchExploreFeed(args: {
     // cursor named.
     windowOffset = 0;
     page = await fetchWindow(windowAfter);
-    ordered = orderWindow(page.entities);
+    window = await orderWindow(page.entities, windowAfter);
+    ordered = window.rows;
   }
 
   // GEO-3070. Only on the first ranked window, which is where page one comes from. Every page cut
@@ -1041,6 +1078,7 @@ export async function fetchExploreFeed(args: {
 
   return {
     items: await attachMeta(slice),
+    ...(window.feed ? { feed: window.feed } : {}),
     nextCursor: scanBudgetSpent
       ? null
       : nextExploreWindowCursor({

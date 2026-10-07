@@ -9,7 +9,7 @@ import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_N
 import { Text } from '~/design-system/text';
 
 import type { DebateParticipantSummary, ParticipantSlot } from './api';
-import { DebateFormatDetails } from './format-details';
+import { DebateFormatDetails, type DebateFormatOpenRounds } from './format-details';
 import { DebateFormatSelector } from './format-selector';
 import type { DebateFormatId } from './formats';
 import { speakerLabel } from './playback-utils';
@@ -33,6 +33,8 @@ type DebateRequestDialogProps = {
   participants: readonly DebateRequestDialogParticipant[];
   currentUserId: string;
   formatId: string | null | undefined;
+  /** The debate's `open_rounds` block, when there is a debate (the ready prompt). */
+  openRounds?: DebateFormatOpenRounds | null;
   formatSelector?: DebateRequestDialogFormatSelector;
   busy: boolean;
   error: string | null;
@@ -62,6 +64,7 @@ export function DebateRequestDialog({
   participants,
   currentUserId,
   formatId,
+  openRounds,
   formatSelector,
   busy,
   error,
@@ -156,7 +159,12 @@ export function DebateRequestDialog({
               )}
             </div>
             <div className="px-1 pb-1">
-              <DebateFormatDetails formatId={formatId} participants={turnParticipants} currentUserId={currentUserId} />
+              <DebateFormatDetails
+                formatId={formatId}
+                openRounds={openRounds}
+                participants={turnParticipants}
+                currentUserId={currentUserId}
+              />
             </div>
           </section>
 

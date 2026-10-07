@@ -22,6 +22,7 @@ function timed(id: string, timing: ClaimTiming | null, text = `Claim ${id}`): Ti
     spaceId: 'space-1',
     blockId: 'block-1',
     publishedTiming: null,
+    highlightScore: null,
     relationEntityId: null,
     restated: false,
     timing,
