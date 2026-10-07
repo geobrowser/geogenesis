@@ -11,6 +11,7 @@ import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
+import { openRebuttalRoundCount } from '~/core/debates/open-rounds';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
@@ -338,6 +339,9 @@ export function DebateExploreFeedCard({
     onClaims: mediaMounted ? () => openClaims() : undefined,
     onShare: mediaMounted ? share.onOpen : undefined,
     shareOpen: share.open,
+    // From the debate lookup, so it arrives with Claims and Share; drawn last in the row so landing
+    // late shifts none of the controls before it.
+    rebuttalRounds: debate ? openRebuttalRoundCount(debate) : null,
   };
 
   return (

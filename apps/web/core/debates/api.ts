@@ -2307,9 +2307,17 @@ export type DebateLobbyMember = {
   /** Left to debate; still listed, without host powers, until back or it expires. */
   stepped_out: boolean;
   in_debate: boolean;
+  /**
+   * What `in_debate` is about (GEO-3130). `null` when not debating, when the viewer is not on this
+   * roster, or when a moderator hid the debate. Absent from a geo-chat that predates it.
+   */
+  in_debate_subject?: DebateLobbyDebateSubject | null;
   /** A listener's raised hand (GEO-3134). Absent from a geo-chat that predates moderation. */
   hand_raised_at?: string | null;
 };
+
+export type DebateLobbyDebateSubject =
+  { phase: 'choosing_claim' } | { phase: 'on_claim'; claim_entity_id: string; claim_name: string; space_id: string };
 
 /** What a host did to someone, as `viewer.last_moderation` and the log spell it (GEO-3134). */
 export type DebateLobbyModerationAction =
@@ -2376,6 +2384,8 @@ export type DebateLobbySummary = {
   viewer_reminded: boolean;
   /** On the roster, stepped out included. */
   viewer_on_roster: boolean;
+  /** When this row was read; orders card patches. `null` before the lobby's first broadcast; absent from older geo-chat. */
+  as_of?: string | null;
 };
 
 export type DebateLobbiesResponse = { lobbies: DebateLobbySummary[] };
@@ -2406,6 +2416,20 @@ export async function getDebateLobby(
     accountKey,
     signal,
   });
+}
+
+/**
+ * The lobby the viewer is on the roster of. `current_lobby_id` survives a step-out and is null once
+ * they leave, are removed, or the lobby ends; `stepped_out` is false whenever it is null.
+ */
+export type DebateMyLobby = { current_lobby_id: string | null; stepped_out: boolean };
+
+export async function getMyDebateLobby(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateMyLobby>('/me/debate-lobby', { auth: true, getPrivyIdentityToken, accountKey, signal });
 }
 
 /** Without `starts_at` the lobby opens now. A start opens it 10 minutes early. */
@@ -3291,6 +3315,11 @@ export async function getGeoChatSession(
 
   geoChatSessionRequests.set(requestKey, request);
   return request;
+}
+
+/** The access token every tab and request currently shares, if one is stored. */
+export function getStoredGeoChatAccessToken() {
+  return loadStoredSession()?.session.access_token ?? null;
 }
 
 export function resetGeoChatSession() {

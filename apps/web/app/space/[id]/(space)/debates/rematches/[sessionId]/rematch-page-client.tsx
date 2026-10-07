@@ -27,7 +27,6 @@ import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
-import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
 import { requestOpenRounds } from '~/core/debates/format-details';
@@ -51,6 +50,7 @@ import {
   useNotInterestedClaimIds,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
+import { useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -58,7 +58,7 @@ import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
-import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
+import { HubQueryState, HubSkeleton, exploreClaimsAction } from '~/core/debates/matchmaking/hub-states';
 import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ScrollableTabRow } from '~/core/debates/matchmaking/scrollable-tab-row';
@@ -270,6 +270,7 @@ const ROOM_REJOIN_RETRY_MS = 15_000;
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
   // The room owns this session rather than the other way round, so two of the page's exits change
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
@@ -1621,7 +1622,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
       router.replace(`/space/${endedSession.source_space_id}/debates`);
     },
-    [currentUserId, router]
+    [consumeDebateReturnDestination, currentUserId, router]
   );
 
   // "Debate now" = claims the opponent has responded to; the tab badge counts them.
@@ -2920,11 +2921,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         // the way on.
                         opponentHasPositions
                         ? { label: `See ${remoteFirstName}’s positions`, onClick: () => setTab('opponent') }
-                        : { label: 'Explore claims', onClick: () => setTab('explore') }
+                        : exploreClaimsAction(setTab)
                       : tab === 'opponent'
                         ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
                           // resolve, and the catalogue next door is the whole of the way out of it.
-                          { label: 'Explore claims', onClick: () => setTab('explore') }
+                          exploreClaimsAction(setTab)
                         : source === 'mine'
                           ? // The same dead end one tab over: a viewer who has answered nothing
                             // cannot fill this list from here, and the whole corpus is next door.

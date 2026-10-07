@@ -36,10 +36,12 @@ vi.mock('./claims-tab', () => ({
     variant,
     trailing,
     onSettledEmpty,
+    onTabChange,
   }: {
     variant?: string;
     trailing?: React.ReactNode;
     onSettledEmpty?: () => void;
+    onTabChange?: (tab: string) => void;
   }) => {
     // Stands in for the real tab reporting an unnarrowed, settled, empty corpus.
     React.useEffect(() => {
@@ -49,6 +51,8 @@ vi.mock('./claims-tab', () => ({
     return (
       <div data-testid="claims-tab" data-variant={variant}>
         {trailing}
+        {/* Stands in for the empty state's "Explore claims". */}
+        {onTabChange ? <button onClick={() => onTabChange('explore')}>Explore claims</button> : null}
       </div>
     );
   },
@@ -289,16 +293,58 @@ describe('LobbyTab', () => {
     expect(returning.onTabChange).not.toHaveBeenCalled();
   });
 
-  // A viewer who turned the switch off and found an empty Lobby asked a question and got an answer.
-  // Moving them off the tab would be answering a different one.
-  it('stays put when the viewer chose the wider list themselves', () => {
+  // A preference stored on another day is not a question asked about today's list. Arriving on an
+  // empty Lobby with it off is the same dead end as stepping back onto one.
+  it('moves on to Explore when the stored preference is the wider list', () => {
     localStorage.setItem(STORAGE_KEY, 'false');
     mocks.widerEmpty = true;
 
     const { onTabChange } = renderLobby();
 
+    expect(onTabChange).toHaveBeenCalledWith('explore');
+  });
+
+  // A viewer who turned the switch off just now and found an empty Lobby asked a question and got
+  // an answer. Moving them off the tab would be answering a different one.
+  it('stays put when the viewer turns the switch off on this visit', () => {
+    mocks.widerEmpty = true;
+
+    const { onTabChange } = renderLobby();
+    fireEvent.click(toggle());
+
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
     expect(onTabChange).not.toHaveBeenCalled();
+  });
+
+  // The hub unmounts the tab on the way out, so a choice held by the mount would be gone by the time
+  // they came back — and the stored preference they just wrote would then read as one from another
+  // day.
+  it('still stays put when they leave and come back after turning the switch off', () => {
+    mocks.widerEmpty = true;
+    const store = createStore();
+    renderLobby(store);
+    fireEvent.click(toggle());
+
+    cleanup();
+    const returning = renderLobby(store);
+
+    expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
+    expect(returning.onTabChange).not.toHaveBeenCalled();
+  });
+
+  // Leaving for Explore by the button is leaving for Explore. Coming back must not do it again.
+  it('does not move them again after they took the empty state to Explore', () => {
+    mocks.widerEmpty = true;
+    const store = createStore();
+    const { onTabChange } = renderLobby(store);
+    fireEvent.click(toggle());
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+    expect(onTabChange).toHaveBeenCalledWith('explore');
+
+    cleanup();
+    const returning = renderLobby(store);
+
+    expect(returning.onTabChange).not.toHaveBeenCalled();
   });
 
   it('swaps to the wider list when toggled off', () => {

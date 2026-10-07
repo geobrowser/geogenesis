@@ -13,6 +13,7 @@ import {
   type DebatePublishInput,
   buildDebateClaimsDraft,
   buildDebatePublishDraft,
+  debatePublishId,
   mergeTranscriptSegmentsIntoTurns,
   stableClaimRelationIds,
 } from './debate-publish-draft';
@@ -1185,6 +1186,85 @@ describe('buildDebatePublishDraft', () => {
     );
     const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
     expect(ops.length).toBeGreaterThan(0);
+  });
+});
+
+// The sweep's "already published" check reads the indexer, so while the indexer lags the same debate
+// is published again. On 2026-10-05 that wrote 11 to 16 copies of three debates. Every id the draft
+// mints is derived from the debate, so a second publish rewrites the first instead of copying it.
+describe('buildDebatePublishDraft ids across republishes', () => {
+  const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';
+  const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+  const republishable = (overrides: Partial<DebatePublishInput> = {}) =>
+    baseInput({
+      ogImageUrl: 'ipfs://bafyogcard',
+      claimTopics: [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' }],
+      claims: [
+        { text: 'Iran was close to a weapon.', isFactual: true, turnIndex: 0, isContestable: true },
+        // Verbatim twins in one turn: an older payload's fresh-id claims stay two entities.
+        { text: 'Iran was close to a weapon.', isFactual: true, turnIndex: 0 },
+        { text: 'Stable claim.', isFactual: null, turnIndex: 1, stableEntityId: STABLE, isContestable: true },
+        { text: 'Matched claim.', isFactual: false, turnIndex: 1, existingClaimEntityId: EXISTING },
+      ],
+      ...overrides,
+    });
+  const idsOf = (draft: ReturnType<typeof buildDebatePublishDraft>) => ({
+    values: draft.values.map(v => [v.id, v.entity.id, v.property.id]),
+    relations: draft.relations.map(r => [r.id, r.entityId, r.fromEntity.id, r.type.id, r.toEntity.id]),
+  });
+
+  it('writes the same entity, relation and value ids when the same debate is published again', () => {
+    const first = buildDebatePublishDraft(republishable());
+    const second = buildDebatePublishDraft(republishable());
+
+    expect(idsOf(second)).toEqual(idsOf(first));
+    expect(first.relations.length).toBeGreaterThan(20);
+  });
+
+  it('keeps every id unique within one edit, even when the input repeats itself', () => {
+    const draft = buildDebatePublishDraft(
+      republishable({
+        // The same person on both sides: two Participants edges from the Debate to one entity.
+        participants: [
+          { spaceEntityId: YES_SPACE, displayName: 'Arturas', position: true, participantSlot: 1 },
+          { spaceEntityId: YES_SPACE, displayName: 'Arturas', position: false, participantSlot: 2 },
+        ],
+      })
+    );
+    const relationIds = draft.relations.flatMap(r => [r.id, r.entityId]);
+    expect(new Set(relationIds).size).toBe(relationIds.length);
+    const valueIds = draft.values.map(v => v.id);
+    expect(new Set(valueIds).size).toBe(valueIds.length);
+    const minted = draft.values
+      .filter(v => v.property.id === SystemIds.NAME_PROPERTY && v.value === 'Iran was close to a weapon.')
+      .map(v => v.entity.id);
+    expect(new Set(minted).size).toBe(2);
+  });
+
+  it('derives the ids from the debate, so two debates share none of their own', () => {
+    const a = buildDebatePublishDraft(republishable());
+    const b = buildDebatePublishDraft(republishable({ debateId: '99992222-3333-4444-5555-666677778888' }));
+    const ids = (draft: typeof a) => new Set(draft.relations.map(r => r.id));
+    const shared = [...ids(a)].filter(id => ids(b).has(id));
+    // Only a stable claim's own relations, which are keyed on the claim rather than the debate (its
+    // Sources edge points at each debate, so even that one differs).
+    const stableIds = new Set(a.relations.filter(r => r.fromEntity.id === STABLE).map(r => r.id));
+    expect(shared.length).toBeGreaterThan(0);
+    expect(shared.every(id => stableIds.has(id))).toBe(true);
+    expect(a.relations.find(r => r.type.id === TYPES_PROPERTY_ID && r.fromEntity.id === a.debateEntityId)?.id).toBe(
+      debatePublishId(a.debateEntityId, `relation:${a.debateEntityId}:${TYPES_PROPERTY_ID}:${DEBATE_TYPE_ID}`)
+    );
+  });
+
+  it("leaves a stable claim's relations on the ids the early claims publish uses", () => {
+    const draft = buildDebatePublishDraft(republishable());
+    const types = draft.relations.find(r => r.fromEntity.id === STABLE && r.type.id === TYPES_PROPERTY_ID);
+    expect(types?.id).toBe(stableClaimRelationIds(STABLE, TYPES_PROPERTY_ID, CLAIM_TYPE_ID).id);
+  });
+
+  it('still takes ids from an injected factory', () => {
+    const draft = buildDebatePublishDraft(republishable(), { createEntityId: idFactory() });
+    expect(draft.relations.every(r => r.fromEntity.id === STABLE || r.id.startsWith('id'))).toBe(true);
   });
 });
 
