@@ -14,6 +14,7 @@ import {
   type DebateRematchSession,
   type GetPrivyIdentityToken,
   type LiveKitJoinResponse,
+  type OpenRoundPick,
   type ParticipantSlot,
   abortLocalRecordingMultipart,
   getCurrentGeoChatUserId,
@@ -40,6 +41,7 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
+import { DebateRoomOverlayCard } from '~/core/debates/debate-room-overlay-card';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -73,6 +75,7 @@ import {
   useMarkDebateCapturing,
   useMarkDebateJoined,
   useMarkDebateReady,
+  useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
 import { BackToLobbyRow, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
@@ -83,6 +86,7 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
+import { OpenRoundPickCard } from '~/core/debates/open-round-pick-card';
 import {
   type OpenRoundGap,
   type OpenRoundsRoomPhase,
@@ -94,7 +98,13 @@ import {
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
-import { type LiveRecordingStream, putRecordingPart, startLiveRecordingStream } from '~/core/debates/recording-stream';
+import {
+  type LiveRecordingStream,
+  type RecordingPauseReason,
+  putRecordingPart,
+  startLiveRecordingStream,
+} from '~/core/debates/recording-stream';
+import { recordingUploadErrorProperties } from '~/core/debates/recording-upload-errors';
 import {
   debateRecordingUploadId,
   deleteDebateRecordingUpload,
@@ -117,6 +127,7 @@ import { useScrollLock } from '~/core/debates/use-scroll-lock';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useFeatureFlag } from '~/core/state/feature-flags';
+import { reportError } from '~/core/telemetry/logger';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
@@ -270,7 +281,7 @@ function startRoomRecordingStream({
   stream: MediaStream;
   mimeType: string;
   startedAtMs: number;
-  shouldPause: () => boolean;
+  shouldPause: () => RecordingPauseReason | null;
 }): LiveRecordingStream {
   const { getPrivyIdentityToken, accountKey } = auth;
   const videoSettings = stream.getVideoTracks()[0]?.getSettings?.();
@@ -368,6 +379,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markCapturing = useMarkDebateCapturing(debateId);
   const abortDebate = useAbortDebate(debateId);
   const endDebateTurn = useEndDebateTurn(debateId);
+  const saveOpenRoundPick = useSaveOpenRoundPick(debateId);
   const clearDebateActivity = useClearDebateActivity();
   const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
@@ -455,9 +467,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const reportedRecorderFailuresRef = React.useRef(new Set<string>());
+  // The recording's timeslices, for a recorder with no live stream only (no signed-in user when it
+  // started). With one, the stream holds them, and lets go of each once it is uploaded.
   const recordingChunksRef = React.useRef<Blob[]>([]);
   // GEO-2955. The recording made durable while it is made: every timeslice to IndexedDB, and to
-  // R2 part by part. The in-memory chunks above stay the source of the upload at the end.
+  // R2 part by part. It is also the only place this tab keeps the timeslices, so memory stays
+  // bounded however long the debate runs: one that is in a confirmed part is let go of.
   const liveRecordingStreamRef = React.useRef<LiveRecordingStream | null>(null);
   // The streamed upload shares the upstream with the call, so it stands down while the call
   // struggles. Set from LiveKit's own quality reports for the local participant.
@@ -509,7 +524,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingPersistencePromiseRef = React.useRef<Promise<boolean> | null>(null);
   const persistedRecordingDebateIdRef = React.useRef<string | null>(null);
   const stoppedRecordingRef = React.useRef<{
-    blob: Blob;
+    /** The whole recording, when it was not streamed; a streamed one is read from the stream. */
+    blob: Blob | null;
     mimeType: string;
     startedAtMs: number;
     endedAtMs: number;
@@ -1110,10 +1126,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 stream,
                 mimeType: recorder.mimeType || mimeType || 'video/webm',
                 startedAtMs: recordingStartedAtRef.current,
-                shouldPause: () =>
-                  callConnectionPoorRef.current ||
-                  roomStateRef.current !== 'connected' ||
-                  (typeof navigator !== 'undefined' && navigator.onLine === false),
+                // Why, not just whether: a stream that stands down says which of these held it.
+                shouldPause: () => {
+                  if (typeof navigator !== 'undefined' && navigator.onLine === false) return 'offline';
+                  if (roomStateRef.current !== 'connected') return 'room_not_connected';
+                  if (callConnectionPoorRef.current) return 'connection_poor';
+                  return null;
+                },
               });
             }
             // GEO-2644. This event is the first instant capture is genuinely underway, and the debate
@@ -1139,10 +1158,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // `startDebateRecorder` reports the `error` itself; this only clears the pill.
         recorder.addEventListener('error', () => setCapturing(false), { once: true });
         recorder.ondataavailable = event => {
-          if (event.data.size > 0) {
-            recordingChunksRef.current.push(event.data);
-            liveRecordingStreamRef.current?.append(event.data, serverNowRef.current());
-          }
+          if (event.data.size === 0) return;
+          // One home per recording, decided when it started: the stream if there is one, which lets
+          // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
+          const live = liveRecordingStreamRef.current;
+          if (live) live.append(event.data, serverNowRef.current());
+          else recordingChunksRef.current.push(event.data);
         };
       },
     });
@@ -1199,10 +1220,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const endedAtMs = recordingEndedAtRef.current;
     if (!recorder || !startedAtMs || !endedAtMs) return false;
 
+    const liveStream = liveRecordingStreamRef.current;
     if (!stoppedRecordingRef.current) {
       const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
-      const blob = new Blob(recordingChunksRef.current, { type: mimeType });
-      if (blob.size === 0) return false;
+      const blob = liveStream ? null : new Blob(recordingChunksRef.current, { type: mimeType });
+      if ((blob ? blob.size : (liveStream?.size() ?? 0)) === 0) return false;
       const videoSettings = localMediaStreamRef.current?.getVideoTracks()[0]?.getSettings?.();
       stoppedRecordingRef.current = {
         blob,
@@ -1218,15 +1240,28 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
 
     const recording = stoppedRecordingRef.current;
-    // Whatever went out during the debate is handed to the queue, which sends only the rest.
-    const multipart = (await liveRecordingStreamRef.current?.finish()) ?? null;
+    // Whatever went out during the debate is handed to the queue, which sends only the rest — and,
+    // for a streamed recording, stores only the rest: the stream no longer holds the parts it sent.
+    const multipart = (await liveStream?.finish()) ?? null;
+    const bytes = liveStream?.recording() ?? null;
+    if (!multipart) {
+      // Nothing went out during the debate: the whole recording is one upload from here, which is
+      // the case that has lost one (GEO-3171). Counted, so it is never silent again.
+      capture('debate_recording_upload_fallback', {
+        debate_id: debate.id,
+        reason: 'whole_recording_after_debate',
+        streamed: liveStream !== null,
+        bytes: bytes?.size ?? recording.blob?.size ?? 0,
+      });
+    }
+    const storedBytes = bytes ? bytes.size - bytes.availableFrom : (recording.blob?.size ?? 0);
     const storage = await estimateRecordingStorage();
     if (storage?.quota !== undefined && storage.usage !== undefined) {
       const availableBytes = storage.quota - storage.usage;
-      if (availableBytes < recording.blob.size) {
+      if (availableBytes < storedBytes) {
         console.warn('[DebateRecording] browser storage estimate is below recording size', {
           availableBytes,
-          recordingBytes: recording.blob.size,
+          recordingBytes: storedBytes,
         });
       }
     }
@@ -1235,7 +1270,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       await enqueueDebateRecordingUpload({
         userId: localParticipant.user_id,
         debateId: debate.id,
-        blob: recording.blob,
+        ...(bytes ? { recording: bytes } : { blob: recording.blob ?? new Blob([], { type: recording.mimeType }) }),
         mimeType: recording.mimeType,
         startedAtMs: recording.startedAtMs,
         endedAtMs: recording.endedAtMs,
@@ -1270,9 +1305,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const persistStoppedLocalRecording = React.useCallback(() => {
     if (persistedRecordingDebateIdRef.current === debate?.id) return Promise.resolve(true);
     if (recordingPersistencePromiseRef.current) return recordingPersistencePromiseRef.current;
-    const persistence = performStoppedLocalRecordingPersistence().finally(() => {
-      recordingPersistencePromiseRef.current = null;
-    });
+    const debateId = debate?.id ?? null;
+    const persistence = performStoppedLocalRecordingPersistence()
+      .catch(error => {
+        // The recording did not reach the upload queue. The person sees the error and can retry,
+        // but nothing else would ever count it.
+        reportRecordingHandoffFailure(debateId, error);
+        throw error;
+      })
+      .finally(() => {
+        recordingPersistencePromiseRef.current = null;
+      });
     recordingPersistencePromiseRef.current = persistence;
     return persistence;
   }, [debate?.id, performStoppedLocalRecordingPersistence]);
@@ -1933,6 +1976,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const toggleVideoEnabled = React.useCallback(() => {
     setVideoEnabled(current => !current);
   }, []);
+
+  const savePickAsync = saveOpenRoundPick.mutateAsync;
+  const pickOpenRound = React.useCallback(
+    (roundIndex: number, pick: OpenRoundPick) => savePickAsync({ roundIndex, pick }),
+    [savePickAsync]
+  );
 
   const endLocalTurn = React.useCallback(async () => {
     if (
@@ -2821,6 +2870,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 rematchBusy={consentToRematch.isPending}
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
+                onPickOpenRound={pickOpenRound}
+                remoteDisconnected={remotePresence === 'left'}
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
@@ -2861,6 +2912,8 @@ function DebateRecordingModal({
   rematchBusy,
   endTurnPending,
   onEndTurn,
+  onPickOpenRound,
+  remoteDisconnected,
   onRetryFinalization,
   canRetryConnection,
   onRetryConnection,
@@ -2892,6 +2945,9 @@ function DebateRecordingModal({
   rematchBusy: boolean;
   endTurnPending: boolean;
   onEndTurn: () => void;
+  onPickOpenRound: (roundIndex: number, pick: OpenRoundPick) => Promise<unknown>;
+  /** The other debater has dropped out of the call, which mid-debate means reconnecting. */
+  remoteDisconnected: boolean;
   onRetryFinalization: () => void;
   canRetryConnection: boolean;
   onRetryConnection: () => void;
@@ -2952,8 +3008,13 @@ function DebateRecordingModal({
     ) : null;
   // During thanking the same countdown used to be drawn over both videos. It now belongs to the
   // debate-again action below; all other shared phase countdowns keep their existing placement.
+  // The Open rounds pick card carries the decision window's countdown itself (GEO-3178).
+  const openRoundDeciding = countdown.openRounds?.phase === 'deciding' ? countdown.openRounds : null;
   const sharedPhaseCountdown =
-    countdown.effectiveStatus !== 'thanking' && countdown.activeSlot === null && countdown.yieldingSlot === null
+    countdown.effectiveStatus !== 'thanking' &&
+    countdown.activeSlot === null &&
+    countdown.yieldingSlot === null &&
+    !openRoundDeciding
       ? countdownRing
       : null;
   const localCountdown = localEndingTurn
@@ -3125,6 +3186,25 @@ function DebateRecordingModal({
 
         <div className="relative grid w-full max-w-[430px] gap-2">
           {orderedVideoTiles}
+
+          {openRoundDeciding && debate.open_rounds && localSlot !== null && (
+            <OpenRoundPickCard
+              // A fresh card per round, so nothing picked or failed in one round carries into the next.
+              key={openRoundDeciding.roundIndex}
+              roundIndex={openRoundDeciding.roundIndex}
+              savedPick={
+                debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
+              }
+              rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
+              remainingSeconds={countdown.remainingSeconds}
+              progress={countdown.progress}
+              onPick={pick => onPickOpenRound(openRoundDeciding.roundIndex, pick)}
+              localReconnecting={roomState === 'reconnecting'}
+              reconnectingOpponentName={
+                remoteDisconnected ? (remoteParticipant ? speakerName(remoteParticipant) : 'The other debater') : null
+              }
+            />
+          )}
 
           {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && (
             <DebateAgainCard
@@ -3500,7 +3580,7 @@ function DebateAgainCard({
   const consentLabel = localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!";
 
   return (
-    <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
+    <DebateRoomOverlayCard className="w-[calc(100%-7rem)] gap-2 px-3 py-2">
       {rebuttalRounds !== null && (
         <>
           <CardRow>
@@ -3575,7 +3655,7 @@ function DebateAgainCard({
         </span>
       </CardRow>
       {children}
-    </section>
+    </DebateRoomOverlayCard>
   );
 }
 
@@ -3706,6 +3786,22 @@ function logDebateConnectionDiagnostic(
   }
 ) {
   console.info('[DebateRoomConnection]', { event, ...details });
+}
+
+function reportRecordingHandoffFailure(debateId: string | null, error: unknown) {
+  try {
+    const online = typeof navigator === 'undefined' || navigator.onLine;
+    capture('debate_recording_upload_failed', {
+      debate_id: debateId ?? 'unknown',
+      stage: 'handoff',
+      attempt_count: 0,
+      terminal_reason: 'handoff_failed',
+      ...recordingUploadErrorProperties(error, { online }),
+    });
+    reportError(error, { tags: { area: 'debate_recording', stage: 'handoff' } });
+  } catch {
+    // Reporting must never change what the person is shown.
+  }
 }
 
 function captureDebateRoomConnectionEvent(

@@ -38,6 +38,7 @@ import {
   useGeoChatAuth,
   useLeaveDebateRematch,
   useMarkDebateReady,
+  useSaveOpenRoundPick,
   useSpaceDebates,
   useUpdateDebateAvailability,
 } from './hooks';
@@ -58,6 +59,7 @@ const mocks = vi.hoisted(() => ({
   listDebateRematchClaims: vi.fn(),
   listDebateSharePrompts: vi.fn(),
   markDebateReady: vi.fn(),
+  saveOpenRoundPick: vi.fn(),
   pathname: '/space/space-1/debates/debate-1',
   push: vi.fn(),
   back: vi.fn(),
@@ -118,6 +120,7 @@ vi.mock('./api', async importOriginal => {
     listDebateRematchClaims: mocks.listDebateRematchClaims,
     listDebateSharePrompts: mocks.listDebateSharePrompts,
     markDebateReady: mocks.markDebateReady,
+    saveOpenRoundPick: mocks.saveOpenRoundPick,
     updateDebateAvailability: mocks.updateDebateAvailability,
   };
 });
@@ -1232,6 +1235,84 @@ describe('authoritative mutation reconciliation', () => {
       act(() => result.current.mutateAsync({ turnIndex: 0, endedAtMs: 1_784_542_272_505 }))
     ).rejects.toMatchObject({ code: 'turn_yield_stale', status: 400 });
     expect(mocks.endDebateTurn).toHaveBeenCalledOnce();
+  });
+
+  // GEO-3178.
+  describe('useSaveOpenRoundPick', () => {
+    const renderSavePick = () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { mutations: { retryDelay: 0 }, queries: { retry: false } },
+      });
+      const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+      const { result } = renderHook(() => useSaveOpenRoundPick('debate-1'), { wrapper });
+      return { queryClient, invalidateQueries, result };
+    };
+
+    beforeEach(() => {
+      mocks.saveOpenRoundPick.mockReset();
+    });
+
+    it('saves the pick for its round and applies the debate it answers with', async () => {
+      const debate = { id: 'debate-1', status: 'in_progress' } as unknown as Debate;
+      mocks.saveOpenRoundPick.mockResolvedValue(debate);
+      const { queryClient, invalidateQueries, result } = renderSavePick();
+
+      await act(() => result.current.mutateAsync({ roundIndex: 2, pick: 'extend' }));
+
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledWith('debate-1', 2, 'extend', expect.any(Function), 'user-a');
+      expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(debate);
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
+    });
+
+    it('treats a round that resolved mid-save as done, and re-reads the debate for its outcome', async () => {
+      mocks.saveOpenRoundPick.mockRejectedValue(
+        new GeoChatRequestError('Round already resolved', 'round_already_resolved', 409)
+      );
+      const { invalidateQueries, result } = renderSavePick();
+
+      await expect(act(() => result.current.mutateAsync({ roundIndex: 0, pick: 'end' }))).resolves.toBeNull();
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
+    });
+
+    it('sends a later pick only once the earlier one has answered, so the last tap is saved last', async () => {
+      const extendDebate = { id: 'debate-1', open_rounds: { my_pick: 'extend' } } as unknown as Debate;
+      const endDebate = { id: 'debate-1', open_rounds: { my_pick: 'end' } } as unknown as Debate;
+      let answerFirst!: (debate: Debate) => void;
+      mocks.saveOpenRoundPick
+        .mockReturnValueOnce(new Promise<Debate>(resolve => (answerFirst = resolve)))
+        .mockResolvedValueOnce(endDebate);
+      const { queryClient, result } = renderSavePick();
+
+      let saves!: Promise<unknown>;
+      act(() => {
+        saves = Promise.all([
+          result.current.mutateAsync({ roundIndex: 0, pick: 'extend' }),
+          result.current.mutateAsync({ roundIndex: 0, pick: 'end' }),
+        ]);
+      });
+      await act(async () => undefined);
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledOnce();
+
+      await act(async () => {
+        answerFirst(extendDebate);
+        await saves;
+      });
+      expect(mocks.saveOpenRoundPick.mock.calls.map(call => call[2])).toEqual(['extend', 'end']);
+      expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(endDebate);
+    });
+
+    it('rejects any other failure once, without retrying', async () => {
+      mocks.saveOpenRoundPick.mockRejectedValue(new GeoChatRequestError('Unavailable', 'service_unavailable', 503));
+      const { result } = renderSavePick();
+
+      await expect(act(() => result.current.mutateAsync({ roundIndex: 0, pick: 'end' }))).rejects.toMatchObject({
+        status: 503,
+      });
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledOnce();
+    });
   });
 });
 

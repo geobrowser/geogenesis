@@ -27,9 +27,11 @@ import {
   useAdminPairOverlap,
   useCreateAdminMatch,
 } from './admin-hooks';
+import { useAdminPairFit, useAdminSharedFreeSlots } from './admin-pair-fit';
 import { SegmentedControl, useMinuteClock } from './debate-calendar-controls';
 import { HubPillButton } from './hub-pill-button';
 import { offlinePerson } from './offline-person';
+import { byPairFit, fitReasonText } from './pair-fit';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { SpaceFilterPills } from './space-filter-pills';
@@ -66,7 +68,9 @@ type Props = {
  *   found by name through Geo search. Only people with availability can be picked. Everyone else
  *   gets Request availability, which emails them, and says so when there is no email on file.
  * - **Once debater 1 is picked**, the list reorders by matches with them, the People tab's order
- *   measured from that person instead of the viewer.
+ *   measured from that person instead of the viewer. When gaia's pair fit is available (GEO-3224)
+ *   it orders by fit instead, halved for anyone with no free time in common, and each row says
+ *   why ("Disagrees with Ana on ..."); when it is not, the order is exactly the matches order.
  * - **Recommended** offers the half-hours both are free; **Pick any time** is the override, kept a
  *   separate mode so nobody drifts into it. Every time shows both debaters' own clocks.
  */
@@ -140,6 +144,11 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   });
   // As the People tab does: a count is only shown, and only ranks, once it is known for this anchor.
   const ranking = first !== null && facts.matchesKnown;
+  const rosterProfileIds = React.useMemo(() => rosterPeople.map(person => person.profile_space_id), [rosterPeople]);
+  const fit = useAdminPairFit(first ? first.person.profile_space_id : null, rosterProfileIds);
+  const freeSlots = useAdminSharedFreeSlots(first ? first.userId : null, availableIds);
+  const fitRanking = first !== null && fit.available;
+  const fitOf = (person: DebatePerson) => (first ? fit.byProfile.get(normId(person.profile_space_id)) : undefined);
   const matchCount = (person: DebatePerson) =>
     facts.matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0;
 
@@ -174,10 +183,17 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
         (facts.debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
     )
     .sort(
-      (left, right) =>
-        (ranking ? matchCount(right) - matchCount(left) : 0) ||
-        debatesOf(right) - debatesOf(left) ||
-        speakerLabel(left).localeCompare(speakerLabel(right))
+      byPairFit<DebatePerson>(
+        {
+          available: fitRanking,
+          fitOf,
+          sharedFreeSlotsOf: person => freeSlots.get(normId(person.user_id)),
+        },
+        (left, right) =>
+          (ranking ? matchCount(right) - matchCount(left) : 0) ||
+          debatesOf(right) - debatesOf(left) ||
+          speakerLabel(left).localeCompare(speakerLabel(right))
+      )
     );
   // People without availability come from search alone, after everyone who can be picked.
   const listedHits = hitPeople.filter(person => !picked.has(normId(person.user_id)));
@@ -221,19 +237,28 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
     );
   };
 
-  const option = (person: DebatePerson, available: boolean) => (
-    <PersonOption
-      key={person.user_id}
-      person={person}
-      available={available}
-      record={available ? (facts.records.get(person.profile_space_id) ?? null) : null}
-      matches={available && ranking ? matchCount(person) : null}
-      matchesWith={first ? debaterFirstName(first.person) : null}
-      prompt={prompts.get(normId(person.user_id))}
-      onPick={() => pick(person)}
-      onRequest={() => void requestAvailability([person.user_id])}
-    />
-  );
+  const option = (person: DebatePerson, available: boolean) => {
+    const personFit = available && fitRanking ? fitOf(person) : undefined;
+    return (
+      <PersonOption
+        key={person.user_id}
+        person={person}
+        available={available}
+        fitReason={
+          personFit && first
+            ? fitReasonText(personFit.reason, debaterFirstName(first.person), personFit.parts.opposed)
+            : null
+        }
+        noSharedTime={available && fitRanking && freeSlots.get(normId(person.user_id)) === 0}
+        record={available ? (facts.records.get(person.profile_space_id) ?? null) : null}
+        matches={available && ranking ? matchCount(person) : null}
+        matchesWith={first ? debaterFirstName(first.person) : null}
+        prompt={prompts.get(normId(person.user_id))}
+        onPick={() => pick(person)}
+        onRequest={() => void requestAvailability([person.user_id])}
+      />
+    );
+  };
 
   return (
     <>
@@ -267,9 +292,11 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
           <Text as="p" variant="footnote" color="grey-04">
             {!first
               ? 'People with availability, most debates first'
-              : ranking
-                ? `Ordered by matches with ${speakerLabel(first.person)}, most first`
-                : `Counting matches with ${speakerLabel(first.person)}…`}
+              : fitRanking
+                ? `Ordered by fit with ${speakerLabel(first.person)}: disagreements, shared interests and free time`
+                : ranking
+                  ? `Ordered by matches with ${speakerLabel(first.person)}, most first`
+                  : `Counting matches with ${speakerLabel(first.person)}…`}
           </Text>
           <ul aria-label="People" className="min-h-0 flex-1 overflow-y-auto border-t border-grey-02">
             {debatersQuery.error && !debatersQuery.data ? (
@@ -431,12 +458,18 @@ function PersonOption({
   record,
   matches,
   matchesWith,
+  fitReason,
+  noSharedTime,
   prompt,
   onPick,
   onRequest,
 }: {
   person: DebatePerson;
   available: boolean;
+  /** Why they fit debater 1 (GEO-3224), when pair fit is ranking the list. */
+  fitReason: string | null;
+  /** Pair fit is ranking and they share no free half-hour with debater 1. */
+  noSharedTime: boolean;
   record: PersonRecord | null;
   /** Matches with debater 1, once known; null hides the count. */
   matches: number | null;
@@ -503,6 +536,11 @@ function PersonOption({
           {name}
         </Text>
         <PersonRecordLine record={record} match={matchPill} />
+        {fitReason || noSharedTime ? (
+          <Text as="span" variant="footnote" color="grey-04" className="truncate">
+            {[fitReason, noSharedTime ? 'No free time in common' : null].filter(Boolean).join(' · ')}
+          </Text>
+        ) : null}
         {available ? null : (
           <Text as="span" variant="footnote" color="grey-04">
             No availability set. Can&rsquo;t be matched until they set it.
