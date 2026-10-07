@@ -1975,18 +1975,16 @@ describe('DebateRematchPageClient', () => {
     });
 
     // The filter bar is one bar across Explore's sources, so a space picked while browsing still
-    // narrows this list — the same as it does between All claims and Featured. Pinned because the
-    // membership default puts a space in it without anyone clicking, and a viewer landing on their
-    // own positions behind a filter they never set would read as claims having gone missing.
+    // narrows this list — the same as it does between All claims and Featured.
     it('narrows with the space filter the browsing source was left on', async () => {
       viewerOnlyClaim();
       mocks.spaceAllowlist = new Set([SPACE_1, SPACE_2].map(id => id.replace(/-/g, '')));
-      mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
       render(<DebateRematchPageClient sessionId="rematch-1" />);
       await showExplore();
+      selectFilter('Any space', 'Crypto');
       await showMyPositions();
 
-      // Seeded to the space the viewer belongs to, so their position in the other one is filtered
+      // Narrowed to the space picked on Explore, so their position in the other one is filtered
       // out — and clearing the filter brings it back.
       expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
       expect(screen.queryByText('Only mine')).toBeNull();
@@ -3191,122 +3189,21 @@ describe('DebateRematchPageClient', () => {
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
   });
 
-  // Reported after the facet landed: pick a space, pick a topic it lists, get nothing. The space
-  // menu was filtered by the viewer's allowlist but not by whether this pairing can publish a
-  // debate there — and `browsedRows` drops every claim in a space it cannot. The server's topic
-  // facet knows nothing about that, so it offered all of the space's topics over an empty list.
-  // GEO-2789, the debate-again half. Seeded from the menu rather than the eligible set, because
-  // the effect above polices the selection against exactly what the menu offers.
-  it('opens on the spaces the viewer belongs to', async () => {
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    // The trigger takes the name of the one selected space rather than reading "Any space".
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
-
-    // Ticked in the menu, and listed once: a seed in any shape but the menu's own would be added
-    // back as a second row rather than ticking the one already there.
-    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
-    const rows = screen.getAllByRole('button', { name: /Crypto/ }).filter(el => el.hasAttribute('aria-pressed'));
-    expect(rows).toHaveLength(1);
-    expect(rows[0]).toHaveAttribute('aria-pressed', 'true');
-  });
-
-  /**
-   * GEO-2789's seed is spent on whatever menu it sees, and a curator's page is not a menu that can
-   * answer it — its spaces say nothing about who is looking.
-   *
-   * That used to be the ordinary path rather than an edge: the tab opened on Recommended whenever
-   * there was anything to recommend, so any viewer with a curated page had their one seed spent
-   * against it and reached All claims with the default already gone. Opening on All claims means
-   * the seed meets a menu about the corpus first, whatever a curator has done.
-   */
-  it('spends the seed on All claims even when a curated page exists', async () => {
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    // A curated page in a space that is nobody's membership, so its menu could not answer the seed.
-    mocks.recommendedSections = [{ id: 'section-1', name: 'Curated', claimIds: [CLAIM_FRESH] }];
-    mocks.recommendedEntities = [publishedEntity(CLAIM_FRESH, 'A curated claim')];
-
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    await showExplore();
-
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
-  });
-
   // The rows are one page; the facet counts the whole tag. So a space whose only tagged claim is on
   // a later page reaches the *menu* without ever reaching the space-type lookup — which is keyed on
   // the loaded entities — and an unresolved type reads as publishable. That is how a personal space,
-  // the one thing that gate exists to exclude, could be offered and take the one-shot default with
-  // it before its page arrived and pruned it away.
+  // the one thing that gate exists to exclude, could be offered before its page arrived.
   it('knows the type of a space the facet offers but no loaded claim names', async () => {
     const PERSONAL_SPACE = '019fedae-72b6-7ab2-927a-df044d57c5aa';
-    mocks.memberSpaceIds = new Set([PERSONAL_SPACE.replace(/-/g, ''), SPACE_1.replace(/-/g, '')]);
-    // Theirs, and a personal space — so it is both seedable and unpublishable.
     mocks.spaceTypes = { [PERSONAL_SPACE]: 'PERSONAL' };
     mocks.facetOnlySpaces = [{ id: PERSONAL_SPACE, count: 4 }];
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    // The default lands on the space that survives the gate, not the one whose type was unknown.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-
-    // And the personal space is not on the menu at all.
-    fireEvent.click(screen.getByRole('button', { name: /Crypto/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Any space/ }));
+    expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Space 019fedae/ })).toBeNull();
-  });
-
-  // The seed is spent on whatever the menu is offering, so every gate that decides what it offers
-  // has to have answered. `useDebatePublishableSpaces` answers `null` for *unknown*, which
-  // `isSpaceDebatePublishable` reads as "don't filter" — so mid-load the menu offers spaces the
-  // page will go on to reject. Seeded from one of those, the default is spent and the pruning
-  // effect then takes it straight back off, leaving the viewer with no default at all.
-  it('waits for the publishable lookup before taking its one default', async () => {
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
-    // Still in flight: every space passes the gate for now, Governance among them.
-    mocks.publishableSpaceIds = null;
-    mocks.publishableSpacesLoading = true;
-    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    // Nothing seeded yet, because nothing is known yet.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
-
-    // It lands, and Governance turns out not to be publishable after all.
-    mocks.publishableSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    mocks.publishableSpacesLoading = false;
-    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    // The default is still there to spend, and spends it on the space that survived.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
-  });
-
-  // GEO-2834. Same rule as the publishable gate above, applied to the *viewer's* side of the match:
-  // sign-up sends one membership proposal per picked space and they land seconds apart, so the
-  // first non-empty answer is a fraction of what the reader chose — and the seed fires once.
-  it('waits for the rest of their memberships before taking its one default', async () => {
-    // Only the first proposal has been indexed so far.
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-    mocks.isSettlingMemberships = true;
-    const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await showAllClaims();
-
-    // Unspent, rather than spent on the one space that happens to have landed.
-    await waitFor(() => expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument());
-
-    // The rest of what they picked lands.
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, ''), SPACE_2.replace(/-/g, '')]);
-    mocks.isSettlingMemberships = false;
-    view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    // Seeded with both of theirs, which a seed taken against the partial answer would have missed.
-    await waitFor(() => expect(screen.getByRole('button', { name: /2 spaces/ })).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
   });
 
   // This menu's options accumulate from rows as they arrive, so they are pickable before the seed
@@ -5726,29 +5623,6 @@ describe('the Related tab', () => {
   });
 
   /**
-   * The member-space default is spent on whatever menu it sees, and it is a default about browsing.
-   * Its gate said "not the opponent's tab", which was the same sentence as "only on Explore" while
-   * there were two tabs to choose between — and stopped being one the moment this tab landed the
-   * pair somewhere else. Spent here, it would be spent against a menu of one space, the debated
-   * claim's, which Explore would then inherit as a deliberate-looking choice nobody made.
-   */
-  it('does not spend the member-space default on the Related tab', async () => {
-    debateWithRelated();
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-    await screen.findByRole('button', { name: 'Related' });
-    await settleTabSwap();
-
-    // Unspent: the trigger still offers every space rather than naming one.
-    expect(screen.getByRole('button', { name: /Any space/ })).toBeInTheDocument();
-
-    // And spent as soon as the tab it is about is open.
-    await showAllClaims();
-    await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
-  });
-
-  /**
    * The space filter is a selection made against whatever spelling the menu offered, and a row
    * carries whatever spelling its source used. Compared raw, switching to Related hid a row under a
    * filter naming that very space — the filter and the row agreeing about the space and disagreeing
@@ -5766,11 +5640,10 @@ describe('the Related tab', () => {
 
     // The selection is made over on Explore, against a menu built from rows geo-chat named with
     // hyphens, and it outlives the tab (GEO-2850) — which is how the two spellings meet.
-    mocks.memberSpaceIds = new Set([SPACE_1.replace(/-/g, '')]);
-
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await screen.findByRole('button', { name: 'Related' });
     await showAllClaims();
+    selectFilter('Any space', 'Crypto');
     await waitFor(() => expect(screen.getByRole('button', { name: /Crypto/ })).toBeInTheDocument());
 
     fireEvent.click(screen.getByRole('button', { name: 'Related' }));
@@ -6567,21 +6440,24 @@ describe('From this debate', () => {
  * GEO-3223. On a desktop the space and topic menus are rows of pills, and the search box answers
  * topics as well as claims. A phone keeps the menus, which the rest of this file drives.
  */
-describe('desktop filter rows', () => {
+describe('desktop filter row', () => {
   beforeEach(() => {
     mocks.isPhone = false;
   });
 
-  const spaceRow = () => screen.queryByRole('group', { name: 'Filter by space' });
-  const topicRow = () => screen.queryByRole('group', { name: 'Filter by topic' });
+  const pillRow = () => screen.queryByRole('group', { name: 'Filter claims' });
+  const pill = (name: RegExp) => within(pillRow()!).queryByRole('button', { name });
   const searchBox = () => screen.getByRole('textbox', { name: 'Search claims and topics' });
 
-  it('draws spaces and topics as pills instead of menus', async () => {
+  it('draws spaces and topics as one row of pills instead of menus', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    expect(spaceRow()).toBeInTheDocument();
-    expect(topicRow()).toBeInTheDocument();
+    await waitFor(() => expect(pillRow()).toBeInTheDocument());
+    expect(pill(/^Governance\s?\d/)).toBeInTheDocument();
+    // Both of the list's spaces sit in the same row as the topics.
+    expect(pill(/^Crypto/)).toBeInTheDocument();
+    expect(pill(/^Governance space/)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
     expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
   });
@@ -6590,12 +6466,26 @@ describe('desktop filter rows', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    const governance = within(topicRow()!).getByRole('button', { name: /Governance/ });
-    fireEvent.click(governance);
+    fireEvent.click(pill(/^Governance\s?\d/)!);
 
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
     expect(screen.getByText('A newly published claim')).toBeInTheDocument();
-    expect(within(topicRow()!).getByRole('button', { name: /Governance/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(pill(/^Governance\s?\d/)).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('treats spaces as AND: picking one leaves only what co-occurs with it', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toBeInTheDocument());
+
+    // The untagged claim's space: picking it drops the other space and both topics, which only the
+    // other claim carries.
+    fireEvent.click(pill(/^Crypto/)!);
+
+    await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
+    expect(pill(/^Crypto/)).toHaveAttribute('aria-pressed', 'true');
+    expect(pill(/^Governance space/)).toBeNull();
+    expect(pill(/^Governance\s?\d/)).toBeNull();
   });
 
   it('leaves out a topic every listed claim carries, since it cannot narrow anything', async () => {
@@ -6611,17 +6501,28 @@ describe('desktop filter rows', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    await waitFor(() => expect(within(topicRow()!).getByRole('button', { name: /Ethics/ })).toBeInTheDocument());
-    expect(within(topicRow()!).queryByRole('button', { name: /Governance/ })).toBeNull();
+    await waitFor(() => expect(pill(/Ethics/)).toBeInTheDocument());
+    expect(pill(/^Governance\s?\d/)).toBeNull();
   });
 
-  it('hides the space row when every listed claim is in one space', async () => {
+  it('leaves out the space when every listed claim is in it', async () => {
     mocks.debateTagClaims = [debateTag(), debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_2, 2)];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    await waitFor(() => expect(topicRow()).toBeInTheDocument());
-    expect(spaceRow()).toBeNull();
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toBeInTheDocument());
+    expect(pill(/^Governance space/)).toBeNull();
+  });
+
+  it('opens unfiltered rather than ticking the spaces the viewer belongs to', async () => {
+    mocks.memberSpaceIds = new Set([SPACE_1, SPACE_2]);
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(pillRow()).toBeInTheDocument());
+    expect(within(pillRow()!).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
   });
 
   it('suggests matching topics under the search box, and picks one in a press', async () => {
@@ -6636,9 +6537,7 @@ describe('desktop filter rows', () => {
 
     expect(searchBox()).toHaveValue('');
     expect(screen.queryByRole('group', { name: 'Matching topics' })).toBeNull();
-    await waitFor(() =>
-      expect(within(topicRow()!).getByRole('button', { name: /Governance/ })).toHaveAttribute('aria-pressed', 'true')
-    );
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toHaveAttribute('aria-pressed', 'true'));
     await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
   });
 
@@ -6656,16 +6555,16 @@ describe('desktop filter rows', () => {
     expect(mocks.taggedFiltersAskedFor.at(-1)).toMatchObject({ search: 'ethics', searchTopicIds: ['topic-eth'] });
   });
 
-  it('keeps both rows up while the search box has text', async () => {
+  it('keeps every pill up while the search box has text', async () => {
     mocks.debateTagClaims = [debateTag(), debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_2, 2)];
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
-    await waitFor(() => expect(topicRow()).toBeInTheDocument());
-    expect(spaceRow()).toBeNull();
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toBeInTheDocument());
+    const before = within(pillRow()!).getAllByRole('button').length;
 
-    // Every listed claim is in one space, which would hide the row; typing holds it still instead.
+    // Every listed claim is in one space, which leaves that space out; typing holds it still instead.
     fireEvent.change(searchBox(), { target: { value: 'newly' } });
 
-    expect(spaceRow()).toBeInTheDocument();
+    expect(within(pillRow()!).getAllByRole('button').length).toBeGreaterThan(before);
   });
 });

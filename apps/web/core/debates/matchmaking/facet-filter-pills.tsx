@@ -6,36 +6,51 @@ import cx from 'classnames';
 
 import { normId } from '~/core/utils/norm-id';
 
+import { Skeleton } from '~/design-system/skeleton';
+
 import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
+import { SpaceThumb } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubPillButton } from './hub-pill-button';
 import { formatFacetCount } from './topic-facets';
 
 /** How many lines of pills the row may take before the rest go behind "…". */
-export const TOPIC_PILL_LINES = 2;
+export const FACET_PILL_LINES = 2;
 
 /**
- * The most topics measured for the row. Two lines at the picker's width hold well under this, so
+ * The most options measured for the row. Two lines at the picker's width hold well under this, so
  * measuring the whole facet — which grows with the corpus — would be work spent on pills that can
- * never be drawn. Picked topics are measured past it, since they are always drawn.
+ * never be drawn. Picked options are measured past it, since they are always drawn.
  */
-const MEASURED_TOPIC_LIMIT = 40;
+const MEASURED_OPTION_LIMIT = 40;
 
 /** The row's `gap-2`, which the line-fitting below has to agree with. */
 const PILL_GAP_PX = 8;
 
-type Topic = { id: string; name: string | null; count: number };
+/** One pill: a space, drawn with its image, or a topic. */
+export type FacetPillOption = {
+  kind: 'space' | 'topic';
+  id: string;
+  /** `null` while a space's name is still on its way, which draws as a skeleton. */
+  name: string | null;
+  /** A space's image. Topics have none. */
+  image?: string | null;
+  count: number;
+};
 
 type Props = {
   analyticsSurface: DebateAnalyticsSurface;
   /**
-   * The topics to offer, in the order they should be drawn: picked first, then by count — the topic
-   * menu's own order (`orderFacetOptions`), so the row refills on each press the way the menu does.
+   * The options to offer, in the order they should be drawn: picked first in the order they were
+   * picked, then by count — the topic menu's own order (`orderFacetOptions`), so the row refills on
+   * each press the way the menu does.
    */
-  topics: Topic[];
-  topicIds: string[];
-  onTopicToggle: (topicId: string) => void;
-  onTopicsClear: () => void;
+  options: FacetPillOption[];
+  /** Every picked space and topic id. */
+  pickedIds: string[];
+  onToggle: (option: FacetPillOption) => void;
+  /** Clears every pick, of both kinds. */
+  onClear: () => void;
   /** The counts in hand answer a filter that has since changed. */
   countsPending?: boolean;
   className?: string;
@@ -89,50 +104,52 @@ export function fitPills({
 }
 
 /**
- * The topic filter as pills, for a desktop's width: two lines of them, and "…" for the rest.
+ * The debate again picker's filters as one row of pills, for a desktop's width (GEO-3223): spaces
+ * and topics together, two lines of them, and "…" for the rest.
  *
- * The space row's sibling (`SpaceFilterPills`), with the topic menu's rules rather than the space
- * menu's. Topics are AND and counted as co-occurrence, so the row is the menu's top: picked topics
- * first in the order they were picked, then whatever the remaining claims carry, by count. Each
- * press re-runs that, so the row refills with what can still narrow the list — and a pill that is
- * pressed moves to the front with the other picks, as a row in the menu does.
+ * One row because the split was the product's and not the reader's: to someone looking for a claim,
+ * "Crypto" and "Regulation" are both things to narrow by, and two rows with two rules asked them to
+ * know which was which. So both kinds follow the topic menu's rules — AND, counted as co-occurrence
+ * — and the row is that menu's top: picked options first in the order they were picked, then
+ * whatever the remaining claims carry, by count. Each press re-runs that, so the row refills with
+ * what can still narrow the list, and a pressed pill moves to the front with the other picks.
  *
- * The facet grows with the corpus, so the row cannot hold all of it. It holds what fits on two lines
- * at the width it has, measured, and the full menu opens from the "…" at its end. Picked topics are
- * always drawn, however many there are: every filter in force stays on screen to be undone.
+ * The facet grows with the corpus, so the row holds what fits on two lines at the width it has,
+ * measured, and the full list opens from the "…" at its end. Picked options are always drawn,
+ * however many there are: every filter in force stays on screen to be undone.
  */
-export function TopicFilterPills({
+export function FacetFilterPills({
   analyticsSurface,
-  topics,
-  topicIds,
-  onTopicToggle,
-  onTopicsClear,
+  options,
+  pickedIds,
+  onToggle,
+  onClear,
   countsPending = false,
   className,
 }: Props) {
   const rowRef = React.useRef<HTMLDivElement | null>(null);
   const measureRef = React.useRef<HTMLDivElement | null>(null);
 
-  const picked = React.useMemo(() => new Set(topicIds.map(normId)), [topicIds]);
-  const isPicked = (topicId: string) => picked.has(normId(topicId));
-  const pickedCount = topics.filter(topic => isPicked(topic.id)).length;
+  const picked = React.useMemo(() => new Set(pickedIds.map(normId)), [pickedIds]);
+  const isPicked = (id: string) => picked.has(normId(id));
+  const pickedCount = options.filter(option => isPicked(option.id)).length;
 
   const candidates = React.useMemo(
-    () => topics.filter((topic, index) => index < MEASURED_TOPIC_LIMIT || picked.has(normId(topic.id))),
-    [picked, topics]
+    () => options.filter((option, index) => index < MEASURED_OPTION_LIMIT || picked.has(normId(option.id))),
+    [options, picked]
   );
 
   // Everything until measured. A layout effect answers before the first paint, so this is only ever
   // seen where nothing can be measured at all — and there every pill is the honest answer.
   const [fitted, setFitted] = React.useState(candidates.length);
-  // Picked topics are drawn whatever the measurement says.
+  // Picked options are drawn whatever the measurement says.
   const shownCount = Math.max(Math.min(fitted, candidates.length), pickedCount);
   const shown = candidates.slice(0, shownCount);
-  const hiddenCount = topics.length - shown.length;
+  const hiddenCount = options.length - shown.length;
 
-  // Re-measured when anything a pill's width depends on changes: which topics, their names, their
-  // counts, and which are picked (a picked pill is the same width, but it is forced).
-  const measureKey = candidates.map(topic => `${topic.id}:${topic.name ?? ''}:${topic.count}`).join('|');
+  // Re-measured when anything a pill's width depends on changes: which options, their names, their
+  // counts, and how many are forced.
+  const measureKey = candidates.map(option => `${option.id}:${option.name ?? ''}:${option.count}`).join('|');
 
   React.useLayoutEffect(() => {
     const row = rowRef.current;
@@ -150,7 +167,7 @@ export function TopicFilterPills({
           widths: rest.map(widthOf),
           trailing: widthOf(trailing),
           available: row.clientWidth,
-          lines: TOPIC_PILL_LINES,
+          lines: FACET_PILL_LINES,
           forced: pickedCount,
         })
       );
@@ -164,38 +181,54 @@ export function TopicFilterPills({
     return () => observer?.disconnect();
   }, [measureKey, pickedCount]);
 
+  const byId = React.useMemo(() => new Map(options.map(option => [option.id, option])), [options]);
   const menuOptions = React.useMemo<HubFilterOption<string>[]>(
-    () => topics.map(topic => ({ value: topic.id, label: topic.name ?? 'Topic', count: topic.count })),
-    [topics]
+    () =>
+      options.map(option => ({
+        value: option.id,
+        label: option.name ?? (option.kind === 'space' ? 'Space' : 'Topic'),
+        image: option.image ?? null,
+        // Only spaces carry a picture; a topic row with an empty image tile would read as a space.
+        showImage: option.kind === 'space',
+        pending: option.kind === 'space' && option.name === null,
+        count: option.count,
+      })),
+    [options]
   );
 
   const allPill = (props: React.ComponentProps<typeof HubPillButton> = {}) => (
     <HubPillButton
-      variant={topicIds.length === 0 ? 'primary' : 'secondary'}
-      aria-pressed={topicIds.length === 0}
+      variant={pickedIds.length === 0 ? 'primary' : 'secondary'}
+      aria-pressed={pickedIds.length === 0}
       onClick={() => {
-        if (topicIds.length > 0) onTopicsClear();
+        if (pickedIds.length > 0) onClear();
       }}
-      {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'All topics pill', 'filter')}
+      {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'All filters pill', 'filter')}
       {...props}
     >
-      All topics
+      All
     </HubPillButton>
   );
 
-  const pill = (topic: Topic, props: React.ComponentProps<typeof HubPillButton> = {}) => {
-    const on = isPicked(topic.id);
+  const pill = (option: FacetPillOption, props: React.ComponentProps<typeof HubPillButton> = {}) => {
+    const on = isPicked(option.id);
+    const isSpace = option.kind === 'space';
     return (
       <HubPillButton
-        key={topic.id}
+        key={option.id}
         variant={on ? 'primary' : 'secondary'}
         aria-pressed={on}
-        onClick={() => onTopicToggle(topic.id)}
-        className="gap-1.5"
-        {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Topic pill', 'filter')}
+        onClick={() => onToggle(option)}
+        className={cx('gap-1.5', isSpace && 'pl-1.5')}
+        {...debateSurfaceAnalyticsAttributes(analyticsSurface, isSpace ? 'Space pill' : 'Topic pill', 'filter')}
         {...props}
       >
-        <span className="max-w-[200px] truncate">{topic.name ?? 'Topic'}</span>
+        {isSpace ? <SpaceThumb spaceId={option.id} image={option.image ?? null} /> : null}
+        {option.name === null && isSpace ? (
+          <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
+        ) : (
+          <span className="max-w-[200px] truncate">{option.name ?? 'Topic'}</span>
+        )}
         <span
           className={cx(
             'tabular-nums transition-opacity',
@@ -203,7 +236,7 @@ export function TopicFilterPills({
             countsPending && 'opacity-50'
           )}
         >
-          {formatFacetCount(topic.count)}
+          {formatFacetCount(option.count)}
         </span>
       </HubPillButton>
     );
@@ -211,9 +244,9 @@ export function TopicFilterPills({
 
   const moreTrigger = (
     <HubPillButton
-      aria-label={`All topics (${topics.length})`}
+      aria-label={`All filters (${options.length})`}
       className="w-9 px-0 tracking-widest text-grey-04"
-      {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'More topics', 'filter')}
+      {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'More filters', 'filter')}
     >
       ···
     </HubPillButton>
@@ -221,21 +254,25 @@ export function TopicFilterPills({
 
   return (
     <div ref={rowRef} className={cx('relative', className)}>
-      <div role="group" aria-label="Filter by topic" className="flex flex-wrap items-center gap-2">
+      <div role="group" aria-label="Filter claims" className="flex flex-wrap items-center gap-2">
         {allPill()}
-        {shown.map(topic => pill(topic))}
+        {shown.map(option => pill(option))}
         {hiddenCount > 0 ? (
           <HubMultiFilterMenu
             align="start"
-            label="All topics"
+            label="All filters"
             trigger={moreTrigger}
-            analytics={{ name: 'More topics', surface: analyticsSurface }}
+            analytics={{ name: 'More filters', surface: analyticsSurface }}
             options={menuOptions}
-            values={topicIds}
-            onToggle={onTopicToggle}
-            onClear={onTopicsClear}
-            clearLabel="Any topic"
+            values={pickedIds}
+            onToggle={id => {
+              const option = byId.get(id);
+              if (option) onToggle(option);
+            }}
+            onClear={onClear}
+            clearLabel="All"
             countsPending={countsPending}
+            showImages
           />
         ) : null}
       </div>
@@ -248,7 +285,7 @@ export function TopicFilterPills({
         className="pointer-events-none invisible absolute top-0 left-0 flex h-0 items-center gap-2 overflow-hidden whitespace-nowrap"
       >
         {allPill({ tabIndex: -1 })}
-        {candidates.map(topic => pill(topic, { tabIndex: -1 }))}
+        {candidates.map(option => pill(option, { tabIndex: -1 }))}
         <HubPillButton tabIndex={-1} className="w-9 px-0">
           ···
         </HubPillButton>

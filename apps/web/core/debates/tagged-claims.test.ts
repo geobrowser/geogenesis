@@ -1065,3 +1065,54 @@ describe('claims a search reaches through a topic', () => {
     expect(JSON.stringify(sentVariables().filter)).not.toContain(NAMED_TOPIC);
   });
 });
+
+/**
+ * GEO-3223. The debate again picker puts spaces and topics in one row of pills that narrow together,
+ * so picked spaces are AND there: a claim tagged in every one of them, and a space facet counted as
+ * co-occurrence over the narrowed list.
+ */
+describe('spaces matched all at once', () => {
+  const allSpaces: TaggedClaimFilters = {
+    ...NO_TAGGED_CLAIM_FILTERS,
+    spaceIds: [SPACE, OTHER_SPACE],
+    spaceMatch: 'all',
+  };
+
+  const tagIn = (spaceId: string) => ({
+    relations: { some: { typeId: { is: expect.any(String) }, toEntityId: { is: TAG }, spaceId: { is: spaceId } } },
+  });
+
+  it('asks for claims tagged in every picked space', async () => {
+    respondWithPages([[node('a1', 'One', { tagSpaces: [SPACE, OTHER_SPACE] })]]);
+    const { result } = renderClaims(allSpaces);
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const and = sentVariables().filter.and as any[];
+    expect(and).toContainEqual(tagIn(SPACE));
+    expect(and).toContainEqual(tagIn(OTHER_SPACE));
+    // And the tag clause itself is not narrowed to "any of them", which would undo the AND.
+    expect(JSON.stringify(and[0])).not.toContain(OTHER_SPACE);
+  });
+
+  it('counts the space facet over the narrowed list, picked spaces included', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(decoder({ relationsConnection: { groupedAggregates: [] } }))
+    );
+    renderHook(() => useTaggedSpaceFacet(TAG, allSpaces, true), { wrapper: Wrapper });
+
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+    const and = sentVariables().fromEntity.and as any[];
+    expect(and).toContainEqual(tagIn(SPACE));
+    expect(and).toContainEqual(tagIn(OTHER_SPACE));
+  });
+
+  it('leaves the hub’s "any of them" alone', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...allSpaces, spaceMatch: undefined });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const and = sentVariables().filter.and as any[];
+    expect(and[0].relations.some.spaceId).toEqual({ in: [SPACE, OTHER_SPACE] });
+    expect(and).not.toContainEqual(tagIn(SPACE));
+  });
+});

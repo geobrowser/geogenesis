@@ -157,8 +157,22 @@ export type TaggedClaimFilters = {
   search: string;
   /** AND, not OR: a claim has to carry every picked topic. */
   topicIds: string[];
-  /** OR: any of the picked spaces. Left out of the space facet, which must not narrow by itself. */
+  /**
+   * OR by default: any of the picked spaces, and left out of the space facet, which must not narrow
+   * by itself. With `spaceMatch: 'all'`, AND — see there.
+   */
   spaceIds: string[];
+  /**
+   * How picked spaces combine. `'any'` (the default) is the hub's menu: a claim in any of them, and a
+   * space facet counted without the space selection so every space keeps its own number.
+   *
+   * `'all'` is the debate again picker's single row of space and topic pills (GEO-3223), where a
+   * space is one more facet to drill into: a claim has to be tagged in every picked space, and the
+   * space facet is co-occurrence over the narrowed list, the way the topic facet always is. Since
+   * most claims are tagged in one space, picking one space leaves only the spaces its claims are
+   * also tagged in.
+   */
+  spaceMatch?: 'any' | 'all';
   /**
    * Every space this viewer may be shown claims from at all — their allowlist, already cut to what
    * a debate can be published into. Applied to *everything*, the space facet included: a space the
@@ -334,12 +348,14 @@ export function taggedEntityFilter(
   // Two space filters with different jobs. The picked one narrows and is what the space facet must
   // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
   // everything. Where both exist the picked set is already a subset, so the narrower wins.
-  const picked = omit === 'spaces' ? [] : filters.spaceIds;
+  const matchAll = filters.spaceMatch === 'all';
+  const picked = omit === 'spaces' && !matchAll ? [] : filters.spaceIds;
   // `null` and `[]` are different answers and only one of them narrows nothing. Unresolved is
   // `null` — the allowlist has not come back, and a list that is briefly too wide beats a panel
   // that never fills. Resolved-and-empty is a viewer who may see no space at all, and collapsing
   // the two showed them the entire tag. `spaceId: { in: [] }` returns nothing, which is the answer.
-  const spaceIds = picked.length > 0 ? picked : filters.eligibleSpaceIds;
+  // Under `'all'` the picked spaces each get their own clause below, so this one keeps only the scope.
+  const spaceIds = picked.length > 0 && !matchAll ? picked : filters.eligibleSpaceIds;
 
   // The space goes on the *tag relation*, not on the entity.
   //
@@ -353,6 +369,15 @@ export function taggedEntityFilter(
   if (spaceIds !== null) tagRelation.spaceId = { in: spaceIds };
 
   const and: Record<string, unknown>[] = [{ relations: { some: tagRelation } }];
+
+  // AND across spaces: one tag relation per picked space, so the claim is tagged in all of them.
+  if (matchAll) {
+    for (const spaceId of picked) {
+      and.push({
+        relations: { some: { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: tagId }, spaceId: { is: spaceId } } },
+      });
+    }
+  }
 
   // AND, not OR (GEO-2696): one clause per topic, so a claim has to carry all of them. Scoped to
   // the spaces the topic must have been assigned in, where the caller asked — see `topicSpaceIds`.
@@ -474,6 +499,7 @@ const taggedSearchClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters, 
     filters.spaceIds,
     filters.eligibleSpaceIds,
     filters.excludeAnsweredBy ?? null,
+    filters.spaceMatch ?? 'any',
     ids,
   ] as const;
 
@@ -498,6 +524,7 @@ export const taggedClaimsQueryKey = (
     filters.topicSpaceIds ?? null,
     filters.excludeAnsweredBy ?? null,
     searchTopicKey(filters),
+    filters.spaceMatch ?? 'any',
   ] as const;
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
@@ -618,6 +645,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
       filters.eligibleSpaceIds,
       filters.topicSpaceIds ?? null,
       filters.excludeAnsweredBy ?? null,
+      filters.spaceMatch ?? 'any',
       searchTopicIds,
     ] as const,
     queryFn: ({ signal }) => {
@@ -898,8 +926,10 @@ export const taggedFacetQueryKey = (
     filters.search,
     searchClaimIds,
     filters.topicIds,
-    // The space facet does not narrow by the picked spaces, so they are not part of its identity.
-    dimension === 'spaces' ? null : filters.spaceIds,
+    // The space facet does not narrow by the picked spaces, so they are not part of its identity —
+    // unless spaces are AND, where it is co-occurrence and does.
+    dimension === 'spaces' && filters.spaceMatch !== 'all' ? null : filters.spaceIds,
+    filters.spaceMatch ?? 'any',
     filters.eligibleSpaceIds,
     filters.topicSpaceIds ?? null,
     filters.excludeAnsweredBy ?? null,

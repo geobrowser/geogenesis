@@ -54,6 +54,7 @@ import { useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
+import { FacetFilterPills, type FacetPillOption } from '~/core/debates/matchmaking/facet-filter-pills';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
@@ -62,7 +63,6 @@ import { HubQueryState, HubSkeleton, exploreClaimsAction } from '~/core/debates/
 import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ScrollableTabRow } from '~/core/debates/matchmaking/scrollable-tab-row';
-import { SpaceFilterPills } from '~/core/debates/matchmaking/space-filter-pills';
 import {
   carriesEveryTopic,
   claimTopicsById,
@@ -75,7 +75,6 @@ import {
   topicSuggestions,
   topicsFor,
 } from '~/core/debates/matchmaking/topic-facets';
-import { TopicFilterPills } from '~/core/debates/matchmaking/topic-filter-pills';
 import { TopicSearchSuggestions } from '~/core/debates/matchmaking/topic-search-suggestions';
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
@@ -112,6 +111,7 @@ import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hoo
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -677,7 +677,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     hideMyPositions && localParticipant === null && (sessionQuery.isLoading || viewerIdentityUnresolved);
 
   const searchedTaggedFilters = React.useMemo<TaggedClaimFilters>(
-    () => ({ search: debouncedSearch, topicIds: debouncedTopicIds, spaceIds, eligibleSpaceIds, excludeAnsweredBy }),
+    () => ({
+      search: debouncedSearch,
+      topicIds: debouncedTopicIds,
+      spaceIds,
+      // Spaces are AND here, like topics: one row of pills that narrow together (GEO-3223).
+      spaceMatch: 'all',
+      eligibleSpaceIds,
+      excludeAnsweredBy,
+    }),
     [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, spaceIds]
   );
   /** What the tagged query waits on before it can be asked the right question. */
@@ -1931,8 +1939,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // whichever spelling its source used — a Related row built from the graph carries bare hex where
     // the selection made on the opponent's tab carries geo-chat's — so a raw `includes` hid a row
     // under a filter naming that very space.
-    (claim: DebateRematchClaim) =>
-      spaceIds.length === 0 || spaceIds.some(spaceId => idEquals(spaceId, claim.claim.space_id)),
+    //
+    // AND since GEO-3223, as topics are: spaces and topics are one row of pills that narrow together.
+    // A row is drawn under one space, so two picked spaces leave nothing — which the menu never
+    // offers, because counted as co-occurrence it drops every space but the picked one.
+    (claim: DebateRematchClaim) => spaceIds.every(spaceId => idEquals(spaceId, claim.claim.space_id)),
     [spaceIds]
   );
   const passesTopics = React.useCallback(
@@ -1982,9 +1993,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? taggedSpaceFacet.spaces
             .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
             .map(space => ({ id: space.id, name: null, count: space.count }))
-        : countBy(
+        : // Co-occurrence over the narrowed rows, the space selection included: spaces are AND
+          // (GEO-3223), so a space's count is what picking it would leave.
+          countBy(
             facetClaims
-              .filter(claim => passesTopics(claim) && passesSearch(claim))
+              .filter(claim => passesSpace(claim) && passesTopics(claim) && passesSearch(claim))
               .map(claim => ({ id: claim.claim.space_id, name: null }))
           ),
     [
@@ -1992,6 +2005,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       facetClaims,
       graphFiltered,
       passesSearch,
+      passesSpace,
       passesTopics,
       spaceAllowlist,
       taggedSpaceFacet.spaces,
@@ -2321,6 +2335,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       sourceDebateQuery.isLoading ||
       isSettlingMemberships ||
       (graphFiltered && !taggedSpaceFacet.settled),
+    // No default any more (GEO-3223). The seed ticked every space the viewer belongs to, which read
+    // as "any of these" while spaces were OR; with spaces AND, as one row with the topics, it would
+    // ask for claims tagged in all of them at once and empty the list. Explore opens unfiltered,
+    // already scoped to the spaces the viewer may see.
+    seedSpent: true,
   });
 
   const tabError =
@@ -2597,22 +2616,49 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const setTopicPicked = (topicId: string) => setTopicIds(current => toggleId(current, topicId));
 
   /**
-   * How many claims the filters leave listed, read off the space counts: every claim is counted
-   * under its space, and those counts are never narrowed by the space selection, so the picked
-   * spaces' counts add up to the list. Zero while they load, which the rules below read as unknown.
+   * How many claims the filters leave listed, read off the space counts. Those are co-occurrence
+   * over the list (spaces are AND), so with a space picked its count is the list; with none, every
+   * claim is counted under its space and they add up to it. Zero while they load, which the rule
+   * below reads as unknown.
    */
-  const listedCount = facetSpaces
-    .filter(space => spaceIds.length === 0 || spaceIds.some(picked => idEquals(picked, space.id)))
-    .reduce((sum, space) => sum + space.count, 0);
+  const pickedSpaceCount = facetSpaces.find(space => spaceIds.some(picked => idEquals(picked, space.id)))?.count;
+  const listedCount = pickedSpaceCount ?? facetSpaces.reduce((sum, space) => sum + space.count, 0);
   /**
-   * Whether the search box has text. The two rows hold still while it does: each keystroke would
-   * otherwise take a row away and bring it back, and the filters would jump under the reader.
+   * Whether the search box has text. The row holds still while it does: each keystroke would
+   * otherwise take pills away and bring them back, and the filters would jump under the reader.
    */
   const typing = search.trim().length > 0;
-  /** One space and nothing picked: the row could offer nothing but the space every claim is in. */
-  const showsSpaceRow = typing || spaceIds.length > 0 || facetSpaces.length > 1;
-  // A topic every listed claim carries narrows nothing, so the row leaves it out.
-  const rowTopics = typing ? facetTopics : narrowingTopics(facetTopics, listedCount, topicIds);
+
+  // Names and pictures for the space pills. The browse sidebar already holds most of them.
+  const facetSpaceIds = React.useMemo(() => facetSpaces.map(space => space.id), [facetSpaces]);
+  const { labelsById: spaceLabelsById, isLoading: spaceLabelsLoading } = useSpaceLabels(facetSpaceIds);
+
+  /**
+   * GEO-3223. Spaces and topics as one row of pills, under the topic menu's rules: picked first in
+   * the order they were picked, then by count. A space or topic every listed claim is in narrows
+   * nothing, so it is left out; that is also what hides the spaces when every claim is in one.
+   */
+  const pillOptions = React.useMemo<FacetPillOption[]>(() => {
+    const keep = <T extends { id: string; count: number }>(options: T[], picked: string[]) =>
+      typing ? options : narrowingTopics(options, listedCount, picked);
+    const spaces = keep(facetSpaces, spaceIds).map(space => {
+      const label = spaceLabel(spaceLabelsById, space.id);
+      return {
+        kind: 'space' as const,
+        id: space.id,
+        name: label?.name ?? (spaceLabelsLoading ? null : 'Space'),
+        image: label?.image ?? null,
+        count: space.count,
+      };
+    });
+    const topics = keep(facetTopics, topicIds).map(topic => ({
+      kind: 'topic' as const,
+      id: topic.id,
+      name: topic.name,
+      count: topic.count,
+    }));
+    return orderFacetOptions<FacetPillOption>([...spaces, ...topics], [...spaceIds, ...topicIds]);
+  }, [facetSpaces, facetTopics, listedCount, spaceIds, spaceLabelsById, spaceLabelsLoading, topicIds, typing]);
 
   /**
    * The topics the search box suggests: named by the text, counted under the space and topic filters
@@ -2929,28 +2975,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 leading={sourceMenu}
               />
             ) : (
-              // GEO-3223: on a desktop the two menus become rows of pills, so the spaces and topics
-              // are on screen to be picked rather than behind "Any space" and "Any topic". The
-              // source menu and the list's switch keep a row of their own beneath them.
+              // GEO-3223: on a desktop the two menus become one row of pills, so the spaces and
+              // topics are on screen to be picked rather than behind "Any space" and "Any topic".
+              // The source menu and the list's switch keep a row of their own beneath it.
               <div className="flex flex-col gap-2">
-                {showsSpaceRow ? (
-                  <SpaceFilterPills
+                {pillOptions.length > 0 ? (
+                  <FacetFilterPills
                     analyticsSurface="rematch"
-                    facetSpaces={facetSpaces}
-                    spaceIds={spaceIds}
-                    onSpaceToggle={onSpaceToggle}
-                    onSpacesClear={onSpacesClear}
-                    loading={tabIsLoading}
-                    countsPending={filterCountsPending}
-                  />
-                ) : null}
-                {rowTopics.length > 0 ? (
-                  <TopicFilterPills
-                    analyticsSurface="rematch"
-                    topics={rowTopics}
-                    topicIds={topicIds}
-                    onTopicToggle={setTopicPicked}
-                    onTopicsClear={() => setTopicIds([])}
+                    options={pillOptions}
+                    pickedIds={[...spaceIds, ...topicIds]}
+                    onToggle={option =>
+                      option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
+                    }
+                    onClear={() => {
+                      onSpacesClear();
+                      setTopicIds([]);
+                    }}
                     countsPending={filterCountsPending}
                   />
                 ) : null}
