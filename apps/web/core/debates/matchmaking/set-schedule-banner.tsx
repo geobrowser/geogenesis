@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { useDebateSchedule, useGeoChatAuth } from '~/core/debates/hooks';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
@@ -11,7 +13,7 @@ import { Text } from '~/design-system/text';
 
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
-import { hubAnalyticsAttributes } from './hub-analytics';
+import { debateActionAnalyticsAttributes } from './hub-analytics';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`), like the explore
 // welcome banner. Dismissing it is permanent, which is safe because the editor has a standing
@@ -23,7 +25,8 @@ const SET_SCHEDULE_BANNER_ID = 'debatesSetSchedule';
 
 /**
  * "Set your debate schedule" — the callout at the top of the debates panel, above the tabs, whose
- * button opens the availability calendar (GEO-2936).
+ * button opens the availability calendar (GEO-2936). The debate calendar page shows the same
+ * callout above its week, and shares its dismissal: it is one prompt, closed once.
  *
  * Onboarding only: once a schedule is saved it retires for good, because the header's calendar
  * button is where the schedule lives from then on, and a full-width card restating it on every
@@ -38,6 +41,10 @@ type Props = {
    * take the focused control with it, so focus moves up here rather than dropping to the page.
    */
   scheduleButtonRef?: React.RefObject<HTMLButtonElement | null>;
+  /** Whose clicks and saves these are: the debates panel's, or the calendar page's. */
+  surface?: 'hub' | 'calendar';
+  /** Replaces the panel's spacing, for a page with its own gutters. */
+  className?: string;
 };
 
 export function SetScheduleBanner(props: Props) {
@@ -48,7 +55,7 @@ export function SetScheduleBanner(props: Props) {
   );
 }
 
-function Banner({ scheduleButtonRef }: Props) {
+function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
   const { authenticated } = useGeoChatAuth();
   const { dismissed, remember } = useDismissedNotice(SET_SCHEDULE_BANNER_ID);
   const [modalOpen, setModalOpen] = React.useState(false);
@@ -73,7 +80,7 @@ function Banner({ scheduleButtonRef }: Props) {
   if (data === undefined || isSet) return null;
 
   return (
-    <div className="mx-4 mb-3 rounded-lg bg-[#EFE2FF] p-4">
+    <div className={cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-[#EFE2FF] p-4')}>
       <div className="flex items-start justify-between gap-3">
         <Text as="h3" variant="smallTitle">
           Set your debate schedule
@@ -81,7 +88,7 @@ function Banner({ scheduleButtonRef }: Props) {
         <button
           type="button"
           aria-label="Dismiss"
-          {...hubAnalyticsAttributes('Dismiss schedule prompt', 'dismiss_debate_schedule_prompt')}
+          {...debateActionAnalyticsAttributes(surface, 'Dismiss schedule prompt', 'dismiss_debate_schedule_prompt')}
           onClick={handleDismiss}
           className="shrink-0 text-grey-04 transition-colors hover:text-text"
         >
@@ -97,7 +104,7 @@ function Banner({ scheduleButtonRef }: Props) {
       <button
         ref={openerRef}
         type="button"
-        {...hubAnalyticsAttributes('Open schedule', 'open_debate_schedule')}
+        {...debateActionAnalyticsAttributes(surface, 'Open schedule', 'open_debate_schedule')}
         onClick={() => {
           returnFocusRef.current = openerRef.current;
           setModalOpen(true);
@@ -111,7 +118,7 @@ function Banner({ scheduleButtonRef }: Props) {
         open={modalOpen}
         onOpenChange={setModalOpen}
         openerRef={returnFocusRef}
-        surface="hub_banner"
+        surface={surface === 'calendar' ? 'calendar' : 'hub_banner'}
         onSaved={() => {
           if (scheduleButtonRef?.current) returnFocusRef.current = scheduleButtonRef.current;
         }}

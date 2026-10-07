@@ -318,12 +318,13 @@ describe('DebateCalendar', () => {
     expect(mocks.promptSignIn).toHaveBeenCalled();
   });
 
-  it("shows everyone's free time to a viewer with no schedule, and nudges without blocking", () => {
+  it("shows everyone's free time to a viewer with no schedule, and nudges without blocking", async () => {
     render(<DebateCalendar />);
 
     expect(mocks.schedulableOptions[0]).toEqual({ calendar: true, spaces: [] });
     expect(cell(/Thursday.*free: Elena/)).toBeInTheDocument();
-    expect(screen.getByText(/Set your availability so others can book you too/)).toBeInTheDocument();
+    // The debates panel's own callout, not a calendar-only notice.
+    expect(await screen.findByText('Set your debate schedule')).toBeInTheDocument();
     expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_opened', {
       opened_from: 'direct',
       viewer_has_schedule: false,
@@ -484,7 +485,7 @@ describe('DebateCalendar', () => {
     });
   });
 
-  it("labels the set-availability prompt and a pending request's cancel as the calendar's", () => {
+  it("labels the set-schedule prompt and a pending request's cancel as the calendar's", async () => {
     mocks.activity = {
       challenge: {
         id: 'c1',
@@ -499,9 +500,9 @@ describe('DebateCalendar', () => {
     };
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('button', { name: 'Set availability' })).toHaveAttribute(
+    expect(await screen.findByRole('button', { name: 'Set my schedule' })).toHaveAttribute(
       'data-geo-analytics-label',
-      'Debate calendar Set availability'
+      'Debate calendar Open schedule'
     );
     expect(screen.getByRole('button', { name: 'Cancel request' })).toHaveAttribute(
       'data-geo-analytics-label',

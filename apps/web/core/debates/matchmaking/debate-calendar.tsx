@@ -57,8 +57,9 @@ import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hook
 import { HubHeaderControls } from './hub-header-controls';
 import { HubPillButton } from './hub-pill-button';
 import { HubMessage, HubQueryState } from './hub-states';
-import { INLINE_SLOTS, PersonRow, type PersonSchedule, SetAvailabilityNotice, schedulableAsPerson } from './people-tab';
+import { INLINE_SLOTS, PersonRow, type PersonSchedule, schedulableAsPerson } from './people-tab';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
+import { SetScheduleBanner } from './set-schedule-banner';
 import { SpaceFilterPills } from './space-filter-pills';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useLiveRequestBlock } from './use-live-request-block';
@@ -139,6 +140,7 @@ export function DebateCalendar() {
 
   const schedule = useDebateSchedule();
   const viewerHasSchedule = authenticated ? schedule.isSet : false;
+  const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   // Once per visit, when what it reports is known: signed out, or signed in with the viewer's own
   // schedule read. Fired before that, `viewer_has_schedule` would be a guess.
@@ -160,7 +162,7 @@ export function DebateCalendar() {
         <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
           Debate calendar
         </Text>
-        <HubHeaderControls analyticsSurface="calendar">
+        <HubHeaderControls analyticsSurface="calendar" scheduleButtonRef={scheduleButtonRef}>
           {admin.isAdmin ? <CalendarViewSwitch view={view} onChange={changeView} /> : null}
         </HubHeaderControls>
       </header>
@@ -187,7 +189,12 @@ export function DebateCalendar() {
       ) : view === 'debates' ? (
         <AdminDebatesBody isPhone={isPhone} admin={admin} />
       ) : (
-        <DebateCalendarBody isPhone={isPhone} viewerHasSchedule={viewerHasSchedule} schedule={schedule} />
+        <DebateCalendarBody
+          isPhone={isPhone}
+          viewerHasSchedule={viewerHasSchedule}
+          schedule={schedule}
+          scheduleButtonRef={scheduleButtonRef}
+        />
       )}
     </div>
   );
@@ -197,10 +204,12 @@ function DebateCalendarBody({
   isPhone,
   viewerHasSchedule,
   schedule,
+  scheduleButtonRef,
 }: {
   isPhone: boolean;
   viewerHasSchedule: boolean;
   schedule: ReturnType<typeof useDebateSchedule>;
+  scheduleButtonRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const peopleQuery = useDebatePeople(true);
   const { data: activity } = useDebateActivity(true);
@@ -570,18 +579,9 @@ function DebateCalendarBody({
         )}
       </div>
 
-      {!viewerHasSchedule && !schedule.isLoading ? (
-        <div className="px-6 pt-3 md:px-4">
-          <SetAvailabilityNotice
-            message={
-              isPhone
-                ? 'Set your availability so others can book you too.'
-                : 'Set your availability so others can book you too, and to see which of these times you share.'
-            }
-            surface="calendar"
-          />
-        </div>
-      ) : null}
+      {/* The debates panel's own callout, so the prompt reads the same wherever it is met. It hides
+          itself once a schedule is saved or the callout is dismissed in either place. */}
+      <SetScheduleBanner surface="calendar" scheduleButtonRef={scheduleButtonRef} className="mx-6 mt-3 md:mx-4" />
 
       <CalendarWeekNav
         days={days}

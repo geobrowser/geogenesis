@@ -106,6 +106,31 @@ describe('SetScheduleBanner', () => {
 
     await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
   });
+
+  // The calendar page shows the same callout, with its clicks labelled as the calendar's.
+  it("labels the calendar page's callout as the calendar's", async () => {
+    render(<SetScheduleBanner surface="calendar" />);
+
+    expect(await screen.findByRole('button', { name: 'Set my schedule' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Open schedule'
+    );
+    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Dismiss schedule prompt'
+    );
+  });
+
+  // One prompt, closed once: dismissing it in the panel keeps it off the calendar page too.
+  it('shares its dismissal with the calendar page', async () => {
+    const { user, unmount } = setup();
+    await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
+    unmount();
+
+    render(<SetScheduleBanner surface="calendar" />);
+    await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
+  });
 });
 
 // Both ways the banner leaves take the focused control with it. Focus goes up to the header's
