@@ -58,7 +58,6 @@ import {
   writeDebateTabClaim,
 } from '~/core/debates/debate-tab-claims';
 import { DebateVideoTile } from '~/core/debates/debate-video-tile';
-import { debateTurnRole } from '~/core/debates/formats';
 import {
   useAbortDebate,
   useClearDebateActivity,
@@ -83,6 +82,15 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
+import {
+  type OpenRoundGap,
+  type OpenRoundsRoomPhase,
+  debateThankingStartsAtMs,
+  debateTurnRoleForDebate,
+  isDebatesLastTurn,
+  openRoundGapAfterTurn,
+  openRoundsRoomPhase,
+} from '~/core/debates/open-rounds';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import { type LiveRecordingStream, putRecordingPart, startLiveRecordingStream } from '~/core/debates/recording-stream';
 import {
@@ -192,7 +200,7 @@ type RoomLike = {
   remoteParticipants?: { size: number };
 };
 
-type DebateCountdown = {
+export type DebateCountdown = {
   label: string;
   remainingSeconds: number;
   progress: number;
@@ -205,6 +213,13 @@ type DebateCountdown = {
   yieldedRemainingSeconds: number | null;
   yieldedProgress: number | null;
   preservesExistingCountIn: boolean;
+  /**
+   * Open rounds (GEO-3175): the room's phase, on the room's clock. `null` for every fixed format.
+   * The pick bar, pick card and reveal read this rather than re-deriving timing. While it is
+   * `deciding` or `result`, `remainingSeconds`/`progress` count down that phase, `activeSlot` is
+   * `null` and `turnIndex` is the round's last turn.
+   */
+  openRounds: OpenRoundsRoomPhase | null;
 };
 
 type PendingTurnYield = {
@@ -215,7 +230,8 @@ type PendingTurnYield = {
 
 type DebateRecordingWindow = {
   startAtMs: number;
-  endAtMs: number;
+  /** `null` while the end is undecided: an Open rounds debate whose last round has not resolved. */
+  endAtMs: number | null;
 };
 
 type DebateRoomState = 'idle' | 'connecting' | 'reconnecting' | 'connected' | 'saving';
@@ -436,9 +452,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const connectionInstanceIdRef = React.useRef('uncoordinated');
   const recorderRef = React.useRef<MediaRecorder | null>(null);
   const reportedRecorderFailuresRef = React.useRef(new Set<string>());
+  // The recording's timeslices, for a recorder with no live stream only (no signed-in user when it
+  // started). With one, the stream holds them, and lets go of each once it is uploaded.
   const recordingChunksRef = React.useRef<Blob[]>([]);
   // GEO-2955. The recording made durable while it is made: every timeslice to IndexedDB, and to
-  // R2 part by part. The in-memory chunks above stay the source of the upload at the end.
+  // R2 part by part. It is also the only place this tab keeps the timeslices, so memory stays
+  // bounded however long the debate runs: one that is in a confirmed part is let go of.
   const liveRecordingStreamRef = React.useRef<LiveRecordingStream | null>(null);
   // The streamed upload shares the upstream with the call, so it stands down while the call
   // struggles. Set from LiveKit's own quality reports for the local participant.
@@ -490,7 +509,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const recordingPersistencePromiseRef = React.useRef<Promise<boolean> | null>(null);
   const persistedRecordingDebateIdRef = React.useRef<string | null>(null);
   const stoppedRecordingRef = React.useRef<{
-    blob: Blob;
+    /** The whole recording, when it was not streamed; a streamed one is read from the stream. */
+    blob: Blob | null;
     mimeType: string;
     startedAtMs: number;
     endedAtMs: number;
@@ -1120,10 +1140,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // `startDebateRecorder` reports the `error` itself; this only clears the pill.
         recorder.addEventListener('error', () => setCapturing(false), { once: true });
         recorder.ondataavailable = event => {
-          if (event.data.size > 0) {
-            recordingChunksRef.current.push(event.data);
-            liveRecordingStreamRef.current?.append(event.data, serverNowRef.current());
-          }
+          if (event.data.size === 0) return;
+          // One home per recording, decided when it started: the stream if there is one, which lets
+          // go of each timeslice once it is uploaded, or this tab's own list, as before streaming.
+          const live = liveRecordingStreamRef.current;
+          if (live) live.append(event.data, serverNowRef.current());
+          else recordingChunksRef.current.push(event.data);
         };
       },
     });
@@ -1180,10 +1202,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const endedAtMs = recordingEndedAtRef.current;
     if (!recorder || !startedAtMs || !endedAtMs) return false;
 
+    const liveStream = liveRecordingStreamRef.current;
     if (!stoppedRecordingRef.current) {
       const mimeType = recorder.mimeType || preferredRecordingMimeType() || 'video/webm';
-      const blob = new Blob(recordingChunksRef.current, { type: mimeType });
-      if (blob.size === 0) return false;
+      const blob = liveStream ? null : new Blob(recordingChunksRef.current, { type: mimeType });
+      if ((blob ? blob.size : (liveStream?.size() ?? 0)) === 0) return false;
       const videoSettings = localMediaStreamRef.current?.getVideoTracks()[0]?.getSettings?.();
       stoppedRecordingRef.current = {
         blob,
@@ -1199,15 +1222,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     }
 
     const recording = stoppedRecordingRef.current;
-    // Whatever went out during the debate is handed to the queue, which sends only the rest.
-    const multipart = (await liveRecordingStreamRef.current?.finish()) ?? null;
+    // Whatever went out during the debate is handed to the queue, which sends only the rest — and,
+    // for a streamed recording, stores only the rest: the stream no longer holds the parts it sent.
+    const multipart = (await liveStream?.finish()) ?? null;
+    const bytes = liveStream?.recording() ?? null;
+    const storedBytes = bytes ? bytes.size - bytes.availableFrom : (recording.blob?.size ?? 0);
     const storage = await estimateRecordingStorage();
     if (storage?.quota !== undefined && storage.usage !== undefined) {
       const availableBytes = storage.quota - storage.usage;
-      if (availableBytes < recording.blob.size) {
+      if (availableBytes < storedBytes) {
         console.warn('[DebateRecording] browser storage estimate is below recording size', {
           availableBytes,
-          recordingBytes: recording.blob.size,
+          recordingBytes: storedBytes,
         });
       }
     }
@@ -1216,7 +1242,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       await enqueueDebateRecordingUpload({
         userId: localParticipant.user_id,
         debateId: debate.id,
-        blob: recording.blob,
+        ...(bytes ? { recording: bytes } : { blob: recording.blob ?? new Blob([], { type: recording.mimeType }) }),
         mimeType: recording.mimeType,
         startedAtMs: recording.startedAtMs,
         endedAtMs: recording.endedAtMs,
@@ -2472,7 +2498,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (debate.status !== 'preflight' && debate.status !== 'in_progress') return;
 
     const now = serverClock.now();
-    if (now >= recordingWindow.endAtMs) {
+    const recordingEndAtMs = recordingWindow.endAtMs;
+    if (recordingEndAtMs !== null && now >= recordingEndAtMs) {
       persistRecordingAfterCapture();
       return;
     }
@@ -2491,11 +2518,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // which is the rest of GEO-2644; this is the prerequisite that makes that possible without
     // deadlocking capture against the clock it would then be waiting on.
     startLocalRecorder(stream);
+    // GEO-3175. An Open rounds debate has no end until a round resolves End or the cap round is
+    // appended, so there is no stop timer yet. This effect re-runs on every row update, which is
+    // when the end becomes known, and arms the timer then.
+    if (recordingEndAtMs === null) return clearRecordingTimers;
     recordingStopTimerRef.current = window.setTimeout(
       () => {
         persistRecordingAfterCapture();
       },
-      Math.max(0, recordingWindow.endAtMs - now)
+      Math.max(0, recordingEndAtMs - now)
     );
 
     return clearRecordingTimers;
@@ -3338,10 +3369,11 @@ function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | n
  */
 export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
+  // An undecided round has no turn to name yet (GEO-3175).
+  if (countdown.openRounds?.phase === 'deciding') return null;
   const nextTurnIndex = countdown.turnIndex + 1;
-  const turnCount = debate.turn_durations_ms.length;
-  if (nextTurnIndex >= turnCount) return null;
-  switch (debateTurnRole(nextTurnIndex, turnCount)) {
+  if (nextTurnIndex >= debate.turn_durations_ms.length) return null;
+  switch (debateTurnRoleForDebate(debate, nextTurnIndex)) {
     case 'rebuttal':
       return 'Rebut in';
     case 'closing':
@@ -3351,11 +3383,13 @@ export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
   }
 }
 
-function debateEndsSoonIsVisible(debate: Debate, countdown: DebateCountdown, localSlot: ParticipantSlot | null) {
+export function debateEndsSoonIsVisible(debate: Debate, countdown: DebateCountdown, localSlot: ParticipantSlot | null) {
   if (!localSlot || countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return false;
   if (countdown.activeSlot === localSlot) return false;
   if (countdown.remainingSeconds <= 0 || countdown.remainingSeconds > 5) return false;
-  return countdown.turnIndex === debate.turn_durations_ms.length - 1;
+  // Open rounds: only a running turn of the cap round, never a decision or a reveal (GEO-3175).
+  if (countdown.openRounds && countdown.openRounds.phase !== 'speaking') return false;
+  return isDebatesLastTurn(debate, countdown.turnIndex);
 }
 
 function thankingParticipantSlot(debate: Debate, countdown: DebateCountdown): ParticipantSlot | null {
@@ -3565,7 +3599,7 @@ function setRemoteMediaAudioEnabled(
   }
 }
 
-function localTurnStartsInSeconds(
+export function localTurnStartsInSeconds(
   debate: Debate,
   countdown: DebateCountdown,
   localSlot: ParticipantSlot | null
@@ -3581,6 +3615,8 @@ function localTurnStartsInSeconds(
     return countdown.incomingSlot === localSlot ? countdown.remainingSeconds : null;
   }
   if (countdown.activeSlot === localSlot) return null;
+  // An undecided round has no next turn to count into (GEO-3175).
+  if (countdown.openRounds?.phase === 'deciding') return null;
 
   const nextTurnIndex = countdown.turnIndex + 1;
   if (nextTurnIndex >= debate.turn_durations_ms.length) return null;
@@ -3827,6 +3863,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
       yieldedRemainingSeconds: countdownWindow?.yieldedRemainingSeconds ?? null,
       yieldedProgress: countdownWindow?.yieldedProgress ?? null,
       preservesExistingCountIn: countdownWindow?.preservesExistingCountIn ?? false,
+      openRounds: debate && countdownWindow ? openRoundsRoomPhase(debate, countdownWindow) : null,
     };
   }
 
@@ -3850,6 +3887,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
     yieldedRemainingSeconds: countdownWindow.yieldedRemainingSeconds,
     yieldedProgress: countdownWindow.yieldedProgress,
     preservesExistingCountIn: countdownWindow.preservesExistingCountIn,
+    openRounds: debate ? openRoundsRoomPhase(debate, countdownWindow) : null,
   };
 }
 
@@ -3867,19 +3905,25 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
  */
 const RECORDING_POST_ROLL_MS = 5_000;
 
-function recordingWindowForDebate(debate: Debate): DebateRecordingWindow | null {
+/**
+ * Capture runs from the debate's start until a post-roll after thanking starts. For a fixed format
+ * that is the sum of its turns, as it always was. For Open rounds (GEO-3175) the end is unknown
+ * until a round resolves End or the cap round is appended, and until then `endAtMs` is `null`: the
+ * room keeps recording, and re-reads this on every row update.
+ */
+export function recordingWindowForDebate(debate: Debate): DebateRecordingWindow | null {
   const startAtMs = timestampMs(debate.started_at ?? debate.preflight_ends_at);
   if (startAtMs === null || debate.turn_durations_ms.length === 0) return null;
 
-  let endAtMs = startAtMs;
-  for (const [turnIndex, durationMs] of debate.turn_durations_ms.entries()) {
-    const naturalTurnEndMs = endAtMs + Math.max(0, durationMs);
+  const endAtMs = debateThankingStartsAtMs(debate, startAtMs, (turnIndex, turnStartMs, durationMs) => {
+    const naturalTurnEndMs = turnStartMs + Math.max(0, durationMs);
     const handoffDeadlineMs = timestampMs(
       debate.turn_yields?.find(turnYield => turnYield.turn_index === turnIndex)?.handoff_deadline_at ?? null
     );
-    endAtMs = handoffDeadlineMs === null ? naturalTurnEndMs : Math.min(naturalTurnEndMs, handoffDeadlineMs);
-  }
+    return handoffDeadlineMs === null ? naturalTurnEndMs : Math.min(naturalTurnEndMs, handoffDeadlineMs);
+  });
 
+  if (endAtMs === null) return { startAtMs, endAtMs: null };
   if (endAtMs <= startAtMs) return null;
 
   return {
@@ -3914,7 +3958,7 @@ function debateWithPendingYield(debate: Debate, pendingTurnYield: PendingTurnYie
   };
 }
 
-function countdownWindowForDebate(
+export function countdownWindowForDebate(
   debate: Debate,
   now: number
 ): {
@@ -3928,6 +3972,7 @@ function countdownWindowForDebate(
   yieldedRemainingSeconds: number | null;
   yieldedProgress: number | null;
   preservesExistingCountIn: boolean;
+  openRoundsGap?: OpenRoundGap;
 } {
   if (debate.status === 'connecting') {
     return {
@@ -4035,6 +4080,7 @@ function timedDebateCountdownWindow(
   yieldedRemainingSeconds: number | null;
   yieldedProgress: number | null;
   preservesExistingCountIn: boolean;
+  openRoundsGap?: OpenRoundGap;
 } {
   let turnStartMs = debateStartMs;
 
@@ -4077,10 +4123,7 @@ function timedDebateCountdownWindow(
         };
       }
       turnStartMs = validHandoffDeadlineMs;
-      continue;
-    }
-
-    if (now < naturalTurnEndMs) {
+    } else if (now < naturalTurnEndMs) {
       return {
         startMs: turnStartMs,
         targetMs: naturalTurnEndMs,
@@ -4093,8 +4136,35 @@ function timedDebateCountdownWindow(
         yieldedProgress: null,
         preservesExistingCountIn: false,
       };
+    } else {
+      turnStartMs = validHandoffDeadlineMs ?? naturalTurnEndMs;
     }
-    turnStartMs = validHandoffDeadlineMs ?? naturalTurnEndMs;
+
+    // Open rounds (GEO-3175): a round's end is followed by a decision and a reveal, not the next
+    // turn. Fixed formats always `continue` at the turn's end, which is the walk as it was.
+    const gap = openRoundGapAfterTurn(debate, turnIndex, turnStartMs, now);
+    if (gap.kind === 'continue') {
+      turnStartMs = gap.nextTurnStartsAtMs;
+      continue;
+    }
+    if (gap.kind === 'thanking') {
+      turnStartMs = gap.startsAtMs;
+      break;
+    }
+    const hold = gap.phase;
+    return {
+      startMs: hold.phase === 'deciding' ? hold.roundEndedAtMs : hold.resolvedAtMs,
+      targetMs: hold.phase === 'deciding' ? hold.decisionDeadlineAtMs : hold.nextPhaseStartsAtMs,
+      activeSlot: null,
+      effectiveStatus: 'in_progress',
+      turnIndex,
+      yieldingSlot: null,
+      incomingSlot: null,
+      yieldedRemainingSeconds: null,
+      yieldedProgress: null,
+      preservesExistingCountIn: false,
+      openRoundsGap: gap,
+    };
   }
 
   return {

@@ -35,3 +35,11 @@ export function HideMyPositionsSwitch({ checked, onChange, analyticsSurface }: S
     <FilterSwitch label="Hide my positions" checked={checked} onChange={onChange} analyticsSurface={analyticsSurface} />
   );
 }
+
+/**
+ * "Hide agreed" — on the debate-again flow's "Their positions" tab, the claims the viewer holds the
+ * same side on as the opponent. See `rematchHideAgreedAtom`.
+ */
+export function HideAgreedSwitch({ checked, onChange, analyticsSurface }: SwitchProps) {
+  return <FilterSwitch label="Hide agreed" checked={checked} onChange={onChange} analyticsSurface={analyticsSurface} />;
+}

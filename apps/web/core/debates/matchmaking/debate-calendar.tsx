@@ -659,7 +659,6 @@ function DebateCalendarBody({
               slotsByUser={slotsByUser}
               opponentName={opponentName}
               renderRow={renderRow}
-              onBook={openBooking}
               now={now}
             />
           )}

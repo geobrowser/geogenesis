@@ -322,6 +322,18 @@ export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPo
  */
 export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', true);
 
+/**
+ * "Hide agreed" on the debate-again flow's "Their positions" tab.
+ *
+ * The opponent has a side on every claim there, so each row is one of three things to the viewer:
+ * the other side (a match, requestable now), no side yet (one press from a match), or the same side.
+ * Only the last is a dead end — there is nothing to debate — and this is what takes it out.
+ *
+ * Not "Hide my positions", which on this tab would also hide the matches: the rows the viewer can act
+ * on soonest. Stored and on by default for the same reasons as {@link rematchHideMyPositionsAtom}.
+ */
+export const rematchHideAgreedAtom = atomWithStorage('rematchHideAgreed', true);
+
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 
 // Set to `Date.now()` whenever a ranking "Create new" entity is published. The

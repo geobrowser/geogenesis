@@ -40,11 +40,9 @@ export type ScheduleEntry =
   | 'reschedule_link'
   /** "Reschedule" on an accepted debate in the Requests tab, which moves it the same way. */
   | 'requests_reschedule'
-  /** A face on the calendar's week grid (GEO-3152), which opens their week at that hour. */
-  | 'calendar_slot'
-  /** A row in one hour's list of everyone free then, on the calendar. */
+  /** A row in one hour's list of everyone free then, on the calendar's week grid (GEO-3152). */
   | 'calendar_hour'
-  /** The card a face on the calendar opens on hover or tap, and the phone list's rows. */
+  /** The card a face on the calendar opens on hover, and the phone list's rows. */
   | 'calendar_card';
 
 /** Which control opened the viewer's own schedule editor. */

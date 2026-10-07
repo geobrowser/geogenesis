@@ -255,6 +255,21 @@ describe('DebateGatewayClient', () => {
         ['debates', 'account', 'user-a', 'matches'],
       ],
     ],
+    [
+      'lobby list',
+      { event_type: 'debate.lobbies_changed', payload: { lobby_id: 'abc' } },
+      [
+        ['debates', 'account', 'user-a', 'lobbies'],
+        ['debates', 'account', 'user-a', 'lobby', 'abc'],
+      ],
+    ],
+    [
+      'one lobby',
+      { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD' } },
+      [
+        ['debates', 'account', 'user-a', 'lobby', 'abcd'],
+      ],
+    ],
   ])('maps %s events to their authoritative query families', async (_label, event, expectedKeys) => {
     client.start(
       vi.fn(async () => 'privy-token'),
@@ -295,7 +310,7 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.receive('READY', readyPayload([{ scope: 'matchmaking' }]));
     await flushInvalidations();
 
-    for (const kind of ['people', 'matchmaking-claims', 'matches']) {
+    for (const kind of ['people', 'matchmaking-claims', 'matches', 'lobbies', 'lobby']) {
       expectInvalidated(invalidateQueries, {
         queryKey: ['debates', 'account', 'user-a', kind],
         refetchType: 'active',

@@ -44,6 +44,7 @@ import {
   invalidateDebatesOutsideRematchClaims,
   useGeoChatAuth,
 } from '../hooks';
+import { routeIntoDebate } from '../lobbies/step-out';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
 
@@ -457,7 +458,8 @@ export function useAcceptDebateRequest() {
         // this tab is not yet on the path of. Without the intent the coordinator reads that as
         // someone who needs telling and reopens this very dialog as the ready prompt.
         markEnteringDebate(result.debate.id);
-        router.push(debatePath(result.debate));
+        const path = debatePath(result.debate);
+        routeIntoDebate(() => router.push(path));
       }
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },

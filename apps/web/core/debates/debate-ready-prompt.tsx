@@ -11,6 +11,7 @@ import { markEnteringDebate } from './debate-entry-intent';
 import { DebateRequestDialog } from './debate-request-dialog';
 import { debatePath } from './debate-routes';
 import { useAbortDebate, useClearDebateActivity } from './hooks';
+import { routeIntoDebate } from './lobbies/step-out';
 import { SpaceChip } from './matchmaking/matchmaking-claim-card';
 
 /**
@@ -37,7 +38,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
     if (joining) return;
     setJoining(true);
     markEnteringDebate(debate.id);
-    startJoining(() => router.push(debatePath(debate)));
+    routeIntoDebate(() => startJoining(() => router.push(debatePath(debate))));
   };
 
   /**
@@ -111,7 +112,7 @@ export function DebateRejoinBar({ debate, openInAnotherTab = false }: { debate: 
         onClick={() => {
           setJoining(true);
           markEnteringDebate(debate.id);
-          startJoining(() => router.push(debatePath(debate)));
+          routeIntoDebate(() => startJoining(() => router.push(debatePath(debate))));
         }}
         className="pointer-events-auto flex max-w-full items-center gap-2 rounded-full bg-text py-2 pr-2 pl-4 text-white shadow-card transition-opacity hover:opacity-90 disabled:opacity-70"
       >

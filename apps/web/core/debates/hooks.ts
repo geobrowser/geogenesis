@@ -25,6 +25,7 @@ import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import {
   type Debate,
   type DebateActivity,
+  dashlessId,
   type DebateClaimsResponse,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
@@ -162,6 +163,11 @@ export const debateQueryKeys = {
   /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
   room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
   upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
+  /** GEO-3133. Refetched on `debate.lobbies_changed`. */
+  lobbies: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobbies'] as const,
+  /** Dashless, as `debate.lobby_changed` spells it. */
+  lobby: (accountKey: string | null, lobbyId: string) =>
+    ['debates', 'account', accountKey, 'lobby', dashlessId(lobbyId)] as const,
   scheduledDebates: (accountKey: string | null) => ['debates', 'account', accountKey, 'scheduled-debates'] as const,
   /** Every admin list of scheduled debates, whatever week it was read from: what New match refreshes. */
   adminScheduledDebatesRoot: ['debates', 'admin-scheduled-debates'] as const,
