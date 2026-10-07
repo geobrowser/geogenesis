@@ -381,32 +381,81 @@ describe('DebateGatewayClient', () => {
       expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbiesKey }));
     });
 
-    // The GET replaces the whole list, so a patch it predates would be lost until the next one.
-    it('refetches when a patch lands while a GET that predates it is in flight', async () => {
+    /** A list GET per call: each resolves with its response when released, in call order. */
+    function slowLobbyFetches(responses: object[]) {
+      const releases: (() => void)[] = [];
+      const fetchLobbies = vi.fn(() => {
+        const response = responses[Math.min(fetchLobbies.mock.calls.length - 1, responses.length - 1)]!;
+        return new Promise<object>(done => releases.push(() => done(response)));
+      });
+      return { fetchLobbies, release: (index: number) => releases[index]!() };
+    }
+
+    it('keeps a patch that lands during a GET when the older GET arrives, without asking again', async () => {
       await started();
       invalidateQueries.mockRestore();
-
-      const responses = [
-        { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] },
-        { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] },
-        { lobbies: [row('aa', 8, '2026-10-07T12:00:05Z')] },
-      ];
-      let release: () => void = () => undefined;
-      const fetchLobbies = vi.fn(async () => {
-        const response = responses[fetchLobbies.mock.calls.length - 1]!;
-        if (fetchLobbies.mock.calls.length === 2) await new Promise<void>(done => (release = done));
-        return response;
-      });
+      const { fetchLobbies, release } = slowLobbyFetches([{ lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] }]);
       const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
       const unsubscribe = observer.subscribe(() => undefined);
+      release(0);
       await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3']));
 
       void observer.refetch();
       await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
-      release();
+      expect(cachedIds()).toEqual(['aa:8']);
+      release(1);
+
+      await vi.waitFor(() => expect(fetchLobbies).toHaveBeenCalledTimes(2));
       await vi.runAllTicks();
+      expect(cachedIds()).toEqual(['aa:8']);
+      unsubscribe();
+    });
+
+    it('applies a patch that lands during the first load once the list arrives', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+      const { fetchLobbies, release } = slowLobbyFetches([{ lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] }]);
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+      release(0);
 
       await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:8']));
+      expect(fetchLobbies).toHaveBeenCalledTimes(1);
+      unsubscribe();
+    });
+
+    it('does not cancel a slow GET for a stream of patches, and drops held patches the GET has caught up with', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+      const { fetchLobbies, release } = slowLobbyFetches([
+        { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] },
+        { lobbies: [row('aa', 6, '2026-10-07T12:00:04Z')] },
+        { lobbies: [row('aa', 2, '2026-10-07T12:00:09Z')] },
+      ]);
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+      release(0);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3']));
+
+      void observer.refetch();
+      for (const [headcount, second] of [
+        [4, 2],
+        [5, 3],
+        [7, 5],
+      ] as const) {
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', headcount, `2026-10-07T12:00:0${second}Z`) });
+      }
+      release(1);
+      await vi.waitFor(() => expect(fetchLobbies).toHaveBeenCalledTimes(2));
+      await vi.runAllTicks();
+      // The GET read the lobby at :04; the patch from :05 is newer and stays on top.
+      expect(cachedIds()).toEqual(['aa:7']);
+
+      void observer.refetch();
+      release(2);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:2']));
       expect(fetchLobbies).toHaveBeenCalledTimes(3);
       unsubscribe();
     });

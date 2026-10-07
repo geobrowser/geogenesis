@@ -145,6 +145,9 @@ export class DebateGatewayClient {
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
+  /** The newest card patch per dashless lobby id, laid over each list GET until one catches up. */
+  private readonly heldLobbyPatches = new Map<string, DebateLobbyCardPatch>();
+  private unsubscribeLobbyFetches: (() => void) | null = null;
 
   private snapshot: DebateGatewaySnapshot = {
     status: 'idle',
@@ -201,6 +204,13 @@ export class DebateGatewayClient {
     if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
     this.accountKey = accountKey;
+    this.unsubscribeLobbyFetches ??= this.queryClient.getQueryCache().subscribe(event => {
+      // A fetch's own success; the overlay's `setQueryData` is `manual` and does not come back here.
+      if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
+      if (this.accountKey && isLobbiesQueryKey(event.query.queryKey, this.accountKey)) {
+        this.overlayHeldLobbyPatches(event.query.state.data as DebateLobbiesResponse | undefined);
+      }
+    });
     if (this.enabled) return;
     this.enabled = true;
     this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
@@ -246,6 +256,9 @@ export class DebateGatewayClient {
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
+    this.heldLobbyPatches.clear();
+    this.unsubscribeLobbyFetches?.();
+    this.unsubscribeLobbyFetches = null;
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false, pauseReason: null });
   }
@@ -482,8 +495,8 @@ export class DebateGatewayClient {
           // Card-less: create, open, close, or a change to this viewer's own standing.
           this.queueAccountQuery('lobbies');
           this.queueAccountQuery('my-lobby');
-        } else if (!this.patchLobbies(patch)) {
-          this.queueAccountQuery('lobbies');
+        } else {
+          this.holdLobbyPatch(patch);
         }
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
@@ -495,15 +508,36 @@ export class DebateGatewayClient {
     }
   }
 
-  /** Patches the cached lobbies list in place. False when the list should be refetched as well. */
-  private patchLobbies(patch: DebateLobbyCardPatch) {
-    if (!this.accountKey) return false;
+  /**
+   * Applies a card patch and holds it, so a GET that read the list before the patch cannot undo it.
+   * A GET in flight is never cancelled for a patch: patches can outpace its round trip.
+   */
+  private holdLobbyPatch(patch: DebateLobbyCardPatch) {
+    const id = dashlessId(patch.lobby.lobby_id);
+    const held = this.heldLobbyPatches.get(id);
+    if (held && Date.parse(held.asOf) >= Date.parse(patch.asOf)) return;
+    this.heldLobbyPatches.set(id, patch);
+    this.overlayHeldLobbyPatches();
+  }
 
+  /** Lays held patches over the cached list. `fetched`, a GET's result, also drops those it has caught up with. */
+  private overlayHeldLobbyPatches(fetched?: DebateLobbiesResponse) {
+    if (!this.accountKey) return;
     const key = ['debates', 'account', this.accountKey, 'lobbies'];
-    this.queryClient.setQueryData<DebateLobbiesResponse>(key, list => (list ? applyLobbyCardPatch(list, patch) : list));
-    // A GET in flight may have read the row before this patch and replaces the whole list when it
-    // lands; refetching lets the flush cancel it.
-    return this.queryClient.getQueryState(key)?.fetchStatus !== 'fetching';
+    const list = this.queryClient.getQueryData<DebateLobbiesResponse>(key);
+    if (!list) return;
+
+    if (fetched) {
+      for (const row of fetched.lobbies) {
+        const id = dashlessId(row.lobby_id);
+        const held = this.heldLobbyPatches.get(id);
+        if (held && row.as_of && Date.parse(row.as_of) >= Date.parse(held.asOf)) this.heldLobbyPatches.delete(id);
+      }
+    }
+
+    let next = list;
+    for (const patch of this.heldLobbyPatches.values()) next = applyLobbyCardPatch(next, patch);
+    if (next !== list) this.queryClient.setQueryData(key, next);
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {
@@ -1141,6 +1175,16 @@ function rateLimitRetryDelayMs(payload: unknown) {
 
 function isGatewayEnvelope(value: unknown): value is GatewayEnvelope {
   return isRecord(value) && value.v === 1 && typeof value.op === 'string' && 'payload' in value;
+}
+
+function isLobbiesQueryKey(queryKey: readonly unknown[], accountKey: string) {
+  return (
+    queryKey.length === 4 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[2] === accountKey &&
+    queryKey[3] === 'lobbies'
+  );
 }
 
 function isDebateEvent(value: unknown): value is DebateInvalidationEvent {
