@@ -951,14 +951,16 @@ export function useEndDebateTurn(debateId: string) {
 
 /**
  * Saves an Open rounds pick (GEO-3178). Not retried: the pick card puts the selection back and asks
- * the debater to tap again, which is the retry, and a silent one could land after they changed it.
+ * the debater to tap again, which is the retry, and a silent one would hold up any pick queued
+ * behind it while the decision window runs out.
  *
  * `round_already_resolved` is not a failure: the round ended while the save was in flight, the room
  * is about to show the result, and the debate is re-read for it. It resolves `null`.
  *
- * Saves for one debate run one after another (`scope`). A debater who switches quickly sends two
- * PUTs, and concurrent ones can reach the server, or answer, in either order — so the pick they
- * switched away from could be what the server keeps, or what the cache shows last.
+ * Saves for one debate run one after another (`scope`), so a quick switch is sent only once the
+ * previous pick has answered. Without that, the two PUTs would run concurrently and could reach the
+ * server, or answer, in either order — so the pick switched away from could be what the server
+ * keeps, or what the cache shows last.
  */
 export function useSaveOpenRoundPick(debateId: string) {
   const queryClient = useQueryClient();

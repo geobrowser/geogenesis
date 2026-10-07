@@ -29,15 +29,15 @@ type OpenRoundPickCardProps = {
 };
 
 /**
- * Extend or End, after every Open rounds round but the cap (GEO-3178). Built on the
- * `DebateAgainCard` shell: same place over the tiles, radius and shadow.
+ * Extend or End, after every Open rounds round but the cap (GEO-3178). Shares
+ * `DebateRoomOverlayCard` with "Debate again?": same place over the tiles, radius and shadow.
  *
  * Picks are blind, so the card says nothing about the other debater's pick, not even whether they
  * have made one. It is open for the whole `deciding` phase and closes when the room moves to the
  * result, which the server does as soon as both have picked.
  *
  * The selection shows the pick being saved until the save answers, then the server's `savedPick`.
- * A failed save shows `savedPick` again, so the card never claims a pick the server does not hold.
+ * A failed save shows `savedPick` again rather than the pick that did not save.
  */
 export function OpenRoundPickCard({
   roundIndex,
@@ -51,7 +51,7 @@ export function OpenRoundPickCard({
 }: OpenRoundPickCardProps) {
   const [requestedPick, setRequestedPick] = React.useState<OpenRoundPick | null>(null);
   const [saveFailed, setSaveFailed] = React.useState(false);
-  // Only the latest tap settles the card: an earlier save answering late must not undo a later one.
+  // Only the latest tap settles the card: an earlier save answering after a later tap must not undo it.
   const latestRequestRef = React.useRef(0);
   const headingId = React.useId();
 
