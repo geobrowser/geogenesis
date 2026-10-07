@@ -1,5 +1,6 @@
 import { capture } from '~/core/analytics';
 import { db } from '~/core/database/indexeddb';
+import { addTelemetryBreadcrumb, reportEvent } from '~/core/telemetry/logger';
 
 import { GeoChatRequestError, type LocalRecordingPartUrl, type ObjectStoreUpload } from './api';
 import { RecordingUploadError, recordingStorageHttpError } from './recording-upload-errors';
@@ -86,17 +87,18 @@ export async function createRecordingStream(id: string, metadata: RecordingStrea
   });
 }
 
+/** Writes one timeslice. Resolves `false`, writing nothing, when the stream's row is not there. */
 export async function appendRecordingChunk(
   streamId: string,
   seq: number,
   blob: Blob,
   chunkAtMs: number
-): Promise<void> {
+): Promise<boolean> {
   // Read before the transaction opens: it would commit at a non-IndexedDB `await` inside it.
   const data = await blob.arrayBuffer();
-  await db.transaction('rw', db.debateRecordingStreams, db.debateRecordingChunks, async () => {
+  return db.transaction('rw', db.debateRecordingStreams, db.debateRecordingChunks, async () => {
     const stream = await db.debateRecordingStreams.get(streamId);
-    if (!stream) return;
+    if (!stream) return false;
     await db.debateRecordingChunks.put({ streamId, seq, data });
     await db.debateRecordingStreams.update(streamId, {
       byteSize: stream.byteSize + blob.size,
@@ -104,7 +106,25 @@ export async function appendRecordingChunk(
       lastChunkAtMs: Math.max(stream.lastChunkAtMs, chunkAtMs),
       heartbeatAt: Date.now(),
     });
+    return true;
   });
+}
+
+/** Some of a stream's timeslices, by `seq`, as the bytes they were saved as. */
+export async function readRecordingStreamChunks(streamId: string, seqs: number[]): Promise<Map<number, ArrayBuffer>> {
+  const found = new Map<number, ArrayBuffer>();
+  if (seqs.length === 0) return found;
+  const wanted = new Set(seqs);
+  const chunks = await db.debateRecordingChunks
+    .where('[streamId+seq]')
+    .between([streamId, Math.min(...seqs)], [streamId, Math.max(...seqs)], true, true)
+    .toArray();
+  for (const chunk of chunks) {
+    if (!wanted.has(chunk.seq)) continue;
+    const data = chunk.data ?? (chunk.blob ? await chunk.blob.arrayBuffer() : undefined);
+    if (data) found.set(chunk.seq, data);
+  }
+  return found;
 }
 
 export async function setRecordingStreamMultipart(
@@ -152,6 +172,209 @@ export function totalPartCount(byteSize: number, partSize: number): number {
   return Math.max(1, Math.ceil(byteSize / partSize));
 }
 
+/**
+ * A recording's bytes, read a range at a time, so that nothing has to hold the whole of it.
+ *
+ * Bytes before `availableFrom` are not on this device any more: they went out during the debate in
+ * multipart parts that object storage confirmed, and the queue only ever needs the parts that did
+ * not. Every byte from `availableFrom` on can be read.
+ */
+export type RecordingByteSource = {
+  readonly size: number;
+  readonly availableFrom: number;
+  /** Everything from `availableFrom` on is held in memory, so keeping a copy of it costs nothing. */
+  readonly heldInMemory: boolean;
+  /** Bytes `[start, end)`, as a memory-backed `Blob`. */
+  read: (start: number, end: number) => Promise<Blob>;
+};
+
+export function blobByteSource(blob: Blob): RecordingByteSource {
+  return {
+    size: blob.size,
+    availableFrom: 0,
+    heldInMemory: true,
+    read: async (start, end) => blob.slice(start, end),
+  };
+}
+
+function isBlob(value: Blob | RecordingByteSource): value is Blob {
+  return typeof (value as Blob).arrayBuffer === 'function';
+}
+
+export function recordingBytesReleasedError(start: number) {
+  return new RecordingUploadError(
+    `Recording bytes from ${start} were uploaded during the debate and are no longer kept on this device.`,
+    'blob_unreadable'
+  );
+}
+
+/**
+ * When the live upload falls behind — it stands down while the call struggles, and it may not be
+ * able to start at all — the bytes it has not sent pile up. Past this many held in memory, the
+ * oldest ones already saved in IndexedDB are let go and read back from there when they are needed.
+ * About three and a half minutes of a 2.5 Mbps recording: well under the five-minute debates that
+ * have always been held in memory whole.
+ */
+export const RECORDING_RETAINED_BYTES_LIMIT = 64 * 1024 * 1024;
+
+type LedgerEntry = {
+  seq: number;
+  start: number;
+  end: number;
+  /** The timeslice, while this tab still holds it. */
+  blob: Blob | null;
+  /** Saved in the stream's IndexedDB chunks, so it can be read back once let go. */
+  durable: boolean;
+};
+
+export type ReadDurableChunks = (seqs: number[]) => Promise<Map<number, ArrayBuffer>>;
+
+/**
+ * The recording's timeslices, in order, holding in memory only what is not safe anywhere else.
+ *
+ * A timeslice is let go once every byte of it is in a multipart part object storage confirmed
+ * (`confirm`), and — only when too much is piling up — once it is saved in IndexedDB (`spill`).
+ * One that is neither is always held: nothing is let go that cannot be had back, or that is not
+ * already uploaded.
+ */
+export class RecordingChunkLedger {
+  private readonly entries: LedgerEntry[] = [];
+  private total = 0;
+  private confirmed = 0;
+  private retained = 0;
+  private peak = 0;
+  private spilled = 0;
+  /** Entries before this index are let go for good: wholly confirmed. */
+  private confirmedCursor = 0;
+  private frozen = false;
+
+  get size() {
+    return this.total;
+  }
+
+  /** Bytes from the start of the recording that are in confirmed parts. */
+  get confirmedBytes() {
+    return this.confirmed;
+  }
+
+  get retainedBytes() {
+    return this.retained;
+  }
+
+  get peakRetainedBytes() {
+    return this.peak;
+  }
+
+  get spilledChunks() {
+    return this.spilled;
+  }
+
+  /** Every byte from `start` on is held in memory. */
+  heldFrom(start: number): boolean {
+    for (let index = this.indexAt(start); index < this.entries.length; index += 1) {
+      if (!this.entries[index].blob) return false;
+    }
+    return true;
+  }
+
+  append(blob: Blob): number {
+    const seq = this.entries.length;
+    this.entries.push({ seq, start: this.total, end: this.total + blob.size, blob, durable: false });
+    this.total += blob.size;
+    this.retained += blob.size;
+    this.peak = Math.max(this.peak, this.retained);
+    this.releaseConfirmed();
+    return seq;
+  }
+
+  markDurable(seq: number) {
+    const entry = this.entries[seq];
+    if (entry) entry.durable = true;
+  }
+
+  /** The first `bytes` of the recording are in parts object storage confirmed. */
+  confirm(bytes: number) {
+    if (this.frozen || bytes <= this.confirmed) return;
+    this.confirmed = bytes;
+    this.releaseConfirmed();
+  }
+
+  /** Lets go of the oldest unsent timeslices already in IndexedDB until no more than `limit` is held. */
+  spill(limit: number) {
+    if (this.frozen) return;
+    for (let index = this.confirmedCursor; index < this.entries.length && this.retained > limit; index += 1) {
+      const entry = this.entries[index];
+      if (!entry.blob || !entry.durable) continue;
+      this.drop(entry);
+      this.spilled += 1;
+    }
+  }
+
+  /**
+   * Nothing more is let go. Once the recording is handed to the queue, what it was told it can
+   * read must stay readable — a part that lands after that changes nothing it relies on.
+   */
+  freeze() {
+    this.frozen = true;
+  }
+
+  /** Bytes `[start, end)`: from memory where held, from IndexedDB where spilled. */
+  async read(start: number, end: number, readDurable?: ReadDurableChunks): Promise<Blob> {
+    if (start < 0 || end > this.total || start > end) {
+      throw new RangeError(`Recording range ${start}-${end} is outside 0-${this.total}.`);
+    }
+    if (start === end) return new Blob([]);
+    const covering: LedgerEntry[] = [];
+    for (let index = this.indexAt(start); index < this.entries.length; index += 1) {
+      const entry = this.entries[index];
+      if (entry.start >= end) break;
+      covering.push(entry);
+    }
+    // Taken now: an entry let go while IndexedDB is read is still in hand.
+    const held = covering.map(entry => entry.blob);
+    const missing = covering.filter((entry, index) => !held[index]);
+    for (const entry of missing) {
+      if (!entry.durable || !readDurable) throw recordingBytesReleasedError(entry.start);
+    }
+    const fetched = missing.length > 0 && readDurable ? await readDurable(missing.map(entry => entry.seq)) : null;
+    const parts = covering.map((entry, index) => {
+      const part = held[index] ?? fetched?.get(entry.seq);
+      const size = part instanceof Blob ? part.size : part?.byteLength;
+      if (!part || size !== entry.end - entry.start) {
+        throw new RecordingUploadError('This browser’s saved copy of the recording is incomplete.', 'blob_unreadable');
+      }
+      return part;
+    });
+    const base = covering[0].start;
+    return new Blob(parts).slice(start - base, end - base);
+  }
+
+  private releaseConfirmed() {
+    while (this.confirmedCursor < this.entries.length && this.entries[this.confirmedCursor].end <= this.confirmed) {
+      this.drop(this.entries[this.confirmedCursor]);
+      this.confirmedCursor += 1;
+    }
+  }
+
+  private drop(entry: LedgerEntry) {
+    if (!entry.blob) return;
+    this.retained -= entry.blob.size;
+    entry.blob = null;
+  }
+
+  /** The index of the entry holding byte `offset`, or the end. */
+  private indexAt(offset: number): number {
+    let low = 0;
+    let high = this.entries.length;
+    while (low < high) {
+      const middle = (low + high) >> 1;
+      if (this.entries[middle].end <= offset) low = middle + 1;
+      else high = middle;
+    }
+    return low;
+  }
+}
+
 export type RecordingPartTransport = {
   startMultipart: () => Promise<{ filename: string; upload_id: string; part_size: number }>;
   getPartUrls: (filename: string, uploadId: string, partNumbers: number[]) => Promise<LocalRecordingPartUrl[]>;
@@ -159,19 +382,48 @@ export type RecordingPartTransport = {
   abortMultipart: (filename: string, uploadId: string) => Promise<void>;
 };
 
+/** Why the live upload is standing down for the call. Reported, so a stream that never ran says why. */
+export type RecordingPauseReason = 'connection_poor' | 'room_not_connected' | 'offline';
+
+/**
+ * A recording that is not streaming during the debate, and why. Reported once per recording, as
+ * soon as it is known: the whole recording is then one upload after the debate, over the same
+ * connection, which is the case most likely to lose it.
+ */
+export type RecordingStreamStall = {
+  reason: 'start_failed' | 'paused' | 'routes_missing';
+  pause_reason: RecordingPauseReason | null;
+  start_attempts: number;
+  bytes_recorded: number;
+  paused_ms: number;
+};
+
 export type RecordingPartStreamerOptions = RecordingPartTransport & {
   /**
    * Called before every part. The upload shares the participant's upstream with the live call,
    * so it yields whenever the call is struggling — the bytes are safe in IndexedDB and go out
    * after the debate instead, which is exactly what happened before streaming existed.
+   *
+   * Returns why it should pause, or `false`/`null` when it should not. A plain `true` is read as
+   * `connection_poor`. It never stops the upload being opened, only parts being sent, and a pause
+   * that lasts {@link MAX_CONTINUOUS_PAUSE_MS} lets one part through.
    */
-  shouldPause: () => boolean;
+  shouldPause: () => boolean | RecordingPauseReason | null;
+  /** The recording has not started streaming {@link STREAM_STALL_AFTER_MS} after its first bytes. */
+  onStall?: (stall: RecordingStreamStall) => void;
   /** Persists progress so a reload knows which parts already landed. */
   onMultipartChange?: (multipart: StreamedRecordingMultipart) => void;
   setTimer?: (callback: () => void, delayMs: number) => unknown;
   clearTimer?: (timer: unknown) => void;
   /** How long `finish` waits for a part already on the wire before handing over. */
   finishGraceMs?: number;
+  /**
+   * Where the recording's bytes are kept. Shared with whoever saves them, so that a timeslice this
+   * streamer has sent is let go of everywhere. One of its own when omitted.
+   */
+  ledger?: RecordingChunkLedger;
+  /** Reads back timeslices the ledger let go of after saving them to IndexedDB. */
+  readDurable?: ReadDurableChunks;
 };
 
 const PART_URL_BATCH = 8;
@@ -179,6 +431,20 @@ const PAUSE_RECHECK_MS = 3_000;
 const MIN_RETRY_MS = 2_000;
 const MAX_RETRY_MS = 30_000;
 const MAX_START_ATTEMPTS = 3;
+/**
+ * The longest the live upload stands down in one stretch before it sends a part anyway, one per
+ * stretch. A pause that never lifts used to mean no part at all: the whole recording went up in
+ * one PUT after the debate, over the connection that had been too poor to stream it (GEO-3171).
+ * One 5 MiB part a minute is under 0.7 Mbps, well below what the recording itself is made at.
+ */
+export const MAX_CONTINUOUS_PAUSE_MS = 60_000;
+/** How long after its first bytes a recording that has not started streaming is reported. */
+export const STREAM_STALL_AFTER_MS = 30_000;
+
+function pauseReason(value: boolean | RecordingPauseReason | null): RecordingPauseReason | null {
+  if (!value) return null;
+  return value === true ? 'connection_poor' : value;
+}
 
 /**
  * Uploads a growing recording to R2 one fixed-size part at a time, while it is recorded.
@@ -192,8 +458,7 @@ const MAX_START_ATTEMPTS = 3;
 export class RecordingPartStreamer {
   private readonly options: Required<Pick<RecordingPartStreamerOptions, 'setTimer' | 'clearTimer' | 'finishGraceMs'>> &
     RecordingPartStreamerOptions;
-  private readonly chunks: Blob[] = [];
-  private byteSize = 0;
+  private readonly ledger: RecordingChunkLedger;
   private multipart: StreamedRecordingMultipart | null = null;
   private readonly uploaded = new Set<number>();
   private urls = new Map<number, ObjectStoreUpload>();
@@ -204,7 +469,19 @@ export class RecordingPartStreamer {
   private disabled = false;
   private stopped = false;
   private pausedMs = 0;
+  private readonly pausedMsByReason: Record<RecordingPauseReason, number> = {
+    connection_poor: 0,
+    room_not_connected: 0,
+    offline: 0,
+  };
+  /** Paused since the last part went out (or since the start): what {@link MAX_CONTINUOUS_PAUSE_MS} bounds. */
+  private continuousPausedMs = 0;
+  private lastPauseReason: RecordingPauseReason | null = null;
+  private partsSentThroughPause = 0;
   private partFailures = 0;
+  private startFailures = 0;
+  private stallTimer: unknown = null;
+  private stallReported = false;
 
   constructor(options: RecordingPartStreamerOptions) {
     this.options = {
@@ -213,19 +490,62 @@ export class RecordingPartStreamer {
       finishGraceMs: 10_000,
       ...options,
     };
+    this.ledger = options.ledger ?? new RecordingChunkLedger();
+  }
+
+  private get byteSize() {
+    return this.ledger.size;
   }
 
   /** Seeds a streamer resumed from IndexedDB with the parts an earlier run already sent. */
   resume(multipart: StreamedRecordingMultipart): void {
     this.multipart = { ...multipart, uploadedPartNumbers: [...multipart.uploadedPartNumbers] };
     for (const partNumber of multipart.uploadedPartNumbers) this.uploaded.add(partNumber);
+    this.ledger.confirm(this.confirmedBytes());
   }
 
   append(chunk: Blob): void {
     if (this.stopped || chunk.size === 0) return;
-    this.chunks.push(chunk);
-    this.byteSize += chunk.size;
+    this.ledger.append(chunk);
+    this.wake();
+  }
+
+  /** New bytes are in the shared ledger: send any part they complete. */
+  wake(): void {
     this.schedule(0);
+    this.armStallCheck();
+  }
+
+  private armStallCheck() {
+    if (this.stallTimer !== null || this.stallReported || this.multipart || this.stopped) return;
+    this.stallTimer = this.options.setTimer(() => {
+      this.stallTimer = null;
+      this.reportStall();
+    }, STREAM_STALL_AFTER_MS);
+  }
+
+  /** Once per recording: it is not streaming, and why. */
+  private reportStall() {
+    if (this.stallReported || this.multipart || this.stopped) return;
+    this.stallReported = true;
+    this.options.onStall?.({
+      reason: this.disabled ? 'routes_missing' : this.startFailures > 0 ? 'start_failed' : 'paused',
+      pause_reason: this.lastPauseReason,
+      start_attempts: this.startAttempts,
+      bytes_recorded: this.byteSize,
+      paused_ms: this.pausedMs,
+    });
+  }
+
+  /**
+   * Bytes from the start of the recording that are in parts object storage has confirmed: the
+   * longest unbroken run of uploaded parts from part 1. Only these are ever let go of.
+   */
+  confirmedBytes(): number {
+    if (!this.multipart) return 0;
+    let parts = 0;
+    while (this.uploaded.has(parts + 1)) parts += 1;
+    return Math.min(this.byteSize, parts * this.multipart.partSize);
   }
 
   /**
@@ -233,6 +553,8 @@ export class RecordingPartStreamer {
    * part already on the wire so its number is recorded, but never for more parts.
    */
   async finish(): Promise<StreamedRecordingMultipart | null> {
+    // A recording that never streamed is reported now if its stall check had not come round yet.
+    if (this.byteSize > 0) this.reportStall();
     this.stopped = true;
     this.clearScheduled();
     if (this.inFlight) {
@@ -241,6 +563,9 @@ export class RecordingPartStreamer {
         new Promise<void>(resolve => this.options.setTimer(resolve, this.options.finishGraceMs)),
       ]);
     }
+    // With the snapshot, in the same turn: the bytes it says are uploaded are exactly the ones let
+    // go of, even if the part still on the wire lands later.
+    this.ledger.freeze();
     return this.snapshot();
   }
 
@@ -265,7 +590,15 @@ export class RecordingPartStreamer {
       parts_uploaded_live: this.uploaded.size,
       total_parts: partSize ? totalPartCount(this.byteSize, partSize) : null,
       paused_ms: this.pausedMs,
+      paused_connection_poor_ms: this.pausedMsByReason.connection_poor,
+      paused_room_not_connected_ms: this.pausedMsByReason.room_not_connected,
+      paused_offline_ms: this.pausedMsByReason.offline,
+      parts_sent_through_pause: this.partsSentThroughPause,
+      start_attempts: this.startAttempts,
+      start_failures: this.startFailures,
       part_failures: this.partFailures,
+      peak_retained_bytes: this.ledger.peakRetainedBytes,
+      spilled_chunks: this.ledger.spilledChunks,
     } as const;
   }
 
@@ -287,6 +620,10 @@ export class RecordingPartStreamer {
       this.options.clearTimer(this.timer);
       this.timer = null;
     }
+    if (this.stallTimer !== null) {
+      this.options.clearTimer(this.stallTimer);
+      this.stallTimer = null;
+    }
   }
 
   private nextPartNumber(): number | null {
@@ -300,31 +637,57 @@ export class RecordingPartStreamer {
 
   private async pump(): Promise<void> {
     if (this.stopped || this.disabled || this.inFlight) return;
-    if (this.options.shouldPause()) {
-      this.pausedMs += PAUSE_RECHECK_MS;
-      this.schedule(PAUSE_RECHECK_MS);
-      return;
+    // Opening the upload is one small request, so it is never held back for the call: a pause that
+    // held from the first second used to leave a debate with no live upload at all (GEO-3171).
+    // Parts are what compete with the call, and they stand down — but not for ever.
+    let throughPause = false;
+    if (this.multipart && this.nextPartNumber() !== null) {
+      const reason = pauseReason(this.options.shouldPause());
+      if (reason) {
+        this.lastPauseReason = reason;
+        if (this.continuousPausedMs < MAX_CONTINUOUS_PAUSE_MS) {
+          this.pausedMs += PAUSE_RECHECK_MS;
+          this.pausedMsByReason[reason] += PAUSE_RECHECK_MS;
+          this.continuousPausedMs += PAUSE_RECHECK_MS;
+          this.schedule(PAUSE_RECHECK_MS);
+          return;
+        }
+        throughPause = true;
+      }
+    } else if (!this.multipart) {
+      // Still recorded, so a recording that cannot open its upload says what the call was doing.
+      const reason = pauseReason(this.options.shouldPause());
+      if (reason) this.lastPauseReason = reason;
     }
-    const step = this.multipart ? this.sendNextPart() : this.start();
+    const sendingPart = this.multipart !== null;
+    const step = sendingPart ? this.sendNextPart() : this.start();
     this.inFlight = step;
     try {
       await step;
       this.failures = 0;
+      if (sendingPart) {
+        this.continuousPausedMs = 0;
+        if (throughPause) this.partsSentThroughPause += 1;
+      }
     } catch (error) {
       this.failures += 1;
       if (this.multipart) this.partFailures += 1;
+      else this.startFailures += 1;
       if (!this.multipart && isMissingRouteError(error)) {
         // A geo-chat without the multipart routes. The recording still uploads after the debate,
         // as one PUT, exactly as it did before.
         this.disabled = true;
         return;
       }
-      if (!this.multipart && this.startAttempts >= MAX_START_ATTEMPTS) {
-        this.disabled = true;
-        return;
-      }
       this.inFlight = null;
-      this.schedule(Math.min(MAX_RETRY_MS, MIN_RETRY_MS * 2 ** (this.failures - 1)));
+      // Opening the upload is retried for as long as the recording runs, at most every
+      // {@link MAX_RETRY_MS} once it has failed {@link MAX_START_ATTEMPTS} times: giving up left the
+      // whole recording to one upload after the debate.
+      const delay =
+        !this.multipart && this.startAttempts >= MAX_START_ATTEMPTS
+          ? MAX_RETRY_MS
+          : Math.min(MAX_RETRY_MS, MIN_RETRY_MS * 2 ** (this.failures - 1));
+      this.schedule(delay);
       return;
     } finally {
       if (this.inFlight === step) this.inFlight = null;
@@ -356,9 +719,11 @@ export class RecordingPartStreamer {
     if (partNumber === null) return;
     const upload = await this.partUrl(partNumber);
     const { start, end } = partRange(partNumber, multipart.partSize, this.byteSize);
-    await this.options.putPart(upload, new Blob(this.chunks).slice(start, end));
+    await this.options.putPart(upload, await this.ledger.read(start, end, this.options.readDurable));
     this.uploaded.add(partNumber);
     this.urls.delete(partNumber);
+    // Its bytes are safe in object storage now, so this tab need not hold them.
+    this.ledger.confirm(this.confirmedBytes());
     this.options.onMultipartChange?.(this.snapshot()!);
   }
 
@@ -390,11 +755,14 @@ export class RecordingPartStreamer {
  * re-sending one would be harmless — it overwrites itself with the same bytes — just wasteful.
  */
 export async function uploadRemainingParts(
-  blob: Blob,
+  recording: Blob | RecordingByteSource,
   multipart: StreamedRecordingMultipart,
   transport: Pick<RecordingPartTransport, 'getPartUrls' | 'putPart'>,
   onPartUploaded: (partNumber: number, uploadedBytes: number) => Promise<void> | void
 ): Promise<void> {
+  // Read a part at a time: a recording streamed during the debate is never held whole.
+  const bytes = isBlob(recording) ? blobByteSource(recording) : recording;
+  const blob = { size: bytes.size };
   const total = totalPartCount(blob.size, multipart.partSize);
   const uploaded = new Set(multipart.uploadedPartNumbers);
   const missing = Array.from({ length: total }, (_, index) => index + 1).filter(
@@ -417,7 +785,7 @@ export async function uploadRemainingParts(
         );
       }
       const { start, end } = partRange(partNumber, multipart.partSize, blob.size);
-      await transport.putPart(upload, blob.slice(start, end));
+      await transport.putPart(upload, await bytes.read(start, end));
       uploaded.add(partNumber);
       const uploadedBytes = [...uploaded].reduce((sum, number) => {
         const range = partRange(number, multipart.partSize, blob.size);
@@ -445,11 +813,19 @@ export type LiveRecordingStream = {
   readonly id: string;
   /** Hands one `MediaRecorder` timeslice to IndexedDB and to the part streamer. */
   append: (chunk: Blob, chunkAtMs: number) => void;
+  /** Bytes recorded so far. */
+  size: () => number;
   /**
    * The recorder has stopped: waits for every chunk write, stops the streamer, and returns the
    * multipart upload for the queue to finish — or `null` if nothing was streamed.
    */
   finish: () => Promise<StreamedRecordingMultipart | null>;
+  /**
+   * The recording's bytes, for the upload queue, once `finish` has resolved. Everything from
+   * `availableFrom` on — the bytes no confirmed part holds — is read from memory, or from
+   * IndexedDB where it was let go of there. Readable until `release` or `abort`.
+   */
+  recording: () => RecordingByteSource;
   /** The recording has been handed to the upload queue, which now holds the only copy it needs. */
   release: () => Promise<void>;
   /** The recording must not publish: discard the streamed parts and the local chunks. */
@@ -462,32 +838,73 @@ export type LiveRecordingStream = {
 };
 
 /**
- * Everything the debate room needs to make one recording durable while it is made.
+ * Everything the debate room needs to make one recording durable while it is made — and the
+ * only place its bytes are kept while it is made.
  *
- * Failures here are logged and swallowed, never thrown into the recorder: the in-memory chunks
- * the room keeps are still the source of the upload at the end, so a quota error or a dead
- * connection costs the protection this adds, not the recording.
+ * Memory stays bounded however long the debate runs. A timeslice is held until the part holding
+ * it is confirmed by object storage, then let go of: with the live upload keeping up, that is
+ * about one part plus the timeslice being cut. When the upload falls behind or never starts,
+ * timeslices already saved to IndexedDB are let go of past {@link RECORDING_RETAINED_BYTES_LIMIT}
+ * and read back when needed; one that is neither uploaded nor saved is always held, which is
+ * what every timeslice was before. See {@link RecordingChunkLedger}.
+ *
+ * Failures here are logged and swallowed, never thrown into the recorder: a quota error or a
+ * dead connection costs the protection this adds, not the recording.
  */
+/**
+ * A recording that is not streaming during the debate. Everything it holds goes up after the
+ * debate instead, in one upload, which is how one participant's recording was lost (GEO-3171): no
+ * event said streaming had not started until the debate was over, and none said why.
+ */
+export function reportRecordingStreamStall(debateId: string, stall: RecordingStreamStall) {
+  console.warn('[DebateRecording] the recording is not streaming during the debate:', stall);
+  try {
+    const { reason: stallReason, ...details } = stall;
+    capture('debate_recording_upload_fallback', {
+      debate_id: debateId,
+      reason: 'stream_not_started',
+      stall_reason: stallReason,
+      ...details,
+    });
+    addTelemetryBreadcrumb('debate.recording', 'stream_not_started', { debate_id: debateId, ...stall }, 'warning');
+    reportEvent({
+      name: 'debate_recording_stream_not_started',
+      level: 'warning',
+      tags: { reason: stall.reason, pause_reason: stall.pause_reason ?? 'none' },
+      extra: { debate_id: debateId, ...stall },
+    });
+  } catch {
+    // Reporting must never touch the recording.
+  }
+}
+
 export function startLiveRecordingStream({
   id,
   metadata,
   transport,
   shouldPause,
+  retainedBytesLimit = RECORDING_RETAINED_BYTES_LIMIT,
 }: {
   id: string;
   metadata: RecordingStreamMetadata;
   transport: RecordingPartTransport;
-  shouldPause: () => boolean;
+  shouldPause: () => boolean | RecordingPauseReason | null;
+  /** For tests. */
+  retainedBytesLimit?: number;
 }): LiveRecordingStream {
-  let seq = 0;
   let durable = true;
   let writes: Promise<void> = createRecordingStream(id, metadata).catch(error => {
     durable = false;
     console.warn('[DebateRecording] could not open the local recording store:', error);
   });
+  const ledger = new RecordingChunkLedger();
+  const readDurable: ReadDurableChunks = seqs => readRecordingStreamChunks(id, seqs);
   const streamer = new RecordingPartStreamer({
     ...transport,
     shouldPause,
+    ledger,
+    readDurable,
+    onStall: stall => reportRecordingStreamStall(metadata.debateId, stall),
     onMultipartChange: multipart => {
       writes = writes.then(() =>
         setRecordingStreamMultipart(id, multipart).catch(error =>
@@ -500,17 +917,26 @@ export function startLiveRecordingStream({
   return {
     id,
     append(chunk, chunkAtMs) {
-      streamer.append(chunk);
+      if (chunk.size === 0) return;
+      const chunkSeq = ledger.append(chunk);
+      streamer.wake();
       if (!durable) return;
-      const chunkSeq = seq;
-      seq += 1;
       writes = writes.then(() =>
-        appendRecordingChunk(id, chunkSeq, chunk, chunkAtMs).catch(error => {
-          // Most likely the storage quota. Stop writing rather than fail every second; the room's
-          // in-memory copy still carries the recording to the upload queue at the end.
-          durable = false;
-          console.warn('[DebateRecording] stopped saving the recording locally as it is made:', error);
-        })
+        appendRecordingChunk(id, chunkSeq, chunk, chunkAtMs)
+          .then(written => {
+            if (!written) {
+              durable = false;
+              return;
+            }
+            ledger.markDurable(chunkSeq);
+            ledger.spill(retainedBytesLimit);
+          })
+          .catch(error => {
+            // Most likely the storage quota. Stop writing rather than fail every second; the
+            // timeslices not yet saved stay in memory and carry the recording to the queue.
+            durable = false;
+            console.warn('[DebateRecording] stopped saving the recording locally as it is made:', error);
+          })
       );
     },
     async finish() {
@@ -524,6 +950,19 @@ export function startLiveRecordingStream({
         ...streamer.stats(),
       });
       return multipart;
+    },
+    size: () => ledger.size,
+    recording() {
+      const availableFrom = ledger.confirmedBytes;
+      return {
+        size: ledger.size,
+        availableFrom,
+        heldInMemory: ledger.heldFrom(availableFrom),
+        read: async (start, end) => {
+          if (start < availableFrom) throw recordingBytesReleasedError(start);
+          return ledger.read(start, end, readDurable);
+        },
+      };
     },
     async release() {
       await writes;

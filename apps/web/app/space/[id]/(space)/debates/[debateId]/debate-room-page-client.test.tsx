@@ -164,9 +164,22 @@ vi.mock('~/core/debates/recording-stream', () => ({
   putRecordingPart: vi.fn(),
   startLiveRecordingStream: (options: { id: string }) => {
     mocks.startLiveStream(options);
+    // The stream is where a streamed recording's bytes live, so it hands them back at the end.
+    const chunks: Blob[] = [];
+    const size = () => chunks.reduce((total, chunk) => total + chunk.size, 0);
     return {
       id: options.id,
-      append: mocks.liveStreamAppend,
+      append: (chunk: Blob, chunkAtMs: number) => {
+        chunks.push(chunk);
+        mocks.liveStreamAppend(chunk, chunkAtMs);
+      },
+      size,
+      recording: () => ({
+        size: size(),
+        availableFrom: 0,
+        heldInMemory: true,
+        read: async (start: number, end: number) => new Blob(chunks).slice(start, end),
+      }),
       finish: mocks.liveStreamFinish,
       release: mocks.liveStreamRelease,
       abort: mocks.liveStreamAbort,
@@ -4926,7 +4939,7 @@ describe('DebateRoomPageClient', () => {
       expect.objectContaining({
         userId: 'user-a',
         debateId: 'debate-1',
-        blob: expect.any(Blob),
+        recording: expect.objectContaining({ size: expect.any(Number), availableFrom: 0 }),
         mimeType: 'video/webm',
       })
     );
@@ -5008,6 +5021,45 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
       expect(mocks.enqueueRecording).toHaveBeenCalledWith(expect.objectContaining({ multipart: null }));
+      // The whole recording is one upload from here: counted, never silent (GEO-3171).
+      expect(mocks.capture).toHaveBeenCalledWith(
+        'debate_recording_upload_fallback',
+        expect.objectContaining({ debate_id: 'debate-1', reason: 'whole_recording_after_debate', streamed: true })
+      );
+    });
+
+    it('tells the stream why it should stand down, not just whether (GEO-3171)', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      await renderLiveDebate();
+      await waitFor(() => expect(mocks.startLiveStream).toHaveBeenCalled());
+      const { shouldPause } = mocks.startLiveStream.mock.calls[0][0] as { shouldPause: () => string | null };
+
+      expect(shouldPause()).toBeNull();
+      const onLine = vi.spyOn(Navigator.prototype, 'onLine', 'get').mockReturnValue(false);
+      try {
+        expect(shouldPause()).toBe('offline');
+      } finally {
+        onLine.mockRestore();
+      }
+    });
+
+    it('reports a recording that could not be handed to the upload queue (GEO-3171)', async () => {
+      mocks.enqueueRecording.mockRejectedValue(new Error('disk said no'));
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = completedDebateOutsideThankYou();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() =>
+        expect(mocks.capture).toHaveBeenCalledWith(
+          'debate_recording_upload_failed',
+          expect.objectContaining({ debate_id: 'debate-1', stage: 'handoff', terminal_reason: 'handoff_failed' })
+        )
+      );
     });
 
     it('discards the streamed parts when the debate is cancelled', async () => {
