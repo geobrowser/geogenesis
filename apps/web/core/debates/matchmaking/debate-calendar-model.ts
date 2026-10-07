@@ -256,6 +256,13 @@ export function firstBusyHour(cells: ReadonlyMap<string, unknown>, debates: OwnD
   return first;
 }
 
+/** A day list's heading: `Thu 8`, or `Today, Thu 8`. */
+export function dayListLabel(date: Date, today: Date): string {
+  // Composed rather than formatted together: en-US writes the pair as `8 Thu`.
+  const label = `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${date.getDate()}`;
+  return date.toDateString() === today.toDateString() ? `Today, ${label}` : label;
+}
+
 /** `5 – 11 Oct 2026`, `Oct 5 – 11, 2026`: however the viewer's locale writes a range of days. */
 export function weekRangeLabel(days: Date[]): string {
   return new Intl.DateTimeFormat(undefined, { day: 'numeric', month: 'short', year: 'numeric' }).formatRange(

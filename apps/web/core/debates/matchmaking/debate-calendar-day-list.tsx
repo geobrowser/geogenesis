@@ -14,6 +14,7 @@ import {
   type OwnDebate,
   cellKey,
   cellOf,
+  dayListLabel,
   timeRangeLabel,
 } from './debate-calendar-model';
 import { HubPillButton } from './hub-pill-button';
@@ -43,7 +44,7 @@ export function CalendarDayList({
   renderRow: RenderRow;
 }) {
   const byDay = React.useMemo(() => {
-    const today = new Date().toDateString();
+    const today = new Date();
     return days.slice(0, DAYS_IN_WEEK).map((date, day) => {
       // A person's place in the day is their first free hour; their order within it is the cell's.
       const people = new Map<string, { slots: FreeSlot[]; firstHour: number; rank: number }>();
@@ -58,11 +59,9 @@ export function CalendarDayList({
         .sort(([, left], [, right]) => left.firstHour - right.firstHour || left.rank - right.rank)
         .map(([userKey, { slots }]) => ({ userKey, slots }));
       const own = debates.filter(debate => cellOf(debate.start, days)?.day === day);
-      // Composed rather than formatted together: en-US writes the pair as `8 Thu`.
-      const label = `${date.toLocaleDateString(undefined, { weekday: 'short' })} ${date.getDate()}`;
       return {
         key: date.getTime(),
-        label: date.toDateString() === today ? `Today, ${label}` : label,
+        label: dayListLabel(date, today),
         people: ordered,
         own,
       };

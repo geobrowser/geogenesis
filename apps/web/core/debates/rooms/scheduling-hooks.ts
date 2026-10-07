@@ -16,10 +16,12 @@ import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
   ADMIN_SCHEDULED_DEBATES_LIMIT,
+  GeoChatRequestError,
   type ScheduledDebateRequest,
   type ScheduledDebateResponseResult,
   cancelScheduledDebate,
   createScheduledDebate,
+  isGeoChatRefusal,
   listAdminScheduledDebates,
   listScheduledDebates,
   rescheduleScheduledDebate,
@@ -84,9 +86,12 @@ export function useAdminScheduledDebates(enabled: boolean, from: Date) {
         signal
       ),
     enabled: enabled && authenticated,
-    // A refusal is the answer for everyone who is not an admin; polling it would ask again forever.
+    // A refusal is the answer for everyone who is not an admin: never retried or polled, or every
+    // visitor would ask again forever. Anything else (a blip, a 500) is not an answer, so an admin
+    // is not silently dropped to the Availability view by one bad request.
+    retry: (failureCount, error) => !isAdminRefusal(error) && failureCount < 2,
     refetchInterval: query => (present && query.state.status === 'success' ? SCHEDULED_POLL_MS : false),
-    refetchOnWindowFocus: query => query.state.status === 'success',
+    refetchOnWindowFocus: query => !isAdminRefusal(query.state.error),
   });
 
   return {
@@ -96,6 +101,14 @@ export function useAdminScheduledDebates(enabled: boolean, from: Date) {
     isAdminPending: query.isPending && authenticated && enabled,
     truncated: (query.data?.matches.length ?? 0) >= ADMIN_SCHEDULED_DEBATES_LIMIT,
   };
+}
+
+/** Not on the allowlist (403), or no admins configured on this deployment (503). */
+function isAdminRefusal(error: unknown) {
+  return (
+    isGeoChatRefusal(error) ||
+    (error instanceof GeoChatRequestError && error.code === 'scheduling_admin_not_configured')
+  );
 }
 
 export function useCreateScheduledDebate() {

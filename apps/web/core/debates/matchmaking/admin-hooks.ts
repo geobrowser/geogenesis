@@ -14,7 +14,7 @@ import {
   listAdminDebateSchedules,
   sendAdminAvailabilityPrompt,
 } from '../api';
-import { debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 
 /**
  * Where the list stops paging. Far past today's debater count; past it, the dialog still finds
@@ -29,8 +29,6 @@ const adminKeys = {
   debaters: (accountKey: string | null) => ['debates', 'admin-debaters', accountKey] as const,
   overlap: (accountKey: string | null, of: string, other: string) =>
     ['debates', 'admin-overlap', of, other, accountKey] as const,
-  /** The calendar's list, whatever week it was read from. */
-  scheduledRoot: ['debates', 'admin-scheduled-debates'] as const,
 };
 
 /**
@@ -42,19 +40,23 @@ export function useAdminDebaters(enabled: boolean) {
   const query = useQuery({
     ...debateQueryNetworkOptions,
     queryKey: adminKeys.debaters(accountKey),
-    queryFn: async ({ signal }) => {
-      const debaters: AdminScheduledDebater[] = [];
-      for (let offset = 0; offset < MAX_ADMIN_DEBATERS; offset += ADMIN_DEBATE_SCHEDULES_PAGE) {
-        const page = await listAdminDebateSchedules(
+    queryFn: async ({ signal }): Promise<AdminScheduledDebater[]> => {
+      const page = (offset: number) =>
+        listAdminDebateSchedules(
           { limit: ADMIN_DEBATE_SCHEDULES_PAGE, offset },
           getPrivyIdentityToken,
           accountKey,
           signal
         );
-        debaters.push(...page.debaters);
-        if (page.debaters.length < ADMIN_DEBATE_SCHEDULES_PAGE || debaters.length >= page.total) break;
+      // The first page says how many there are; the rest are read side by side rather than in turn.
+      const head = await page(0);
+      const total = Math.min(head.total, MAX_ADMIN_DEBATERS);
+      const offsets: number[] = [];
+      for (let offset = ADMIN_DEBATE_SCHEDULES_PAGE; offset < total; offset += ADMIN_DEBATE_SCHEDULES_PAGE) {
+        offsets.push(offset);
       }
-      return debaters;
+      const rest = await Promise.all(offsets.map(page));
+      return [head, ...rest].flatMap(response => response.debaters);
     },
     enabled: enabled && authenticated,
     staleTime: 60_000,
@@ -104,7 +106,7 @@ export function useCreateAdminMatch() {
         accountKey
       ),
     // The calendar draws the new match from its own list, so it has to read it again.
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: adminKeys.scheduledRoot }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: debateQueryKeys.adminScheduledDebatesRoot }),
   });
 }
 

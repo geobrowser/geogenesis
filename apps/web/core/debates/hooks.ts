@@ -163,8 +163,10 @@ export const debateQueryKeys = {
   room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
   upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
   scheduledDebates: (accountKey: string | null) => ['debates', 'account', accountKey, 'scheduled-debates'] as const,
+  /** Every admin list of scheduled debates, whatever week it was read from: what New match refreshes. */
+  adminScheduledDebatesRoot: ['debates', 'admin-scheduled-debates'] as const,
   adminScheduledDebates: (accountKey: string | null, from: string) =>
-    ['debates', 'admin-scheduled-debates', from, accountKey] as const,
+    [...debateQueryKeys.adminScheduledDebatesRoot, from, accountKey] as const,
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,

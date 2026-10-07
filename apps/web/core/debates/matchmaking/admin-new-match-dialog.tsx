@@ -1,7 +1,6 @@
 'use client';
 
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
@@ -9,19 +8,18 @@ import cx from 'classnames';
 
 import { useSearch } from '~/core/hooks/use-search';
 import { normId } from '~/core/utils/norm-id';
-import { Z_LAYER_CLASS } from '~/core/z-layers';
 
-import { Avatar } from '~/design-system/avatar';
-import { Close } from '~/design-system/icons/close';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 
 import { MUTUAL_SLOT, SELECTED_SLOT } from '~/partials/availability/peer-availability';
+import { ScheduleDialog } from '~/partials/availability/schedule-dialog';
 
 import { type DebatePerson, GeoChatRequestError, isDebateProfileMissing } from '../api';
 import { speakerLabel } from '../playback-utils';
 import { dayShift, timeIn, zoneCity } from './admin-debate-calendar-model';
+import { DebaterFace, POSITIVE_TEXT_CLASS, debaterFirstName } from './admin-debate-parts';
 import {
   ADMIN_MATCH_DAYS,
   useAdminAvailabilityPrompt,
@@ -29,18 +27,27 @@ import {
   useAdminPairOverlap,
   useCreateAdminMatch,
 } from './admin-hooks';
+import { SegmentedControl } from './debate-calendar-controls';
 import { HubPillButton } from './hub-pill-button';
+import { offlinePerson } from './offline-person';
+import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { SpaceFilterPills } from './space-filter-pills';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { usePersonFacts } from './use-person-facts';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 
-const SLOT_MS = 30 * 60_000;
+const SLOT_MINUTES = 30;
 const EMPTY_SPACE_IDS: string[] = [];
 
 /** What became of asking someone to set their availability. */
 type PromptOutcome = 'pending' | 'sent' | 'no_email' | 'not_on_debates' | 'error';
+
+/** The outcomes that settle it: asking again would email someone for nothing. */
+const SETTLED_PROMPTS: ReadonlySet<PromptOutcome> = new Set(['pending', 'sent', 'no_email', 'not_on_debates']);
+
+/** A time picked, and whether it is outside their availability: `null` until their overlap is known. */
+type Choice = { start: number; outside: boolean | null };
 
 type Props = {
   open: boolean;
@@ -62,65 +69,28 @@ type Props = {
  *   measured from that person instead of the viewer.
  * - **Recommended** offers the half-hours both are free; **Pick any time** is the override, kept a
  *   separate mode so nobody drifts into it. Every time shows both debaters' own clocks.
- *
- * Drives the Radix primitives directly, as the availability modal does: it needs more width than
- * the shared `Dialog` allows.
  */
 export function AdminNewMatchDialog({ open, onOpenChange, openerRef, onSent }: Props) {
   return (
-    <Root open={open} onOpenChange={onOpenChange}>
-      <Portal>
-        <Overlay className={cx('fixed inset-0 bg-text/20', Z_LAYER_CLASS.scheduleDialogBackdrop)} />
-        <Content
-          aria-describedby={undefined}
-          onCloseAutoFocus={event => {
-            if (!openerRef?.current) return;
-            event.preventDefault();
-            openerRef.current.focus();
+    <ScheduleDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      title="New match"
+      description="Both debaters get an invite, the same as when one person asks another."
+      openerRef={openerRef}
+      widthClassName="w-[68rem]"
+    >
+      {/* Mounted per opening, so a half-built match never survives into the next one. */}
+      {open ? (
+        <NewMatchBody
+          onClose={() => onOpenChange(false)}
+          onSent={note => {
+            onSent(note);
+            onOpenChange(false);
           }}
-          className={cx(
-            'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 focus:outline-hidden md:inset-0 md:translate-x-0 md:translate-y-0',
-            Z_LAYER_CLASS.scheduleDialog
-          )}
-        >
-          <div
-            data-no-sheet-drag
-            className="flex max-h-[calc(100dvh-2rem)] w-[68rem] max-w-[calc(100vw-2rem)] flex-col gap-4 overflow-hidden rounded-xl bg-white p-5 shadow-card md:h-dvh md:max-h-dvh md:w-screen md:max-w-none md:gap-3 md:overflow-y-auto md:rounded-none md:p-4"
-          >
-            <div className="flex shrink-0 items-start justify-between gap-4">
-              <div className="flex flex-col gap-1">
-                <Title asChild>
-                  <Text as="h2" variant="smallTitle">
-                    New match
-                  </Text>
-                </Title>
-                <Text as="p" variant="footnote" color="grey-04">
-                  Both debaters get an invite, the same as when one person asks another.
-                </Text>
-              </div>
-              <button
-                type="button"
-                aria-label="Close"
-                onClick={() => onOpenChange(false)}
-                className="grid size-4 shrink-0 place-items-center text-[#151515] transition-opacity hover:opacity-70"
-              >
-                <Close />
-              </button>
-            </div>
-            {/* Mounted per opening, so a half-built match never survives into the next one. */}
-            {open ? (
-              <NewMatchBody
-                onClose={() => onOpenChange(false)}
-                onSent={note => {
-                  onSent(note);
-                  onOpenChange(false);
-                }}
-              />
-            ) : null}
-          </div>
-        </Content>
-      </Portal>
-    </Root>
+        />
+      ) : null}
+    </ScheduleDialog>
   );
 }
 
@@ -130,58 +100,59 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   const [first, setFirst] = React.useState<Picked | null>(null);
   const [second, setSecond] = React.useState<Picked | null>(null);
   const [spaceIds, setSpaceIds] = React.useState<string[]>(EMPTY_SPACE_IDS);
-  const [prompts, setPrompts] = React.useState<ReadonlyMap<string, PromptOutcome>>(new Map());
+  const [prompts, setPromptsState] = React.useState<ReadonlyMap<string, PromptOutcome>>(new Map());
+  // Mirrored synchronously: two presses in one tick both read the same render's state, and the
+  // second would email everyone the first just did.
+  const promptsRef = React.useRef<ReadonlyMap<string, PromptOutcome>>(prompts);
+  const setPrompt = (userId: string, outcome: PromptOutcome) => {
+    promptsRef.current = new Map(promptsRef.current).set(normId(userId), outcome);
+    setPromptsState(promptsRef.current);
+  };
 
   const debatersQuery = useAdminDebaters(true);
   const availableIds = React.useMemo(
-    () => new Set((debatersQuery.data ?? []).map(debater => normId(debater.user_id))),
+    () => [...new Set((debatersQuery.data ?? []).map(debater => normId(debater.user_id)))],
     [debatersQuery.data]
   );
+  const isAvailable = React.useMemo(() => new Set(availableIds), [availableIds]);
+
+  // Everyone with availability, read once and kept: the roster the facts below are keyed on, so a
+  // keystroke never re-reads it or blanks the list while it loads.
+  const roster = useGeoChatUserSummaries(availableIds, availableIds.length > 0);
+  const rosterPeople = React.useMemo(() => roster.map(offlinePerson), [roster]);
 
   // Geo search for people by name: how anyone without availability is found at all. A geo-chat user
   // id is the page entity of their personal space, so a person hit is a candidate id as it stands;
-  // the summaries lookup below keeps only the hits that front a personal space.
+  // the summaries lookup keeps only the hits that front a personal space.
   const search = useSearch({ filterByTypes: [SystemIds.PERSON_TYPE], restrictToFilterTypes: true });
   const searchTerm = search.query.trim().toLowerCase();
   const hitIds = React.useMemo(
-    () => (searchTerm ? search.results.map(result => normId(result.id)) : []),
-    [search.results, searchTerm]
+    () => (searchTerm ? search.results.map(result => normId(result.id)).filter(id => !isAvailable.has(id)) : []),
+    [isAvailable, search.results, searchTerm]
   );
+  const hits = useGeoChatUserSummaries(hitIds, hitIds.length > 0);
+  const hitPeople = React.useMemo(() => hits.map(offlinePerson), [hits]);
 
-  const candidateIds = React.useMemo(() => [...new Set([...availableIds, ...hitIds])], [availableIds, hitIds]);
-  const summaries = useGeoChatUserSummaries(candidateIds, candidateIds.length > 0);
-  const people = React.useMemo<DebatePerson[]>(
-    () =>
-      summaries.map(summary => ({
-        ...summary,
-        online: false,
-        available_to_debate: false,
-        in_debate: false,
-        online_since: null,
-        can_challenge: false,
-      })),
-    [summaries]
-  );
-
-  const facts = usePersonFacts(people, {
+  const facts = usePersonFacts(rosterPeople, {
     authenticated: true,
     rosterUnavailable: debatersQuery.isPending,
     anchorProfileSpaceId: first ? first.person.profile_space_id : null,
   });
+  // As the People tab does: a count is only shown, and only ranks, once it is known for this anchor.
+  const ranking = first !== null && facts.matchesKnown;
   const matchCount = (person: DebatePerson) =>
     facts.matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0;
-  const hasAvailability = (person: DebatePerson) => availableIds.has(normId(person.user_id));
 
   const offeredSpaces = React.useMemo(() => {
     const counts = new Map<string, number>();
-    for (const person of people) {
+    for (const person of rosterPeople) {
       for (const spaceId of facts.debateSpacesByPerson.get(person.profile_space_id) ?? []) {
         counts.set(spaceId, (counts.get(spaceId) ?? 0) + 1);
       }
     }
     for (const spaceId of spaceIds) if (!counts.has(normId(spaceId))) counts.set(normId(spaceId), 0);
     return [...counts].map(([id, count]) => ({ id, name: null, count }));
-  }, [facts.debateSpacesByPerson, people, spaceIds]);
+  }, [facts.debateSpacesByPerson, rosterPeople, spaceIds]);
   const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
     offeredSpaces,
     spaceIds,
@@ -193,7 +164,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
 
   const picked = new Set([first?.userId, second?.userId].filter(Boolean).map(id => normId(id!)));
   const wanted = new Set(spaceIds.map(normId));
-  const listed = people
+  const debatesOf = (person: DebatePerson) => facts.records.get(person.profile_space_id)?.debatesArgued ?? 0;
+  const listedRoster = rosterPeople
     .filter(person => !picked.has(normId(person.user_id)))
     .filter(person => !searchTerm || speakerLabel(person).toLowerCase().includes(searchTerm))
     .filter(
@@ -201,28 +173,28 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
         wanted.size === 0 ||
         (facts.debateSpacesByPerson.get(person.profile_space_id) ?? []).some(spaceId => wanted.has(spaceId))
     )
-    .sort((left, right) => {
-      const debates = (person: DebatePerson) => facts.records.get(person.profile_space_id)?.debatesArgued ?? 0;
-      const available = (person: DebatePerson) => (hasAvailability(person) ? 1 : 0);
-      return (
-        (first ? matchCount(right) - matchCount(left) : 0) ||
-        available(right) - available(left) ||
-        debates(right) - debates(left) ||
+    .sort(
+      (left, right) =>
+        (ranking ? matchCount(right) - matchCount(left) : 0) ||
+        debatesOf(right) - debatesOf(left) ||
         speakerLabel(left).localeCompare(speakerLabel(right))
-      );
-    });
+    );
+  // People without availability come from search alone, after everyone who can be picked.
+  const listedHits = hitPeople.filter(person => !picked.has(normId(person.user_id)));
 
   const prompt = useAdminAvailabilityPrompt();
   const requestAvailability = async (userIds: string[]) => {
-    setPrompts(current => new Map([...current, ...userIds.map(id => [normId(id), 'pending'] as const)]));
-    for (const userId of userIds) {
+    // Never twice: a double press, or asking both when one was already asked, would email again.
+    const toAsk = userIds.filter(userId => !SETTLED_PROMPTS.has(promptsRef.current.get(normId(userId)) ?? 'error'));
+    for (const userId of toAsk) setPrompt(userId, 'pending');
+    for (const userId of toAsk) {
       let outcome: PromptOutcome;
       try {
         outcome = (await prompt.mutateAsync(userId)).sent ? 'sent' : 'no_email';
       } catch (error) {
         outcome = isDebateProfileMissing(error) ? 'not_on_debates' : 'error';
       }
-      setPrompts(current => new Map(current).set(normId(userId), outcome));
+      setPrompt(userId, outcome);
     }
   };
 
@@ -233,13 +205,11 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
     search.onQueryChange('');
   };
   const clear = (which: 'first' | 'second') => {
-    if (which === 'first') {
-      setFirst(second);
-      setSecond(null);
-    } else setSecond(null);
+    if (which === 'first') setFirst(second);
+    setSecond(null);
   };
 
-  const [chosen, setChosen] = React.useState<{ start: number; outside: boolean } | null>(null);
+  const [chosen, setChosen] = React.useState<Choice | null>(null);
   const create = useCreateAdminMatch();
   const send = () => {
     if (!first || !second || !chosen) return;
@@ -250,6 +220,20 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
       }
     );
   };
+
+  const option = (person: DebatePerson, available: boolean) => (
+    <PersonOption
+      key={person.user_id}
+      person={person}
+      available={available}
+      record={available ? (facts.records.get(person.profile_space_id) ?? null) : null}
+      matches={available && ranking ? matchCount(person) : null}
+      matchesWith={first ? debaterFirstName(first.person) : null}
+      prompt={prompts.get(normId(person.user_id))}
+      onPick={() => pick(person)}
+      onRequest={() => void requestAvailability([person.user_id])}
+    />
+  );
 
   return (
     <>
@@ -281,37 +265,22 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
             countsPending={facts.personRecordsPending}
           />
           <Text as="p" variant="footnote" color="grey-04">
-            {first
-              ? `Ordered by matches with ${speakerLabel(first.person)}, most first`
-              : 'People with availability first'}
+            {!first
+              ? 'People with availability, most debates first'
+              : ranking
+                ? `Ordered by matches with ${speakerLabel(first.person)}, most first`
+                : `Counting matches with ${speakerLabel(first.person)}…`}
           </Text>
-          <ul aria-label="People" className="min-h-0 flex-1 overflow-y-auto border-t border-grey-02 md:max-h-none">
-            {debatersQuery.isPending && listed.length === 0 ? (
-              <li className="py-4">
-                <Text as="p" variant="metadata" color="grey-04">
-                  Loading people…
-                </Text>
-              </li>
-            ) : listed.length === 0 ? (
-              <li className="py-4">
-                <Text as="p" variant="metadata" color="grey-04">
-                  {searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}
-                </Text>
-              </li>
+          <ul aria-label="People" className="min-h-0 flex-1 overflow-y-auto border-t border-grey-02">
+            {debatersQuery.isPending && listedRoster.length === 0 ? (
+              <EmptyRow>Loading people…</EmptyRow>
+            ) : listedRoster.length === 0 && listedHits.length === 0 ? (
+              <EmptyRow>{searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}</EmptyRow>
             ) : (
-              listed.map(person => (
-                <PersonOption
-                  key={person.user_id}
-                  person={person}
-                  available={hasAvailability(person)}
-                  record={facts.records.get(person.profile_space_id) ?? null}
-                  matches={first ? matchCount(person) : null}
-                  matchesWith={first ? firstName(first.person) : null}
-                  prompt={prompts.get(normId(person.user_id))}
-                  onPick={() => pick(person)}
-                  onRequest={() => void requestAvailability([person.user_id])}
-                />
-              ))
+              <>
+                {listedRoster.map(person => option(person, true))}
+                {listedHits.map(person => option(person, false))}
+              </>
             )}
           </ul>
         </div>
@@ -339,7 +308,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
                   month: 'short',
                   day: 'numeric',
                 })}{' '}
-                · {timeIn(chosen.start, undefined)} – {timeIn(chosen.start + SLOT_MS, undefined)} your time
+                · {timeIn(chosen.start, undefined)} – {timeIn(chosen.start + SLOT_MINUTES * 60_000, undefined)} your
+                time
               </Text>
               {chosen.outside ? (
                 <Text as="p" variant="footnote" className="text-purple">
@@ -382,16 +352,13 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   );
 }
 
-function firstName(person: DebatePerson) {
-  return person.display_name?.trim().split(/\s+/)[0] ?? speakerLabel(person);
-}
-
-function Face({ person, size }: { person: DebatePerson; size: 28 | 32 }) {
+function EmptyRow({ children }: { children: React.ReactNode }) {
   return (
-    // An image avatar fills its parent, so the box sets the size.
-    <div className={cx('shrink-0 overflow-hidden rounded-full', size === 28 ? 'h-7 w-7' : 'h-8 w-8')}>
-      <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={size} />
-    </div>
+    <li className="py-4">
+      <Text as="p" variant="metadata" color="grey-04">
+        {children}
+      </Text>
+    </li>
   );
 }
 
@@ -422,7 +389,7 @@ function PickBox({
   }
   return (
     <div className="flex min-h-14 min-w-0 items-center gap-2 rounded-lg border border-grey-02 px-2.5">
-      <Face person={picked.person} size={28} />
+      <DebaterFace summary={picked.person} fallbackId={picked.userId} size={28} />
       <Text as="span" variant="metadataMedium" className="min-w-0 flex-1 truncate">
         {speakerLabel(picked.person)}
       </Text>
@@ -457,7 +424,8 @@ function PersonOption({
 }: {
   person: DebatePerson;
   available: boolean;
-  record: Parameters<typeof PersonRecordLine>[0]['record'];
+  record: PersonRecord | null;
+  /** Matches with debater 1, once known; null hides the count. */
   matches: number | null;
   matchesWith: string | null;
   prompt: PromptOutcome | undefined;
@@ -494,7 +462,7 @@ function PersonOption({
       <Text
         as="span"
         variant="footnote"
-        className={cx('pt-1.5 text-right', prompt === 'sent' ? 'text-[#0b7a59]' : 'text-grey-04')}
+        className={cx('pt-1.5 text-right', prompt === 'sent' ? POSITIVE_TEXT_CLASS : 'text-grey-04')}
       >
         {PROMPT_LABELS[prompt]}
       </Text>
@@ -516,7 +484,7 @@ function PersonOption({
 
   return (
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
-      <Face person={person} size={32} />
+      <DebaterFace summary={person} fallbackId={person.user_id} size={32} />
       <div className="flex min-w-0 flex-col gap-0.5">
         <Text as="span" variant="metadataMedium" className="truncate">
           {name}
@@ -541,12 +509,18 @@ function PersonOption({
 /** The next fourteen local midnights, today first: the days a match can be booked on. */
 function bookableDays(): Date[] {
   const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  return Array.from({ length: ADMIN_MATCH_DAYS }, (_, index) => {
-    const day = new Date(today);
-    day.setDate(today.getDate() + index);
-    return day;
-  });
+  return Array.from(
+    { length: ADMIN_MATCH_DAYS },
+    (_, index) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + index)
+  );
+}
+
+/**
+ * `minutes` past midnight on `day`, by the wall clock. Built from parts rather than by adding
+ * milliseconds, which lands an hour off on a day the clocks change.
+ */
+function atMinutes(day: Date, minutes: number): number {
+  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes).getTime();
 }
 
 function dayHeading(day: Date) {
@@ -555,9 +529,14 @@ function dayHeading(day: Date) {
     : day.toLocaleDateString(undefined, { weekday: 'short' });
 }
 
+const MODE_OPTIONS = [
+  { value: 'recommended', label: 'Recommended' },
+  { value: 'any', label: 'Pick any time' },
+] as const;
+
 /**
  * Choose a time: Recommended (the half-hours both are free) or Pick any time (the override). Every
- * time is the admin's, with each debater's own clock under it.
+ * time is the admin's, with each debater's own clock under it once their zone is known.
  */
 function TimePicker({
   first,
@@ -569,7 +548,7 @@ function TimePicker({
   first: Picked | null;
   second: Picked | null;
   prompts: ReadonlyMap<string, PromptOutcome>;
-  onChoose: (choice: { start: number; outside: boolean } | null) => void;
+  onChoose: (choice: Choice | null) => void;
   onRequestBoth: () => void;
 }) {
   const [mode, setMode] = React.useState<'recommended' | 'any'>('recommended');
@@ -588,13 +567,20 @@ function TimePicker({
     return (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > cutoff);
   }, [candidate]);
   const mutual = React.useMemo(() => new Set(slots), [slots]);
+  // Whether a time is outside their availability is only known once the overlap has answered in
+  // full; until then the override says nothing rather than flagging every time it is shown.
+  const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
 
-  const anyStart = days[anyDay] ? days[anyDay].getTime() + anyMinutes * 60_000 : null;
+  const anyStart = days[anyDay] ? atMinutes(days[anyDay], anyMinutes) : null;
   React.useEffect(() => {
     if (mode === 'recommended') onChoose(selected !== null ? { start: selected, outside: false } : null);
     else
-      onChoose(anyStart !== null && anyStart > Date.now() ? { start: anyStart, outside: !mutual.has(anyStart) } : null);
-  }, [anyStart, mode, mutual, onChoose, selected]);
+      onChoose(
+        anyStart !== null && anyStart > Date.now()
+          ? { start: anyStart, outside: overlapKnown ? !mutual.has(anyStart) : null }
+          : null
+      );
+  }, [anyStart, mode, mutual, onChoose, overlapKnown, selected]);
 
   const box = (children: React.ReactNode) => (
     <div className="flex min-h-[28rem] min-w-0 flex-col gap-3 rounded-xl border border-grey-02 p-3.5 md:min-h-0">
@@ -620,18 +606,12 @@ function TimePicker({
     );
   }
 
-  const a = firstName(first.person);
-  const b = firstName(second.person);
-  const local = (at: number) => (
-    <>
-      <span className="block text-footnote whitespace-nowrap opacity-70">
-        {a} {timeIn(at, firstZone)}
-      </span>
-      <span className="block text-footnote whitespace-nowrap opacity-70">
-        {b} {timeIn(at, secondZone)}
-      </span>
-    </>
-  );
+  const a = debaterFirstName(first.person);
+  const b = debaterFirstName(second.person);
+  const theirClocks = [
+    { name: a, zone: firstZone },
+    { name: b, zone: secondZone },
+  ].filter((clock): clock is { name: string; zone: string } => clock.zone !== undefined);
 
   let body: React.ReactNode;
   if (mode === 'recommended') {
@@ -653,7 +633,9 @@ function TimePicker({
         </div>
       );
     } else if (slots.length === 0) {
-      const asked = prompts.get(normId(first.userId)) === 'sent' && prompts.get(normId(second.userId)) === 'sent';
+      const outcomes = [first, second].map(person => prompts.get(normId(person.userId)));
+      const asking = outcomes.includes('pending');
+      const asked = outcomes.every(outcome => outcome !== undefined && SETTLED_PROMPTS.has(outcome));
       body = (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
           <Text as="p" variant="metadataMedium">
@@ -667,14 +649,21 @@ function TimePicker({
             >
               Pick any time
             </HubPillButton>
-            {asked ? (
-              <Text as="span" variant="footnote" className="text-[#0b7a59]">
-                Asked both to widen their availability
+            {asked && !asking ? (
+              <Text as="span" variant="footnote" color="grey-04">
+                {[a, b]
+                  .map((name, index) => {
+                    const outcome = outcomes[index];
+                    return outcome === 'sent' ? `Asked ${name}` : `${name}: ${PROMPT_LABELS[outcome as 'no_email']}`;
+                  })
+                  .join(' · ')}
               </Text>
             ) : (
               <HubPillButton
                 analyticsSurface="calendar"
                 analyticsLabel="New match Ask both to widen availability"
+                pending={asking}
+                pendingLabel="Sending…"
                 onClick={onRequestBoth}
               >
                 Ask both to widen availability
@@ -716,7 +705,10 @@ function TimePicker({
                       key={start}
                       type="button"
                       aria-pressed={selected === start}
-                      aria-label={`${timeIn(start, undefined)}, ${a} ${timeIn(start, firstZone)}, ${b} ${timeIn(start, secondZone)}`}
+                      aria-label={[
+                        timeIn(start, undefined),
+                        ...theirClocks.map(({ name, zone }) => `${name} ${timeIn(start, zone)}`),
+                      ].join(', ')}
                       onClick={() => setSelected(current => (current === start ? null : start))}
                       className={cx(
                         'rounded-md border px-2 py-1 text-left tabular-nums transition-colors',
@@ -724,7 +716,11 @@ function TimePicker({
                       )}
                     >
                       <span className="block text-footnoteMedium">{timeIn(start, undefined)}</span>
-                      {local(start)}
+                      {theirClocks.map(({ name, zone }) => (
+                        <span key={name} className="block text-footnote whitespace-nowrap opacity-70">
+                          {name} {timeIn(start, zone)}
+                        </span>
+                      ))}
                     </button>
                   ))}
                 </section>
@@ -735,6 +731,7 @@ function TimePicker({
     }
   } else {
     const inside = anyStart !== null && mutual.has(anyStart);
+    const future = anyStart !== null && anyStart > Date.now();
     body = (
       <>
         <Text as="p" variant="footnote" color="grey-04">
@@ -767,48 +764,54 @@ function TimePicker({
               onChange={event => setAnyMinutes(Number(event.currentTarget.value))}
               className="h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02"
             >
-              {Array.from({ length: 48 }, (_, index) => index * 30).map(minutes => (
+              {Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES).map(minutes => (
                 <option key={minutes} value={minutes}>
-                  {timeIn(new Date(2026, 0, 1, 0, minutes).getTime(), undefined)}
+                  {timeIn(atMinutes(days[0], minutes), undefined)}
                 </option>
               ))}
             </select>
           </label>
           <Text as="span" variant="footnote" color="grey-04" className="pb-2.5">
-            30 minutes
+            {SLOT_MINUTES} minutes
           </Text>
         </div>
-        {anyStart !== null && anyStart <= Date.now() ? (
+        {anyStart !== null && !future ? (
           <Text as="p" variant="footnote" className="text-red-01">
             That time has passed.
           </Text>
-        ) : anyStart !== null ? (
+        ) : null}
+        {anyStart !== null && future && theirClocks.length > 0 ? (
           <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
-            {[
-              { name: speakerLabel(first.person), zone: firstZone },
-              { name: speakerLabel(second.person), zone: secondZone },
-            ].map(({ name, zone }) => (
+            {theirClocks.map(({ name, zone }) => (
               <div
                 key={name}
                 className={cx(
                   'flex flex-col gap-0.5 rounded-lg border px-3 py-2.5',
-                  inside ? 'border-grey-02' : 'border-purple bg-purple/10'
+                  !overlapKnown || inside ? 'border-grey-02' : 'border-purple bg-purple/10'
                 )}
               >
                 <Text as="span" variant="metadataMedium">
                   {name}
                 </Text>
                 <Text as="span" variant="metadata">
-                  {timeIn(anyStart, zone)}
-                  {zone ? ` in ${zoneCity(zone)}${dayShift(anyStart, zone)}` : ''}
+                  {timeIn(anyStart, zone)} in {zoneCity(zone)}
+                  {dayShift(anyStart, zone)}
                 </Text>
               </div>
             ))}
           </div>
         ) : null}
-        {anyStart !== null && anyStart > Date.now() ? (
-          <Text as="p" variant="footnote" className={inside ? 'text-grey-04' : 'text-purple'}>
-            {inside ? 'They’re both free then.' : 'Not a time they’re both free.'}
+        {anyStart !== null && future ? (
+          <Text
+            as="p"
+            variant="footnote"
+            className={!overlapKnown ? 'text-grey-04' : inside ? 'text-grey-04' : 'text-purple'}
+          >
+            {!overlapKnown
+              ? 'Checking whether they’re both free then…'
+              : inside
+                ? 'They’re both free then.'
+                : 'Not a time they’re both free.'}
           </Text>
         ) : null}
       </>
@@ -821,32 +824,7 @@ function TimePicker({
         <Text as="p" variant="metadataMedium">
           Choose a time
         </Text>
-        <div
-          role="radiogroup"
-          aria-label="How to pick a time"
-          className="flex rounded-full border border-grey-02 p-0.5"
-        >
-          {(
-            [
-              { value: 'recommended', label: 'Recommended' },
-              { value: 'any', label: 'Pick any time' },
-            ] as const
-          ).map(option => (
-            <button
-              key={option.value}
-              type="button"
-              role="radio"
-              aria-checked={mode === option.value}
-              onClick={() => setMode(option.value)}
-              className={cx(
-                'rounded-full px-3 py-1 text-metadata transition-colors',
-                mode === option.value ? 'bg-text text-white' : 'text-grey-04 hover:text-text'
-              )}
-            >
-              {option.label}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl label="How to pick a time" options={MODE_OPTIONS} value={mode} onChange={setMode} />
       </div>
       {body}
     </>

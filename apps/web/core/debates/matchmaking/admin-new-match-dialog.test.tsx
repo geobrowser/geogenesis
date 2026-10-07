@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   searchResults: [] as { id: string }[],
   overlap: undefined as unknown,
   matchesByAnchor: {} as Record<string, [string, unknown[]][]>,
+  matchesKnown: true,
   anchors: [] as (string | null | undefined)[],
   create: vi.fn(),
   prompt: vi.fn(),
@@ -21,7 +22,9 @@ vi.mock('./admin-hooks', () => ({
   ADMIN_MATCH_DAYS: 14,
   useAdminDebaters: () => ({ data: mocks.debaters, isPending: false, timezoneByUser: new Map() }),
   useAdminPairOverlap: (first: string | null, second: string | null) =>
-    first && second ? { data: mocks.overlap, isPending: false, error: null, refetch: vi.fn() } : { isPending: false },
+    first && second
+      ? { data: mocks.overlap, isPending: mocks.overlap === undefined, error: null, refetch: vi.fn() }
+      : { isPending: false },
   useCreateAdminMatch: () => ({ mutate: mocks.create, isPending: false, error: null }),
   useAdminAvailabilityPrompt: () => ({ mutateAsync: mocks.prompt }),
 }));
@@ -42,6 +45,7 @@ vi.mock('./use-person-facts', () => ({
   usePersonFacts: (_people: unknown, { anchorProfileSpaceId }: { anchorProfileSpaceId?: string | null }) => {
     mocks.anchors.push(anchorProfileSpaceId);
     return {
+      matchesKnown: Boolean(anchorProfileSpaceId) && mocks.matchesKnown,
       matchAnalysis: {
         byProfile: new Map(anchorProfileSpaceId ? (mocks.matchesByAnchor[anchorProfileSpaceId] ?? []) : []),
       },
@@ -125,6 +129,7 @@ beforeEach(() => {
       ],
     },
     anchors: [],
+    matchesKnown: true,
   });
   mocks.create.mockReset();
   mocks.prompt.mockReset();
@@ -208,6 +213,43 @@ describe('AdminNewMatchDialog', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Pick any time' })[0]);
     expect(screen.getByRole('radio', { name: 'Pick any time' })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getAllByText(/Not a time they.re both free/).length).toBeGreaterThan(0);
+  });
+
+  it('does not rank or count matches until they are known for debater 1', () => {
+    mocks.matchesKnown = false;
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    expect(screen.getByText('Counting matches with Ana Ruiz…')).toBeInTheDocument();
+    expect(screen.queryByText(/matches? with Ana$/)).not.toBeInTheDocument();
+    expect(people()[0]).toHaveTextContent('Leo Okafor');
+  });
+
+  it('asks each debater once, however often Ask both is pressed', async () => {
+    (mocks.overlap as { candidates: { slots: unknown[] }[] }).candidates[0].slots = [];
+    mocks.prompt.mockImplementation((userId: string) => Promise.resolve({ sent: userId === 'ana' }));
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    const ask = screen.getByRole('button', { name: 'Ask both to widen availability' });
+    await act(async () => {
+      fireEvent.click(ask);
+      fireEvent.click(ask);
+    });
+    expect(mocks.prompt.mock.calls.map(([userId]) => userId)).toEqual(['ana', 'raj']);
+    expect(screen.getByText('Asked Ana · Raj: No email on file')).toBeInTheDocument();
+  });
+
+  it('flags nothing in Pick any time until their shared times are known', () => {
+    mocks.overlap = undefined;
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+
+    expect(screen.getByText(/Checking whether they.re both free then/)).toBeInTheDocument();
+    expect(screen.queryByText(/Not a time they.re both free/)).not.toBeInTheDocument();
   });
 
   it('keeps Send invites off until two debaters and a time are picked', () => {

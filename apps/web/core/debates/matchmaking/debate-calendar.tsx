@@ -33,6 +33,7 @@ import {
   calendarOpened,
   calendarWeekChanged,
 } from './debate-calendar-analytics';
+import { CalendarWeekNav, useMinuteClock } from './debate-calendar-controls';
 import { CalendarDayList } from './debate-calendar-day-list';
 import {
   CALENDAR_WEEKS,
@@ -46,8 +47,6 @@ import {
   viewerFreeSlots,
   weekCells,
   weekDays,
-  weekOffsetLabels,
-  weekRangeLabel,
   weekStart,
 } from './debate-calendar-model';
 import { CALENDAR_FROM_PARAM, CALENDAR_PATH, CALENDAR_VIEW_PARAM } from './debate-calendar-route';
@@ -211,13 +210,7 @@ function DebateCalendarBody({
   const { personalSpaceId } = usePersonalSpaceId();
   const popoverPortal = useElevatedPopoverPortal();
 
-  // Held in state so slots that pass drop off as the page stays open; React Compiler caches a
-  // `Date.now()` read in render once per mount.
-  const [now, setNow] = React.useState(() => Date.now());
-  React.useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(interval);
-  }, []);
+  const now = useMinuteClock();
 
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [search, setSearch] = React.useState('');
@@ -525,7 +518,6 @@ function DebateCalendarBody({
   const loadError = schedulableQuery.error && !schedulableQuery.data ? schedulableQuery.error : null;
   const nobodyFree = unfilteredCells.size === 0;
   const filteredOut = !nobodyFree && cells.size === 0;
-  const offsets = weekOffsetLabels(days);
 
   // The viewer's own debates keep the week on screen even with nobody else free in it.
   const ownDebatesThisWeek = debates.some(debate => cellOf(debate.start, days) !== null);
@@ -591,43 +583,15 @@ function DebateCalendarBody({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2 px-6 py-3 md:px-4">
-        <HubPillButton
-          aria-label="Previous week"
-          analyticsSurface="calendar"
-          analyticsLabel="Debate calendar Previous week"
-          disabled={weekOffset === 0}
-          onClick={() => goToWeek(weekOffset - 1, 'previous')}
-          className="w-7 px-0"
-        >
-          ‹
-        </HubPillButton>
-        <HubPillButton
-          aria-label="Next week"
-          analyticsSurface="calendar"
-          analyticsLabel="Debate calendar Next week"
-          disabled={weekOffset >= CALENDAR_WEEKS - 1}
-          onClick={() => goToWeek(weekOffset + 1, 'next')}
-          className="w-7 px-0"
-        >
-          ›
-        </HubPillButton>
-        <Text as="span" variant="listSemibold" className="px-1" aria-live="polite">
-          {weekRangeLabel(days)}
-        </Text>
-        <HubPillButton analyticsSurface="calendar" disabled={weekOffset === 0} onClick={() => goToWeek(0, 'today')}>
-          Today
-        </HubPillButton>
-        <span className="flex-1" />
+      <CalendarWeekNav
+        days={days}
+        weekOffset={weekOffset}
+        onGoToWeek={goToWeek}
+        isPhone={isPhone}
+        analyticsLabelPrefix="Debate calendar"
+      >
         <Legend viewerHasSchedule={viewerHasSchedule} />
-        {/* The week grid carries the offset at the top of its time column; the day list has no
-            time column, so a phone shows it here. */}
-        {isPhone ? (
-          <Text as="span" variant="footnote" color="grey-04">
-            {offsets.join(' / ')}
-          </Text>
-        ) : null}
-      </div>
+      </CalendarWeekNav>
 
       {/* Not the error state: everyone's free time loaded and can still be booked. These are the
           reads that only add to it, so a failure says what is missing and the week stays up. */}

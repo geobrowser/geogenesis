@@ -119,6 +119,19 @@ describe('adminDebates', () => {
     ]);
   });
 
+  it('never shows a decline on a match that closed without one', () => {
+    const [taken] = adminDebates([
+      request({
+        status: 'superseded',
+        participants: [
+          { user_id: 'a', accepted: true },
+          { user_id: 'b', accepted: false },
+        ],
+      }),
+    ]);
+    expect(taken.debaters.map(debater => debater.answer)).toEqual(['sent', 'no_answer']);
+  });
+
   it('finds the sender when geo-chat writes the two ids in different shapes', () => {
     const [debate] = adminDebates([
       request({

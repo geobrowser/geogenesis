@@ -97,7 +97,9 @@ function roleOf(userId: string, request: ScheduledDebateRequest): DebaterRole {
 function answerOf(accepted: boolean | null, role: DebaterRole, status: ScheduledDebateStatus): DebaterAnswer {
   if (role === 'sent') return 'sent';
   if (accepted === true) return 'accepted';
-  if (accepted === false) return 'declined';
+  // Only a declined match has a decliner. A slot taken by another booking is closed without anyone
+  // saying no, whatever the row holds, and its card says so; a red "Declined" would contradict it.
+  if (accepted === false && status === 'declined') return 'declined';
   return status === 'pending' ? 'pending' : 'no_answer';
 }
 
