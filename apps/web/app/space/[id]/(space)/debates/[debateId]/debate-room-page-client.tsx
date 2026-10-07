@@ -12,8 +12,10 @@ import { capture } from '~/core/analytics';
 import {
   type Debate,
   type DebateRematchSession,
+  GeoChatRequestError,
   type GetPrivyIdentityToken,
   type LiveKitJoinResponse,
+  type OpenRoundPick,
   type ParticipantSlot,
   abortLocalRecordingMultipart,
   getCurrentGeoChatUserId,
@@ -73,6 +75,7 @@ import {
   useMarkDebateCapturing,
   useMarkDebateJoined,
   useMarkDebateReady,
+  useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
 import { BackToLobbyRow, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
@@ -83,6 +86,7 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
+import { OpenRoundPickCard } from '~/core/debates/open-round-pick-card';
 import {
   type OpenRoundGap,
   type OpenRoundsRoomPhase,
@@ -375,6 +379,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markCapturing = useMarkDebateCapturing(debateId);
   const abortDebate = useAbortDebate(debateId);
   const endDebateTurn = useEndDebateTurn(debateId);
+  const saveOpenRoundPick = useSaveOpenRoundPick(debateId);
   const clearDebateActivity = useClearDebateActivity();
   const clearTimedOutDebateActivity = useClearTimedOutDebateActivity();
   const consentToRematch = useConsentToDebateRematch(debateId);
@@ -1972,6 +1977,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setVideoEnabled(current => !current);
   }, []);
 
+  // A round that resolved while the save was in flight is not a failure to report: the room is
+  // about to show the result, and the hook re-reads the debate for it.
+  const savePickAsync = saveOpenRoundPick.mutateAsync;
+  const pickOpenRound = React.useCallback(
+    (roundIndex: number, pick: OpenRoundPick) =>
+      savePickAsync({ roundIndex, pick }).catch(error => {
+        if (error instanceof GeoChatRequestError && error.code === 'round_already_resolved') return;
+        throw error;
+      }),
+    [savePickAsync]
+  );
+
   const endLocalTurn = React.useCallback(async () => {
     if (
       !localSlot ||
@@ -2859,6 +2876,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 rematchBusy={consentToRematch.isPending}
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
+                onPickOpenRound={pickOpenRound}
+                remoteDisconnected={remotePresence === 'left'}
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
                 onRetryConnection={retryConnection}
@@ -2899,6 +2918,8 @@ function DebateRecordingModal({
   rematchBusy,
   endTurnPending,
   onEndTurn,
+  onPickOpenRound,
+  remoteDisconnected,
   onRetryFinalization,
   canRetryConnection,
   onRetryConnection,
@@ -2930,6 +2951,9 @@ function DebateRecordingModal({
   rematchBusy: boolean;
   endTurnPending: boolean;
   onEndTurn: () => void;
+  onPickOpenRound: (roundIndex: number, pick: OpenRoundPick) => Promise<unknown>;
+  /** The other debater has dropped out of the call, which mid-debate means reconnecting. */
+  remoteDisconnected: boolean;
   onRetryFinalization: () => void;
   canRetryConnection: boolean;
   onRetryConnection: () => void;
@@ -2990,8 +3014,13 @@ function DebateRecordingModal({
     ) : null;
   // During thanking the same countdown used to be drawn over both videos. It now belongs to the
   // debate-again action below; all other shared phase countdowns keep their existing placement.
+  // The Open rounds pick card carries the decision window's countdown itself (GEO-3178).
+  const openRoundDeciding = countdown.openRounds?.phase === 'deciding' ? countdown.openRounds : null;
   const sharedPhaseCountdown =
-    countdown.effectiveStatus !== 'thanking' && countdown.activeSlot === null && countdown.yieldingSlot === null
+    countdown.effectiveStatus !== 'thanking' &&
+    countdown.activeSlot === null &&
+    countdown.yieldingSlot === null &&
+    !openRoundDeciding
       ? countdownRing
       : null;
   const localCountdown = localEndingTurn
@@ -3163,6 +3192,27 @@ function DebateRecordingModal({
 
         <div className="relative grid w-full max-w-[430px] gap-2">
           {orderedVideoTiles}
+
+          {openRoundDeciding && debate.open_rounds && localSlot !== null && (
+            <OpenRoundPickCard
+              // A fresh card per round, so nothing picked or failed in one round carries into the next.
+              key={openRoundDeciding.roundIndex}
+              roundIndex={openRoundDeciding.roundIndex}
+              savedPick={
+                debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
+              }
+              rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
+              remainingSeconds={countdown.remainingSeconds}
+              progress={countdown.progress}
+              onPick={pick => onPickOpenRound(openRoundDeciding.roundIndex, pick)}
+              localReconnecting={roomState === 'reconnecting'}
+              reconnectingOpponentName={
+                remoteDisconnected
+                  ? remoteParticipant?.display_name || remoteParticipant?.profile_space_id || 'The other debater'
+                  : null
+              }
+            />
+          )}
 
           {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && (
             <DebateAgainCard

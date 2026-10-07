@@ -39,6 +39,7 @@ import {
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
   type MatchmakingClaimsQuery,
+  type OpenRoundPick,
   RECIPIENT_AWAY_CODE,
   type TranscriptFormat,
   abortDebate,
@@ -81,6 +82,7 @@ import {
   replaceDebateSchedule,
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
+  saveOpenRoundPick,
   updateDebateAvailability,
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
@@ -943,6 +945,30 @@ export function useEndDebateTurn(debateId: string) {
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
+    },
+  });
+}
+
+/**
+ * Saves an Open rounds pick (GEO-3178). Not retried: the pick card puts the selection back and asks
+ * the debater to tap again, which is the retry, and a silent one could land after they changed it.
+ *
+ * `round_already_resolved` means the round is over, so the debate is re-read for its outcome.
+ */
+export function useSaveOpenRoundPick(debateId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    mutationFn: ({ roundIndex, pick }: { roundIndex: number; pick: OpenRoundPick }) =>
+      saveOpenRoundPick(debateId, roundIndex, pick, getPrivyIdentityToken, accountKey),
+    onSuccess: debate => {
+      queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
+    },
+    onError: error => {
+      if (error instanceof GeoChatRequestError && error.code === 'round_already_resolved') {
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debateId) });
+      }
     },
   });
 }
