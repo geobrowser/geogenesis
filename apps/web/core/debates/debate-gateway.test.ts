@@ -1575,6 +1575,107 @@ describe('DebateGatewayClient', () => {
     expect(sockets).toHaveLength(3);
   });
 
+  it('drops only a refused scope that the ERROR names, keeping the socket and other scopes', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: 'private-debate' },
+    });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets).toHaveLength(1);
+
+    // A later reconnect replays the other scope but not the refused one.
+    sockets[0]!.serverClose();
+    await vi.advanceTimersByTimeAsync(1_000);
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    const subscribed = sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE').map(message => message.payload);
+    expect(subscribed).toEqual([{ scope: 'space', space_id: 'space-1' }]);
+  });
+
+  it('retries a refused scope once every holder has released it and it is retained again', async () => {
+    const release = client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: 'private-debate' },
+    });
+
+    release();
+    expect(sockets[0]!.sent.some(message => message.op === 'UNSUBSCRIBE')).toBe(false);
+
+    client.retainScope({ scope: 'debate', debate_id: 'private-debate' });
+    expect(sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(2);
+  });
+
+  it('retries refused scopes after the account changes', async () => {
+    client.retainScope({ scope: 'matchmaking' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'authentication is required for resource subscriptions',
+      subscription: { scope: 'matchmaking' },
+    });
+
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-b'
+    );
+    await vi.runAllTicks();
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    expect(sockets[1]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'matchmaking' } })
+    );
+  });
+
+  it('keeps recycling the socket when the refusal names no client scope', async () => {
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+
+    // A room subscription, which this client never sends and cannot map to a scope.
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { space_id: 'space-1', room_id: 'room-1', room_kind: 'member', resume_after_seq: null },
+    });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
+  });
+
   it('reconnects with a new session when the authenticated account changes', async () => {
     queryClient.setQueryData(['debates', 'account', 'user-a', 'activity'], { private: 'user-a' });
     client.start(

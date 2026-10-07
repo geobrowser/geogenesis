@@ -142,6 +142,8 @@ export class DebateGatewayClient {
   private readonly scopes = new Map<string, { scope: DebateGatewayScope; count: number }>();
   private readonly sentScopes = new Set<string>();
   private readonly confirmedScopes = new Set<string>();
+  /** Retained scopes the server refused; never re-sent until fully released or the account changes. */
+  private readonly refusedScopes = new Set<string>();
   private readonly recentEventIds = new Set<string>();
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
@@ -254,6 +256,7 @@ export class DebateGatewayClient {
     this.disposeSocket();
     this.sentScopes.clear();
     this.confirmedScopes.clear();
+    this.refusedScopes.clear();
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
@@ -285,6 +288,8 @@ export class DebateGatewayClient {
       this.scopes.delete(key);
       this.sentScopes.delete(key);
       this.confirmedScopes.delete(key);
+      // The server never held a refused scope, so there is nothing to unsubscribe.
+      if (this.refusedScopes.delete(key)) return;
       this.sendSubscription(scope, 'UNSUBSCRIBE');
     };
   }
@@ -366,6 +371,8 @@ export class DebateGatewayClient {
           // A real ceiling, and reconnecting re-sends the same scopes and hits it again. The
           // account-routed stream keeps working; only the scopes past the limit are lost.
           this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'subscription_limit' });
+        } else if (this.refuseForbiddenScope(envelope.payload)) {
+          // Only that scope is refused; the socket and every other subscription stay up.
         } else if (this.canRecoverFromError()) {
           // Anything else is not known to be permanent, and parking here was a dead end: nothing in
           // this branch closes the socket, so heartbeats keep being acked, `heartbeatsAwaitingAck`
@@ -831,7 +838,7 @@ export class DebateGatewayClient {
     if (!this.readyForDebates || !this.socket || this.socket.readyState !== OPEN) return;
     const key = scopeKey(scope);
     if (op === 'SUBSCRIBE') {
-      if (this.sentScopes.has(key)) return;
+      if (this.sentScopes.has(key) || this.refusedScopes.has(key)) return;
       this.sentScopes.add(key);
     }
     this.sendEnvelope(op, scope);
@@ -900,6 +907,18 @@ export class DebateGatewayClient {
     if (!this.enabled) return;
     this.setSnapshot({ status: 'degraded', paused: true, pauseReason: reason });
     this.scheduleReconnect(minimumDelayMs);
+  }
+
+  /** `false` when the ERROR names no scope (older geo-chat, or a room), leaving the generic path. */
+  private refuseForbiddenScope(payload: unknown) {
+    if (!isRecord(payload) || payload.code !== 'subscription_forbidden') return false;
+    const scope = parseScope(payload.subscription);
+    if (!scope) return false;
+    const key = scopeKey(scope);
+    this.sentScopes.delete(key);
+    this.confirmedScopes.delete(key);
+    if (this.scopes.has(key)) this.refusedScopes.add(key);
+    return true;
   }
 
   private canRecoverFromError() {
