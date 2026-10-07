@@ -85,6 +85,18 @@ export function isDebatesLastTurn(debate: Pick<Debate, 'turn_durations_ms' | 'op
 }
 
 /**
+ * How many rebuttal rounds an Open rounds debate unlocked (GEO-3180): `0` for one that ended after
+ * the opening, `null` for a fixed format, which has no rounds to count. Read off the last appended
+ * turn rather than `rounds[]`: only an Extend appends a round, so the appended turns are exactly
+ * the rounds both debaters agreed to — including the cap round, which never resolves into
+ * `rounds[]`. Round 0 is the opening, so the last turn's round is the rebuttal count.
+ */
+export function openRebuttalRoundCount(debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>): number | null {
+  if (!isOpenRoundsDebate(debate)) return null;
+  return openRoundIndexForTurn(debate.turn_durations_ms.length - 1);
+}
+
+/**
  * What a turn is. Open rounds sends `turn_roles`, one per appended turn, and it is read as given;
  * every fixed format keeps `debateTurnRole`'s position rule (GEO-2852).
  */

@@ -1,3 +1,5 @@
+import * as React from 'react';
+
 import cx from 'classnames';
 
 import type { OpenRoundsRoomPhase } from './open-rounds';
@@ -12,6 +14,40 @@ const pipWidth: Record<PipKind, { regular: string; compact: string }> = {
   round: { regular: 'w-3', compact: 'w-1.5' },
   next: { regular: 'w-3', compact: 'w-1.5' },
 };
+
+/** One round's pip. `data-round-pip` is what tests read the pips by. */
+function RoundPip({ round, className }: { round: number | 'next'; className: string }) {
+  return <i data-round-pip={round} className={cx('shrink-0 rounded-full', className)} />;
+}
+
+/** The pips' row: decoration beside text that already says the count, so hidden from readers. */
+function RoundPipRow({ children, className }: { children: React.ReactNode; className?: string }) {
+  return (
+    <span aria-hidden="true" className={cx('flex min-w-0 items-center gap-[3px]', className)}>
+      {children}
+    </span>
+  );
+}
+
+/**
+ * The rounds a finished debate unlocked (GEO-3180), one pip each, in the current text colour so
+ * the end card draws them dark and the feed's rounds pill purple. Smaller than the room's counter,
+ * which is the row's headline; here they sit beside a label.
+ */
+export function DebateRoundPips({ rounds, className }: { rounds: number; className?: string }) {
+  return (
+    <RoundPipRow className={className}>
+      {Array.from({ length: rounds }, (_, index) => (
+        <RoundPip key={index} round={index + 1} className="h-[5px] w-2 bg-current" />
+      ))}
+    </RoundPipRow>
+  );
+}
+
+/** "1 rebuttal round", "3 rebuttal rounds". */
+export function rebuttalRoundsLabel(rounds: number) {
+  return `${rounds} rebuttal round${rounds === 1 ? '' : 's'}`;
+}
 
 /**
  * Where an Open rounds debate is (GEO-3174): the opening, or rebuttal round N of up to the cap, one
@@ -30,11 +66,10 @@ export function DebateRoundIndicator({ phase, maxRounds }: { phase: OpenRoundsRo
   const compact = roundIndex > compactAfterRounds;
 
   const pip = (kind: PipKind, round: number | 'next') => (
-    <i
+    <RoundPip
       key={round}
-      data-round-pip={round}
+      round={round}
       className={cx(
-        'shrink-0 rounded-full',
         compact ? pipWidth[kind].compact : pipWidth[kind].regular,
         kind === 'next'
           ? 'h-[7px] border-[1.5px] border-dashed border-grey-03'
@@ -55,15 +90,15 @@ export function DebateRoundIndicator({ phase, maxRounds }: { phase: OpenRoundsRo
         <span className="sr-only">
           {roundIndex === 0
             ? 'Opening. No rebuttal rounds yet.'
-            : `Round ${roundIndex} of ${maxRounds}. ${roundIndex} rebuttal round${roundIndex === 1 ? '' : 's'} so far.`}{' '}
+            : `Round ${roundIndex} of ${maxRounds}. ${rebuttalRoundsLabel(roundIndex)} so far.`}{' '}
           {anotherPossible ? 'Another round is possible.' : 'No more rounds.'}
         </span>
       </p>
-      <span aria-hidden="true" className="flex min-w-0 items-center gap-[3px] overflow-hidden">
+      <RoundPipRow className="overflow-hidden">
         {pip('opening', 0)}
         {Array.from({ length: roundIndex }, (_, index) => pip('round', index + 1))}
         {anotherPossible && pip('next', 'next')}
-      </span>
+      </RoundPipRow>
     </div>
   );
 }

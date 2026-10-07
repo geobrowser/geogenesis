@@ -18,6 +18,7 @@ import {
   listening as openRoundsListening,
   revealEnd as openRoundsRevealEnd,
   roundOneSpeaking as openRoundsRoundOneSpeaking,
+  thankingAfterEnd as openRoundsThankingAfterEnd,
 } from '~/core/debates/open-rounds-fixtures';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
@@ -4182,6 +4183,50 @@ describe('DebateRoomPageClient', () => {
 
     // The request, not the cancellation — the coordinator owns the confirmation and the upload.
     expect(mocks.setPublishOptOutRequest).toHaveBeenCalledWith('debate-1');
+  });
+
+  // GEO-3180. How far the two took it leads the card, above publish and rematch.
+  function thankingOpenRoundsDebate(rebuttalRounds: number): Debate {
+    vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:30.000'));
+    const thanking = openRoundsThankingAfterEnd();
+    const rebuttalTurns = rebuttalRounds * 2;
+    return {
+      ...thanking,
+      turn_durations_ms: [60_000, 60_000, ...Array.from({ length: rebuttalTurns }, () => 45_000)],
+      open_rounds: {
+        ...thanking.open_rounds!,
+        turn_roles: ['opening', 'opening', ...Array.from({ length: rebuttalTurns }, () => 'rebuttal' as const)],
+      },
+    };
+  }
+
+  it('leads the end card with the rebuttal rounds the debaters unlocked', async () => {
+    mocks.debate = thankingOpenRoundsDebate(2);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const card = (await screen.findByText('Debate again?')).closest('section')!;
+    const rows = card.querySelectorAll(':scope > div:not(.bg-divider)');
+    expect(rows[0]).toHaveTextContent('2 rebuttal rounds');
+    expect(rows[0]?.querySelectorAll('[data-round-pip]')).toHaveLength(2);
+  });
+
+  it('says the debate stopped at the opening when nobody extended it', async () => {
+    mocks.debate = thankingOpenRoundsDebate(0);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Opening only')).toBeInTheDocument();
+  });
+
+  it('leaves the rounds row off a fixed format', async () => {
+    thankingDebateAtFinalTurn();
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await screen.findByText('Debate again?');
+    expect(screen.queryByText(/rebuttal round/)).toBeNull();
+    expect(screen.queryByText('Opening only')).toBeNull();
   });
 
   // The card's rows are separated by hairlines in the design, and the first one belongs to the
