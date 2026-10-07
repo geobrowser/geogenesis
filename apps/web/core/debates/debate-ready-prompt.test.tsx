@@ -125,6 +125,22 @@ describe('DebateReadyPrompt', () => {
     expect(mocks.abortMutateAsync).toHaveBeenCalled();
   });
 
+  it('shows an Open rounds debate’s format with the cap its server snapshotted', () => {
+    render(
+      <DebateReadyPrompt
+        debate={debate({
+          turn_format_id: 'open_rounds',
+          open_rounds: { max_rebuttal_rounds: 3, rebuttal_turn_ms: 45_000 } as Debate['open_rounds'],
+        })}
+        currentUserId="user-me"
+      />
+    );
+
+    expect(screen.getByText('Then rebut back and forth')).toBeInTheDocument();
+    expect(screen.getByText('Another round only if you both pick Extend. Up to 3 rounds.')).toBeInTheDocument();
+    expect(screen.queryByText(/clos/i)).not.toBeInTheDocument();
+  });
+
   it('says so when the debate is already under way', () => {
     render(<DebateReadyPrompt debate={debate({ status: 'in_progress' })} currentUserId="user-me" />);
 
