@@ -2,20 +2,49 @@
 
 import * as React from 'react';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { Text } from '~/design-system/text';
 
-import { peekDebateReturnDestination } from '../debate-return-navigation';
+import { consumeDebateReturnDestination, peekDebateReturnDestination } from '../debate-return-navigation';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
-import { useDebateLobby } from './hooks';
+import { useDebateLobby, useMyDebateLobby } from './hooks';
 import { requestLobbyRejoin } from './step-out';
 
-/** The lobby this debate flow returns to, read once per mount; null when it did not start in one. */
+/**
+ * geo-chat's lobby to return to: the one the viewer stepped out of, from any tab, or null. Undefined
+ * while it is unknown (flag off, loading, or the call failed), so callers fall back to this tab.
+ */
+function useServerLobbyReturn(): { lobbyId: string | null } | undefined {
+  const lobbyJoining = useFeatureFlag('lobbyJoining');
+  const mine = useMyDebateLobby(lobbyJoining);
+  if (!lobbyJoining || mine.isError || !mine.data) return undefined;
+  return { lobbyId: mine.data.stepped_out ? mine.data.current_lobby_id : null };
+}
+
+/** The lobby this debate flow returns to; null when it did not start in one or that lobby is gone. */
 export function useRecordedLobby(): string | null {
-  const [lobbyId] = React.useState(() => {
+  const lobbyJoining = useFeatureFlag('lobbyJoining');
+  const mine = useMyDebateLobby(lobbyJoining);
+  // This tab's record, read once per mount; used only when geo-chat cannot answer.
+  const [stored] = React.useState(() => {
     const destination = peekDebateReturnDestination();
     return destination ? debateRoomIdFromPath(destination) : null;
   });
-  return lobbyId;
+
+  if (!lobbyJoining || mine.isError) return stored;
+  return mine.data?.stepped_out ? mine.data.current_lobby_id : null;
+}
+
+/** The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. */
+export function useConsumeDebateReturnDestination() {
+  const lobby = useServerLobbyReturn();
+  const lobbyId = lobby?.lobbyId;
+  const known = lobby !== undefined;
+  return React.useCallback(
+    () => consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined),
+    [known, lobbyId]
+  );
 }
 
 type BackToLobbyProps = { onLeave: () => void; disabled?: boolean };

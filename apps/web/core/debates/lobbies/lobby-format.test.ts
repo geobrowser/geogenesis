@@ -4,6 +4,7 @@ import { type DebateLobbyMember, type DebateLobbyRole, GeoChatRequestError } fro
 import {
   hostAfterChange,
   hostsLabel,
+  inDebateLabel,
   isAlreadyInAnotherLobby,
   lobbyErrorMessage,
   lobbyScheduleLabel,
@@ -282,5 +283,28 @@ describe('moderation copy', () => {
     const now = Date.parse('2026-10-05T10:05:00Z');
     expect(sinceLabel('2026-10-05T10:04:40Z', now)).toBe('20 s');
     expect(sinceLabel('2026-10-05T10:02:00Z', now)).toBe('3 min');
+  });
+});
+
+describe('inDebateLabel', () => {
+  it('names the claim the pair is debating', () => {
+    expect(
+      inDebateLabel({ phase: 'on_claim', claim_entity_id: 'c1', claim_name: ' Cats are better ', space_id: 's1' })
+    ).toBe('In a debate on “Cats are better”');
+  });
+
+  it('says the pair is still picking', () => {
+    expect(inDebateLabel({ phase: 'choosing_claim' })).toBe('In a debate, picking a claim');
+  });
+
+  // null: hidden by a moderator, or the viewer is off the roster. undefined: an older geo-chat.
+  it.each([null, undefined])('falls back to the plain line for %s', subject => {
+    expect(inDebateLabel(subject)).toBe('In a debate');
+  });
+
+  it('falls back to the plain line for a claim with no name', () => {
+    expect(inDebateLabel({ phase: 'on_claim', claim_entity_id: 'c1', claim_name: '', space_id: 's1' })).toBe(
+      'In a debate'
+    );
   });
 });

@@ -272,6 +272,12 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
   }),
 }));
 
+// The server-first return lives in lobby-return's own tests; here this tab's record decides.
+vi.mock('~/core/debates/lobbies/lobby-return', async () => {
+  const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
+  return { BackToLobbyRow: () => null, useConsumeDebateReturnDestination: () => consumeDebateReturnDestination };
+});
+
 vi.mock('~/core/debates/hooks', () => ({
   useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
   useDebateExtractedClaims: (debateId: string, enabled: boolean) => {

@@ -28,7 +28,6 @@ import {
   startDebateRecorder,
 } from '~/core/debates/debate-recorder';
 import { DebateRecordingStatusPill } from '~/core/debates/debate-recording-status-pill';
-import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import {
   CameraIcon,
   LeaveIcon,
@@ -75,7 +74,7 @@ import {
   useMarkDebateJoined,
   useMarkDebateReady,
 } from '~/core/debates/hooks';
-import { BackToLobbyRow } from '~/core/debates/lobbies/lobby-return';
+import { BackToLobbyRow, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -328,6 +327,7 @@ export function DebateRoomPageClient({ spaceId, debateId }: DebateRoomPageClient
 
 function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const router = useRouter();
+  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
   const mediaSession = useDebateMediaSession();
   const mediaSessionKey = debateMediaSessionKey(debateId);
   const {
@@ -804,7 +804,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       router.replace(`/space/${spaceId}/debates`);
     },
-    [clearDebateActivity, debateId, router, spaceId]
+    [clearDebateActivity, consumeDebateReturnDestination, debateId, router, spaceId]
   );
 
   /** The exit for a debate whose recording was cancelled — it can never be re-entered. */
@@ -828,7 +828,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     router.replace(`/space/${spaceId}/debates`);
-  }, [router, spaceId]);
+  }, [consumeDebateReturnDestination, router, spaceId]);
 
   /**
    * Moves this tab on to the next step of a debate-again session — unless another of the viewer's
@@ -2323,7 +2323,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     connectionFailureRedirectTimerRef.current = window.setTimeout(() => {
       router.replace(consumeDebateReturnDestination() ?? `/space/${spaceId}/questions`);
     }, connectionFailureRedirectDelayMs);
-  }, [router, spaceId]);
+  }, [consumeDebateReturnDestination, router, spaceId]);
 
   const reconcileConnectionDeadline = React.useCallback(async () => {
     const generation = connectionGenerationRef.current;
