@@ -1,4 +1,4 @@
-import type { Debate, DebateOpenRounds, OpenRoundPick } from './api';
+import type { Debate, DebateOpenRounds, OpenRoundPick, OpenRoundRevealedPick } from './api';
 import { type DebateTurnRole, debateTurnRole } from './formats';
 
 /**
@@ -94,6 +94,34 @@ export function isDebatesLastTurn(debate: Pick<Debate, 'turn_durations_ms' | 'op
 export function openRebuttalRoundCount(debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>): number | null {
   if (!isOpenRoundsDebate(debate)) return null;
   return openRoundIndexForTurn(debate.turn_durations_ms.length - 1);
+}
+
+/**
+ * Both picks of a resolved round, for the reveal (GEO-3179). `rounds[]` lists every resolved round;
+ * in the result window the block itself also carries the round that just resolved, which is the one
+ * a payload written in the same transaction as the resolution has. `null` until the round resolves.
+ */
+export function openRoundRevealedPicks(
+  openRounds: Pick<DebateOpenRounds, 'rounds' | 'round_index' | 'revealed_picks'>,
+  roundIndex: number
+): OpenRoundRevealedPick[] | null {
+  const history = openRounds.rounds?.find(round => round.round_index === roundIndex);
+  if (history?.picks?.length) return history.picks;
+  if (openRounds.round_index === roundIndex && openRounds.revealed_picks?.length) return openRounds.revealed_picks;
+  return null;
+}
+
+/**
+ * Whether the second turn of a round is running, which every round but the cap ends on a pick, so
+ * whoever speaks it has the last word before both decide (GEO-3179). The cap round's second turn
+ * is the last word of the whole debate.
+ */
+export function openRoundLastWord(
+  debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>,
+  turnIndex: number | null
+): 'round' | 'debate' | null {
+  if (!isOpenRoundsDebate(debate) || turnIndex === null || turnIndex % 2 !== 1) return null;
+  return isFinalOpenRound(debate.open_rounds, openRoundIndexForTurn(turnIndex)) ? 'debate' : 'round';
 }
 
 /**
