@@ -37,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   routerReplace: vi.fn(),
   summaries: [] as unknown[],
   admin: {} as Record<string, unknown>,
+  timezones: new Map<string, string>(),
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
@@ -122,6 +123,13 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => 'me' }));
 vi.mock('./use-geo-chat-user-summaries', () => ({ useGeoChatUserSummaries: () => mocks.summaries }));
+vi.mock('./admin-hooks', () => ({
+  useAdminDebaters: () => ({ timezoneByUser: mocks.timezones }),
+}));
+// The dialog has its own suite; here it only has to open.
+vi.mock('./admin-new-match-dialog', () => ({
+  AdminNewMatchDialog: ({ open }: { open: boolean }) => (open ? <div role="dialog" aria-label="New match" /> : null),
+}));
 vi.mock('./use-debates-hub', () => ({ useDebatesHub: () => ({ open: mocks.openHub, close: vi.fn() }) }));
 vi.mock('./use-person-facts', () => ({
   usePersonFacts: () => ({
@@ -684,7 +692,11 @@ describe('DebateCalendar', () => {
 
 describe('DebateCalendar, admin view (GEO-2943)', () => {
   beforeEach(() => {
-    mocks.summaries = [summary('11', 'Ana'), summary('12', 'Raj'), summary('13', 'Mia')];
+    mocks.summaries = [summary('11', 'Ana Ruiz'), summary('12', 'Raj Mehta'), summary('13', 'Mia Chen')];
+    mocks.timezones = new Map([
+      ['11', 'Europe/Madrid'],
+      ['12', 'Asia/Kolkata'],
+    ]);
   });
 
   it('offers no view switch to a viewer the admin list refused', () => {
@@ -710,55 +722,78 @@ describe('DebateCalendar, admin view (GEO-2943)', () => {
     mocks.searchParams = new URLSearchParams({ from: '/debates' });
     render(<DebateCalendar />);
 
-    const availability = screen.getByRole('radio', { name: 'Availability' });
-    expect(availability).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('radio', { name: 'Availability' })).toHaveAttribute('aria-checked', 'true');
     fireEvent.click(screen.getByRole('radio', { name: 'Debates' }));
     expect(mocks.routerReplace).toHaveBeenCalledWith('/matchmaking/calendar?from=%2Fdebates&view=debates', {
       scroll: false,
     });
   });
 
-  it('draws every scheduled debate by state, and opens each debater’s own answer', async () => {
+  it('labels every block by its state, and names who a waiting match is waiting on', () => {
     mocks.admin = adminWith(ADMIN_MATCHES);
     mocks.searchParams = new URLSearchParams({ view: 'debates' });
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('button', { name: /Ana vs Raj, Both accepted$/ })).toBeInTheDocument();
-    expect(
-      screen.getByRole('button', { name: /Raj vs Mia, Nobody answered, outside availability$/ })
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ana vs Raj, Confirmed$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Ana vs Raj, Waiting on Raj$/ })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Raj vs Mia, No replies, outside availability$/ })).toBeInTheDocument();
+  });
 
-    fireEvent.click(screen.getByRole('button', { name: /Ana vs Raj, Waiting on one$/ }));
-    const details = await screen.findByRole('dialog');
-    const rows = within(details).getAllByRole('listitem');
-    expect(rows[0]).toHaveTextContent(/Ana.*Sent.*Accepted/);
-    expect(rows[1]).toHaveTextContent(/Raj.*Received.*Pending/);
+  it('opens a card with the sentence, each debater’s answer, and their own time', async () => {
+    mocks.admin = adminWith(ADMIN_MATCHES);
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    render(<DebateCalendar />);
+
+    fireEvent.click(screen.getByRole('button', { name: /Waiting on Raj$/ }));
+    const card = await screen.findByRole('dialog');
+    expect(card).toHaveTextContent('Ana sent the invite. Waiting on Raj to reply.');
+    const rows = within(card).getAllByRole('listitem');
+    expect(rows[0]).toHaveTextContent(/Ana Ruiz.*Sent the invite.*in Madrid.*Sent invite/);
+    expect(rows[1]).toHaveTextContent(/Raj Mehta.*Was invited.*in Kolkata.*No reply yet/);
     // An image avatar fills its parent: the box around it is what keeps it 28px.
     expect(rows[0].querySelector('.h-7.w-7.overflow-hidden')).not.toBeNull();
   });
 
-  it('narrows to the matches that need attention', () => {
+  it('counts each state in the legend, hides closed debates until asked, and filters by state', () => {
+    mocks.admin = adminWith([
+      ...ADMIN_MATCHES,
+      scheduledMatch({
+        request_id: 'gone',
+        status: 'expired',
+        scheduled_start_at: at(9, 9),
+        scheduled_end_at: at(9, 9, 30),
+      }),
+    ]);
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    render(<DebateCalendar />);
+
+    const closed = screen.getByRole('button', { name: /^Closed\s*1$/ });
+    expect(closed).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByRole('button', { name: /Expired$/ })).not.toBeInTheDocument();
+
+    fireEvent.click(closed);
+    expect(screen.getByRole('button', { name: /Ana vs Raj, Expired$/ })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Confirmed\s*1$/ }));
+    expect(screen.queryByRole('button', { name: /Confirmed$/ })).not.toBeInTheDocument();
+  });
+
+  it('opens New match from the week bar', () => {
     mocks.admin = adminWith(ADMIN_MATCHES);
     mocks.searchParams = new URLSearchParams({ view: 'debates' });
     render(<DebateCalendar />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Needs attention (2)' }));
-    expect(screen.queryByRole('button', { name: /Both accepted$/ })).not.toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Waiting on one$/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'New match' }));
+    expect(screen.getByRole('dialog', { name: 'New match' })).toBeInTheDocument();
   });
 
-  it('lists the admin view by day on a phone', () => {
+  it('lists the admin view by day on a phone, each card inline', () => {
     mocks.admin = adminWith(ADMIN_MATCHES);
     mocks.searchParams = new URLSearchParams({ view: 'debates' });
     mocks.isPhone = true;
     render(<DebateCalendar />);
 
-    const thursday = screen.getByRole('region', { name: 'Thu 8' });
-    expect(
-      within(thursday)
-        .getAllByRole('listitem')
-        .filter(item => item.parentElement === thursday.querySelector('ul'))
-    ).toHaveLength(2);
+    expect(screen.getByRole('region', { name: 'Thu 8' })).toHaveTextContent(/Waiting on Raj/);
     expect(screen.getByRole('region', { name: 'Fri 9' })).toHaveTextContent(/Booked outside at least one debater/);
   });
 });

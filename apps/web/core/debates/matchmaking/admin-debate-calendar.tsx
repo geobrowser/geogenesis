@@ -11,6 +11,7 @@ import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
 import type { DebateParticipantSummary } from '../api';
@@ -20,15 +21,24 @@ import {
   ANSWER_LABELS,
   type AdminDebate,
   type AdminDebater,
+  DEFAULT_SHOWN_STATES,
   type DebaterAnswer,
+  MATCH_STATES,
   MATCH_STATE_LABELS,
   type MatchState,
   ROLE_LABELS,
-  STATUS_LABELS,
   adminDebates,
   adminDebatesByCell,
-  needsAttention,
+  blockLabel,
+  countByState,
+  dayShift,
+  matchSentence,
+  showsOffHours,
+  timeIn,
+  zoneCity,
 } from './admin-debate-calendar-model';
+import { useAdminDebaters } from './admin-hooks';
+import { AdminNewMatchDialog } from './admin-new-match-dialog';
 import {
   CALENDAR_WEEKS,
   DAYS_IN_WEEK,
@@ -50,71 +60,111 @@ import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 
-type NameOf = (userId: string) => DebateParticipantSummary | null;
-
-const STATE_CLASS_NAMES: Record<MatchState, string> = {
-  confirmed: 'border border-green bg-successTertiary text-text',
-  waiting: 'border border-orange bg-orange/15 text-text',
-  unanswered: 'border border-dashed border-grey-03 bg-white text-text',
-  off: 'border border-grey-02 bg-grey-01 text-grey-04',
+/** Names, first names and zones for the debaters on the calendar, from one lookup each. */
+type Debaters = {
+  nameOf: (userId: string) => DebateParticipantSummary | null;
+  firstNameOf: (userId: string) => string;
+  timezoneOf: (userId: string) => string | undefined;
 };
 
-const STATE_SWATCH_CLASS_NAMES: Record<MatchState, string> = {
-  confirmed: 'border border-green bg-successTertiary',
-  waiting: 'border border-orange bg-orange/15',
-  unanswered: 'border border-dashed border-grey-03 bg-white',
-  off: 'border border-grey-02 bg-grey-01',
+/** One look per state, shared by the blocks, the legend's swatches and the card's chip. */
+const STATE_CLASS_NAMES: Record<MatchState, string> = {
+  confirmed: 'border-green bg-successTertiary',
+  waiting: 'border-orange bg-orange/15',
+  noreply: 'border-dashed border-grey-03 bg-white',
+  declined: 'border-red-01 bg-red-02',
+  closed: 'border-grey-02 bg-grey-01',
+};
+
+/** The state word on a block, darkened so it reads on its own fill. */
+const STATE_LABEL_CLASS_NAMES: Record<MatchState, string> = {
+  confirmed: 'text-[#0b7a59]',
+  waiting: 'text-[#a45a00]',
+  noreply: 'text-grey-04',
+  declined: 'text-[#c62f19]',
+  closed: 'text-grey-04',
 };
 
 const ANSWER_CLASS_NAMES: Record<DebaterAnswer, string> = {
-  accepted: 'bg-successTertiary text-text',
-  declined: 'bg-red-02 text-red-01',
-  pending: 'bg-orange/15 text-text',
+  sent: 'bg-grey-01 text-text',
+  accepted: 'bg-successTertiary text-[#0b7a59]',
+  declined: 'bg-red-02 text-[#c62f19]',
+  pending: 'bg-orange/15 text-[#a45a00]',
   no_answer: 'bg-grey-01 text-grey-04',
 };
 
-function pairLabel(debate: AdminDebate, nameOf: NameOf) {
-  const names = debate.debaters.map(debater => {
-    const known = nameOf(debater.userId);
-    return known ? speakerLabel(known) : 'Someone';
-  });
-  return names.join(' vs ');
+/** Shown on a match that is still open and was booked outside someone's availability. */
+function OffHoursTag() {
+  return (
+    <span className="inline-flex shrink-0 items-center gap-1 self-start rounded-full bg-purple/10 px-1.5 py-px text-footnoteMedium whitespace-nowrap text-purple">
+      <Time />
+      Off-hours
+    </span>
+  );
 }
 
-/** The colour key, which doubles as the meaning of each block's fill. */
-export function AdminDebatesLegend() {
-  const states: MatchState[] = ['confirmed', 'waiting', 'unanswered', 'off'];
+function pairLabel(debate: AdminDebate, debaters: Debaters) {
+  return debate.debaters.map(debater => debaters.firstNameOf(debater.userId)).join(' vs ');
+}
+
+/**
+ * The legend, which is also the filter: each state with how many debates this week are in it,
+ * pressed to show them. Closed starts unpressed, since nothing in it needs an admin.
+ */
+export function AdminDebatesLegend({
+  counts,
+  shown,
+  onToggle,
+}: {
+  counts: Record<MatchState, number>;
+  shown: ReadonlySet<MatchState>;
+  onToggle: (state: MatchState) => void;
+}) {
   return (
-    <ul className="flex flex-wrap items-center gap-3 text-footnote text-grey-04" aria-label="Legend">
-      {states.map(state => (
-        <li key={state} className="flex items-center gap-1.5">
-          <span aria-hidden className={cx('h-2.5 w-3.5 rounded-sm', STATE_SWATCH_CLASS_NAMES[state])} />
-          {MATCH_STATE_LABELS[state]}
-        </li>
-      ))}
-      <li className="flex items-center gap-1.5">
-        <span aria-hidden className="h-2 w-2 rounded-full bg-red-01" />
-        Outside availability
-      </li>
-    </ul>
+    <div role="group" aria-label="Show debates by state" className="flex flex-wrap gap-1.5">
+      {MATCH_STATES.map(state => {
+        const pressed = shown.has(state);
+        return (
+          <button
+            key={state}
+            type="button"
+            aria-pressed={pressed}
+            onClick={() => onToggle(state)}
+            className={cx(
+              'inline-flex h-7 items-center gap-2 rounded-full border border-grey-02 bg-white pr-2.5 pl-2 text-metadata transition-colors hover:bg-grey-01',
+              !pressed && 'text-grey-04'
+            )}
+          >
+            <span
+              aria-hidden
+              className={cx('h-3 w-5 shrink-0 rounded-sm border', STATE_CLASS_NAMES[state], !pressed && 'opacity-35')}
+            />
+            {MATCH_STATE_LABELS[state]}
+            <span className={cx('font-medium tabular-nums', pressed ? 'text-text' : 'text-grey-04')}>
+              {counts[state]}
+            </span>
+          </button>
+        );
+      })}
+    </div>
   );
 }
 
 /**
- * The admin calendar's week (GEO-2943): every scheduled debate in its hour, coloured by whether
- * both debaters, one, or neither has accepted. A block opens the match's detail card.
+ * The admin calendar's week (GEO-2943): every scheduled debate in its hour, in its state's look. A
+ * block opens the match's card.
  *
- * Read-only. Acting on a match (resend, reschedule, cancel) is a later cut.
+ * Read-only. Acting on a match (resend, reschedule, cancel) needs geo-chat work and comes later.
  */
 export function AdminDebatesWeek({
   days,
   debates,
-  nameOf,
+  debaters,
   now,
 }: {
   days: Date[];
   debates: AdminDebate[];
-  nameOf: NameOf;
+  debaters: Debaters;
   now: number;
 }) {
   const scrollRef = React.useRef<HTMLDivElement>(null);
@@ -208,7 +258,7 @@ export function AdminDebatesWeek({
                   >
                     {isNowCell ? <NowLine now={now} /> : null}
                     {inCell.map(debate => (
-                      <AdminDebateBlock key={debate.requestId} debate={debate} nameOf={nameOf} />
+                      <AdminDebateBlock key={debate.requestId} debate={debate} debaters={debaters} />
                     ))}
                   </div>
                 );
@@ -221,26 +271,28 @@ export function AdminDebatesWeek({
   );
 }
 
-function AdminDebateBlock({ debate, nameOf }: { debate: AdminDebate; nameOf: NameOf }) {
-  const pair = pairLabel(debate, nameOf);
+function AdminDebateBlock({ debate, debaters }: { debate: AdminDebate; debaters: Debaters }) {
+  const pair = pairLabel(debate, debaters);
+  const label = blockLabel(debate, debaters.firstNameOf);
+  const struck = debate.state === 'declined' || debate.state === 'closed';
   return (
     <Popover.Root>
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label={`${timeRangeLabel(debate.start, debate.end)}, ${pair}, ${MATCH_STATE_LABELS[debate.state]}${
-            debate.outsideAvailability ? ', outside availability' : ''
+          aria-label={`${timeRangeLabel(debate.start, debate.end)}, ${pair}, ${label}${
+            showsOffHours(debate) ? ', outside availability' : ''
           }`}
           className={cx(
-            'relative flex w-full min-w-0 flex-col rounded-md px-2 py-1 text-left text-footnoteMedium',
-            STATE_CLASS_NAMES[debate.state]
+            'flex w-full min-w-0 flex-col gap-px rounded-md border px-2 py-1 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text',
+            STATE_CLASS_NAMES[debate.state],
+            debate.state === 'closed' ? 'text-grey-04' : 'text-text'
           )}
         >
-          {debate.outsideAvailability ? (
-            <span aria-hidden className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-01" />
-          ) : null}
-          <span className="pr-3">{timeRangeLabel(debate.start, debate.end)}</span>
-          <span className={cx('truncate font-normal', debate.state === 'off' && 'line-through')}>{pair}</span>
+          <span className="font-medium tabular-nums">{timeRangeLabel(debate.start, debate.end)}</span>
+          <span className={cx('truncate', struck && 'line-through')}>{pair}</span>
+          <span className={cx('truncate font-medium', STATE_LABEL_CLASS_NAMES[debate.state])}>{label}</span>
+          {showsOffHours(debate) ? <OffHoursTag /> : null}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -252,58 +304,101 @@ function AdminDebateBlock({ debate, nameOf }: { debate: AdminDebate; nameOf: Nam
           aria-label={`${pair}, ${timeRangeLabel(debate.start, debate.end)}`}
           className="z-100 w-[340px] max-w-[calc(100vw-32px)] rounded-xl border border-grey-02 bg-white p-4 shadow-lg"
         >
-          <AdminDebateDetails debate={debate} nameOf={nameOf} />
+          <AdminDebateDetails debate={debate} debaters={debaters} />
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
   );
 }
 
-/** Everything the calendar knows about one match: when, its status, and each debater's own answer. */
-export function AdminDebateDetails({ debate, nameOf }: { debate: AdminDebate; nameOf: NameOf }) {
+/**
+ * Everything the calendar knows about one match: when, its state in a sentence, and for each
+ * debater how they came to be in it, their own answer, and the time it is for them.
+ */
+export function AdminDebateDetails({ debate, debaters }: { debate: AdminDebate; debaters: Debaters }) {
   const when = new Date(debate.start).toLocaleDateString(undefined, {
     weekday: 'short',
     month: 'short',
     day: 'numeric',
   });
+  const notes: { key: string; text: string; tone: 'quiet' | 'warn' }[] = [];
+  if (debate.createdByAdmin) notes.push({ key: 'admin', text: 'Arranged by an admin.', tone: 'quiet' });
+  if (debate.rescheduleCount > 0) {
+    notes.push({
+      key: 'moved',
+      text: `Moved ${debate.rescheduleCount === 1 ? 'once' : `${debate.rescheduleCount} times`}.`,
+      tone: 'quiet',
+    });
+  }
+  if (debate.outsideAvailability) {
+    notes.push({
+      key: 'outside',
+      text: showsOffHours(debate)
+        ? 'Booked outside at least one debater’s availability, so a decline is more likely.'
+        : 'Booked outside at least one debater’s availability.',
+      tone: 'warn',
+    });
+  }
+
   return (
     <div className="flex flex-col gap-3">
-      <div className="flex flex-col gap-0.5">
-        <Text as="p" variant="metadataMedium">
-          {when} · {timeRangeLabel(debate.start, debate.end)}
-        </Text>
-        <Text as="p" variant="footnote" color="grey-04">
-          {STATUS_LABELS[debate.status]} · {MATCH_STATE_LABELS[debate.state]}
-          {debate.createdByAdmin ? ' · Arranged by an admin' : ''}
-          {debate.rescheduleCount > 0
-            ? ` · Moved ${debate.rescheduleCount} time${debate.rescheduleCount === 1 ? '' : 's'}`
-            : ''}
-        </Text>
+      <div className="flex items-start justify-between gap-2">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <Text as="p" variant="metadataMedium" className="tabular-nums">
+            {when} · {timeRangeLabel(debate.start, debate.end)}
+          </Text>
+          <Text as="p" variant="footnote" color="grey-04">
+            Your time
+          </Text>
+        </div>
+        <span
+          className={cx(
+            'shrink-0 rounded-full border px-2 py-0.5 text-footnoteMedium whitespace-nowrap',
+            STATE_CLASS_NAMES[debate.state]
+          )}
+        >
+          {blockLabel(debate, debaters.firstNameOf)}
+        </span>
       </div>
-      <ul className="flex flex-col gap-2">
+      <Text as="p" variant="metadata">
+        {matchSentence(debate, debaters.firstNameOf)}
+      </Text>
+      <ul className="flex flex-col gap-2.5">
         {debate.debaters.map(debater => (
-          <DebaterRow key={debater.userId} debater={debater} summary={nameOf(debater.userId)} />
+          <DebaterRow key={debater.userId} debater={debater} start={debate.start} debaters={debaters} />
         ))}
       </ul>
-      {debate.outsideAvailability ? (
-        <Text as="p" variant="footnote" className="text-red-01">
-          Booked outside at least one debater&rsquo;s availability.
-        </Text>
+      {notes.length > 0 ? (
+        <div className="flex flex-col gap-1 border-t border-divider pt-2.5">
+          {notes.map(note => (
+            <Text
+              key={note.key}
+              as="p"
+              variant="footnote"
+              className={note.tone === 'warn' ? 'text-purple' : 'text-grey-04'}
+            >
+              {note.text}
+            </Text>
+          ))}
+        </div>
       ) : null}
     </div>
   );
 }
 
-function DebaterRow({ debater, summary }: { debater: AdminDebater; summary: DebateParticipantSummary | null }) {
+function DebaterRow({ debater, start, debaters }: { debater: AdminDebater; start: number; debaters: Debaters }) {
+  const summary = debaters.nameOf(debater.userId);
   const name = summary ? speakerLabel(summary) : 'Someone';
   const href = summary && validateSpaceId(summary.profile_space_id) ? NavUtils.toSpace(summary.profile_space_id) : null;
+  const timezone = debaters.timezoneOf(debater.userId);
+  const local = timezone ? ` · ${timeIn(start, timezone)} in ${zoneCity(timezone)}${dayShift(start, timezone)}` : '';
   return (
-    <li className="flex items-center gap-2">
+    <li className="grid grid-cols-[1.75rem_minmax(0,1fr)_auto] items-center gap-2">
       {/* An image avatar fills its parent, so the box sets the size; `size` only reaches the generated one. */}
       <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full">
         <Avatar avatarUrl={summary?.avatar_cid ?? null} value={summary?.profile_space_id ?? debater.userId} size={28} />
       </div>
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-w-0 flex-col">
         {href ? (
           <Link href={href} className="truncate text-metadataMedium hover:underline">
             {name}
@@ -315,24 +410,30 @@ function DebaterRow({ debater, summary }: { debater: AdminDebater; summary: Deba
         )}
         <Text as="span" variant="footnote" color="grey-04">
           {ROLE_LABELS[debater.role]}
+          {local}
         </Text>
       </div>
-      <span className={cx('shrink-0 rounded-full px-2 py-0.5 text-footnoteMedium', ANSWER_CLASS_NAMES[debater.answer])}>
+      <span
+        className={cx(
+          'rounded-full px-2 py-0.5 text-footnoteMedium whitespace-nowrap',
+          ANSWER_CLASS_NAMES[debater.answer]
+        )}
+      >
         {ANSWER_LABELS[debater.answer]}
       </span>
     </li>
   );
 }
 
-/** The admin calendar on a phone: the week's matches grouped by day, each with its details inline. */
+/** The admin calendar on a phone: the week's matches grouped by day, each card open inline. */
 export function AdminDebatesDayList({
   days,
   debates,
-  nameOf,
+  debaters,
 }: {
   days: Date[];
   debates: AdminDebate[];
-  nameOf: NameOf;
+  debaters: Debaters;
 }) {
   const byDay = React.useMemo(() => {
     const today = new Date().toDateString();
@@ -357,8 +458,8 @@ export function AdminDebatesDayList({
             </Text>
             <ul className="flex flex-col gap-2 px-4 py-2">
               {day.debates.map(debate => (
-                <li key={debate.requestId} className={cx('rounded-lg p-3', STATE_CLASS_NAMES[debate.state])}>
-                  <AdminDebateDetails debate={debate} nameOf={nameOf} />
+                <li key={debate.requestId} className="rounded-lg border border-grey-02 p-3">
+                  <AdminDebateDetails debate={debate} debaters={debaters} />
                 </li>
               ))}
             </ul>
@@ -368,12 +469,22 @@ export function AdminDebatesDayList({
   );
 }
 
-/** A lookup from geo-chat user id to the graph's name and face, for the blocks and cards above. */
-export function useNameOf(summaries: DebateParticipantSummary[]): NameOf {
+/** Names, first names and zones for a set of debaters, keyed by geo-chat user id. */
+export function useDebaters(userIds: string[], timezoneByUser: ReadonlyMap<string, string>): Debaters {
+  const summaries = useGeoChatUserSummaries(userIds, userIds.length > 0);
   return React.useMemo(() => {
     const byUser = new Map(summaries.map(summary => [normId(summary.user_id), summary]));
-    return (userId: string) => byUser.get(normId(userId)) ?? null;
-  }, [summaries]);
+    const nameOf = (userId: string) => byUser.get(normId(userId)) ?? null;
+    return {
+      nameOf,
+      firstNameOf: (userId: string) => {
+        const known = nameOf(userId);
+        // A display name is the person's own; a bare space id is no one's first name.
+        return known?.display_name ? (known.display_name.trim().split(/\s+/)[0] ?? 'Someone') : 'Someone';
+      },
+      timezoneOf: (userId: string) => timezoneByUser.get(normId(userId)),
+    };
+  }, [summaries, timezoneByUser]);
 }
 
 export type CalendarView = 'availability' | 'debates';
@@ -406,9 +517,9 @@ export function CalendarViewSwitch({ view, onChange }: { view: CalendarView; onC
 }
 
 /**
- * The admin half of the debate calendar (GEO-2943): every scheduled debate this week and next, in
- * any status, and each debater's own answer. Shown only once geo-chat has served the admin list,
- * so a viewer off its allowlist never reaches it.
+ * The admin half of the debate calendar (GEO-2942, GEO-2943): every scheduled debate this week and
+ * next, in any status, each debater's own answer, and New match to pair two debaters. Shown only
+ * once geo-chat has served the admin list, so a viewer off its allowlist never reaches it.
  */
 export function AdminDebatesBody({
   isPhone,
@@ -424,29 +535,39 @@ export function AdminDebatesBody({
   }, []);
 
   const [weekOffset, setWeekOffset] = React.useState(0);
-  const [attentionOnly, setAttentionOnly] = React.useState(false);
+  const [shown, setShown] = React.useState<ReadonlySet<MatchState>>(DEFAULT_SHOWN_STATES);
+  const [newMatchOpen, setNewMatchOpen] = React.useState(false);
+  const [sentNote, setSentNote] = React.useState<string | null>(null);
+  const newMatchButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   const days = React.useMemo(() => weekDays(weekStart(new Date(now), weekOffset)), [now, weekOffset]);
   const all = React.useMemo(() => adminDebates(admin.data?.matches), [admin.data]);
-  const shown = React.useMemo(() => (attentionOnly ? all.filter(needsAttention) : all), [all, attentionOnly]);
-  const thisWeek = React.useMemo(() => shown.filter(debate => cellOf(debate.start, days) !== null), [days, shown]);
-  const attentionCount = React.useMemo(
-    () => all.filter(debate => needsAttention(debate) && cellOf(debate.start, days) !== null).length,
-    [all, days]
-  );
+  const thisWeek = React.useMemo(() => all.filter(debate => cellOf(debate.start, days) !== null), [all, days]);
+  const counts = React.useMemo(() => countByState(thisWeek), [thisWeek]);
+  const visible = React.useMemo(() => thisWeek.filter(debate => shown.has(debate.state)), [shown, thisWeek]);
 
+  const { timezoneByUser } = useAdminDebaters(true);
   const userIds = React.useMemo(
     () => [...new Set(all.flatMap(debate => debate.debaters.map(debater => debater.userId)))],
     [all]
   );
-  const nameOf = useNameOf(useGeoChatUserSummaries(userIds, userIds.length > 0));
+  const debaters = useDebaters(userIds, timezoneByUser);
 
   const goToWeek = (next: number) => setWeekOffset(Math.max(0, Math.min(CALENDAR_WEEKS - 1, next)));
+  const toggle = (state: MatchState) =>
+    setShown(current => {
+      const next = new Set(current);
+      if (next.has(state)) next.delete(state);
+      else next.add(state);
+      return next;
+    });
+  const showAll = () => setShown(new Set(MATCH_STATES));
+  const hiddenCount = thisWeek.length - visible.length;
   const offsets = weekOffsetLabels(days);
 
   return (
     <div className="flex flex-col">
-      <div className="flex flex-wrap items-center gap-2 px-6 py-3 md:px-4">
+      <div className="flex flex-wrap items-center gap-2 px-6 pt-3 pb-2 md:px-4">
         <HubPillButton
           aria-label="Previous week"
           analyticsSurface="calendar"
@@ -470,28 +591,41 @@ export function AdminDebatesBody({
         <Text as="span" variant="listSemibold" className="px-1" aria-live="polite">
           {weekRangeLabel(days)}
         </Text>
-        <HubPillButton
-          analyticsSurface="calendar"
-          analyticsLabel="Admin debate calendar Needs attention"
-          aria-pressed={attentionOnly}
-          variant={attentionOnly ? 'primary' : 'secondary'}
-          onClick={() => setAttentionOnly(current => !current)}
-        >
-          Needs attention{admin.data ? ` (${attentionCount})` : ''}
-        </HubPillButton>
-        <span className="flex-1" />
-        <AdminDebatesLegend />
         {isPhone ? (
           <Text as="span" variant="footnote" color="grey-04">
             {offsets.join(' / ')}
           </Text>
         ) : null}
+        <span className="flex-1" />
+        <HubPillButton
+          ref={newMatchButtonRef}
+          analyticsSurface="calendar"
+          analyticsLabel="Admin debate calendar New match"
+          variant="primary"
+          onClick={() => {
+            setSentNote(null);
+            setNewMatchOpen(true);
+          }}
+        >
+          New match
+        </HubPillButton>
       </div>
 
-      <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
-        Admin view. Only allowlisted admins can see other people&rsquo;s scheduled debates.
-        {admin.truncated ? ` Showing the first ${admin.data?.matches.length ?? 0}; later debates are cut off.` : ''}
-      </Text>
+      <div className="flex flex-col gap-2 px-6 pb-3 md:px-4">
+        <AdminDebatesLegend counts={counts} shown={shown} onToggle={toggle} />
+        <Text as="p" variant="footnote" color="grey-04">
+          Admin view. Only allowlisted admins can see other people&rsquo;s scheduled debates.
+          {admin.truncated ? ` Showing the first ${admin.data?.matches.length ?? 0}; later debates are cut off.` : ''}
+        </Text>
+        {/* A live region that is always mounted, so the note is announced when it arrives. */}
+        <div role="status">
+          {sentNote ? (
+            <Text as="p" variant="metadata">
+              {sentNote}
+            </Text>
+          ) : null}
+        </div>
+      </div>
 
       <div className="px-6 pb-6 md:px-4">
         <HubQueryState
@@ -501,23 +635,34 @@ export function AdminDebatesBody({
           error={admin.data ? null : admin.error}
           failureReason={admin.failureReason}
           onRetry={() => void admin.refetch()}
-          isEmpty={thisWeek.length === 0}
-          emptyMessage={attentionOnly ? 'Nothing needs attention this week.' : 'No debates scheduled this week.'}
+          isEmpty={visible.length === 0}
+          emptyMessage={
+            hiddenCount > 0
+              ? `${hiddenCount} ${hiddenCount === 1 ? 'debate is' : 'debates are'} hidden by the state filter.`
+              : 'No debates scheduled this week.'
+          }
           emptyAction={
-            attentionOnly
-              ? { label: 'Show all', onClick: () => setAttentionOnly(false) }
+            hiddenCount > 0
+              ? { label: 'Show all', onClick: showAll }
               : weekOffset < CALENDAR_WEEKS - 1
                 ? { label: 'Next week', onClick: () => goToWeek(weekOffset + 1) }
                 : undefined
           }
         >
           {isPhone ? (
-            <AdminDebatesDayList days={days} debates={thisWeek} nameOf={nameOf} />
+            <AdminDebatesDayList days={days} debates={visible} debaters={debaters} />
           ) : (
-            <AdminDebatesWeek key={days[0].getTime()} days={days} debates={thisWeek} nameOf={nameOf} now={now} />
+            <AdminDebatesWeek key={days[0].getTime()} days={days} debates={visible} debaters={debaters} now={now} />
           )}
         </HubQueryState>
       </div>
+
+      <AdminNewMatchDialog
+        open={newMatchOpen}
+        onOpenChange={setNewMatchOpen}
+        openerRef={newMatchButtonRef}
+        onSent={note => setSentNote(note)}
+      />
     </div>
   );
 }
