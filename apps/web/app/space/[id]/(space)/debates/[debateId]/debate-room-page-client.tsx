@@ -3115,9 +3115,13 @@ function DebateRecordingModal({
           sets it so the headline does not change under you at the swap. Everything below it stays
           in the single 430px column the room has always used. */}
       <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]">
-        {/* Where the debate is and the way out, above the claim (GEO-3174). A fixed format has no
-            rounds to count, so its row holds Leave alone. */}
-        <div className="mb-3.5 flex w-full max-w-[430px] items-center justify-between gap-2">
+        <h1 className="mb-5 w-full max-w-[900px] text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
+          {debate.claim.claim}
+        </h1>
+
+        {/* Where the debate is and the way out, between the claim and the tiles (GEO-3174). A fixed
+            format has no rounds to count, so its row holds Leave alone. */}
+        <div className="mb-3 flex w-full max-w-[430px] items-center justify-between gap-2">
           {roundIndicator ? <DebateRoundIndicator state={roundIndicator} /> : <span />}
           <RecordingCircleButton
             ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
@@ -3129,10 +3133,6 @@ function DebateRecordingModal({
             <LeaveIcon />
           </RecordingCircleButton>
         </div>
-
-        <h1 className="mb-5 w-full max-w-[900px] text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
-          {debate.claim.claim}
-        </h1>
 
         <div className="relative grid w-full max-w-[430px] gap-2">
           {orderedVideoTiles}

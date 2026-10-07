@@ -5120,11 +5120,12 @@ describe('DebateRoomPageClient', () => {
     });
   });
 
-  // GEO-3174. The room says which round it is in, and Leave sits above the claim at the top right.
+  // GEO-3174. The room says which round it is in, with Leave at its right, between the claim and
+  // the tiles.
   describe('open rounds round indicator (GEO-3174)', () => {
     const indicator = () => document.querySelector('[data-debate-round-indicator]');
 
-    it('follows the room from the opening into round 1, beside Leave above the claim', async () => {
+    it('follows the room from the opening into round 1, beside Leave between the claim and the tiles', async () => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
       const view = await renderLiveDebate(openRoundsListening());
@@ -5133,7 +5134,8 @@ describe('DebateRoomPageClient', () => {
       expect(screen.getByText('Opening. No rebuttal rounds yet. Another round is possible.')).toBeInTheDocument();
       const leave = screen.getByRole('button', { name: 'Leave debate' });
       const heading = screen.getByRole('heading', { name: 'The protocol should ship debates' });
-      expect(leave.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(heading.compareDocumentPosition(leave) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(leave.compareDocumentPosition(debateVideoTile('local')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       expect(leave.parentElement).toContainElement(indicator() as HTMLElement);
 
       vi.mocked(Date.now).mockReturnValue(openRoundsAt('20:03:00.000'));
@@ -5146,14 +5148,15 @@ describe('DebateRoomPageClient', () => {
       ).toBeInTheDocument();
     });
 
-    it('shows no round indicator for a fixed format, and still puts Leave above the claim', async () => {
+    it('shows no round indicator for a fixed format, and still puts Leave between the claim and the tiles', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
       await renderLiveDebate();
 
       expect(indicator()).toBeNull();
       const leave = screen.getByRole('button', { name: 'Leave debate' });
       const heading = screen.getByRole('heading', { name: 'The protocol should ship debates' });
-      expect(leave.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(heading.compareDocumentPosition(leave) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      expect(leave.compareDocumentPosition(debateVideoTile('local')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
   });
 
