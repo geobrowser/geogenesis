@@ -2418,6 +2418,20 @@ export async function getDebateLobby(
   });
 }
 
+/**
+ * The lobby the viewer is on the roster of. `current_lobby_id` survives a step-out and is null once
+ * they leave, are removed, or the lobby ends; `stepped_out` is false whenever it is null.
+ */
+export type DebateMyLobby = { current_lobby_id: string | null; stepped_out: boolean };
+
+export async function getMyDebateLobby(
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateMyLobby>('/me/debate-lobby', { auth: true, getPrivyIdentityToken, accountKey, signal });
+}
+
 /** Without `starts_at` the lobby opens now. A start opens it 10 minutes early. */
 export async function createDebateLobby(
   body: { name: string; starts_at?: string },

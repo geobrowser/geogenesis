@@ -27,7 +27,6 @@ import { markEnteringDebate } from '~/core/debates/debate-entry-intent';
 import { useDebateGatewaySpaceScopes } from '~/core/debates/debate-gateway';
 import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-target';
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
-import { consumeDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
 import { requestOpenRounds } from '~/core/debates/format-details';
@@ -51,6 +50,7 @@ import {
   useNotInterestedClaimIds,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
+import { useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -270,6 +270,7 @@ const ROOM_REJOIN_RETRY_MS = 15_000;
 
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
+  const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
   // The room owns this session rather than the other way round, so two of the page's exits change
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
@@ -1621,7 +1622,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
       router.replace(`/space/${endedSession.source_space_id}/debates`);
     },
-    [currentUserId, router]
+    [consumeDebateReturnDestination, currentUserId, router]
   );
 
   // "Debate now" = claims the opponent has responded to; the tab badge counts them.

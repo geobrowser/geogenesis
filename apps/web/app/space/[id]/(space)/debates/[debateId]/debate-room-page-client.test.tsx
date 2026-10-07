@@ -123,6 +123,12 @@ vi.mock('~/core/debates/api', async importOriginal => {
   };
 });
 
+// The server-first return lives in lobby-return's own tests; here this tab's record decides.
+vi.mock('~/core/debates/lobbies/lobby-return', async () => {
+  const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
+  return { BackToLobbyRow: () => null, useConsumeDebateReturnDestination: () => consumeDebateReturnDestination };
+});
+
 vi.mock('~/core/debates/hooks', () => ({
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
