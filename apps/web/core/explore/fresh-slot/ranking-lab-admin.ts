@@ -104,7 +104,10 @@ export async function requireRankingLabAdmin(request: Request, deps: Deps = {}):
     return { ok: false, status: 503, code: 'admin_check_unavailable' };
   }
   if (probe.status === 401) return { ok: false, status: 401, code: 'geo_chat_session_invalid' };
-  if (probe.status === 403 || probe.status === 503) return remember({ ok: false, status: 403, code: 'not_admin' });
+  if (probe.status === 403) return remember({ ok: false, status: 403, code: 'not_admin' });
+  // geo-chat answers 503 both when no admins are configured and when it is briefly unavailable, so
+  // a 503 is "not admin" for this request only: caching it would lock admins out for a minute.
+  if (probe.status === 503) return { ok: false, status: 403, code: 'not_admin' };
   if (!probe.ok) return { ok: false, status: 503, code: 'admin_check_unavailable' };
 
   const claims = jwtPayload(geoChatToken);
