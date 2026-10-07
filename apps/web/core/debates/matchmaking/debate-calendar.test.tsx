@@ -1009,6 +1009,19 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People2$/);
   });
 
+  it("puts the pills on the week's row and the legend under the grid, on a desktop", () => {
+    render(<DebateCalendar />);
+
+    const nextWeek = screen.getByRole('button', { name: 'Next week' });
+    const pills = screen.getByRole('button', { name: 'People' });
+    const grid = screen.getByRole('grid');
+    const legend = screen.getByRole('list', { name: 'Legend' });
+    // Document order: the week's controls, then the pills beside them, then the grid, then the legend.
+    expect(nextWeek.compareDocumentPosition(pills) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(pills.compareDocumentPosition(grid) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(grid.compareDocumentPosition(legend) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("votes from a claim's side pills", () => {
     render(<DebateCalendar />);
     fireEvent.click(screen.getByRole('button', { name: 'Claims' }));

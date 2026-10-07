@@ -811,16 +811,11 @@ function DebateCalendarBody({
         {isPhone ? (
           <SpaceTopicFilters {...spaceFilter} trailing={narrowPills} />
         ) : (
-          <div className="flex items-center gap-3">
-            <SpaceFilterPills
-              {...spaceFilter}
-              className="min-w-0 flex-1"
-              loading={peopleQuery.isLoading || publishableSpacesPending}
-            />
-            {/* While the panel is open its tabs are the switch, so the pills step aside rather than
-                offer the same two choices twice. */}
-            {panelTab ? null : narrowPills}
-          </div>
+          <SpaceFilterPills
+            {...spaceFilter}
+            className="min-w-0"
+            loading={peopleQuery.isLoading || publishableSpacesPending}
+          />
         )}
       </div>
 
@@ -846,7 +841,11 @@ function DebateCalendarBody({
             isPhone={isPhone}
             analyticsLabelPrefix="Debate calendar"
           >
-            <Legend viewerHasSchedule={viewerHasSchedule} />
+            {/* On a desktop the pills sit on the week's own row, beside the panel they open, and the
+                legend moves under the grid. While the panel is open its tabs are the switch, so the
+                pills step aside rather than offer the same two choices twice. A phone keeps its
+                legend here and its pills in the filter row, where they open the sheet. */}
+            {isPhone ? <Legend viewerHasSchedule={viewerHasSchedule} /> : panelTab ? null : narrowPills}
           </CalendarWeekNav>
 
           {narrowNote || hiddenNote ? (
@@ -937,6 +936,11 @@ function DebateCalendarBody({
                 />
               )}
             </HubQueryState>
+            {isPhone ? null : (
+              <div className="mt-3">
+                <Legend viewerHasSchedule={viewerHasSchedule} />
+              </div>
+            )}
           </div>
         </div>
 
