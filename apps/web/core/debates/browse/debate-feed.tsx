@@ -13,6 +13,7 @@ import { type Debate, GeoChatRequestError } from '~/core/debates/api';
 import type { DebatePageFeedState } from '~/core/debates/debate-page-outcome';
 import { isRemovedDebateAnswer } from '~/core/debates/debate-removal';
 import { useDebate, useProcessedVideoDebateIds, useSpaceDebates } from '~/core/debates/hooks';
+import { openRebuttalRoundCount } from '~/core/debates/open-rounds';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { type DebatePageOutcome, useDebatePageOutcome } from '~/core/debates/use-debate-page-outcome';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
@@ -596,6 +597,7 @@ function DebateFeedItem({
     onClaims: () => onOpenClaims(),
     onShare: share.onOpen,
     shareOpen: share.open,
+    rebuttalRounds: openRebuttalRoundCount(debate),
   };
 
   return (

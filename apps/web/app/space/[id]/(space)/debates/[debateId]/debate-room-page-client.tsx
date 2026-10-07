@@ -48,7 +48,7 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
-import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
+import { DebateRoundIndicator, DebateRoundPips, rebuttalRoundsLabel } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
   type DebateTabClaimKey,
@@ -90,6 +90,7 @@ import {
   debateThankingStartsAtMs,
   debateTurnRoleForDebate,
   isDebatesLastTurn,
+  openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
@@ -3153,6 +3154,7 @@ function DebateRecordingModal({
               publishing={publishing}
               publishBusy={publishOptOutOffer.busy}
               onStopPublishing={() => setPublishOptOutRequest(publishOptOutOffer.debateId)}
+              rebuttalRounds={openRebuttalRoundCount(debate)}
             >
               <BackToLobbyRow onLeave={onLeave} disabled={leaveDisabled} />
             </DebateAgainCard>
@@ -3485,6 +3487,7 @@ function DebateAgainCard({
   publishing,
   publishBusy,
   onStopPublishing,
+  rebuttalRounds,
   children,
 }: {
   opponentName: string;
@@ -3498,6 +3501,8 @@ function DebateAgainCard({
   publishing: boolean | null;
   publishBusy: boolean;
   onStopPublishing: () => void;
+  /** Rebuttal rounds the two unlocked (GEO-3180). Null for a fixed format, which leaves the row off. */
+  rebuttalRounds: number | null;
   /** Extra rows under the opponent's, e.g. the way back to a lobby. */
   children?: React.ReactNode;
 }) {
@@ -3506,6 +3511,17 @@ function DebateAgainCard({
 
   return (
     <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
+      {rebuttalRounds !== null && (
+        <>
+          <CardRow>
+            <Text as="span" variant="smallTitle" color="text" className="min-w-0 truncate">
+              {rebuttalRounds > 0 ? rebuttalRoundsLabel(rebuttalRounds) : 'Opening only'}
+            </Text>
+            {rebuttalRounds > 0 && <DebateRoundPips rounds={rebuttalRounds} className="shrink-0 text-text" />}
+          </CardRow>
+          <CardDivider />
+        </>
+      )}
       {publishing !== null && (
         <>
           <CardRow>
