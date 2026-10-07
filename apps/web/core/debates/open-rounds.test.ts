@@ -123,9 +123,9 @@ describe('open rounds: what follows a round', () => {
 
   it('8.3 / 8.4 picks do not change the timing: still deciding until resolved', () => {
     for (const debate of [
-      deciding({ my_pick: 'rebut', opponent_has_picked: false }),
+      deciding({ my_pick: 'extend', opponent_has_picked: false }),
       deciding({ my_pick: null, opponent_has_picked: true }),
-      deciding({ my_pick: 'rebut', opponent_has_picked: true }),
+      deciding({ my_pick: 'extend', opponent_has_picked: true }),
     ]) {
       expect(openRoundGapAfterTurn(debate, 1, roundZeroEnd, at('20:02:03.000'))).toMatchObject({
         kind: 'hold',
@@ -134,7 +134,7 @@ describe('open rounds: what follows a round', () => {
     }
   });
 
-  it('8.5 reveal → rebut: result window, then the next round at resolved + 3 s', () => {
+  it('8.5 reveal → extend: result window, then the next round at resolved + 3 s', () => {
     const debate = revealRebut();
     expect(openRoundGapAfterTurn(debate, 1, roundZeroEnd, at('20:02:04.250'))).toEqual({
       kind: 'hold',
@@ -142,7 +142,7 @@ describe('open rounds: what follows a round', () => {
         phase: 'result',
         roundIndex: 0,
         isFinalRound: false,
-        outcome: 'rebut',
+        outcome: 'extend',
         resolvedAtMs: at('20:02:04.200'),
         nextPhaseStartsAtMs: at('20:02:07.200'),
       },
@@ -184,12 +184,12 @@ describe('open rounds: what follows a round', () => {
     });
   });
 
-  it('holds on a Rebut whose next round has not been appended rather than inventing turns', () => {
+  it('holds on an Extend whose next round has not been appended rather than inventing turns', () => {
     const { open_rounds: openRounds, ...rest } = revealRebut();
     const stale: Debate = { ...rest, turn_durations_ms: [60_000, 60_000], open_rounds: openRounds };
     expect(openRoundGapAfterTurn(stale, 1, roundZeroEnd, at('20:02:30.000'))).toMatchObject({
       kind: 'hold',
-      phase: { phase: 'result', outcome: 'rebut' },
+      phase: { phase: 'result', outcome: 'extend' },
     });
   });
 
@@ -207,7 +207,7 @@ describe('open rounds: when thanking starts (the recorder’s end)', () => {
   it('is undecided while any round is pending', () => {
     expect(debateThankingStartsAtMs(listening(), start, naturalTurnEnd)).toBeNull();
     expect(debateThankingStartsAtMs(deciding(), start, naturalTurnEnd)).toBeNull();
-    // Round 0 resolved Rebut, so round 1 is pending now.
+    // Round 0 resolved Extend, so round 1 is pending now.
     expect(debateThankingStartsAtMs(revealRebut(), start, naturalTurnEnd)).toBeNull();
     expect(debateThankingStartsAtMs(roundOneSpeaking(), start, naturalTurnEnd)).toBeNull();
   });

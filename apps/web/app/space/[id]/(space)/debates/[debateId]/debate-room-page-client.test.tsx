@@ -5074,9 +5074,9 @@ describe('DebateRoomPageClient', () => {
       await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
 
       // The opening's summed end plus the post-roll is 20:02:05. A fixed-turn recorder stopped here.
-      rerenderAt(view, '20:02:06.000', openRoundsDeciding({ my_pick: 'rebut' }));
-      rerenderAt(view, '20:02:40.000', openRoundsDeciding({ my_pick: 'rebut', opponent_has_picked: true }));
-      // Round 0 resolved Rebut, and round 1 runs.
+      rerenderAt(view, '20:02:06.000', openRoundsDeciding({ my_pick: 'extend' }));
+      rerenderAt(view, '20:02:40.000', openRoundsDeciding({ my_pick: 'extend', opponent_has_picked: true }));
+      // Round 0 resolved Extend, and round 1 runs.
       rerenderAt(view, '20:03:00.000', openRoundsRoundOneSpeaking());
       await act(async () => undefined);
       expect(mocks.enqueueRecording).not.toHaveBeenCalled();
