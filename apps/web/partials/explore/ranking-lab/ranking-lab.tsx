@@ -123,6 +123,10 @@ export function RankingLab() {
   });
 
   const [draft, setDraft] = React.useState<FreshSlotConfig | null>(null);
+  // An in-page confirmation, not window.confirm: a native dialog blocks the whole page.
+  const [confirming, setConfirming] = React.useState<{ kind: 'save' } | { kind: 'rollback'; revision: number } | null>(
+    null
+  );
   const live = lab.data?.state?.config ?? lab.data?.defaults ?? null;
   React.useEffect(() => {
     if (live && draft === null) setDraft(live);
@@ -252,10 +256,8 @@ export function RankingLab() {
             {preview.isPending ? 'Previewing…' : 'Preview'}
           </Button>
           <Button
-            onClick={() => {
-              if (window.confirm('Save these settings? Explore serves them within a minute.')) save.mutate(draft);
-            }}
-            disabled={!dirty || save.isPending || !data.storeConfigured}
+            onClick={() => setConfirming({ kind: 'save' })}
+            disabled={!dirty || save.isPending || !data.storeConfigured || confirming !== null}
           >
             {save.isPending ? 'Saving…' : 'Save'}
           </Button>
@@ -266,6 +268,17 @@ export function RankingLab() {
             Defaults
           </Button>
         </div>
+        {confirming?.kind === 'save' ? (
+          <ConfirmBar
+            message="Save these settings? Explore serves them within a minute."
+            confirmLabel="Save"
+            onConfirm={() => {
+              save.mutate(draft);
+              setConfirming(null);
+            }}
+            onCancel={() => setConfirming(null)}
+          />
+        ) : null}
         {save.error ? <ErrorLine error={save.error} /> : null}
         {save.data?.adjustments.length ? (
           <Text variant="metadata" color="grey-04">
@@ -303,12 +316,8 @@ export function RankingLab() {
                   <Button
                     variant="secondary"
                     small
-                    disabled={rollback.isPending}
-                    onClick={() => {
-                      if (window.confirm(`Restore the settings saved in revision ${entry.revision}?`)) {
-                        rollback.mutate(entry.revision);
-                      }
-                    }}
+                    disabled={rollback.isPending || confirming !== null}
+                    onClick={() => setConfirming({ kind: 'rollback', revision: entry.revision })}
                   >
                     Restore
                   </Button>
@@ -321,6 +330,17 @@ export function RankingLab() {
             ))}
           </ul>
         )}
+        {confirming?.kind === 'rollback' ? (
+          <ConfirmBar
+            message={`Restore the settings saved in revision ${confirming.revision}? Explore serves them within a minute.`}
+            confirmLabel="Restore"
+            onConfirm={() => {
+              rollback.mutate(confirming.revision);
+              setConfirming(null);
+            }}
+            onCancel={() => setConfirming(null)}
+          />
+        ) : null}
         {rollback.error ? <ErrorLine error={rollback.error} /> : null}
       </section>
 
@@ -336,6 +356,34 @@ function LabShell({ children }: { children: React.ReactNode }) {
         Ranking lab
       </Text>
       {typeof children === 'string' ? <Text variant="body">{children}</Text> : children}
+    </div>
+  );
+}
+
+function ConfirmBar({
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      role="alertdialog"
+      aria-label={message}
+      className="flex flex-wrap items-center gap-2 rounded border border-grey-02 p-3"
+    >
+      <Text variant="metadata">{message}</Text>
+      <Button small onClick={onConfirm}>
+        {confirmLabel}
+      </Button>
+      <Button small variant="secondary" onClick={onCancel}>
+        Cancel
+      </Button>
     </div>
   );
 }
@@ -443,16 +491,19 @@ function RankingParamsSection({ params }: { params: RankingParams | null }) {
       </Text>
       {params?.config ? (
         <div className="sm:grid-cols-3 grid grid-cols-2 gap-x-6 gap-y-1">
-          {Object.entries(params.config).map(([key, value]) => (
-            <div key={key} className="flex justify-between gap-2">
-              <Text as="span" variant="metadata" color="grey-04">
-                {key}
-              </Text>
-              <Text as="span" variant="metadata">
-                {value ?? '—'}
-              </Text>
-            </div>
-          ))}
+          {Object.entries(params.config)
+            // GraphQL response metadata (e.g. the response cache's `__responseCacheId`), not a parameter.
+            .filter(([key]) => !key.startsWith('__'))
+            .map(([key, value]) => (
+              <div key={key} className="flex justify-between gap-2">
+                <Text as="span" variant="metadata" color="grey-04">
+                  {key}
+                </Text>
+                <Text as="span" variant="metadata">
+                  {value ?? '—'}
+                </Text>
+              </div>
+            ))}
           {params.typeWeights.map(weight => (
             <div key={weight.typeId} className="flex justify-between gap-2">
               <Text as="span" variant="metadata" color="grey-04">
