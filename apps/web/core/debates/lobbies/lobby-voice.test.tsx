@@ -18,7 +18,16 @@ const mocks = vi.hoisted(() => ({
   isMicrophoneEnabled: false,
   setMicrophoneEnabled: vi.fn(async () => undefined),
   participants: [] as { identity: string; isMicrophoneEnabled: boolean; isSpeaking: boolean }[],
+  permissions: undefined as { canPublish: boolean } | undefined,
+  /** Local participant listeners, by event name. */
+  listeners: new Map<string, (...args: unknown[]) => void>(),
 }));
+
+const localParticipant = {
+  setMicrophoneEnabled: mocks.setMicrophoneEnabled,
+  on: (event: string, listener: (...args: unknown[]) => void) => mocks.listeners.set(event, listener),
+  off: (event: string) => mocks.listeners.delete(event),
+};
 
 vi.mock('../api', async importOriginal => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -48,10 +57,8 @@ vi.mock('@livekit/components-react', () => ({
   useRoomContext: () => ({}),
   useConnectionState: () => mocks.connectionState,
   useAudioPlayback: () => ({ canPlayAudio: mocks.canPlayAudio, startAudio: mocks.startAudio }),
-  useLocalParticipant: () => ({
-    localParticipant: { setMicrophoneEnabled: mocks.setMicrophoneEnabled },
-    isMicrophoneEnabled: mocks.isMicrophoneEnabled,
-  }),
+  useLocalParticipant: () => ({ localParticipant, isMicrophoneEnabled: mocks.isMicrophoneEnabled }),
+  useLocalParticipantPermissions: () => mocks.permissions,
   useParticipants: () => mocks.participants,
 }));
 
@@ -126,6 +133,7 @@ beforeEach(() => {
   mocks.canPlayAudio = true;
   mocks.isMicrophoneEnabled = false;
   mocks.participants = [];
+  mocks.permissions = undefined;
   mocks.getDebateLobbyVoiceToken.mockResolvedValue(token());
 });
 
@@ -163,6 +171,47 @@ describe('LobbyVoice', () => {
     renderVoice(lobby('listener'));
     expect(await screen.findByText('You’re listening')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /mute/i })).toBeNull();
+    expect(mocks.roomProps).toMatchObject({ audio: false });
+  });
+
+  // GEO-3134: LiveKit revokes publishing before the refetch brings the listener role.
+  it('takes the mic down when a host moves the viewer to listeners', async () => {
+    const { setJoined } = renderVoice();
+    await screen.findByRole('button', { name: /mute/i });
+    expect(mocks.roomProps).toMatchObject({ audio: true });
+
+    mocks.permissions = { canPublish: false };
+    setJoined(true);
+    expect(await screen.findByText('You’re listening')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /mute/i })).toBeNull();
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false);
+  });
+
+  // GEO-3134: Move to speakers and Make host mint a publishing token; the mic stays off until a click.
+  it.each(['speaker', 'host'] as const)('starts muted after a listener becomes a %s', async role => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_publish: false }));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const ui = (view: DebateLobbyView) => (
+      <QueryClientProvider client={client}>
+        <LobbyVoice lobby={view} connectionId="conn-1" joined currentUserId="u1" onConnectedChange={vi.fn()}>
+          <Speaking />
+        </LobbyVoice>
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui(lobby('listener')));
+    await screen.findByText('You’re listening');
+
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_publish: true, start_muted: false }));
+    rerender(ui(lobby(role)));
+    await screen.findByRole('button', { name: /Unmute/ });
+    expect(mocks.roomProps).toMatchObject({ audio: false });
+  });
+
+  it('remembers a host’s mute so a reconnect does not unmute', async () => {
+    renderVoice();
+    await screen.findByRole('button', { name: /mute/i });
+    expect(mocks.roomProps).toMatchObject({ audio: true });
+    act(() => mocks.listeners.get('trackMuted')?.({ source: 'microphone' }));
     expect(mocks.roomProps).toMatchObject({ audio: false });
   });
 

@@ -1,5 +1,8 @@
 import {
   type DebateLobbyMember,
+  type DebateLobbyMemberAction,
+  type DebateLobbyModerationAction,
+  type DebateLobbyModerationEntry,
   type DebateLobbyPerson,
   type DebateLobbyRole,
   type DebateLobbyView,
@@ -112,6 +115,11 @@ export function isAlreadyInAnotherLobby(error: unknown): error is GeoChatRequest
   return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'already_in_another_lobby';
 }
 
+/** The join was refused because a host removed the viewer; only an explicit Rejoin comes back. */
+export function isRemovedFromLobby(error: unknown): error is GeoChatRequestError {
+  return error instanceof GeoChatRequestError && error.status === 409 && error.code === 'lobby_removed';
+}
+
 /** The other lobby's id, from the 409's `details.current_lobby_id`. */
 export function otherLobbyIdFrom(error: GeoChatRequestError) {
   const id = error.details?.current_lobby_id;
@@ -166,7 +174,134 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
     case 'voice_unavailable':
     case 'livekit_not_configured':
       return 'Voice is unavailable right now. Try again in a moment.';
+    case 'lobby_member_not_found':
+      return 'They aren’t in this lobby anymore.';
+    case 'lobby_target_is_self':
+      return 'You can’t do that to yourself.';
+    case 'lobby_target_is_host':
+      return 'Remove them as host first.';
+    case 'lobby_creator_host':
+      return 'Only the lobby’s creator can remove their host status.';
+    case 'lobby_last_host':
+      return 'Make someone else a host first. The lobby needs one.';
+    case 'lobby_target_banned':
+      return 'They’re banned from this lobby. Unban them first.';
+    case 'lobby_target_not_in_voice':
+      return 'Their mic isn’t on.';
+    case 'lobby_not_listener':
+      return 'Only listeners raise a hand.';
+    case 'lobby_removed':
+      return 'A host removed you from this lobby.';
     default:
       return fallback;
   }
+}
+
+/** A refused moderation action. Hosts moderate from inside the lobby only. */
+export function moderationErrorMessage(error: unknown, fallback = 'That didn’t work. Try again.') {
+  if (error instanceof GeoChatRequestError && error.code === 'lobby_not_present') return 'Join the lobby to moderate.';
+  return lobbyErrorMessage(error, fallback);
+}
+
+export const MEMBER_ACTION_LABEL: Record<DebateLobbyMemberAction, string> = {
+  promote: 'Make host',
+  mute: 'Mute mic',
+  'move-to-listeners': 'Move to listeners',
+  'move-to-speakers': 'Move to speakers',
+  remove: 'Remove from lobby',
+  ban: 'Ban from lobby',
+  unban: 'Unban',
+  'remove-host': 'Remove as host',
+};
+
+/** Host actions the viewer may take on `member`, in menu order; geo-chat enforces the same rules. */
+export function memberActions(
+  viewer: Pick<DebateLobbyView['viewer'], 'hosting' | 'role' | 'creator'>,
+  member: Pick<DebateLobbyMember, 'role' | 'creator'>,
+  isSelf: boolean
+): DebateLobbyMemberAction[] {
+  if (!viewer.hosting) return [];
+  // The acting host is a speaker: hosting never changes their role, so who hosts is not theirs to change.
+  const hostByRole = viewer.role === 'host';
+  if (isSelf) return hostByRole ? ['remove-host'] : [];
+  if (member.role === 'host') {
+    return hostByRole && (!member.creator || viewer.creator) ? ['remove-host'] : [];
+  }
+  const actions: DebateLobbyMemberAction[] = [];
+  if (hostByRole) actions.push('promote');
+  if (member.role === 'speaker') actions.push('mute', 'move-to-listeners');
+  else actions.push('move-to-speakers');
+  actions.push('remove', 'ban');
+  return actions;
+}
+
+/** Raised hands, oldest first. */
+export function raisedHands(members: DebateLobbyMember[]) {
+  return members
+    .filter(member => member.hand_raised_at)
+    .sort((a, b) => Date.parse(a.hand_raised_at!) - Date.parse(b.hand_raised_at!));
+}
+
+/** "20 s", "3 min", "2 h": how long ago, for a raised hand. */
+export function sinceLabel(iso: string, now: number = Date.now()) {
+  const seconds = Math.max(0, Math.round((now - Date.parse(iso)) / 1000));
+  if (Number.isNaN(seconds)) return null;
+  if (seconds < 60) return `${seconds} s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)} min`;
+  return `${Math.floor(seconds / 3600)} h`;
+}
+
+/** What the viewer is told after a host acts on them. Kick and ban have their own screens. */
+export function moderationNoticeText(action: DebateLobbyModerationAction): string | null {
+  switch (action) {
+    case 'mute':
+      return 'A host muted you. Unmute when you’re ready.';
+    case 'move_to_listeners':
+      return 'A host moved you to listeners. Raise your hand to ask to speak.';
+    case 'move_to_speakers':
+      return 'A host moved you to speakers. Unmute when you’re ready.';
+    case 'promote':
+      return 'A host made you a host.';
+    case 'remove_host':
+      return 'A host removed your host status.';
+    default:
+      return null;
+  }
+}
+
+/** "Adam muted Sam", "Adam moved Sam to listeners"; an automatic change reads "Sam started hosting". */
+export function moderationLogLabel(entry: Pick<DebateLobbyModerationEntry, 'action' | 'actor' | 'target'>) {
+  const target = entry.target ? personName(entry.target) : UNNAMED_PERSON;
+  if (!entry.actor && (entry.action === 'promote' || entry.action === 'remove_host')) {
+    return entry.action === 'promote' ? `${target} started hosting` : `${target} stopped hosting`;
+  }
+  const actor = entry.actor ? personName(entry.actor) : UNNAMED_PERSON;
+  switch (entry.action) {
+    case 'mute':
+      return `${actor} muted ${target}`;
+    case 'move_to_listeners':
+      return `${actor} moved ${target} to listeners`;
+    case 'move_to_speakers':
+      return `${actor} moved ${target} to speakers`;
+    case 'kick':
+      return `${actor} removed ${target}`;
+    case 'ban':
+      return `${actor} banned ${target}`;
+    case 'unban':
+      return `${actor} unbanned ${target}`;
+    case 'promote':
+      return `${actor} made ${target} a host`;
+    case 'remove_host':
+      return entry.target && entry.actor && sameUser(entry.actor, entry.target)
+        ? `${actor} stepped down as host`
+        : `${actor} removed ${target} as host`;
+    case 'end':
+      return `${actor} ended the lobby`;
+    default:
+      return actor;
+  }
+}
+
+function sameUser(a: Pick<DebateLobbyPerson, 'user_id'>, b: Pick<DebateLobbyPerson, 'user_id'>) {
+  return dashlessId(a.user_id) === dashlessId(b.user_id);
 }

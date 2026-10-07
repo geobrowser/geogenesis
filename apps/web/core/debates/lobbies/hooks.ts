@@ -22,7 +22,7 @@ import {
 import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useConnectionId } from '../rooms/hooks';
-import { isAlreadyInAnotherLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
+import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
@@ -97,7 +97,7 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
 }
 
 /** Writes a returned view into the lobby's cache entry and marks the list stale. */
-function useStoreLobbyView() {
+export function useStoreLobbyView() {
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
 
@@ -154,7 +154,7 @@ export type LobbyPresenceState =
   | { status: 'joining' }
   | { status: 'joined' }
   /** In another open lobby; joining this one leaves it, so the viewer is asked first. */
-  | { status: 'confirm_leave_other'; otherLobbyId: string | null }
+  | { status: 'confirm_leave_other'; otherLobbyId: string | null; rejoin?: true }
   /** Joined another lobby from another tab, which dropped this one; no automatic rejoin. */
   | { status: 'moved'; otherLobbyId: string | null }
   /** Left to debate, still on the roster; "Back to the room" joins again. */
@@ -168,7 +168,13 @@ export type LobbyPresenceState =
  * Presence in one lobby: joins once admitted, heartbeats while joined, and leaves on unmount,
  * `pagehide` or Leave. A heartbeat answering `lapsed` joins again.
  */
-export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut = false, connected = false) {
+export function useLobbyPresence(
+  lobbyId: string,
+  admitted: boolean,
+  steppedOut = false,
+  connected = false,
+  removed = false
+) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
@@ -210,7 +216,8 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   }, []);
 
   const join = React.useCallback(
-    async (leaveOtherLobby = false) => {
+    /** `rejoin` only from the removed screen's Rejoin: the viewer chose to come back. */
+    async (leaveOtherLobby = false, rejoin = false) => {
       const generation = generationRef.current;
       sentRef.current = true;
       setState({ status: 'joining' });
@@ -219,7 +226,12 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
           retryOnceIfRateLimited(() =>
             setDebateLobbyPresence(
               lobbyId,
-              { connection_id: connectionId, joined: true, leave_other_lobby: leaveOtherLobby },
+              {
+                connection_id: connectionId,
+                joined: true,
+                leave_other_lobby: leaveOtherLobby,
+                ...(rejoin ? { rejoin: true } : {}),
+              },
               () => tokenRef.current(),
               accountKey
             )
@@ -234,8 +246,17 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
         if (generation !== generationRef.current) return;
         joinedRef.current = false;
         sentRef.current = false;
+        // Any join, automatic or not, lands on the removed screen; only its Rejoin sends `rejoin`.
+        if (isRemovedFromLobby(error)) {
+          setState({ status: 'dropped', reason: 'removed' });
+          return;
+        }
         if (isAlreadyInAnotherLobby(error)) {
-          setState({ status: 'confirm_leave_other', otherLobbyId: otherLobbyIdFrom(error) });
+          setState({
+            status: 'confirm_leave_other',
+            otherLobbyId: otherLobbyIdFrom(error),
+            ...(rejoin ? { rejoin: true as const } : {}),
+          });
           return;
         }
         setState({ status: 'failed', message: lobbyErrorMessage(error, 'Could not join this lobby. Try again.') });
@@ -321,9 +342,18 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
     if (!admitted || status !== 'idle') return;
     // Consumed on every arrival so a flag left by a failed leave cannot outlive it.
     const rejoin = consumeLobbyRejoin(lobbyId);
-    if (steppedOut && !rejoin) setState({ status: 'stepped_out' });
+    // A host removed them, possibly mid-debate: coming back is their call, even after Back to the room.
+    if (removed) setState({ status: 'dropped', reason: 'removed' });
+    else if (steppedOut && !rejoin) setState({ status: 'stepped_out' });
     else void join(false);
-  }, [admitted, join, lobbyId, setState, status, steppedOut]);
+  }, [admitted, join, lobbyId, removed, setState, status, steppedOut]);
+
+  // Unbanned after a ban this tab heard: the view is admitted again with `removed`, so the
+  // viewer gets the removed screen and its Rejoin rather than a stale ban.
+  const droppedBanned = state.status === 'dropped' && state.reason === 'banned';
+  React.useEffect(() => {
+    if (droppedBanned && admitted && removed) setState({ status: 'dropped', reason: 'removed' });
+  }, [admitted, droppedBanned, removed, setState]);
 
   const beatNowRef = React.useRef<(() => void) | null>(null);
 

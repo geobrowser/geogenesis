@@ -31,7 +31,8 @@ export function BackToLobbyRow(props: BackToLobbyProps) {
 
 function OpenLobbyRow({ lobbyId, onLeave, disabled = false }: BackToLobbyProps & { lobbyId: string }) {
   const lobby = useDebateLobby(lobbyId).data;
-  if (lobby?.access.status !== 'admitted') return null;
+  // A host removed them: going back is a choice made on the lobby page, not from here.
+  if (lobby?.access.status !== 'admitted' || lobby.viewer.removed) return null;
 
   return (
     <>
