@@ -125,13 +125,12 @@ export function LobbyHostLists({ lobby }: { lobby: DebateLobbyView }) {
 
   return (
     <section className="flex flex-col gap-2" aria-label="Host lists" data-testid="lobby-host-lists">
-      <div role="tablist" className="flex gap-4">
+      <div role="group" aria-label="Show" className="flex gap-4">
         {tabs.map(item => (
           <button
             key={item.id}
             type="button"
-            role="tab"
-            aria-selected={tab === item.id}
+            aria-pressed={tab === item.id}
             onClick={() => setTab(item.id)}
             className={cx('text-footnoteMedium', tab === item.id ? 'text-text' : 'text-grey-04 hover:text-text')}
           >
@@ -139,7 +138,7 @@ export function LobbyHostLists({ lobby }: { lobby: DebateLobbyView }) {
           </button>
         ))}
       </div>
-      <div role="tabpanel" className="rounded-lg border border-grey-02 bg-white">
+      <div className="rounded-lg border border-grey-02 bg-white">
         {tab === 'hands' ? (
           <RaisedHands lobby={lobby} hands={hands} />
         ) : tab === 'banned' ? (

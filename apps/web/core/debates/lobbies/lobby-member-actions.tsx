@@ -98,7 +98,6 @@ export function LobbyMemberActions({
           <button
             key={action}
             type="button"
-            role="menuitem"
             disabled={moderate.isPending}
             {...debateActionAnalyticsAttributes('hub', `Lobby ${MEMBER_ACTION_LABEL[action]}`, 'moderate_lobby_member')}
             onClick={() => (action === 'ban' ? setConfirmingBan(true) : run(action))}
@@ -155,7 +154,7 @@ export function LobbyMemberMenu({
     >
       {/* Remounted on each open, so a confirm or error from last time does not linger. */}
       {open ? (
-        <div role="menu" aria-label={personName(member)}>
+        <div role="group" aria-label={`Host controls for ${personName(member)}`}>
           <LobbyMemberActions
             lobby={lobby}
             member={member}

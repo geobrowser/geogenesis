@@ -98,7 +98,7 @@ describe('LobbyMemberActions', () => {
   it('runs an action on the member and reports done', async () => {
     const onDone = vi.fn();
     renderWith(<LobbyMemberActions lobby={lobby()} member={member('sam', 'speaker')} isSelf={false} onDone={onDone} />);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Move to listeners' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Move to listeners' }));
     await waitFor(() => expect(onDone).toHaveBeenCalled());
     expect(api.moderateDebateLobbyMember).toHaveBeenCalledWith(
       'lobby1',
@@ -111,7 +111,7 @@ describe('LobbyMemberActions', () => {
 
   it('asks before banning', async () => {
     renderWith(<LobbyMemberActions lobby={lobby()} member={member('sam', 'speaker')} isSelf={false} />);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Ban from lobby' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ban from lobby' }));
     expect(api.moderateDebateLobbyMember).not.toHaveBeenCalled();
     expect(screen.getByText(/Ban SAM\?/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Ban' }));
@@ -123,14 +123,14 @@ describe('LobbyMemberActions', () => {
   it('shows the server’s refusal', async () => {
     api.moderateDebateLobbyMember.mockRejectedValue(new GeoChatRequestError('raw', 'lobby_not_present', 409));
     renderWith(<LobbyMemberActions lobby={lobby()} member={member('sam', 'speaker')} isSelf={false} />);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Remove from lobby' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from lobby' }));
     expect(await screen.findByText('Join the lobby to moderate.')).toBeTruthy();
   });
 
   it('hides Mute for a mic that is off', () => {
     renderWith(<LobbyMemberActions lobby={lobby()} member={member('sam', 'speaker')} isSelf={false} micOn={false} />);
-    expect(screen.queryByRole('menuitem', { name: 'Mute mic' })).toBeNull();
-    expect(screen.getByRole('menuitem', { name: 'Move to listeners' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Mute mic' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Move to listeners' })).toBeTruthy();
   });
 
   it('renders nothing for a viewer who is not hosting', () => {
@@ -146,7 +146,7 @@ describe('LobbyMemberActions', () => {
 
   it('offers a host stepping down on their own row', () => {
     renderWith(<LobbyMemberActions lobby={lobby()} member={member('host1', 'host')} isSelf />);
-    expect(screen.getAllByRole('menuitem').map(item => item.textContent)).toEqual(['Step down as host']);
+    expect(screen.getAllByRole('button').map(item => item.textContent)).toEqual(['Step down as host']);
   });
 });
 
@@ -193,7 +193,7 @@ describe('LobbyHostLists', () => {
       }
     );
     renderWith(<LobbyHostLists lobby={view} />);
-    expect(screen.getByRole('tab', { name: 'Raised hands · 2' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Raised hands · 2' })).toBeTruthy();
     const moves = screen.getAllByRole('button', { name: 'Move to speakers' });
     fireEvent.click(moves[0]!);
     await waitFor(() =>
@@ -210,7 +210,7 @@ describe('LobbyHostLists', () => {
   it('lets a host unban', async () => {
     api.getDebateLobbyBans.mockResolvedValue(banned);
     renderWith(<LobbyHostLists lobby={lobby()} />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Banned · 1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Banned · 1' }));
     expect(screen.getByText(/Banned by Adam/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Unban' }));
     await waitFor(() =>
@@ -221,7 +221,7 @@ describe('LobbyHostLists', () => {
   it('shows the acting host the banned list without Unban', async () => {
     api.getDebateLobbyBans.mockResolvedValue(banned);
     renderWith(<LobbyHostLists lobby={lobby({ role: 'speaker', creator: false })} />);
-    fireEvent.click(await screen.findByRole('tab', { name: 'Banned · 1' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Banned · 1' }));
     expect(screen.getByText('Jordan')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Unban' })).toBeNull();
   });
@@ -244,10 +244,10 @@ describe('LobbyHostLists', () => {
         lobby={lobby({ hosting: false, connected: false }, { access: { status: 'closed', reason: 'ended' } })}
       />
     );
-    expect(screen.queryByRole('tab', { name: /Raised hands/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Raised hands/ })).toBeNull();
     expect(await screen.findByText('Jordan')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Unban' })).toBeNull();
-    fireEvent.click(screen.getByRole('tab', { name: 'Log' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Log' }));
     expect(await screen.findByText('Adam banned Jordan')).toBeTruthy();
   });
 });
