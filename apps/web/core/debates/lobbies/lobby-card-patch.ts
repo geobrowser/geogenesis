@@ -6,11 +6,7 @@ export type DebateLobbyCard = Omit<DebateLobbySummary, 'viewer_reminded' | 'view
 export type DebateLobbyCardPatch =
   { status: 'listed'; insert: boolean; asOf: number; lobby: DebateLobbyCard } | { status: 'removed'; lobbyId: string };
 
-/**
- * `debate.lobbies_changed`'s `lobby_card`. `null` for an absent or unreadable one, which the caller
- * answers with a refetch: the field is missing from a geo-chat that predates it, and from the
- * events routed to one viewer about their own standing.
- */
+/** `debate.lobbies_changed`'s `lobby_card`; `null` when absent or unreadable, which means refetch. */
 export function parseLobbyCardPatch(lobbyId: string | undefined, value: unknown): DebateLobbyCardPatch | null {
   if (!isRecord(value)) return null;
 

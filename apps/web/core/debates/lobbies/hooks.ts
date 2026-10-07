@@ -50,9 +50,8 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
 }
 
 /**
- * The side panel list. No polling: `debate.lobbies_changed` patches it, or refetches it when the
- * event carries no card. Patches drift from the list's caps and stop while the panel is closed, so
- * every mount reloads it.
+ * The side panel list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount:
+ * patches stop while the panel is closed.
  */
 export function useDebateLobbies(enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
