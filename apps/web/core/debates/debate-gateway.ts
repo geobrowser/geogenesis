@@ -142,7 +142,7 @@ export class DebateGatewayClient {
   private readonly scopes = new Map<string, { scope: DebateGatewayScope; count: number }>();
   private readonly sentScopes = new Set<string>();
   private readonly confirmedScopes = new Set<string>();
-  /** Retained scopes the server refused; never re-sent until fully released or the account changes. */
+  /** Retained scopes the server refused; not re-sent on this socket. Retried once per connection. */
   private readonly refusedScopes = new Set<string>();
   private readonly recentEventIds = new Set<string>();
   private readonly recentEventIdOrder: string[] = [];
@@ -309,6 +309,7 @@ export class DebateGatewayClient {
       this.readyForDebates = false;
       this.sentScopes.clear();
       this.confirmedScopes.clear();
+      this.refusedScopes.clear();
       this.scheduleTokenRotation(session);
       this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
 

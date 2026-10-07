@@ -1587,24 +1587,40 @@ describe('DebateGatewayClient', () => {
     sockets[0]!.receive('READY', readyPayload([]));
     await flushInvalidations();
 
-    sockets[0]!.receive('ERROR', {
+    const refusal = {
       code: 'subscription_forbidden',
       message: 'not authorized',
       subscription: { scope: 'debate', debate_id: 'private-debate' },
-    });
+    };
+    sockets[0]!.receive('ERROR', refusal);
 
     expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
     expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    // A later READY on the same socket does not re-send it.
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    expect(sockets[0]!.sent.filter(message => message.op === 'SUBSCRIBE')).toHaveLength(2);
     await vi.advanceTimersByTimeAsync(30_000);
     expect(sockets).toHaveLength(1);
 
-    // A later reconnect replays the other scope but not the refused one.
+    // A reconnect retries it once, and a second refusal still does not recycle.
     sockets[0]!.serverClose();
     await vi.advanceTimersByTimeAsync(1_000);
     sockets[1]!.open();
     sockets[1]!.receive('READY', readyPayload([]));
-    const subscribed = sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE').map(message => message.payload);
-    expect(subscribed).toEqual([{ scope: 'space', space_id: 'space-1' }]);
+    const subscribed = () =>
+      sockets[1]!.sent.filter(message => message.op === 'SUBSCRIBE').map(message => message.payload);
+    expect(subscribed()).toEqual([
+      { scope: 'space', space_id: 'space-1' },
+      { scope: 'debate', debate_id: 'private-debate' },
+    ]);
+
+    sockets[1]!.receive('ERROR', refusal);
+    sockets[1]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    expect(sockets[1]!.readyState).toBe(FakeWebSocket.OPEN);
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+    expect(subscribed()).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(sockets).toHaveLength(2);
   });
 
   it('retries a refused scope once every holder has released it and it is retained again', async () => {
