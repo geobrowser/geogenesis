@@ -883,7 +883,7 @@ function SharedTimes({
 }
 
 /** "Today 3:00 PM", "Tomorrow 9:30 AM", "Thu 6:00 PM" — the range is one week, so a weekday is unambiguous. */
-function formatSlot(iso: string, now: Date = new Date()): string {
+export function formatSlot(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
   const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
   const dayDiff = Math.round(

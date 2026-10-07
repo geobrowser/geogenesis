@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from 
 import { normId } from '~/core/utils/norm-id';
 
 import type { DebatePerson, SchedulablePeopleResponse, ScheduledDebateRequest } from '../api';
+import type { ParticipantPosition } from '../participant-positions';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
@@ -38,17 +39,61 @@ const mocks = vi.hoisted(() => ({
   summaries: [] as unknown[],
   admin: {} as Record<string, unknown>,
   timezones: new Map<string, string>(),
+  personalSpaceId: null as string | null,
+  viewerHasPositions: true as boolean | null,
+  positions: [] as ParticipantPosition[],
+  positionReads: [] as unknown[][],
+  claimNames: new Map<string, string>(),
+  openSidePanel: vi.fn(),
+  paramListeners: new Set<() => void>(),
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
-vi.mock('next/navigation', () => ({
-  useSearchParams: () => mocks.searchParams,
-  usePathname: () => '/matchmaking/calendar',
-  useRouter: () => ({ replace: mocks.routerReplace }),
+// The URL is the panel's state (GEO-3220), so a replace has to land the way Next's does: new params,
+// and a render that reads them.
+vi.mock('next/navigation', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (listener: () => void) => {
+    mocks.paramListeners.add(listener);
+    return () => mocks.paramListeners.delete(listener);
+  };
+  return {
+    useSearchParams: () => useSyncExternalStore(subscribe, () => mocks.searchParams),
+    usePathname: () => '/matchmaking/calendar',
+    useRouter: () => ({
+      replace: (href: string, options?: unknown) => {
+        mocks.routerReplace(href, options);
+        mocks.searchParams = new URLSearchParams(href.split('?')[1] ?? '');
+        for (const listener of mocks.paramListeners) listener();
+      },
+    }),
+  };
+});
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel }),
+}));
+vi.mock('../participant-positions', () => ({
+  useParticipantPositions: (participants: unknown[]) => {
+    mocks.positionReads.push(participants);
+    const byClaim = new Map<string, ParticipantPosition[]>();
+    if (participants.length > 0) {
+      for (const row of mocks.positions) byClaim.set(row.claimId, [...(byClaim.get(row.claimId) ?? []), row]);
+    }
+    return { byClaim, isLoading: false, isPlaceholderData: false, isFetching: false, error: null };
+  },
+}));
+vi.mock('../claim-picker-page', () => ({
+  useClaimEntitiesByIds: (ids: string[]) => ({
+    entities: ids.map(id => ({ id, name: mocks.claimNames.get(id) ?? null })),
+    isLoading: false,
+    error: null,
+  }),
 }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
-vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: null }) }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId }),
+}));
 vi.mock('~/core/hooks/use-space-labels', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/hooks/use-space-labels')>()),
   useSpaceLabels: () => ({ labelsById: new Map() }),
@@ -135,6 +180,7 @@ vi.mock('./use-person-facts', () => ({
   usePersonFacts: () => ({
     matchAnalysis: { byProfile: mocks.matchesByProfile, countsByProfileAndSpace: new Map() },
     matchesKnown: true,
+    viewerHasPositions: mocks.viewerHasPositions,
     matchingSpaceIds: [],
     matchingClaimNamesById: new Map(),
     matchingClaimsLoading: false,
@@ -151,10 +197,10 @@ vi.mock('./hub-header-controls', () => ({
   HubHeaderControls: ({ children }: { children?: React.ReactNode }) => <>{children}</>,
 }));
 vi.mock('./claims-tab', () => ({
-  SpaceTopicFilters: ({ leading }: { leading?: React.ReactNode }) => (
+  SpaceTopicFilters: ({ trailing }: { trailing?: React.ReactNode }) => (
     <div>
-      {leading}
       <button type="button">Space menu</button>
+      {trailing}
     </div>
   ),
 }));
@@ -178,6 +224,8 @@ const { DebateCalendar } = await import('./debate-calendar');
 // Wednesday 7 Oct 2026, 10:00 local.
 const NOW = new Date(2026, 9, 7, 10, 0);
 const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).toISOString();
+
+const PROFILE = (id: string) => `019fedae72b67ab2927adf044d57c5${id.padStart(2, '0')}`;
 
 function summary(id: string, name: string) {
   return {
@@ -293,7 +341,14 @@ beforeEach(() => {
     bookingProps: null,
     summaries: [],
     admin: notAdmin(),
+    personalSpaceId: null,
+    viewerHasPositions: true,
+    positions: [],
+    positionReads: [],
+    claimNames: new Map(),
   });
+  mocks.paramListeners.clear();
+  mocks.openSidePanel.mockReset();
   mocks.routerReplace.mockReset();
   mocks.capture.mockReset();
   mocks.promptSignIn.mockReset();
@@ -544,20 +599,22 @@ describe('DebateCalendar', () => {
   });
 
   it('tells filters hiding everyone apart from nobody being free', async () => {
+    // Somebody picked who is not on the calendar this week.
+    mocks.searchParams = new URLSearchParams({ people: PROFILE('99') });
     render(<DebateCalendar />);
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search people' }), { target: { value: 'zz' } });
     // The hub's states cross-fade, so the message lands once the grid has gone.
     expect(await screen.findByText('Nobody who matches those filters is free this week.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Clear filters' }));
+    fireEvent.click(screen.getAllByRole('button', { name: 'Clear filters' })[0]);
     expect(await screen.findByRole('gridcell', { name: /free: Elena/ })).toBeInTheDocument();
+    expect(mocks.searchParams.toString()).toBe('');
   });
 
   it('records Clear filters as one clear, not as a space change too', async () => {
+    mocks.searchParams = new URLSearchParams({ people: PROFILE('99') });
     render(<DebateCalendar />);
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search people' }), { target: { value: 'zz' } });
-    fireEvent.click(await screen.findByRole('button', { name: 'Clear filters' }));
+    fireEvent.click((await screen.findAllByRole('button', { name: 'Clear filters' }))[0]);
 
     const filters = mocks.capture.mock.calls.filter(([name]) => name === 'debate_calendar_filter_changed');
     expect(filters).toEqual([['debate_calendar_filter_changed', { filter: 'clear' }]]);
@@ -583,26 +640,6 @@ describe('DebateCalendar', () => {
 
     expect(screen.getByText('Nobody has open times this week.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Clear filters' })).not.toBeInTheDocument();
-  });
-
-  it('records a search again when the same words are typed after clearing it', () => {
-    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] });
-    vi.setSystemTime(NOW);
-    render(<DebateCalendar />);
-    const search = screen.getByRole('textbox', { name: 'Search people' });
-    const searches = () =>
-      mocks.capture.mock.calls.filter(
-        ([name, props]) => name === 'debate_calendar_filter_changed' && props.filter === 'search'
-      );
-
-    fireEvent.change(search, { target: { value: 'el' } });
-    act(() => vi.advanceTimersByTime(1_000));
-    fireEvent.change(search, { target: { value: '' } });
-    act(() => vi.advanceTimersByTime(1_000));
-    fireEvent.change(search, { target: { value: 'el' } });
-    act(() => vi.advanceTimersByTime(1_000));
-
-    expect(searches()).toHaveLength(2);
   });
 
   it("keeps the week up when who's online fails to load, and says so with a retry", () => {
@@ -651,7 +688,9 @@ describe('DebateCalendar', () => {
     render(<DebateCalendar />);
     expect(screen.getByRole('button', { name: 'Space menu' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Pick a space' })).toBeNull();
-    expect(screen.getByRole('textbox', { name: 'Search people' })).toBeInTheDocument();
+    // The people search box went with the People and Claims panel (GEO-3220): the pills open it.
+    expect(screen.queryByRole('textbox', { name: 'Search people' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'People' })).toBeInTheDocument();
   });
 
   it('lists the week by day on a phone', () => {
@@ -832,5 +871,213 @@ describe('DebateCalendar, admin view (GEO-2943)', () => {
 
     expect(screen.getByRole('region', { name: 'Thu 8' })).toHaveTextContent(/Waiting on Raj/);
     expect(screen.getByRole('region', { name: 'Fri 9' })).toHaveTextContent(/Booked outside at least one debater/);
+  });
+});
+
+describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
+  const VIEWER = '019fedae-72b6-7ab2-927a-df044d57c590';
+  const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+  const CLAIM_ONE = 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1';
+  const CLAIM_TWO = 'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2';
+  const position = (profileSpaceId: string, claimId: string, agrees: boolean): ParticipantPosition => ({
+    profileSpaceId,
+    claimId,
+    spaceId: SPACE,
+    responseKind: 'stance',
+    position: agrees,
+  });
+
+  beforeEach(() => {
+    mocks.personalSpaceId = VIEWER;
+    // Elena and Marco are free Thursday at six, Ana on Friday.
+    mocks.schedulable = response([
+      free('11', 'Elena', [thursdaySix]),
+      free('12', 'Marco', [thursdaySix]),
+      free('13', 'Ana', [[at(9, 12), at(9, 13)]]),
+    ]);
+    // On claim one the viewer agrees, Elena disagrees and Marco agrees. Only Ana answered claim two.
+    mocks.positions = [
+      position(VIEWER, CLAIM_ONE, true),
+      position(summary('11', '').profile_space_id, CLAIM_ONE, false),
+      position(summary('12', '').profile_space_id, CLAIM_ONE, true),
+      position(summary('13', '').profile_space_id, CLAIM_TWO, true),
+    ];
+    mocks.claimNames = new Map([
+      [CLAIM_ONE, 'Phones should be banned in schools'],
+      [CLAIM_TWO, 'Homework does more harm than good'],
+    ]);
+    mocks.matchesByProfile = new Map([[PROFILE('11'), [match(1)]]]);
+  });
+
+  const thursday = () => cell(/Thursday.*free:/);
+  const panel = () => screen.getByRole('complementary', { name: 'Narrow the calendar' });
+  const filterEvents = () =>
+    mocks.capture.mock.calls.filter(([name]) => name === 'debate_calendar_filter_changed').map(([, props]) => props);
+
+  it("looks as it did with nothing picked, and reads everyone's positions only once the panel opens", () => {
+    render(<DebateCalendar />);
+
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('complementary', { name: 'Narrow the calendar' })).not.toBeInTheDocument();
+    expect(mocks.positionReads.every(participants => participants.length === 0)).toBe(true);
+    expect(thursday()).toHaveAccessibleName(/Elena/);
+    expect(thursday()).toHaveAccessibleName(/Marco/);
+
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    expect(panel()).toBeInTheDocument();
+    expect(mocks.positionReads.at(-1)).toHaveLength(4);
+  });
+
+  it('narrows the week to the people picked, and keeps them in the URL', () => {
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Elena' }));
+
+    expect(mocks.searchParams.get('people')).toBe(PROFILE('11'));
+    expect(thursday()).toHaveAccessibleName(/Elena/);
+    expect(thursday()).not.toHaveAccessibleName(/Marco/);
+    expect(screen.getByText(/Showing the person you picked\./)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'People, 1 picked' })).toBeInTheDocument();
+    expect(filterEvents()).toEqual([{ filter: 'person' }]);
+  });
+
+  it('shows everyone holding a picked claim, and with Matches only, just those on the other side', () => {
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Phones should be banned in schools' }));
+
+    expect(mocks.searchParams.get('claims')).toBe(`${SPACE}:${CLAIM_ONE}`);
+    expect(thursday()).toHaveAccessibleName(/Elena/);
+    expect(thursday()).toHaveAccessibleName(/Marco/);
+    expect(screen.queryByRole('gridcell', { name: /Friday.*Ana/ })).not.toBeInTheDocument();
+    expect(screen.getByText(/Showing 2 people with a position on the claim you picked\./)).toBeInTheDocument();
+
+    fireEvent.click(within(panel()).getByRole('switch', { name: 'Matches only' }));
+
+    expect(mocks.searchParams.get('matches')).toBe('1');
+    expect(thursday()).toHaveAccessibleName(/Elena/);
+    expect(thursday()).not.toHaveAccessibleName(/Marco/);
+    expect(screen.getByText(/Showing 1 person who disagree with you on the claim you picked\./)).toBeInTheDocument();
+    expect(filterEvents()).toEqual([{ filter: 'claim' }, { filter: 'matches_only' }]);
+  });
+
+  it('shows a picked person with a picked claim only if they hold it, and says why they are missing', async () => {
+    mocks.searchParams = new URLSearchParams({ people: PROFILE('13'), claims: `${SPACE}:${CLAIM_ONE}` });
+    render(<DebateCalendar />);
+
+    expect(await screen.findByText('Nobody who matches those filters is free this week.')).toBeInTheDocument();
+    expect(
+      screen.getByText(/Ana doesn’t match your other filters\.|Ana doesn't match your other filters\./)
+    ).toBeInTheDocument();
+
+    // Still in its list, ticked, so it can be unticked.
+    fireEvent.click(screen.getByRole('button', { name: 'People, 1 picked' }));
+    const ana = within(panel()).getByRole('checkbox', { name: /Ana \(hidden by your other filters\)/ });
+    expect(ana).toHaveAttribute('aria-checked', 'true');
+    fireEvent.click(ana);
+    expect(mocks.searchParams.get('people')).toBeNull();
+  });
+
+  it('counts who disagrees on each claim, and books one of their times from the count', async () => {
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    fireEvent.click(
+      within(panel()).getByRole('button', {
+        name: '1 person disagrees with you on Phones should be banned in schools',
+      })
+    );
+    const popover = await screen.findByLabelText('People who disagree with you on Phones should be banned in schools');
+    expect(within(popover).getByText('Elena')).toBeInTheDocument();
+    expect(within(popover).queryByText('Marco')).not.toBeInTheDocument();
+
+    // By label: jsdom has no layout, so Radix marks the popover detached and hides it from roles.
+    fireEvent.click(within(popover).getByLabelText('Schedule a debate with Elena Tomorrow 6:00 PM'));
+
+    expect(screen.getByRole('dialog', { name: 'Book Elena' })).toBeInTheDocument();
+    expect(mocks.bookingProps).toMatchObject({
+      entry: 'calendar_claim_match',
+      initialSelectedStart: new Date(at(8, 18)).toISOString(),
+    });
+  });
+
+  it('opens a claim in the entity side panel without picking it', () => {
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Open claim: Phones should be banned in schools' }));
+
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_ONE, SPACE, false);
+    expect(mocks.searchParams.get('claims')).toBeNull();
+  });
+
+  it('keeps picks from the URL on a reload', () => {
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}`, matches: '1' });
+    render(<DebateCalendar />);
+
+    expect(thursday()).toHaveAccessibleName(/Elena/);
+    expect(thursday()).not.toHaveAccessibleName(/Marco/);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims, 1 picked' }));
+    expect(within(panel()).getByRole('checkbox', { name: 'Phones should be banned in schools' })).toHaveAttribute(
+      'aria-checked',
+      'true'
+    );
+    expect(within(panel()).getByRole('switch', { name: 'Matches only' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('turns Matches only off, with a hint, for a viewer who holds no position', () => {
+    mocks.viewerHasPositions = false;
+    mocks.searchParams = new URLSearchParams({ matches: '1' });
+    render(<DebateCalendar />);
+
+    // The URL asked for it, but there is nothing to match on: the week is not narrowed.
+    expect(thursday()).toHaveAccessibleName(/Marco/);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+    const toggle = within(panel()).getByRole('switch', { name: 'Matches only' });
+    expect(toggle).toBeDisabled();
+    expect(toggle).toHaveAttribute('aria-checked', 'false');
+    expect(within(panel()).getByText('Take a position on a claim to see matches')).toBeInTheDocument();
+  });
+
+  it('labels every panel control as the calendar’s, apart from the hub’s', () => {
+    render(<DebateCalendar />);
+    expect(screen.getByRole('button', { name: 'Claims' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Claims filter'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    const labels = [
+      within(panel()).getByRole('tab', { name: /People/ }),
+      within(panel()).getByRole('button', { name: 'Close panel' }),
+      within(panel()).getByRole('switch', { name: 'Matches only' }),
+      within(panel()).getByRole('checkbox', { name: 'Phones should be banned in schools' }),
+      within(panel()).getByRole('button', { name: 'Open claim: Phones should be banned in schools' }),
+    ].map(control => control.getAttribute('data-geo-analytics-label'));
+    expect(labels).toEqual([
+      'Debate calendar Panel People tab',
+      'Debate calendar Close panel',
+      'Debate calendar Matches only',
+      'Debate calendar Claim pick',
+      'Debate calendar Open claim',
+    ]);
+  });
+
+  it('opens as a bottom sheet on a phone, and applies picks only when confirmed', () => {
+    mocks.isPhone = true;
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    const sheet = screen.getByRole('dialog', { name: 'Narrow the calendar' });
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: 'Phones should be banned in schools' }));
+    expect(mocks.searchParams.get('claims')).toBeNull();
+
+    fireEvent.click(within(sheet).getByRole('button', { name: 'Show 2 people' }));
+
+    expect(mocks.searchParams.get('claims')).toBe(`${SPACE}:${CLAIM_ONE}`);
+    expect(screen.queryByRole('dialog', { name: 'Narrow the calendar' })).not.toBeInTheDocument();
   });
 });
