@@ -26,6 +26,16 @@ type FormatParticipant = {
 /** What the format box needs from a debate's `open_rounds` block. */
 export type DebateFormatOpenRounds = Pick<DebateOpenRounds, 'max_rebuttal_rounds' | 'rebuttal_turn_ms'>;
 
+/**
+ * The format box's Open rounds block for a pending request. The server decides the format and cap
+ * when the request is made (GEO-3201); the rebuttal turn length isn't on the request, so it uses the
+ * default every Open rounds debate starts with.
+ */
+export function requestOpenRounds(maxRebuttalRounds: number | null | undefined): DebateFormatOpenRounds | null {
+  if (maxRebuttalRounds == null) return null;
+  return { max_rebuttal_rounds: maxRebuttalRounds, rebuttal_turn_ms: openRoundsDefaultRebuttalTurnMs };
+}
+
 export function DebateFormatDetails({
   formatId,
   openRounds,
@@ -35,7 +45,7 @@ export function DebateFormatDetails({
   formatId: string | null | undefined;
   /**
    * The debate's own `open_rounds` block, when there is a debate. It carries the cap the server
-   * snapshotted for this debate. A request has no debate yet, so it has no block and no cap.
+   * snapshotted for this debate. For a pending request, build it with `requestOpenRounds`.
    */
   openRounds?: DebateFormatOpenRounds | null;
   participants: FormatParticipant[];

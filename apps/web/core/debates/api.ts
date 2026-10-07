@@ -415,6 +415,8 @@ export type DebateRematchRequest = {
   response_kind?: WireResponseKind | null;
   cancellation_reason?: string | null;
   turn_format_id: string;
+  /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
+  max_rebuttal_rounds?: number | null;
   created_at: string;
   expires_at: string;
 };
@@ -760,6 +762,8 @@ export type DebateRequest = {
   /** The current target. The server re-targets the request when a recipient dismisses or blocks. */
   recipient: DebateRequestParty;
   turn_format_id: string | null;
+  /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
+  max_rebuttal_rounds?: number | null;
   created_at: string;
   /** Fixed for the lifetime of the request, even as it advances between recipients. */
   expires_at: string;
