@@ -144,7 +144,8 @@ export function debateTurnRoleForDebate(
  * Fixed formats, the first turn of a round and the cap round's last turn answer `continue` at
  * `turnEndsAtMs`, which is exactly what the room did before Open rounds existed. Otherwise the turn
  * ended a round, and the round is deciding until it resolves, then in its result window until
- * `decision_resolved_at + result_window_ms`, then either the next round (`continue`) or thanking.
+ * `decision_resolved_at + result_window_ms`, then thanking after an End. After an Extend the opener's
+ * count-in (`extend_count_in_ms`) follows the window, and then the next round (`continue`).
  *
  * An unresolved round stays `deciding` however late it gets: the room never falls through to
  * thanking because the last appended turn ended. Only the server's outcome ends a debate.
@@ -171,7 +172,10 @@ export function openRoundGapAfterTurn(
   const resolution = openRoundResolution(debate, roundIndex, turnEndsAtMs);
   if (!resolution || nowMs < resolution.resolvedAtMs) return deciding;
 
-  const nextPhaseStartsAtMs = resolution.resolvedAtMs + openRounds.result_window_ms;
+  const nextPhaseStartsAtMs =
+    resolution.resolvedAtMs +
+    openRounds.result_window_ms +
+    (resolution.outcome === 'extend' ? openRoundCountInMs(openRounds) : 0);
   const nextRoundAppended = turnIndex + 1 < debate.turn_durations_ms.length;
   // An Extend appends the next round in the same transaction that writes it, so an Extend without the
   // next round's turns is a payload that has not caught up; hold on the result rather than invent
@@ -192,6 +196,11 @@ export function openRoundGapAfterTurn(
 
   if (resolution.outcome === 'end') return { kind: 'thanking', startsAtMs: nextPhaseStartsAtMs };
   return { kind: 'continue', nextTurnStartsAtMs: nextPhaseStartsAtMs };
+}
+
+/** The opener's count-in after an Extend. `0` from a geo-chat that does not send it. */
+export function openRoundCountInMs(openRounds: Pick<DebateOpenRounds, 'extend_count_in_ms'>) {
+  return Math.max(0, openRounds.extend_count_in_ms ?? 0);
 }
 
 /**
@@ -219,7 +228,10 @@ function openRoundResolution(
   const nextTurnIndex = roundIndex * 2 + 2;
   if (nextTurnIndex < debate.turn_durations_ms.length) {
     const nextStartedAtMs = debate.current_turn_index === nextTurnIndex ? timestampMs(debate.turn_started_at) : null;
-    const resolvedAtMs = nextStartedAtMs !== null ? nextStartedAtMs - openRounds.result_window_ms : roundEndedAtMs;
+    const resolvedAtMs =
+      nextStartedAtMs !== null
+        ? nextStartedAtMs - openRounds.result_window_ms - openRoundCountInMs(openRounds)
+        : roundEndedAtMs;
     return { resolvedAtMs: Math.max(roundEndedAtMs, resolvedAtMs), outcome: 'extend' };
   }
 

@@ -2998,6 +2998,7 @@ function DebateRecordingModal({
   const revealOutcome = openRoundResultPhase?.outcome ?? (openRoundWrapHeld ? 'end' : null);
   const timedRevealStep = useOpenRoundRevealStep(
     openRoundResultPhase ? countdown.elapsedMs : null,
+    openRoundResultPhase?.outcome ?? null,
     debate.open_rounds?.result_window_ms ?? 0
   );
   const revealStep: OpenRoundRevealStep | null = openRoundWrapHeld ? 'result' : timedRevealStep;
@@ -3019,7 +3020,10 @@ function DebateRecordingModal({
   const openRoundsEndHeld = openRoundsMaxReached || openRoundWrapHeld;
   const openRoundResult: OpenRoundResult | null = openRoundsMaxReached
     ? { kind: 'max', rounds: debate.open_rounds?.max_rebuttal_rounds ?? 0 }
-    : revealRoundIndex !== null && revealStep === 'result'
+    : revealRoundIndex !== null &&
+        (revealStep === 'result' ||
+          // The opener's own tile counts them in; the other debater keeps the announcement until then.
+          (revealStep === 'countIn' && localSlot !== debate.first_participant_slot))
       ? revealOutcome === 'extend'
         ? {
             kind: 'round',
@@ -3029,8 +3033,6 @@ function DebateRecordingModal({
               debate.first_participant_slot === localSlot
                 ? 'You'
                 : speakerNameForSlot(debate, debate.first_participant_slot),
-            // The window ends where the new round starts, so this is the opener's count-in.
-            seconds: countdown.remainingSeconds,
           }
         : {
             kind: 'wrap',
@@ -3072,8 +3074,9 @@ function DebateRecordingModal({
       <span className="hidden mobile:inline">{lastWord === 'debate' ? 'Final word' : 'Last word'}</span>
     </DebateTileChip>
   ) : null;
-  // During a reveal the announcement of the new round carries the count-in.
-  const localUpcomingSeconds = openRoundResultPhase ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
+  // During a reveal the opener's count-in waits until the result has been read.
+  const localUpcomingSeconds =
+    openRoundResultPhase && revealStep !== 'countIn' ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
   const localUpcomingLabel =
     countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
@@ -3288,7 +3291,7 @@ function DebateRecordingModal({
             <DebateRoundIndicator
               // Once the new round is announced, the counter moves to it.
               phase={
-                openRoundResultPhase?.outcome === 'extend' && revealStep === 'result'
+                openRoundResultPhase?.outcome === 'extend' && (revealStep === 'result' || revealStep === 'countIn')
                   ? {
                       phase: 'speaking',
                       roundIndex: openRoundResultPhase.roundIndex + 1,

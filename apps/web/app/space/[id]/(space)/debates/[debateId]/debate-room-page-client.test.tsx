@@ -5362,7 +5362,7 @@ describe('DebateRoomPageClient', () => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     });
 
-    it('turns both picks over, then announces the new round and counts down to its opener', async () => {
+    it('turns both picks over, then announces the new round and who opens it', async () => {
       // Resolved Extend at 20:02:04.2; round 1 starts at 20:02:07.2.
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:04.300'));
       const view = await renderLiveDebate(openRoundsRevealRebut());
@@ -5382,7 +5382,7 @@ describe('DebateRoomPageClient', () => {
 
       rerenderAt(view, openRoundsAt('20:02:05.700'), openRoundsRevealRebut());
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
-      expect(result()).toHaveTextContent('Round1You open in 2');
+      expect(result()?.textContent).toBe('Round1You open');
       expect(document.querySelector('[data-debate-round-indicator]')).toHaveAttribute(
         'data-debate-round-indicator',
         '1'
@@ -5392,9 +5392,53 @@ describe('DebateRoomPageClient', () => {
       expect(chips('remote')).toHaveAttribute('data-tile-chips', 'hidden');
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
 
-      // "Round 1" holds to the end of the window, and is itself the count-in.
-      rerenderAt(view, openRoundsAt('20:02:06.700'), openRoundsRevealRebut());
-      await waitFor(() => expect(result()).toHaveTextContent('You open in 1'));
+      // With no count-in from geo-chat, "Round 1" holds to the end of the window.
+      rerenderAt(view, openRoundsAt('20:02:06.900'), openRoundsRevealRebut());
+      expect(result()?.textContent).toBe('Round1You open');
+      expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
+    });
+
+    // geo-chat's `extend_count_in_ms`: the new round starts 5 s after the window closes.
+    const revealRebutWithCountIn = (): Debate => {
+      const debate = openRoundsRevealRebut();
+      return {
+        ...debate,
+        turn_started_at: '2026-10-06T20:02:12.200Z',
+        turn_ends_at: '2026-10-06T20:02:57.200Z',
+        open_rounds: {
+          ...debate.open_rounds!,
+          extend_count_in_ms: 5_000,
+          next_phase_starts_at: '2026-10-06T20:02:12.200Z',
+        },
+      };
+    };
+
+    it('counts the opener in for 5 s after the announcement', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:06.000'));
+      const view = await renderLiveDebate(revealRebutWithCountIn());
+      await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
+
+      rerenderAt(view, openRoundsAt('20:02:07.300'), revealRebutWithCountIn());
+      await waitFor(() => expect(within(debateVideoTile('local')).getByText('Rebut in')).toBeInTheDocument());
+      expect(within(debateVideoTile('local')).getByText('5')).toBeInTheDocument();
+      expect(result()).toBeNull();
+      expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
+
+      rerenderAt(view, openRoundsAt('20:02:11.300'), revealRebutWithCountIn());
+      await waitFor(() => expect(within(debateVideoTile('local')).getByText('1')).toBeInTheDocument());
+
+      // Round 1 starts at 20:02:12.2, Alice first.
+      rerenderAt(view, openRoundsAt('20:02:12.400'), revealRebutWithCountIn());
+      await waitFor(() => expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'true'));
+      expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
+    });
+
+    it('keeps the announcement up for the other debater while the opener is counted in', async () => {
+      joinAsBob();
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:09.000'));
+      await renderLiveDebate(revealRebutWithCountIn());
+
+      await waitFor(() => expect(result()).toHaveTextContent('Round1Alice opens'));
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
 

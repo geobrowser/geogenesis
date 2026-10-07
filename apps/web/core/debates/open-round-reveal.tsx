@@ -16,13 +16,13 @@ import { recordingLabelTextShadow, recordingOverlayTextShadow } from './debate-v
  *
  * - `flip`: each tile's card turns from the debater's name to their pick.
  * - `result`: what the picks mean, for the rest of the window. Two Extends: "Round N" and who opens
- *   it, counting down to the new round, so the announcement is the opener's count-in. Anything
- *   else: "That's a wrap", with the picks left up so the split explains itself.
+ *   it. Anything else: "That's a wrap", with the picks left up so the split explains itself.
+ * - `countIn`: Extend only, after the window. The opener gets the room's usual 5 s count-in, which
+ *   geo-chat adds after the window as `extend_count_in_ms`.
  *
- * The server starts the next round when the window closes, so an Extend's reveal cannot outlast it.
  * The flip is a share of the window rather than a fixed time, so a longer window lengthens both.
  */
-export type OpenRoundRevealStep = 'flip' | 'result';
+export type OpenRoundRevealStep = 'flip' | 'result' | 'countIn';
 
 /** The share of the window the picks have to turn and be read before the result takes over. */
 export const OPEN_ROUND_FLIP_SHARE = 0.45;
@@ -37,31 +37,32 @@ function flipEndsMs(windowMs: number) {
   return Math.round(windowMs * OPEN_ROUND_FLIP_SHARE);
 }
 
-export function openRoundRevealStep(elapsedMs: number, windowMs: number): OpenRoundRevealStep {
-  return elapsedMs < flipEndsMs(windowMs) ? 'flip' : 'result';
+export function openRoundRevealStep(elapsedMs: number, outcome: OpenRoundPick, windowMs: number): OpenRoundRevealStep {
+  if (elapsedMs < flipEndsMs(windowMs)) return 'flip';
+  return outcome === 'extend' && elapsedMs >= windowMs ? 'countIn' : 'result';
 }
 
 /**
  * The reveal step for a result window `elapsedMs` into it, or `null` outside one.
  *
  * The room's countdown only ticks every 500 ms, which would let the two screens change step up to
- * half a second apart. This schedules its own re-render at the step boundary instead, measured from
+ * half a second apart. This schedules its own re-render at each step boundary instead, measured from
  * the last `elapsedMs` the room gave it.
  */
-export function useOpenRoundRevealStep(elapsedMs: number | null, windowMs: number) {
+export function useOpenRoundRevealStep(elapsedMs: number | null, outcome: OpenRoundPick | null, windowMs: number) {
   const [reached, setReached] = React.useState<{ from: number; to: number } | null>(null);
   const effectiveMs = elapsedMs === null ? null : reached?.from === elapsedMs ? reached.to : elapsedMs;
 
   React.useEffect(() => {
     if (elapsedMs === null || effectiveMs === null) return;
-    const next = flipEndsMs(windowMs);
-    if (next <= effectiveMs) return;
+    const next = [flipEndsMs(windowMs), windowMs].find(boundary => boundary > effectiveMs);
+    if (next === undefined) return;
     const timer = window.setTimeout(() => setReached({ from: elapsedMs, to: next }), next - effectiveMs);
     return () => window.clearTimeout(timer);
   }, [elapsedMs, effectiveMs, windowMs]);
 
-  if (effectiveMs === null) return null;
-  return openRoundRevealStep(effectiveMs, windowMs);
+  if (effectiveMs === null || outcome === null) return null;
+  return openRoundRevealStep(effectiveMs, outcome, windowMs);
 }
 
 /**
@@ -114,8 +115,7 @@ export function OpenRoundPickReveal({
 }
 
 export type OpenRoundResult =
-  /** `seconds` until the new round starts, on the room's clock; `0` once it is due. */
-  | { kind: 'round'; round: number; opener: string; seconds: number }
+  | { kind: 'round'; round: number; opener: string }
   | { kind: 'wrap'; note: string | null }
   | { kind: 'max'; rounds: number };
 
@@ -127,7 +127,7 @@ export type OpenRoundResult =
 export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) {
   const pill =
     result.kind === 'round'
-      ? `${openRoundOpenerLine(result.opener)}${result.seconds > 0 ? ` in ${result.seconds}` : ''}`
+      ? openRoundOpenerLine(result.opener)
       : result.kind === 'wrap'
         ? result.note
         : `${result.rounds} rebuttal rounds`;

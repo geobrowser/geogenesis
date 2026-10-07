@@ -331,3 +331,32 @@ describe('open rounds: the last word (GEO-3179)', () => {
     expect(openRoundLastWord(listening(), null)).toBeNull();
   });
 });
+
+describe('open rounds: the count-in after an Extend (GEO-3179)', () => {
+  const withCountIn = (debate: Debate): Debate => ({
+    ...debate,
+    open_rounds: { ...debate.open_rounds!, extend_count_in_ms: 5_000 },
+  });
+
+  it('holds on the result until the count-in ends, then starts the next round', () => {
+    // Resolved Extend at 20:02:04.2: window to 20:02:07.2, count-in to 20:02:12.2.
+    const debate = withCountIn(revealRebut());
+    const roundEnd = at('20:02:00.000');
+    expect(openRoundGapAfterTurn(debate, 1, roundEnd, at('20:02:10.000'))).toMatchObject({
+      kind: 'hold',
+      phase: { phase: 'result', nextPhaseStartsAtMs: at('20:02:12.200') },
+    });
+    expect(openRoundGapAfterTurn(debate, 1, roundEnd, at('20:02:12.300'))).toEqual({
+      kind: 'continue',
+      nextTurnStartsAtMs: at('20:02:12.200'),
+    });
+  });
+
+  it('does not delay thanking after an End', () => {
+    const debate = withCountIn(revealEnd());
+    expect(openRoundGapAfterTurn(debate, 1, at('20:02:00.000'), at('20:02:09.000'))).toEqual({
+      kind: 'thanking',
+      startsAtMs: at('20:02:08.000'),
+    });
+  });
+});
