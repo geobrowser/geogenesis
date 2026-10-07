@@ -3,7 +3,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { DebateFormatDetails } from './format-details';
+import { DebateFormatDetails, requestOpenRounds } from './format-details';
 
 const participants = [
   { user_id: 'user-local', profile_space_id: 'profile-local', display_name: 'Local speaker', avatar_cid: null },
@@ -45,8 +45,22 @@ describe('DebateFormatDetails', () => {
     expect(container.textContent).not.toMatch(/clos/i);
   });
 
-  // A request has no debate yet, so the server has not snapshotted a cap; a number would be a guess.
-  it('names no cap for an Open rounds request, which has no debate yet', () => {
+  // GEO-3201: the server decides the format and cap when the request is made.
+  it('shows the cap a pending request carries', () => {
+    renderDetails({ formatId: 'open_rounds', openRounds: requestOpenRounds(4) });
+
+    expect(screen.getByText('A round happens only if you both pick Extend. Up to 4 rounds.')).toBeInTheDocument();
+    expect(screen.getByText('45s')).toBeInTheDocument();
+  });
+
+  it('builds no Open rounds block for a request without a cap', () => {
+    expect(requestOpenRounds(null)).toBeNull();
+    expect(requestOpenRounds(undefined)).toBeNull();
+    expect(requestOpenRounds(0)).toEqual({ max_rebuttal_rounds: 0, rebuttal_turn_ms: 45_000 });
+  });
+
+  // A request from an older server carries no cap; a number would be a guess.
+  it('names no cap for an Open rounds request without one', () => {
     const { container } = renderDetails({ formatId: 'open_rounds' });
 
     expect(screen.getByText('A round happens only if you both pick Extend.')).toBeInTheDocument();
