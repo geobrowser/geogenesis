@@ -10,7 +10,7 @@ import { useMatchmakingMatches } from './hooks';
 import { MatchesList } from './matches-list';
 import { MatchesOnlySwitch } from './matches-only-switch';
 import { type NarrowedListState, useNarrowedDefault } from './use-narrowed-default';
-import { type DebatesHubTab, debatesHubLeftLobbyForExploreAtom, debatesHubMatchesOnlyAtom } from '~/atoms';
+import { type DebatesHubTab, debatesHubLobbyMoveSpentAtom, debatesHubMatchesOnlyAtom } from '~/atoms';
 
 /**
  * The hub's landing tab, and the single answer to "what can I debate right now" (GEO-2861).
@@ -62,7 +62,7 @@ export function LobbyTab({
         ? 'empty'
         : 'filled';
 
-  const { showNarrowed, steppedBack, rearm } = useNarrowedDefault(matchesOnly, matchesState);
+  const { showNarrowed, rearm } = useNarrowedDefault(matchesOnly, matchesState);
 
   /**
    * Once a session, and held outside this component because this component does not last.
@@ -75,11 +75,17 @@ export function LobbyTab({
    *
    * Held still as well, so `ClaimsTab`'s report effect is not re-armed on every render of this one.
    */
-  const [leftForExplore, setLeftForExplore] = useAtom(debatesHubLeftLobbyForExploreAtom);
-  const showExplore = React.useCallback(() => {
-    setLeftForExplore(true);
-    onTabChange('explore');
-  }, [onTabChange, setLeftForExplore]);
+  const [moveSpent, setMoveSpent] = useAtom(debatesHubLobbyMoveSpentAtom);
+  // Every way off Lobby goes through here, the empty states' buttons included, so a viewer who has
+  // already left for Explore once is not sent there again when they come back.
+  const leaveLobby = React.useCallback(
+    (tab: DebatesHubTab) => {
+      setMoveSpent(true);
+      onTabChange(tab);
+    },
+    [onTabChange, setMoveSpent]
+  );
+  const showExplore = React.useCallback(() => leaveLobby('explore'), [leaveLobby]);
 
   /**
    * An account geo-chat has not registered yet cannot answer this tab at all.
@@ -92,9 +98,9 @@ export function LobbyTab({
    */
   const warmingUp = isAccountWarmingUpQuery(matchesQuery);
   React.useEffect(() => {
-    if (!warmingUp || leftForExplore) return;
+    if (!warmingUp || moveSpent) return;
     showExplore();
-  }, [leftForExplore, showExplore, warmingUp]);
+  }, [moveSpent, showExplore, warmingUp]);
 
   const toggle = (
     <MatchesOnlySwitch
@@ -105,6 +111,10 @@ export function LobbyTab({
       checked={showNarrowed}
       onChange={next => {
         rearm();
+        // The viewer has chosen which list to read, which is the question the move was guessing at.
+        // Spent for the session rather than this mount: the hub unmounts the tab on the way out, and
+        // an empty list they asked for is still theirs when they come back to it.
+        setMoveSpent(true);
         setMatchesOnly(next);
       }}
     />
@@ -114,21 +124,21 @@ export function LobbyTab({
   // their space menus differently, and describe an empty list in different words — the only thing
   // they share is the toggle and the selection it sits beside, which is exactly what is passed.
   return showNarrowed ? (
-    <MatchesList onTabChange={onTabChange} layout={layout} scopePicker={scopePicker} trailing={toggle} />
+    <MatchesList onTabChange={leaveLobby} layout={layout} scopePicker={scopePicker} trailing={toggle} />
   ) : (
     <ClaimsTab
       variant="lobby"
       layout={layout}
       scopePicker={scopePicker}
       trailing={toggle}
-      // The last rung of the same ladder. Having stepped back from matches to the wider list and
-      // found that empty too, there is nothing on this tab for the viewer to do, and Explore is the
-      // one place that always has something — it describes the corpus rather than the viewer.
+      // The last rung of the same ladder. Arriving on a wider list with nothing in it, there is
+      // nothing on this tab for the viewer to do, and Explore is the one place that always has
+      // something — it describes the corpus rather than the viewer.
       //
-      // Only on the automatic path. A viewer who turned the switch off themselves and found an
-      // empty Lobby asked a question and got an answer; moving them off the tab would be answering
-      // a different one. `steppedBack` is exactly "nobody chose this list".
-      onSettledEmpty={steppedBack && !leftForExplore ? showExplore : undefined}
+      // Whatever the stored preference: one set on another day is not a question about today's list.
+      // Once a session, and not after the viewer has pressed the switch — see the marker.
+      onSettledEmpty={moveSpent ? undefined : showExplore}
+      onTabChange={leaveLobby}
     />
   );
 }
