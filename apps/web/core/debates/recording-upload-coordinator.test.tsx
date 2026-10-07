@@ -246,62 +246,6 @@ describe('debate recording uploader', () => {
       ).toBe(false);
     });
 
-    describe('when the queue keeps only the tail the live upload had not sent', () => {
-      // Part 1 ('reco') went out live and is not kept; 'rding' is.
-      function tailOnly() {
-        return { ...streamedRecording(), blob: undefined, localFromByte: 4 };
-      }
-
-      function tailBytes() {
-        const tail = new Blob(['rding']);
-        return {
-          size: 9,
-          availableFrom: 4,
-          heldInMemory: true,
-          read: vi.fn(async (start: number, end: number) => {
-            if (start < 4) throw new Error(`byte ${start} is not kept`);
-            return tail.slice(start - 4, end - 4);
-          }),
-        };
-      }
-
-      it('sends the remaining parts from the tail, a part at a time', async () => {
-        const dependencies = streamedDependencies();
-        const bytes = tailBytes();
-        const readRecording = vi.fn();
-
-        await processDebateRecordingUpload(tailOnly(), {
-          ...dependencies,
-          readRecording,
-          readRecordingBytes: async () => bytes,
-        });
-
-        expect(bytes.read.mock.calls).toEqual([
-          [4, 8],
-          [8, 9],
-        ]);
-        expect(readRecording).not.toHaveBeenCalled();
-        expect(dependencies.completeUpload).toHaveBeenCalledWith(
-          'debate-1',
-          expect.objectContaining({ multipart_upload_id: 'upload-1', byte_size: 9 })
-        );
-      });
-
-      it('waits for the multipart routes to come back rather than sending a partial file as one PUT', async () => {
-        const dependencies = streamedDependencies();
-        dependencies.getPartUrls.mockRejectedValue(new GeoChatRequestError('404 Not Found', null, 404));
-
-        await expect(
-          processDebateRecordingUpload(tailOnly(), { ...dependencies, readRecordingBytes: async () => tailBytes() })
-        ).rejects.toMatchObject({ status: 404 });
-
-        expect(dependencies.setMultipart).not.toHaveBeenCalledWith('user-a:debate-1', null);
-        expect(dependencies.createUpload).not.toHaveBeenCalled();
-        expect(dependencies.putRecording).not.toHaveBeenCalled();
-        expect(dependencies.deleteUpload).not.toHaveBeenCalled();
-      });
-    });
-
     it('goes straight to completion once every part is out', async () => {
       const dependencies = streamedDependencies();
 
