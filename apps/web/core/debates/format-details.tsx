@@ -150,10 +150,10 @@ function OpenRoundsRebuttalRow({
       </span>
       <div className="flex min-w-0 flex-col gap-0.5">
         <Text as="div" variant="metadataMedium" color="text">
-          Then rebut back and forth
+          Then extend, round by round
         </Text>
         <Text as="div" variant="metadata" color="grey-04">
-          Another round only if you both pick Extend.{cap}
+          A round happens only if you both pick Extend.{cap}
         </Text>
       </div>
     </div>

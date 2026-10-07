@@ -29,8 +29,8 @@ describe('DebateFormatDetails', () => {
     expect(screen.getByText('Remote speaker makes an argument')).toBeInTheDocument();
     expect(screen.getAllByText('1m')).toHaveLength(2);
     expect(screen.getByText('45s')).toBeInTheDocument();
-    expect(screen.getByText('Then rebut back and forth')).toBeInTheDocument();
-    expect(screen.getByText('Another round only if you both pick Extend. Up to 3 rounds.')).toBeInTheDocument();
+    expect(screen.getByText('Then extend, round by round')).toBeInTheDocument();
+    expect(screen.getByText('A round happens only if you both pick Extend. Up to 3 rounds.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/clos/i);
   });
 
@@ -40,7 +40,7 @@ describe('DebateFormatDetails', () => {
       openRounds: { max_rebuttal_rounds: 10, rebuttal_turn_ms: 45_000 },
     });
 
-    expect(screen.getByText('Another round only if you both pick Extend. Up to 10 rounds.')).toBeInTheDocument();
+    expect(screen.getByText('A round happens only if you both pick Extend. Up to 10 rounds.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/clos/i);
   });
 
@@ -48,7 +48,7 @@ describe('DebateFormatDetails', () => {
   it('names no cap for an Open rounds request, which has no debate yet', () => {
     const { container } = renderDetails({ formatId: 'open_rounds' });
 
-    expect(screen.getByText('Another round only if you both pick Extend.')).toBeInTheDocument();
+    expect(screen.getByText('A round happens only if you both pick Extend.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/Up to/);
     expect(container.textContent).not.toMatch(/clos/i);
   });
@@ -66,6 +66,6 @@ describe('DebateFormatDetails', () => {
     expect(screen.getByText('You make an argument')).toBeInTheDocument();
     expect(screen.getByText('Remote speaker rebuts')).toBeInTheDocument();
     expect(screen.getByText('Remote speaker closes to the audience')).toBeInTheDocument();
-    expect(screen.queryByText('Then rebut back and forth')).not.toBeInTheDocument();
+    expect(screen.queryByText('Then extend, round by round')).not.toBeInTheDocument();
   });
 });

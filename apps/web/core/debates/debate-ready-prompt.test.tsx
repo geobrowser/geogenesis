@@ -136,8 +136,8 @@ describe('DebateReadyPrompt', () => {
       />
     );
 
-    expect(screen.getByText('Then rebut back and forth')).toBeInTheDocument();
-    expect(screen.getByText('Another round only if you both pick Extend. Up to 3 rounds.')).toBeInTheDocument();
+    expect(screen.getByText('Then extend, round by round')).toBeInTheDocument();
+    expect(screen.getByText('A round happens only if you both pick Extend. Up to 3 rounds.')).toBeInTheDocument();
     expect(screen.queryByText(/clos/i)).not.toBeInTheDocument();
   });
 
