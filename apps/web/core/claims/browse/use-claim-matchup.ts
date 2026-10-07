@@ -2,7 +2,13 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 
-import { type DebateClaimPositionSummary, GeoChatRequestError, notifyClaimResponseIndexed } from '~/core/debates/api';
+import {
+  type DebateActivity,
+  type DebateClaimPositionSummary,
+  type DebateRequestsResponse,
+  GeoChatRequestError,
+  notifyClaimResponseIndexed,
+} from '~/core/debates/api';
 import { readinessQueryPrefixes } from '~/core/debates/claim-response-indexed-notifier';
 import { useDebateActivity, useGeoChatAuth } from '~/core/debates/hooks';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
@@ -26,6 +32,18 @@ export function debateRequestErrorMessage(error: unknown, viewerPosition: boolea
       : 'Choose Agree or Disagree first.';
   }
   return error.message;
+}
+
+/** Why a claim request can't be sent now, or undefined. */
+export function claimRequestBlockedReason(
+  activity: Pick<DebateActivity, 'available_to_debate' | 'outbound_request'> | undefined,
+  requests: Pick<DebateRequestsResponse, 'outbound'> | undefined
+) {
+  const outbound = requests?.outbound ?? activity?.outbound_request ?? null;
+  // Only when the server actually says so — a missing field must not block requesting.
+  if (activity?.available_to_debate === false) return 'Switch yourself to available to send a request.';
+  if (outbound) return 'Withdraw your open request to send another.';
+  return undefined;
 }
 
 /**
@@ -102,14 +120,7 @@ export function useClaimMatchup({
         candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
       ) ?? null);
 
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
-  // Only when the server actually says so — a missing field must not block requesting.
-  const unavailable = activity?.available_to_debate === false;
-  const blockedReason = unavailable
-    ? 'Switch yourself to available to send a request.'
-    : outbound
-      ? 'Withdraw your open request to send another.'
-      : undefined;
+  const blockedReason = claimRequestBlockedReason(activity, requestsQuery.data);
 
   return {
     match,
