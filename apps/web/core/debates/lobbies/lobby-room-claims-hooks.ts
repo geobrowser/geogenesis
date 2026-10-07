@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { GeoChatRequestError, dashlessId, getDebateLobbyClaims } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
@@ -18,6 +18,19 @@ export function useDebateLobbyClaims(lobbyId: string, enabled = true) {
     queryFn: ({ signal }) => getDebateLobbyClaims(dashlessId(lobbyId), getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
   });
+}
+
+/** Refusals that mean the list's request offer is out of date. */
+const STALE_OFFER_CODES = new Set(['no_candidates_in_lobby', 'lobby_not_present']);
+
+/** A request `onError` that refetches the list when the refusal says its offer was stale. */
+export function useRefreshLobbyClaimsOnRefusal(lobbyId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return (error: unknown) => {
+    if (!(error instanceof GeoChatRequestError) || !error.code || !STALE_OFFER_CODES.has(error.code)) return;
+    void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbyClaims(accountKey, lobbyId) });
+  };
 }
 
 /** A refused lobby-scoped request, in the reader's terms; null to fall back to the claim's own. */

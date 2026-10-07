@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   data: undefined as DebateLobbyClaims | undefined,
   mutate: vi.fn(),
   recover: vi.fn(),
+  refreshOnRefusal: vi.fn(),
   activity: undefined as { available_to_debate: boolean; outbound_request?: unknown } | undefined,
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('./lobby-room-claims-hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('./lobby-room-claims-hooks')>()),
+  useRefreshLobbyClaimsOnRefusal: () => mocks.refreshOnRefusal,
   useDebateLobbyClaims: () => ({
     data: mocks.data,
     isLoading: false,
@@ -115,6 +117,8 @@ afterEach(() => {
   cleanup();
   mocks.data = undefined;
   mocks.mutate.mockReset();
+  mocks.recover.mockReset();
+  mocks.refreshOnRefusal.mockReset();
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
 });
 
@@ -134,8 +138,14 @@ describe('LobbyRoomClaims', () => {
     fireEvent.click(requests[0]!);
     expect(mocks.mutate).toHaveBeenCalledWith(
       { space_id: 'space-1', claim_entity_id: 'entity-b', lobby_id: '0192abc' },
-      { onError: mocks.recover }
+      { onError: expect.any(Function) }
     );
+
+    // A refusal reaches both the intent recovery and the stale-offer refresh.
+    const refusal = new Error('refused');
+    mocks.mutate.mock.calls[0]![1].onError(refusal);
+    expect(mocks.recover).toHaveBeenCalledWith(refusal);
+    expect(mocks.refreshOnRefusal).toHaveBeenCalledWith(refusal);
   });
 
   it('waits for geo-chat to hold a side the viewer just took before offering a request', () => {

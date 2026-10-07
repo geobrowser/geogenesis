@@ -13,7 +13,11 @@ import { useDebateActivity } from '../hooks';
 import { useCreateDebateRequest, useDebateRequests } from '../matchmaking/hooks';
 import { HubMessageNote, HubQueryState } from '../matchmaking/hub-states';
 import { RequestDebateControl } from '../request-debate-control';
-import { lobbyClaimRequestErrorMessage, useDebateLobbyClaims } from './lobby-room-claims-hooks';
+import {
+  lobbyClaimRequestErrorMessage,
+  useDebateLobbyClaims,
+  useRefreshLobbyClaimsOnRefusal,
+} from './lobby-room-claims-hooks';
 import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
 
 export const LOBBY_ROOM_CLAIMS_COPY = {
@@ -111,6 +115,7 @@ function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRo
     spaceId: claim.space_id,
     viewerPosition: offer.viewerPosition,
   });
+  const refreshOnRefusal = useRefreshLobbyClaimsOnRefusal(lobbyId);
   const blockedReason = claimRequestBlockedReason(activity, requests);
   // geo-chat refuses the request until it holds the viewer's side, which a vote from this list
   // reaches only once its response-indexed report returns and the list refetches.
@@ -121,7 +126,12 @@ function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRo
       onRequest={() =>
         createRequest.mutate(
           { space_id: claim.space_id, claim_entity_id: claim.claim_entity_id, lobby_id: dashlessId(lobbyId) },
-          { onError: recoverFromMissingIntent }
+          {
+            onError: error => {
+              recoverFromMissingIntent(error);
+              refreshOnRefusal(error);
+            },
+          }
         )
       }
       disabled={Boolean(blockedReason)}
