@@ -38,6 +38,9 @@ import { useDebatesHub } from './use-debates-hub';
 /** Faces drawn in a cell before the rest collapse into "+N". */
 const FACES_PER_CELL = 3;
 
+/** A face and the "+N" after the faces: the same disc, each tucked under the one before it. */
+const FACE_CLASS_NAME = 'h-[30px] w-[30px] shrink-0 rounded-full ring-2 ring-white not-first:-ml-2';
+
 /** How long a face's card waits before opening on hover, and before closing once the pointer leaves. */
 const CARD_OPEN_DELAY_MS = 250;
 const CARD_CLOSE_DELAY_MS = 200;
@@ -301,7 +304,10 @@ export function CalendarWeek({
                             {people.length > FACES_PER_CELL ? (
                               <span
                                 aria-hidden
-                                className="-ml-2 flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-grey-02 text-footnoteMedium text-grey-04 ring-2 ring-white"
+                                className={cx(
+                                  FACE_CLASS_NAME,
+                                  'flex items-center justify-center bg-grey-02 text-footnoteMedium text-grey-04'
+                                )}
                               >
                                 +{people.length - FACES_PER_CELL}
                               </span>
@@ -432,6 +438,7 @@ function Face({
   return (
     <span
       aria-hidden
+      data-testid="calendar-face"
       onPointerEnter={event => {
         if (event.pointerType === 'mouse') onHover(event.currentTarget);
       }}
@@ -439,7 +446,8 @@ function Face({
         if (event.pointerType === 'mouse') onLeave();
       }}
       className={cx(
-        'relative h-[30px] w-[30px] shrink-0 overflow-hidden rounded-full ring-2 ring-white not-first:-ml-2',
+        FACE_CLASS_NAME,
+        'relative overflow-hidden',
         live && 'outline-2 outline-offset-2 outline-green',
         away && 'opacity-45'
       )}

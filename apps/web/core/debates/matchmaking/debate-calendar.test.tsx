@@ -221,6 +221,7 @@ afterEach(() => {
 });
 
 const cell = (name: RegExp) => screen.getByRole('gridcell', { name });
+const firstFace = (gridcell: HTMLElement) => within(gridcell).getAllByTestId('calendar-face')[0];
 
 describe('DebateCalendar', () => {
   it('asks a signed-out viewer to sign in instead of drawing an empty week', () => {
@@ -323,8 +324,7 @@ describe('DebateCalendar', () => {
   it('records whose card opened, once, when a face is hovered', async () => {
     render(<DebateCalendar />);
 
-    const face = cell(/Thursday.*free: Elena/).querySelector('span[aria-hidden]')!;
-    fireEvent.pointerEnter(face, { pointerType: 'mouse' });
+    fireEvent.pointerEnter(firstFace(cell(/Thursday.*free: Elena/)), { pointerType: 'mouse' });
 
     await waitFor(() =>
       expect(mocks.capture).toHaveBeenCalledWith('debate_calendar_person_viewed', { peer_user_id: '11' })
@@ -335,10 +335,7 @@ describe('DebateCalendar', () => {
   it('opens the hour, not a booking, when a face itself is clicked', () => {
     render(<DebateCalendar />);
 
-    const thursday = cell(/Thursday.*free: Elena/);
-    const face = thursday.querySelector('span[aria-hidden]');
-    expect(face).not.toBeNull();
-    fireEvent.click(face!);
+    fireEvent.click(firstFace(cell(/Thursday.*free: Elena/)));
     expect(screen.getByRole('dialog', { name: /Free Thursday/ })).toBeInTheDocument();
     expect(screen.queryByRole('dialog', { name: 'Book Elena' })).not.toBeInTheDocument();
   });
