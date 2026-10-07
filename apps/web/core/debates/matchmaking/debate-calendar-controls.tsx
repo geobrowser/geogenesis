@@ -86,9 +86,20 @@ export function CalendarWeekNav({
   );
 }
 
+/** Arrow keys step through a radio group, wrapping; Home and End jump to its ends. */
+const RADIO_STEPS: Record<string, (index: number, count: number) => number> = {
+  ArrowRight: (index, count) => (index + 1) % count,
+  ArrowDown: (index, count) => (index + 1) % count,
+  ArrowLeft: (index, count) => (index - 1 + count) % count,
+  ArrowUp: (index, count) => (index - 1 + count) % count,
+  Home: () => 0,
+  End: (_, count) => count - 1,
+};
+
 /**
  * Two or three exclusive options as one pill: the calendar's Availability | Debates, New match's
- * Recommended | Pick any time. Radios, so arrow-key users and screen readers get one choice.
+ * Recommended | Pick any time. A radio group, so it behaves as one: a single tab stop on the
+ * checked option, and the arrow keys move the choice and the focus together.
  */
 export function SegmentedControl<T extends string>({
   label,
@@ -101,15 +112,30 @@ export function SegmentedControl<T extends string>({
   value: T;
   onChange: (value: T) => void;
 }) {
+  const buttons = React.useRef<(HTMLButtonElement | null)[]>([]);
+  const onKeyDown = (event: React.KeyboardEvent, index: number) => {
+    const step = RADIO_STEPS[event.key];
+    if (!step) return;
+    event.preventDefault();
+    const next = step(index, options.length);
+    onChange(options[next].value);
+    buttons.current[next]?.focus();
+  };
+
   return (
     <div role="radiogroup" aria-label={label} className="flex rounded-full border border-grey-02 p-0.5">
-      {options.map(option => (
+      {options.map((option, index) => (
         <button
           key={option.value}
+          ref={element => {
+            buttons.current[index] = element;
+          }}
           type="button"
           role="radio"
           aria-checked={value === option.value}
+          tabIndex={value === option.value ? 0 : -1}
           onClick={() => onChange(option.value)}
+          onKeyDown={event => onKeyDown(event, index)}
           className={cx(
             'rounded-full px-3 py-1 text-metadata transition-colors',
             value === option.value ? 'bg-text text-white' : 'text-grey-04 hover:text-text'

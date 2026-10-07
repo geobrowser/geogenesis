@@ -119,6 +119,39 @@ describe('adminDebates', () => {
     ]);
   });
 
+  it('asks the original sender again once the other debater moves the time', () => {
+    // Raj moved Ana's invite: the mover counts as accepted, and Ana has to answer the new time.
+    const moved = { invited_by_user_id: 'a', proposed_by_user_id: 'b', reschedule_count: 1 };
+    const [waiting] = adminDebates([
+      request({
+        ...moved,
+        participants: [
+          { user_id: 'a', accepted: null },
+          { user_id: 'b', accepted: true },
+        ],
+      }),
+    ]);
+    expect(waiting.debaters.map(debater => [debater.role, debater.answer])).toEqual([
+      ['sent', 'pending'],
+      ['received', 'accepted'],
+    ]);
+    expect(blockLabel(waiting, firstNameOf)).toBe('Waiting on Ana');
+    expect(matchSentence(waiting, firstNameOf)).toBe('Raj moved it to this time. Waiting on Ana to reply.');
+
+    const [declined] = adminDebates([
+      request({
+        ...moved,
+        status: 'declined',
+        participants: [
+          { user_id: 'a', accepted: false },
+          { user_id: 'b', accepted: true },
+        ],
+      }),
+    ]);
+    expect(declined.debaters[0].answer).toBe('declined');
+    expect(matchSentence(declined, firstNameOf)).toBe('Ana declined. This debate won’t happen.');
+  });
+
   it('never shows a decline on a match that closed without one', () => {
     const [taken] = adminDebates([
       request({

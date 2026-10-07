@@ -15,12 +15,29 @@ const mocks = vi.hoisted(() => ({
   matchesKnown: true,
   anchors: [] as (string | null | undefined)[],
   create: vi.fn(),
+  debatersError: null as Error | null,
+  refetchDebaters: vi.fn(),
   prompt: vi.fn(),
 }));
 
 vi.mock('./admin-hooks', () => ({
   ADMIN_MATCH_DAYS: 14,
-  useAdminDebaters: () => ({ data: mocks.debaters, isPending: false, timezoneByUser: new Map() }),
+  useAdminDebaters: () =>
+    mocks.debatersError
+      ? {
+          data: undefined,
+          isPending: false,
+          error: mocks.debatersError,
+          refetch: mocks.refetchDebaters,
+          timezoneByUser: new Map(),
+        }
+      : {
+          data: mocks.debaters,
+          isPending: false,
+          error: null,
+          refetch: mocks.refetchDebaters,
+          timezoneByUser: new Map(),
+        },
   useAdminPairOverlap: (first: string | null, second: string | null) =>
     first && second
       ? { data: mocks.overlap, isPending: mocks.overlap === undefined, error: null, refetch: vi.fn() }
@@ -130,7 +147,9 @@ beforeEach(() => {
     },
     anchors: [],
     matchesKnown: true,
+    debatersError: null,
   });
+  mocks.refetchDebaters.mockReset();
   mocks.create.mockReset();
   mocks.prompt.mockReset();
 });
@@ -250,6 +269,53 @@ describe('AdminNewMatchDialog', () => {
 
     expect(screen.getByText(/Checking whether they.re both free then/)).toBeInTheDocument();
     expect(screen.queryByText(/Not a time they.re both free/)).not.toBeInTheDocument();
+  });
+
+  it('says when the people with availability could not be loaded, and offers a retry', () => {
+    mocks.debatersError = new Error('down');
+    renderDialog();
+
+    expect(screen.queryByText('Nobody matches that.')).not.toBeInTheDocument();
+    expect(screen.getByText('Couldn’t load the people with availability.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.refetchDebaters).toHaveBeenCalled();
+  });
+
+  it('drops a picked time once it passes with the dialog open', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    vi.setSystemTime(new Date(2026, 9, 7, 8, 50));
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(
+      screen.getAllByRole('button', { pressed: false }).find(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))!
+    );
+    expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
+
+    act(() => {
+      vi.setSystemTime(new Date(2026, 9, 7, 9, 0, 30));
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
+  });
+
+  it('drops a same-day override once its time passes', () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setInterval', 'clearInterval'] });
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '0' } });
+    fireEvent.change(screen.getByRole('combobox', { name: 'Starts (your time)' }), {
+      target: { value: String(10 * 60) },
+    });
+    expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
+
+    act(() => {
+      vi.setSystemTime(new Date(2026, 9, 6, 10, 1));
+      vi.advanceTimersByTime(60_000);
+    });
+    expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
   });
 
   it('keeps Send invites off until two debaters and a time are picked', () => {

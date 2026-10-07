@@ -27,7 +27,7 @@ import {
   useAdminPairOverlap,
   useCreateAdminMatch,
 } from './admin-hooks';
-import { SegmentedControl } from './debate-calendar-controls';
+import { SegmentedControl, useMinuteClock } from './debate-calendar-controls';
 import { HubPillButton } from './hub-pill-button';
 import { offlinePerson } from './offline-person';
 import type { PersonRecord } from './person-record';
@@ -272,7 +272,20 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
                 : `Counting matches with ${speakerLabel(first.person)}…`}
           </Text>
           <ul aria-label="People" className="min-h-0 flex-1 overflow-y-auto border-t border-grey-02">
-            {debatersQuery.isPending && listedRoster.length === 0 ? (
+            {debatersQuery.error && !debatersQuery.data ? (
+              // Not an empty roster: nobody could be picked, and saying "nobody matches" would hide that.
+              <li className="flex flex-wrap items-center gap-2 border-b border-grey-02 py-4">
+                <Text as="p" variant="metadata" color="grey-04">
+                  Couldn&rsquo;t load the people with availability.
+                </Text>
+                <HubPillButton analyticsSurface="calendar" onClick={() => void debatersQuery.refetch()}>
+                  Try again
+                </HubPillButton>
+              </li>
+            ) : null}
+            {debatersQuery.error && !debatersQuery.data ? (
+              listedHits.map(person => option(person, false))
+            ) : debatersQuery.isPending && listedRoster.length === 0 ? (
               <EmptyRow>Loading people…</EmptyRow>
             ) : listedRoster.length === 0 && listedHits.length === 0 ? (
               <EmptyRow>{searchTerm && search.isLoading ? 'Searching…' : 'Nobody matches that.'}</EmptyRow>
@@ -557,15 +570,16 @@ function TimePicker({
   const [anyDay, setAnyDay] = React.useState(1);
   const [anyMinutes, setAnyMinutes] = React.useState(17 * 60);
 
+  // Ticks each minute, so a picked time that passes while the dialog is open stops being sendable.
+  const now = useMinuteClock();
   const overlap = useAdminPairOverlap(first?.userId ?? null, second?.userId ?? null);
   const candidate = overlap.data?.candidates[0];
   const firstZone = overlap.data?.viewer_timezone || undefined;
   const secondZone = candidate?.with_timezone || undefined;
-  // Trimmed to times still ahead when the answer lands, not on every render.
-  const slots = React.useMemo(() => {
-    const cutoff = Date.now();
-    return (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > cutoff);
-  }, [candidate]);
+  const slots = React.useMemo(
+    () => (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > now),
+    [candidate, now]
+  );
   const mutual = React.useMemo(() => new Set(slots), [slots]);
   // Whether a time is outside their availability is only known once the overlap has answered in
   // full; until then the override says nothing rather than flagging every time it is shown.
@@ -573,14 +587,15 @@ function TimePicker({
 
   const anyStart = days[anyDay] ? atMinutes(days[anyDay], anyMinutes) : null;
   React.useEffect(() => {
-    if (mode === 'recommended') onChoose(selected !== null ? { start: selected, outside: false } : null);
+    if (mode === 'recommended')
+      onChoose(selected !== null && selected > now ? { start: selected, outside: false } : null);
     else
       onChoose(
-        anyStart !== null && anyStart > Date.now()
+        anyStart !== null && anyStart > now
           ? { start: anyStart, outside: overlapKnown ? !mutual.has(anyStart) : null }
           : null
       );
-  }, [anyStart, mode, mutual, onChoose, overlapKnown, selected]);
+  }, [anyStart, mode, mutual, now, onChoose, overlapKnown, selected]);
 
   const box = (children: React.ReactNode) => (
     <div className="flex min-h-[28rem] min-w-0 flex-col gap-3 rounded-xl border border-grey-02 p-3.5 md:min-h-0">
@@ -731,7 +746,7 @@ function TimePicker({
     }
   } else {
     const inside = anyStart !== null && mutual.has(anyStart);
-    const future = anyStart !== null && anyStart > Date.now();
+    const future = anyStart !== null && anyStart > now;
     body = (
       <>
         <Text as="p" variant="footnote" color="grey-04">

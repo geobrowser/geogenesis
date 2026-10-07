@@ -73,6 +73,8 @@ export type AdminDebate = {
   debaters: AdminDebater[];
   /** The debater a `waiting` match is waiting on; null in every other state. */
   waitingOnUserId: string | null;
+  /** Who proposed the current time, when a debater moved it: not the sender once it was moved. */
+  movedByUserId: string | null;
   createdByAdmin: boolean;
   outsideAvailability: boolean;
   rescheduleCount: number;
@@ -95,7 +97,9 @@ function roleOf(userId: string, request: ScheduledDebateRequest): DebaterRole {
 }
 
 function answerOf(accepted: boolean | null, role: DebaterRole, status: ScheduledDebateStatus): DebaterAnswer {
-  if (role === 'sent') return 'sent';
+  // Sending counts as accepting, but only until the other debater moves the time: geo-chat then
+  // asks the sender again, and their answer to the new time is the one that matters.
+  if (role === 'sent' && accepted === true) return 'sent';
   if (accepted === true) return 'accepted';
   // Only a declined match has a decliner. A slot taken by another booking is closed without anyone
   // saying no, whatever the row holds, and its card says so; a red "Declined" would contradict it.
@@ -126,6 +130,7 @@ export function adminDebates(requests: ScheduledDebateRequest[] | undefined): Ad
         state === 'waiting'
           ? (request.participants.find(participant => participant.accepted !== true)?.user_id ?? null)
           : null,
+      movedByUserId: request.reschedule_count > 0 ? (request.proposed_by_user_id ?? null) : null,
       createdByAdmin: request.created_by_admin,
       outsideAvailability: request.outside_availability ?? false,
       rescheduleCount: request.reschedule_count,
@@ -147,7 +152,11 @@ export function blockLabel(debate: AdminDebate, firstNameOf: FirstNameOf): strin
 /** The card's one-sentence account of the match, in the words an admin would use. */
 export function matchSentence(debate: AdminDebate, firstNameOf: FirstNameOf): string {
   const sender = debate.debaters.find(debater => debater.role === 'sent');
-  const origin = sender ? `${firstNameOf(sender.userId)} sent the invite.` : 'An admin arranged this match.';
+  const origin = debate.movedByUserId
+    ? `${firstNameOf(debate.movedByUserId)} moved it to this time.`
+    : sender
+      ? `${firstNameOf(sender.userId)} sent the invite.`
+      : 'An admin arranged this match.';
   switch (debate.state) {
     case 'confirmed':
       return `${origin} Both accepted.`;
