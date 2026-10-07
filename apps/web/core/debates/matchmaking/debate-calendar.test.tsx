@@ -714,7 +714,7 @@ describe('DebateCalendar, admin view (GEO-2943)', () => {
     render(<DebateCalendar />);
 
     expect(screen.getByRole('radio', { name: 'Availability' })).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(screen.getByRole('radio', { name: 'Debates' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Admin' }));
     expect(mocks.routerReplace).toHaveBeenCalledWith('/matchmaking/calendar?from=%2Fdebates&view=debates', {
       scroll: false,
     });

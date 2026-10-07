@@ -590,10 +590,10 @@ export type CalendarView = 'availability' | 'debates';
 
 const VIEW_OPTIONS = [
   { value: 'availability', label: 'Availability' },
-  { value: 'debates', label: 'Debates' },
+  { value: 'debates', label: 'Admin' },
 ] as const;
 
-/** Availability | Debates. Rendered only for an admin; everyone else has one view and no switch. */
+/** Availability | Admin. Rendered only for an admin; everyone else has one view and no switch. */
 export function CalendarViewSwitch({ view, onChange }: { view: CalendarView; onChange: (view: CalendarView) => void }) {
   return <SegmentedControl label="Calendar view" options={VIEW_OPTIONS} value={view} onChange={onChange} />;
 }
