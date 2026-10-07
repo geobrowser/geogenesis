@@ -194,12 +194,13 @@ export async function handoffPreparedSocialVideo({
   downloadUrl: string;
   onUnshareable?: (info: { userActivationSpent: boolean }) => void;
 }): Promise<SocialVideoHandoffOutcome> {
-  const method = getPreparedSocialVideoHandoffMethod(file);
+  const payload = socialVideoShareData({ title, text, file });
+  const method = getPreparedSocialVideoHandoffMethod(payload);
 
   try {
     if (method === 'native_share') {
       try {
-        const sharePromise = navigator.share(text ? { title, text, files: [file] } : { title, files: [file] });
+        const sharePromise = navigator.share(payload);
         await sharePromise;
       } catch (error) {
         // `navigator.canShare({ files })` chose this path, but it is a *hint* — it answers whether
@@ -258,11 +259,16 @@ export async function handoffPreparedSocialVideo({
   }
 }
 
-export function getPreparedSocialVideoHandoffMethod(file: File): SocialVideoHandoffMethod {
+export function socialVideoShareData({ title, text, file }: { title: string; text?: string; file: File }): ShareData {
+  return text ? { title, text, files: [file] } : { title, files: [file] };
+}
+
+/** Whether this browser will take that exact payload — the same object the share will use. */
+export function getPreparedSocialVideoHandoffMethod(data: ShareData): SocialVideoHandoffMethod {
   if (typeof navigator === 'undefined') return 'download';
   if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return 'download';
   try {
-    return navigator.canShare({ files: [file] }) ? 'native_share' : 'download';
+    return navigator.canShare(data) ? 'native_share' : 'download';
   } catch {
     return 'download';
   }

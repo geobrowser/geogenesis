@@ -26,7 +26,7 @@ afterEach(() => {
 });
 
 describe('handoffPreparedSocialVideo', () => {
-  it('probes only the file payload and shares only the claim title and MP4', async () => {
+  it('probes the exact payload it goes on to share', async () => {
     mocks.canShare.mockReturnValue(true);
     mocks.share.mockResolvedValue(undefined);
     Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
@@ -39,13 +39,36 @@ describe('handoffPreparedSocialVideo', () => {
       downloadUrl: 'blob:https://geo.test/social-video',
     });
 
-    expect(mocks.canShare).toHaveBeenCalledWith({ files: [preparedFile] });
-    expect(mocks.share).toHaveBeenCalledWith({ title: 'Debates are useful', files: [preparedFile] });
+    expect(mocks.canShare).toHaveBeenCalledWith({ title: 'Debates are useful', files: [preparedFile] });
+    expect(mocks.share.mock.calls[0][0]).toBe(mocks.canShare.mock.calls[0][0]);
     await expect(handoff).resolves.toBe('native_share');
     expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
       debate_id: 'debate-1',
       method: 'native_share',
     });
+  });
+
+  // The text rides on both halves or neither — it is part of what the platform is agreeing to.
+  it('probes the text alongside the file when one is given', async () => {
+    mocks.canShare.mockReturnValue(true);
+    mocks.share.mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'canShare', { configurable: true, value: mocks.canShare });
+    Object.defineProperty(navigator, 'share', { configurable: true, value: mocks.share });
+
+    await handoffPreparedSocialVideo({
+      debateId: 'debate-1',
+      title: 'Debates are useful',
+      text: 'Watch the debate on Geo!',
+      file: preparedFile,
+      downloadUrl: 'blob:https://geo.test/social-video',
+    });
+
+    expect(mocks.canShare).toHaveBeenCalledWith({
+      title: 'Debates are useful',
+      text: 'Watch the debate on Geo!',
+      files: [preparedFile],
+    });
+    expect(mocks.share.mock.calls[0][0]).toBe(mocks.canShare.mock.calls[0][0]);
   });
 
   // Preston, on production: "Failed to execute 'share' on 'Navigator': Permission denied".
