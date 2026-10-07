@@ -2384,6 +2384,8 @@ export type DebateLobbySummary = {
   viewer_reminded: boolean;
   /** On the roster, stepped out included. */
   viewer_on_roster: boolean;
+  /** When this row was read; orders card patches. `null` before the lobby's first broadcast; absent from older geo-chat. */
+  as_of?: string | null;
 };
 
 export type DebateLobbiesResponse = { lobbies: DebateLobbySummary[] };

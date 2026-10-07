@@ -260,6 +260,7 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.lobbies_changed', payload: { lobby_id: 'abc' } },
       [
         ['debates', 'account', 'user-a', 'lobbies'],
+        ['debates', 'account', 'user-a', 'my-lobby'],
         ['debates', 'account', 'user-a', 'lobby', 'abc'],
       ],
     ],
@@ -290,7 +291,8 @@ describe('DebateGatewayClient', () => {
 
   describe('lobby card patches', () => {
     const lobbiesKey = ['debates', 'account', 'user-a', 'lobbies'];
-    const row = (lobbyId: string, headcount: number, viewerReminded = false) => ({
+    const myLobbyKey = ['debates', 'account', 'user-a', 'my-lobby'];
+    const row = (lobbyId: string, headcount: number, asOf: string | null = null, viewerReminded = false) => ({
       lobby_id: lobbyId,
       name: lobbyId,
       scheduled: false,
@@ -304,10 +306,11 @@ describe('DebateGatewayClient', () => {
       reminder_count: 0,
       viewer_reminded: viewerReminded,
       viewer_on_roster: false,
+      as_of: asOf,
     });
     const card = (lobbyId: string, headcount: number, asOf: string) => {
-      const { viewer_reminded: _r, viewer_on_roster: _o, ...lobby } = row(lobbyId, headcount);
-      return { status: 'listed', insert: false, as_of: asOf, lobby };
+      const { viewer_reminded: _r, viewer_on_roster: _o, as_of: _a, ...lobby } = row(lobbyId, headcount);
+      return { status: 'listed', as_of: asOf, lobby };
     };
 
     async function started() {
@@ -338,9 +341,9 @@ describe('DebateGatewayClient', () => {
         .getQueryData<{ lobbies: { lobby_id: string; headcount: number }[] }>(lobbiesKey)
         ?.lobbies.map(lobby => `${lobby.lobby_id}:${lobby.headcount}`);
 
-    it('patches the cached list without refetching it, keeping the viewer’s own fields', async () => {
+    it('patches a cached row without refetching, keeping the viewer’s own fields', async () => {
       await started();
-      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, true), row('bb', 2)] });
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, null, true), row('bb', 2)] });
 
       await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 5, '2026-10-07T12:00:01Z') });
 
@@ -349,98 +352,77 @@ describe('DebateGatewayClient', () => {
         queryClient.getQueryData<{ lobbies: { viewer_reminded: boolean }[] }>(lobbiesKey)?.lobbies[1]
       ).toMatchObject({ viewer_reminded: true });
       expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbiesKey }));
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: myLobbyKey }));
       expectInvalidated(invalidateQueries, {
         queryKey: [...lobbiesKey.slice(0, 3), 'lobby', 'bb'],
         refetchType: 'active',
       });
     });
 
-    it('drops a patch older than the last one applied to that row', async () => {
+    it('drops a patch no newer than the row, whether the GET or a patch set it', async () => {
       await started();
-      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, '2026-10-07T12:00:04Z')] });
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 9, '2026-10-07T12:00:04Z') });
+      expect(cachedIds()).toEqual(['aa:3']);
 
       await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 6, '2026-10-07T12:00:05Z') });
       await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:02Z') });
-
       expect(cachedIds()).toEqual(['aa:6']);
     });
 
-    it('drops a removed row', async () => {
+    it('never adds a lobby from a patch', async () => {
       await started();
-      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3), row('bb', 2)] });
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
 
-      await lobbiesChanged({ lobby_id: 'AA', lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z' } });
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 1, '2026-10-07T12:00:01Z') });
 
-      expect(cachedIds()).toEqual(['bb:2']);
+      expect(cachedIds()).toEqual(['aa:3']);
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbiesKey }));
     });
 
-    it('does not let a GET in flight when a patch lands bring a removed lobby back', async () => {
+    // The GET replaces the whole list, so a patch it predates would be lost until the next one.
+    it('refetches when a patch lands while a GET that predates it is in flight', async () => {
       await started();
       invalidateQueries.mockRestore();
 
       const responses = [
-        { lobbies: [row('aa', 3), row('bb', 2)] },
-        { lobbies: [row('aa', 3), row('bb', 2)] },
-        { lobbies: [row('bb', 2)] },
+        { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] },
+        { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] },
+        { lobbies: [row('aa', 8, '2026-10-07T12:00:05Z')] },
       ];
       let release: () => void = () => undefined;
       const fetchLobbies = vi.fn(async () => {
         const response = responses[fetchLobbies.mock.calls.length - 1]!;
-        // The second GET read the list before the removal and lands after the patch.
         if (fetchLobbies.mock.calls.length === 2) await new Promise<void>(done => (release = done));
         return response;
       });
       const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
       const unsubscribe = observer.subscribe(() => undefined);
-      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3', 'bb:2']));
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3']));
 
       void observer.refetch();
-      await lobbiesChanged({ lobby_id: 'aa', lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z' } });
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
       release();
       await vi.runAllTicks();
 
-      await vi.waitFor(() => expect(cachedIds()).toEqual(['bb:2']));
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:8']));
       expect(fetchLobbies).toHaveBeenCalledTimes(3);
       unsubscribe();
     });
 
-    it('applies a refill patch, then refetches the list once', async () => {
-      await started();
-      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3), row('bb', 2)] });
-
-      await lobbiesChanged({
-        lobby_id: 'aa',
-        lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z', refill: true },
-      });
-
-      expect(cachedIds()).toEqual(['bb:2']);
-      expectInvalidated(invalidateQueries, { queryKey: lobbiesKey, refetchType: 'active' });
-    });
-
-    it('drops patches no newer than a removal’s as_of', async () => {
-      await started();
-      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
-
-      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:05Z' } });
-      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { ...card('bb', 1, '2026-10-07T12:00:05Z'), insert: true } });
-      expect(cachedIds()).toEqual(['aa:3']);
-
-      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { ...card('bb', 1, '2026-10-07T12:00:06Z'), insert: true } });
-      expect(cachedIds()).toEqual(['aa:3', 'bb:1']);
-    });
-
     it.each([
       ['no lobby_card', {}],
-      ['an unknown status', { lobby_card: { status: 'later' } }],
-      ['a listed card without as_of', { lobby_card: { ...card('aa', 1, ''), as_of: undefined } }],
-      ['a removal without as_of', { lobby_card: { status: 'removed' } }],
-    ])('refetches the list for %s', async (_label, extra) => {
+      ['another status', { lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z' } }],
+      ['a card without as_of', { lobby_card: { ...card('aa', 1, ''), as_of: undefined } }],
+    ])('refetches the list and the viewer’s lobby for %s', async (_label, extra) => {
       await started();
       queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
 
       await lobbiesChanged({ lobby_id: 'aa', ...extra });
 
       expectInvalidated(invalidateQueries, { queryKey: lobbiesKey, refetchType: 'active' });
+      expectInvalidated(invalidateQueries, { queryKey: myLobbyKey, refetchType: 'active' });
       expect(cachedIds()).toEqual(['aa:3']);
     });
   });

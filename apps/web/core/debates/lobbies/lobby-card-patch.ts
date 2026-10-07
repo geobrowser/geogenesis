@@ -1,23 +1,17 @@
 import { type DebateLobbiesResponse, type DebateLobbySummary, dashlessId } from '../api';
 
 /** `DebateLobbySummary` as broadcast: nothing about whoever receives it. */
-export type DebateLobbyCard = Omit<DebateLobbySummary, 'viewer_reminded' | 'viewer_on_roster'>;
+export type DebateLobbyCard = Omit<DebateLobbySummary, 'viewer_reminded' | 'viewer_on_roster' | 'as_of'>;
 
-/** `refill`: the capped list changed shape, so refetch once after applying. */
-export type DebateLobbyCardPatch =
-  | { status: 'listed'; insert: boolean; asOf: number; refill: boolean; lobby: DebateLobbyCard }
-  | { status: 'removed'; lobbyId: string; asOf: number; refill: boolean };
+export type DebateLobbyCardPatch = { asOf: string; lobby: DebateLobbyCard };
 
-/** `debate.lobbies_changed`'s `lobby_card`; `null` when absent or unreadable, which means refetch. */
-export function parseLobbyCardPatch(lobbyId: string | undefined, value: unknown): DebateLobbyCardPatch | null {
-  if (!isRecord(value)) return null;
-
-  const asOf = typeof value.as_of === 'string' ? Date.parse(value.as_of) : NaN;
-  if (Number.isNaN(asOf)) return null;
-  const refill = value.refill === true;
-
-  if (value.status === 'removed') return lobbyId ? { status: 'removed', lobbyId, asOf, refill } : null;
-  if (value.status !== 'listed') return null;
+/**
+ * `debate.lobbies_changed`'s `lobby_card`; `null` when absent or unreadable, which means refetch.
+ * Create, open and close arrive without one.
+ */
+export function parseLobbyCardPatch(value: unknown): DebateLobbyCardPatch | null {
+  if (!isRecord(value) || value.status !== 'listed') return null;
+  if (typeof value.as_of !== 'string' || Number.isNaN(Date.parse(value.as_of))) return null;
 
   const lobby = value.lobby;
   if (!isRecord(lobby) || typeof lobby.lobby_id !== 'string') return null;
@@ -25,27 +19,24 @@ export function parseLobbyCardPatch(lobbyId: string | undefined, value: unknown)
     return null;
   }
 
-  return { status: 'listed', insert: value.insert === true, asOf, refill, lobby: lobby as DebateLobbyCard };
+  return { asOf: value.as_of, lobby: lobby as DebateLobbyCard };
 }
 
 /**
- * The cached list with one patch applied, or the same list when the patch changes nothing. A
- * missing row is added only on `insert`: any other absence is the list's caps or a ban.
+ * The cached list with one patch applied, or the same list when it changes nothing. Patches only
+ * update a row already listed, and only when newer than that row's `as_of`.
  */
 export function applyLobbyCardPatch(list: DebateLobbiesResponse, patch: DebateLobbyCardPatch): DebateLobbiesResponse {
-  if (patch.status === 'removed') {
-    const lobbies = list.lobbies.filter(row => dashlessId(row.lobby_id) !== dashlessId(patch.lobbyId));
-    return lobbies.length === list.lobbies.length ? list : { lobbies };
-  }
-
   const id = dashlessId(patch.lobby.lobby_id);
   const cached = list.lobbies.find(row => dashlessId(row.lobby_id) === id);
-  if (!cached && !patch.insert) return list;
+  if (!cached) return list;
+  if (cached.as_of && Date.parse(cached.as_of) >= Date.parse(patch.asOf)) return list;
 
   const row: DebateLobbySummary = {
     ...patch.lobby,
-    viewer_reminded: cached?.viewer_reminded ?? false,
-    viewer_on_roster: cached?.viewer_on_roster ?? false,
+    viewer_reminded: cached.viewer_reminded,
+    viewer_on_roster: cached.viewer_on_roster,
+    as_of: patch.asOf,
   };
   const others = list.lobbies.filter(other => dashlessId(other.lobby_id) !== id);
 

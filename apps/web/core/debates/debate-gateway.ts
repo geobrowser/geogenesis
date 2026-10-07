@@ -145,8 +145,6 @@ export class DebateGatewayClient {
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
-  /** The newest `lobby_card.as_of` seen per dashless lobby id, removals included; older patches are dropped. */
-  private readonly lobbyCardAsOf = new Map<string, number>();
 
   private snapshot: DebateGatewaySnapshot = {
     status: 'idle',
@@ -248,7 +246,6 @@ export class DebateGatewayClient {
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
-    this.lobbyCardAsOf.clear();
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false, pauseReason: null });
   }
@@ -479,12 +476,18 @@ export class DebateGatewayClient {
         break;
       // GEO-3133. Sent to matchmaking subscribers: the lobbies card, and a lobby page whose viewer
       // is not inside, which `debate.lobby_changed` does not reach.
-      case 'debate.lobbies_changed':
-        if (!this.patchLobbies(parseLobbyCardPatch(identifiers.lobby_id, identifiers.lobby_card))) {
+      case 'debate.lobbies_changed': {
+        const patch = parseLobbyCardPatch(identifiers.lobby_card);
+        if (!patch) {
+          // Card-less: create, open, close, or a change to this viewer's own standing.
+          this.queueAccountQuery('lobbies');
+          this.queueAccountQuery('my-lobby');
+        } else if (!this.patchLobbies(patch)) {
           this.queueAccountQuery('lobbies');
         }
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
+      }
       // GEO-3131. Sent to the lobby's present members.
       case 'debate.lobby_changed':
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
@@ -492,25 +495,15 @@ export class DebateGatewayClient {
     }
   }
 
-  /** Patches the cached lobbies list in place. False when the event should refetch it as well. */
-  private patchLobbies(patch: DebateLobbyCardPatch | null) {
-    if (!patch || !this.accountKey) return false;
-
-    // A removal wins a tie: a closed lobby does not reopen.
-    const id = dashlessId(patch.status === 'listed' ? patch.lobby.lobby_id : patch.lobbyId);
-    const lastAsOf = this.lobbyCardAsOf.get(id);
-    const stale =
-      lastAsOf !== undefined && (patch.status === 'listed' ? patch.asOf <= lastAsOf : patch.asOf < lastAsOf);
+  /** Patches the cached lobbies list in place. False when the list should be refetched as well. */
+  private patchLobbies(patch: DebateLobbyCardPatch) {
+    if (!this.accountKey) return false;
 
     const key = ['debates', 'account', this.accountKey, 'lobbies'];
-    if (!stale) {
-      this.lobbyCardAsOf.set(id, patch.asOf);
-      this.queryClient.setQueryData<DebateLobbiesResponse>(key, list =>
-        list ? applyLobbyCardPatch(list, patch) : list
-      );
-    }
-    // A GET already in flight may predate the patch and would overwrite it; the flush cancels it.
-    return !patch.refill && this.queryClient.getQueryState(key)?.fetchStatus !== 'fetching';
+    this.queryClient.setQueryData<DebateLobbiesResponse>(key, list => (list ? applyLobbyCardPatch(list, patch) : list));
+    // A GET in flight may have read the row before this patch and replaces the whole list when it
+    // lands; refetching lets the flush cancel it.
+    return this.queryClient.getQueryState(key)?.fetchStatus !== 'fetching';
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {
@@ -582,7 +575,8 @@ export class DebateGatewayClient {
       | 'upcoming-rooms'
       | 'room'
       | 'lobbies'
-      | 'lobby',
+      | 'lobby'
+      | 'my-lobby',
     id?: string
   ) {
     if (!this.accountKey) return;
