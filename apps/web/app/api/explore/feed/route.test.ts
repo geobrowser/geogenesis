@@ -48,6 +48,7 @@ const sentArgs = () =>
     cursor: string | null;
     reorderWindow?: unknown;
     freshSlot?: { config: unknown; revision: number };
+    markPlayableLeads?: boolean;
   };
 
 describe('GET /api/explore/feed', () => {
@@ -63,6 +64,42 @@ describe('GET /api/explore/feed', () => {
 
     expect(sentArgs().freshSlot).toBeUndefined();
     expect(mocks.freshState).not.toHaveBeenCalled();
+  });
+
+  // GEO-3234. Seen demotion runs in the browser; the page only says whether it is on.
+  describe('seen demotion', () => {
+    const SEEN_ON = { ...FRESH_ON, seenDemotion: { enabled: true, minViews: 2, days: 3 } };
+    const bestPage = { items: [], nextCursor: null, feed: { name: 'best', version: 'best-1' } };
+
+    it('ships the knobs with a Best page and asks for the playable leads, while on', async () => {
+      mocks.freshState.mockResolvedValue({ config: SEEN_ON, revision: 5, updatedAt: null, updatedBy: null });
+      mocks.fetchFeed.mockResolvedValue(bestPage);
+
+      const response = await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+      expect(sentArgs().markPlayableLeads).toBe(true);
+      expect((await response.json()).seenDemotion).toEqual({ minViews: 2, days: 3 });
+      // Nothing per-visitor, so nothing stops a shared cache keeping it.
+      expect(response.headers.get('cache-control')).toBeNull();
+    });
+
+    it('leaves the page exactly as it was while off', async () => {
+      mocks.fetchFeed.mockResolvedValue(bestPage);
+
+      const response = await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+      expect(sentArgs().markPlayableLeads).toBe(false);
+      expect(await response.json()).toEqual(bestPage);
+    });
+
+    it('leaves an interleaved page alone', async () => {
+      mocks.freshState.mockResolvedValue({ config: SEEN_ON, revision: 5, updatedAt: null, updatedBy: null });
+      mocks.fetchFeed.mockResolvedValue({ ...bestPage, feed: { name: 'interleaved', version: 'interleave(a,b)' } });
+
+      const response = await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+      expect((await response.json()).seenDemotion).toBeUndefined();
+    });
   });
 
   it('serves debates and claims when the client sends no types', async () => {

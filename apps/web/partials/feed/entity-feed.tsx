@@ -15,6 +15,9 @@ import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/de
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
 import type { ExploreFeedItem, ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { applySeenDemotion } from '~/core/explore/seen-demotion/demote-seen';
+import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
+import { seenStore } from '~/core/explore/seen-demotion/seen-store';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
@@ -497,10 +500,30 @@ export function EntityFeed({
     return () => io.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
+  // GEO-3234. Load what this browser has already shown, once, while the first page is in flight.
+  const isBest = sort === 'best';
+  React.useEffect(() => {
+    if (isBest) seenStore().prime();
+  }, [isBest]);
+  const [mountedAtSec] = React.useState(() => Math.floor(Date.now() / 1000));
+
   const items = React.useMemo(() => {
     const pages = data?.pages ?? [];
     const flat: ExploreFeedItem[] = [];
-    for (const p of pages) flat.push(...p.items);
+    for (const [index, p] of pages.entries()) {
+      // GEO-3234. Each Best page reordered for this visitor on its own, so paging is untouched.
+      const config = readSeenDemotionPageConfig(p.seenDemotion);
+      flat.push(
+        ...(config
+          ? applySeenDemotion(p.items, {
+              config,
+              snapshot: seenStore().snapshot(),
+              firstPage: index === 0,
+              nowSec: mountedAtSec,
+            })
+          : p.items)
+      );
+    }
     if (!isForYou) return flat;
     // For you pages two streams that overlap, so an item served from one can come back later from
     // the other. The first appearance stays.
@@ -511,7 +534,7 @@ export function EntityFeed({
       seen.add(id);
       return true;
     });
-  }, [data?.pages, isForYou]);
+  }, [data?.pages, isForYou, mountedAtSec]);
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];
