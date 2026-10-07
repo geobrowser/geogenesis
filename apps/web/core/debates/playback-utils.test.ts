@@ -4,7 +4,6 @@ import type { DebateMediaArtifactKind, DebateMediaResponse, DebateMediaTurnSegme
 import {
   clampSeconds,
   hasProcessedVideo,
-  normalizeTurnDurationsMs,
   pairPlayhead,
   playBothWithMutedFallback,
   recordingWindowOffsetsSeconds,
@@ -15,6 +14,7 @@ import {
   turnSpansFromSegments,
   turnStateForTime,
   turnStateFromSegments,
+  usableTurnDurationsMs,
 } from './playback-utils';
 
 describe('hasProcessedVideo', () => {
@@ -40,18 +40,22 @@ describe('hasProcessedVideo', () => {
   });
 });
 
-describe('normalizeTurnDurationsMs', () => {
-  it('keeps finite positive durations', () => {
-    expect(normalizeTurnDurationsMs([30_000, 45_000])).toEqual([30_000, 45_000]);
+describe('usableTurnDurationsMs', () => {
+  it('keeps a row whose every duration is finite and positive', () => {
+    expect(usableTurnDurationsMs([30_000, 45_000])).toEqual([30_000, 45_000]);
   });
 
-  it('drops non-finite, zero, and negative values', () => {
-    expect(normalizeTurnDurationsMs([Number.NaN, -5, 0, 1_000, Infinity])).toEqual([1_000]);
+  // Dropping the bad entry would shift every later turn onto the other speaker (GEO-2956).
+  it('rejects the whole row when any duration is unusable', () => {
+    expect(usableTurnDurationsMs([Number.NaN, -5, 0, 1_000, Infinity])).toBeNull();
+    expect(usableTurnDurationsMs([60_000, 0, 45_000])).toBeNull();
   });
 
-  it('falls back to a two-turn default when nothing survives', () => {
-    expect(normalizeTurnDurationsMs([])).toEqual([30_000, 30_000]);
-    expect(normalizeTurnDurationsMs([0, -1, Number.NaN])).toEqual([30_000, 30_000]);
+  // It used to invent [30_000, 30_000] here.
+  it('does not invent a schedule for an empty or missing row', () => {
+    expect(usableTurnDurationsMs([])).toBeNull();
+    expect(usableTurnDurationsMs(undefined)).toBeNull();
+    expect(usableTurnDurationsMs(null)).toBeNull();
   });
 });
 

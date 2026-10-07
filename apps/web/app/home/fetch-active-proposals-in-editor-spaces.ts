@@ -6,6 +6,7 @@ import {
   type ApiProposalListItem,
   convertVoteOption,
   getApiProposalCanExecute,
+  getEffectiveApiProposalStatus,
   mapActionTypeToProposalType,
   mapProposalStatus,
 } from '~/core/io/rest';
@@ -135,7 +136,7 @@ export async function getActiveProposalsForSpacesWhereEditor(
     const profile = profilesBySpaceId.get(p.proposedBy) ?? defaultProfile(p.proposedBy, p.proposedBy);
     const actionType = p.actions[0]?.actionType ?? 'UNKNOWN';
     const type = mapActionTypeToProposalType(actionType);
-    const status = mapProposalStatus(p.status);
+    const status = mapProposalStatus(getEffectiveApiProposalStatus(p));
 
     return {
       id: p.proposalId,

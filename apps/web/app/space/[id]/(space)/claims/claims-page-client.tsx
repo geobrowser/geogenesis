@@ -169,8 +169,9 @@ export function ClaimsPageClient({ spaceId }: ClaimsPageClientProps) {
         ) : rows.length === 0 ? (
           <Text color="grey-04">{hasNarrowed ? 'No claims match these filters.' : 'No claims here yet.'}</Text>
         ) : (
-          rows.map(row => (
+          rows.map((row, index) => (
             <ExploreFeedCard
+              itemPosition={index + 1}
               key={`${row.entityId}-${row.spaceId}`}
               item={{ ...row, spaceName: '', spaceImage: null, hasPendingMembershipRequest: false }}
               // Every row is this space by construction, so a space chip and a Join button would

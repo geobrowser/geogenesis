@@ -26,29 +26,37 @@ describe('feature flags', () => {
     // GEO-2914 hid the Explore side panel behind this rather than deleting it, so off is the
     // shipped state rather than a developer convenience — see the explore-page test.
     expect(defaultFeatureFlags.exploreSidePanel).toBe(false);
+    expect(defaultFeatureFlags.lobbyJoining).toBe(false);
+    expect(defaultFeatureFlags.lobbyHosting).toBe(false);
     expect(defaultFeatureFlags.bountiesTab).toBe(true);
     expect(normalizeFeatureFlags(null)).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
-      peerAvailability: false,
       debateDebugging: false,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      forYouFeed: false,
+      lobbyJoining: false,
+      lobbyHosting: false,
       bountiesTab: true,
     });
   });
 
-  // Claims and debates shipped to everyone. Every browser that ever opened the flags dialog still
-  // has the retired ids in storage, and they must not survive normalization — a stray `questionsTab`
-  // reaching the dialog would render a checkbox for a flag nothing reads.
-  it('drops the retired claims-and-debates flags that are still in storage', () => {
-    expect(normalizeFeatureFlags({ questionsTab: true, debatesTab: true, debateDebugging: true })).toEqual({
+  // Claims, debates and scheduling shipped to everyone. Every browser that ever opened the flags
+  // dialog still has the retired ids in storage, and they must not survive normalization — a stray
+  // `questionsTab` reaching the dialog would render a checkbox for a flag nothing reads.
+  it('drops the retired flags that are still in storage', () => {
+    expect(
+      normalizeFeatureFlags({ questionsTab: true, debatesTab: true, peerAvailability: true, debateDebugging: true })
+    ).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: false,
-      peerAvailability: false,
       debateDebugging: true,
       debateFormatSelector: false,
       exploreSidePanel: false,
+      forYouFeed: false,
+      lobbyJoining: false,
+      lobbyHosting: false,
       bountiesTab: true,
     });
   });
@@ -71,10 +79,12 @@ describe('feature flags', () => {
     expect(JSON.parse(window.localStorage.getItem(featureFlagsStorageKey) ?? 'null')).toEqual({
       playbackDiagnostics: false,
       debugDebatesPage: true,
-      peerAvailability: false,
       debateDebugging: true,
       debateFormatSelector: true,
       exploreSidePanel: false,
+      forYouFeed: false,
+      lobbyJoining: false,
+      lobbyHosting: false,
       bountiesTab: true,
     });
   });

@@ -5,6 +5,7 @@ import {
   type ApiProposalListItem,
   convertVoteOption,
   getApiProposalCanExecute,
+  getEffectiveApiProposalStatus,
   mapApiActionsToProposalType,
   mapProposalStatus,
 } from '~/core/io/rest';
@@ -147,7 +148,7 @@ export async function getMyGovernanceProposals(opts: {
         startTime: p.timing.startTime,
         submittedAt: getSubmittedTime(submittedTimes, p.proposalId),
         endTime: p.timing.endTime,
-        status: mapProposalStatus(p.status),
+        status: mapProposalStatus(getEffectiveApiProposalStatus(p)),
         canExecute: getApiProposalCanExecute(p),
         proposalVotes: {
           totalCount: p.votes.total,

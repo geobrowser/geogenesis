@@ -2,9 +2,7 @@
 
 import * as React from 'react';
 
-import { usePeerAvailabilityEnabled } from '~/core/state/feature-flags';
-
-import { Text } from '~/design-system/text';
+import cx from 'classnames';
 
 import { useDebateActivity } from '../hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
@@ -16,9 +14,10 @@ import { HubCardList } from './hub-motion';
 import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { type ScheduledContent, ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
+import { RequestSection } from './request-section';
+import { ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
-import { useUnexpiredRequests } from './use-request-countdown';
+import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
 type RequestStatusFilter = 'all' | 'sent' | 'received';
 
@@ -29,38 +28,15 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
 ];
 
 /**
- * Both halves of your request traffic, split the way the design does: the one request you have
- * sent under "Sent", and every unexpired request pointed at you under "Received". A received
- * request lives here for its full 25-minute lifetime — dismissing the popup with "Not now" leaves
- * it untouched, so this is where you come back to it.
+ * Sent + received requests (received stays for the full ~25m lifetime after "Not now").
+ * Server already drops offline/blocked; this tab is presentation and space/status narrowing.
  *
- * The server already filters out offline requesters and blocked users, so this tab only owns
- * presentation plus narrowing. (Requests carry no topics — the topic facet is a Claims/Matches
- * concern, so the design's third menu has nothing to offer here.)
+ * `dense` (live rail): no sticky filters — three stickies stacked would overlap, and a rail
+ * has no room for full-tab chrome. No heading or outer padding either: each section below names
+ * itself, and the rail spaces its sections the way the facet rail opposite does.
  */
-export function RequestsTab() {
-  // The flag that lets anyone book one. Split rather than branched inside, so a viewer who cannot
-  // schedule mounts none of the scheduling reads (GEO-2938, GEO-2940).
-  return usePeerAvailabilityEnabled() ? (
-    <ScheduledRequestsTab />
-  ) : (
-    <RequestsTabBody scheduled={NO_SCHEDULED} schedulingEnabled={false} />
-  );
-}
-
-const NO_SCHEDULED: ScheduledContent = { answerable: [], upcoming: [], requestsError: null, roomsError: null };
-
-function ScheduledRequestsTab() {
-  return <RequestsTabBody scheduled={useScheduledContent(true)} schedulingEnabled />;
-}
-
-function RequestsTabBody({
-  scheduled,
-  schedulingEnabled,
-}: {
-  scheduled: ScheduledContent;
-  schedulingEnabled: boolean;
-}) {
+export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
+  const scheduled = useScheduledContent();
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -68,7 +44,9 @@ function RequestsTabBody({
   const { data: activity } = useDebateActivity(true);
 
   const incoming = useUnexpiredRequests(requestsQuery.data?.incoming ?? []);
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
+  // Through the same expiry filter as the received side, so a lapsed request leaves at its expiry
+  // rather than sitting on an "Expired" card until the server says so.
+  const outbound = useLiveRequest(requestsQuery.data?.outbound ?? activity?.outbound_request);
 
   const inSpace = React.useCallback(
     (requestSpaceId: string) => spaceIds.length === 0 || spaceIds.includes(requestSpaceId),
@@ -97,11 +75,7 @@ function RequestsTabBody({
 
   // The claimless challenge sits alongside claim requests: it expires the same way, and "Not now"
   // in its popup leaves it here rather than answering it.
-  const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
-  const liveChallenges = useUnexpiredRequests(
-    React.useMemo(() => (reportedChallenge ? [reportedChallenge] : []), [reportedChallenge])
-  );
-  const challenge = liveChallenges[0] ?? null;
+  const challenge = useLiveRequest(activity?.challenge);
   const currentUserId = useCurrentGeoChatUserId();
   // A claimless challenge belongs to no space, so a space filter can only hide it. Role is left
   // undecided until the viewer's id is known — guessing files an incoming challenge under Sent,
@@ -121,92 +95,90 @@ function RequestsTabBody({
     scheduled.upcoming.length > 0 ||
     scheduled.requestsError !== null ||
     scheduled.roomsError !== null;
-  const isEmpty = !sent && !outgoingChallenge && received.length === 0 && !incomingChallenge && !hasScheduled;
+  const hasRequests = Boolean(sent || outgoingChallenge || received.length > 0 || incomingChallenge);
+  const isEmpty = !hasRequests && !hasScheduled;
+
+  if (dense && isEmpty) return null;
 
   return (
     <div className="flex flex-col">
-      <HubStickyControls>
-        <SpaceTopicFilters
-          analyticsSurface="hub"
-          spaceIds={spaceIds}
-          onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
-          onSpacesClear={() => setSpaceIds([])}
-          facetSpaces={facetSpaces}
-          leading={
-            <HubFilterMenu
-              label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
-              analytics={{ name: 'Status', surface: 'hub' }}
-              options={STATUS_OPTIONS}
-              value={status}
-              onChange={setStatus}
-            />
-          }
-        />
-      </HubStickyControls>
+      {!dense && (
+        <HubStickyControls>
+          <SpaceTopicFilters
+            analyticsSurface="hub"
+            spaceIds={spaceIds}
+            onSpaceToggle={id => setSpaceIds(current => toggleId(current, id))}
+            onSpacesClear={() => setSpaceIds([])}
+            facetSpaces={facetSpaces}
+            leading={
+              <HubFilterMenu
+                label={STATUS_OPTIONS.find(option => option.value === status)?.label ?? 'Any status'}
+                analytics={{ name: 'Status', surface: 'hub' }}
+                options={STATUS_OPTIONS}
+                value={status}
+                onChange={setStatus}
+              />
+            }
+          />
+        </HubStickyControls>
+      )}
 
-      <div className="flex flex-col gap-3 px-4 py-3">
+      <div className={cx('flex flex-col gap-3 px-4', !dense && 'py-3')}>
         {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
             must not vanish because an unrelated read failed. */}
-        {schedulingEnabled && <ScheduledDebatesSection content={scheduled} />}
+        <ScheduledDebatesSection content={scheduled} />
 
-        <HubQueryState
-          analyticsSurface="hub"
-          isLoading={requestsQuery.isLoading}
-          error={requestsQuery.error}
-          failureReason={requestsQuery.failureReason}
-          onRetry={() => void requestsQuery.refetch()}
-          isEmpty={isEmpty}
-          emptyMessage={
-            hasFilters ? 'No requests match these filters.' : 'Any debate requests you’ll receive will appear here.'
-          }
-          emptyAction={
-            hasFilters
-              ? {
-                  label: 'Clear filters',
-                  onClick: () => {
-                    setSpaceIds([]);
-                    setStatus('all');
-                  },
-                }
-              : undefined
-          }
-        >
-          <div className="flex flex-col gap-4">
-            {sent || outgoingChallenge ? (
-              <RequestSection label="Sent">
-                <div className="flex flex-col gap-2">
-                  {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
-                  <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
-                </div>
-              </RequestSection>
-            ) : null}
+        {/* Dense with only scheduled debates to show, the requests list would be an empty box that
+            still takes a gap below them. */}
+        {dense && !hasRequests && !requestsQuery.isLoading && !requestsQuery.error ? null : (
+          <HubQueryState
+            analyticsSurface="hub"
+            isLoading={requestsQuery.isLoading}
+            error={requestsQuery.error}
+            failureReason={requestsQuery.failureReason}
+            onRetry={() => void requestsQuery.refetch()}
+            isEmpty={isEmpty}
+            emptyMessage={
+              hasFilters ? 'No requests match these filters.' : 'Any debate requests you’ll receive will appear here.'
+            }
+            emptyAction={
+              hasFilters
+                ? {
+                    label: 'Clear filters',
+                    onClick: () => {
+                      setSpaceIds([]);
+                      setStatus('all');
+                    },
+                  }
+                : undefined
+            }
+          >
+            <div className="flex flex-col gap-4">
+              {sent || outgoingChallenge ? (
+                <RequestSection label="Sent">
+                  <div className="flex flex-col gap-2">
+                    {outgoingChallenge ? <DebateChallengeCard challenge={outgoingChallenge} role="requester" /> : null}
+                    <HubCardList>{sent ? <OutboundRequestCard key={sent.id} request={sent} /> : null}</HubCardList>
+                  </div>
+                </RequestSection>
+              ) : null}
 
-            {incomingChallenge || received.length > 0 ? (
-              <RequestSection label="Received">
-                <div className="flex flex-col gap-2">
-                  {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
-                  <HubCardList>
-                    {received.map(request => (
-                      <IncomingRequestCard key={request.id} request={request} />
-                    ))}
-                  </HubCardList>
-                </div>
-              </RequestSection>
-            ) : null}
-          </div>
-        </HubQueryState>
+              {incomingChallenge || received.length > 0 ? (
+                <RequestSection label="Received">
+                  <div className="flex flex-col gap-2">
+                    {incomingChallenge ? <DebateChallengeCard challenge={incomingChallenge} role="recipient" /> : null}
+                    <HubCardList>
+                      {received.map(request => (
+                        <IncomingRequestCard key={request.id} request={request} />
+                      ))}
+                    </HubCardList>
+                  </div>
+                </RequestSection>
+              ) : null}
+            </div>
+          </HubQueryState>
+        )}
       </div>
     </div>
-  );
-}
-
-function RequestSection({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <Text as="h3" variant="footnote" color="grey-04">
-        {label}
-      </Text>
-      {children}
-    </section>
   );
 }

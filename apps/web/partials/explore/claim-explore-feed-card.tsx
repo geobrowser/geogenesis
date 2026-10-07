@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
@@ -25,9 +26,10 @@ import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Text } from '~/design-system/text';
 
-import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 
 /**
@@ -162,10 +164,10 @@ export function ClaimExploreFeedCard({
     indexedPosition: trustedIndexedPosition(summary, control.isResponsePending),
   });
 
-  // Read the same live cache as `EntityCommentsButton` before deciding whether the row has a third
-  // action at all. Checking only the server seed would keep the button hidden after this card's
-  // optional composer publishes the first comment; rendering a button that returns null would leave
-  // PositionRow in its three-column layout with an empty final column.
+  // Read the live comment cache before deciding whether the row has a third action at all. Checking
+  // only the server seed would keep the pill hidden after this card's optional composer publishes the
+  // first comment; rendering a pill that returns null would leave PositionRow in its three-column
+  // layout with an empty final column.
   // What the claim page's Activity heading says: its debates, the claims extracted from them, and
   // every comment in that tree — not only the comments filed directly on the claim. The two read
   // from one query so a reader who opens the card is not told a different number. Falls back to the
@@ -193,8 +195,8 @@ export function ClaimExploreFeedCard({
    *
    * It went beside the type and the age first, on the reasoning that it is
    * another fact about the claim in a row that already holds facts about it. On
-   * a real record that row is rarely as empty as it looks in isolation: the
-   * space chip, the type, the age, Controversial and the debate offer are
+   * a real record that row was rarely as empty as it looked in isolation: the
+   * space chip, the type, the age, Controversial and the debate offer were
    * already competing for it, and a sixth segment wrapped the line.
    *
    * Under the matching pill it needs no words to say which side it means —
@@ -212,7 +214,7 @@ export function ClaimExploreFeedCard({
   const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';
 
   return (
-    // The `<article>` is the root and stays the root. Two things depend on that and neither is
+    // The `<ActionSurfaceArticle>` is the root and stays the root. Two things depend on that and neither is
     // visible from here: `table-block-explore-items-dnd` sizes these through `[&>article]`, a
     // direct-child rule that a wrapper silently breaks, and `last:` is only meaningful on an
     // element that is actually a sibling of the other cards — inside a wrapper every card is an
@@ -221,7 +223,7 @@ export function ClaimExploreFeedCard({
     // The mobile Explore shell is selected by a viewport query rather than this article's container
     // query. That lets the root itself take the debates panel's border, radius and padding while the
     // card's internal wide/narrow decision remains local to the space it actually has.
-    <article
+    <ActionSurfaceArticle
       ref={setContainer}
       className={cx(
         '@container flex flex-col gap-4',
@@ -328,19 +330,17 @@ export function ClaimExploreFeedCard({
             onRespond={control.respond}
             promptForComment={control.isConnected}
             disabled={!control.canRespond}
-            pending={control.isResponsePending}
+            pending={control.isResponseSubmitting}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
             positionRowClassName="max-w-[360px]"
             positionRowEndSlot={
               liveCommentCount > 0 ? (
-                <EntityCommentsButton
-                  commentsInCount={commentsInCount}
-                  entityId={item.entityId}
-                  spaceId={item.spaceId}
-                  targetEntityType="claim"
-                  count={activityCount}
-                  className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+                <ClaimActivityLink
+                  item={item}
+                  count={liveCommentCount}
+                  measuresActivity={commentsInCount != null}
+                  opensSidePanel={titleOpensSidePanel}
                 />
               ) : undefined
             }
@@ -369,9 +369,54 @@ export function ClaimExploreFeedCard({
           </div>
         ) : null}
       </div>
-    </article>
+    </ActionSurfaceArticle>
   );
 }
+
+/**
+ * The count beside the pills, and the way through to the claim's Activity section.
+ *
+ * Not the global comments panel. That lists only the comments filed directly on the claim, while the
+ * number here is the claim's whole activity — its debates, the claims extracted from them, and every
+ * comment under those — so it showed a shorter list than the count promised, without the debates it
+ * was counting. The claim's Activity section is the one place that draws all of it.
+ *
+ * Where it opens follows the title, through `opensSidePanel`: on Explore the side panel, scrolled to
+ * Activity (see `useScrollToCommentsOnOpen`); everywhere else the claim page at `#entity-comments`,
+ * which `CommentSection` scrolls to on arrival. It is the title's own link pointed at a position, so it
+ * inherits the title's rules rather than restating them: a real anchor, modified clicks left to the
+ * browser, and the side-panel opener mark only where it opens the panel.
+ */
+function ClaimActivityLink({
+  item,
+  count,
+  measuresActivity,
+  opensSidePanel,
+}: {
+  item: ExploreFeedItem;
+  count: number;
+  /** Whether `count` is the claim's whole activity rather than its own comments — see `commentsInCount`. */
+  measuresActivity: boolean;
+  opensSidePanel: boolean;
+}) {
+  return (
+    <ExploreCardEntityLink
+      item={item}
+      opensSidePanel={opensSidePanel}
+      section={ACTIVITY_SECTION}
+      aria-label={`${measuresActivity ? 'Activity' : 'Comments'} (${count})`}
+      data-geo-analytics-label="Open claim activity"
+      data-geo-analytics-intent="open_claim_activity"
+      className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+    >
+      <ExploreCommentsIcon />
+      <span className="text-[14px] font-normal tabular-nums">{count}</span>
+    </ExploreCardEntityLink>
+  );
+}
+
+/** Module-level so the link's click handler is not rebuilt on every render. */
+const ACTIVITY_SECTION = { hash: ENTITY_COMMENTS_ANCHOR_ID, sidePanel: { scrollToComments: true } };
 
 /**
  * The share, the split and who answered — or an invitation where nobody has.

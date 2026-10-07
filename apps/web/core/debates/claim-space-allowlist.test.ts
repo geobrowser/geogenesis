@@ -12,6 +12,7 @@ import {
   buildClaimSpaceAllowlist,
   buildMemberSpaceIds,
   isClaimSpaceAllowed,
+  keepSelectableSpaces,
 } from './claim-space-allowlist';
 
 function row(id: string, overrides: Partial<BrowseSpaceRow> = {}): BrowseSpaceRow {
@@ -262,5 +263,25 @@ describe('awaitsRequestedMembership', () => {
   // would poll for the rest of the bridge's life.
   it('ignores a request made by another account', () => {
     expect(awaits([requested(PENDING, { ownerId: STRANGER })], data())).toBe(false);
+  });
+});
+
+describe('keepSelectableSpaces', () => {
+  it('drops a selected space the settled menu no longer offers', () => {
+    expect(keepSelectableSpaces([FEATURED, MEMBER], [FEATURED], true)).toEqual([FEATURED]);
+  });
+
+  it('keeps every selection while the menu is unresolved', () => {
+    const selected = [FEATURED, MEMBER];
+    expect(keepSelectableSpaces(selected, [], false)).toBe(selected);
+  });
+
+  it('hands back the same array when nothing changes', () => {
+    const selected = [FEATURED, MEMBER];
+    expect(keepSelectableSpaces(selected, [MEMBER, FEATURED], true)).toBe(selected);
+  });
+
+  it("keeps a space offered under another spelling, in the menu's spelling", () => {
+    expect(keepSelectableSpaces([MEMBER], [normId(MEMBER)], true)).toEqual([normId(MEMBER)]);
   });
 });

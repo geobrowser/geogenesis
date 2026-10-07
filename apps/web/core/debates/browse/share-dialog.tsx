@@ -4,7 +4,9 @@ import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
 import { capture } from '~/core/analytics';
+import { observeOperation } from '~/core/analytics-operations';
 import type { Debate } from '~/core/debates/api';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
@@ -44,6 +46,11 @@ const LINKEDIN_TEXT_MAX = 700;
  * and a download of the prepared debate video.
  */
 export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerRef }: Props) {
+  const getContext = useActionContext('share_dialog', 'debate', debate.id, {
+    overlay: 'modal',
+    overlay_entity_id: debate.id,
+    overlay_entity_type: 'debate',
+  });
   const media = useDebateMedia(debate.id, open);
   const socialVideoReady = hasSocialVideo(media.data);
 
@@ -65,42 +72,57 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     window.open(href, '_blank', 'noopener,noreferrer');
   };
 
-  // The sheet's own success metric.
-  const captureShare = (method: ShareMethod) => {
+  // Preserve synchronous user activation and the handler's original errors.
+  const handoffShare = (method: ShareMethod, handoff: () => void) => {
+    const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
+    try {
+      handoff();
+      if (method === 'download') operation.succeeded({ method });
+      else operation.failed('unknown');
+    } catch (error) {
+      operation.failed('unavailable');
+      throw error;
+    }
     try {
       capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method });
     } catch {}
   };
 
   const onReddit = () => {
-    openComposer(
-      `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl())}&title=${encodeURIComponent(shareMessage(REDDIT_TITLE_MAX))}`
+    handoffShare('reddit', () =>
+      openComposer(
+        `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl())}&title=${encodeURIComponent(shareMessage(REDDIT_TITLE_MAX))}`
+      )
     );
-    captureShare('reddit');
   };
 
   const onX = () => {
     const url = shareUrl();
     const text = shareMessage(X_TWEET_MAX - url.length - 1);
-    openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`);
-    captureShare('x');
+    handoffShare('x', () =>
+      openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`)
+    );
   };
 
   const onLinkedIn = () => {
     // `share-offsite` ignores any text param — it scrapes the page's OG tags. The feed composer is
     // the only hand-off that pre-fills text; putting the URL in the text still yields a link preview.
-    openComposer(
-      `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${shareUrl()}`)}`
+    handoffShare('linkedin', () =>
+      openComposer(
+        `https://www.linkedin.com/feed/?shareActive=true&text=${encodeURIComponent(`${shareMessage(LINKEDIN_TEXT_MAX)}\n${shareUrl()}`)}`
+      )
     );
-    captureShare('linkedin');
   };
 
   const onCopy = async () => {
+    const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
     try {
       await navigator.clipboard.writeText(shareUrl());
       setToast(<span>Link copied!</span>);
-      captureShare('copy_link');
+      operation.succeeded({ method: 'copy_link' });
+      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'copy_link' });
     } catch {
+      operation.failed('unavailable');
       setToast(<span>Could not copy link.</span>);
     }
   };
@@ -148,7 +170,8 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
                   ariaLabel={download.status === 'error' ? 'Retry preparing debate video' : 'Download debate video'}
                   onClick={() => {
                     if (download.status === 'ready') {
-                      captureShare('download');
+                      handoffShare('download', download.download);
+                      return;
                     } else if (download.status === 'error') {
                       setToast(<span>{download.error ?? 'Could not prepare the video for download.'}</span>);
                     }

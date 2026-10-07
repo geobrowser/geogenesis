@@ -6,19 +6,12 @@ import * as React from 'react';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 
-import {
-  bindPrivyAnalytics,
-  identifyPrivyUser,
-  reconcileAnonymousAnalyticsIdentity,
-  restorePrivySession,
-} from './analytics';
+import { bindPrivyAnalytics, identifyPrivyUser, reconcileAnonymousAnalyticsIdentity } from './analytics';
 
 export function AnalyticsUserIdentifier() {
   const { ready, authenticated, user, getAccessToken } = usePrivy();
   const { personalSpaceId, isFetched } = usePersonalSpaceId();
   const lastIdentityKey = React.useRef<string | null>(null);
-  const restoredUserId = React.useRef<string | null>(null);
-  const sawReadyUnauthenticated = React.useRef(false);
 
   React.useEffect(() => {
     if (!ready || !authenticated || !user) {
@@ -41,28 +34,12 @@ export function AnalyticsUserIdentifier() {
   }, [ready, authenticated, user, personalSpaceId, isFetched]);
 
   React.useEffect(() => {
-    if (!ready) {
-      return;
-    }
-
-    if (!authenticated) {
+    if (ready && !authenticated) {
       reconcileAnonymousAnalyticsIdentity();
-      sawReadyUnauthenticated.current = true;
-      restoredUserId.current = null;
-      return;
     }
-
-    if (!user) {
-      return;
-    }
-
-    if (sawReadyUnauthenticated.current || !user.id || restoredUserId.current === user.id) {
-      return;
-    }
-
-    restoredUserId.current = user.id;
-    restorePrivySession(user);
-  }, [ready, authenticated, user]);
+    // PrivyAuthTracker owns auth events. Readiness alone cannot distinguish an existing session
+    // from a just-completed login, especially when this observer mounts after the wallet loads.
+  }, [ready, authenticated]);
 
   React.useEffect(() => {
     if (!ready || !authenticated || !user?.id || process.env.NEXT_PUBLIC_GEO_ANALYTICS_VERIFIED_IDENTITY !== 'true')

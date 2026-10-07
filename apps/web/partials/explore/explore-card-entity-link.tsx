@@ -2,15 +2,17 @@
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { capture } from '~/core/analytics';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { type OpenSidePanelOptions, useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { NavUtils } from '~/core/utils/utils';
 
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
-type Props = {
+type Props = Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href' | 'onClick' | 'children'> & {
   item: Pick<ExploreFeedItem, 'entityId' | 'spaceId' | 'types'>;
   /**
    * Whether an unmodified left click opens the side panel instead of navigating (GEO-2757).
@@ -18,12 +20,17 @@ type Props = {
    * Coverage section, and a data block's explore view, and this only changes Explore.
    */
   opensSidePanel?: boolean;
-  className?: string;
+  /**
+   * A position on the entity's page — the href's fragment — and where the panel should open instead.
+   * The panel has no URL to carry a fragment, so each link that has one says what it means there.
+   */
+  section?: { hash: string; sidePanel: OpenSidePanelOptions };
   children: React.ReactNode;
 };
 
 /**
- * The entity name on an Explore card.
+ * The entity name on an Explore card — and any other link on one into the entity, such as a claim's
+ * activity count, which goes where the name goes but to a position on the page (`section`).
  *
  * Deliberately a real anchor with a real `href` even when it opens the panel, and only unmodified
  * left clicks are intercepted. A panel is not a page: cmd/ctrl-click, shift-click and middle click
@@ -38,7 +45,7 @@ type Props = {
  * The panel itself is mounted globally in `app/entry.tsx`, so nothing has to be rendered alongside
  * the card for this to have somewhere to land.
  */
-export function ExploreCardEntityLink({ item, opensSidePanel = false, className, children }: Props) {
+export function ExploreCardEntityLink({ item, opensSidePanel = false, section, children, ...anchorProps }: Props) {
   const { openSidePanel } = useEntitySidePanel();
 
   // A debate is a full-screen video experience, so a title pointing at one navigates even on
@@ -53,26 +60,41 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, className,
   // only names when the Claims relation is missing.
   const opensPanel = opensSidePanel && !isDebateEntity(item.types);
 
+  // GEO-3144: an open is engagement, credited like a vote or comment to the feed version behind the
+  // card, which the card's action scope carries. Recorded on every click that opens it, panel or page.
+  const snapshot = useActionContext('explore_feed_card', 'entity', item.entityId);
+  const recordOpen = React.useCallback(() => {
+    try {
+      capture('element_clicked', { ...snapshot(), source: 'explore_feed_card', element_action: 'open' });
+    } catch {
+      /* Optional telemetry. */
+    }
+  }, [snapshot]);
+
   const onClick = React.useCallback(
     (event: React.MouseEvent<HTMLAnchorElement>) => {
+      recordOpen();
       if (!opensPanel) return;
       if (isModifiedClick(event)) return;
       event.preventDefault();
       event.stopPropagation();
       // `openedWithMainViewEditing: false` — Explore has no editor behind it, so the panel has no
       // main-view edit session to return the viewer to.
-      openSidePanel(item.entityId, item.spaceId, false);
+      openSidePanel(item.entityId, item.spaceId, false, section?.sidePanel);
     },
-    [item.entityId, item.spaceId, opensPanel, openSidePanel]
+    [item.entityId, item.spaceId, opensPanel, openSidePanel, recordOpen, section?.sidePanel]
   );
+
+  const pageHref = NavUtils.toEntity(item.spaceId, item.entityId);
 
   return (
     <Link
-      href={NavUtils.toEntity(item.spaceId, item.entityId)}
+      {...anchorProps}
+      href={section ? `${pageHref}#${section.hash}` : pageHref}
       entityId={item.entityId}
       spaceId={item.spaceId}
-      className={className}
       onClick={onClick}
+      onAuxClick={recordOpen}
       // Exempts this link from the panel's capture-phase outside-pointerdown close
       // (`entity-side-panel.tsx`). Without it, clicking a second card while the panel is open
       // tears the panel down on `pointerdown` and the `onClick` below builds it again — a

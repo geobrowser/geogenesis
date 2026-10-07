@@ -1,14 +1,18 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { type AnalyticsProperties } from '~/core/analytics';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
-import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimMatchup, withMatchParticipants } from '~/core/claims/browse/use-claim-matchup';
 import {
@@ -18,6 +22,7 @@ import {
 } from '~/core/hooks/use-entity-vote';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
+import type { PrivySignInCallOptions } from '~/core/hooks/use-privy-sign-in';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
@@ -26,9 +31,12 @@ import {
   CLAIM_RESPONSE_KIND,
   RESPONSE_CONFIRMING_COPY,
   type ResponseKind,
+  isAwaitingResponseSubmission,
   responsePositionLabel,
 } from '~/core/responses/entity-response';
+import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
@@ -48,6 +56,9 @@ import type {
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
+
+/** A signed-out press's sign-in prompt. `onCancel` withdraws the press if the sign-in is abandoned. */
+export type RequireSignIn = (properties?: AnalyticsProperties, options?: PrivySignInCallOptions) => void;
 
 type Props = {
   claim: DebateClaimSummary;
@@ -146,7 +157,7 @@ type Props = {
    * viewers — the hub's Claims tab and the claim page — and left unset when signing in is not a
    * possibility the host has to handle, which keeps the response path unchanged for everyone else.
    */
-  onRequireSignIn?: () => void;
+  onRequireSignIn?: RequireSignIn;
   /** `AnimatePresence mode="popLayout"` measures the exiting row through this; without it the row
    * never pops out of flow and the rows above close the gap only after the fade finishes. */
   ref?: React.Ref<HTMLElement>;
@@ -408,7 +419,7 @@ export function useClaimPositionControl({
    * signed out and pressing prompts sign-in — matching the vote arrows on an entity page. Without
    * one they stay disabled, which is what the hub's cards have always done.
    */
-  onRequireSignIn?: () => void;
+  onRequireSignIn?: RequireSignIn;
   /**
    * Whether this host offers the account-level match at all.
    *
@@ -424,6 +435,7 @@ export function useClaimPositionControl({
    */
   offersDebate?: boolean;
 }) {
+  const getSignInContext = useActionContext('claim_position_control', 'claim', claim.claim_entity_id);
   const target = {
     entityId: claim.claim_entity_id,
     entityName: claim.claim,
@@ -432,12 +444,14 @@ export function useClaimPositionControl({
     // say "veracity" — which selects no SDK method, so the click throws. See `CLAIM_RESPONSE_KIND`.
     responseKind: CLAIM_RESPONSE_KIND,
   };
-  const { submitResponse, isConnected, personalSpaceId } = useEntityResponse(target);
+  const { submitResponse, submitResponseAsync, isConnected, personalSpaceId } = useEntityResponse(target);
   const responseIndexing = useEntityResponseIndexingSnapshot(target);
   const resetResponseIndexing = useResetEntityResponseIndexingSnapshot(target);
-  // Publishing before the personal space finishes registering fails, so wait it out the same way
-  // the claim page does.
+  // Publishing before the personal space finishes registering fails, so a press in that window is
+  // queued for the runner (`respond`) rather than published or refused.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const { authenticated } = useGeoChatAuth();
+  const queryClient = useQueryClient();
 
   const copy = CLAIM_RESPONSE_COPY;
   const [responseError, setResponseError] = React.useState<string | null>(null);
@@ -464,10 +478,64 @@ export function useClaimPositionControl({
   const pendingResponse = responseIndexing.status === 'idle' ? null : responseIndexing.pending;
   const optimisticPosition =
     pendingResponse?.expectedResponse == null ? null : pendingResponse.expectedResponse === 'positive';
-  const viewerPosition = pendingResponse ? optimisticPosition : (readiness.viewer_response?.position ?? null);
+  // A side picked before the account could publish, held until the queued write starts. Without it
+  // the pill the visitor pressed reads as unpressed for the whole of onboarding. Read off the queue
+  // rather than kept here: the feed remounts this card when it reloads after onboarding, and state
+  // held in the card went with it.
+  //
+  // Replayed through the card on screen when there is one (`useQueuedAction`): `useEntityResponse`
+  // keys its in-flight state — what holds the pill while the write confirms — by the viewer's
+  // personal space, which the press's closure predates.
+  const queuedPositionAction = useQueuedAction({
+    id: `claim-position:${claim.claim_entity_id}:${claim.space_id}`,
+    component: 'claim_position_control',
+    label: 'your position',
+    // Held until the viewer's own side is known — the same wait that keeps the pills from
+    // republishing a held side — so the check below reads an answer, not a loading default.
+    ready: answersReady,
+    run: async (intent, { live, isCurrent }) => {
+      const direction = intent === 'positive' ? 'positive' : 'negative';
+      // The side the viewer holds: this card's answer when it is the one on screen; read fresh when
+      // the replay is the press's own closure, whose answer is from before they signed in.
+      const held = live
+        ? readiness.viewer_response?.position === true
+          ? 'positive'
+          : readiness.viewer_response?.position === false
+            ? 'negative'
+            : null
+        : await readViewerResponseForReplay(queryClient, {
+            entityId: claim.claim_entity_id,
+            spaceId: claim.space_id,
+            responseKind: CLAIM_RESPONSE_KIND,
+            objectType: CLAIM_RESPONSE_OBJECT_TYPE,
+          });
+      // Cleared (a sign-out) or replaced (a newer press) during that read: the write must not follow.
+      if (!isCurrent()) return;
+      // A returning viewer who already held this side: nothing to publish. Sending it again would be
+      // a second response for one press, where pressing a held side signed in means "remove".
+      if (held === direction) return;
+      await submitResponseAsync(direction);
+    },
+  });
+  const queuedPosition = queuedPositionAction.intent === undefined ? null : queuedPositionAction.intent === 'positive';
+  const viewerPosition = pendingResponse
+    ? optimisticPosition
+    : (queuedPosition ?? readiness.viewer_response?.position ?? null);
   // Sent, and not yet seen on chain. `indexed` is past this: the chain has confirmed the write and
   // only geo-chat is still catching up, so the side drawn is a fact rather than a guess.
   const isResponsePending = responseIndexing.status === 'reconciling' || responseIndexing.status === 'delayed';
+  /**
+   * Narrower than `isResponsePending`: only until the bundler has the write (GEO-2889).
+   *
+   * This is what the pills wait on. Inclusion is the slow part — p90 ~30s, p99 ~2 minutes — and the
+   * side is already drawn held, so after submission the response reads as made and a press means
+   * what it says: pressing the held side retracts it, pressing the other switches. A failure after
+   * submission still rolls the side back and says so (`useEntityResponse`).
+   *
+   * `isResponsePending` stays the wider window, for the readers that must not trust the index while
+   * a write is out — `trustedIndexedPosition` — which is about the data, not about the press.
+   */
+  const isResponseSubmitting = isAwaitingResponseSubmission(responseIndexing);
 
   // Already cached from the navbar, so the viewer's own avatar can join the side they picked in the
   // same frame the pill fills in — rather than after geo-chat has indexed the response and told us
@@ -517,17 +585,50 @@ export function useClaimPositionControl({
     if (confirmed) resetResponseIndexing(responseIndexing.runId);
   }, [serverReadiness, resetResponseIndexing, responseIndexing]);
 
+  // Replayed by `PendingActionsRunner` once the personal space exists. A new account has none until
+  // well after sign-in completes — onboarding, then the space's own creation — so publishing at the
+  // press, or asking the visitor to press again, loses the side they picked.
+  //
+  // Queued at the press, like every other sign-up-gated control, rather than from the sign-in's
+  // completion callback. That callback belongs to this card, and the feed can remount the card
+  // while the visitor is signing up — the For you feed refetches once their follows load, and
+  // onboarding navigates back to the page when it is done — taking the callback, and the vote,
+  // with it. The queue and its runner are app-level and outlive the card.
+  const queuePosition = (position: boolean) => queuedPositionAction.queue(position ? 'positive' : 'negative');
+
   const respond = (position: boolean) => {
     if (!isConnected) {
-      onRequireSignIn?.();
+      // A new account whose space is still being made: hold the side rather than prompting a sign-in
+      // that would do nothing. Only then — a signed-in viewer with no space and no setup under way
+      // has nothing coming that would ever publish it.
+      if (isAccountSetupPending) {
+        // Pressing the side already queued takes it back, as pressing a held side does.
+        if (queuedPosition === position) queuedPositionAction.cancel();
+        else queuePosition(position);
+        return;
+      }
+      // Signed in with no space and none being made: nothing would ever publish a queued side, and a
+      // sign-in prompt does nothing for someone already signed in. A host with no sign-in prompt
+      // leaves the pills disabled, so there is nothing to queue for either.
+      if (authenticated || !onRequireSignIn) return;
+      queuePosition(position);
+      onRequireSignIn(
+        {
+          ...getSignInContext(),
+          auth_control: position ? 'agree' : 'disagree',
+          auth_intent: 'vote',
+          auth_continuation: 'queued',
+        },
+        { onCancel: queuedPositionAction.cancel }
+      );
       return;
     }
-    if (isAccountSetupPending) return;
-    // Ignored rather than sent. While the write is confirming, the held pill is this client's guess,
-    // and pressing a held pill means "remove" — so a double-click, or a press on a side that is still
-    // confirming, published a retraction nobody asked for. The request then failed with geo-chat's
-    // "respond to this claim first" beside a pill that still looked held.
-    if (isResponsePending) return;
+    // Ignored rather than sent. Until the bundler has the write, the held pill is this client's guess,
+    // and pressing a held pill means "remove" — so a double-click, or a press on a side that has not
+    // reached the bundler, published a retraction nobody asked for. The request then failed with
+    // geo-chat's "respond to this claim first" beside a pill that still looked held. Once submitted
+    // the write is made, so a press is a new, deliberate response (GEO-2889).
+    if (isResponseSubmitting) return;
     setResponseError(null);
     // A failed publish silently rolls the optimistic state back, which reads as the response
     // simply vanishing. Catch it here so the reason is visible.
@@ -543,10 +644,9 @@ export function useClaimPositionControl({
     if (responseBlockedReason) return responseBlockedReason;
     // Ahead of the rest: it is the only one of these the reader can do nothing about, and naming
     // the side they cannot take yet is the least useful thing to say about a dead control.
-    if (!answersReady) return 'Loading this claim’s responses…';
-    if (!isConnected) return copy.connect;
-    if (isAccountSetupPending) return 'Finishing account setup…';
-    if (isResponsePending) return RESPONSE_CONFIRMING_COPY;
+    if (!answersReady && !isAccountSetupPending) return 'Loading this claim’s responses…';
+    if (!isConnected && !isAccountSetupPending) return copy.connect;
+    if (isResponseSubmitting) return RESPONSE_CONFIRMING_COPY;
     if (viewerPosition === position) return position ? copy.removePositive : copy.removeNegative;
     return responsePositionLabel(position);
   };
@@ -558,16 +658,27 @@ export function useClaimPositionControl({
     actionTitle,
     responseError,
     isConnected,
-    /** The viewer's response is on its way to the chain; the pills ignore presses until it lands. */
+    /**
+     * The viewer's response is on its way to the chain and not yet indexed. For readers deciding
+     * whether to trust the index — not for the pills, which use `isResponseSubmitting`.
+     */
     isResponsePending,
+    /** The viewer's response has not reached the bundler yet; the pills ignore presses until it has. */
+    isResponseSubmitting,
     /**
      * False only while the account genuinely cannot publish, never while one is in flight.
      *
      * Being signed out doesn't disable the pills where a sign-in prompt was supplied: a disabled
      * control gives a visitor nothing to press and no way to learn what to do about it.
      */
+    // Live while a new account's personal space is still being made: a press is queued for it and
+    // drawn at once, rather than the pills going dead for the seconds — or minutes — that takes.
+    // `answersReady` is waived for the same window. It waits for the viewer's own side so a press on
+    // a held side clears it rather than republishing — and an account this new holds no side.
     canRespond:
-      (isConnected || Boolean(onRequireSignIn)) && !isAccountSetupPending && answersReady && !responseBlockedReason,
+      (isConnected || Boolean(onRequireSignIn) || isAccountSetupPending) &&
+      (answersReady || isAccountSetupPending) &&
+      !responseBlockedReason,
   };
 }
 
@@ -620,7 +731,7 @@ function RespondableControls({
    * from a second source contradicts the pair it is comparing rather than completing it.
    */
   reconcileWithIndexedResponse?: boolean;
-  onRequireSignIn?: () => void;
+  onRequireSignIn?: RequireSignIn;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
 }) {
@@ -726,7 +837,7 @@ function RespondableControls({
   const sideKnown =
     answersReady || (answersMayComeFromIndex && reconcileWithIndexedResponse && settledDirection !== null);
 
-  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, isResponsePending } =
+  const { viewerPosition, optimisticPositions, respond, actionTitle, responseError, canRespond, isResponseSubmitting } =
     useClaimPositionControl({
       claim,
       positions,
@@ -771,11 +882,11 @@ function RespondableControls({
         viewerPosition={viewerPosition}
         onRespond={respond}
         // Not disabled while the response publishes: dimming the pills for the length of an indexing
-        // round trip read as the response not having landed. Pending instead — presses are ignored,
-        // because nothing serializes overlapping submissions and a second press on the held side is
-        // a retraction.
+        // round trip read as the response not having landed. Pending instead, and only until the
+        // bundler has the write — a press before then is a double-click on the held side, which is a
+        // retraction nobody meant; after it, the response is made (GEO-2889).
         disabled={!canRespond}
-        pending={isResponsePending}
+        pending={isResponseSubmitting}
         titleFor={actionTitle}
         noteFor={noteFor}
       />
@@ -1015,6 +1126,7 @@ export function PositionRow({
   titleFor,
   noteFor,
   endSlot,
+  showParticipants = true,
 }: {
   positions: DebateClaimPositionSummary[];
   responseKind: ResponseKind;
@@ -1040,10 +1152,18 @@ export function PositionRow({
   noteFor?: (position: boolean) => React.ReactNode;
   /** A compact third action, kept beside both positions at narrow and wide card widths. */
   endSlot?: React.ReactNode;
+  /**
+   * False to leave the ready-to-debate faces out of the pills.
+   *
+   * Those faces are the people standing ready to argue each side — a matchmaking fact. On a surface
+   * that shows who *voted* beside the pills, two face stacks meaning two different things sit a row
+   * apart, and the nearer one reads as the voters.
+   */
+  showParticipants?: boolean;
 }) {
   const copy = CLAIM_RESPONSE_COPY;
-  const forSide = positions.find(position => position.position === true);
-  const againstSide = positions.find(position => position.position === false);
+  const forSide = showParticipants ? positions.find(position => position.position === true) : undefined;
+  const againstSide = showParticipants ? positions.find(position => position.position === false) : undefined;
 
   // Two across where there is room for both labels whole, stacked where there is not.
   //

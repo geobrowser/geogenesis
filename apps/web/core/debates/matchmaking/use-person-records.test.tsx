@@ -94,6 +94,20 @@ describe('usePersonRecords', () => {
     expect(result.current.get(A)?.positions).toBe(16);
   });
 
+  // Four aliased connections per person in one document: fine for the calendar's 200, but admin
+  // New match lists everyone with availability, which can be five times that.
+  it('splits a long list into documents of at most 200 people, and still answers for everyone', async () => {
+    const ids = Array.from({ length: 450 }, (_, index) => index.toString(16).padStart(32, '0'));
+    const ones = (count: number) => response(...Array.from({ length: count }, () => 1));
+    mocks.responses = [ones(200), ones(200), ones(50)];
+
+    const { result } = renderHook(() => usePersonRecords(ids), { wrapper });
+
+    await waitFor(() => expect(result.current.size).toBe(450));
+    expect(mocks.calls).toBe(3);
+    expect(ids.every(id => result.current.get(id)?.positions === 1)).toBe(true);
+  });
+
   it('asks for nobody when the list is empty', () => {
     const { result } = renderHook(() => usePersonRecords([]), { wrapper });
 

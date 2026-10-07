@@ -49,8 +49,10 @@ export function RankingTableView({
     periodLabel,
     hasRankedByOthers,
     submissions,
+    aggregatedSubmitterRefs,
     aggregatedSubmitterSpaceIds,
     aggregatedRankingCount,
+    viewSharedRanking,
   } = state;
 
   return (
@@ -71,8 +73,10 @@ export function RankingTableView({
             periodLabel={periodLabel}
             hasRankedByOthers={hasRankedByOthers}
             submissions={submissions}
+            aggregatedSubmitterRefs={aggregatedSubmitterRefs}
             aggregatedSubmitterSpaceIds={aggregatedSubmitterSpaceIds}
             aggregatedRankingCount={aggregatedRankingCount}
+            onSelectVoter={viewSharedRanking}
           />
         ) : null}
       </div>

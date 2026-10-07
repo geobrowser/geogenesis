@@ -99,6 +99,8 @@ type HubQueryStateProps = {
    * watches a skeleton for all of it.
    */
   failureReason?: unknown;
+  /** What loading looks like, where the list skeleton is the wrong shape: the calendar's grid. */
+  loadingFallback?: React.ReactNode;
   children: React.ReactNode;
 };
 
@@ -114,6 +116,7 @@ export function HubQueryState({
   onRetry,
   signInAction,
   failureReason,
+  loadingFallback,
   children,
 }: HubQueryStateProps) {
   const needsSignIn = Boolean(signInAction) && isSignInRequired(error);
@@ -190,7 +193,7 @@ export function HubQueryState({
           {isMatchmakingUnavailable(error) ? "Matchmaking isn't available yet." : 'Something went wrong.'}
         </HubMessage>
       ) : state === 'loading' ? (
-        <HubSkeleton />
+        (loadingFallback ?? <HubSkeleton />)
       ) : state === 'empty' ? (
         <HubMessage
           note={emptyNote}

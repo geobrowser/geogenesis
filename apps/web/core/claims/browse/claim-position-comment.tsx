@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 
 import type { DebateClaimPositionSummary } from '~/core/debates/api';
 import { PositionRow } from '~/core/debates/matchmaking/matchmaking-claim-card';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePublishComment } from '~/core/hooks/use-publish-comment';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 
@@ -80,6 +81,9 @@ export function ClaimPositionCommentControl({
   const [actionsBelow, setActionsBelow] = React.useState(false);
   const composerRef = React.useRef<HTMLDivElement>(null);
   const textareaRef = React.useRef<HTMLTextAreaElement>(null);
+  // Focused for a mouse and keyboard, where it saves a click. On a touch screen focusing raises the
+  // on-screen keyboard over the claim the viewer just answered, for an explanation that is optional.
+  const focusComposerOnOpen = !useMediaQuery('(hover: none), (pointer: coarse)');
   const { publishComment: submitComment } = usePublishComment(entityId, spaceId, {
     targetEntityType: 'claim',
     interactionSurface: 'claim_position_explanation',
@@ -213,7 +217,7 @@ export function ClaimPositionCommentControl({
                 }}
                 placeholder={`Why do you ${action.toLowerCase()}?`}
                 aria-label={`Why do you ${action.toLowerCase()}?`}
-                autoFocus
+                autoFocus={focusComposerOnOpen}
                 wrap="soft"
                 rows={1}
                 disabled={isSubmitting}

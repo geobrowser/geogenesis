@@ -44,4 +44,12 @@ describe('Topic feed request parameters', () => {
 
     expect(parseTopicFeedSelectedIds(ids, pageTopicId)).toEqual(ids.slice(1, MAX_TOPIC_FEED_SELECTED_TOPICS + 1));
   });
+
+  it('keeps every selection, still capped, when there is no page Topic', () => {
+    const ids = Array.from({ length: MAX_TOPIC_FEED_SELECTED_TOPICS + 1 }, (_, index) =>
+      (index + 1).toString(16).padStart(32, '0')
+    );
+
+    expect(parseTopicFeedSelectedIds(ids.join(','))).toEqual(ids.slice(0, MAX_TOPIC_FEED_SELECTED_TOPICS));
+  });
 });

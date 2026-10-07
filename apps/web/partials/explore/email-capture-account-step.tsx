@@ -6,13 +6,26 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { trackPrivyAuth } from '~/core/analytics';
+import { currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 
 import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
 
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
+
+// The headless attempt and its modal fallback belong to the same signup surface.
+export const ACCOUNT_ANALYTICS = {
+  component: 'explore_email_capture',
+  auth_control: 'create_account',
+  auth_trigger: 'control',
+  target_type: 'application',
+  target_id: 'genesis',
+  link_source: 'explore_email_capture',
+  form_type: 'account',
+  signup_surface: 'explore_email_capture',
+} as const;
 
 /**
  * The code step, driven by Privy's own flow state rather than a second copy of it kept here.
@@ -22,48 +35,25 @@ const CODE_LENGTH = 6;
  * most people actually do.
  */
 export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () => void }) {
-  // Mounted only while someone is signing up, which is the point of it living here: Privy's login
-  // hooks register on a shared emitter, and one of these sitting on every Explore visit would be
-  // registering callbacks beside the navbar's own login for every reader who never presses the
-  // button that leads here — which is what broke that button.
-  //
-  // The embedded wallet this login needs is not created here. It cannot be: this component is
-  // unmounted by the card's own visibility rule the instant `authenticated` turns true, which is
-  // the exact render in which the wallet becomes creatable. `useEnsureEmbeddedWallet`, mounted for
-  // the life of the app in `core/providers.tsx`, does it instead.
-  // Reports its own sign-in, which is safe now that the navbar arms its tracker rather than firing
-  // on every completion. Leaving it to the navbar looked tidy and was not: that button is replaced
-  // by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session on a tab
-  // refocus or a Privy re-init — so a completion landing in that window was recorded by nobody at
-  // all. Silent under-counting of exactly the signups this flow exists to produce.
+  // Headless email completion runs directly after verification, even if authentication has
+  // already unmounted this card. Modal completions go through the app-wide PrivyAuthTracker.
+  // EmbeddedWalletSync separately creates and activates the wallet for a headless login.
   const {
     sendCode,
     loginWithCode,
     state: otpState,
   } = useLoginWithEmail({
-    onComplete: args =>
-      trackPrivyAuth(args, {
-        auth_flow: 'manual_login',
-        link_source: 'explore_email_capture',
-        form_type: 'account',
-        signup_surface: 'explore_email_capture',
-      }),
+    onComplete: args => completePrivyAuth(args, ACCOUNT_ANALYTICS),
   });
   // Held in a ref so the effect below does not re-run and re-send when the callback identity
   // changes, which would mail a second code on an unrelated re-render.
   const giveUpRef = React.useRef(onGiveUp);
   giveUpRef.current = onGiveUp;
-  // Here for the same reason as the hook above, and it is the one that matters more: this registers
-  // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
-  // actually press. Mounted in the parent it would do that on every Explore visit. If the shortcut
-  // cannot send a code, the parent hides this card behind Privy's modal without unmounting it, so
-  // this hook still owns the completion and can attribute it to the email-capture surface.
+  // Keep the modal fallback's UI error handler with the card; its analytics attribution is
+  // snapshotted by usePrivySignIn and survives the card disappearing after authentication.
   const openPrivyModal = usePrivySignIn(undefined, {
-    analytics: {
-      link_source: 'explore_email_capture',
-      form_type: 'account',
-      signup_surface: 'explore_email_capture',
-    },
+    analytics: ACCOUNT_ANALYTICS,
+    resumeAuthAttempt: true,
     onError: () => giveUpRef.current(),
   });
   const [code, setCode] = React.useState('');
@@ -103,9 +93,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
       if (!mountedRef.current) return;
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
-      // Keep this step mounted while the parent hides it behind the modal. Its own sign-in hook
-      // then observes completion and preserves this surface's attribution. Dismissal comes back
-      // through the hook's `onError` and closes the attempt.
+      // Keep the step mounted while hidden so the modal's error callback can close the card.
       openPrivyModalRef.current();
     } finally {
       if (mountedRef.current) setSending(false);
@@ -123,6 +111,10 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   React.useEffect(() => {
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
+    const attempt = currentAuthAttempt();
+    if (!attempt || attempt.endedAt || attempt.properties.component !== 'explore_email_capture')
+      beginPrivyAuth(ACCOUNT_ANALYTICS, { resume: true });
+    openAuthAttempt(ACCOUNT_ANALYTICS);
     void requestCode();
   }, [requestCode]);
 

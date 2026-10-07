@@ -634,8 +634,8 @@ export const propertiesBatchQuery = graphql(/* GraphQL */ `
 `);
 
 export const entityNamesQuery = graphql(/* GraphQL */ `
-  query EntityNames($filter: EntityFilter) {
-    entities(filter: $filter) {
+  query EntityNames($filter: EntityFilter, $first: Int) {
+    entities(filter: $filter, first: $first) {
       id
       name
     }

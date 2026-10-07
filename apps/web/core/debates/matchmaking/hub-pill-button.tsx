@@ -17,7 +17,8 @@ type Props = {
   analyticsSurface?: DebateAnalyticsSurface;
   /** Explicit override for exceptional actions with a more specific intent. */
   analyticsIntent?: string;
-} & React.ComponentPropsWithoutRef<'button'>;
+  // With the ref, which React 19 passes as a prop: an opener that takes focus back on close needs it.
+} & React.ComponentProps<'button'>;
 
 /**
  * The debates feature has its own pill style — `rounded-full`, `h-7`, `text-metadata` — shared with
@@ -25,6 +26,31 @@ type Props = {
  * bordered rounded-rect, so matching it here would make the hub the odd one out. This just
  * collapses the six hand-written copies of that pill into one.
  */
+/**
+ * The pill's classes, for the one place the hub needs a pill that is not a button: a link, such as
+ * "Join debate". Kept here so the two cannot drift.
+ */
+export function hubPillClassName(variant: 'primary' | 'secondary' = 'secondary', className?: string) {
+  return cx(
+    // `h-7` is a fixed height, so a label that wraps to a second line spills out of the pill.
+    // nowrap is what prevents that: it makes min-content equal max-content, and a flex item's
+    // default `min-width: auto` then stops the row from squeezing the pill at all — the name
+    // beside it absorbs the shrinking instead, which is why rows give it `min-w-0 truncate`.
+    // shrink-0 is redundant today and kept only to survive a later `min-w-0` on this button,
+    // which would defeat the `min-width: auto` this leans on.
+    'inline-flex h-7 shrink-0 items-center justify-center rounded-full px-3 text-metadata whitespace-nowrap transition-colors disabled:opacity-50',
+    variant === 'primary' ? 'bg-text text-white hover:bg-text/90' : 'border border-grey-02 text-text hover:bg-grey-01',
+    className
+  );
+}
+
+/**
+ * The hub's round icon control — Close, See times, the schedule calendar. Text-free, so it sits
+ * beside a pill without competing with it. One definition because the copies had started to spread.
+ */
+export const HUB_ICON_BUTTON_CLASS_NAME =
+  'flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text';
+
 export function HubPillButton({
   variant = 'secondary',
   pendingLabel,
@@ -50,19 +76,7 @@ export function HubPillButton({
       data-geo-analytics-intent={analyticsIntent ?? surfaceAnalytics['data-geo-analytics-intent']}
       disabled={disabled || pending}
       aria-busy={pending || undefined}
-      className={cx(
-        // `h-7` is a fixed height, so a label that wraps to a second line spills out of the pill.
-        // nowrap is what prevents that: it makes min-content equal max-content, and a flex item's
-        // default `min-width: auto` then stops the row from squeezing the pill at all — the name
-        // beside it absorbs the shrinking instead, which is why rows give it `min-w-0 truncate`.
-        // shrink-0 is redundant today and kept only to survive a later `min-w-0` on this button,
-        // which would defeat the `min-width: auto` this leans on.
-        'inline-flex h-7 shrink-0 items-center justify-center rounded-full px-3 text-metadata whitespace-nowrap transition-colors disabled:opacity-50',
-        variant === 'primary'
-          ? 'bg-text text-white hover:bg-text/90'
-          : 'border border-grey-02 text-text hover:bg-grey-01',
-        className
-      )}
+      className={hubPillClassName(variant, className)}
       {...rest}
     >
       {pending && pendingLabel ? pendingLabel : children}

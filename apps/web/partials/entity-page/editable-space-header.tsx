@@ -32,7 +32,7 @@ import { HistoryEmpty } from '../history/history-empty';
 import { EntityVersionItem } from '../history/history-item';
 import { HistoryPanel } from '../history/history-panel';
 import { useEntityHistory } from '../history/use-entity-history';
-import { EntityPageTitle } from './entity-page-title';
+import { EntityPageTitle, titleBottomSpacing } from './entity-page-title';
 
 type OverlayMode = 'closed' | 'menu' | 'creatingVersion' | 'spaceRelationships' | 'spaceTopic' | 'subtopics';
 
@@ -73,6 +73,7 @@ export function EditableSpaceHeading({
   actionsComponent,
   keepSpaceActions = false,
   fallbackName,
+  menuItems,
 }: {
   spaceId: string;
   entityId: string;
@@ -93,6 +94,12 @@ export function EditableSpaceHeading({
    * its own title.
    */
   fallbackName?: string | null;
+  /**
+   * Extra overflow-menu items after the copy actions, e.g. a profile's availability link. A node
+   * rather than a render prop, since the space layout passing it is a server component — so each
+   * item closes the menu itself, with `MenuItem`'s `closeOnSelect`.
+   */
+  menuItems?: React.ReactNode;
 }) {
   const name = useName(entityId, spaceId);
   const isEditing = useUserIsEditing(spaceId);
@@ -157,8 +164,15 @@ export function EditableSpaceHeading({
       {/* Wraps rather than squeezing: a long name beside Edit profile, a vote
           pair, history and the overflow menu has nowhere to go on a phone, and
           `justify-between` would have compressed the controls into each other.
-          Only engages when it has to, so nothing changes on a wide screen. */}
-      <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+          Only engages when it has to, so nothing changes on a wide screen.
+
+          The gap under the name is the row's, not the title's. Inside the
+          title it counted toward what the actions centre on, and sat them
+          6px below the name. */}
+      <div
+        className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2"
+        style={{ paddingBottom: titleBottomSpacing(isEditing) }}
+      >
         <EntityPageTitle
           // Browse falls back to the server's name; edit must not. A fallback in
           // the textarea reads as a stored name that isn't there, and one
@@ -169,6 +183,7 @@ export function EditableSpaceHeading({
           onChange={onNameChange}
           accessory={nameAccessoryComponent}
           className="min-w-0 grow"
+          withBottomSpacing={false}
         />
         {(actionsComponent || isSpacePage) && (
           <div className="inline-flex shrink-0 items-center gap-4">
@@ -221,7 +236,7 @@ export function EditableSpaceHeading({
                   open={isContextMenuOpen}
                   onOpenChange={open => dispatch({ type: 'SET_MENU_OPEN', open })}
                   trigger={isContextMenuOpen ? <Close color="grey-04" /> : <Context color="grey-04" />}
-                  className={cx('min-w-0', !isCreatingNewVersion ? 'max-w-[160px]' : 'max-w-[320px]')}
+                  className={cx('min-w-0', !isCreatingNewVersion ? 'max-w-[200px]' : 'max-w-[320px]')}
                 >
                   {isCreatingNewVersion && (
                     <CreateNewVersionInSpace
@@ -244,6 +259,7 @@ export function EditableSpaceHeading({
                       <MenuItem onClick={onCopyEntityId}>
                         <p>Copy Entity ID</p>
                       </MenuItem>
+                      {menuItems}
                       <MenuItem onClick={() => dispatch({ type: 'OPEN_CREATE_IN_SPACE' })}>
                         <p>Create in space</p>
                       </MenuItem>

@@ -38,6 +38,17 @@ export const DEBATE_VIDEOS_PROPERTY_ID = 'c48dc314fa7148aeb967139160456f1d';
 /** Claims (RELATION) → Claim. The claim the debate argued for/against. */
 export const DEBATE_CLAIMS_PROPERTY_ID = 'e614cce1c4ce45868304fd1237119eb2';
 
+/**
+ * A claim's stance toward another claim (GEO-3142): Supports / Opposes / Addresses (RELATION)
+ * → Claim. The debate publisher writes exactly one of these from every claim extracted from a
+ * debate to the debate's motion, judged by the extractor on what the claim says rather than on
+ * which side its speaker argued. Addresses means "on the subject, but a reason neither way".
+ * The 108 debates published before 2 Oct 2026 got theirs from a one-off backfill bot.
+ */
+export const CLAIM_SUPPORTS_PROPERTY_ID = '81faa4adafad4009b1061374c1219f04';
+export const CLAIM_OPPOSES_PROPERTY_ID = '71d1bcd5f1cf487fb9a3c7b1d53803eb';
+export const CLAIM_ADDRESSES_PROPERTY_ID = '7115a43dcac347b8b036aa113c6ad1b0';
+
 /** Transcripts (RELATION) → Transcript. */
 export const DEBATE_TRANSCRIPTS_PROPERTY_ID = 'c504c7d5c3374016a5f083e4b5a92911';
 
@@ -121,6 +132,19 @@ export const SOURCES_PROPERTY_ID = '49c5d5e1679a4dbdbfd33f618f227c94'; // Conten
  */
 export const CLAIM_START_OFFSET_PROPERTY_ID = 'a1d1cb557b184238ba0ec78ba7f289fb';
 export const CLAIM_END_OFFSET_PROPERTY_ID = '79a677b597f84ca8a1cf24eef7837b61';
+
+/**
+ * How much a claim carries its debate: the probability, judged by extraction-api's
+ * `claims.score_highlights` over the whole transcript, that the debate's claim list would
+ * misrepresent the debate without it. 0–1, compared within one debate; the player uses it to
+ * show the few claims that matter rather than every one.
+ *
+ * Lives on the same block → claim relation entity as the offsets, for the same reason: it is a
+ * fact about this claim *in this debate*, and a claim reused across debates can carry a
+ * different score in each. Float, in the Geo root space; created by Preston on 2026-10-02 as
+ * "Quality score" and renamed "Highlight score" on 2026-10-05.
+ */
+export const CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID = '580ba596988144a79716cd38a891319b';
 
 /**
  * The typing that says a relation points at a *span* of its target rather than the whole of it.

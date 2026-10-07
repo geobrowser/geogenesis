@@ -18,10 +18,11 @@ type Claim = {
   /** null models a claim the graph reports no space for. */
   spaceId?: string | null;
   /**
-   * Values on the block → claim relation entity, where timecodes live. Integers arrive from the
-   * API as strings, so these fixtures are written as strings too.
+   * Values on the block → claim relation entity, where timecodes and the highlight score live.
+   * Integers arrive from the API as strings, so these fixtures are written as strings too; floats
+   * arrive as numbers.
    */
-  offsets?: Array<{ propertyId: string; integer?: string | null } | null>;
+  offsets?: Array<{ propertyId: string; integer?: string | null; float?: number | null } | null>;
 };
 
 type Block = {
@@ -519,6 +520,60 @@ describe('published timecodes', () => {
     const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
 
     expect(all[0].publishedTiming).toBeNull();
+  });
+
+  it('reads the highlight score off the relation entity, beside the offsets', () => {
+    const SCORE = '580ba596988144a79716cd38a891319b';
+    const { all } = group(
+      response([
+        {
+          id: 'block-1',
+          claims: [{ id: 'c1', offsets: [...offsets('134600', '143140'), { propertyId: SCORE, float: 0.62 }] }],
+        },
+      ])
+    );
+    expect(all[0].highlightScore).toBe(0.62);
+    expect(all[0].publishedTiming).toEqual({ startMs: 134600, endMs: 143140 });
+  });
+
+  it.each([
+    ['no score value', offsets('1000', '2000')],
+    ['a null score', [{ propertyId: '580ba596988144a79716cd38a891319b', float: null }]],
+    ['a score over 1', [{ propertyId: '580ba596988144a79716cd38a891319b', float: 1.5 }]],
+    ['a negative score', [{ propertyId: '580ba596988144a79716cd38a891319b', float: -0.5 }]],
+  ])('reports no highlight score for %s', (_label, values) => {
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+    expect(all[0].highlightScore).toBeNull();
+  });
+
+  it.each([0, 1])('keeps a score at the boundary, %d', score => {
+    const values = [{ propertyId: '580ba596988144a79716cd38a891319b', float: score }];
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+    expect(all[0].highlightScore).toBe(score);
+  });
+
+  /**
+   * Block order is publish position, which is random, so "the first statement's score" would be a
+   * coin toss. The strongest statement answers "does this claim matter"; the row's other
+   * per-statement fields stay the first statement's, as `restated` documents.
+   */
+  it("gives a claim stated in two turns the highest of its statements' scores", () => {
+    const SCORE = '580ba596988144a79716cd38a891319b';
+    const scored = (score: number | null) => (score === null ? [] : [{ propertyId: SCORE, float: score }]);
+    const two = (first: number | null, second: number | null) =>
+      group(
+        response([
+          { id: 'block-1', position: 'a1', author: PRESTON, claims: [{ id: 'claim-1', offsets: scored(first) }] },
+          { id: 'block-2', position: 'a2', author: ARTURAS, claims: [{ id: 'claim-1', offsets: scored(second) }] },
+        ])
+      ).all[0];
+
+    expect(two(0.3, 0.8)).toMatchObject({ restated: true, highlightScore: 0.8 });
+    expect(two(0.8, 0.3)).toMatchObject({ restated: true, highlightScore: 0.8 });
+    // One unscored statement does not erase the other's score, whichever comes first.
+    expect(two(null, 0.6).highlightScore).toBe(0.6);
+    expect(two(0.6, null).highlightScore).toBe(0.6);
+    expect(two(null, null).highlightScore).toBeNull();
   });
 
   it('carries the block each claim was said in, so its turn can be located on the recording', () => {

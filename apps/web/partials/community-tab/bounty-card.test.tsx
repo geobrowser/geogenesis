@@ -56,6 +56,7 @@ describe('bounty cards', () => {
           isInterested={false}
           isPending={false}
           isInterestLoading={false}
+          isInterestKnown
           canRegisterInterest
           onRegisterInterest={vi.fn()}
         />

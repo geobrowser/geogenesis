@@ -62,7 +62,7 @@ export function SpaceChromeGate({ children, keepChrome = false }: { children: Re
 
 /**
  * Routes that render a space rail on the server today (Overview + Community, for a
- * space or `/root`). This is used ONLY to seed the header width before the rail has
+ * space or `/root`, and a topic space's `/overview`). This is used ONLY to seed the header width before the rail has
  * reported its content on the client — so a hard load of a rail route paints at the
  * right width instead of flashing narrow → wide, and a non-rail tab (which never
  * renders a rail on the server) is never seeded wide. Once the rail reports via the
@@ -72,7 +72,7 @@ function useIsSidebarSeedRoute() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   if (searchParams.get('tabId')) return false;
-  return pathname != null && /^(\/space\/[^/]+|\/root)(\/community)?\/?$/.test(pathname);
+  return pathname != null && /^(\/space\/[^/]+|\/root)(\/community|\/overview)?\/?$/.test(pathname);
 }
 
 type SpaceHeaderContentContainerProps = {

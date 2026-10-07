@@ -6,6 +6,7 @@ import {
   GeoChatRequestError,
   GeoChatSessionError,
   blockDebateUser,
+  clearClaimNotInterested,
   completeLocalRecordingUpload,
   createDebateRequest,
   createScheduledDebate,
@@ -14,14 +15,20 @@ import {
   getDebateActivity,
   getGeoChatSession,
   getRematchLiveKitToken,
+  hideDebate,
   isAccountWarmingUp,
   joinDebateQueue,
   listDebateClaims,
   listDebatePeople,
   listMatchmakingClaims,
+  listNotInterestedClaims,
+  listUpcomingDebateRooms,
+  markClaimNotInterested,
   notifyClaimResponseIndexed,
   resetGeoChatSession,
   retryDebatePhaseBoundaryRequest,
+  saveOpenRoundPick,
+  unhideDebate,
   updateDebateAvailability,
 } from './api';
 
@@ -198,6 +205,21 @@ describe('debate availability', () => {
   });
 });
 
+describe('upcoming debate rooms', () => {
+  it('asks for reminded lobbies alongside debate rooms', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ rooms: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await listUpcomingDebateRooms(vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith('http://localhost:8080/me/debate-rooms?include=lobbies', expect.anything());
+  });
+});
+
 describe('matchmaking', () => {
   function stubJson(body: unknown) {
     const fetch = vi
@@ -356,6 +378,37 @@ describe('matchmaking', () => {
       'http://localhost:8080/me/debate-blocks/user-b',
       expect.objectContaining({ method: 'PUT' })
     );
+  });
+
+  // GEO-2862. Off-chain and private: a plain geo-chat write, no transaction.
+  it('marks, clears and lists "Not interested" claims', async () => {
+    const response = {
+      claims: [{ claim_entity_id: 'claim-1', claim_text: 'A claim', created_at: '2026-10-01T00:00:00Z' }],
+    };
+    // A fresh Response per call: a body can only be read once.
+    const fetch = vi
+      .fn()
+      .mockImplementation(
+        async () =>
+          new Response(JSON.stringify(response), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(markClaimNotInterested('claim-1', vi.fn(), 'user-a')).resolves.toEqual(response);
+    await clearClaimNotInterested('claim-1', vi.fn(), 'user-a');
+    await listNotInterestedClaims(vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenNthCalledWith(
+      1,
+      'http://localhost:8080/me/not-interested-claims/claim-1',
+      expect.objectContaining({ method: 'PUT' })
+    );
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      'http://localhost:8080/me/not-interested-claims/claim-1',
+      expect.objectContaining({ method: 'DELETE' })
+    );
+    expect(fetch.mock.calls[2][0]).toBe('http://localhost:8080/me/not-interested-claims');
   });
 });
 
@@ -736,6 +789,50 @@ describe('turn yields', () => {
   });
 });
 
+describe('open round picks (GEO-3175)', () => {
+  it('puts the pick to the addressed round and returns the debate built for the caller', async () => {
+    const debate = { id: 'debate-1', status: 'in_progress', open_rounds: { round_index: 0, my_pick: 'extend' } };
+    const fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify(debate), {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(saveOpenRoundPick('debate-1', 0, 'extend', vi.fn(), 'user-a')).resolves.toEqual(debate);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/rounds/0/pick',
+      expect.objectContaining({
+        method: 'PUT',
+        headers: {
+          Authorization: 'Bearer access-token',
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ pick: 'extend' }),
+      })
+    );
+  });
+
+  it('surfaces the contract’s refusal codes', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'round_already_resolved', message: 'Round 0 has resolved.' } }), {
+          status: 409,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(saveOpenRoundPick('debate-1', 0, 'end', vi.fn(), 'user-a')).rejects.toMatchObject({
+      code: 'round_already_resolved',
+      status: 409,
+    });
+  });
+});
+
 describe('a refused session exchange', () => {
   /**
    * The seam every other test on this branch assumes and none of them touched.
@@ -1015,6 +1112,76 @@ describe('scheduled debate limit', () => {
       code: 'too_many_open_invitations',
       message:
         'you have 100 invitations to this person waiting for an answer; wait for some to be answered before sending more',
+    });
+  });
+});
+
+describe('debate visibility (GEO-2785)', () => {
+  const visibility = {
+    debate_id: '01a0448a-61d3-7101-8434-a20fdadf6f97',
+    hidden: true,
+    hidden_at: '2026-09-30T18:00:00Z',
+    hidden_by_user_id: 'user-1',
+    hidden_reason: 'test debate',
+  };
+  const ok = () =>
+    new Response(JSON.stringify(visibility), { status: 200, headers: { 'Content-Type': 'application/json' } });
+
+  it('hides with a trimmed reason, authenticated', async () => {
+    const fetch = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetch);
+
+    await expect(hideDebate('debate-1', '  test debate  ', vi.fn(), 'user-a')).resolves.toEqual(visibility);
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/hide',
+      expect.objectContaining({
+        method: 'POST',
+        headers: { Authorization: 'Bearer access-token', 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason: 'test debate' }),
+      })
+    );
+  });
+
+  it('sends no reason when the reason is blank', async () => {
+    const fetch = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetch);
+
+    await hideDebate('debate-1', '   ', vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/hide',
+      expect.objectContaining({ body: JSON.stringify({}) })
+    );
+  });
+
+  it('unhides authenticated, with no body', async () => {
+    const fetch = vi.fn().mockResolvedValue(ok());
+    vi.stubGlobal('fetch', fetch);
+
+    await unhideDebate('debate-1', vi.fn(), 'user-a');
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debates/debate-1/unhide',
+      expect.objectContaining({ method: 'POST', headers: { Authorization: 'Bearer access-token' }, body: undefined })
+    );
+  });
+
+  it('surfaces a refusal as a GeoChatRequestError with its code', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ error: { code: 'debate_visibility_forbidden', message: 'no' } }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      )
+    );
+
+    await expect(unhideDebate('debate-1', vi.fn(), 'user-a')).rejects.toMatchObject({
+      name: 'GeoChatRequestError',
+      code: 'debate_visibility_forbidden',
+      status: 403,
     });
   });
 });

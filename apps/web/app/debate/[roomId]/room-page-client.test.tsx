@@ -14,6 +14,16 @@ const mocks = vi.hoisted(() => ({
   },
   debateStatus: { data: undefined, isLoading: false } as { data: string | undefined; isLoading: boolean },
   replace: vi.fn(),
+  access: { status: 'admitted' } as { status: string; opens_at?: string },
+  kind: 'debate' as 'debate' | 'lobby',
+  lobbyJoining: false,
+}));
+
+vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.lobbyJoining }));
+
+vi.mock('~/core/debates/lobbies/lobby-page', () => ({
+  DebateLobbyPage: ({ lobbyId }: { lobbyId: string }) => <div>lobby {lobbyId}</div>,
+  LobbiesUnavailable: () => <div>Lobbies are not available right now.</div>,
 }));
 
 vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mocks.replace, push: vi.fn() }) }));
@@ -26,7 +36,8 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
   useDebateRoom: () => ({
     data: {
       room_id: 'room-1',
-      access: { status: 'admitted' },
+      kind: mocks.kind,
+      access: mocks.access,
       starts_at: '2026-09-24T13:00:00.000Z',
       opens_at: '2026-09-24T12:50:00.000Z',
       scheduled_end_at: null,
@@ -59,9 +70,53 @@ afterEach(() => {
   mocks.session = { data: undefined, isLoading: true };
   mocks.debateStatus = { data: undefined, isLoading: false };
   mocks.replace.mockReset();
+  mocks.access = { status: 'admitted' };
+  mocks.kind = 'debate';
+  mocks.lobbyJoining = false;
 });
 
 describe('DebateRoomPageClient', () => {
+  // GEO-3131. A lobby's room view is `not_a_participant`, which must not redirect.
+  it('opens the lobby page for a lobby when joining is on', () => {
+    mocks.kind = 'lobby';
+    mocks.access = { status: 'not_a_participant' };
+    mocks.lobbyJoining = true;
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByText('lobby room-1')).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('says lobbies are unavailable when joining is off', () => {
+    mocks.kind = 'lobby';
+    mocks.access = { status: 'not_a_participant' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByText('Lobbies are not available right now.')).toBeInTheDocument();
+    expect(screen.queryByText(/lobby room-1/)).not.toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  // Someone early has nothing to do here yet, so the notice says when and sends them somewhere useful.
+  it('tells an early arrival when the room opens and offers Explore', () => {
+    mocks.access = { status: 'not_yet_open', opens_at: '2026-09-24T12:50:00.000Z' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(
+      screen.getByText(/^The debate room opens 10 minutes early at .+\. In the meantime explore Geo\.$/)
+    ).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Explore' })).toHaveAttribute('href', '/explore');
+    expect(screen.queryByText(/picker for/)).not.toBeInTheDocument();
+  });
+
+  // geo-chat stores the lead per room, so the copy follows the room rather than a constant.
+  it('reads how early the room opens off the room itself', () => {
+    mocks.access = { status: 'not_yet_open', opens_at: '2026-09-24T12:45:00.000Z' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+
+    expect(screen.getByText(/^The debate room opens 15 minutes early at /)).toBeInTheDocument();
+  });
+
   // Mounting the picker on a used room flashed its claims, then bounced into the finished debate.
   it('says a room whose debate is over has already had it', () => {
     mocks.session = converted;

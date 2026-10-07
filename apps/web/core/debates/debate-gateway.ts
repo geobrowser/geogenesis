@@ -16,6 +16,7 @@ import {
   GeoChatRequestError,
   type GeoChatSession,
   type GetPrivyIdentityToken,
+  dashlessId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
   resetGeoChatSession,
@@ -63,6 +64,7 @@ type DebateEventPayload = {
   space_id?: string;
   debate_id?: string;
   rematch_session_id?: string;
+  lobby_id?: string;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -468,6 +470,16 @@ export class DebateGatewayClient {
       case 'debate.matchmaking_changed':
         this.queueMatchmakingSections(identifiers.sections);
         break;
+      // GEO-3133. Sent to matchmaking subscribers: the lobbies card, and a lobby page whose viewer
+      // is not inside, which `debate.lobby_changed` does not reach.
+      case 'debate.lobbies_changed':
+        this.queueAccountQuery('lobbies');
+        if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
+        break;
+      // GEO-3131. Sent to the lobby's present members.
+      case 'debate.lobby_changed':
+        if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
+        break;
     }
   }
 
@@ -496,6 +508,9 @@ export class DebateGatewayClient {
     }
     if (scope.scope === 'matchmaking') {
       this.queueMatchmakingSections();
+      // `debate.lobbies_changed` rides this scope too.
+      this.queueAccountQuery('lobbies');
+      this.queueAccountQuery('lobby');
       return;
     }
     this.queueQuery(['debates', 'detail', scope.debate_id]);
@@ -535,7 +550,9 @@ export class DebateGatewayClient {
       | 'requests'
       | 'scheduled-debates'
       | 'upcoming-rooms'
-      | 'room',
+      | 'room'
+      | 'lobbies'
+      | 'lobby',
     id?: string
   ) {
     if (!this.accountKey) return;
