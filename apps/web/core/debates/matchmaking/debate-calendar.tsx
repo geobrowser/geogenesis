@@ -580,7 +580,7 @@ function DebateCalendarBody({
       </div>
 
       {/* The debates panel's own callout, so the prompt reads the same wherever it is met. It hides
-          itself once a schedule is saved or the callout is dismissed in either place. */}
+          itself while the viewer's schedule offers upcoming time. */}
       <SetScheduleBanner surface="calendar" scheduleButtonRef={scheduleButtonRef} className="mx-6 mt-3 md:mx-4" />
 
       <CalendarWeekNav

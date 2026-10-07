@@ -13,7 +13,8 @@ import { Text } from '~/design-system/text';
 
 import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 
-import { debateActionAnalyticsAttributes } from './hub-analytics';
+import { debateAnalyticsLabel } from './hub-analytics';
+import { HubPillButton } from './hub-pill-button';
 
 /**
  * "Debate schedule" — the callout at the top of the debates panel, above the tabs, whose
@@ -72,18 +73,19 @@ function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
         <Text as="h3" variant="smallTitle">
           Debate schedule
         </Text>
-        <button
+        <HubPillButton
           ref={openerRef}
-          type="button"
-          {...debateActionAnalyticsAttributes(surface, 'Open schedule', 'open_debate_schedule')}
+          variant="primary"
+          analyticsSurface={surface}
+          analyticsLabel={debateAnalyticsLabel(surface, 'Open schedule')}
+          analyticsIntent="open_debate_schedule"
           onClick={() => {
             returnFocusRef.current = openerRef.current;
             setModalOpen(true);
           }}
-          className="shrink-0 rounded-full bg-[#151515] px-4 py-1 text-metadata text-white transition-opacity hover:opacity-90"
         >
           Set my schedule
-        </button>
+        </HubPillButton>
       </div>
 
       <Text as="p" variant="metadata" className="mt-2">
