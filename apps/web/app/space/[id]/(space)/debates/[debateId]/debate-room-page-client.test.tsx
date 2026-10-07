@@ -5317,18 +5317,6 @@ describe('DebateRoomPageClient', () => {
       await waitFor(() => expect(pickCard()).not.toBeInTheDocument());
     });
 
-    it('does not report a failure when the round resolved while the pick was saving', async () => {
-      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
-      mocks.savePickMutateAsync.mockRejectedValue(
-        new GeoChatRequestError('Round already resolved', 'round_already_resolved', 409)
-      );
-      await renderLiveDebate(openRoundsDeciding());
-
-      fireEvent.click(await screen.findByRole('button', { name: /End/ }));
-      await act(async () => undefined);
-      expect(screen.getByRole('alert')).toBeEmptyDOMElement();
-    });
-
     it('asks to tap again when a pick does not save', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
       mocks.savePickMutateAsync.mockRejectedValue(new GeoChatRequestError('Unavailable', null, 503));

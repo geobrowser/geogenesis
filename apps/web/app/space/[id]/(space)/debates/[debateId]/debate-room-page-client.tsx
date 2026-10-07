@@ -12,7 +12,6 @@ import { capture } from '~/core/analytics';
 import {
   type Debate,
   type DebateRematchSession,
-  GeoChatRequestError,
   type GetPrivyIdentityToken,
   type LiveKitJoinResponse,
   type OpenRoundPick,
@@ -42,6 +41,7 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
+import { DebateRoomOverlayCard } from '~/core/debates/debate-room-overlay-card';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -1977,15 +1977,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     setVideoEnabled(current => !current);
   }, []);
 
-  // A round that resolved while the save was in flight is not a failure to report: the room is
-  // about to show the result, and the hook re-reads the debate for it.
   const savePickAsync = saveOpenRoundPick.mutateAsync;
   const pickOpenRound = React.useCallback(
-    (roundIndex: number, pick: OpenRoundPick) =>
-      savePickAsync({ roundIndex, pick }).catch(error => {
-        if (error instanceof GeoChatRequestError && error.code === 'round_already_resolved') return;
-        throw error;
-      }),
+    (roundIndex: number, pick: OpenRoundPick) => savePickAsync({ roundIndex, pick }),
     [savePickAsync]
   );
 
@@ -3207,9 +3201,7 @@ function DebateRecordingModal({
               onPick={pick => onPickOpenRound(openRoundDeciding.roundIndex, pick)}
               localReconnecting={roomState === 'reconnecting'}
               reconnectingOpponentName={
-                remoteDisconnected
-                  ? remoteParticipant?.display_name || remoteParticipant?.profile_space_id || 'The other debater'
-                  : null
+                remoteDisconnected ? (remoteParticipant ? speakerName(remoteParticipant) : 'The other debater') : null
               }
             />
           )}
@@ -3588,7 +3580,7 @@ function DebateAgainCard({
   const consentLabel = localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!";
 
   return (
-    <section className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-7rem)] -translate-x-1/2 -translate-y-1/2 flex-col gap-2 overflow-hidden rounded-lg bg-white px-3 py-2 text-text shadow-card">
+    <DebateRoomOverlayCard className="w-[calc(100%-7rem)] gap-2 px-3 py-2">
       {rebuttalRounds !== null && (
         <>
           <CardRow>
@@ -3663,7 +3655,7 @@ function DebateAgainCard({
         </span>
       </CardRow>
       {children}
-    </section>
+    </DebateRoomOverlayCard>
   );
 }
 

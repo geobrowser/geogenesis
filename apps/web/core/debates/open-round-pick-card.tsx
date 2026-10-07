@@ -8,6 +8,8 @@ import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
 
 import type { OpenRoundPick } from './api';
+import { DebateRoomOverlayCard } from './debate-room-overlay-card';
+import { COUNTDOWN_WARNING_COLOR } from './recording-countdown-ring';
 
 type OpenRoundPickCardProps = {
   /** The round that just ended, which is the round the pick is for. */
@@ -76,10 +78,10 @@ export function OpenRoundPickCard({
   const rebuttalSeconds = Math.round(rebuttalTurnMs / 1_000);
 
   return (
-    <section
+    <DebateRoomOverlayCard
       aria-labelledby={headingId}
       data-open-round-pick-card={roundIndex}
-      className="absolute top-1/2 left-1/2 z-40 flex w-[calc(100%-1.5rem)] max-w-[318px] -translate-x-1/2 -translate-y-1/2 flex-col gap-2.5 overflow-hidden rounded-lg bg-white p-3 text-text shadow-card"
+      className="w-[calc(100%-1.5rem)] max-w-[318px] gap-2.5 p-3"
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -124,7 +126,7 @@ export function OpenRoundPickCard({
             ? `${reconnectingOpponentName} is reconnecting. Their last saved pick still counts.`
             : null}
       </p>
-    </section>
+    </DebateRoomOverlayCard>
   );
 }
 
@@ -179,10 +181,8 @@ function PickCountdown({ remainingSeconds, progress }: { remainingSeconds: numbe
 
   return (
     <span
-      className={cx(
-        'inline-flex shrink-0 items-center gap-1.5 text-metadataMedium tabular-nums',
-        warning ? 'text-[#ff4a26]' : 'text-grey-04'
-      )}
+      className="inline-flex shrink-0 items-center gap-1.5 text-metadataMedium text-grey-04 tabular-nums"
+      style={warning ? { color: COUNTDOWN_WARNING_COLOR } : undefined}
     >
       <svg aria-hidden="true" viewBox="0 0 18 18" className="size-[18px]">
         <circle cx="9" cy="9" r={ringRadius} fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth="2" />

@@ -953,22 +953,25 @@ export function useEndDebateTurn(debateId: string) {
  * Saves an Open rounds pick (GEO-3178). Not retried: the pick card puts the selection back and asks
  * the debater to tap again, which is the retry, and a silent one could land after they changed it.
  *
- * `round_already_resolved` means the round is over, so the debate is re-read for its outcome.
+ * `round_already_resolved` is not a failure: the round ended while the save was in flight, the room
+ * is about to show the result, and the debate is re-read for it. It resolves `null`.
  */
 export function useSaveOpenRoundPick(debateId: string) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useMutation({
-    mutationFn: ({ roundIndex, pick }: { roundIndex: number; pick: OpenRoundPick }) =>
-      saveOpenRoundPick(debateId, roundIndex, pick, getPrivyIdentityToken, accountKey),
-    onSuccess: debate => {
-      queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
-    },
-    onError: error => {
-      if (error instanceof GeoChatRequestError && error.code === 'round_already_resolved') {
-        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debateId) });
+    mutationFn: async ({ roundIndex, pick }: { roundIndex: number; pick: OpenRoundPick }) => {
+      try {
+        return await saveOpenRoundPick(debateId, roundIndex, pick, getPrivyIdentityToken, accountKey);
+      } catch (error) {
+        if (error instanceof GeoChatRequestError && error.code === 'round_already_resolved') return null;
+        throw error;
       }
+    },
+    onSuccess: debate => {
+      if (debate) queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debateId) });
     },
   });
 }
