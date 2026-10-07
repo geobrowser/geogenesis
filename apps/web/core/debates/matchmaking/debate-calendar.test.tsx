@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   viewerHasPositions: true as boolean | null,
   positions: [] as ParticipantPosition[],
   positionReads: [] as unknown[][],
+  positionsPlaceholder: false,
   claimNames: new Map<string, string>(),
   openProfile: vi.fn(),
   respond: vi.fn(),
@@ -78,7 +79,13 @@ vi.mock('../participant-positions', () => ({
     if (participants.length > 0) {
       for (const row of mocks.positions) byClaim.set(row.claimId, [...(byClaim.get(row.claimId) ?? []), row]);
     }
-    return { byClaim, isLoading: false, isPlaceholderData: false, isFetching: false, error: null };
+    return {
+      byClaim,
+      isLoading: false,
+      isPlaceholderData: mocks.positionsPlaceholder,
+      isFetching: mocks.positionsPlaceholder,
+      error: null,
+    };
   },
 }));
 vi.mock('../claim-picker-page', async () => {
@@ -381,6 +388,7 @@ beforeEach(() => {
     viewerHasPositions: true,
     positions: [],
     positionReads: [],
+    positionsPlaceholder: false,
     claimNames: new Map(),
     claimTopics: new Map(),
   });
@@ -1179,6 +1187,23 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(within(people).getByRole('checkbox', { name: 'Elena' })).toBeInTheDocument();
     expect(within(people).getByRole('checkbox', { name: 'Marco' })).toBeInTheDocument();
     expect(within(people).queryByRole('checkbox', { name: 'Ana' })).not.toBeInTheDocument();
+  });
+
+  it('keeps the week up while the roster changes under a picked claim', async () => {
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}` });
+    const { rerender } = render(<DebateCalendar />);
+    expect(thursday()).toHaveAccessibleName(/Elena/);
+
+    // Someone comes online: the positions read moves to a new key and holds the last answer while
+    // it refetches. That held answer is drawn, not a skeleton.
+    mocks.roster = [{ ...summary('15', 'Zed'), online: true } as DebatePerson];
+    mocks.positionsPlaceholder = true;
+    rerender(<DebateCalendar />);
+    // Past the states' cross-fade, which only mounts a skeleton once the week has faded out.
+    await act(() => new Promise(resolve => setTimeout(resolve, 600)));
+
+    expect(screen.queryByLabelText('Loading who is free')).not.toBeInTheDocument();
+    expect(thursday()).toHaveAccessibleName(/Elena/);
   });
 
   it('keeps picks from the URL on a reload', () => {

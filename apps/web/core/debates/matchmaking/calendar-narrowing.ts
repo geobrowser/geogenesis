@@ -159,8 +159,9 @@ export type ClaimListRow = {
 
 /**
  * The Claims list: claims in the picked spaces, held by the picked people, and with Matches only,
- * where someone on the calendar opposes the viewer. Picks come first and always stay; the rest by
- * most matches, then most people holding them.
+ * where someone on the calendar opposes the viewer. Picks always stay, in their place: a row that
+ * jumped to the top when ticked would move out from under the pointer. By most matches, then most
+ * people holding them.
  *
  * Search is the panel's, applied after this, so a pick hidden by a search is not called hidden.
  */
@@ -211,7 +212,6 @@ export function claimListRows(
   const held = (summary: ClaimSummary) => summary.agree.size + summary.disagree.size;
   return rows.sort(
     (left, right) =>
-      Number(right.selected) - Number(left.selected) ||
       right.summary.opponents.size - left.summary.opponents.size ||
       held(right.summary) - held(left.summary) ||
       left.summary.key.localeCompare(right.summary.key)
@@ -232,8 +232,8 @@ export type PersonListRow<T extends PersonFacts = PersonFacts> = { person: T; se
 
 /**
  * The People list: people in the picked spaces, holding a picked claim (the opposite side, with
- * Matches only), and with Matches only, people the viewer has a match with. Picks come first and
- * always stay; the rest by most matches, then soonest free.
+ * Matches only), and with Matches only, people the viewer has a match with. Picks always stay, in
+ * their place, as on the Claims list. By most matches, then soonest free.
  */
 export function personListRows<T extends PersonFacts>(
   people: readonly T[],
@@ -257,7 +257,6 @@ export function personListRows<T extends PersonFacts>(
   }
   return rows.sort(
     (left, right) =>
-      Number(right.selected) - Number(left.selected) ||
       right.person.matchCount - left.person.matchCount ||
       (left.person.firstFree ?? Infinity) - (right.person.firstFree ?? Infinity) ||
       left.person.profileKey.localeCompare(right.person.profileKey)

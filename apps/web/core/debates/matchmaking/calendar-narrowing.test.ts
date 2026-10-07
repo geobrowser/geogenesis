@@ -118,13 +118,14 @@ describe('the panel lists', () => {
     { profileKey: JONAH, matchCount: 0, firstFree: 2, inSpaces: false },
   ];
 
-  it('orders claims by matches, narrows them by space, and pins a pick the space hides', () => {
+  it('orders claims by matches, narrows them by space, and keeps a pick the space hides in its place', () => {
     expect(claimListRows(claims, NO_PICKS, []).map(item => item.summary.key)).toEqual([PHONES_KEY, SEED_OILS_KEY]);
 
     const pinned = claimListRows(claims, { ...NO_PICKS, claims: [SEED_OILS_KEY] }, [AI]);
+    // Not moved to the top: a ticked row stays where it was pressed.
     expect(pinned.map(item => [item.summary.key, item.selected, item.hidden])).toEqual([
-      [SEED_OILS_KEY, true, true],
       [PHONES_KEY, false, false],
+      [SEED_OILS_KEY, true, true],
     ]);
   });
 
@@ -140,7 +141,7 @@ describe('the panel lists', () => {
   it('keeps a claim picked from a link that nobody on the calendar holds', () => {
     const stray = claimPickKey(AI, 'cccccccccccccccccccccccccccccc09');
     const rows = claimListRows(claims, { ...NO_PICKS, claims: [stray] }, []);
-    expect(rows[0]).toMatchObject({ selected: true, hidden: true, summary: { key: stray } });
+    expect(rows.find(item => item.summary.key === stray)).toMatchObject({ selected: true, hidden: true });
   });
 
   it('orders people by matches then soonest free, and narrows them by space and picked claims', () => {
@@ -151,8 +152,8 @@ describe('the panel lists', () => {
         item.hidden,
       ])
     ).toEqual([
-      [JONAH, true],
       [MAYA, false],
+      [JONAH, true],
     ]);
   });
 });

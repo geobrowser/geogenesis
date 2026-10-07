@@ -320,6 +320,7 @@ function DebateCalendarBody({
     matchAnalysis,
     matchesKnown,
     viewerHasPositions,
+    matchesLoading,
     matchingSpaceIds,
     matchingClaimNamesById,
     matchingClaimsLoading,
@@ -358,8 +359,13 @@ function DebateCalendarBody({
     [allPeople, viewerProfileSpaceId, wantAllPositions]
   );
   const allPositions = useParticipantPositions(allPositionParticipants, viewerProfileSpaceId);
-  const allPositionsReady =
-    allPositionParticipants.length > 0 && !allPositions.isLoading && !allPositions.isPlaceholderData;
+  // Whether a first answer has landed. Not whether the answer is for the current roster: the read is
+  // keyed on everyone on the calendar, online people included, and that list is polled, so the key
+  // moves whenever someone comes or goes. Waiting on `isPlaceholderData` too sent the whole week back
+  // to its skeleton on every such change while a claim was picked (GEO-3220 review: "two cycles of
+  // the calendar reloading"). The held answer is the right one to draw meanwhile; a newcomer's
+  // positions join it when the refetch lands.
+  const allPositionsReady = allPositionParticipants.length > 0 && !allPositions.isLoading;
   const pool = React.useMemo(() => new Set(allPeople.map(person => normId(person.profile_space_id))), [allPeople]);
   const claimSummaries = React.useMemo(
     () => summarizeClaims(allPositions.byClaim, viewerProfileSpaceId, pool),
@@ -376,7 +382,7 @@ function DebateCalendarBody({
   // the pick is about to hide.
   const picksPending =
     (effectivePicks.claims.length > 0 && !allPositionsReady) ||
-    (effectivePicks.matchesOnly && effectivePicks.claims.length === 0 && !matchesKnown);
+    (effectivePicks.matchesOnly && effectivePicks.claims.length === 0 && matchesLoading);
 
   // The space filter narrows client-side unless the server already did, in which case its
   // membership answer stands.
@@ -1000,7 +1006,7 @@ function DebateCalendarBody({
               )}
             </HubQueryState>
             {isPhone ? null : (
-              <div className="mt-3">
+              <div className="mt-3 flex justify-end">
                 <Legend viewerHasSchedule={viewerHasSchedule} />
               </div>
             )}
