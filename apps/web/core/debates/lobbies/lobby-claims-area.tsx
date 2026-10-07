@@ -49,7 +49,11 @@ export function LobbyClaimsArea({ lobby }: { lobby: DebateLobbyView }) {
           </button>
         ))}
       </ScrollableTabRow>
-      {activeTab === 'room' ? <LobbyRoomClaims lobby={lobby} /> : <LobbyExploreClaims lobby={lobby} />}
+      {activeTab === 'room' ? (
+        <LobbyRoomClaims lobby={lobby} onExplore={() => setActiveTab('explore')} />
+      ) : (
+        <LobbyExploreClaims lobby={lobby} />
+      )}
     </section>
   );
 }
