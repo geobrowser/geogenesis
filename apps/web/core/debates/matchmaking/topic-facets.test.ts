@@ -13,7 +13,10 @@ import {
   keepSelectableTopic,
   keepSelectableTopics,
   keepSelectedVisible,
+  narrowingTopics,
   orderFacetOptions,
+  topicNameMatches,
+  topicSuggestions,
   topicsFor,
 } from './topic-facets';
 
@@ -418,5 +421,70 @@ describe('carriesEveryTopic', () => {
   it('drops a claim with no topics as soon as one is picked', () => {
     expect(carriesEveryTopic(undefined, ['ai'])).toBe(false);
     expect(carriesEveryTopic([], ['ai'])).toBe(false);
+  });
+});
+
+describe('topicNameMatches (GEO-3223)', () => {
+  it('matches what is typed at the start of any word', () => {
+    expect(topicNameMatches('Nuclear power', 'nuc')).toBe(true);
+    expect(topicNameMatches('Nuclear power', 'POW')).toBe(true);
+    expect(topicNameMatches('Nuclear power', 'nuclear po')).toBe(true);
+  });
+
+  it('does not match inside a word, so a short query stays on topic', () => {
+    expect(topicNameMatches('Ukraine', 'ai')).toBe(false);
+    expect(topicNameMatches('AI safety', 'ai')).toBe(true);
+  });
+
+  it('treats punctuation as a word break', () => {
+    expect(topicNameMatches('U.S. politics', 'pol')).toBe(true);
+    expect(topicNameMatches('Climate (policy)', 'pol')).toBe(true);
+  });
+
+  it('matches nothing for an empty query or a missing name', () => {
+    expect(topicNameMatches('Energy', '   ')).toBe(false);
+    expect(topicNameMatches(null, 'energy')).toBe(false);
+  });
+});
+
+describe('narrowingTopics (GEO-3223)', () => {
+  const topics = [
+    { id: 'topic-ai', count: 4 },
+    { id: 'topic-jobs', count: 2 },
+  ];
+
+  it('leaves out a topic every listed claim carries', () => {
+    expect(narrowingTopics(topics, 4, []).map(topic => topic.id)).toEqual(['topic-jobs']);
+  });
+
+  it('keeps a picked topic, so it can be un-picked', () => {
+    expect(narrowingTopics(topics, 4, ['topic-ai']).map(topic => topic.id)).toEqual(['topic-ai', 'topic-jobs']);
+  });
+
+  it('drops nothing while the total is unknown', () => {
+    expect(narrowingTopics(topics, 0, [])).toEqual(topics);
+  });
+});
+
+describe('topicSuggestions (GEO-3223)', () => {
+  const topics = [
+    { id: 'topic-energy', name: 'Energy', count: 3 },
+    { id: 'topic-grid', name: 'Power grid', count: 2 },
+    { id: 'topic-nuclear', name: 'Nuclear power', count: 5 },
+    { id: 'topic-empty', name: 'Power politics', count: 0 },
+  ];
+
+  it('offers the topics the text names, most claims first', () => {
+    expect(topicSuggestions(topics, 'pow', []).map(topic => topic.id)).toEqual(['topic-nuclear', 'topic-grid']);
+  });
+
+  it('leaves out picked topics and topics every claim carries', () => {
+    expect(topicSuggestions(topics, 'pow', ['topic-grid']).map(topic => topic.id)).toEqual(['topic-nuclear']);
+    expect(topicSuggestions(topics, 'pow', [], 5).map(topic => topic.id)).toEqual(['topic-grid']);
+  });
+
+  it('stops at the limit, and offers nothing without a query', () => {
+    expect(topicSuggestions(topics, 'pow', [], 0, 1)).toHaveLength(1);
+    expect(topicSuggestions(topics, '', [])).toEqual([]);
   });
 });

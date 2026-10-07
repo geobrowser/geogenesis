@@ -194,7 +194,29 @@ export type TaggedClaimFilters = {
    * Undefined or `null` excludes nothing.
    */
   excludeAnsweredBy?: string | null;
+  /**
+   * Topics whose names the search text matched, so a claim carrying any of them answers the search
+   * as well as a claim whose own text does. Searching "nuclear" then finds a claim tagged Nuclear
+   * power that never says the word.
+   *
+   * Only read while there is a search. The rows these add come after the text matches rather than
+   * among them: the text search ranks its own hits, and a topic match is not a hit it scored. The
+   * facets count both, since both are on the list.
+   *
+   * Undefined or empty adds nothing.
+   */
+  searchTopicIds?: string[];
 };
+
+/** The topics a search also matches, or `null` when it adds none — the shape the keys carry. */
+function searchTopicKey(filters: TaggedClaimFilters): string[] | null {
+  return filters.searchTopicIds && filters.searchTopicIds.length > 0 ? filters.searchTopicIds : null;
+}
+
+/** A claim carrying any of these topics, as an `EntityFilter` clause. */
+function carriesAnyTopic(topicIds: string[]) {
+  return { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { in: topicIds } } } };
+}
 
 export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
   search: '',
@@ -344,8 +366,16 @@ export function taggedEntityFilter(
   // matching happen somewhere that can stem, rank and score it while the rest of this filter — the
   // tag, the topics, the spaces — keeps being answered here, over the set it returned. The facets
   // ride the same filter, so their counts describe the search's results too.
+  //
+  // A claim carrying a topic the text matched answers it too (`searchTopicIds`), so the facets and
+  // counts built on this clause cover both kinds of match.
   if (searchClaimIds !== null) {
-    and.push({ id: { in: searchClaimIds } });
+    const searchTopicIds = searchTopicKey(filters);
+    and.push(
+      searchTopicIds
+        ? { or: [{ id: { in: searchClaimIds } }, carriesAnyTopic(searchTopicIds)] }
+        : { id: { in: searchClaimIds } }
+    );
   }
 
   // An anti-join through the vote table's primary key (gaia#987), so it costs the same however
@@ -467,6 +497,7 @@ export const taggedClaimsQueryKey = (
     filters.eligibleSpaceIds,
     filters.topicSpaceIds ?? null,
     filters.excludeAnsweredBy ?? null,
+    searchTopicKey(filters),
   ] as const;
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
@@ -548,7 +579,9 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
               propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
               // The ids of this page only. The tag, the topics and the spaces still narrow here, so
               // a claim the search matched but a topic filter excludes never reaches the list.
-              filter: taggedEntityFilter(tagId, filters, ids),
+              // Without the topics the text matched: those rows are their own request below, and
+              // here they would come back on every page.
+              filter: taggedEntityFilter(tagId, { ...filters, searchTopicIds: undefined }, ids),
               first: ids.length,
               after: null,
             },
@@ -565,6 +598,55 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     combine: combineSearchPages,
   });
 
+  /**
+   * The claims a search reaches through a topic name rather than through their own text: one ranked
+   * page of claims carrying any of the matched topics.
+   *
+   * Drawn after the text matches, once the text search has nothing more to page, so a topic match
+   * never pushes a scored hit down or lands between two of them as pages arrive. One page, because
+   * a topic broad enough to fill more than that is one to pick as a filter, and its suggestion is
+   * under the search box for exactly that.
+   */
+  const searchTopicIds = searchTopicKey(filters);
+  const topicRows = useQuery({
+    queryKey: [
+      'tagged-claims',
+      'search-topic-claims',
+      tagId,
+      filters.topicIds,
+      filters.spaceIds,
+      filters.eligibleSpaceIds,
+      filters.topicSpaceIds ?? null,
+      filters.excludeAnsweredBy ?? null,
+      searchTopicIds,
+    ] as const,
+    queryFn: ({ signal }) => {
+      const { and } = taggedEntityFilter(tagId, { ...filters, search: '', searchTopicIds: undefined }, null);
+      return Effect.runPromise(
+        graphql({
+          query: taggedClaimsDocument,
+          decoder: decodeTaggedClaimsPage,
+          variables: {
+            tagPropertyId: TAG_PROPERTY_ID,
+            tagId,
+            claimTypeId: CLAIM_TYPE_ID,
+            topicsPropertyId: TOPICS_PROPERTY_ID,
+            propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
+            filter: { and: [...and, carriesAnyTopic(searchTopicIds ?? [])] },
+            first: TAGGED_CLAIMS_PAGE_SIZE,
+            after: null,
+          },
+          signal,
+        })
+      );
+    },
+    staleTime: TAGGED_STALE_TIME,
+    enabled: enabled && searching && searchTopicIds !== null,
+  });
+  /** Whether the topic matches are part of this search, and so part of what it is waiting on. */
+  const topicRowsWanted = searching && searchTopicIds !== null;
+  const topicRowsPending = topicRowsWanted && topicRows.isLoading;
+
   const searchClaimsNow = React.useMemo(() => {
     if (search.claimIds === null) return NO_TAGGED_CLAIMS;
     const byRelevance = new Map(search.claimIds.map((id, index) => [id, index]));
@@ -575,14 +657,23 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // A page still waiting is left out rather than skipped over, so the rows keep arriving in
     // relevance order instead of a later page jumping the queue and being overtaken.
     const claims: TaggedClaim[] = [];
+    let pagesComplete = true;
     for (const page of searchPages.pages) {
-      if (!page) break;
+      if (!page) {
+        pagesComplete = false;
+        break;
+      }
       claims.push(
         ...[...page].sort((a, b) => (byRelevance.get(a.entity.id) ?? 0) - (byRelevance.get(b.entity.id) ?? 0))
       );
     }
+    // The topic matches go last, once the text search has no more pages to add above them.
+    if (topicRowsWanted && pagesComplete && !search.hasNextPage && topicRows.data) {
+      const listed = new Set(claims.map(claim => claim.entity.id));
+      claims.push(...topicRows.data.claims.filter(claim => !listed.has(claim.entity.id)));
+    }
     return claims;
-  }, [search.claimIds, searchPages.pages]);
+  }, [search.claimIds, search.hasNextPage, searchPages.pages, topicRows.data, topicRowsWanted]);
 
   const cache = useQueryClient();
   const searchRefetch = search.refetch;
@@ -608,7 +699,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     searching &&
     search.error === null &&
     searchPages.error === null &&
-    (!search.settled || searchPages.firstPagePending || searchPages.appendedPending);
+    (!search.settled || searchPages.firstPagePending || searchPages.appendedPending || topicRowsPending);
 
   const browsedClaims = React.useMemo(
     () => query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS,
@@ -659,7 +750,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // re-asked with the previous rows still held is not a list appearing, and drawing a skeleton
     // over readable rows is the flash all of this exists to avoid.
     isLoading: enabled && (searching ? searchRowsSettling && claims.length === 0 : query.isLoading),
-    error: enabled ? (searching ? (search.error ?? searchPages.error) : query.error) : null,
+    error: enabled ? (searching ? (search.error ?? searchPages.error ?? topicRows.error) : query.error) : null,
     // Paging follows whichever source is answering. A search's next page is another `/search`
     // offset, not a graph cursor — the cursor belongs to a query that is not running.
     hasNextPage: enabled && (searching ? search.hasNextPage : query.hasNextPage),
@@ -812,6 +903,7 @@ export const taggedFacetQueryKey = (
     filters.eligibleSpaceIds,
     filters.topicSpaceIds ?? null,
     filters.excludeAnsweredBy ?? null,
+    searchTopicKey(filters),
   ] as const;
 
 const NO_FACET_COUNTS: TaggedFacetCount[] = [];

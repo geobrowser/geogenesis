@@ -33,6 +33,11 @@ const { SPACE_1, SPACE_2, CLAIM_SHARED, CLAIM_MORE, CLAIM_SOURCE, CLAIM_FRESH, N
 }));
 
 const mocks = vi.hoisted(() => ({
+  /**
+   * GEO-3223. Whether the viewport is a phone's. Most of this file drives the space and topic menus,
+   * which a phone keeps, so it defaults to one; the desktop pill rows have their own cases.
+   */
+  isPhone: true,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
   sourceDebateLoading: false,
   /** GEO-2870. geo-chat's extracted-claims payload for the source debate, and whether it is final. */
@@ -204,6 +209,10 @@ const mocks = vi.hoisted(() => ({
 // The picker opens on the opponent's positions now (GEO-2861), so participant avatars resolve on
 // mount rather than only after a tab switch — and that lookup is a real request. Stubbed the same
 // way `matchmaking-claim-card` stubs it; this file asserts on claims, not on faces.
+vi.mock('~/core/hooks/use-media-query', () => ({
+  useMediaQuery: () => mocks.isPhone,
+}));
+
 vi.mock('~/core/analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/analytics')>()),
   capture: mocks.capture,
@@ -452,7 +461,11 @@ function applyServerFilters(rows: ReturnType<typeof taggedRowsFor>, filters: any
     // Word at a time, ANDed, which is what the server does — a phrase match here would let a test
     // pass on a narrowing the real query never performs.
     const words = filters.search.trim().split(/\s+/).filter(Boolean).slice(0, 8);
-    if (!words.every((word: string) => name.toLowerCase().includes(word.toLowerCase()))) return false;
+    // A claim carrying a topic the search named answers it too (GEO-3223).
+    const viaTopic = (filters.searchTopicIds ?? []).some((topicId: string) =>
+      (row.entity.relations ?? []).some((relation: any) => relation.toEntity.id === topicId)
+    );
+    if (!viaTopic && !words.every((word: string) => name.toLowerCase().includes(word.toLowerCase()))) return false;
     if (
       !filters.topicIds.every((topicId: string) =>
         (row.entity.relations ?? []).some((relation: any) => relation.toEntity.id === topicId)
@@ -913,6 +926,7 @@ function mutation(mutate = mocks.mutate) {
 }
 
 beforeEach(() => {
+  mocks.isPhone = true;
   mocks.capture.mockClear();
   mocks.sourceDebate = { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } };
   mocks.sourceDebateLoading = false;
@@ -1261,7 +1275,7 @@ describe('DebateRematchPageClient', () => {
 
     // Pinned with the filters and the search box, where the hub's claims tab keeps it — so a
     // request stays on screen while the viewer keeps browsing rather than scrolling away.
-    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
     expect(card.closest('.sticky')).toBe(pinned);
     // Above both of them, not wedged between.
     const filters = screen.getByRole('button', { name: /Any space/ });
@@ -2370,7 +2384,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showRecommended();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'newly' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims and topics' }), { target: { value: 'newly' } });
 
     await waitFor(() => expect(screen.queryByRole('heading', { name: 'Geopolitics & chips' })).toBeNull());
     expect(screen.getByRole('heading', { name: 'Open weight AI' })).toBeInTheDocument();
@@ -3764,7 +3778,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), {
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims and topics' }), {
       target: { value: 'newly published' },
     });
 
@@ -3879,7 +3893,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
 
-    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
     expect(pinned).not.toBeNull();
     expect(pinned?.className).toContain('top-0');
 
@@ -3941,7 +3955,7 @@ describe('DebateRematchPageClient', () => {
     await showAllClaims();
 
     const header = screen.getByTestId('rematch-pair-header');
-    const pinned = screen.getByRole('textbox', { name: 'Search claims' }).closest('.sticky');
+    const pinned = screen.getByRole('textbox', { name: 'Search claims and topics' }).closest('.sticky');
     expect(header.closest('.sticky')).toBe(pinned);
 
     // Inside the column, not floating over the viewport: the dock's `fixed` shell is gone.
@@ -6362,7 +6376,9 @@ describe('claims the pair have already debated', () => {
     await showOpponentClaims();
     expect(alreadyDebatedToggle()).toBeInTheDocument();
 
-    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'nothing like it' } });
+    fireEvent.change(screen.getByRole('textbox', { name: 'Search claims and topics' }), {
+      target: { value: 'nothing like it' },
+    });
 
     await waitFor(() => expect(screen.queryByRole('button', { name: /Already debated with/ })).toBeNull());
   });
@@ -6544,5 +6560,112 @@ describe('From this debate', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /Already debated with Salina/ }));
     expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-3223. On a desktop the space and topic menus are rows of pills, and the search box answers
+ * topics as well as claims. A phone keeps the menus, which the rest of this file drives.
+ */
+describe('desktop filter rows', () => {
+  beforeEach(() => {
+    mocks.isPhone = false;
+  });
+
+  const spaceRow = () => screen.queryByRole('group', { name: 'Filter by space' });
+  const topicRow = () => screen.queryByRole('group', { name: 'Filter by topic' });
+  const searchBox = () => screen.getByRole('textbox', { name: 'Search claims and topics' });
+
+  it('draws spaces and topics as pills instead of menus', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    expect(spaceRow()).toBeInTheDocument();
+    expect(topicRow()).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Any space/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
+  });
+
+  it('narrows the list from a topic pill, as the menu did', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const governance = within(topicRow()!).getByRole('button', { name: /Governance/ });
+    fireEvent.click(governance);
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    expect(within(topicRow()!).getByRole('button', { name: /Governance/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('leaves out a topic every listed claim carries, since it cannot narrow anything', async () => {
+    mocks.entities = [
+      {
+        ...sharedEntity(),
+        relations: [
+          { type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-gov', name: 'Governance' }, isDeleted: false },
+        ],
+      },
+      publishedEntity(),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(within(topicRow()!).getByRole('button', { name: /Ethics/ })).toBeInTheDocument());
+    expect(within(topicRow()!).queryByRole('button', { name: /Governance/ })).toBeNull();
+  });
+
+  it('hides the space row when every listed claim is in one space', async () => {
+    mocks.debateTagClaims = [debateTag(), debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_2, 2)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    await waitFor(() => expect(topicRow()).toBeInTheDocument());
+    expect(spaceRow()).toBeNull();
+  });
+
+  it('suggests matching topics under the search box, and picks one in a press', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    fireEvent.change(searchBox(), { target: { value: 'gov' } });
+    const suggestion = await screen.findByRole('button', { name: 'Filter by Governance' });
+    expect(screen.getByRole('group', { name: 'Matching topics' })).toBeInTheDocument();
+
+    fireEvent.click(suggestion);
+
+    expect(searchBox()).toHaveValue('');
+    expect(screen.queryByRole('group', { name: 'Matching topics' })).toBeNull();
+    await waitFor(() =>
+      expect(within(topicRow()!).getByRole('button', { name: /Governance/ })).toHaveAttribute('aria-pressed', 'true')
+    );
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+  });
+
+  it('finds a claim through a topic name, and says which topic it matched', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    // The claim's own text never says "ethics"; its Ethics topic does.
+    fireEvent.change(searchBox(), { target: { value: 'ethics' } });
+
+    await waitFor(() => expect(screen.queryByText('A claim both participants chose')).toBeNull());
+    expect(screen.getByText('A newly published claim')).toBeInTheDocument();
+    expect(screen.getByText('Ethics', { selector: 'p span' })).toBeInTheDocument();
+    // Explore asks the server for it: the matched topic rides along with the search.
+    expect(mocks.taggedFiltersAskedFor.at(-1)).toMatchObject({ search: 'ethics', searchTopicIds: ['topic-eth'] });
+  });
+
+  it('keeps both rows up while the search box has text', async () => {
+    mocks.debateTagClaims = [debateTag(), debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_2, 2)];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(topicRow()).toBeInTheDocument());
+    expect(spaceRow()).toBeNull();
+
+    // Every listed claim is in one space, which would hide the row; typing holds it still instead.
+    fireEvent.change(searchBox(), { target: { value: 'newly' } });
+
+    expect(spaceRow()).toBeInTheDocument();
   });
 });

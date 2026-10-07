@@ -62,15 +62,21 @@ import { HubQueryState, HubSkeleton, exploreClaimsAction } from '~/core/debates/
 import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ScrollableTabRow } from '~/core/debates/matchmaking/scrollable-tab-row';
+import { SpaceFilterPills } from '~/core/debates/matchmaking/space-filter-pills';
 import {
   carriesEveryTopic,
   claimTopicsById,
   countBy,
   keepSelectableTopics,
+  narrowingTopics,
   orderFacetOptions,
   toggleId,
+  topicNameMatches,
+  topicSuggestions,
   topicsFor,
 } from '~/core/debates/matchmaking/topic-facets';
+import { TopicFilterPills } from '~/core/debates/matchmaking/topic-filter-pills';
+import { TopicSearchSuggestions } from '~/core/debates/matchmaking/topic-search-suggestions';
 import { useDebouncedSearch } from '~/core/debates/matchmaking/use-debounced-search';
 import { useDebouncedSelection } from '~/core/debates/matchmaking/use-debounced-selection';
 import { useSpaceFilterMenu } from '~/core/debates/matchmaking/use-space-filter-selection';
@@ -105,6 +111,7 @@ import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
 import { responsePositionLabel } from '~/core/responses/entity-response';
@@ -168,6 +175,14 @@ function listLandingState(pending: boolean, rows: number): LandingState {
  * landing on a guess, and the landing is taken once: a tab whose answer arrives afterwards must not
  * move someone who is already reading a list.
  */
+/** How many topics a search may match claims through on Explore. See `searchTopicIds`. */
+const SEARCH_TOPIC_LIMIT = 20;
+
+const NO_IDS: string[] = [];
+
+/** Below this a phone keeps the space and topic menus, the way the calendar does (GEO-3223). */
+const PHONE_QUERY = '(max-width: 767px)';
+
 export function resolveLandingTab(states: ReadonlyArray<readonly [PickerTab, LandingState]>): PickerTab | null {
   for (const [tab, state] of states) {
     if (state === 'pending') return null;
@@ -661,12 +676,50 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const excludePending =
     hideMyPositions && localParticipant === null && (sessionQuery.isLoading || viewerIdentityUnresolved);
 
-  const taggedFilters = React.useMemo<TaggedClaimFilters>(
+  const searchedTaggedFilters = React.useMemo<TaggedClaimFilters>(
     () => ({ search: debouncedSearch, topicIds: debouncedTopicIds, spaceIds, eligibleSpaceIds, excludeAnsweredBy }),
     [debouncedSearch, debouncedTopicIds, eligibleSpaceIds, excludeAnsweredBy, spaceIds]
   );
   /** What the tagged query waits on before it can be asked the right question. */
   const taggedScopePending = allowlistPending || excludePending;
+
+  /**
+   * The tag's topics under every filter but the search (GEO-3223) — what the search box matches
+   * topic names against, for its suggestions and for the claims it reaches through a topic.
+   *
+   * Not the topic menu's facet, which is counted over the search's results: a topic the text names
+   * but no text match carries would never appear there, and that is the topic the search is for.
+   * With nothing typed this is the same request as the menu's, so it costs one only while searching,
+   * and then once per filter rather than per keystroke.
+   */
+  const unsearchedTaggedFilters = React.useMemo<TaggedClaimFilters>(
+    () => ({ ...searchedTaggedFilters, search: '' }),
+    [searchedTaggedFilters]
+  );
+  const unsearchedTaggedTopics = useTaggedTopicFacet(
+    claimsTagId,
+    unsearchedTaggedFilters,
+    taggedEnabled && !taggedScopePending
+  );
+  // Every topic the text names, not only the few suggested: a claim reached through any of them
+  // answers the search. Capped, so a short query cannot widen the list to most of the tag.
+  const searchTopicIds = React.useMemo(
+    () =>
+      debouncedSearch
+        ? topicSuggestions(
+            unsearchedTaggedTopics.topics,
+            debouncedSearch,
+            debouncedTopicIds,
+            0,
+            SEARCH_TOPIC_LIMIT
+          ).map(topic => topic.id)
+        : NO_IDS,
+    [debouncedSearch, debouncedTopicIds, unsearchedTaggedTopics.topics]
+  );
+  const taggedFilters = React.useMemo<TaggedClaimFilters>(
+    () => (searchTopicIds.length > 0 ? { ...searchedTaggedFilters, searchTopicIds } : searchedTaggedFilters),
+    [searchTopicIds, searchedTaggedFilters]
+  );
 
   // One ranked, filtered page of the tag at a time (GEO-2798), carrying its own topics and its
   // "Is factual" value — so there is no entity lookup behind it and no corpus held to show the top
@@ -1886,10 +1939,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (claim: DebateRematchClaim) => carriesPickedTopics(claim.claim.claim_entity_id, claim.claim.space_id),
     [carriesPickedTopics]
   );
+  // The claim's text, or the name of a topic it carries here (GEO-3223) — the same two ways
+  // Explore's query answers a search.
   const passesSearch = React.useCallback(
     (claim: DebateRematchClaim) =>
-      !debouncedSearch || claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase()),
-    [debouncedSearch]
+      !debouncedSearch ||
+      claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+      (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).some(topic =>
+        topicNameMatches(topic.name, debouncedSearch)
+      ),
+    [debouncedSearch, topicsByClaimId]
   );
 
   // Both menus come from the server's own count over the tag, each narrowed by every dimension but
@@ -2530,11 +2589,116 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         ? visibleSections.some(section => section.claims.some(hasClaimId))
         : visibleClaims.some(hasClaimId)));
 
+  /**
+   * GEO-3223. A desktop draws the space and topic filters as pill rows; a phone keeps the menus, as
+   * the calendar does, because two rows of pills would push the first claim off a phone's screen.
+   */
+  const isPhone = useMediaQuery(PHONE_QUERY);
+  const setTopicPicked = (topicId: string) => setTopicIds(current => toggleId(current, topicId));
+
+  /**
+   * How many claims the filters leave listed, read off the space counts: every claim is counted
+   * under its space, and those counts are never narrowed by the space selection, so the picked
+   * spaces' counts add up to the list. Zero while they load, which the rules below read as unknown.
+   */
+  const listedCount = facetSpaces
+    .filter(space => spaceIds.length === 0 || spaceIds.some(picked => idEquals(picked, space.id)))
+    .reduce((sum, space) => sum + space.count, 0);
+  /**
+   * Whether the search box has text. The two rows hold still while it does: each keystroke would
+   * otherwise take a row away and bring it back, and the filters would jump under the reader.
+   */
+  const typing = search.trim().length > 0;
+  /** One space and nothing picked: the row could offer nothing but the space every claim is in. */
+  const showsSpaceRow = typing || spaceIds.length > 0 || facetSpaces.length > 1;
+  // A topic every listed claim carries narrows nothing, so the row leaves it out.
+  const rowTopics = typing ? facetTopics : narrowingTopics(facetTopics, listedCount, topicIds);
+
+  /**
+   * The topics the search box suggests: named by the text, counted under the space and topic filters
+   * but not the search, so a topic no text match carries can still be offered.
+   *
+   * Explore counts them on the server (`unsearchedTaggedTopics`); the other lists count their own
+   * rows, and there the total is known too, so a topic every row carries is not offered.
+   */
+  const unsearchedFacetClaims = React.useMemo(
+    () => (graphFiltered ? null : facetClaims.filter(claim => passesSpace(claim) && passesTopics(claim))),
+    [facetClaims, graphFiltered, passesSpace, passesTopics]
+  );
+  const suggestionSource = React.useMemo(
+    () =>
+      unsearchedFacetClaims === null
+        ? unsearchedTaggedTopics.topics
+        : countBy(
+            unsearchedFacetClaims.flatMap(claim =>
+              (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).map(topic => ({
+                id: topic.id,
+                name: topic.name,
+              }))
+            )
+          ),
+    [topicsByClaimId, unsearchedFacetClaims, unsearchedTaggedTopics.topics]
+  );
+  const suggestedTopics = searchOnly
+    ? NO_TOPIC_SUGGESTIONS
+    : topicSuggestions(suggestionSource, search, topicIds, unsearchedFacetClaims?.length ?? 0);
+
+  /**
+   * Under a claim the search reached through a topic rather than its own text, which topic it was —
+   * otherwise "nuclear" lists a claim that never says the word, and it reads as a mistake.
+   */
+  const topicMatchCaptionFor = (claim: DebateRematchClaim) => {
+    if (!debouncedSearch || claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return null;
+    const matched = (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).filter(
+      topic => topicNameMatches(topic.name, debouncedSearch)
+    );
+    return matched.length > 0 ? <TopicMatchCaption names={matched.map(topic => topic.name ?? 'Topic')} /> : null;
+  };
+
+  // Only the browsed source waits on geo-chat. The other two build their facets from
+  // entities already in hand, so their counts are never behind the *selection*, and a
+  // skeleton there would be describing a wait that isn't happening.
+  //
+  // Search is not like that: every source filters its rows by `debouncedSearch`, so
+  // while the box is unsettled the counts describe the pre-typing query wherever they
+  // came from. That window is ungated for the same reason the others are gated.
+  // Not only the search since GEO-2798. That was true while the menus were built from
+  // claims already in hand — a tick was answered on the same render, with no request
+  // behind it. The tagged sources' menus are their own server requests now, and
+  // `keepPreviousData` deliberately holds the previous filter's numbers rather than
+  // blinking, so without this they read as current for a debounce plus a request.
+  const filterCountsPending =
+    searchSettling || (graphFiltered && (topicsSettling || !taggedTopicFacet.settled || !taggedSpaceFacet.settled));
+
+  // Explore's alone, and it has to say so rather than falling through: `hidesAnswered`
+  // is gated on that tab, so anywhere else the switch would draw a control that could
+  // not change a single row under it. Never on "My positions", which is the backlog it
+  // hides. The opponent's tab lost its "Matches only" switch to the Matches tab.
+  const listSwitch =
+    tab === 'explore' ? (
+      <HideMyPositionsSwitch analyticsSurface="rematch" checked={hideMyPositions} onChange={setHideMyPositions} />
+    ) : tab === 'opponent' ? (
+      <HideAgreedSwitch analyticsSurface="rematch" checked={hideAgreed} onChange={setHideAgreed} />
+    ) : null;
+
+  // Only where a curator has made a page for this pairing. Without one there is a single option, and
+  // a menu of one is a control that cannot do anything.
+  const sourceMenu =
+    tab === 'explore' && offersSourceMenu ? (
+      <HubFilterMenu
+        label={CLAIMS_SOURCE_LABELS[source === 'mine' ? 'all' : source]}
+        analytics={{ name: 'Claims source', surface: 'rematch' }}
+        options={sourceOptions}
+        value={source === 'mine' ? 'all' : source}
+        onChange={setChosenSource}
+      />
+    ) : null;
+
   /** On "From this debate", who said the claim — the one thing that tab knows that a row does not. */
   const debateContextFor = (claim: DebateRematchClaim) => {
-    if (tab !== 'debate') return null;
+    if (tab !== 'debate') return topicMatchCaptionFor(claim);
     const extracted = debateItemByClaimId.get(normId(claim.claim.claim_entity_id));
-    return extracted ? <DebateTurnCaption speaker={debateSpeakerOf(extracted)} /> : null;
+    return extracted ? <DebateTurnCaption speaker={debateSpeakerOf(extracted)} /> : topicMatchCaptionFor(claim);
   };
 
   const renderClaimCard = (claim: DebateRematchClaim, previouslyDebated = false) => (
@@ -2749,69 +2913,71 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               <RematchRequestCard request={outboundRequest} participants={participants} currentUserId={currentUserId} />
             ) : null}
 
-            {searchOnly ? null : (
+            {searchOnly ? null : isPhone ? (
               <SpaceTopicFilters
                 analyticsSurface="rematch"
                 spaceIds={spaceIds}
                 onSpaceToggle={onSpaceToggle}
                 onSpacesClear={onSpacesClear}
                 topicIds={topicIds}
-                onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+                onTopicToggle={setTopicPicked}
                 onTopicsClear={() => setTopicIds([])}
                 facetSpaces={facetSpaces}
                 facetTopics={facetTopics}
-                // Only the browsed source waits on geo-chat. The other two build their facets from
-                // entities already in hand, so their counts are never behind the *selection*, and a
-                // skeleton there would be describing a wait that isn't happening.
-                //
-                // Search is not like that: every source filters its rows by `debouncedSearch`, so
-                // while the box is unsettled the counts describe the pre-typing query wherever they
-                // came from. That window is ungated for the same reason the others are gated.
-                // Not only the search since GEO-2798. That was true while the menus were built from
-                // claims already in hand — a tick was answered on the same render, with no request
-                // behind it. The tagged sources' menus are their own server requests now, and
-                // `keepPreviousData` deliberately holds the previous filter's numbers rather than
-                // blinking, so without this they read as current for a debounce plus a request.
-                countsPending={
-                  searchSettling ||
-                  (graphFiltered && (topicsSettling || !taggedTopicFacet.settled || !taggedSpaceFacet.settled))
-                }
-                // Explore's alone, and it has to say so rather than falling through: `hidesAnswered`
-                // is gated on that tab, so anywhere else the switch would draw a control that could
-                // not change a single row under it. Never on "My positions", which is the backlog it
-                // hides. The opponent's tab lost its "Matches only" switch to the Matches tab.
-                trailing={
-                  tab === 'explore' ? (
-                    <HideMyPositionsSwitch
-                      analyticsSurface="rematch"
-                      checked={hideMyPositions}
-                      onChange={setHideMyPositions}
-                    />
-                  ) : tab === 'opponent' ? (
-                    <HideAgreedSwitch analyticsSurface="rematch" checked={hideAgreed} onChange={setHideAgreed} />
-                  ) : null
-                }
-                leading={
-                  // Only where a curator has made a page for this pairing. Without one there is a
-                  // single option, and a menu of one is a control that cannot do anything.
-                  tab === 'explore' && offersSourceMenu ? (
-                    <HubFilterMenu
-                      label={CLAIMS_SOURCE_LABELS[source === 'mine' ? 'all' : source]}
-                      analytics={{ name: 'Claims source', surface: 'rematch' }}
-                      options={sourceOptions}
-                      value={source === 'mine' ? 'all' : source}
-                      onChange={setChosenSource}
-                    />
-                  ) : null
-                }
+                countsPending={filterCountsPending}
+                trailing={listSwitch}
+                leading={sourceMenu}
               />
+            ) : (
+              // GEO-3223: on a desktop the two menus become rows of pills, so the spaces and topics
+              // are on screen to be picked rather than behind "Any space" and "Any topic". The
+              // source menu and the list's switch keep a row of their own beneath them.
+              <div className="flex flex-col gap-2">
+                {showsSpaceRow ? (
+                  <SpaceFilterPills
+                    analyticsSurface="rematch"
+                    facetSpaces={facetSpaces}
+                    spaceIds={spaceIds}
+                    onSpaceToggle={onSpaceToggle}
+                    onSpacesClear={onSpacesClear}
+                    loading={tabIsLoading}
+                    countsPending={filterCountsPending}
+                  />
+                ) : null}
+                {rowTopics.length > 0 ? (
+                  <TopicFilterPills
+                    analyticsSurface="rematch"
+                    topics={rowTopics}
+                    topicIds={topicIds}
+                    onTopicToggle={setTopicPicked}
+                    onTopicsClear={() => setTopicIds([])}
+                    countsPending={filterCountsPending}
+                  />
+                ) : null}
+                {sourceMenu || listSwitch ? (
+                  <div className="flex flex-wrap items-center gap-2">
+                    {sourceMenu}
+                    <span className="flex-1" />
+                    {listSwitch}
+                  </div>
+                ) : null}
+              </div>
             )}
             <Input
               withSearchIcon
               value={search}
               onChange={event => setSearch(event.currentTarget.value)}
-              placeholder="Search claims"
-              aria-label="Search claims"
+              placeholder={searchOnly ? 'Search claims' : 'Search claims and topics'}
+              aria-label={searchOnly ? 'Search claims' : 'Search claims and topics'}
+            />
+            <TopicSearchSuggestions
+              analyticsSurface="rematch"
+              query={search}
+              topics={suggestedTopics}
+              onPick={topicId => {
+                setTopicIds(current => (current.includes(topicId) ? current : [...current, topicId]));
+                setSearch('');
+              }}
             />
           </div>
         </div>
@@ -3365,6 +3531,17 @@ type FromThisDebateItem = { claim: FromThisDebateClaim; row: DebateRematchClaim 
 const DEBATE_CLAIM_PUBLISH_POLL_MS = 15_000;
 
 /** Which turn of the debate a claim came from, by its speaker. */
+const NO_TOPIC_SUGGESTIONS: { id: string; name: string | null; count: number }[] = [];
+
+/** Which topics a search matched a claim through, when its own text did not match (GEO-3223). */
+function TopicMatchCaption({ names }: { names: string[] }) {
+  return (
+    <Text as="p" variant="footnote" color="grey-04" className="mt-2">
+      Tagged <span className="text-text">{names.join(', ')}</span>
+    </Text>
+  );
+}
+
 function DebateTurnCaption({ speaker }: { speaker: string | null }) {
   return (
     <Text as="p" variant="footnote" color="grey-04" className="mt-2">

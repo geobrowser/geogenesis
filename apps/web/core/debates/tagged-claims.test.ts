@@ -976,3 +976,92 @@ describe('the facet menus', () => {
     expect(result.current.settled).toBe(false);
   });
 });
+
+/**
+ * GEO-3223. A search also matches claims through their topics' names: the picker hands over the
+ * topics the text named, and a claim carrying one answers the search as well as a text match does.
+ */
+describe('claims a search reaches through a topic', () => {
+  const NAMED_TOPIC = '9a1f3c0b2d4e4f5a8b6c7d8e9f0a1b2c';
+
+  /** Answers the search's own row pages by id, and the topic request with `topicRows`. */
+  function respondWithSearchAndTopicRows(textRows: unknown[], topicRows: unknown[]) {
+    graphqlMock.mockImplementation(({ decoder, variables }) => {
+      const and = ((variables as any)?.filter?.and ?? []) as any[];
+      const viaTopic = and.some(clause => clause.relations?.some?.toEntityId?.in);
+      const asked = and.find(clause => clause.id?.in)?.id?.in as string[] | undefined;
+      const nodes = viaTopic
+        ? topicRows
+        : asked
+          ? textRows.filter(row => asked.includes((row as { id: string }).id))
+          : textRows;
+      return Effect.succeed(
+        decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } })
+      );
+    });
+  }
+
+  const searching: TaggedClaimFilters = {
+    ...NO_TAGGED_CLAIM_FILTERS,
+    search: 'nuclear',
+    searchTopicIds: [NAMED_TOPIC],
+  };
+
+  it('lists the topic matches after the text matches, once each', async () => {
+    respondWithSearch([['a1']]);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('a1', 'Text match'), node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+
+    await waitFor(() => expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1', 't1']));
+  });
+
+  it('asks for the topic matches by topic, and keeps them out of the search pages', async () => {
+    respondWithSearch([['a1']]);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    const filters = graphqlMock.mock.calls.map(call => JSON.stringify(call[0].variables.filter));
+    const topicRequest = filters.find(filter => filter.includes(NAMED_TOPIC));
+    expect(topicRequest).toBeDefined();
+    // A search page names its ids only; with the topic in there it would return the topic matches
+    // again on every page.
+    const pageRequest = filters.find(filter => filter.includes('"in":["a1"]'));
+    expect(pageRequest).not.toContain(NAMED_TOPIC);
+  });
+
+  it('holds the topic matches back while the text search has pages left', async () => {
+    // Two text matches, one page of them in hand.
+    respondWithSearch([['a1']], 2);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+
+    await waitFor(() => expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1']));
+    expect(result.current.hasNextPage).toBe(true);
+  });
+
+  it('counts the topic matches in the facets, beside the text matches', async () => {
+    respondWithSearch([['a1']]);
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(decoder({ relationsConnection: { groupedAggregates: [] } }))
+    );
+    renderHook(() => useTaggedSpaceFacet(TAG, searching, true), { wrapper: Wrapper });
+
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+    const and = sentVariables().fromEntity.and as any[];
+    expect(and).toContainEqual({
+      or: [
+        { id: { in: ['a1'] } },
+        { relations: { some: { typeId: { is: expect.any(String) }, toEntityId: { in: [NAMED_TOPIC] } } } },
+      ],
+    });
+  });
+
+  it('adds nothing when no search is running', async () => {
+    respondWithPages([[node('b1', 'Browsed')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, searchTopicIds: [NAMED_TOPIC] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(JSON.stringify(sentVariables().filter)).not.toContain(NAMED_TOPIC);
+  });
+});
