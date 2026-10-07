@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   clearDebateReturnDestination,
   consumeDebateReturnDestination,
+  peekDebateReturnDestination,
   rememberDebateReturnDestination,
+  rememberLobbyReturnDestination,
 } from './debate-return-navigation';
 
 beforeEach(() => {
@@ -29,6 +31,23 @@ describe('debate return navigation', () => {
     rememberDebateReturnDestination('/space/claim-space/debates/rematches/rematch-1');
 
     expect(consumeDebateReturnDestination()).toBe('/space/my-space');
+  });
+
+  it('returns to a lobby stepped out of, through the debate and rematch routes', () => {
+    rememberDebateReturnDestination('/space/my-space');
+    rememberLobbyReturnDestination('lobby1');
+    rememberDebateReturnDestination('/debate/lobby1');
+    rememberDebateReturnDestination('/space/claim-space/debates/rematches/rematch-1');
+
+    expect(peekDebateReturnDestination()).toBe('/debate/lobby1');
+    expect(consumeDebateReturnDestination()).toBe('/debate/lobby1');
+    expect(peekDebateReturnDestination()).toBeNull();
+  });
+
+  it('still never returns to a room captured from the address bar', () => {
+    rememberDebateReturnDestination('/debate/room1');
+
+    expect(consumeDebateReturnDestination()).toBeNull();
   });
 
   it('allows the debates index to be the return page', () => {

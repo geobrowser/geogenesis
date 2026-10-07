@@ -19,10 +19,11 @@ import {
   setDebateLobbyReminder,
   stepOutOfDebateLobby,
 } from '../api';
+import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { useConnectionId } from '../rooms/hooks';
 import { isAlreadyInAnotherLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
-import { registerLobbyStepOut } from './step-out';
+import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
@@ -172,7 +173,14 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
   const connectionId = useConnectionId();
-  const [state, setState] = React.useState<LobbyPresenceState>({ status: 'idle' });
+  const [state, setRenderedState] = React.useState<LobbyPresenceState>({ status: 'idle' });
+  // Current as of the last update rather than the last render, so `stepOut` sees a server
+  // step-out that landed in the same tick as the routing.
+  const statusRef = React.useRef(state.status);
+  const setState = React.useCallback((next: LobbyPresenceState) => {
+    statusRef.current = next.status;
+    setRenderedState(next);
+  }, []);
 
   // A token refresh must not re-run the effects below.
   const tokenRef = React.useRef(getPrivyIdentityToken);
@@ -233,7 +241,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
         setState({ status: 'failed', message: lobbyErrorMessage(error, 'Could not join this lobby. Try again.') });
       }
     },
-    [accountKey, connectionId, enqueue, lobbyId, store]
+    [accountKey, connectionId, enqueue, lobbyId, setState, store]
   );
 
   const sendLeave = React.useCallback(
@@ -258,17 +266,27 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
     } catch {
       // The lease lapses within a minute anyway.
     }
-  }, [enqueue, sendLeave, store]);
+  }, [enqueue, sendLeave, setState, store]);
 
   // Out of the lobby without a leave: stops the heartbeat and the unmount's leave.
-  const stopWithout = React.useCallback((next: LobbyPresenceState) => {
-    generationRef.current += 1;
-    sentRef.current = false;
-    joinedRef.current = false;
-    setState(next);
-  }, []);
+  const stopWithout = React.useCallback(
+    (next: LobbyPresenceState) => {
+      generationRef.current += 1;
+      sentRef.current = false;
+      joinedRef.current = false;
+      setState(next);
+    },
+    [setState]
+  );
 
   const stepOut = React.useCallback(async () => {
+    // The server can step the viewer out first (the debate's start reaches the heartbeat before
+    // the routing), and the lobby must still be where the debate returns to.
+    const steppedOutAlready = statusRef.current === 'stepped_out';
+    if (!sentRef.current && !steppedOutAlready) return;
+    rememberLobbyReturnDestination(lobbyId);
+    // Only a press on the coming debate's end card may skip the stepped-out prompt.
+    clearLobbyRejoin();
     if (!sentRef.current) return;
     stopWithout({ status: 'stepped_out' });
     try {
@@ -297,13 +315,15 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
   }, [stepOut]);
 
   // Auto-join once admitted, unless the viewer left, is being asked about another lobby, or
-  // stepped out, where going back is their call.
+  // stepped out, where going back is their call unless the debate's end card already made it.
   const status = state.status;
   React.useEffect(() => {
     if (!admitted || status !== 'idle') return;
-    if (steppedOut) setState({ status: 'stepped_out' });
+    // Consumed on every arrival so a flag left by a failed leave cannot outlive it.
+    const rejoin = consumeLobbyRejoin(lobbyId);
+    if (steppedOut && !rejoin) setState({ status: 'stepped_out' });
     else void join(false);
-  }, [admitted, join, status, steppedOut]);
+  }, [admitted, join, lobbyId, setState, status, steppedOut]);
 
   const beatNowRef = React.useRef<(() => void) | null>(null);
 
@@ -417,7 +437,7 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
       // Ignored after a real unmount; after StrictMode's test unmount it lets the remount join.
       setState({ status: 'idle' });
     };
-  }, [enqueue]);
+  }, [enqueue, setState]);
 
   return { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt };
 }
