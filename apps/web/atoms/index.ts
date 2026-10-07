@@ -214,7 +214,11 @@ export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
 export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
 
 /**
- * Whether the hub has already moved the viewer off an empty Lobby this session (GEO-2863).
+ * Whether the hub's move off an empty Lobby is spent for this session (GEO-2863).
+ *
+ * Spent by the move itself, and by the viewer answering the question it guesses at — pressing
+ * "Matches only" either way, or leaving for Explore from the empty state's button. A viewer who has
+ * chosen what to look at on Lobby is not moved off it later in the same session.
  *
  * Held out here because `LobbyTab` cannot hold it: `HubSwap` unmounts the tab when the viewer
  * leaves it, so a ref or state inside would be gone by the time they came back. With "Matches only"
@@ -225,7 +229,7 @@ export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
  * The move is a courtesy on first arrival, not a policy. Once it has been made, the viewer gets the
  * empty state and can read it.
  */
-export const debatesHubLeftLobbyForExploreAtom = atom(false);
+export const debatesHubLobbyMoveSpentAtom = atom(false);
 
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
@@ -266,7 +270,7 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPeopleSpaceIdsAtom, []);
   set(debatesHubPeopleOnlineOnlyAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
-  set(debatesHubLeftLobbyForExploreAtom, false);
+  set(debatesHubLobbyMoveSpentAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
   // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
   // account the previous one's *filters* is a leak; handing them a browsing preference held on this

@@ -58,7 +58,7 @@ import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
 import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
-import { HubQueryState, HubSkeleton } from '~/core/debates/matchmaking/hub-states';
+import { HubQueryState, HubSkeleton, exploreClaimsAction } from '~/core/debates/matchmaking/hub-states';
 import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { ScrollableTabRow } from '~/core/debates/matchmaking/scrollable-tab-row';
@@ -2920,11 +2920,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         // the way on.
                         opponentHasPositions
                         ? { label: `See ${remoteFirstName}’s positions`, onClick: () => setTab('opponent') }
-                        : { label: 'Explore claims', onClick: () => setTab('explore') }
+                        : exploreClaimsAction(setTab)
                       : tab === 'opponent'
                         ? // GEO-2861. An opponent who has answered nothing is a dead end this tab cannot
                           // resolve, and the catalogue next door is the whole of the way out of it.
-                          { label: 'Explore claims', onClick: () => setTab('explore') }
+                          exploreClaimsAction(setTab)
                         : source === 'mine'
                           ? // The same dead end one tab over: a viewer who has answered nothing
                             // cannot fill this list from here, and the whole corpus is next door.
