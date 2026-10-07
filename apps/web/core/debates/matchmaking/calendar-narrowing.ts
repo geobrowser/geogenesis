@@ -330,3 +330,49 @@ function listNames(names: string[]): string {
   if (names.length <= 2) return names.join(' and ');
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
+
+/** A topic as the panel's menus offer it. */
+export type PanelTopic = { id: string; name: string | null };
+
+/**
+ * The topic sets an item answers to: one per claim. A claim is its own one set; a person is every
+ * claim they hold a position on, since people carry no topics of their own.
+ */
+export type TopicSets = ReadonlyArray<ReadonlyArray<PanelTopic>>;
+
+/**
+ * Whether an item passes the picked topics: some one claim of its carries every one of them. AND,
+ * as the hub's topic menu is — so a person passes exactly when they hold a position on a claim the
+ * Claims tab would show for the same topics.
+ */
+export function coversTopics(sets: TopicSets, topicIds: readonly string[]): boolean {
+  if (topicIds.length === 0) return true;
+  const wanted = topicIds.map(normId);
+  return sets.some(set => {
+    const carried = new Set(set.map(topic => normId(topic.id)));
+    return wanted.every(id => carried.has(id));
+  });
+}
+
+/**
+ * The topic menu for a list: every topic its items carry, each with how many items picking it too
+ * would leave. Picked topics always stay offered, so they can be unpicked; others that would leave
+ * nothing are dropped. Most items first, then by name.
+ */
+export function topicFacet(
+  items: readonly TopicSets[],
+  picked: readonly string[]
+): Array<PanelTopic & { count: number }> {
+  const topics = new Map<string, PanelTopic>();
+  for (const sets of items) {
+    for (const set of sets) for (const topic of set) topics.set(normId(topic.id), { ...topic, id: normId(topic.id) });
+  }
+  const pickedIds = new Set(picked.map(normId));
+  return [...topics.values()]
+    .map(topic => ({
+      ...topic,
+      count: items.filter(sets => coversTopics(sets, [...pickedIds, topic.id])).length,
+    }))
+    .filter(topic => topic.count > 0 || pickedIds.has(topic.id))
+    .sort((left, right) => right.count - left.count || (left.name ?? '').localeCompare(right.name ?? ''));
+}

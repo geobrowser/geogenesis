@@ -17,6 +17,7 @@ import { normId } from '~/core/utils/norm-id';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
+import { CheckboxVisual } from '~/design-system/checkbox';
 import { Calendar } from '~/design-system/icons/calendar';
 import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
@@ -35,6 +36,7 @@ import {
   type SchedulablePerson,
   type ScheduleOverlapSlot,
 } from '../api';
+import { useOpenDebaterProfile } from '../browse/use-open-debater-profile';
 import {
   useCreateDebateChallenge,
   useDebateActivity,
@@ -563,6 +565,8 @@ export function PersonRow({
   onRequireSignIn,
   onSeeTimes,
   analyticsSurface = 'hub',
+  pick,
+  openProfileInSidePanel = false,
 }: {
   person: DebatePerson;
   /** Distinct claims on which this person and the viewer hold comparable, opposite positions. */
@@ -603,6 +607,16 @@ export function PersonRow({
   onRequireSignIn?: (properties?: AnalyticsProperties) => void;
   /** Whose clicks these are. The People tab's are the hub's; the calendar passes its own. */
   analyticsSurface?: DebateAnalyticsSurface;
+  /**
+   * A checkbox ahead of the face, for a list the viewer picks people from: the calendar's People
+   * panel (GEO-3220). `hidden` is a pick the other filters would leave out, kept so it can be unticked.
+   */
+  pick?: { selected: boolean; hidden: boolean; onToggle: () => void };
+  /**
+   * The name opens the person's profile in the entity side panel rather than navigating away, so a
+   * page that is itself the work — the calendar — stays put behind it.
+   */
+  openProfileInSidePanel?: boolean;
   onSeeTimes: (
     peer: { userId: string; name: string },
     opener: HTMLElement | null,
@@ -650,7 +664,26 @@ export function PersonRow({
     // row box with the name — where it was the tallest thing and set the name's line height. The
     // tracks hang from the top, so the face, the name and the button all start on one line: centred,
     // the face and button drifted down to the middle of however many stat lines the row carried.
-    <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
+    <li
+      className={cx(
+        'grid items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0',
+        pick ? 'grid-cols-[1rem_2rem_minmax(0,1fr)_auto]' : 'grid-cols-[2rem_minmax(0,1fr)_auto]',
+        pick?.hidden && 'opacity-60'
+      )}
+    >
+      {pick ? (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={pick.selected}
+          aria-label={pick.hidden ? `${speakerLabel(person)} (hidden by your other filters)` : speakerLabel(person)}
+          {...debateActionAnalyticsAttributes(analyticsSurface, 'Person pick', 'filter_debate_calendar')}
+          onClick={pick.onToggle}
+          className="mt-2 flex size-4 items-center justify-center rounded-[4px] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple"
+        >
+          <CheckboxVisual checked={pick.selected} />
+        </button>
+      ) : null}
       {/* The dot means "can be asked now", the same as inside the claim pills, so offline and away
           rows (GEO-3119) go without it. The clip sits on the inner span: on the
           wrapper it would cut the half of the dot that hangs over the rim. */}
@@ -671,7 +704,9 @@ export function PersonRow({
 
             Unlinked when the id is not a space id. Rendering an anchor to `/space/undefined`
             would look identical until it was clicked. */}
-        {profileHref ? (
+        {profileHref && openProfileInSidePanel ? (
+          <SidePanelProfileName person={person} href={profileHref} analyticsSurface={analyticsSurface} />
+        ) : profileHref ? (
           <Link
             href={profileHref}
             onClick={() =>
@@ -816,6 +851,36 @@ export function PersonRow({
         )}
       </div>
     </li>
+  );
+}
+
+/**
+ * A person's name that opens their profile in the entity side panel. Its own component so the
+ * profile lookup behind it runs only for rows that ask for this, not for every People tab row.
+ */
+function SidePanelProfileName({
+  person,
+  href,
+  analyticsSurface,
+}: {
+  person: DebatePerson;
+  href: string;
+  analyticsSurface: DebateAnalyticsSurface;
+}) {
+  const openProfile = useOpenDebaterProfile(person.profile_space_id, {
+    interactionSurface: analyticsSurface === 'calendar' ? 'debate_calendar' : 'debates_hub_people',
+  });
+  return (
+    <Link
+      href={href}
+      {...debateActionAnalyticsAttributes(analyticsSurface, 'Person profile', 'open_profile')}
+      onClick={openProfile}
+      className="min-w-0"
+    >
+      <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
+        {speakerLabel(person)}
+      </Text>
+    </Link>
   );
 }
 

@@ -45,6 +45,8 @@ const mocks = vi.hoisted(() => ({
   positionReads: [] as unknown[][],
   claimNames: new Map<string, string>(),
   openSidePanel: vi.fn(),
+  openProfile: vi.fn(),
+  claimTopics: new Map<string, { id: string; name: string }[]>(),
   paramListeners: new Set<() => void>(),
 }));
 
@@ -82,12 +84,30 @@ vi.mock('../participant-positions', () => ({
     return { byClaim, isLoading: false, isPlaceholderData: false, isFetching: false, error: null };
   },
 }));
-vi.mock('../claim-picker-page', () => ({
-  useClaimEntitiesByIds: (ids: string[]) => ({
-    entities: ids.map(id => ({ id, name: mocks.claimNames.get(id) ?? null })),
-    isLoading: false,
-    error: null,
-  }),
+vi.mock('../claim-picker-page', async () => {
+  const { TOPICS_PROPERTY_ID } = await import('~/core/claims/ontology');
+  return {
+    useClaimEntitiesByIds: (ids: string[]) => ({
+      entities: ids.map(id => ({
+        id,
+        name: mocks.claimNames.get(id) ?? null,
+        relations: (mocks.claimTopics.get(id) ?? []).map(topic => ({
+          type: { id: TOPICS_PROPERTY_ID },
+          toEntity: topic,
+          spaceId: null,
+        })),
+      })),
+      isLoading: false,
+      error: null,
+    }),
+  };
+});
+// Resolving a profile reads the space; here it only has to be asked, with whose.
+vi.mock('../browse/use-open-debater-profile', () => ({
+  useOpenDebaterProfile: (profileSpaceId: string) => (event: { preventDefault: () => void }) => {
+    event.preventDefault();
+    mocks.openProfile(profileSpaceId);
+  },
 }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
@@ -104,18 +124,20 @@ vi.mock('~/design-system/prefetch-link', () => ({
     href,
     className,
     onClick,
+    ...rest
   }: {
     children: React.ReactNode;
     href: string;
     className?: string;
-    onClick?: () => void;
+    onClick?: (event: React.MouseEvent) => void;
   }) => (
     <a
+      {...rest}
       href={href}
       className={className}
       onClick={event => {
         event.preventDefault();
-        onClick?.();
+        onClick?.(event);
       }}
     >
       {children}
@@ -346,7 +368,9 @@ beforeEach(() => {
     positions: [],
     positionReads: [],
     claimNames: new Map(),
+    claimTopics: new Map(),
   });
+  mocks.openProfile.mockReset();
   mocks.paramListeners.clear();
   mocks.openSidePanel.mockReset();
   mocks.routerReplace.mockReset();
@@ -480,6 +504,15 @@ describe('DebateCalendar', () => {
     expect(screen.queryByRole('dialog', { name: 'Book Elena' })).not.toBeInTheDocument();
   });
 
+  it("opens a name in the hour's list as their profile in the side panel", () => {
+    render(<DebateCalendar />);
+
+    fireEvent.click(firstFace(cell(/Thursday.*free: Elena/)));
+    fireEvent.click(within(screen.getByRole('dialog', { name: /Free Thursday/ })).getByRole('link', { name: 'Elena' }));
+
+    expect(mocks.openProfile).toHaveBeenCalledWith(summary('11', '').profile_space_id);
+  });
+
   it('marks the chips for times the viewer is free too, as the booking modal does', () => {
     mocks.scheduleIsSet = true;
     // Thursday 18:00-18:30 only, saved in the browser's own zone so it means 18:00 here.
@@ -533,10 +566,11 @@ describe('DebateCalendar', () => {
       'Debate calendar Free time'
     );
 
-    fireEvent.click(within(list).getByRole('link', { name: 'Elena' }));
-    expect(mocks.personProfileOpened).toHaveBeenCalledWith(expect.any(String), null, {
-      interaction_surface: 'debate_calendar',
-    });
+    // The name opens the profile in the side panel, whose opener records it (GEO-3220).
+    const name = within(list).getByRole('link', { name: 'Elena' });
+    expect(name).toHaveAttribute('data-geo-analytics-label', 'Debate calendar Person profile');
+    fireEvent.click(name);
+    expect(mocks.openProfile).toHaveBeenCalledWith(summary('11', '').profile_space_id);
   });
 
   it("labels the set-availability prompt and a pending request's cancel as the calendar's", () => {
@@ -888,6 +922,18 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
   });
 
   beforeEach(() => {
+    // The topic menu measures its list; jsdom has no layout to measure.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    onTestFinished(() => {
+      vi.unstubAllGlobals();
+    });
     mocks.personalSpaceId = VIEWER;
     // Elena and Marco are free Thursday at six, Ana on Friday.
     mocks.schedulable = response([
@@ -1002,6 +1048,46 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
       entry: 'calendar_claim_match',
       initialSelectedStart: new Date(at(8, 18)).toISOString(),
     });
+  });
+
+  it("draws People rows as the hub's People tab does, and opens a name in the side panel", () => {
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    const people = within(panel()).getByRole('list', { name: 'People' });
+    // The People tab's own row: its booking pill, beside the checkbox.
+    expect(within(people).getByRole('button', { name: 'Schedule a debate with Elena' })).toBeInTheDocument();
+    fireEvent.click(within(people).getByRole('link', { name: 'Elena' }));
+
+    expect(mocks.openProfile).toHaveBeenCalledWith(summary('11', '').profile_space_id);
+    expect(mocks.searchParams.get('people')).toBeNull();
+  });
+
+  it('narrows the Claims list by topic, and People to those holding a claim in it', async () => {
+    mocks.claimTopics = new Map([
+      [CLAIM_ONE, [{ id: 'dddddddddddddddddddddddddddddd01', name: 'Education' }]],
+      [CLAIM_TWO, [{ id: 'dddddddddddddddddddddddddddddd02', name: 'Health' }]],
+    ]);
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Any topic' }));
+    fireEvent.click((await within(panel()).findByText('Health')).closest('button')!);
+
+    const claims = within(panel()).getByRole('list', { name: 'Claims' });
+    expect(within(claims).getByText('Homework does more harm than good')).toBeInTheDocument();
+    expect(within(claims).queryByText('Phones should be banned in schools')).not.toBeInTheDocument();
+    // A list filter, not a pick: the week is untouched.
+    expect(thursday()).toHaveAccessibleName(/Marco/);
+
+    fireEvent.click(within(panel()).getByRole('tab', { name: /People/ }));
+    fireEvent.click(within(panel()).getByRole('button', { name: 'Any topic' }));
+    fireEvent.click((await within(panel()).findByText('Education')).closest('button')!);
+
+    const people = within(panel()).getByRole('list', { name: 'People' });
+    expect(within(people).getByRole('checkbox', { name: 'Elena' })).toBeInTheDocument();
+    expect(within(people).getByRole('checkbox', { name: 'Marco' })).toBeInTheDocument();
+    expect(within(people).queryByRole('checkbox', { name: 'Ana' })).not.toBeInTheDocument();
   });
 
   it('opens a claim in the entity side panel without picking it', () => {

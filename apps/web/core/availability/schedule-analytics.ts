@@ -45,7 +45,9 @@ export type ScheduleEntry =
   /** The card a face on the calendar opens on hover, and the phone list's rows. */
   | 'calendar_card'
   /** A time beside someone who disagrees with the viewer, in the calendar's Claims panel (GEO-3220). */
-  | 'calendar_claim_match';
+  | 'calendar_claim_match'
+  /** A row's chips or Schedule in the calendar's People panel (GEO-3220). */
+  | 'calendar_people_panel';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =

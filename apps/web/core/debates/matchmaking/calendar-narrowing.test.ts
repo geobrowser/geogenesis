@@ -5,11 +5,13 @@ import {
   NO_PICKS,
   claimListRows,
   claimPickKey,
+  coversTopics,
   hiddenPicksSentence,
   narrowingSentence,
   passesPicks,
   personListRows,
   summarizeClaims,
+  topicFacet,
 } from './calendar-narrowing';
 import { calendarHref, readCalendarPicks, writeCalendarPicks } from './debate-calendar-route';
 
@@ -217,5 +219,33 @@ describe('picks in the URL', () => {
     expect(calendarHref('/space/x', { ...NO_PICKS, claims: [PHONES_KEY], matchesOnly: true })).toBe(
       `/matchmaking/calendar?from=%2Fspace%2Fx&claims=${AI}%3A${PHONES}&matches=1`
     );
+  });
+});
+
+describe('topics', () => {
+  const ai = { id: 'dddddddddddddddddddddddddddddd01', name: 'AI' };
+  const jobs = { id: 'dddddddddddddddddddddddddddddd02', name: 'Jobs' };
+  const health = { id: 'dddddddddddddddddddddddddddddd03', name: 'Health' };
+
+  it('passes an item when one of its claims carries every picked topic', () => {
+    // A person holding one AI+Jobs claim and one Health claim.
+    const person = [[ai, jobs], [health]];
+    expect(coversTopics(person, [])).toBe(true);
+    expect(coversTopics(person, [ai.id, jobs.id])).toBe(true);
+    // Across two different claims is not one claim in both topics.
+    expect(coversTopics(person, [ai.id, health.id])).toBe(false);
+  });
+
+  it('counts what each topic would leave, keeps picks, and drops dead ends', () => {
+    const items = [[[ai, jobs]], [[ai]], [[health]]];
+    expect(topicFacet(items, [])).toEqual([
+      { ...ai, count: 2 },
+      { ...health, count: 1 },
+      { ...jobs, count: 1 },
+    ]);
+    expect(topicFacet(items, [ai.id])).toEqual([
+      { ...ai, count: 2 },
+      { ...jobs, count: 1 },
+    ]);
   });
 });

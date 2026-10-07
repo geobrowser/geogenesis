@@ -7,7 +7,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { personProfileOpened } from '~/core/analytics';
 import { type SpaceLabel, spaceLabel } from '~/core/hooks/use-space-labels';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
@@ -26,16 +25,26 @@ import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
 
 import type { DebatePerson } from '../api';
+import { useOpenDebaterProfile } from '../browse/use-open-debater-profile';
 import { speakerLabel } from '../playback-utils';
-import { type CalendarPicks, type ClaimListRow, type PersonListRow, togglePick } from './calendar-narrowing';
+import {
+  type CalendarPicks,
+  type ClaimListRow,
+  type PanelTopic,
+  type PersonListRow,
+  type TopicSets,
+  coversTopics,
+  togglePick,
+  topicFacet,
+} from './calendar-narrowing';
 import type { FreeSlot } from './debate-calendar-model';
 import type { ClaimMatch } from './disagreement-counts';
 import { debateActionAnalyticsAttributes } from './hub-analytics';
 import { SpaceThumb } from './hub-facet-rail';
+import { HubMultiFilterMenu } from './hub-filter-menu';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { MatchesOnlySwitch } from './matches-only-switch';
 import { formatSlot } from './people-tab';
-import { PersonMatches } from './person-disagreements';
 
 export type NarrowTab = 'people' | 'claims';
 
@@ -120,12 +129,18 @@ type BodyProps = {
   loading: boolean;
   /** `false` when the viewer holds no position, `null` while that is unknown. */
   viewerHasPositions: boolean | null;
-  claimNamesById: ReadonlyMap<string, string | null>;
-  claimNamesLoading: boolean;
   labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
   onPickTime: (userKey: string, start: string, opener: HTMLElement) => void;
   onOpenClaim: (claimId: string, spaceId: string) => void;
+  /** The topics each claim carries in its own space, by claim key. */
+  claimTopics: ReadonlyMap<string, readonly PanelTopic[]>;
+  /** The claim keys each person holds a position on, by profile key. */
+  heldByPerson: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Topics come with everyone's positions and the claims' entities; until then the menus wait. */
+  topicsPending: boolean;
+  /** A People row: the calendar's own `PersonRow`, as the debates hub's People tab draws it, ticked. */
+  renderPerson: (row: PanelPerson, onToggle: () => void) => React.ReactNode;
 };
 
 /**
@@ -142,32 +157,69 @@ export function CalendarNarrowPanelBody({
   people,
   loading,
   viewerHasPositions,
-  claimNamesById,
-  claimNamesLoading,
   labelsById,
   popoverPortal,
   onPickTime,
   onOpenClaim,
+  claimTopics,
+  heldByPerson,
+  topicsPending,
+  renderPerson,
 }: BodyProps) {
   const [searches, setSearches] = React.useState<Record<NarrowTab, string>>({ people: '', claims: '' });
+  // Topics, like search, help find something to pick rather than being a pick: they narrow the list,
+  // not the week, and leave a ticked row in place so it can be unticked.
+  const [topics, setTopics] = React.useState<Record<NarrowTab, string[]>>({ people: [], claims: [] });
   const term = searches[tab].trim().toLowerCase();
 
-  const visibleClaims = React.useMemo(
+  // A claim answers to its own topics; a person, who carries none, to those of every claim they hold
+  // a position on.
+  const claimSets = React.useCallback(
+    (claim: PanelClaim): TopicSets => [claimTopics.get(claim.summary.key) ?? []],
+    [claimTopics]
+  );
+  const personSets = React.useCallback(
+    (row: PanelPerson): TopicSets =>
+      [...(heldByPerson.get(row.person.profileKey) ?? [])].map(key => claimTopics.get(key) ?? []),
+    [claimTopics, heldByPerson]
+  );
+
+  const searchedClaims = React.useMemo(
     () => (term ? claims.filter(claim => claim.name?.toLowerCase().includes(term)) : claims),
     [claims, term]
   );
-  const visiblePeople = React.useMemo(
-    () => (term ? people.filter(({ person }) => speakerLabel(person.person).toLowerCase().includes(term)) : people),
+  const searchedPeople = React.useMemo(
+    () => (term ? people.filter(row => speakerLabel(row.person.person).toLowerCase().includes(term)) : people),
     [people, term]
+  );
+  const visibleClaims = React.useMemo(
+    () => searchedClaims.filter(claim => claim.selected || coversTopics(claimSets(claim), topics.claims)),
+    [claimSets, searchedClaims, topics.claims]
+  );
+  const visiblePeople = React.useMemo(
+    () => searchedPeople.filter(row => row.selected || coversTopics(personSets(row), topics.people)),
+    [personSets, searchedPeople, topics.people]
   );
 
   const onClaims = tab === 'claims';
   const picked = onClaims ? picks.claims.length : picks.people.length;
   const listCount = onClaims ? visibleClaims.length : visiblePeople.length;
-  const countLabel =
-    picked > 0
-      ? `${picked} selected`
-      : `${listCount} ${onClaims ? (listCount === 1 ? 'claim' : 'claims') : listCount === 1 ? 'person' : 'people'}`;
+  const tabTopics = topics[tab];
+  // Over the list as everything but the topics leaves it, so each count says what picking that topic
+  // would leave.
+  const facet = React.useMemo(
+    () =>
+      onClaims
+        ? topicFacet(searchedClaims.map(claimSets), topics.claims)
+        : topicFacet(searchedPeople.map(personSets), topics.people),
+    [claimSets, onClaims, personSets, searchedClaims, searchedPeople, topics]
+  );
+  const topicLabel =
+    tabTopics.length === 0
+      ? 'Any topic'
+      : tabTopics.length === 1
+        ? (facet.find(topic => topic.id === tabTopics[0])?.name ?? 'Topic')
+        : `${tabTopics.length} topics`;
   const matchesDisabled = viewerHasPositions === false;
   const matchesHint = 'Take a position on a claim to see matches';
 
@@ -188,7 +240,8 @@ export function CalendarNarrowPanelBody({
     </button>
   );
 
-  const emptyMessage = term
+  const narrowedByList = term !== '' || tabTopics.length > 0;
+  const emptyMessage = narrowedByList
     ? onClaims
       ? 'No claims match that search.'
       : 'Nobody matches that search.'
@@ -226,10 +279,22 @@ export function CalendarNarrowPanelBody({
           placeholder={onClaims ? 'Search claims' : 'Search people'}
           aria-label={onClaims ? 'Search claims' : 'Search people'}
         />
-        <div className="flex min-h-7 items-center gap-2">
-          <Text as="span" variant="footnote" color="grey-04">
-            {countLabel}
-          </Text>
+        <div className="flex min-h-7 flex-wrap items-center gap-2">
+          <HubMultiFilterMenu
+            // One menu per tab: their options differ, and an open menu should not carry across.
+            key={tab}
+            align="start"
+            label={topicLabel}
+            analytics={{ name: onClaims ? 'Claims topic' : 'People topic', surface: 'calendar' }}
+            options={facet.map(topic => ({ value: topic.id, label: topic.name ?? 'Topic', count: topic.count }))}
+            values={tabTopics}
+            onToggle={topicId => setTopics(current => ({ ...current, [tab]: togglePick(current[tab], topicId) }))}
+            onClear={() => setTopics(current => ({ ...current, [tab]: [] }))}
+            clearLabel="Any topic"
+            countsPending={topicsPending}
+            searchPlaceholder="Search topics"
+            searchEmptyLabel="No topics match"
+          />
           {picked > 0 ? (
             <button
               type="button"
@@ -237,7 +302,7 @@ export function CalendarNarrowPanelBody({
               onClick={() => onPicksChange(onClaims ? { ...picks, claims: [] } : { ...picks, people: [] })}
               className="px-1 text-footnote text-grey-04 underline transition-colors hover:text-text"
             >
-              Clear
+              Clear {picked} selected
             </button>
           ) : null}
           <span className="flex-1" />
@@ -264,7 +329,7 @@ export function CalendarNarrowPanelBody({
             <Text as="p" variant="footnote" color="grey-04">
               {emptyMessage}
             </Text>
-            {picks.matchesOnly && !term ? (
+            {picks.matchesOnly && !narrowedByList ? (
               <HubPillButton
                 analyticsSurface="calendar"
                 analyticsLabel="Debate calendar Show everyone"
@@ -290,17 +355,13 @@ export function CalendarNarrowPanelBody({
             ))}
           </ul>
         ) : (
-          <ul aria-label="People" className="m-0 flex list-none flex-col gap-0.5 p-0">
+          <ul aria-label="People" className="m-0 flex list-none flex-col px-2 py-0">
             {visiblePeople.map(row => (
-              <PersonPickRow
-                key={row.person.profileKey}
-                row={row}
-                claimNamesById={claimNamesById}
-                claimNamesLoading={claimNamesLoading}
-                labelsById={labelsById}
-                popoverPortal={popoverPortal}
-                onToggle={() => onPicksChange({ ...picks, people: togglePick(picks.people, row.person.profileKey) })}
-              />
+              <React.Fragment key={row.person.profileKey}>
+                {renderPerson(row, () =>
+                  onPicksChange({ ...picks, people: togglePick(picks.people, row.person.profileKey) })
+                )}
+              </React.Fragment>
             ))}
           </ul>
         )}
@@ -547,9 +608,10 @@ function ClaimMatches({
   );
 }
 
-/** A person's name, linking to their profile as `PersonRow`'s does. */
+/** A person's name, opening their profile in the entity side panel as the calendar's rows do. */
 function ProfileName({ person, className }: { person: DebatePerson; className?: string }) {
   const name = speakerLabel(person);
+  const openProfile = useOpenDebaterProfile(person.profile_space_id, { interactionSurface: 'debate_calendar' });
   if (!validateSpaceId(person.profile_space_id)) {
     return (
       <Text as="span" variant="metadataMedium" className={cx('truncate', className)}>
@@ -561,75 +623,11 @@ function ProfileName({ person, className }: { person: DebatePerson; className?: 
     <Link
       href={NavUtils.toSpace(person.profile_space_id)}
       {...panelAnalytics('Person profile', 'open_profile')}
-      onClick={() => personProfileOpened(person.profile_space_id, null, { interaction_surface: 'debate_calendar' })}
+      onClick={openProfile}
       className={cx('min-w-0 truncate text-metadataMedium text-text hover:underline', className)}
     >
       {name}
     </Link>
-  );
-}
-
-function PersonPickRow({
-  row,
-  claimNamesById,
-  claimNamesLoading,
-  labelsById,
-  popoverPortal,
-  onToggle,
-}: {
-  row: PanelPerson;
-  claimNamesById: ReadonlyMap<string, string | null>;
-  claimNamesLoading: boolean;
-  labelsById: Map<string, SpaceLabel>;
-  popoverPortal: HTMLElement | null;
-  onToggle: () => void;
-}) {
-  const { person, matches, firstFree } = row.person;
-  const name = speakerLabel(person);
-  const live = person.online && !person.away;
-  const subline = live
-    ? 'Online now'
-    : firstFree !== null
-      ? `Next free ${formatSlot(new Date(firstFree).toISOString())}`
-      : 'No open times in the next two weeks';
-
-  return (
-    <PickRow label={name} selected={row.selected} hidden={row.hidden} analyticsAction="Person pick" onToggle={onToggle}>
-      <div className="grid grid-cols-[1rem_2rem_minmax(0,1fr)] items-start gap-2.5">
-        <span className="mt-2">
-          <CheckboxVisual checked={row.selected} />
-        </span>
-        <span className="relative size-8">
-          <span className="block size-8 overflow-hidden rounded-full">
-            <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} size={32} />
-          </span>
-          {live ? <OnlineDot faceSize={32} /> : null}
-        </span>
-        <span className="flex min-w-0 flex-col gap-0.5">
-          <span className="flex min-w-0 items-center justify-between gap-2">
-            <span className="pointer-events-auto flex min-w-0">
-              <ProfileName person={person} />
-            </span>
-            {matches.length > 0 ? (
-              <span className="pointer-events-auto text-footnoteMedium">
-                <PersonMatches
-                  personName={name}
-                  matches={matches}
-                  claimNamesById={claimNamesById}
-                  claimNamesLoading={claimNamesLoading}
-                  labelsById={labelsById}
-                  popoverPortal={popoverPortal}
-                  triggerAttributes={panelAnalytics('Person matches', 'debate_calendar_action')}
-                />
-              </span>
-            ) : null}
-          </span>
-          <Text as="span" variant="footnote" color="grey-04" className="truncate">
-            {subline}
-          </Text>
-        </span>
-      </div>
-    </PickRow>
   );
 }
 

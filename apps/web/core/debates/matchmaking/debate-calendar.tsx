@@ -37,6 +37,7 @@ import {
 } from './calendar-narrow-panel';
 import {
   type CalendarPicks,
+  type PanelTopic,
   claimListRows,
   hasPicks,
   hiddenPicksSentence,
@@ -89,6 +90,7 @@ import { INLINE_SLOTS, PersonRow, type PersonSchedule, SetAvailabilityNotice, sc
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
 import { isPersonId } from './person-records-document';
 import { SpaceFilterPills } from './space-filter-pills';
+import { claimTopicsById, topicsFor } from './topic-facets';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useLiveRequestBlock } from './use-live-request-block';
 import { usePersonFacts } from './use-person-facts';
@@ -527,9 +529,17 @@ function DebateCalendarBody({
     [matchCount, matchesKnown, peopleByUser]
   );
 
-  /** One person's row, the People tab's, with the half-hours this place offers as its chips. */
+  /**
+   * One person's row, the People tab's, with the half-hours this place offers as its chips. The
+   * People panel adds a checkbox, and a portal of its own inside a phone's sheet.
+   */
   const renderRow = React.useCallback(
-    (userKey: string, slots: FreeSlot[], entry: ScheduleEntry) => {
+    (
+      userKey: string,
+      slots: FreeSlot[],
+      entry: ScheduleEntry,
+      options?: { pick?: { selected: boolean; hidden: boolean; onToggle: () => void }; portal?: HTMLElement | null }
+    ) => {
       const person = peopleByUser.get(userKey);
       if (!person) return null;
       const all = slotsByUser.get(userKey);
@@ -555,7 +565,10 @@ function DebateCalendarBody({
           record={records.get(person.profile_space_id) ?? null}
           spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
           labelsById={labelsById}
-          popoverPortal={popoverPortal}
+          popoverPortal={options?.portal === undefined ? popoverPortal : options.portal}
+          pick={options?.pick}
+          // The calendar is the work: a name opens the profile beside it rather than leaving it.
+          openProfileInSidePanel
           disabled={buttonsDisabled}
           disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
           onSeeTimes={(_peer, opener, rowEntry, initialStart) => openBooking(userKey, opener, rowEntry, initialStart)}
@@ -614,11 +627,22 @@ function DebateCalendarBody({
     ids.delete('');
     return [...ids].sort();
   }, [claimSummaries, picks.claims, wantAllPositions]);
-  const { entities: panelClaimEntities } = useClaimEntitiesByIds(panelClaimIds);
+  const { entities: panelClaimEntities, isLoading: panelClaimEntitiesLoading } = useClaimEntitiesByIds(panelClaimIds);
   const panelClaimNames = React.useMemo(
     () => new Map(panelClaimEntities.map(claim => [normId(claim.id), claim.name])),
     [panelClaimEntities]
   );
+  // Each claim's topics in its own space, for the panel's topic menus. People carry no topics, so
+  // the People tab reads them through the claims each person holds.
+  const claimTopics = React.useMemo(() => {
+    const byClaimId = claimTopicsById(panelClaimEntities);
+    const byKey = new Map<string, PanelTopic[]>();
+    for (const summary of claimSummaries.byKey.values()) {
+      const topics = topicsFor(byClaimId, summary.claimId, summary.spaceId);
+      if (topics) byKey.set(summary.key, topics);
+    }
+    return byKey;
+  }, [claimSummaries, panelClaimEntities]);
   const personFacts = React.useMemo(
     () =>
       allPeople.map(person => {
@@ -748,10 +772,22 @@ function DebateCalendarBody({
         people={rows.people}
         loading={panelTab === 'claims' ? !allPositionsReady : false}
         viewerHasPositions={viewerHasPositions}
-        claimNamesById={matchingClaimNamesById}
-        claimNamesLoading={matchingClaimsLoading}
         labelsById={labelsById}
         popoverPortal={portal}
+        claimTopics={claimTopics}
+        heldByPerson={claimSummaries.heldByPerson}
+        topicsPending={!allPositionsReady || panelClaimEntitiesLoading}
+        renderPerson={(row, onToggle) =>
+          renderRow(
+            normId(row.person.person.user_id),
+            slotsByUser.get(normId(row.person.person.user_id)) ?? [],
+            'calendar_people_panel',
+            {
+              pick: { selected: row.selected, hidden: row.hidden, onToggle },
+              portal,
+            }
+          )
+        }
         onPickTime={(userKey, start, opener) => {
           onLeave();
           openBooking(userKey, isPhone ? null : opener, 'calendar_claim_match', start);
