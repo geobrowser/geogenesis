@@ -332,8 +332,9 @@ describe('bounded recording memory', () => {
         id: 'user-a:debate-1:1',
         metadata: metadata(),
         transport: wire,
-        // Poor connection the whole debate: nothing goes out live.
-        shouldPause: () => true,
+        // Poor connection the whole debate: the upload opens, but no part goes out live in the
+        // under-a-minute this takes.
+        shouldPause: () => 'connection_poor',
         retainedBytesLimit: 100,
       });
       const chunks = timeslices(40, 30);
@@ -342,9 +343,9 @@ describe('bounded recording memory', () => {
         await savedChunks(live.id, index + 1);
       }
 
-      expect(await live.finish()).toBeNull();
+      expect(await live.finish()).toMatchObject({ uploadedPartNumbers: [] });
       const event = analytics.capture.mock.calls.find(([name]) => name === 'debate_recording_stream_finished')?.[1];
-      expect(event).toMatchObject({ saved_locally: true, parts_uploaded_live: 0 });
+      expect(event).toMatchObject({ saved_locally: true, streaming: 'on', parts_uploaded_live: 0 });
       expect(event.spilled_chunks).toBeGreaterThan(30);
 
       const recording = live.recording();
