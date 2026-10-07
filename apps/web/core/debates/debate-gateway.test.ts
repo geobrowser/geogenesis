@@ -1928,6 +1928,76 @@ describe('DebateGatewayClient', () => {
     expect(client.getSnapshot()).toMatchObject({ status: 'degraded', paused: true });
   });
 
+  it('matches ERROR echoes to a retained debate scope whatever the id spelling', async () => {
+    const dashedUpper = '3F2B8C1A-9D4E-4A7B-B6C5-1E0F2A3B4C5D';
+    const dashless = '3f2b8c1a9d4e4a7bb6c51e0f2a3b4c5d';
+    const refusedDashed = '7c9e6679-7425-40de-944b-e07fc1f90ae7';
+    client.retainScope({ scope: 'debate', debate_id: dashedUpper });
+    client.retainScope({ scope: 'debate', debate_id: refusedDashed });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    const subscribes = (debateId: string) =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { debate_id?: string }).debate_id === debateId
+      ).length;
+
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: dashless },
+    });
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_forbidden',
+      message: 'not authorized',
+      subscription: { scope: 'debate', debate_id: '7c9e6679742540de944be07fc1f90ae7' },
+    });
+
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    // The retry goes out in the retained spelling; the refused scope stays refused through READY.
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(subscribes(dashedUpper)).toBe(2);
+    sockets[0]!.receive('READY', readyPayload([]));
+    expect(subscribes(refusedDashed)).toBe(1);
+    expect(sockets).toHaveLength(1);
+  });
+
+  it('confirms a retained space scope from a normalized READY and reconciles its own query keys', async () => {
+    const dashed = 'A1B2C3D4-E5F6-4789-8ABC-DEF012345678';
+    client.retainScope({ scope: 'space', space_id: dashed });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    invalidateQueries.mockClear();
+
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'a1b2c3d4e5f647898abcdef012345678' }]));
+    await flushInvalidations();
+    expectInvalidated(invalidateQueries, { queryKey: ['debates', 'claims', dashed], refetchType: 'active' });
+
+    // A check failure echoed in the zero-padded 32-byte form still finds it.
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'space', space_id: '0xa1b2c3d4e5f647898abcdef01234567800000000000000000000000000000000' },
+    });
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.OPEN);
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { space_id?: string }).space_id === dashed
+      )
+    ).toHaveLength(2);
+  });
+
   it('reconnects with a new session when the authenticated account changes', async () => {
     queryClient.setQueryData(['debates', 'account', 'user-a', 'activity'], { private: 'user-a' });
     client.start(

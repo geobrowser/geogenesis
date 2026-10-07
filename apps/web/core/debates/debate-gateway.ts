@@ -446,23 +446,23 @@ export class DebateGatewayClient {
       this.hasReachedReady = true;
     }
 
-    const readyScopes = new Map<string, DebateGatewayScope>();
+    const readyScopes = new Set<string>();
     for (const subscription of Array.isArray(ready.subscriptions) ? ready.subscriptions : []) {
       const scope = parseScope(subscription);
-      if (!scope) continue;
-      const key = scopeKey(scope);
-      readyScopes.set(key, scope);
+      if (scope) readyScopes.add(scopeKey(scope));
     }
 
     for (const key of this.confirmedScopes) {
       if (!readyScopes.has(key)) this.confirmedScopes.delete(key);
     }
 
-    for (const [key, scope] of readyScopes) {
+    for (const key of readyScopes) {
       this.clearSubscriptionRetry(key);
-      if (!this.scopes.has(key) || this.confirmedScopes.has(key)) continue;
+      const retained = this.scopes.get(key);
+      if (!retained || this.confirmedScopes.has(key)) continue;
       this.confirmedScopes.add(key);
-      this.queueScopeReconcile(scope);
+      // The retained spelling, which is what the query keys were built from.
+      this.queueScopeReconcile(retained.scope);
     }
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
@@ -1246,10 +1246,24 @@ function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
   return url.toString();
 }
 
+/**
+ * Canonical, so a scope retained from a route matches geo-chat's READY and ERROR echoes whatever
+ * spelling each uses. Payloads keep the retained spelling; only keys are normalized.
+ */
 function scopeKey(scope: DebateGatewayScope) {
-  if (scope.scope === 'space') return `space:${scope.space_id}`;
+  if (scope.scope === 'space') return `space:${canonicalSpaceId(scope.space_id)}`;
   if (scope.scope === 'matchmaking') return 'matchmaking';
-  return `debate:${scope.debate_id}`;
+  return `debate:${dashlessId(scope.debate_id.trim())}`;
+}
+
+/** Mirrors geo-chat's `normalize_space_id`, including its zero-padded 32-byte form. */
+function canonicalSpaceId(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  const withoutPrefix = trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed;
+  if (/^[0-9a-f]{32}0{32}$/.test(withoutPrefix)) return withoutPrefix.slice(0, 32);
+  const compact = withoutPrefix.replace(/-/g, '');
+  if (/^[0-9a-f]{32}$/.test(compact)) return compact;
+  return trimmed;
 }
 
 function parseScope(value: unknown): DebateGatewayScope | null {
