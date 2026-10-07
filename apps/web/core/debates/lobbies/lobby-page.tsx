@@ -31,6 +31,7 @@ import {
   hereLabel,
   hostAfterChange,
   hostsLabel,
+  inDebateLabel,
   isHosting,
   lobbyErrorMessage,
   notYetOpenLabel,
@@ -525,8 +526,8 @@ function RosterRow({
           </Text>
         </Link>
         {member.in_debate || member.stepped_out ? (
-          <Text as="p" variant="footnote" color="grey-04">
-            {member.in_debate ? 'In a debate' : 'Stepped out'}
+          <Text as="p" variant="footnote" color="grey-04" ellipsize>
+            {member.in_debate ? inDebateLabel(member.in_debate_subject) : 'Stepped out'}
           </Text>
         ) : null}
       </div>

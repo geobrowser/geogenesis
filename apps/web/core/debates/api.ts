@@ -2307,9 +2307,17 @@ export type DebateLobbyMember = {
   /** Left to debate; still listed, without host powers, until back or it expires. */
   stepped_out: boolean;
   in_debate: boolean;
+  /**
+   * What `in_debate` is about (GEO-3130). `null` when not debating, when the viewer is not on this
+   * roster, or when a moderator hid the debate. Absent from a geo-chat that predates it.
+   */
+  in_debate_subject?: DebateLobbyDebateSubject | null;
   /** A listener's raised hand (GEO-3134). Absent from a geo-chat that predates moderation. */
   hand_raised_at?: string | null;
 };
+
+export type DebateLobbyDebateSubject =
+  { phase: 'choosing_claim' } | { phase: 'on_claim'; claim_entity_id: string; claim_name: string; space_id: string };
 
 /** What a host did to someone, as `viewer.last_moderation` and the log spell it (GEO-3134). */
 export type DebateLobbyModerationAction =
