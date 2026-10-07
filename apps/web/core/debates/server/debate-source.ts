@@ -23,6 +23,7 @@ import {
 } from '../debate-publish-draft';
 import { hasProcessedVideo } from '../playback-utils';
 import { applyClaimReusePolicy } from './claim-reuse';
+import { applyClaimStancePolicy } from './claim-stance';
 import { type DebateExtractedClaimsResponse, decodeExtractedClaims } from './extracted-claims';
 import { geoChatBaseUrl } from './geo-chat-base-url';
 import { loadMotionTopics } from './motion-topics';
@@ -166,15 +167,40 @@ export class DebateNotPublishableError extends Error {
 }
 
 /**
- * The finished debates in a space, as candidate ids for the publish sweep. Cancelled debates and
- * debates still inside their settlement window are excluded; media-readiness is re-checked per
- * debate by {@link loadDebatePublishSource}. Server-side (unauthenticated) read — the cron sweep
- * has no user session.
+ * The finished debates in a space, as candidate ids for the publish sweep. Cancelled debates,
+ * debates still inside their settlement window, and debates whose media is terminally failed are
+ * excluded; media-readiness is re-checked per debate by {@link loadDebatePublishSource}.
+ * Server-side (unauthenticated) read — the cron sweep has no user session.
  */
 export async function listSweepCandidateDebateIds(spaceId: string): Promise<string[]> {
   const response = await geoChatGet<SpaceDebatesResponse>(`/spaces/${spaceId}/debates`);
   const now = Date.now();
-  return response.debates.filter(debate => isDebatePublishableNow(debate, now)).map(debate => debate.id);
+  return response.debates
+    .filter(debate => isDebatePublishableNow(debate, now) && !isDebateMediaTerminal(debate))
+    .map(debate => debate.id);
+}
+
+/**
+ * Whether the listing says this debate's media will never produce a video (GEO-2985): the job
+ * failed after spending its retries, or succeeded without a `final_video`. Mirrors the two
+ * `media_failed` throws in {@link loadDebatePublishSource}, so the sweep stops re-loading debates
+ * it already knows it cannot publish — before this, every one was re-read and re-logged every five
+ * minutes, forever.
+ *
+ * False when the listing carries no `media` (a geo-chat older than the field): the debate stays a
+ * candidate and the per-debate media read decides, exactly as before. An operator requeue puts the
+ * job back to `queued`, which clears `terminal`, so a recovered debate re-enters the sweep on its own.
+ *
+ * Kept out of {@link isDebatePublishableNow} on purpose: that is the opt-out gate the early claims
+ * sweep shares, and media state is not part of it.
+ */
+export function isDebateMediaTerminal(debate: Debate): boolean {
+  const media = debate.media;
+  if (!media) return false;
+  if (media.terminal === true) return true;
+  // Derived again from the parts, so a listing that reports the job but not the summary flag
+  // still skips the same debates the per-debate check would reject.
+  return media.job_status === 'failed' || (media.job_status === 'succeeded' && media.has_final_video === false);
 }
 
 /**
@@ -193,14 +219,7 @@ export async function loadDebateClaimSpaceId(debateId: string): Promise<string> 
  * reliable "processing done" signal).
  */
 export async function loadDebatePublishSource(debateId: string): Promise<DebateSource> {
-  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
-  if (debate.status !== 'complete') {
-    throw new DebateNotPublishableError(
-      'not_complete',
-      `Debate ${debateId} is not complete (status ${debate.status}).`
-    );
-  }
-  assertDebateRecordingPublishable(debate, Date.now());
+  const debate = await loadSettledDebate(debateId);
 
   const media = await geoChatGet<DebateMediaResponse>(`/debates/${debateId}/media`);
   // A failed job has already spent its retries in the worker; it is not coming back on its own.
@@ -249,9 +268,14 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   // geo-chat decided an hour ago which claims duplicate a published one; the policy decides which
   // of those references the draft may honour now (flag, and the entity still being a Claim in
   // this space). Everything it drops is minted as before.
-  const claims = await applyClaimReusePolicy(extracted?.claims ?? [], debate.claim.space_id, {
+  const reusedClaims = await applyClaimReusePolicy(extracted?.claims ?? [], debate.claim.space_id, {
     debateId,
     motionClaimEntityId: debate.claim.claim_entity_id,
+  });
+  // After reuse, because which entity each claim resolves to decides whether it may already carry
+  // a stance toward the motion (GEO-3142): those keep theirs, so no claim gets a second one.
+  const claims = await applyClaimStancePolicy(reusedClaims, debate.claim.space_id, debate.claim.claim_entity_id, {
+    debateId,
   });
 
   // Like the share card and claims, a failed read degrades to a debate published without topics.
@@ -279,6 +303,46 @@ export async function loadDebatePublishSource(debateId: string): Promise<DebateS
   };
 
   return { debate, media, input };
+}
+
+/**
+ * GEO-2870 option A: candidate ids for the early claims sweep — the debates in a space that are
+ * past their opt-out window (the same {@link isDebatePublishableNow} test the full publish holds
+ * to) and that closed within `recentMs`. Anything older has had its claims published early already
+ * or will get them from the full publish; looking at it every minute would only spend graph reads.
+ */
+export async function listEarlyClaimCandidateDebateIds(
+  spaceId: string,
+  now: number,
+  recentMs: number
+): Promise<string[]> {
+  const response = await geoChatGet<SpaceDebatesResponse>(`/spaces/${spaceId}/debates`);
+  return response.debates
+    .filter(debate => {
+      if (!isDebatePublishableNow(debate, now)) return false;
+      const deadline = debatePublicationDeadline(debate);
+      return deadline !== null && now - deadline <= recentMs;
+    })
+    .map(debate => debate.id);
+}
+
+/**
+ * The debate, read from geo-chat, if anything from it may be published now: complete, recording not
+ * cancelled, and past the settlement window after the last moment a participant could cancel it.
+ * Throws {@link DebateNotPublishableError} otherwise. The early claims publish holds to exactly the
+ * gate the full publish does, before it looks at media — publishing a claim is publishing the
+ * debate's content, and the opt-out promises none of it reaches the graph.
+ */
+export async function loadSettledDebate(debateId: string): Promise<Debate> {
+  const debate = await geoChatGet<Debate>(`/debates/${debateId}`);
+  if (debate.status !== 'complete') {
+    throw new DebateNotPublishableError(
+      'not_complete',
+      `Debate ${debateId} is not complete (status ${debate.status}).`
+    );
+  }
+  assertDebateRecordingPublishable(debate, Date.now());
+  return debate;
 }
 
 export function isDebatePublishableNow(debate: Debate, now: number): boolean {
@@ -419,9 +483,13 @@ async function buildDebateShareCard(
  * report claims for this debate) — the caller then falls back to the raw /transcript merge and
  * publishes with no claims. `turn_index` is expected 0-based and contiguous over non-empty turns.
  */
-async function loadDebateClaims(
+export async function loadDebateClaims(
   debateId: string
-): Promise<{ transcriptTurns: DebatePublishTurn[]; claims: DebateClaimInput[] } | null> {
+): Promise<{
+  transcriptTurns: DebatePublishTurn[];
+  claims: DebateClaimInput[];
+  dedupPendingUntil: number | null;
+} | null> {
   let response: DebateExtractedClaimsResponse;
   try {
     response = await geoChatGet<DebateExtractedClaimsResponse>(`/debates/${debateId}/claims`);

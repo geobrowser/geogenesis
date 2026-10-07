@@ -14,6 +14,7 @@ import {
   claimPickerVotedByQueryKey,
   fetchClaimPickerEntities,
   fetchClaimPickerEntitiesVotedBy,
+  pollWhileMissing,
 } from './claim-picker-page';
 
 vi.mock('~/core/io/graphql-client', () => ({
@@ -194,5 +195,21 @@ describe('fetchClaimPickerEntitiesVotedBy', () => {
     const key = claimPickerVotedByQueryKey('0199AAAA-bbbb-cccc-dddd-eeeeffff0000');
     expect(key[0]).not.toBe('debates');
     expect(key).toEqual(claimPickerVotedByQueryKey('0199aaaabbbbccccddddeeeeffff0000'));
+  });
+});
+
+describe('pollWhileMissing (GEO-2870)', () => {
+  const state = (data?: unknown[]) => ({ state: { data } });
+
+  it('is off without an interval', () => {
+    expect(pollWhileMissing(3, undefined)).toBe(false);
+  });
+
+  it('polls while the answer is missing ids or not there yet, and stops once all are found', () => {
+    const interval = pollWhileMissing(3, 15_000);
+    if (interval === false) throw new Error('expected an interval function');
+    expect(interval(state())).toBe(15_000);
+    expect(interval(state([{}, {}]))).toBe(15_000);
+    expect(interval(state([{}, {}, {}]))).toBe(false);
   });
 });

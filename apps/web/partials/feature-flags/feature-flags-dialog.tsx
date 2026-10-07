@@ -49,9 +49,10 @@ export function FeatureFlagsDialog() {
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
 
-        <Content className="fixed inset-0 z-101 flex items-start justify-center focus:outline-hidden">
-          <div className="mt-32 flex w-[420px] max-w-[calc(100vw-32px)] flex-col gap-4 rounded-xl bg-white p-4 shadow-lg">
-            <div className="flex items-start justify-between gap-4">
+        <Content className="fixed inset-0 z-101 flex items-center justify-center px-4 py-8 focus:outline-hidden">
+          {/* Capped to the viewport; the list scrolls and the header stays put. */}
+          <div className="flex max-h-full w-[420px] max-w-full flex-col gap-4 rounded-xl bg-white p-4 shadow-lg">
+            <div className="flex shrink-0 items-start justify-between gap-4">
               <Title asChild>
                 <Text variant="smallTitle" as="h2">
                   Feature flags
@@ -61,7 +62,7 @@ export function FeatureFlagsDialog() {
               <SquareButton onClick={close} icon={<Close />} aria-label="Close feature flags" />
             </div>
 
-            <div className="flex flex-col divide-y divide-grey-02">
+            <div className="-mr-2 flex min-h-0 flex-col divide-y divide-grey-02 overflow-y-auto overscroll-contain pr-2">
               {featureFlagDefinitions.map(feature => (
                 <div key={feature.id} className="flex items-start justify-between gap-4 py-3 first:pt-0 last:pb-0">
                   <div className="flex min-w-0 flex-col gap-1">

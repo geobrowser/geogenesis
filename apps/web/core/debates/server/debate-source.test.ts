@@ -3,13 +3,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 import { topicFeedFilter, topicFeedPopulationScopes } from '~/core/topics/browse/topic-feed-filter';
 
+import type { Debate } from '../api';
 import { buildDebatePublishDraft } from '../debate-publish-draft';
 import { applyClaimReusePolicy } from './claim-reuse';
+import { applyClaimStancePolicy } from './claim-stance';
 import {
   DebateNotPublishableError,
+  isDebateMediaTerminal,
+  listEarlyClaimCandidateDebateIds,
   listSweepCandidateDebateIds,
   loadDebateOgPreview,
   loadDebatePublishSource,
+  loadSettledDebate,
 } from './debate-source';
 import { loadMotionTopics } from './motion-topics';
 
@@ -18,6 +23,11 @@ import { loadMotionTopics } from './motion-topics';
 vi.mock('./claim-reuse', async importOriginal => ({
   ...(await importOriginal<typeof import('./claim-reuse')>()),
   applyClaimReusePolicy: vi.fn(async (claims: unknown) => claims),
+}));
+
+// The stance policy's graph read is covered in `claim-stance.test.ts`; here it passes claims through.
+vi.mock('./claim-stance', () => ({
+  applyClaimStancePolicy: vi.fn(async (claims: unknown) => claims),
 }));
 
 // The motion's topics are a graph read, covered in `motion-topics.test.ts`. Here it returns none
@@ -198,6 +208,8 @@ describe('loadDebatePublishSource media gating', () => {
           end_ms: 9_000,
           // GEO-2870 D1: geo-chat's stable id, carried through to the draft.
           entity_id: '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b',
+          // GEO-3142: the extractor's verdict toward the motion.
+          stance: 'supports',
         },
         { text: 'The action was unjustified.', is_factual: false, turn_index: 1, start_ms: null, end_ms: null },
       ],
@@ -218,6 +230,8 @@ describe('loadDebatePublishSource media gating', () => {
         topics: [],
         isContestable: false,
         timing: { startMs: 0, endMs: 9_000 },
+        highlightScore: null,
+        stance: 'supports',
       },
       {
         text: 'The action was unjustified.',
@@ -228,8 +242,17 @@ describe('loadDebatePublishSource media gating', () => {
         topics: [],
         isContestable: false,
         timing: null,
+        highlightScore: null,
+        stance: null,
       },
     ]);
+    // After the reuse policy, against the debate's space and motion.
+    expect(vi.mocked(applyClaimStancePolicy)).toHaveBeenCalledWith(
+      input.claims,
+      'c9f267dcb0d270718c2a3c45a64afd32',
+      'claim-1',
+      { debateId: DEBATE_ID }
+    );
   });
 
   it('decodes geo-chat’s existing_entity_id and hands the claims to the reuse policy with the debate space', async () => {
@@ -392,6 +415,106 @@ describe('listSweepCandidateDebateIds', () => {
     );
 
     await expect(listSweepCandidateDebateIds('space-1')).resolves.toEqual(['eligible']);
+  });
+
+  // GEO-2985: a terminal media job used to be re-read and re-logged on every five-minute tick.
+  it('skips debates whose media the listing reports as terminal', async () => {
+    const media = (job_status: string | null, has_final_video: boolean, terminal: boolean) => ({
+      media: { job_status, has_final_video, terminal },
+    });
+    const debates = [
+      debateBody({ id: 'no-job', ...media(null, false, false) }),
+      debateBody({ id: 'queued', ...media('queued', false, false) }),
+      debateBody({ id: 'running', ...media('running', false, false) }),
+      debateBody({ id: 'succeeded', ...media('succeeded', true, false) }),
+      debateBody({ id: 'failed', ...media('failed', false, true) }),
+      debateBody({ id: 'succeeded-no-video', ...media('succeeded', false, true) }),
+      // The flag alone is enough, and the parts alone are enough.
+      debateBody({ id: 'flag-only', media: { terminal: true } }),
+      debateBody({ id: 'parts-only', media: { job_status: 'failed', has_final_video: false } }),
+    ];
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ debates, matches: [] }), { status: 200 }))
+    );
+
+    await expect(listSweepCandidateDebateIds('space-1')).resolves.toEqual(['no-job', 'queued', 'running', 'succeeded']);
+  });
+
+  it('keeps every debate a candidate when geo-chat does not send media state', async () => {
+    const older = debateBody({ id: 'older-geo-chat' });
+    const nulled = debateBody({ id: 'null-media', media: null });
+    expect(older).not.toHaveProperty('media');
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async () => new Response(JSON.stringify({ debates: [older, nulled] }), { status: 200 }))
+    );
+
+    await expect(listSweepCandidateDebateIds('space-1')).resolves.toEqual(['older-geo-chat', 'null-media']);
+  });
+});
+
+describe('isDebateMediaTerminal', () => {
+  it('is false without media state, and only true for a dead or videoless job', () => {
+    const base = debateBody() as unknown as Debate;
+    expect(isDebateMediaTerminal(base)).toBe(false);
+    expect(isDebateMediaTerminal({ ...base, media: null })).toBe(false);
+    expect(
+      isDebateMediaTerminal({ ...base, media: { job_status: 'queued', has_final_video: false, terminal: false } })
+    ).toBe(false);
+    expect(
+      isDebateMediaTerminal({ ...base, media: { job_status: 'failed', has_final_video: false, terminal: true } })
+    ).toBe(true);
+  });
+});
+
+describe('listEarlyClaimCandidateDebateIds (GEO-2870 option A)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-30T12:00:00.000Z'));
+  });
+
+  it('applies the full sweep’s opt-out gate, and keeps only debates that closed within the window', async () => {
+    const recent = debateBody({ id: 'recent' });
+    const old = debateBody({ id: 'old', turn_ends_at: '2026-07-30T08:00:00.000Z' });
+    const cancelled = debateBody({ id: 'cancelled', recording_cancelled_at: '2026-07-30T11:59:00.000Z' });
+    const settling = debateBody({ id: 'settling', turn_ends_at: '2026-07-30T11:59:30.001Z' });
+    const active = debateBody({ id: 'active', status: 'thanking' });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ debates: [recent, old, cancelled, settling, active] }), { status: 200 })
+      )
+    );
+
+    await expect(listEarlyClaimCandidateDebateIds('space-1', Date.now(), 3 * 60 * 60 * 1000)).resolves.toEqual([
+      'recent',
+    ]);
+  });
+});
+
+describe('loadSettledDebate (GEO-2870 option A)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-30T12:00:00.000Z'));
+  });
+
+  it('returns a complete debate past its opt-out window without asking for media', async () => {
+    mockGeoChat({ job: null, artifacts: [] });
+    await expect(loadSettledDebate(DEBATE_ID)).resolves.toMatchObject({ id: DEBATE_ID });
+    expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).toEqual([
+      expect.stringMatching(new RegExp(`/debates/${DEBATE_ID}$`)),
+    ]);
+  });
+
+  it.each([
+    ['not_complete', { status: 'thanking' }],
+    ['recording_cancelled', { recording_cancelled_at: '2026-07-30T11:59:00.000Z' }],
+    ['cancellation_window_open', { turn_ends_at: '2026-07-30T11:59:30.001Z' }],
+  ])('refuses with %s', async (code, overrides) => {
+    mockGeoChat({ job: null, artifacts: [] }, debateBody(overrides));
+    await expect(loadSettledDebate(DEBATE_ID)).rejects.toMatchObject({ code });
   });
 });
 

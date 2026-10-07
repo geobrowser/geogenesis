@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { decodeExtractedClaims } from './extracted-claims';
+import { decodeDedupPendingUntil, decodeExtractedClaims, isDedupSettled } from './extracted-claims';
 
 const turn = { turn_index: 0, participant_slot: 0, attributed_space_id: 'space-a', speaker_name: 'A', text: 'hello' };
 
@@ -107,6 +107,55 @@ describe('decodeExtractedClaims timing (GEO-2958)', () => {
   });
 });
 
+describe('decodeExtractedClaims highlight score', () => {
+  const claim = (extra: Record<string, unknown>) => ({ text: 'A claim', is_factual: false, turn_index: 0, ...extra });
+
+  it("carries geo-chat's highlight_score onto the claim", () => {
+    const { claims } = decodeExtractedClaims({ turns: [turn], claims: [claim({ highlight_score: 0.62 })] });
+    expect(claims[0].highlightScore).toBe(0.62);
+  });
+
+  it.each([0, 1])('keeps a score at the boundary, %d', score => {
+    const { claims } = decodeExtractedClaims({ turns: [turn], claims: [claim({ highlight_score: score })] });
+    expect(claims[0].highlightScore).toBe(score);
+  });
+
+  it.each([
+    ['absent (a payload from before scoring)', {}, false],
+    ['null (geo-chat did not score it)', { highlight_score: null }, false],
+    ['a string', { highlight_score: '0.62' }, true],
+    ['over 1', { highlight_score: 1.5 }, true],
+    ['negative', { highlight_score: -0.2 }, true],
+    ['not finite', { highlight_score: Number.POSITIVE_INFINITY }, true],
+  ])('decodes no score when it is %s', (_label, extra, drift) => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [claim(extra) as Parameters<typeof decodeExtractedClaims>[0]['claims'][number]],
+    });
+    expect(claims[0].highlightScore).toBeNull();
+    // Absent and null are ordinary; a present value that is not a score is drift and is said.
+    const said = warn.mock.calls.some(([message]) => String(message).includes('highlight scores'));
+    expect(said).toBe(drift);
+    warn.mockRestore();
+  });
+
+  it('logs how many claims were scored and by what, so an unscored debate is visible', () => {
+    const log = vi.spyOn(console, 'log').mockImplementation(() => {});
+    decodeExtractedClaims({
+      turns: [turn],
+      claims: [claim({ highlight_score: 0.62 }), claim({ highlight_score: null })],
+      highlight_model: 'perplexity/pplx-decider-v1-27b',
+    });
+    expect(log).toHaveBeenCalledWith('[debate-acceptor] highlight scores decoded', {
+      claims: 2,
+      scored: 1,
+      model: 'perplexity/pplx-decider-v1-27b',
+    });
+    log.mockRestore();
+  });
+});
+
 describe('decodeExtractedClaims stable ids (GEO-2870 D1)', () => {
   it("carries geo-chat's entity_id as a dashless id, and null when absent or blank", () => {
     const { claims } = decodeExtractedClaims({
@@ -139,5 +188,50 @@ describe('decodeExtractedClaims stable ids (GEO-2870 D1)', () => {
       '[debate-acceptor] dropping extracted-claim entity ids that are not entity ids',
       expect.objectContaining({ count: 1 })
     );
+  });
+});
+
+describe('decodeExtractedClaims stance (GEO-3142)', () => {
+  it('carries the three verdicts and reads anything else as no verdict', () => {
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [
+        { text: 'a', is_factual: false, turn_index: 0, stance: 'supports' },
+        { text: 'b', is_factual: false, turn_index: 0, stance: ' Opposes ' },
+        { text: 'c', is_factual: true, turn_index: 0, stance: 'addresses' },
+        { text: 'd', is_factual: false, turn_index: 0, stance: 'neutral' },
+        { text: 'e', is_factual: false, turn_index: 0, stance: null },
+        // A payload from before the classification shipped.
+        { text: 'f', is_factual: false, turn_index: 0 },
+      ],
+    });
+    expect(claims.map(c => c.stance)).toEqual(['supports', 'opposes', 'addresses', null, null, null]);
+  });
+});
+
+describe('decodeExtractedClaims dedup marker', () => {
+  it('reads geo-chat’s instant, and no marker as settled', () => {
+    expect(
+      decodeExtractedClaims({ turns: [turn], claims: [], dedup_pending_until: '2026-10-06T12:02:30.000Z' })
+        .dedupPendingUntil
+    ).toBe(Date.parse('2026-10-06T12:02:30.000Z'));
+    expect(decodeExtractedClaims({ turns: [turn], claims: [] }).dedupPendingUntil).toBeNull();
+    expect(
+      decodeExtractedClaims({ turns: [turn], claims: [], dedup_pending_until: null }).dedupPendingUntil
+    ).toBeNull();
+  });
+
+  it('never settles an unreadable marker, and says so', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    expect(decodeDedupPendingUntil('soon')).toBe(Number.POSITIVE_INFINITY);
+    expect(decodeDedupPendingUntil(17)).toBe(Number.POSITIVE_INFINITY);
+    expect(warn).toHaveBeenCalledTimes(2);
+    expect(isDedupSettled(Number.POSITIVE_INFINITY, Date.now())).toBe(false);
+  });
+
+  it('settles at the instant', () => {
+    expect(isDedupSettled(100, 99)).toBe(false);
+    expect(isDedupSettled(100, 100)).toBe(true);
+    expect(isDedupSettled(null, 0)).toBe(true);
   });
 });

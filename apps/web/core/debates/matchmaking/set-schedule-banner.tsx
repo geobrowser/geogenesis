@@ -14,10 +14,11 @@ import { OwnScheduleModal } from '~/partials/availability/own-schedule-modal';
 import { hubAnalyticsAttributes } from './hub-analytics';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`), like the explore
-// welcome banner. Dismissing it is permanent, which is safe because the calendar has a standing
-// entry point right above it: the calendar button in the hub header (`./schedule-button`), which
-// keeps a dot on it until a schedule is saved. The availability toggle beside that button is a
-// different setting — "available to debate right now" on `PUT /me/debate-availability`.
+// welcome banner. Dismissing it is permanent, which is safe because the editor has a standing
+// entry point right above it: My availability, in the hub header's availability pill
+// (`./hub-header-controls`), which keeps a dot on the pill until a schedule is saved. The pill's
+// "Available now" switch is a different setting, "available to debate right now" on
+// `PUT /me/debate-availability`.
 const SET_SCHEDULE_BANNER_ID = 'debatesSetSchedule';
 
 /**

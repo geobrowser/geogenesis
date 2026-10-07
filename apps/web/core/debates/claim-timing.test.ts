@@ -83,6 +83,7 @@ function claim(id: string, text: string, overrides: Partial<TranscriptClaim> = {
     spaceId: 'space-1',
     blockId: 'block-1',
     publishedTiming: null,
+    highlightScore: null,
     relationEntityId: null,
     restated: false,
     ...overrides,

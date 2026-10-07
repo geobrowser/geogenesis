@@ -114,6 +114,7 @@ function claim(overrides: Partial<OrderedTranscriptClaim> = {}): OrderedTranscri
     spaceId: 'claim-space',
     blockId: 'block-1',
     publishedTiming: null,
+    highlightScore: null,
     relationEntityId: null,
     restated: false,
     timing: null,

@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
+import { DebateLobbyPage, LobbiesUnavailable } from '~/core/debates/lobbies/lobby-page';
 import {
   useDebateRoom,
   useDebateRoomPresence,
@@ -24,6 +25,7 @@ import {
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import { ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spinner } from '~/design-system/spinner';
@@ -39,17 +41,22 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const router = useRouter();
   const roomQuery = useDebateRoom(roomId);
   const room = roomQuery.data ?? null;
+  // A lobby answers `not_a_participant` here, so it is never a denial.
+  const isLobby = room?.kind === 'lobby';
+  const lobbyJoining = useFeatureFlag('lobbyJoining');
 
   // Refusals arrive in the body, not the status: a stranger gets a 200 saying `not_a_participant`.
   // Only a room that does not exist is an HTTP error.
   // Read the body's own verdict first, and consult the transport only when there is no room to go
   // on. React Query keeps the last payload through a failed refetch, and `retry: false` means one
   // 404 on one 3s poll would otherwise redirect everyone currently sitting in the room.
-  const denial = room
-    ? roomAccessDenialFor(room.access)
-    : roomQuery.error instanceof GeoChatRequestError
-      ? roomAccessDenialForStatus(roomQuery.error.status)
-      : null;
+  const denial = isLobby
+    ? null
+    : room
+      ? roomAccessDenialFor(room.access)
+      : roomQuery.error instanceof GeoChatRequestError
+        ? roomAccessDenialForStatus(roomQuery.error.status)
+        : null;
 
   React.useEffect(() => {
     if (!denial) return;
@@ -89,6 +96,11 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
         Sign in to join your debate.
       </RoomNotice>
     );
+  }
+
+  // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest.
+  if (isLobby) {
+    return lobbyJoining ? <DebateLobbyPage key={roomId} lobbyId={roomId} /> : <LobbiesUnavailable />;
   }
 
   if (!room) {

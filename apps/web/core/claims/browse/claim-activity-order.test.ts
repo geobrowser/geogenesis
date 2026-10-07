@@ -13,6 +13,7 @@ function claim(id: string, overrides: Partial<TranscriptClaim> = {}): Transcript
     spaceId: 'space',
     blockId: 'block',
     publishedTiming: null,
+    highlightScore: null,
     relationEntityId: null,
     restated: false,
     ...overrides,

@@ -25,6 +25,7 @@ import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 import {
   type Debate,
   type DebateActivity,
+  dashlessId,
   type DebateClaimsResponse,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
@@ -152,15 +153,32 @@ export const debateQueryKeys = {
   /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
   schedulablePeopleRoot: (accountKey: string | null) =>
     ['debates', 'account', accountKey, 'schedulable-people'] as const,
-  schedulablePeople: (accountKey: string | null, days: number, limit: number) =>
-    ['debates', 'account', accountKey, 'schedulable-people', days, limit] as const,
+  schedulablePeople: (
+    accountKey: string | null,
+    days: number,
+    limit: number,
+    calendar = false,
+    spaces: string[] = []
+  ) =>
+    calendar
+      ? (['debates', 'account', accountKey, 'schedulable-people', days, limit, 'calendar', spaces.join(',')] as const)
+      : (['debates', 'account', accountKey, 'schedulable-people', days, limit] as const),
   /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
   peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
     ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
   /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
   room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
   upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
+  /** GEO-3133. Refetched on `debate.lobbies_changed`. */
+  lobbies: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobbies'] as const,
+  /** Dashless, as `debate.lobby_changed` spells it. */
+  lobby: (accountKey: string | null, lobbyId: string) =>
+    ['debates', 'account', accountKey, 'lobby', dashlessId(lobbyId)] as const,
   scheduledDebates: (accountKey: string | null) => ['debates', 'account', accountKey, 'scheduled-debates'] as const,
+  /** Every admin list of scheduled debates, whatever week it was read from: what New match refreshes. */
+  adminScheduledDebatesRoot: ['debates', 'admin-scheduled-debates'] as const,
+  adminScheduledDebates: (accountKey: string | null, from: string) =>
+    [...debateQueryKeys.adminScheduledDebatesRoot, from, accountKey] as const,
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,

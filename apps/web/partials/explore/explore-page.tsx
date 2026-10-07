@@ -38,7 +38,14 @@ const EXPLORE_FEED_PROPS = {
   titleOpensSidePanel: true,
   claimCardVariant: 'debate-panel-mobile',
   feedTopSpacingClassName: '',
+  sendIdentityToken: true,
 } satisfies React.ComponentProps<typeof EntityFeed>;
+
+/**
+ * GEO-3140. The For you tab for everyone, set per deployment and off unless set. Without it the tab
+ * is still reachable through the `forYouFeed` feature flag, for testing before launch.
+ */
+const FOR_YOU_ENABLED_FOR_EVERYONE = process.env.NEXT_PUBLIC_FOR_YOU_ENABLED === 'true';
 
 /**
  * GEO-3083. Its own component so the follow query only runs with the flag on, and so the feed
@@ -99,7 +106,8 @@ export function ExplorePage({
   // than holding an empty column open.
   const sidePanelEnabled = useFeatureFlag('exploreSidePanel');
   // GEO-3083. Off, Explore is unchanged: Best, New, Top, opening on Best.
-  const forYouEnabled = useFeatureFlag('forYouFeed');
+  const forYouFlag = useFeatureFlag('forYouFeed');
+  const forYouEnabled = FOR_YOU_ENABLED_FOR_EVERYONE || forYouFlag;
 
   return (
     <EntityPageSidebarLayout

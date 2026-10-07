@@ -262,11 +262,11 @@ describe('DebatesHubPanel', () => {
   // of `resetDebatesHubFiltersAtom` has to fail here rather than quietly hand B one of A's filters.
   // GEO-2861. Four tabs, and "My positions" is not one of them: it is a source inside Explore's
   // menu, one more answer to "which claims?" rather than a surface of its own.
-  it('offers Lobby, People, Explore, Positions and Requests, in that order', () => {
+  it('offers Live, People, Explore, My positions and Requests, in that order', () => {
     renderOpen('explore');
 
-    const order = ['Lobby', 'People', 'Explore', 'Positions', 'Requests'];
-    const row = screen.getByRole('button', { name: /^Lobby/ }).closest('.overflow-x-auto');
+    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
+    const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
     const labels = [...(row?.querySelectorAll('button') ?? [])].map(button => button.textContent?.trim());
 
     expect(labels).toEqual(order);
@@ -432,18 +432,18 @@ describe('DebatesHubPanel', () => {
   it('renders every tab and switches between them', async () => {
     renderOpen();
 
-    for (const label of ['Requests', 'Lobby', 'Explore', 'People']) {
+    for (const label of ['Requests', 'Live', 'Explore', 'People']) {
       expect(screen.getByRole('button', { name: new RegExp(`^${label}`) })).toBeInTheDocument();
     }
 
     // jsdom has no layout, so reachability at a narrow width can't be asserted directly. The
     // scroll container is the thing that guarantees it, so pin that instead — without it the
     // last tab is clipped by the panel's `overflow-hidden` with no way to get to it.
-    const row = screen.getByRole('button', { name: /^Lobby/ }).closest('.overflow-x-auto');
+    const row = screen.getByRole('button', { name: /^Live/ }).closest('.overflow-x-auto');
     expect(row).not.toBeNull();
 
     // Order, not just presence: the labels alone stayed green through a reorder.
-    const order = ['Lobby', 'People', 'Explore', 'Positions', 'Requests'];
+    const order = ['Live', 'People', 'Explore', 'My positions', 'Requests'];
     const rendered = order.map(label => screen.getByRole('button', { name: new RegExp(`^${label}`) }));
     for (const [index, tab] of rendered.slice(0, -1).entries()) {
       const next = rendered[index + 1];
@@ -454,15 +454,34 @@ describe('DebatesHubPanel', () => {
 
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
     // Signed in, the list includes offline people free at shared times, so the empty copy says so.
-    expect(await screen.findByText('Nobody is online or free at the same times as you.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
   });
 
-  it('toggles availability from the panel header', () => {
+  it('toggles availability from the panel header', async () => {
     renderOpen();
 
-    fireEvent.click(screen.getByRole('switch', { name: 'Available to debate' }));
+    fireEvent.click(screen.getByRole('button', { name: /^Your availability/ }));
+    fireEvent.click(await screen.findByRole('switch', { name: 'Available now' }));
 
     expect(mocks.updateAvailability).toHaveBeenCalledWith(true);
+  });
+
+  it("sends Calendar's way back to this page with its own query, but not the panel's", () => {
+    mocks.pathname = '/space/abc';
+    mocks.searchParams = new URLSearchParams('proposal=1&modal=debates&modalTarget=people');
+    renderOpen();
+
+    const href = screen.getByRole('link', { name: /^Calendar/ }).getAttribute('href') ?? '';
+    expect(new URL(href, 'https://geo.local').searchParams.get('from')).toBe('/space/abc?proposal=1');
+  });
+
+  it('heads the panel with one availability pill and one Calendar, in that order', () => {
+    renderOpen();
+
+    const pill = screen.getByRole('button', { name: /^Your availability/ });
+    const calendar = screen.getByRole('link', { name: /^Calendar/ });
+    expect(Boolean(pill.compareDocumentPosition(calendar) & Node.DOCUMENT_POSITION_FOLLOWING)).toBe(true);
+    expect(screen.queryByRole('switch', { name: 'Available to debate' })).not.toBeInTheDocument();
   });
 
   it('explains that matchmaking is not deployed yet when the endpoint 404s', () => {
@@ -498,15 +517,15 @@ describe('DebatesHubPanel', () => {
 
     expect(screen.queryByRole('button', { name: /Matches/ })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Requests/ })).not.toBeInTheDocument();
-    // Positions joins them (GEO-2863). It was a source inside Explore's picker and left that menu
+    // My positions joins them (GEO-2863). It was a source inside Explore's picker and left that menu
     // signed out for exactly this reason, so promoting it to a tab promotes the rule with it.
-    expect(screen.queryByRole('button', { name: /Positions/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /positions/i })).not.toBeInTheDocument();
   });
 
-  it('draws Positions as its own tab once there is a viewer to have any', () => {
+  it('draws My positions as its own tab once there is a viewer to have any', () => {
     renderOpen('positions');
 
-    expect(screen.getByRole('button', { name: /^Positions/ })).toHaveAttribute('aria-current', 'true');
+    expect(screen.getByRole('button', { name: /^My positions/ })).toHaveAttribute('aria-current', 'true');
     expect(screen.getByTestId('claims-tab')).toBeInTheDocument();
   });
 

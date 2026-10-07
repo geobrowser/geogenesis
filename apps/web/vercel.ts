@@ -7,5 +7,10 @@ export const config: VercelConfig = {
       path: '/api/debates/publish-sweep',
       schedule: '*/5 * * * *',
     },
+    {
+      // GEO-2870: debate claims onto the graph minutes after extraction, ahead of the debate.
+      path: '/api/debates/publish-claims-sweep',
+      schedule: '* * * * *',
+    },
   ],
 };

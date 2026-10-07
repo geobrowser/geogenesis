@@ -65,7 +65,8 @@ function currentBrowserHref() {
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;
 }
 
-function safeInternalHref(href: string): string | null {
+/** An href on this site, or null: `//host` is protocol-relative and would leave the app. */
+export function safeInternalHref(href: string): string | null {
   if (!href.startsWith('/') || href.startsWith('//')) return null;
   try {
     const url = new URL(href, 'https://geo.local');
