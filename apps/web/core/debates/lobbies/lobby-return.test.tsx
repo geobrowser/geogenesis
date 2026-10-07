@@ -10,7 +10,7 @@ import {
 } from '../debate-return-navigation';
 
 const mocks = vi.hoisted(() => ({
-  lobby: undefined as Pick<DebateLobbyView, 'access'> | undefined,
+  lobby: undefined as { access: DebateLobbyView['access']; viewer: { removed?: boolean } } | undefined,
   useDebateLobby: vi.fn(),
 }));
 
@@ -27,7 +27,7 @@ const { consumeLobbyRejoin } = await import('./step-out');
 beforeEach(() => {
   clearDebateReturnDestination();
   consumeLobbyRejoin('');
-  mocks.lobby = { access: { status: 'admitted' } };
+  mocks.lobby = { access: { status: 'admitted' }, viewer: {} };
   mocks.useDebateLobby.mockClear();
 });
 
@@ -47,7 +47,15 @@ describe('BackToLobbyRow', () => {
 
   it('is hidden once the lobby has ended', () => {
     rememberLobbyReturnDestination('lobby1');
-    mocks.lobby = { access: { status: 'closed', reason: 'ended' } } as Pick<DebateLobbyView, 'access'>;
+    mocks.lobby = { access: { status: 'closed', reason: 'ended' }, viewer: {} };
+    render(<BackToLobbyRow onLeave={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Back to the room' })).toBeNull();
+  });
+
+  // GEO-3134: a removed viewer goes back by choice, from the lobby page's Rejoin.
+  it('is hidden while a host has the viewer removed', () => {
+    rememberLobbyReturnDestination('lobby1');
+    mocks.lobby = { access: { status: 'admitted' }, viewer: { removed: true } };
     render(<BackToLobbyRow onLeave={vi.fn()} />);
     expect(screen.queryByRole('button', { name: 'Back to the room' })).toBeNull();
   });

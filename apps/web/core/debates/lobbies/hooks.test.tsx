@@ -231,6 +231,19 @@ describe('useLobbyPresence', () => {
     expect(joins()).toHaveLength(1);
   });
 
+  // GEO-3134: a kick ends the step-out, and the debate still routes back to the lobby.
+  it('does not join a viewer a host removed, even back from a debate, until they choose to', async () => {
+    requestLobbyRejoin('lobby1');
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true, false, false, true), { wrapper });
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+    expect(joins()).toHaveLength(0);
+    expect(consumeLobbyRejoin('lobby1')).toBe(false);
+
+    await act(() => result.current.join(false));
+    expect(joins()).toHaveLength(1);
+    expect(result.current.state.status).toBe('joined');
+  });
+
   it('still returns to the lobby when the server stepped the viewer out before the routing', async () => {
     const { result } = await goneAfterBeat('stepped_out');
     await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
@@ -480,4 +493,94 @@ describe('useDebateLobby', () => {
     });
     await waitFor(() => expect(result.current.data?.access.status).toBe('admitted'));
   });
+});
+
+// GEO-3134: geo-chat refuses a removed member's join with 409 lobby_removed unless it says `rejoin`.
+describe('useLobbyPresence after a host removed the viewer', () => {
+  const removed = () => new GeoChatRequestError('raw', 'lobby_removed', 409);
+  const lastJoinBody = () => joins().at(-1)?.[1];
+
+  it('lands an automatic join on the removed screen, without retrying', async () => {
+    api.setDebateLobbyPresence.mockRejectedValueOnce(removed());
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+    await new Promise(resolve => setTimeout(resolve, 0));
+    expect(joins()).toHaveLength(1);
+    expect(lastJoinBody()).not.toHaveProperty('rejoin');
+  });
+
+  it('does the same on the end card’s rejoin path', async () => {
+    requestLobbyRejoin('lobby1');
+    api.setDebateLobbyPresence.mockRejectedValueOnce(removed());
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+    expect(lastJoinBody()).not.toHaveProperty('rejoin');
+  });
+
+  it('does the same on a lapsed lease’s rejoin', async () => {
+    api.setDebateLobbyPresence.mockImplementationOnce(async () => view(true)).mockRejectedValueOnce(removed());
+    const { result } = await goneAfterBeat('lapsed');
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+    expect(joins()).toHaveLength(2);
+  });
+
+  it('does the same on a back-forward cache restore', async () => {
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    api.setDebateLobbyPresence.mockRejectedValueOnce(removed());
+    act(() => {
+      window.dispatchEvent(Object.assign(new Event('pageshow'), { persisted: true }));
+    });
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+  });
+
+  it('sends rejoin only from the removed screen’s Rejoin, and keeps it through leaving another lobby', async () => {
+    api.setDebateLobbyPresence.mockRejectedValueOnce(removed());
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('dropped'));
+
+    api.setDebateLobbyPresence.mockRejectedValueOnce(
+      new GeoChatRequestError('raw', 'already_in_another_lobby', 409, null, { current_lobby_id: 'other' })
+    );
+    await act(() => result.current.join(false, true));
+    expect(lastJoinBody()).toMatchObject({ joined: true, rejoin: true });
+    expect(result.current.state).toMatchObject({ status: 'confirm_leave_other', rejoin: true });
+
+    await act(() => result.current.join(true, true));
+    expect(lastJoinBody()).toMatchObject({ leave_other_lobby: true, rejoin: true });
+    expect(result.current.state.status).toBe('joined');
+  });
+});
+
+// GEO-3134: an unban sends the target `debate.lobby_changed`; the refetch is admitted with `removed`.
+it('moves a ban this tab heard to the removed screen once unbanned, and Rejoin comes back', async () => {
+  vi.useFakeTimers({ shouldAdvanceTime: true });
+  api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+    connection_alive: false,
+    voice_away_at: null,
+    reason: 'banned',
+    current_lobby_id: null,
+  });
+  const { result, rerender } = renderHook(
+    ({ admitted, removed }) => useLobbyPresence('lobby1', admitted, false, false, removed),
+    { wrapper, initialProps: { admitted: true, removed: false } }
+  );
+  await waitFor(() => expect(result.current.state.status).toBe('joined'));
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+  });
+  await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'banned' }));
+
+  // The refetch while banned: access banned, so not admitted.
+  rerender({ admitted: false, removed: true });
+  expect(result.current.state).toEqual({ status: 'dropped', reason: 'banned' });
+
+  // Unbanned.
+  rerender({ admitted: true, removed: true });
+  await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+  expect(joins()).toHaveLength(1);
+
+  await act(() => result.current.join(false, true));
+  expect(joins().at(-1)?.[1]).toMatchObject({ joined: true, rejoin: true });
+  expect(result.current.state.status).toBe('joined');
 });
