@@ -17,6 +17,7 @@ import {
   type RankingLabPreviewResponse,
 } from '~/core/explore/fresh-slot/ranking-lab-types';
 import type { RankingParams } from '~/core/explore/fresh-slot/ranking-params';
+import type { SeenDemotionConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -34,6 +35,7 @@ type LabResponse = {
   history: FreshSlotHistoryEntry[];
   defaults: FreshSlotConfig;
   bounds: Record<'cadence' | 'firstPosition' | 'maxPerPage' | 'freshnessHours', { min: number; max: number }>;
+  seenDemotionBounds: Record<'minViews' | 'days', { min: number; max: number }>;
   rankingParams: RankingParams | null;
 };
 
@@ -88,6 +90,11 @@ const NUMERIC_FIELDS: { key: keyof LabResponse['bounds']; label: string; hint: s
   { key: 'freshnessHours', label: 'Fresh for (hours)', hint: 'W: an item stops being fresh at this age' },
 ];
 
+const SEEN_FIELDS: { key: 'minViews' | 'days'; label: string; hint: string }[] = [
+  { key: 'minViews', label: 'After N views', hint: 'N: a card shown this many times moves down' },
+  { key: 'days', label: 'Within D days', hint: 'D: counting views from the last D days' },
+];
+
 function sameConfig(a: FreshSlotConfig, b: FreshSlotConfig) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -104,6 +111,11 @@ function describeChange(entry: FreshSlotHistoryEntry): string {
     if (before !== after) {
       parts.push(`${TYPE_LABEL.get(typeId) ?? typeId.slice(0, 8)} cap ${before ?? 'none'} → ${after ?? 'none'}`);
     }
+  }
+  for (const key of ['enabled', 'minViews', 'days'] as const) {
+    const before = entry.before.seenDemotion[key];
+    const after = entry.after.seenDemotion[key];
+    if (before !== after) parts.push(`seen ${key} ${before} → ${after}`);
   }
   return parts.length > 0 ? parts.join(', ') : 'no change';
 }
@@ -189,6 +201,8 @@ export function RankingLab() {
     else if (Number.isFinite(Number(value))) perTypeCaps[typeId] = Number(value);
     setDraft({ ...draft, perTypeCaps });
   };
+  const setSeen = (patch: Partial<SeenDemotionConfig>) =>
+    setDraft({ ...draft, seenDemotion: { ...draft.seenDemotion, ...patch } });
 
   return (
     <LabShell>
@@ -246,6 +260,43 @@ export function RankingLab() {
                 min={0}
                 value={draft.perTypeCaps[type.id] ?? ''}
                 onChange={event => setCap(type.id, event.target.value)}
+              />
+            </label>
+          ))}
+        </div>
+
+        <Text as="h3" variant="bodySemibold">
+          Seen demotion
+        </Text>
+        <Text variant="metadata" color="grey-04">
+          In each visitor&apos;s browser: a card shown to them N or more times in the last D days, without a click,
+          moves below the unseen cards of its type on its page. The lead debate and fresh cards keep their places. Not
+          shown in the preview, which has no visitor. Live: {state?.config.seenDemotion.enabled ? 'on' : 'off'}.
+        </Text>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={draft.seenDemotion.enabled}
+            onChange={event => setSeen({ enabled: event.target.checked })}
+          />
+          <Text variant="body">Seen demotion enabled</Text>
+        </label>
+        <div className="sm:grid-cols-4 grid grid-cols-2 gap-3">
+          {SEEN_FIELDS.map(field => (
+            <label key={field.key} className="flex flex-col gap-1" title={field.hint}>
+              <Text variant="metadata" color="grey-04">
+                {field.label} ({data.seenDemotionBounds[field.key].min}–{data.seenDemotionBounds[field.key].max})
+              </Text>
+              <input
+                type="number"
+                className="rounded border border-grey-02 px-2 py-1"
+                min={data.seenDemotionBounds[field.key].min}
+                max={data.seenDemotionBounds[field.key].max}
+                value={draft.seenDemotion[field.key]}
+                onChange={event => {
+                  const number = Number(event.target.value);
+                  if (Number.isFinite(number)) setSeen({ [field.key]: number });
+                }}
               />
             </label>
           ))}

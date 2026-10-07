@@ -30,6 +30,8 @@ export async function leadWithPlayableDebate<T>(
     isPlayable: (row: T, signal: AbortSignal) => Promise<boolean>;
     candidates?: number;
     timeoutMs?: number;
+    /** GEO-3234. Told every candidate that passed, in rank order, when the check finished in time. */
+    onPlayable?: (rows: T[]) => void;
   }
 ): Promise<T[]> {
   const candidates = rows.filter(options.isDebate).slice(0, options.candidates ?? LEAD_DEBATE_CANDIDATES);
@@ -49,6 +51,7 @@ export async function leadWithPlayableDebate<T>(
       timedOut,
     ]);
     if (verdicts === 'timeout') return [...rows];
+    options.onPlayable?.(candidates.filter((_, index) => verdicts[index]));
 
     const lead = candidates.find((_, index) => verdicts[index]);
     if (lead === undefined) return [...rows];

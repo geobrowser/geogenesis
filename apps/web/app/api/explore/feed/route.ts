@@ -14,6 +14,7 @@ import {
 } from '~/core/explore/for-you/resolve-for-you-viewer';
 import { readServingFreshSlotState } from '~/core/explore/fresh-slot/fresh-slot-store';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
+import { seenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { normId } from '~/core/utils/norm-id';
 
 /** Enough for any real follow list; the query string stays under ~7 KB. */
@@ -91,6 +92,9 @@ export async function GET(request: Request) {
   // GEO-3221. Best's fresh slot, read from the ranking lab's live config (disabled unless an admin
   // turned it on). Plain Best only; For you is left as it is.
   const freshState = pageSort === 'best' ? await readServingFreshSlotState() : null;
+  // GEO-3234. Seen demotion runs in the browser; the page only carries whether it is on and its
+  // knobs, identical for every visitor, so nothing per-visitor reaches this response or its caches.
+  const seenDemotion = seenDemotionPageConfig(freshState?.config.seenDemotion);
 
   try {
     const result = await fetchExploreFeed({
@@ -114,6 +118,7 @@ export async function GET(request: Request) {
             })
           : undefined,
       freshSlot: freshState ? { config: freshState.config, revision: freshState.revision } : undefined,
+      markPlayableLeads: seenDemotion !== null,
     });
     // Every card names the version that put it there, so engagement can be credited to it.
     const feed = result.feed;
@@ -122,6 +127,8 @@ export async function GET(request: Request) {
       : result.items;
     const body = {
       ...result,
+      // Plain Best only: For you and an interleaving experiment are left alone, as with the fresh slot.
+      ...(seenDemotion && feed?.name === 'best' && !personalized ? { seenDemotion } : {}),
       items,
       nextCursor: personalized ? encodePersonalizedCursor(asOf, result.nextCursor) : result.nextCursor,
     };
