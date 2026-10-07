@@ -55,6 +55,13 @@ import {
   nextExploreWindowCursor,
 } from './explore-window-cursor';
 import { BEST_FEED_VERSION, type FeedDescriptor } from './for-you/feed-version';
+import { type FreshSlotConfig, freshSlotActive } from './fresh-slot/fresh-slot-config';
+import {
+  FRESH_SLOT_CANDIDATE_LIMIT,
+  decodeFreshSlotCursor,
+  encodeFreshSlotCursor,
+} from './fresh-slot/fresh-slot-cursor';
+import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-slot';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
 
 /**
@@ -613,6 +620,62 @@ async function fetchCompleteEntitiesPage(args: {
   };
 }
 
+/** One Fresh list per scroll and scope, shared by every page request of that scroll. */
+const freshListCache = createPromiseTtlCache<ExploreEntitiesPageResponse>({ ttlMs: 60_000, maxEntries: 48 });
+
+/**
+ * The Fresh list (GEO-3221): the newest eligible items created in `[asOf - freshnessHours, asOf]`,
+ * newest first. It is New's own query — the same name, system-entity, block-type, debate-tag and
+ * type rules, scoped to the same spaces — with a creation-time range, so nothing reaches the fresh
+ * slot that New would not show. A Debate entity exists in the graph only once it is published.
+ *
+ * The upper bound is what keeps it stable while someone scrolls: an item created after the scroll
+ * began joins the next scroll, not this one.
+ */
+async function fetchFreshEntitiesPage(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  entityFilter?: EntityFilter;
+  asOfMs: number;
+  freshnessHours: number;
+}): Promise<ExploreEntitiesPageResponse> {
+  const asOfSec = Math.floor(args.asOfMs / 1000);
+  const range: EntityFilter = {
+    createdAt: {
+      greaterThanOrEqualTo: String(asOfSec - args.freshnessHours * 3600),
+      lessThanOrEqualTo: String(asOfSec),
+    },
+  };
+  const key = JSON.stringify({
+    spaceIds: args.spaceIds.map(normId).sort(),
+    time: args.time,
+    typeIds: args.typeIds.map(normId).sort(),
+    requireName: args.requireName ?? null,
+    requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
+    entityFilter: args.entityFilter ?? null,
+    asOfSec,
+    freshnessHours: args.freshnessHours,
+  });
+  return freshListCache.get(key, () =>
+    fetchExploreEntitiesPage({
+      spaceIds: args.spaceIds,
+      time: args.time,
+      limit: FRESH_SLOT_CANDIDATE_LIMIT,
+      after: null,
+      // The id breaks ties: whole batches of claims share one creation second, and the cursor's
+      // mask indexes this list, so its order must not vary between requests.
+      orderBy: [EntitiesOrderBy.CreatedAtDesc, EntitiesOrderBy.IdDesc],
+      typeIds: args.typeIds,
+      requireName: args.requireName,
+      requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+      entityFilter: combineEntityFilters(args.entityFilter, range),
+    })
+  );
+}
+
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
 async function fetchTopEntitiesPage(args: {
   spaceIds: string[];
@@ -787,6 +850,12 @@ export async function fetchExploreFeed(args: {
    * full population from a compact index rather than applying one expensive combined predicate.
    */
   completePopulationScopes?: readonly ExploreCompletePopulationScope[];
+  /**
+   * GEO-3221. The fresh slot's live config: newest items merged into Best's page at read time.
+   * Applied only to plain Best with a type selection, and only to a scroll that began with it.
+   * `now` pins the clock for tests and the ranking lab's preview.
+   */
+  freshSlot?: { config: FreshSlotConfig; revision: number; now?: number };
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = exploreBrowseSpaceIds(args.browse, args.spaceFilterIds);
@@ -852,7 +921,9 @@ export async function fetchExploreFeed(args: {
     return out;
   };
 
-  const { after, offset } = decodeExploreWindowCursor(args.cursor);
+  // Always unwrapped, so a fresh cursor still pages on if the slot was switched off mid-scroll.
+  const freshCursor = decodeFreshSlotCursor(args.cursor, args.freshSlot?.now ?? Date.now());
+  const { after, offset } = decodeExploreWindowCursor(freshCursor.inner);
 
   // Every sort scans wider than it serves — the row builder drops entities with no
   // displayable space, so over-scanning absorbs that. Best scans wider still, because a
@@ -1011,6 +1082,54 @@ export async function fetchExploreFeed(args: {
     });
   }
 
+  // GEO-3221. The fresh slot, on plain Best only: For you returned above, and a window the reorder
+  // hook replaced (For you, an interleaving experiment) is left alone, so an experiment's arms are
+  // never confounded by it.
+  const freshConfig = args.freshSlot?.config;
+  const freshApplies =
+    freshSlotActive(freshConfig) &&
+    args.sort === 'best' &&
+    bestFiltersServerSide &&
+    (freshCursor.firstPage || freshCursor.pinned);
+  const freshVersion = `${BEST_FEED_VERSION}+fresh.${args.freshSlot?.revision ?? 0}`;
+  let freshRows: ExploreFeedRow[] | null = null;
+  if (freshApplies) {
+    try {
+      const freshPage = await fetchFreshEntitiesPage({
+        spaceIds: baseIds,
+        time: args.time,
+        typeIds: args.typeIds ?? [],
+        requireName: args.requireName,
+        requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+        entityFilter: args.entityFilter,
+        asOfMs: freshCursor.asOfMs,
+        freshnessHours: freshConfig.freshnessHours,
+      });
+      freshRows = windowRows(freshPage.entities);
+    } catch (error) {
+      // Best without the slot for this page; the cursor keeps the scroll's state for the next.
+      console.error('explore fresh slot: fresh list failed, serving Best for this page', error);
+    }
+  }
+
+  const mergeFresh = (
+    window: { rows: ExploreFeedRow[]; feed: FeedDescriptor | undefined },
+    shown: ReadonlySet<number>
+  ): { rows: FreshMergedRow<ExploreFeedRow>[]; shownAfter: Set<number> } | null =>
+    freshRows !== null && freshConfig && window.feed?.name === 'best'
+      ? mergeFreshSlot({
+          best: window.rows,
+          fresh: freshRows,
+          shown,
+          config: freshConfig,
+          pageSize,
+          idOf: row => normId(row.entityId),
+          typeOf: exploreItemTypeKey,
+        })
+      : null;
+  const mergedRows = (merged: { rows: FreshMergedRow<ExploreFeedRow>[] }): ExploreFeedRow[] =>
+    merged.rows.map(({ row, fresh }) => (fresh ? { ...row, ranking: { version: freshVersion, slot: 'fresh' } } : row));
+
   // A window that survives none of the above is not the end of the feed, and returning it as an
   // empty page is what makes it behave like one — badly (GEO-2835 review). The client's sentinel
   // has an 8000px rootMargin, so with nothing rendered it stays intersecting and refires the
@@ -1039,9 +1158,11 @@ export async function fetchExploreFeed(args: {
   let windowOffset = offset;
   let extraScans = 0;
   let scanBudgetSpent = false;
+  let shownAtWindowStart = freshCursor.shown;
   let page = await fetchWindow(windowAfter);
   let window = await orderWindow(page.entities, windowAfter);
-  let ordered = window.rows;
+  let merged = mergeFresh(window, shownAtWindowStart);
+  let ordered = merged ? mergedRows(merged) : window.rows;
 
   const scanDeadline = Date.now() + MAX_EMPTY_WINDOW_SCAN_MS;
 
@@ -1053,42 +1174,62 @@ export async function fetchExploreFeed(args: {
       break;
     }
     extraScans += 1;
+    if (merged) shownAtWindowStart = merged.shownAfter;
     windowAfter = page.endCursor;
     // A fresh window is served from its start; the offset only ever indexed the window the
     // cursor named.
     windowOffset = 0;
     page = await fetchWindow(windowAfter);
     window = await orderWindow(page.entities, windowAfter);
-    ordered = window.rows;
+    merged = mergeFresh(window, shownAtWindowStart);
+    ordered = merged ? mergedRows(merged) : window.rows;
   }
 
   // GEO-3070. Only on the first ranked window, which is where page one comes from. Every page cut
   // from that window is reordered the same way, so the lead debate is served once and nothing it
   // displaced is skipped; later windows are ranked further down and left as they are.
   if (args.leadWithPlayableDebate && args.sort === 'best' && windowAfter === null) {
-    ordered = await leadWithPlayableDebate(ordered, {
+    const led = await leadWithPlayableDebate(window.rows, {
       isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
       isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
     });
+    // The merge's page boundaries depend only on which rows Best holds, never their order, so
+    // merging the led order again moves no boundary (GEO-3221).
+    merged = mergeFresh({ ...window, rows: led }, shownAtWindowStart);
+    ordered = merged ? mergedRows(merged) : led;
   }
 
   // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
   // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
   const slice = ordered.slice(windowOffset, windowOffset + pageSize);
 
+  const nextWindowCursor = scanBudgetSpent
+    ? null
+    : nextExploreWindowCursor({
+        after: windowAfter,
+        offset: windowOffset,
+        served: slice.length,
+        windowLength: ordered.length,
+        hasNextPage: page.hasNextPage,
+        endCursor: page.endCursor,
+      });
+  // Pages inside one window share its starting mask; stepping to the next window carries what this
+  // one showed, so nothing it showed comes round again.
+  const staysInWindow = windowOffset + slice.length < ordered.length;
+  const nextCursor =
+    nextWindowCursor !== null && freshApplies
+      ? encodeFreshSlotCursor({
+          asOfMs: freshCursor.asOfMs,
+          shown: staysInWindow || !merged ? shownAtWindowStart : merged.shownAfter,
+          inner: nextWindowCursor,
+        })
+      : nextWindowCursor;
+  const feed: FeedDescriptor | undefined = merged ? { name: 'best', version: freshVersion } : window.feed;
+
   return {
     items: await attachMeta(slice),
-    ...(window.feed ? { feed: window.feed } : {}),
-    nextCursor: scanBudgetSpent
-      ? null
-      : nextExploreWindowCursor({
-          after: windowAfter,
-          offset: windowOffset,
-          served: slice.length,
-          windowLength: ordered.length,
-          hasNextPage: page.hasNextPage,
-          endCursor: page.endCursor,
-        }),
+    ...(feed ? { feed } : {}),
+    nextCursor,
   };
 }
 

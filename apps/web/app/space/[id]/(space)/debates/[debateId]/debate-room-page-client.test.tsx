@@ -5,7 +5,7 @@ import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Debate, DebateRematchSession } from '~/core/debates/api';
+import { type Debate, type DebateRematchSession, GeoChatRequestError } from '~/core/debates/api';
 import {
   clearDebateReturnDestination,
   rememberDebateReturnDestination,
@@ -17,6 +17,7 @@ import {
   deciding as openRoundsDeciding,
   listening as openRoundsListening,
   revealEnd as openRoundsRevealEnd,
+  revealRebut as openRoundsRevealRebut,
   roundOneSpeaking as openRoundsRoundOneSpeaking,
   thankingAfterEnd as openRoundsThankingAfterEnd,
 } from '~/core/debates/open-rounds-fixtures';
@@ -36,6 +37,7 @@ const mocks = vi.hoisted(() => ({
   clearDebateActivity: vi.fn(),
   consentMutateAsync: vi.fn(),
   endTurnMutateAsync: vi.fn(),
+  savePickMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
   enqueueRecording: vi.fn(),
   startLiveStream: vi.fn(),
@@ -152,6 +154,7 @@ vi.mock('~/core/debates/hooks', () => ({
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
   useMarkDebateReady: () => ({ mutateAsync: mocks.readyMutateAsync, isPending: false }),
   useMarkDebateCapturing: () => ({ mutateAsync: mocks.capturingMutateAsync, isPending: false }),
+  useSaveOpenRoundPick: () => ({ mutateAsync: mocks.savePickMutateAsync, isPending: false }),
   useGeoChatAuth: () => ({
     ready: true,
     authenticated: true,
@@ -164,9 +167,22 @@ vi.mock('~/core/debates/recording-stream', () => ({
   putRecordingPart: vi.fn(),
   startLiveRecordingStream: (options: { id: string }) => {
     mocks.startLiveStream(options);
+    // The stream is where a streamed recording's bytes live, so it hands them back at the end.
+    const chunks: Blob[] = [];
+    const size = () => chunks.reduce((total, chunk) => total + chunk.size, 0);
     return {
       id: options.id,
-      append: mocks.liveStreamAppend,
+      append: (chunk: Blob, chunkAtMs: number) => {
+        chunks.push(chunk);
+        mocks.liveStreamAppend(chunk, chunkAtMs);
+      },
+      size,
+      recording: () => ({
+        size: size(),
+        availableFrom: 0,
+        heldInMemory: true,
+        read: async (start: number, end: number) => new Blob(chunks).slice(start, end),
+      }),
       finish: mocks.liveStreamFinish,
       release: mocks.liveStreamRelease,
       abort: mocks.liveStreamAbort,
@@ -4926,7 +4942,7 @@ describe('DebateRoomPageClient', () => {
       expect.objectContaining({
         userId: 'user-a',
         debateId: 'debate-1',
-        blob: expect.any(Blob),
+        recording: expect.objectContaining({ size: expect.any(Number), availableFrom: 0 }),
         mimeType: 'video/webm',
       })
     );
@@ -5008,6 +5024,45 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
       expect(mocks.enqueueRecording).toHaveBeenCalledWith(expect.objectContaining({ multipart: null }));
+      // The whole recording is one upload from here: counted, never silent (GEO-3171).
+      expect(mocks.capture).toHaveBeenCalledWith(
+        'debate_recording_upload_fallback',
+        expect.objectContaining({ debate_id: 'debate-1', reason: 'whole_recording_after_debate', streamed: true })
+      );
+    });
+
+    it('tells the stream why it should stand down, not just whether (GEO-3171)', async () => {
+      setHistoryLength(2);
+      installRecordingMocks();
+      await renderLiveDebate();
+      await waitFor(() => expect(mocks.startLiveStream).toHaveBeenCalled());
+      const { shouldPause } = mocks.startLiveStream.mock.calls[0][0] as { shouldPause: () => string | null };
+
+      expect(shouldPause()).toBeNull();
+      const onLine = vi.spyOn(Navigator.prototype, 'onLine', 'get').mockReturnValue(false);
+      try {
+        expect(shouldPause()).toBe('offline');
+      } finally {
+        onLine.mockRestore();
+      }
+    });
+
+    it('reports a recording that could not be handed to the upload queue (GEO-3171)', async () => {
+      mocks.enqueueRecording.mockRejectedValue(new Error('disk said no'));
+      setHistoryLength(2);
+      installRecordingMocks();
+      const view = await renderLiveDebate();
+      await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+      mocks.debate = completedDebateOutsideThankYou();
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await waitFor(() =>
+        expect(mocks.capture).toHaveBeenCalledWith(
+          'debate_recording_upload_failed',
+          expect.objectContaining({ debate_id: 'debate-1', stage: 'handoff', terminal_reason: 'handoff_failed' })
+        )
+      );
     });
 
     it('discards the streamed parts when the debate is cancelled', async () => {
@@ -5195,6 +5250,93 @@ describe('DebateRoomPageClient', () => {
       const heading = screen.getByRole('heading', { name: 'The protocol should ship debates' });
       expect(heading.compareDocumentPosition(leave) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
       expect(leave.compareDocumentPosition(debateVideoTile('local')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+  });
+
+  // GEO-3178. After every round but the cap, both debaters pick Extend or End on a card over the
+  // tiles. Picks are blind until the reveal.
+  describe('open rounds pick card (GEO-3178)', () => {
+    const pickCard = () => screen.queryByRole('region', { name: /Keep debating\?|Locked in/ });
+    const rerenderAt = (view: ReturnType<typeof render>, time: string, debate: Debate) => {
+      vi.mocked(Date.now).mockReturnValue(openRoundsAt(time));
+      mocks.debate = debate;
+      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    };
+
+    beforeEach(() => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      mocks.savePickMutateAsync.mockResolvedValue(undefined);
+    });
+
+    it('shows nothing about picks during a turn, then opens with the countdown when the round ends', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
+      const view = await renderLiveDebate(openRoundsListening());
+      expect(pickCard()).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Extend/ })).not.toBeInTheDocument();
+
+      rerenderAt(view, '20:02:03.000', openRoundsDeciding());
+      await waitFor(() => expect(pickCard()).toBeInTheDocument());
+      expect(screen.getByText('7 seconds to pick')).toBeInTheDocument();
+      // The card carries the window's countdown, so the tiles do not repeat it.
+      expect(debateVideoTile('local').querySelector('[data-countdown-progress]')).not.toBeInTheDocument();
+      expect(debateVideoTile('remote').querySelector('[data-countdown-progress]')).not.toBeInTheDocument();
+    });
+
+    it('saves a pick for the round that just ended', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      await renderLiveDebate(openRoundsDeciding());
+
+      fireEvent.click(await screen.findByRole('button', { name: /Extend/ }));
+      expect(mocks.savePickMutateAsync).toHaveBeenCalledWith({ roundIndex: 0, pick: 'extend' });
+    });
+
+    it('shows the saved pick after a reload', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      await renderLiveDebate(openRoundsDeciding({ my_pick: 'end' }));
+
+      expect(await screen.findByRole('button', { name: /End/ })).toHaveAttribute('aria-pressed', 'true');
+      expect(screen.getByRole('button', { name: /Extend/ })).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('renders the same card whether or not the other debater has picked', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      const view = await renderLiveDebate(openRoundsDeciding({ my_pick: 'extend', opponent_has_picked: false }));
+      const before = (await waitFor(() => pickCard() as HTMLElement)).outerHTML;
+
+      rerenderAt(view, '20:02:03.000', openRoundsDeciding({ my_pick: 'extend', opponent_has_picked: true }));
+      expect(pickCard()?.outerHTML).toBe(before);
+    });
+
+    it('closes as soon as the round resolves', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      const view = await renderLiveDebate(openRoundsDeciding({ my_pick: 'extend', opponent_has_picked: true }));
+      await waitFor(() => expect(pickCard()).toBeInTheDocument());
+
+      // Both picked: resolved at 20:02:04.2, well inside the 10 s window.
+      rerenderAt(view, '20:02:04.300', openRoundsRevealRebut());
+      await waitFor(() => expect(pickCard()).not.toBeInTheDocument());
+    });
+
+    it('asks to tap again when a pick does not save', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      mocks.savePickMutateAsync.mockRejectedValue(new GeoChatRequestError('Unavailable', null, 503));
+      await renderLiveDebate(openRoundsDeciding());
+
+      const end = await screen.findByRole('button', { name: /End/ });
+      fireEvent.click(end);
+      await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent("Couldn't save your pick. Tap again."));
+      expect(end).toHaveAttribute('aria-pressed', 'false');
+    });
+
+    it('says when the other debater drops out of the call', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      await renderLiveDebate(openRoundsDeciding());
+      await waitFor(() => expect(pickCard()).toBeInTheDocument());
+
+      act(() => emitRoomEvent('participantDisconnected', {}));
+      expect(within(pickCard() as HTMLElement).getByRole('status')).toHaveTextContent(
+        'Bob is reconnecting. Their last saved pick still counts.'
+      );
     });
   });
 

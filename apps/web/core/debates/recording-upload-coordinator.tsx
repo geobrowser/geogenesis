@@ -34,7 +34,9 @@ import {
 import { debateQueryKeys, useDebateActivity, useGeoChatAuth } from './hooks';
 import {
   RECORDING_STREAM_ORPHAN_AFTER_MS,
+  type RecordingByteSource,
   type StreamedRecordingMultipart,
+  blobByteSource,
   isMissingRouteError,
   partRange,
   putRecordingPart,
@@ -58,6 +60,7 @@ import {
   markDebateRecordingUploaded,
   observeDebateRecordingUploads,
   readDebateRecordingUploadBlob,
+  readDebateRecordingUploadBytes,
   requeueDebateRecordingParts,
   retryDebateRecordingUploadNow,
   retryFailedDebateRecordingUpload,
@@ -160,6 +163,11 @@ type RecordingUploadDependencies = {
    * it the row's own `blob` is used, as rows carried before GEO-3116.
    */
   readRecording?: (upload: DebateRecordingUpload) => Promise<Blob>;
+  /**
+   * The same bytes, read a range at a time: what a streamed upload sends its remaining parts from,
+   * so they are never held whole (GEO-2955). Without it they are read whole through `readRecording`.
+   */
+  readRecordingBytes?: (upload: DebateRecordingUpload) => Promise<RecordingByteSource>;
   /** GEO-2955: the parts of a recording that was streamed during the debate. */
   getPartUrls?: (
     debateId: string,
@@ -182,21 +190,25 @@ export async function processDebateRecordingUpload(
   let filename = upload.filename;
   let multipart = streamedMultipart(upload, dependencies);
   if (upload.stage === 'queued' || !filename) {
-    const blob = await recordingBlob(upload, dependencies);
+    let blob: Blob | null = null;
     if (multipart) {
+      const bytes = await recordingBytes(upload, dependencies);
       try {
-        await sendRemainingParts(upload, blob, multipart, dependencies);
+        await sendRemainingParts(upload, bytes, multipart, dependencies);
         filename = multipart.filename;
       } catch (error) {
-        // A geo-chat that has lost the multipart routes since the debate started. The recording
-        // is whole in the queue, so send it the old way rather than failing the upload.
-        if (!isMissingRouteError(error)) throw error;
+        // A geo-chat that has lost the multipart routes since the debate started. When the
+        // recording is whole in the queue, send it the old way rather than failing the upload. When
+        // only its tail is, the rest is in those parts; wait for the routes to come back.
+        if (!isMissingRouteError(error) || bytes.availableFrom > 0) throw error;
+        blob = await bytes.read(0, bytes.size);
         multipart = null;
         await dependencies.setMultipart?.(upload.id, null);
         capture('debate_recording_upload_fallback', { debate_id: upload.debateId, reason: 'multipart_route_missing' });
       }
     }
     if (!multipart) {
+      blob ??= await recordingBlob(upload, dependencies);
       const target = await dependencies.createUpload(upload.debateId, {
         mime_type: upload.mimeType,
         started_at_ms: startedAtMs,
@@ -235,6 +247,14 @@ export async function processDebateRecordingUpload(
   await dependencies.deleteUpload(upload.id);
 }
 
+async function recordingBytes(
+  upload: DebateRecordingUpload,
+  dependencies: RecordingUploadDependencies
+): Promise<RecordingByteSource> {
+  if (dependencies.readRecordingBytes) return dependencies.readRecordingBytes(upload);
+  return blobByteSource(await recordingBlob(upload, dependencies));
+}
+
 async function recordingBlob(upload: DebateRecordingUpload, dependencies: RecordingUploadDependencies): Promise<Blob> {
   if (dependencies.readRecording) return dependencies.readRecording(upload);
   if (upload.blob) return upload.blob;
@@ -252,13 +272,13 @@ function streamedMultipart(
 
 async function sendRemainingParts(
   upload: DebateRecordingUpload,
-  blob: Blob,
+  bytes: RecordingByteSource,
   multipart: StreamedRecordingMultipart,
   dependencies: RecordingUploadDependencies
 ) {
   const progress = { ...multipart, uploadedPartNumbers: [...multipart.uploadedPartNumbers] };
   await uploadRemainingParts(
-    blob,
+    bytes,
     multipart,
     {
       getPartUrls: (partFilename, uploadId, partNumbers) =>
@@ -547,7 +567,10 @@ export function DebateRecordingUploadCoordinator() {
   }, [activeUploadId, activeUploads]);
 
   React.useEffect(() => {
-    if (!userId || !online || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
+    // Not gated on `navigator.onLine`. Chrome can report offline on a connection that works, and a
+    // recording held back by that waited forever with nothing reported (GEO-3171). An attempt that
+    // really is offline fails at once, is classified `offline`, and spends none of the retries.
+    if (!userId || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
     const upload = activeUploads.find(
       candidate =>
         retryNowRef.current.has(candidate.id) ||
@@ -1284,6 +1307,7 @@ function recordingUploadDependencies(
       completeLocalRecordingUpload(debateId, request, getPrivyIdentityToken, accountKey),
     deleteUpload: deleteDebateRecordingUpload,
     readRecording: readDebateRecordingUploadBlob,
+    readRecordingBytes: readDebateRecordingUploadBytes,
     getPartUrls: (debateId, filename, uploadId, partNumbers) =>
       getLocalRecordingPartUrls(
         debateId,
