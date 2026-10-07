@@ -288,6 +288,107 @@ describe('DebateGatewayClient', () => {
     expect(invalidateQueries).toHaveBeenCalledTimes(expectedKeys.length);
   });
 
+  describe('lobby card patches', () => {
+    const lobbiesKey = ['debates', 'account', 'user-a', 'lobbies'];
+    const row = (lobbyId: string, headcount: number, viewerReminded = false) => ({
+      lobby_id: lobbyId,
+      name: lobbyId,
+      scheduled: false,
+      starts_at: '2026-10-07T12:00:00Z',
+      opens_at: '2026-10-07T12:00:00Z',
+      open: true,
+      hosts: [],
+      headcount,
+      avatars: [],
+      debating_count: 0,
+      reminder_count: 0,
+      viewer_reminded: viewerReminded,
+      viewer_on_roster: false,
+    });
+    const card = (lobbyId: string, headcount: number, asOf: string) => {
+      const { viewer_reminded: _r, viewer_on_roster: _o, ...lobby } = row(lobbyId, headcount);
+      return { status: 'listed', insert: false, as_of: asOf, lobby };
+    };
+
+    async function started() {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+    }
+
+    let eventCount = 0;
+    async function lobbiesChanged(payload: Record<string, unknown>) {
+      eventCount += 1;
+      sockets[0]!.receive('EVENT', {
+        event_id: `lobbies-${eventCount}`,
+        event_type: 'debate.lobbies_changed',
+        payload,
+      });
+      await flushInvalidations();
+    }
+
+    const cachedIds = () =>
+      queryClient
+        .getQueryData<{ lobbies: { lobby_id: string; headcount: number }[] }>(lobbiesKey)
+        ?.lobbies.map(lobby => `${lobby.lobby_id}:${lobby.headcount}`);
+
+    it('patches the cached list without refetching it, keeping the viewer’s own fields', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, true), row('bb', 2)] });
+
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 5, '2026-10-07T12:00:01Z') });
+
+      expect(cachedIds()).toEqual(['bb:5', 'aa:3']);
+      expect(
+        queryClient.getQueryData<{ lobbies: { viewer_reminded: boolean }[] }>(lobbiesKey)?.lobbies[1]
+      ).toMatchObject({ viewer_reminded: true });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbiesKey }));
+      expectInvalidated(invalidateQueries, {
+        queryKey: [...lobbiesKey.slice(0, 3), 'lobby', 'bb'],
+        refetchType: 'active',
+      });
+    });
+
+    it('drops a patch older than the last one applied to that row', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 6, '2026-10-07T12:00:05Z') });
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:02Z') });
+
+      expect(cachedIds()).toEqual(['aa:6']);
+    });
+
+    it('drops a removed row', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3), row('bb', 2)] });
+
+      await lobbiesChanged({ lobby_id: 'AA', lobby_card: { status: 'removed' } });
+
+      expect(cachedIds()).toEqual(['bb:2']);
+    });
+
+    it.each([
+      ['no lobby_card', {}],
+      ['an unknown status', { lobby_card: { status: 'later' } }],
+      ['a listed card without as_of', { lobby_card: { ...card('aa', 1, ''), as_of: undefined } }],
+    ])('refetches the list for %s', async (_label, extra) => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+
+      await lobbiesChanged({ lobby_id: 'aa', ...extra });
+
+      expectInvalidated(invalidateQueries, { queryKey: lobbiesKey, refetchType: 'active' });
+      expect(cachedIds()).toEqual(['aa:3']);
+    });
+  });
+
   it('subscribes to the matchmaking scope and reconciles every hub query on confirmation', async () => {
     const release = client.retainScope({ scope: 'matchmaking' });
 

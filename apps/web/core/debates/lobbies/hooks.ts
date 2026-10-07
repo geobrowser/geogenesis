@@ -49,7 +49,11 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-/** The side panel list. No polling: `debate.lobbies_changed` refetches it. */
+/**
+ * The side panel list. No polling: `debate.lobbies_changed` patches it, or refetches it when the
+ * event carries no card. Patches drift from the list's caps and stop while the panel is closed, so
+ * every mount reloads it.
+ */
 export function useDebateLobbies(enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -58,6 +62,7 @@ export function useDebateLobbies(enabled = true) {
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && ready && authenticated,
+    refetchOnMount: 'always',
   });
 }
 

@@ -13,6 +13,7 @@ import {
 } from '~/core/responses/claim-response-summary-query-keys';
 
 import {
+  type DebateLobbiesResponse,
   GeoChatRequestError,
   type GeoChatSession,
   type GetPrivyIdentityToken,
@@ -21,6 +22,7 @@ import {
   getGeoChatSession,
   resetGeoChatSession,
 } from './api';
+import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
 
 export type DebateGatewaySession = GeoChatSession;
 
@@ -65,6 +67,8 @@ type DebateEventPayload = {
   debate_id?: string;
   rematch_session_id?: string;
   lobby_id?: string;
+  /** On `debate.lobbies_changed`; see `parseLobbyCardPatch`. */
+  lobby_card?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -141,6 +145,8 @@ export class DebateGatewayClient {
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
+  /** The newest `lobby_card.as_of` applied per dashless lobby id, so a late patch is dropped. */
+  private readonly lobbyCardAsOf = new Map<string, number>();
 
   private snapshot: DebateGatewaySnapshot = {
     status: 'idle',
@@ -242,6 +248,7 @@ export class DebateGatewayClient {
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
+    this.lobbyCardAsOf.clear();
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false, pauseReason: null });
   }
@@ -473,7 +480,9 @@ export class DebateGatewayClient {
       // GEO-3133. Sent to matchmaking subscribers: the lobbies card, and a lobby page whose viewer
       // is not inside, which `debate.lobby_changed` does not reach.
       case 'debate.lobbies_changed':
-        this.queueAccountQuery('lobbies');
+        if (!this.patchLobbies(parseLobbyCardPatch(identifiers.lobby_id, identifiers.lobby_card))) {
+          this.queueAccountQuery('lobbies');
+        }
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
@@ -481,6 +490,23 @@ export class DebateGatewayClient {
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
     }
+  }
+
+  /** Patches the cached lobbies list in place. False when the event should refetch it instead. */
+  private patchLobbies(patch: DebateLobbyCardPatch | null) {
+    if (!patch || !this.accountKey) return false;
+
+    if (patch.status === 'listed') {
+      const id = dashlessId(patch.lobby.lobby_id);
+      const lastAsOf = this.lobbyCardAsOf.get(id);
+      if (lastAsOf !== undefined && patch.asOf < lastAsOf) return true;
+      this.lobbyCardAsOf.set(id, patch.asOf);
+    }
+
+    this.queryClient.setQueryData<DebateLobbiesResponse>(['debates', 'account', this.accountKey, 'lobbies'], list =>
+      list ? applyLobbyCardPatch(list, patch) : list
+    );
+    return true;
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {

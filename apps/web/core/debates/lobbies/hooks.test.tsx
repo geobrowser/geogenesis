@@ -13,6 +13,7 @@ const api = vi.hoisted(() => ({
   getDebateLobby: vi.fn(),
   stepOutOfDebateLobby: vi.fn(),
   endDebateLobbyStepOut: vi.fn(),
+  listDebateLobbies: vi.fn(),
 }));
 
 vi.mock('../api', async importOriginal => ({ ...(await importOriginal<typeof import('../api')>()), ...api }));
@@ -23,7 +24,7 @@ vi.mock('../hooks', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, useDebateLobby, useLobbyPresence } = await import('./hooks');
+const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useLobbyPresence } = await import('./hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
 
@@ -583,4 +584,20 @@ it('moves a ban this tab heard to the removed screen once unbanned, and Rejoin c
   await act(() => result.current.join(false, true));
   expect(joins().at(-1)?.[1]).toMatchObject({ joined: true, rejoin: true });
   expect(result.current.state.status).toBe('joined');
+});
+
+// Card patches stop while the panel is closed, so a reopen inside the stale window still reloads.
+it('reloads the lobbies list on every mount', async () => {
+  api.listDebateLobbies.mockResolvedValue({ lobbies: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false, staleTime: 30_000 } } });
+  const shared = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  const first = renderHook(() => useDebateLobbies(), { wrapper: shared });
+  await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+  first.unmount();
+
+  renderHook(() => useDebateLobbies(), { wrapper: shared });
+  await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
 });
