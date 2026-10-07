@@ -231,6 +231,19 @@ describe('useLobbyPresence', () => {
     expect(joins()).toHaveLength(1);
   });
 
+  // GEO-3134: a kick ends the step-out, and the debate still routes back to the lobby.
+  it('does not join a viewer a host removed, even back from a debate, until they choose to', async () => {
+    requestLobbyRejoin('lobby1');
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true, false, false, true), { wrapper });
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+    expect(joins()).toHaveLength(0);
+    expect(consumeLobbyRejoin('lobby1')).toBe(false);
+
+    await act(() => result.current.join(false));
+    expect(joins()).toHaveLength(1);
+    expect(result.current.state.status).toBe('joined');
+  });
+
   it('still returns to the lobby when the server stepped the viewer out before the routing', async () => {
     const { result } = await goneAfterBeat('stepped_out');
     await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));

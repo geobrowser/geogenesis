@@ -2343,6 +2343,8 @@ export type DebateLobbyView = {
     /** This viewer has a live connection here; `false` while stepped out. */
     connected: boolean;
     stepped_out: boolean;
+    /** Removed by a host and not rejoined since; the page does not join by itself. GEO-3134. */
+    removed?: boolean;
     /** GEO-3134; absent from a geo-chat that predates moderation. */
     hand_raised_at?: string | null;
     /** The latest action another person took on the viewer here; never `end`. */

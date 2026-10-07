@@ -168,7 +168,13 @@ export type LobbyPresenceState =
  * Presence in one lobby: joins once admitted, heartbeats while joined, and leaves on unmount,
  * `pagehide` or Leave. A heartbeat answering `lapsed` joins again.
  */
-export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut = false, connected = false) {
+export function useLobbyPresence(
+  lobbyId: string,
+  admitted: boolean,
+  steppedOut = false,
+  connected = false,
+  removed = false
+) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
@@ -321,9 +327,11 @@ export function useLobbyPresence(lobbyId: string, admitted: boolean, steppedOut 
     if (!admitted || status !== 'idle') return;
     // Consumed on every arrival so a flag left by a failed leave cannot outlive it.
     const rejoin = consumeLobbyRejoin(lobbyId);
-    if (steppedOut && !rejoin) setState({ status: 'stepped_out' });
+    // A host removed them, possibly mid-debate: coming back is their call, even after Back to the room.
+    if (removed) setState({ status: 'dropped', reason: 'removed' });
+    else if (steppedOut && !rejoin) setState({ status: 'stepped_out' });
     else void join(false);
-  }, [admitted, join, lobbyId, setState, status, steppedOut]);
+  }, [admitted, join, lobbyId, removed, setState, status, steppedOut]);
 
   const beatNowRef = React.useRef<(() => void) | null>(null);
 
