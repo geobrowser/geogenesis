@@ -374,7 +374,7 @@ describe('open rounds clock', () => {
   it('8.2 – 8.4 deciding: counts down the decision window whatever has been picked', () => {
     for (const debate of [
       deciding(),
-      deciding({ my_pick: 'rebut', opponent_has_picked: false }),
+      deciding({ my_pick: 'extend', opponent_has_picked: false }),
       deciding({ my_pick: null, opponent_has_picked: true }),
       deciding({ my_pick: 'end', opponent_has_picked: true }),
     ]) {
@@ -400,7 +400,7 @@ describe('open rounds clock', () => {
     expect(recordingWindowForDebate(debate)).toEqual({ startAtMs: start, endAtMs: null });
   });
 
-  it('8.5 reveal → Rebut: a 3 s result window that counts Alice into round 1, then round 1', () => {
+  it('8.5 reveal → Extend: a 3 s result window that counts Alice into round 1, then round 1', () => {
     const debate = revealRebut();
     const reveal = countdownAt(debate, at('20:02:05.000'));
     expect(reveal).toMatchObject({
@@ -408,7 +408,7 @@ describe('open rounds clock', () => {
       activeSlot: null,
       turnIndex: 1,
       remainingSeconds: 3,
-      openRounds: { phase: 'result', roundIndex: 0, outcome: 'rebut', nextPhaseStartsAtMs: at('20:02:07.200') },
+      openRounds: { phase: 'result', roundIndex: 0, outcome: 'extend', nextPhaseStartsAtMs: at('20:02:07.200') },
     });
     // Round 1 is decided now, so the opener is counted in and the label names it.
     expect(localTurnStartsInSeconds(debate, reveal, 1)).toBe(3);
@@ -504,8 +504,8 @@ describe('open rounds clock', () => {
     // The room keeps no timing state of its own: a reloaded page re-reads the row and the server
     // clock, so the same row at the same instant must give the same countdown.
     const now = at('20:02:06.400');
-    const before = countdownAt(deciding({ my_pick: 'rebut', opponent_has_picked: true }), now);
-    const reloadedRow = JSON.parse(JSON.stringify(deciding({ my_pick: 'rebut', opponent_has_picked: true })));
+    const before = countdownAt(deciding({ my_pick: 'extend', opponent_has_picked: true }), now);
+    const reloadedRow = JSON.parse(JSON.stringify(deciding({ my_pick: 'extend', opponent_has_picked: true })));
     const after = countdownAt(reloadedRow, now);
     expect(after).toEqual(before);
     expect(after).toMatchObject({ remainingSeconds: 4, openRounds: { phase: 'deciding', roundIndex: 0 } });
