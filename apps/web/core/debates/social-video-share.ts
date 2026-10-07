@@ -192,7 +192,7 @@ export async function handoffPreparedSocialVideo({
   text?: string;
   file: File;
   downloadUrl: string;
-  onUnshareable?: () => void;
+  onUnshareable?: (info: { userActivationSpent: boolean }) => void;
 }): Promise<SocialVideoHandoffOutcome> {
   const method = getPreparedSocialVideoHandoffMethod(file);
 
@@ -220,7 +220,7 @@ export async function handoffPreparedSocialVideo({
         // does: the retry button then looks like a remedy and is a dead end.
         if (!isUnretryableShareError(error)) throw error;
 
-        if (onUnshareable) onUnshareable();
+        if (onUnshareable) onUnshareable({ userActivationSpent: true });
         else downloadPreparedVideo(downloadUrl, file.name);
 
         const outcome: SocialVideoHandoffOutcome = onUnshareable ? 'unshareable' : 'download';
@@ -234,7 +234,7 @@ export async function handoffPreparedSocialVideo({
         return outcome;
       }
     } else if (onUnshareable) {
-      onUnshareable();
+      onUnshareable({ userActivationSpent: false });
       captureSocialVideoEvent('debate_social_video_handoff_resolved', { debate_id: debateId, method: 'unshareable' });
       return 'unshareable';
     } else {

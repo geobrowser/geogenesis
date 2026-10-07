@@ -70,6 +70,8 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const [isTouchDevice, setIsTouchDevice] = React.useState(false);
   React.useEffect(() => setIsTouchDevice(window.matchMedia?.('(pointer: coarse)').matches ?? false), []);
 
+  const [videoShareRefused, setVideoShareRefused] = React.useState(false);
+
   const sharingRef = React.useRef(false);
 
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`;
@@ -111,7 +113,12 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   };
 
   const canShareVideoToX =
-    canShareVideo && isTouchDevice && download.status === 'ready' && !!download.file && !!download.downloadUrl;
+    canShareVideo &&
+    isTouchDevice &&
+    !videoShareRefused &&
+    download.status === 'ready' &&
+    !!download.file &&
+    !!download.downloadUrl;
 
   const onXLink = () => {
     const url = shareUrl();
@@ -137,9 +144,14 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
         text: `${shareMessage(X_TWEET_MAX - url.length - 1)} ${url}`,
         file: download.file,
         downloadUrl: download.downloadUrl,
-        onUnshareable: () => {
+        onUnshareable: ({ userActivationSpent }) => {
           fellBackToComposer = true;
-          onXLink();
+          setVideoShareRefused(true);
+          if (!userActivationSpent) {
+            onXLink();
+            return;
+          }
+          setToast(<span>Couldn&apos;t attach the video. Tap X again to post the link.</span>);
         },
       });
 

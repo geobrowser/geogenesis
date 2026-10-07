@@ -17,12 +17,13 @@ const mocks = vi.hoisted(() => ({
   coarsePointer: false,
   handoff: vi.fn(),
   windowOpen: vi.fn(),
+  toast: vi.fn(),
 }));
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 vi.mock('~/core/debates/hooks', () => ({
   useDebateMedia: () => ({ data: { artifacts: [{ kind: 'social_video' }] } }),
 }));
-vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, vi.fn()] }));
+vi.mock('~/core/hooks/use-toast', () => ({ useToast: () => [null, mocks.toast] }));
 vi.mock('../social-video-share', () => ({
   canNativeShareVideo: () => mocks.canShareVideo,
   downloadPreparedVideo: mocks.download,
@@ -60,6 +61,7 @@ beforeEach(() => {
   mocks.handoff.mockReset().mockResolvedValue('native_share');
   vi.stubGlobal('open', mocks.windowOpen);
   mocks.windowOpen.mockReset();
+  mocks.toast.mockReset();
 
   vi.stubGlobal(
     'matchMedia',
@@ -183,12 +185,18 @@ it('keeps the X composer on a desktop pointer, whatever canShare says', () => {
   expect(mocks.windowOpen.mock.calls[0][0]).toContain('twitter.com/intent/tweet');
 });
 
-it('opens the X composer when the share is refused, rather than downloading', async () => {
-  mocks.canShareVideo = true;
-  mocks.handoff.mockImplementation(async ({ onUnshareable }: { onUnshareable?: () => void }) => {
-    onUnshareable?.();
+type Unshareable = { onUnshareable?: (info: { userActivationSpent: boolean }) => void };
+const refuses =
+  (userActivationSpent: boolean) =>
+  async ({ onUnshareable }: Unshareable) => {
+    onUnshareable?.({ userActivationSpent });
     return 'unshareable';
-  });
+  };
+
+//Refused before anything was shared — `canShare` said no.
+it('opens the X composer when the file was never shareable, rather than downloading', async () => {
+  mocks.canShareVideo = true;
+  mocks.handoff.mockImplementation(refuses(false));
   mount();
 
   fireEvent.click(screen.getByRole('button', { name: 'Share on X' }));
@@ -196,6 +204,38 @@ it('opens the X composer when the share is refused, rather than downloading', as
 
   expect(mocks.windowOpen.mock.calls[0][0]).toContain('twitter.com/intent/tweet');
   expect(mocks.download).not.toHaveBeenCalled();
+});
+
+/*
+ * `share()` consumes transient activation before its promise settles, so a refusal coming back
+ * from it leaves nothing to open a window with — the popup blocker takes it and the fallback does
+ * nothing at all. Ask for a fresh tap, which arrives with its own activation.
+ */
+it('asks for another tap when the refusal arrives after the activation is spent', async () => {
+  mocks.canShareVideo = true;
+  mocks.handoff.mockImplementation(refuses(true));
+  mount();
+
+  fireEvent.click(screen.getByRole('button', { name: 'Share on X' }));
+  await vi.waitFor(() => expect(mocks.toast).toHaveBeenCalled());
+
+  expect(mocks.windowOpen).not.toHaveBeenCalled();
+  expect(mocks.download).not.toHaveBeenCalled();
+});
+
+it('takes the composer on the next tap after a refusal', async () => {
+  mocks.canShareVideo = true;
+  mocks.handoff.mockImplementation(refuses(true));
+  mount();
+
+  const x = screen.getByRole('button', { name: 'Share on X' });
+  fireEvent.click(x);
+  await vi.waitFor(() => expect(mocks.toast).toHaveBeenCalled());
+
+  fireEvent.click(x);
+
+  expect(mocks.handoff).toHaveBeenCalledTimes(1);
+  expect(mocks.windowOpen.mock.calls[0][0]).toContain('twitter.com/intent/tweet');
 });
 
 it('ignores a second tap while the share sheet is open', async () => {

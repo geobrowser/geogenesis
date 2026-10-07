@@ -97,7 +97,8 @@ describe('handoffPreparedSocialVideo', () => {
       })
     ).resolves.toBe('unshareable');
 
-    expect(onUnshareable).toHaveBeenCalledTimes(1);
+    // `share()` consumes transient activation before it settles.
+    expect(onUnshareable).toHaveBeenCalledWith({ userActivationSpent: true });
     expect(mocks.capture).toHaveBeenCalledWith('debate_social_video_handoff_resolved', {
       debate_id: 'debate-1',
       method: 'unshareable',
@@ -124,7 +125,7 @@ describe('handoffPreparedSocialVideo', () => {
       })
     ).resolves.toBe('unshareable');
 
-    expect(onUnshareable).toHaveBeenCalledTimes(1);
+    expect(onUnshareable).toHaveBeenCalledWith({ userActivationSpent: false });
     expect(mocks.share).not.toHaveBeenCalled();
   });
 
