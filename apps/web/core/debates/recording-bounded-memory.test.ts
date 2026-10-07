@@ -390,7 +390,7 @@ describe('bounded recording memory', () => {
         await savedChunks(live.id, index + 1);
       }
       const total = new Blob(chunks).size;
-      await vi.waitFor(() => expect(wire.parts.size).toBe(Math.floor(total / 64)));
+      await vi.waitFor(() => expect(wire.parts.size).toBe(Math.floor(total / 64)), { timeout: 10_000 });
 
       const multipart = await live.finish();
       const recording = live.recording();
@@ -440,6 +440,9 @@ describe('bounded recording memory', () => {
         live.append(chunk, 1_000 + index * 1_000);
         await savedChunks(live.id, index + 1);
       }
+      // The live parts land on the streamer's own timers, not in step with the appends above: on a
+      // busy machine one could still be waiting to go out when the recorder stopped.
+      await vi.waitFor(() => expect(wire.parts.size).toBeGreaterThanOrEqual(liveParts), { timeout: 10_000 });
       const multipart = await live.finish();
       expect(multipart?.uploadedPartNumbers).toEqual(Array.from({ length: liveParts }, (_, index) => index + 1));
       // The connection is back by the time the queue sends the rest.
@@ -482,7 +485,8 @@ describe('bounded recording memory', () => {
       expect(same(await assembled(parts), today)).toBe(true);
       // The first timeslice — the WebM header — opens part 1.
       expect(same((await bufferOf(parts.get(1)!)).subarray(0, chunks[0].size), await bufferOf(chunks[0]))).toBe(true);
-    });
+      // ~24 MB through fake IndexedDB: well under a second alone, but 3-4 s in a busy full run.
+    }, 30_000);
 
     it('recovers the whole recording when parts fail partway through the debate', async () => {
       const chunks = timeslices(60, 300, 13);
