@@ -17,45 +17,38 @@ afterEach(() => {
 });
 
 describe('openRoundRevealStep', () => {
-  it('turns the picks, then shows the result', () => {
-    expect(openRoundRevealStep(0, 'end', 3_000)).toBe('flip');
-    expect(openRoundRevealStep(1_349, 'end', 3_000)).toBe('flip');
-    expect(openRoundRevealStep(1_350, 'end', 3_000)).toBe('result');
-    expect(openRoundRevealStep(2_999, 'end', 3_000)).toBe('result');
+  it('turns the picks, then shows the result for the rest of the window', () => {
+    expect(openRoundRevealStep(0, 3_000)).toBe('flip');
+    expect(openRoundRevealStep(1_349, 3_000)).toBe('flip');
+    expect(openRoundRevealStep(1_350, 3_000)).toBe('result');
+    expect(openRoundRevealStep(2_999, 3_000)).toBe('result');
   });
 
-  it('counts the opener in for the last fifth of the window after an Extend', () => {
-    expect(openRoundRevealStep(2_399, 'extend', 3_000)).toBe('result');
-    expect(openRoundRevealStep(2_400, 'extend', 3_000)).toBe('countIn');
-  });
-
-  it('stretches every step with a longer window', () => {
-    expect(openRoundRevealStep(1_800, 'extend', 5_000)).toBe('flip');
-    expect(openRoundRevealStep(3_500, 'extend', 5_000)).toBe('result');
-    expect(openRoundRevealStep(4_000, 'extend', 5_000)).toBe('countIn');
+  it('stretches with a longer window', () => {
+    expect(openRoundRevealStep(2_000, 5_000)).toBe('flip');
+    expect(openRoundRevealStep(2_250, 5_000)).toBe('result');
   });
 });
 
 describe('useOpenRoundRevealStep', () => {
   it('is null outside a result window', () => {
-    const { result } = renderHook(() => useOpenRoundRevealStep(null, null, 3_000));
+    const { result } = renderHook(() => useOpenRoundRevealStep(null, 3_000));
     expect(result.current).toBeNull();
   });
 
-  it('reaches each step on time between the room clock ticks', () => {
+  it('reaches the result on time between the room clock ticks', () => {
     vi.useFakeTimers();
-    const { result } = renderHook(() => useOpenRoundRevealStep(600, 'extend', 3_000));
+    const { result } = renderHook(() => useOpenRoundRevealStep(600, 3_000));
     expect(result.current).toBe('flip');
 
-    act(() => vi.advanceTimersByTime(1_350 - 600));
+    act(() => vi.advanceTimersByTime(1_350 - 601));
+    expect(result.current).toBe('flip');
+    act(() => vi.advanceTimersByTime(1));
     expect(result.current).toBe('result');
-
-    act(() => vi.advanceTimersByTime(2_400 - 1_350));
-    expect(result.current).toBe('countIn');
   });
 
   it('follows the room clock when it ticks', () => {
-    const { result, rerender } = renderHook(({ elapsed }) => useOpenRoundRevealStep(elapsed, 'end', 3_000), {
+    const { result, rerender } = renderHook(({ elapsed }) => useOpenRoundRevealStep(elapsed, 3_000), {
       initialProps: { elapsed: 200 },
     });
     rerender({ elapsed: 1_600 });
@@ -87,13 +80,19 @@ describe('OpenRoundPickReveal', () => {
 });
 
 describe('OpenRoundResultOverlay', () => {
-  it('announces a new round and who opens it', () => {
-    const { container } = render(<OpenRoundResultOverlay result={{ kind: 'round', round: 2, opener: 'Alice' }} />);
-    expect(container).toHaveTextContent('Round2Alice opens');
+  it('announces a new round and counts down to whoever opens it', () => {
+    const { container } = render(
+      <OpenRoundResultOverlay result={{ kind: 'round', round: 2, opener: 'Alice', seconds: 2 }} />
+    );
+    expect(container).toHaveTextContent('Round2Alice opens in 2');
   });
 
-  it('says "You open" to the opener', () => {
-    render(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: 'You' }} />);
+  it('says "You open" to the opener, and drops the count once the round is due', () => {
+    const { rerender } = render(
+      <OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: 'You', seconds: 1 }} />
+    );
+    expect(screen.getByText('You open in 1')).toBeInTheDocument();
+    rerender(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: 'You', seconds: 0 }} />);
     expect(screen.getByText('You open')).toBeInTheDocument();
   });
 
@@ -110,7 +109,9 @@ describe('OpenRoundResultOverlay', () => {
   });
 
   it('drops the burst for reduced motion', () => {
-    const { container } = render(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: 'You' }} />);
+    const { container } = render(
+      <OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: 'You', seconds: 2 }} />
+    );
     expect(container.querySelector('.motion-reduce\\:hidden')).toBeInTheDocument();
   });
 });

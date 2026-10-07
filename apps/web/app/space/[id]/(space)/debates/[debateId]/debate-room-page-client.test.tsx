@@ -5362,7 +5362,7 @@ describe('DebateRoomPageClient', () => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     });
 
-    it('turns both picks over, then announces the new round and who opens it, then counts the opener in', async () => {
+    it('turns both picks over, then announces the new round and counts down to its opener', async () => {
       // Resolved Extend at 20:02:04.2; round 1 starts at 20:02:07.2.
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:04.300'));
       const view = await renderLiveDebate(openRoundsRevealRebut());
@@ -5382,24 +5382,20 @@ describe('DebateRoomPageClient', () => {
 
       rerenderAt(view, openRoundsAt('20:02:05.700'), openRoundsRevealRebut());
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
-      expect(result()).toHaveTextContent('Round1You open');
+      expect(result()).toHaveTextContent('Round1You open in 2');
+      expect(document.querySelector('[data-debate-round-indicator]')).toHaveAttribute(
+        'data-debate-round-indicator',
+        '1'
+      );
       expect(reveal('local')).toBeNull();
       expect(chips('local')).toHaveAttribute('data-tile-chips', 'hidden');
       expect(chips('remote')).toHaveAttribute('data-tile-chips', 'hidden');
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
 
-      // "Round 1" holds until 80% of the window.
-      rerenderAt(view, openRoundsAt('20:02:06.500'), openRoundsRevealRebut());
-      expect(result()).toHaveAttribute('data-open-round-result', 'round');
-
+      // "Round 1" holds to the end of the window, and is itself the count-in.
       rerenderAt(view, openRoundsAt('20:02:06.700'), openRoundsRevealRebut());
-      await waitFor(() => expect(within(debateVideoTile('local')).getByText('Rebut in')).toBeInTheDocument());
-      expect(result()).toBeNull();
-      expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
-      expect(document.querySelector('[data-debate-round-indicator]')).toHaveAttribute(
-        'data-debate-round-indicator',
-        '1'
-      );
+      await waitFor(() => expect(result()).toHaveTextContent('You open in 1'));
+      expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
 
     it('names the other debater as the opener on their screen', async () => {

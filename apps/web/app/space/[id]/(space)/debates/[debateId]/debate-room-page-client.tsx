@@ -2998,7 +2998,6 @@ function DebateRecordingModal({
   const revealOutcome = openRoundResultPhase?.outcome ?? (openRoundWrapHeld ? 'end' : null);
   const timedRevealStep = useOpenRoundRevealStep(
     openRoundResultPhase ? countdown.elapsedMs : null,
-    openRoundResultPhase?.outcome ?? null,
     debate.open_rounds?.result_window_ms ?? 0
   );
   const revealStep: OpenRoundRevealStep | null = openRoundWrapHeld ? 'result' : timedRevealStep;
@@ -3030,6 +3029,8 @@ function DebateRecordingModal({
               debate.first_participant_slot === localSlot
                 ? 'You'
                 : speakerNameForSlot(debate, debate.first_participant_slot),
+            // The window ends where the new round starts, so this is the opener's count-in.
+            seconds: countdown.remainingSeconds,
           }
         : {
             kind: 'wrap',
@@ -3071,9 +3072,8 @@ function DebateRecordingModal({
       <span className="hidden mobile:inline">{lastWord === 'debate' ? 'Final word' : 'Last word'}</span>
     </DebateTileChip>
   ) : null;
-  // During a reveal the opener's count-in waits for the result to have been read.
-  const localUpcomingSeconds =
-    openRoundResultPhase && revealStep !== 'countIn' ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
+  // During a reveal the announcement of the new round carries the count-in.
+  const localUpcomingSeconds = openRoundResultPhase ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
   const localUpcomingLabel =
     countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
@@ -3286,9 +3286,9 @@ function DebateRecordingModal({
         <div className="mb-3 flex w-full max-w-[430px] items-center justify-between gap-2">
           {countdown.openRounds && debate.open_rounds && (
             <DebateRoundIndicator
-              // Once the new round has been announced, the counter moves to it for the count-in.
+              // Once the new round is announced, the counter moves to it.
               phase={
-                openRoundResultPhase && revealStep === 'countIn'
+                openRoundResultPhase?.outcome === 'extend' && revealStep === 'result'
                   ? {
                       phase: 'speaking',
                       roundIndex: openRoundResultPhase.roundIndex + 1,

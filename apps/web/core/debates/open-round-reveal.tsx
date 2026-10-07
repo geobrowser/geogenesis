@@ -15,20 +15,17 @@ import { recordingLabelTextShadow, recordingOverlayTextShadow } from './debate-v
  * `decision_resolved_at`.
  *
  * - `flip`: each tile's card turns from the debater's name to their pick.
- * - `result`: what the picks mean. Two Extends: "Round N" and who opens it. Anything else: "That's a
- *   wrap", with the picks left up so the split explains itself.
- * - `countIn`: Extend only. The opener gets the room's usual count-in into the new round.
+ * - `result`: what the picks mean, for the rest of the window. Two Extends: "Round N" and who opens
+ *   it, counting down to the new round, so the announcement is the opener's count-in. Anything
+ *   else: "That's a wrap", with the picks left up so the split explains itself.
  *
  * The server starts the next round when the window closes, so an Extend's reveal cannot outlast it.
- * The steps are shares of the window rather than fixed times, so a longer window lengthens each.
- * The count-in gets the smallest share: inside the window it only ever reads "1".
+ * The flip is a share of the window rather than a fixed time, so a longer window lengthens both.
  */
-export type OpenRoundRevealStep = 'flip' | 'result' | 'countIn';
+export type OpenRoundRevealStep = 'flip' | 'result';
 
 /** The share of the window the picks have to turn and be read before the result takes over. */
 export const OPEN_ROUND_FLIP_SHARE = 0.45;
-/** The share after which an Extend's result gives way to the opener's count-in. */
-export const OPEN_ROUND_COUNT_IN_SHARE = 0.8;
 
 /**
  * How long "That's a wrap" stays up into thanking, before the end card. An End has nothing to start
@@ -36,38 +33,35 @@ export const OPEN_ROUND_COUNT_IN_SHARE = 0.8;
  */
 export const OPEN_ROUND_WRAP_HOLD_MS = 1_500;
 
-function stepBoundaries(windowMs: number) {
-  return [Math.round(windowMs * OPEN_ROUND_FLIP_SHARE), Math.round(windowMs * OPEN_ROUND_COUNT_IN_SHARE)] as const;
+function flipEndsMs(windowMs: number) {
+  return Math.round(windowMs * OPEN_ROUND_FLIP_SHARE);
 }
 
-export function openRoundRevealStep(elapsedMs: number, outcome: OpenRoundPick, windowMs: number): OpenRoundRevealStep {
-  const [flipEndsMs, countInStartsMs] = stepBoundaries(windowMs);
-  if (elapsedMs < flipEndsMs) return 'flip';
-  if (outcome === 'extend' && elapsedMs >= countInStartsMs) return 'countIn';
-  return 'result';
+export function openRoundRevealStep(elapsedMs: number, windowMs: number): OpenRoundRevealStep {
+  return elapsedMs < flipEndsMs(windowMs) ? 'flip' : 'result';
 }
 
 /**
  * The reveal step for a result window `elapsedMs` into it, or `null` outside one.
  *
  * The room's countdown only ticks every 500 ms, which would let the two screens change step up to
- * half a second apart. This schedules its own re-render at each step boundary instead, measured from
+ * half a second apart. This schedules its own re-render at the step boundary instead, measured from
  * the last `elapsedMs` the room gave it.
  */
-export function useOpenRoundRevealStep(elapsedMs: number | null, outcome: OpenRoundPick | null, windowMs: number) {
+export function useOpenRoundRevealStep(elapsedMs: number | null, windowMs: number) {
   const [reached, setReached] = React.useState<{ from: number; to: number } | null>(null);
   const effectiveMs = elapsedMs === null ? null : reached?.from === elapsedMs ? reached.to : elapsedMs;
 
   React.useEffect(() => {
     if (elapsedMs === null || effectiveMs === null) return;
-    const next = stepBoundaries(windowMs).find(boundary => boundary > effectiveMs);
-    if (next === undefined) return;
+    const next = flipEndsMs(windowMs);
+    if (next <= effectiveMs) return;
     const timer = window.setTimeout(() => setReached({ from: elapsedMs, to: next }), next - effectiveMs);
     return () => window.clearTimeout(timer);
   }, [elapsedMs, effectiveMs, windowMs]);
 
-  if (effectiveMs === null || outcome === null) return null;
-  return openRoundRevealStep(effectiveMs, outcome, windowMs);
+  if (effectiveMs === null) return null;
+  return openRoundRevealStep(effectiveMs, windowMs);
 }
 
 /**
@@ -120,7 +114,8 @@ export function OpenRoundPickReveal({
 }
 
 export type OpenRoundResult =
-  | { kind: 'round'; round: number; opener: string }
+  /** `seconds` until the new round starts, on the room's clock; `0` once it is due. */
+  | { kind: 'round'; round: number; opener: string; seconds: number }
   | { kind: 'wrap'; note: string | null }
   | { kind: 'max'; rounds: number };
 
@@ -132,9 +127,7 @@ export type OpenRoundResult =
 export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) {
   const pill =
     result.kind === 'round'
-      ? result.opener === 'You'
-        ? 'You open'
-        : `${result.opener} opens`
+      ? `${openRoundOpenerLine(result.opener)}${result.seconds > 0 ? ` in ${result.seconds}` : ''}`
       : result.kind === 'wrap'
         ? result.note
         : `${result.rounds} rebuttal rounds`;
@@ -182,6 +175,11 @@ export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) 
       </div>
     </div>
   );
+}
+
+/** "You open", "Alice opens". */
+export function openRoundOpenerLine(opener: string) {
+  return opener === 'You' ? 'You open' : `${opener} opens`;
 }
 
 /** Why a debate ended, when the reason is a missing pick. A split needs no line: the cards say it. */
