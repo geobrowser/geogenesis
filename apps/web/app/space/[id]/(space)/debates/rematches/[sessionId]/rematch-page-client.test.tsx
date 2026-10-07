@@ -226,6 +226,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 vi.mock('next/navigation', () => ({
+  usePathname: () => '/debate/room-1',
   useRouter: () => ({ replace: mocks.replace, back: mocks.back, push: mocks.push }),
 }));
 
@@ -3786,7 +3787,7 @@ describe('DebateRematchPageClient', () => {
 
     fireEvent.click(claim);
 
-    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_SHARED, SPACE_1, false);
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_SHARED, SPACE_1, false, { forceRequestedSpace: true });
   });
 
   // geo-chat now carries readiness on the rematch claims themselves — the rows the picker already

@@ -82,6 +82,7 @@ import {
   useParticipantPositions,
 } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { useRegisterRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { RequestDebateControl } from '~/core/debates/request-debate-control';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
@@ -2536,6 +2537,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     return extracted ? <DebateTurnCaption speaker={debateSpeakerOf(extracted)} /> : null;
   };
 
+  useRegisterRematchPanelContext({
+    sessionId,
+    session,
+    currentUserId,
+    opponentPresent: !inDebateRoom || (roomPresence?.opponentPresent ?? false),
+    canPublishDebateIn,
+    createRequest,
+  });
+
   const renderClaimCard = (claim: DebateRematchClaim, previouslyDebated = false) => (
     <RematchClaimCard
       key={claim.claim.claim_entity_id}
@@ -3352,7 +3362,9 @@ function RematchClaimCard({
       reconcileWithIndexedResponse={false}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
-      onOpenClaim={() => openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false)}
+      onOpenClaim={() =>
+        openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false, { forceRequestedSpace: true })
+      }
     />
   );
 }
