@@ -134,7 +134,7 @@ export function LobbyTab({
       // Not when they turned the switch off on this visit: that empty list is the answer to a
       // question they just asked, and the button below it is enough of a way out.
       onSettledEmpty={!choseWiderHere && !leftForExplore ? showExplore : undefined}
-      onExplore={() => onTabChange('explore')}
+      onTabChange={onTabChange}
     />
   );
 }

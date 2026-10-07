@@ -1862,13 +1862,13 @@ describe('All claims reads the Debate tag', () => {
   it('offers Explore from an empty Lobby', async () => {
     mocks.taggedClaims[DEBATE_TAG] = [];
     mocks.claims = [];
-    const onExplore = vi.fn();
-    render(<ClaimsTab variant="lobby" onExplore={onExplore} />);
+    const onTabChange = vi.fn();
+    render(<ClaimsTab variant="lobby" onTabChange={onTabChange} />);
 
     await screen.findByText('Nobody is ready to debate you on a claim right now.');
     fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
 
-    expect(onExplore).toHaveBeenCalled();
+    expect(onTabChange).toHaveBeenCalledWith('explore');
   });
 });
 

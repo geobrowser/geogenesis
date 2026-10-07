@@ -9,6 +9,22 @@ import { GeoChatRequestError, isAccountWarmingUpQuery, isGeoChatRefusal } from '
 import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubSwap } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
+import type { DebatesHubTab } from '~/atoms';
+
+/** The button an empty hub list offers in place of a dead end. */
+export type HubEmptyAction = { label: string; onClick: () => void };
+
+/**
+ * "Explore claims", for an empty list with nothing to undo (GEO-2840).
+ *
+ * Shared because it is one action out of one kind of dead end — Lobby, Matches and People all reach
+ * for it — and two names for one button in one panel is a difference that implies something.
+ * Undefined without `onTabChange`: in the workspace rail there is no tab to change to, and the
+ * claims list is already on screen beside it.
+ */
+export function exploreClaimsAction(onTabChange?: (tab: DebatesHubTab) => void): HubEmptyAction | undefined {
+  return onTabChange ? { label: 'Explore claims', onClick: () => onTabChange('explore') } : undefined;
+}
 
 /**
  * geo-chat ships the matchmaking endpoints separately from this UI, so a 404 is an expected
@@ -86,7 +102,7 @@ type HubQueryStateProps = {
    */
   emptyNote?: React.ReactNode;
   /** Offered alongside `emptyMessage` — an empty tab should say what to do next. */
-  emptyAction?: { label: string; onClick: () => void };
+  emptyAction?: HubEmptyAction;
   /** Enables a retry on the error state. */
   onRetry?: () => void;
   /** Offered when the list is only reachable signed in. See {@link isSignInRequired}. */

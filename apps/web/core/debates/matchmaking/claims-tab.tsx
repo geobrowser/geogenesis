@@ -48,7 +48,7 @@ import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
-import { HubQueryState, HubSkeleton } from './hub-states';
+import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
@@ -59,6 +59,7 @@ import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 import {
+  type DebatesHubTab,
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
@@ -210,7 +211,7 @@ export function ClaimsTab({
   trailing,
   warm = false,
   onSettledEmpty,
-  onExplore,
+  onTabChange,
   layout = 'panel',
   scopePicker,
 }: {
@@ -226,11 +227,10 @@ export function ClaimsTab({
    */
   onSettledEmpty?: () => void;
   /**
-   * Somewhere to go from an empty, unfiltered list. Lobby passes the Explore tab: with nobody ready
-   * to debate, the corpus is the one list that always has something on it, and the empty state
-   * should say so with a button rather than leave the viewer to find the tab.
+   * Only reached from an empty, unfiltered list's action, as on Matches and People. Lobby passes it:
+   * with nobody ready to debate, the corpus is the one list that always has something on it.
    */
-  onExplore?: () => void;
+  onTabChange?: (tab: DebatesHubTab) => void;
   /**
    * Run the queries, draw nothing (GEO-2863).
    *
@@ -1168,9 +1168,7 @@ export function ClaimsTab({
                         setTopicIds([]);
                       },
                     }
-                  : onExplore
-                    ? { label: 'Explore claims', onClick: onExplore }
-                    : undefined
+                  : exploreClaimsAction(onTabChange)
           }
         >
           {/* One list, in the server's order. Splitting out the claims you'd already answered
