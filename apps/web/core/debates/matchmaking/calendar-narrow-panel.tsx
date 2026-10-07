@@ -88,21 +88,17 @@ export type PanelPerson = PersonListRow<{
 /** The People and Claims pills on the calendar's filter row. */
 export function CalendarNarrowPills({
   picks,
-  counts,
   openTab,
   onToggle,
 }: {
   picks: CalendarPicks;
-  /**
-   * How many each tab lists, the same numbers its tab shows. `null` until known: the claims come
-   * with everyone's positions, which are read only once the panel first opens.
-   */
-  counts: { people: number | null; claims: number | null };
   /** The tab the panel is open on, if it is open. */
   openTab: NarrowTab | null;
   onToggle: (tab: NarrowTab) => void;
 }) {
-  const pill = (tab: NarrowTab, label: string, picked: number, total: number | null, marker: boolean) => (
+  // A count only of what is picked: the pill says what is narrowing the week, and the panel's tabs
+  // say how much there is to pick from.
+  const pill = (tab: NarrowTab, label: string, picked: number, marker: boolean) => (
     <HubPillButton
       analyticsSurface="calendar"
       analyticsLabel={`Debate calendar ${label} filter`}
@@ -113,12 +109,7 @@ export function CalendarNarrowPills({
       onClick={() => onToggle(tab)}
       className={cx('gap-1.5', openTab === tab && picked === 0 && 'bg-grey-01')}
     >
-      {label}
-      {picked > 0 || total !== null ? (
-        <span className={cx('tabular-nums', picked > 0 ? 'text-white/70' : 'text-grey-04')}>
-          {picked > 0 ? (total !== null ? `${picked} of ${total}` : picked) : total}
-        </span>
-      ) : null}
+      {picked > 0 ? `${label} · ${picked}` : label}
       {marker ? (
         <span aria-label="Matches only is on" role="img" className="size-1.5 shrink-0 rounded-full bg-purple" />
       ) : null}
@@ -127,8 +118,8 @@ export function CalendarNarrowPills({
 
   return (
     <div className="flex shrink-0 items-center gap-2">
-      {pill('people', 'People', picks.people.length, counts.people, picks.matchesOnly)}
-      {pill('claims', 'Claims', picks.claims.length, counts.claims, false)}
+      {pill('people', 'People', picks.people.length, picks.matchesOnly)}
+      {pill('claims', 'Claims', picks.claims.length, false)}
     </div>
   );
 }

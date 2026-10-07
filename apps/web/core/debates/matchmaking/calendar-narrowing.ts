@@ -300,19 +300,39 @@ export function narrowingSentence({
   return `${sentence}.`;
 }
 
-/** Why picks are not showing: the names of hidden people, and how many claims the filters hide. */
+/**
+ * Why picks are not showing: the names of hidden people, and how many claims the filters hide.
+ *
+ * A person missing from the week on screen may be free in the calendar's other week; saying so, and
+ * which, is the way forward, where "isn't free this week" alone reads as "not available" — which,
+ * late in a week, is most people (GEO-3220 review).
+ */
 export function hiddenPicksSentence({
   hiddenPeople,
   hiddenClaimCount,
+  weekLabel = 'this week',
+  otherWeekLabel = 'next week',
 }: {
-  hiddenPeople: readonly { name: string; freeThisWeek: boolean }[];
+  hiddenPeople: readonly { name: string; freeThisWeek: boolean; freeOtherWeek?: boolean }[];
   hiddenClaimCount: number;
+  /** How the week on screen is named, and the calendar's other week. */
+  weekLabel?: string;
+  otherWeekLabel?: string;
 }): string | null {
   const parts: string[] = [];
-  const notFree = hiddenPeople.filter(person => !person.freeThisWeek).map(person => person.name);
-  const filtered = hiddenPeople.filter(person => person.freeThisWeek).map(person => person.name);
-  if (notFree.length > 0)
-    parts.push(`${listNames(notFree)} ${notFree.length === 1 ? "isn't" : "aren't"} free this week.`);
+  const names = (filter: (person: (typeof hiddenPeople)[number]) => boolean) =>
+    hiddenPeople.filter(filter).map(person => person.name);
+  const elsewhere = names(person => !person.freeThisWeek && Boolean(person.freeOtherWeek));
+  const notFree = names(person => !person.freeThisWeek && !person.freeOtherWeek);
+  const filtered = names(person => person.freeThisWeek);
+  if (elsewhere.length > 0) {
+    parts.push(
+      `${listNames(elsewhere)} ${elsewhere.length === 1 ? 'is' : 'are'} free ${otherWeekLabel}, not ${weekLabel}.`
+    );
+  }
+  if (notFree.length > 0) {
+    parts.push(`${listNames(notFree)} ${notFree.length === 1 ? "isn't" : "aren't"} free in the next two weeks.`);
+  }
   if (filtered.length > 0) {
     parts.push(`${listNames(filtered)} ${filtered.length === 1 ? "doesn't" : "don't"} match your other filters.`);
   }

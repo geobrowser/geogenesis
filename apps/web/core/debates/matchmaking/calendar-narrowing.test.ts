@@ -178,18 +178,27 @@ describe('the line above the week', () => {
     );
   });
 
-  it('names hidden picks and why', () => {
+  it('names hidden picks and why, and which week a hidden person is free', () => {
     expect(
       hiddenPicksSentence({
         hiddenPeople: [
-          { name: 'Maya', freeThisWeek: false },
+          { name: 'Maya', freeThisWeek: false, freeOtherWeek: true },
+          { name: 'Jonah', freeThisWeek: false },
           { name: 'Ana', freeThisWeek: true },
         ],
         hiddenClaimCount: 2,
       })
     ).toBe(
-      "Maya isn't free this week. Ana doesn't match your other filters. 2 claims you picked don't match your other filters."
+      "Maya is free next week, not this week. Jonah isn't free in the next two weeks. Ana doesn't match your other filters. 2 claims you picked don't match your other filters."
     );
+    expect(
+      hiddenPicksSentence({
+        hiddenPeople: [{ name: 'Maya', freeThisWeek: false, freeOtherWeek: true }],
+        hiddenClaimCount: 0,
+        weekLabel: 'next week',
+        otherWeekLabel: 'this week',
+      })
+    ).toBe('Maya is free this week, not next week.');
     expect(hiddenPicksSentence({ hiddenPeople: [], hiddenClaimCount: 0 })).toBeNull();
   });
 });

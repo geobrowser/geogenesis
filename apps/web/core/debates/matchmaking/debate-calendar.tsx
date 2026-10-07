@@ -691,19 +691,54 @@ function DebateCalendarBody({
     for (const people of cells.values()) for (const person of people) users.add(person.userKey);
     return users;
   }, [cells]);
-  const weekStartMs = days[0].getTime();
-  const weekEndMs = days[days.length - 1].getTime();
-  const freeThisWeek = React.useCallback(
-    (userKey: string) =>
-      (slotsByUser.get(userKey) ?? []).some(slot => slot.start >= weekStartMs && slot.start < weekEndMs),
-    [slotsByUser, weekEndMs, weekStartMs]
+  // The calendar holds two weeks. Picks often fit only the other one — late in a week most people's
+  // next free time is next week — so what the other week holds is worth knowing on this one.
+  const otherWeekOffset = weekOffset === 0 ? 1 : 0;
+  const weekLabel = (offset: number) => (offset === 0 ? 'this week' : 'next week');
+  const weekRange = React.useCallback(
+    (offset: number) => {
+      const bounds = weekDays(weekStart(new Date(now), offset));
+      return [bounds[0].getTime(), bounds[bounds.length - 1].getTime()] as const;
+    },
+    [now]
   );
-  const shownCountFor = (withPicks: CalendarPicks) => {
-    const passes = includeWith(guardPicks(withPicks));
-    let count = 0;
-    for (const userKey of slotsByUser.keys()) if (freeThisWeek(userKey) && passes(userKey)) count += 1;
-    return count;
-  };
+  const freeInWeek = React.useCallback(
+    (userKey: string, offset: number) => {
+      const [start, end] = weekRange(offset);
+      return (slotsByUser.get(userKey) ?? []).some(slot => slot.start >= start && slot.start < end);
+    },
+    [slotsByUser, weekRange]
+  );
+  const freeThisWeek = React.useCallback(
+    (userKey: string) => freeInWeek(userKey, weekOffset),
+    [freeInWeek, weekOffset]
+  );
+  const drawnInWeek = React.useCallback(
+    (offset: number, passes: (userKey: string) => boolean) => {
+      let count = 0;
+      for (const userKey of slotsByUser.keys()) if (freeInWeek(userKey, offset) && passes(userKey)) count += 1;
+      return count;
+    },
+    [freeInWeek, slotsByUser]
+  );
+  const shownCountFor = (withPicks: CalendarPicks) => drawnInWeek(weekOffset, includeWith(guardPicks(withPicks)));
+  const drawnInOtherWeek = React.useMemo(
+    () => drawnInWeek(otherWeekOffset, include),
+    [drawnInWeek, include, otherWeekOffset]
+  );
+
+  // When a change of picks leaves the week on screen empty and the other week does not, move to it:
+  // picking someone free only next week should show them, not an empty week. Once per change, so
+  // moving back by hand afterwards sticks. Only after everything the picks are judged on has landed,
+  // or a week still loading would read as empty.
+  const picksKey = `${effectivePicks.people.join()}|${effectivePicks.claims.join()}|${effectivePicks.matchesOnly}`;
+  const settledPicksKey = React.useRef<string | null>(null);
+  const picksSettled = !schedulableQuery.isLoading && schedulableQuery.data !== undefined && !picksPending;
+  React.useEffect(() => {
+    if (!picksSettled || settledPicksKey.current === picksKey) return;
+    settledPicksKey.current = picksKey;
+    if (hasPicks(effectivePicks) && drawnUsers.size === 0 && drawnInOtherWeek > 0) setWeekOffset(otherWeekOffset);
+  }, [drawnInOtherWeek, drawnUsers.size, effectivePicks, otherWeekOffset, picksKey, picksSettled]);
 
   // The line above the week: what is narrowing it, and any pick it is hiding. Only with something
   // picked, so the calendar with nothing picked reads exactly as it did.
@@ -722,11 +757,25 @@ function DebateCalendarBody({
         {
           name: known ? speakerLabel(known.person) : 'Someone you picked',
           freeThisWeek: known ? freeThisWeek(known.userKey) : false,
+          freeOtherWeek: known ? freeInWeek(known.userKey, otherWeekOffset) : false,
         },
       ];
     }),
     hiddenClaimCount: allPositionsReady ? panelRows.claims.filter(row => row.hidden).length : 0,
+    weekLabel: weekLabel(weekOffset),
+    otherWeekLabel: weekLabel(otherWeekOffset),
   });
+  // A picked person free only in the other week: the line offers that week, not just Clear filters.
+  const pickFreeOtherWeek = picks.people.some(profileKey => {
+    const known = profileToUser.get(profileKey);
+    return Boolean(
+      known &&
+      !drawnUsers.has(known.userKey) &&
+      !freeThisWeek(known.userKey) &&
+      freeInWeek(known.userKey, otherWeekOffset)
+    );
+  });
+  const goToOtherWeek = () => goToWeek(otherWeekOffset, otherWeekOffset > weekOffset ? 'next' : 'previous');
 
   const loading = schedulableQuery.isLoading || (peopleQuery.isLoading && !schedulableQuery.data);
   const loadError = schedulableQuery.error && !schedulableQuery.data ? schedulableQuery.error : null;
@@ -751,14 +800,7 @@ function DebateCalendarBody({
     },
     countsPending: peopleQuery.isLoading || publishableSpacesPending || personRecordsPending,
   } as const;
-  const narrowPills = (
-    <CalendarNarrowPills
-      picks={effectivePicks}
-      counts={{ people: panelRows.people.length, claims: allPositionsReady ? panelRows.claims.length : null }}
-      openTab={panelTab}
-      onToggle={togglePanel}
-    />
-  );
+  const narrowPills = <CalendarNarrowPills picks={effectivePicks} openTab={panelTab} onToggle={togglePanel} />;
   const panelBody = (
     withPicks: CalendarPicks,
     onPicksChange: (next: CalendarPicks) => void,
@@ -851,6 +893,19 @@ function DebateCalendarBody({
           {narrowNote || hiddenNote ? (
             <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4" aria-live="polite">
               {[narrowNote, hiddenNote].filter(Boolean).join(' ')}{' '}
+              {pickFreeOtherWeek ? (
+                <>
+                  <button
+                    type="button"
+                    {...debateActionAnalyticsAttributes('calendar', 'Show other week', 'debate_calendar_action')}
+                    className="underline transition-colors hover:text-text"
+                    onClick={goToOtherWeek}
+                  >
+                    Show {weekLabel(otherWeekOffset)}
+                  </button>{' '}
+                  ·{' '}
+                </>
+              ) : null}
               <button
                 type="button"
                 {...debateActionAnalyticsAttributes('calendar', 'Clear filters', 'filter_debate_calendar')}
@@ -900,15 +955,23 @@ function DebateCalendarBody({
               isEmpty={(nobodyFree || filteredOut) && !ownDebatesThisWeek}
               // Filters hiding everyone has an undo; nobody being free this week has somewhere to go.
               emptyMessage={
-                filteredOut ? 'Nobody who matches those filters is free this week.' : 'Nobody has open times this week.'
+                filteredOut
+                  ? drawnInOtherWeek > 0
+                    ? `Nobody who matches those filters is free ${weekLabel(weekOffset)}, but ${drawnInOtherWeek} ${
+                        drawnInOtherWeek === 1 ? 'is' : 'are'
+                      } ${weekLabel(otherWeekOffset)}.`
+                    : 'Nobody who matches those filters is free this week.'
+                  : 'Nobody has open times this week.'
               }
               emptyNote={filteredOut ? undefined : <DebateHoursNote live />}
               emptyAction={
-                filteredOut
-                  ? { label: 'Clear filters', onClick: clearFilters }
-                  : weekOffset < CALENDAR_WEEKS - 1
-                    ? { label: 'Next week', onClick: () => goToWeek(weekOffset + 1, 'next') }
-                    : undefined
+                filteredOut && drawnInOtherWeek > 0
+                  ? { label: `Show ${weekLabel(otherWeekOffset)}`, onClick: goToOtherWeek }
+                  : filteredOut
+                    ? { label: 'Clear filters', onClick: clearFilters }
+                    : weekOffset < CALENDAR_WEEKS - 1
+                      ? { label: 'Next week', onClick: () => goToWeek(weekOffset + 1, 'next') }
+                      : undefined
               }
             >
               {isPhone ? (

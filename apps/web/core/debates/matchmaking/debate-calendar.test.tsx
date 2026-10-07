@@ -989,11 +989,10 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(mocks.positionReads.at(-1)).toHaveLength(4);
   });
 
-  it('counts each tab on its pill, and steps the pills aside while the panel is open', () => {
+  it('counts what is picked on each pill, and steps the pills aside while the panel is open', () => {
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People3$/);
-    // Claims come with everyone's positions, which wait for the panel.
+    expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People$/);
     expect(screen.getByRole('button', { name: 'Claims' })).toHaveTextContent(/^Claims$/);
 
     fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
@@ -1004,9 +1003,34 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Phones should be banned in schools' }));
     fireEvent.click(within(panel()).getByRole('button', { name: 'Close panel' }));
 
-    expect(screen.getByRole('button', { name: 'Claims, 1 picked' })).toHaveTextContent(/^Claims1 of 2$/);
-    // Picking a claim narrows People to those holding it, as the tab does.
-    expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People2$/);
+    expect(screen.getByRole('button', { name: 'Claims, 1 picked' })).toHaveTextContent(/^Claims · 1$/);
+    expect(screen.getByRole('button', { name: 'People' })).toHaveTextContent(/^People$/);
+  });
+
+  it('moves to next week when the person picked is free only then, and offers the way back', async () => {
+    mocks.schedulable = response([
+      free('11', 'Elena', [thursdaySix]),
+      // Lena's only time is next Thursday.
+      free('14', 'Lena', [[at(15, 18), at(15, 19)]]),
+    ]);
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Lena' }));
+
+    expect(await screen.findByRole('gridcell', { name: /Thursday.*free: Lena/ })).toBeInTheDocument();
+    // Next week: the only way back is enabled.
+    expect(screen.getByRole('button', { name: 'Previous week' })).toBeEnabled();
+
+    // Back on this week by hand, it stays put, and says where Lena is.
+    fireEvent.click(screen.getByRole('button', { name: 'Previous week' }));
+    expect(
+      await screen.findByText('Nobody who matches those filters is free this week, but 1 is next week.')
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Lena is free next week, not this week\./)).toBeInTheDocument();
+
+    fireEvent.click(screen.getAllByRole('button', { name: 'Show next week' })[0]);
+    expect(await screen.findByRole('gridcell', { name: /Thursday.*free: Lena/ })).toBeInTheDocument();
   });
 
   it("puts the pills on the week's row and the legend under the grid, on a desktop", () => {
