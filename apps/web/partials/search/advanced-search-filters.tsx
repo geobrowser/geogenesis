@@ -8,11 +8,9 @@ import cx from 'classnames';
 
 import { EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
-import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
-import { useSpace } from '~/core/hooks/use-space';
-import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
-import { hasName } from '~/core/utils/utils';
+import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
+import { compareBySpaceRank } from '~/core/utils/space/space-ranking';
 
 import { CheckboxVisual } from '~/design-system/checkbox';
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -36,6 +34,7 @@ type Props = {
   onAddTag: (tag: SearchFilterTag) => void;
   onRemoveTag: (id: string) => void;
   portalContainer: HTMLElement | null;
+  onFilterMenuOpenChange?: (open: boolean) => void;
 };
 
 function shieldNavigationKeys(event: React.KeyboardEvent) {
@@ -51,8 +50,10 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 /**
  * The space/type/tag filters shown under global search Advanced. Space (which folds in the
  * canonical-only scope) and type are select-style popovers that float over the results (see
- * `portalContainer`); tags are a free entity search. Selections feed `useSearch`
- * (`filterBySpaceIds` + `includeNonCanonical` / `filterByTypes` / `filterByTags`).
+ * `portalContainer` — must be outside the dialog's overflow clipping); tags are a free entity
+ * search. Type and tag feed `useSearch` (`filterByTypes` / `filterByTags`), the canonical-only
+ * scope feeds `includeNonCanonical`, and the chosen spaces are included (added to eligibility) via
+ * `useSearch`'s `alsoSearchSpaceIds` → REST `additional_space_ids`.
  */
 export function AdvancedSearchFilters({
   canonicalOnly,
@@ -66,7 +67,18 @@ export function AdvancedSearchFilters({
   onAddTag,
   onRemoveTag,
   portalContainer,
+  onFilterMenuOpenChange,
 }: Props) {
+  // Space and type each have their own menu; OR them so the dialog pauses load-more for either.
+  const openMenusRef = React.useRef({ space: false, type: false });
+  const notifyMenuOpen = React.useCallback(
+    (menu: 'space' | 'type', open: boolean) => {
+      openMenusRef.current[menu] = open;
+      onFilterMenuOpenChange?.(openMenusRef.current.space || openMenusRef.current.type);
+    },
+    [onFilterMenuOpenChange]
+  );
+
   return (
     <div className="flex flex-col gap-3" onKeyDown={shieldNavigationKeys}>
       <div className="flex items-start gap-2">
@@ -76,12 +88,14 @@ export function AdvancedSearchFilters({
           selectedSpaceIds={selectedSpaceIds}
           onToggleSpace={onToggleSpace}
           container={portalContainer}
+          onOpenChange={open => notifyMenuOpen('space', open)}
         />
         <TypeFilter
           typeIds={typeIds}
           onToggleType={onToggleType}
           onClearTypes={onClearTypes}
           container={portalContainer}
+          onOpenChange={open => notifyMenuOpen('type', open)}
         />
       </div>
       <TagFilter tags={tags} onAddTag={onAddTag} onRemoveTag={onRemoveTag} />
@@ -95,6 +109,9 @@ function FilterDropdown({
   container,
   header,
   onOpenChange,
+  hasNextPage,
+  isFetchingNextPage,
+  fetchNextPage,
   children,
 }: {
   label: string;
@@ -102,17 +119,29 @@ function FilterDropdown({
   container: HTMLElement | null;
   header?: React.ReactNode;
   onOpenChange?: (open: boolean) => void;
+  hasNextPage?: boolean;
+  isFetchingNextPage?: boolean;
+  fetchNextPage?: () => void;
   children: (close: () => void) => React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(false);
+  const listRef = React.useRef<HTMLUListElement | null>(null);
 
   const handleOpenChange = (next: boolean) => {
     setOpen(next);
     onOpenChange?.(next);
   };
 
+  const handleListScroll = useFetchNextPageOnScroll<HTMLUListElement>({
+    hasNextPage: Boolean(hasNextPage && fetchNextPage),
+    isFetchingNextPage,
+    fetchNextPage: fetchNextPage ?? (() => undefined),
+    scrollRef: listRef,
+    distanceFromBottom: 80,
+  });
+
   return (
-    <Popover.Root open={open} onOpenChange={handleOpenChange}>
+    <Popover.Root modal={false} open={open} onOpenChange={handleOpenChange}>
       <Popover.Trigger asChild>
         <button
           type="button"
@@ -125,23 +154,27 @@ function FilterDropdown({
           </span>
         </button>
       </Popover.Trigger>
+      {/* Always portal (body when host is briefly null) so load-more re-renders never unmount the open menu. */}
       <Popover.Portal container={container ?? undefined}>
         <Popover.Content
           side="bottom"
           align="start"
           sideOffset={6}
-          avoidCollisions
-          collisionPadding={12}
+          avoidCollisions={false}
           onKeyDown={shieldNavigationKeys}
           onOpenAutoFocus={event => event.preventDefault()}
-          className="z-100 flex w-(--radix-popper-anchor-width) min-w-[12rem] flex-col rounded border border-grey-02 bg-white shadow-lg"
+          onCloseAutoFocus={event => event.preventDefault()}
+          className="z-[var(--elevated-popover-z,1001)] flex w-(--radix-popper-anchor-width) min-w-[12rem] flex-col rounded border border-grey-02 bg-white shadow-lg"
         >
           {header}
           <ul
+            ref={listRef}
+            onScroll={fetchNextPage ? handleListScroll : undefined}
             onWheel={event => trapWheelToElement(event.currentTarget, event)}
             className="m-0 flex max-h-52 list-none flex-col overflow-y-auto overscroll-contain"
           >
             {children(() => handleOpenChange(false))}
+            {isFetchingNextPage ? <li className="px-3 py-2 text-footnoteMedium text-grey-04">Loading more…</li> : null}
           </ul>
         </Popover.Content>
       </Popover.Portal>
@@ -187,6 +220,7 @@ function OptionRow({
     <li className="border-b border-divider last:border-none">
       <button
         type="button"
+        onPointerDown={event => event.preventDefault()}
         onClick={onClick}
         disabled={disabled}
         className={cx(
@@ -206,17 +240,22 @@ function TypeFilter({
   onToggleType,
   onClearTypes,
   container,
+  onOpenChange,
 }: {
   typeIds: string[];
   onToggleType: (id: string) => void;
   onClearTypes: () => void;
   container: HTMLElement | null;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const selectedTypes = React.useMemo(() => new Set(typeIds), [typeIds]);
   const [query, setQuery] = React.useState('');
   const normalized = query.trim().toLowerCase();
   const filteredTypes = React.useMemo(
-    () => (normalized === '' ? EXPLORE_ENTITY_TYPES : EXPLORE_ENTITY_TYPES.filter(type => type.label.toLowerCase().includes(normalized))),
+    () =>
+      normalized === ''
+        ? EXPLORE_ENTITY_TYPES
+        : EXPLORE_ENTITY_TYPES.filter(type => type.label.toLowerCase().includes(normalized)),
     [normalized]
   );
   const label =
@@ -227,6 +266,7 @@ function TypeFilter({
       label="Types"
       container={container}
       onOpenChange={open => {
+        onOpenChange?.(open);
         if (!open) setQuery('');
       }}
       header={<FilterSearchInput value={query} onChange={setQuery} placeholder="Filter types…" />}
@@ -263,56 +303,62 @@ function SpaceFilter({
   selectedSpaceIds,
   onToggleSpace,
   container,
+  onOpenChange,
 }: {
   canonicalOnly: boolean;
   onToggleCanonicalOnly: () => void;
   selectedSpaceIds: string[];
   onToggleSpace: (id: string) => void;
   container: HTMLElement | null;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const { personalSpaceId } = usePersonalSpaceId();
-  const { space: personalSpace } = useSpace(personalSpaceId ?? undefined);
-  const memberSpaces = useSpacesWhereMember(personalSpaceId ?? undefined);
+  const { query, setQuery, spaces, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useSpacesQuery(true, {
+    allowEmptyQuery: true,
+    matchLimit: 100,
+  });
 
-  // The viewer's own spaces — personal first, then member/editor — named only, mirroring the
-  // "create entity in space" list already in the dialog.
-  const spaces = React.useMemo(() => {
-    const list = [...memberSpaces];
-    if (personalSpace && !list.some(space => space.id === personalSpace.id)) {
-      list.unshift(personalSpace);
-    }
-    return list.filter(space => hasName(space?.entity?.name));
-  }, [personalSpace, memberSpaces]);
-
-  // Drop selected spaces that have fallen out of the member list
-  React.useEffect(() => {
-    if (spaces.length === 0) return;
-    const known = new Set(spaces.map(space => space.id));
-    const stale = selectedSpaceIds.filter(id => !known.has(id));
-    stale.forEach(onToggleSpace);
-  }, [spaces, selectedSpaceIds, onToggleSpace]);
+  const seenRef = React.useRef<Map<string, { name: string | null; image: string | null }>>(new Map());
+  for (const space of spaces) {
+    seenRef.current.set(space.id, { name: space.name, image: space.image });
+  }
 
   const selected = React.useMemo(() => new Set(selectedSpaceIds), [selectedSpaceIds]);
-  const [query, setQuery] = React.useState('');
-  const normalized = query.trim().toLowerCase();
-  const filteredSpaces = React.useMemo(
-    () => (normalized === '' ? spaces : spaces.filter(space => (space.entity.name ?? '').toLowerCase().includes(normalized))),
-    [spaces, normalized]
-  );
 
+  const rows = React.useMemo(() => {
+    const byId = new Map<string, { id: string; name: string | null; image: string | null }>();
+    for (const id of selectedSpaceIds) {
+      const meta = seenRef.current.get(id);
+      byId.set(id, { id, name: meta?.name ?? null, image: meta?.image ?? null });
+    }
+    for (const space of spaces) {
+      byId.set(space.id, { id: space.id, name: space.name, image: space.image });
+    }
+    const all = [...byId.values()];
+
+    if (query.trim() === '') {
+      all.sort(compareBySpaceRank(space => space.id));
+    }
+    return all;
+  }, [selectedSpaceIds, spaces, query]);
+
+  const selectedName = selectedSpaceIds.length === 1 ? (seenRef.current.get(selectedSpaceIds[0])?.name ?? null) : null;
   const label = canonicalOnly
     ? 'Canonical only'
     : selectedSpaceIds.length === 0
       ? 'All spaces'
       : selectedSpaceIds.length === 1
-        ? (spaces.find(space => space.id === selectedSpaceIds[0])?.entity?.name ?? '1 space')
+        ? (selectedName ?? '1 space')
         : `${selectedSpaceIds.length} spaces`;
 
   return (
     <FilterDropdown
       label="Spaces"
       container={container}
+      hasNextPage={hasNextPage}
+      isFetchingNextPage={isFetchingNextPage}
+      fetchNextPage={fetchNextPage}
       onOpenChange={open => {
+        onOpenChange?.(open);
         if (!open) setQuery('');
       }}
       header={<FilterSearchInput value={query} onChange={setQuery} placeholder="Filter spaces…" />}
@@ -324,19 +370,21 @@ function SpaceFilter({
             <CheckboxVisual checked={canonicalOnly} />
             <span className="min-w-0 flex-1 truncate text-text">Canonical only</span>
           </OptionRow>
-          {filteredSpaces.map(space => {
+          {rows.map(space => {
             const isSelected = selected.has(space.id);
             return (
               <OptionRow key={space.id} selected={isSelected} onClick={() => onToggleSpace(space.id)}>
                 <CheckboxVisual checked={isSelected} />
                 <span className="relative size-4 shrink-0 overflow-hidden rounded-sm bg-grey-01">
-                  <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
+                  <NativeGeoImage value={space.image ?? ''} alt="" className="h-full w-full object-cover" />
                 </span>
-                <span className="min-w-0 flex-1 truncate text-text">{space.entity.name}</span>
+                <span className="min-w-0 flex-1 truncate text-text">{space.name ?? space.id}</span>
               </OptionRow>
             );
           })}
-          {filteredSpaces.length === 0 ? (
+          {isLoading && rows.length === 0 ? (
+            <li className="px-3 py-2 text-footnoteMedium text-grey-04">Loading spaces…</li>
+          ) : rows.length === 0 ? (
             <li className="px-3 py-2 text-footnoteMedium text-grey-04">No spaces</li>
           ) : null}
         </>

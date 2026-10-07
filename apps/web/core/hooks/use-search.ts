@@ -62,10 +62,6 @@ interface SearchOptions {
   alsoSearchSpaceIds?: string[];
   /** Stable analytics classification for the surface. Inferred for shared entity pickers; false disables tracking. */
   analyticsSurface?: SearchAnalyticsSurface | false;
-  /**
-   * Restrict the `additional_space_ids` widening to this exact set instead of the default.
-   */
-  filterBySpaceIds?: string[];
 }
 
 const DEFAULT_SEARCH_PAGE_SIZE = 10;
@@ -100,17 +96,6 @@ export function searchResultMatchesAllowedTypes(
   return result.types.some(t => allowed.has(t.id) || allowed.has(normalizeTypeId(t.id)));
 }
 
-export function entityTypesMatchFilter(
-  types: { id: string }[] | undefined,
-  relationTargetTypeIds: string[] | undefined
-): boolean {
-  return searchResultMatchesAllowedTypes({ types: types ?? [] }, relationTargetTypeIds);
-}
-
-function resultMatchesFilterTypes(result: { types: { id: string }[] }, filterByTypes: string[] | undefined): boolean {
-  return searchResultMatchesAllowedTypes(result, filterByTypes);
-}
-
 export function useSearch({
   filterByTypes,
   filterBySpace,
@@ -123,7 +108,6 @@ export function useSearch({
   includeNonCanonical,
   alsoSearchSpaceIds,
   analyticsSurface,
-  filterBySpaceIds,
 }: SearchOptions = {}) {
   const { store } = useSyncEngine();
   const cache = useQueryClient();
@@ -131,21 +115,12 @@ export function useSearch({
   const debouncedQuery = useDebouncedValue(query);
 
   const globalAdditionalSpaceIds = useGlobalSearchSpaceIds();
-  const baseAdditionalSpaceIds = selectSearchAdditionalSpaceIds({
+  const additionalSpaceIds = selectSearchAdditionalSpaceIds({
     filterBySpace,
     includeNonCanonical,
     alsoSearchSpaceIds,
     globalAdditionalSpaceIds,
   });
-  const filterSpaceKey = React.useMemo(
-    () => (filterBySpaceIds?.length ? [...filterBySpaceIds].sort() : undefined),
-    [filterBySpaceIds]
-  );
-  // Narrow the widening set to the viewer's chosen subset by replacing it outright.
-  const additionalSpaceIds = React.useMemo(() => {
-    if (!baseAdditionalSpaceIds || !filterSpaceKey?.length) return baseAdditionalSpaceIds;
-    return filterSpaceKey;
-  }, [baseAdditionalSpaceIds, filterSpaceKey]);
 
   const maybeEntityId = debouncedQuery.trim();
   const cappedQuery = capSearchQuery(debouncedQuery);
@@ -196,7 +171,7 @@ export function useSearch({
             store,
           });
           if (!merged) return emptySearchPage(pageParam);
-          if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
+          if (filterByTypes?.length && !searchResultMatchesAllowedTypes(merged, filterByTypes)) {
             return emptySearchPage(pageParam);
           }
           return { rows: [merged], offset: pageParam, serverCount: 1, total: 1, succeeded: true };
@@ -230,7 +205,7 @@ export function useSearch({
 
         const rows = !filterByTypes?.length
           ? page.results
-          : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
+          : page.results.filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
 
         return {
           rows,

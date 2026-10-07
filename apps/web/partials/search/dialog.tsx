@@ -28,6 +28,7 @@ import { LeftArrowLong } from '~/design-system/icons/left-arrow-long';
 import { Search } from '~/design-system/icons/search';
 import { Input } from '~/design-system/input';
 import { ResizableContainer } from '~/design-system/resizable-container';
+import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { AdvancedSearchFilters, type SearchFilterTag } from './advanced-search-filters';
 
@@ -70,17 +71,22 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
 
   const [selectedSpaceIds, setSelectedSpaceIds] = useState<string[]>([]);
   const [filterTags, setFilterTags] = useState<SearchFilterTag[]>([]);
-  const [filterPopoverHost, setFilterPopoverHost] = useState<HTMLDivElement | null>(null);
 
-  const autocomplete = useSearch({
+  const [filterMenuOpen, setFilterMenuOpen] = useState(false);
+
+  const filterPopoverHost = useElevatedPopoverPortal();
+
+  const hasSelectedSpaces = selectedSpaceIds.length > 0;
+  const search = useSearch({
     enabled: open,
-    includeNonCanonical: canonicalOnly ? false : true,
+    includeNonCanonical: canonicalOnly || hasSelectedSpaces ? false : true,
+    alsoSearchSpaceIds: hasSelectedSpaces ? selectedSpaceIds : undefined,
     analyticsSurface: 'global',
     filterByTypes: filterTypeIds.length > 0 ? filterTypeIds : undefined,
-    filterBySpaceIds: selectedSpaceIds.length > 0 ? selectedSpaceIds : undefined,
     filterByTags: filterTags.length > 0 ? filterTags.map(tag => tag.id) : undefined,
   });
-  const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
+
+  const { fetchNextPage, hasNextPage, isFetchingNextPage } = search;
 
   const toggleFilterType = useCallback((id: string) => {
     setFilterTypeIds(prev => (prev.includes(id) ? prev.filter(typeId => typeId !== id) : [...prev, id]));
@@ -120,19 +126,19 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const [selectedIndex, setSelectedIndex] = useState<number>(0);
   const [openSpacesIndex, setOpenSpacesIndex] = useState<number | null>(null);
   const [isCreatingNewEntity, setIsCreatingNewEntity] = useState<boolean>(false);
-  const selectedEntity = openSpacesIndex !== null ? autocomplete.results[openSpacesIndex] : null;
+  const selectedEntity = openSpacesIndex !== null ? search.results[openSpacesIndex] : null;
 
   const handleOpenChange = useCallback(() => {
-    autocomplete.onQueryChange('');
+    search.onQueryChange('');
     setOpenSpacesIndex(null);
     setIsCreatingNewEntity(false);
     setFilterTypeIds([]);
     setSelectedSpaceIds([]);
     setFilterTags([]);
     onDone();
-  }, [autocomplete, onDone]);
+  }, [search, onDone]);
 
-  const isValidEntityId = validateEntityId(autocomplete.query);
+  const isValidEntityId = validateEntityId(search.query);
 
   let view: View = 'selectEntity';
   if (openSpacesIndex !== null && selectedEntity) {
@@ -141,10 +147,15 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     view = 'createEntity';
   }
 
-  const hasResults = autocomplete.results.length > 0;
+  useEffect(() => {
+    if (!isShowingAdvanced) setFilterMenuOpen(false);
+  }, [isShowingAdvanced]);
+
+  const hasResults = search.results.length > 0;
   const resultsScrollRef = React.useRef<HTMLUListElement | null>(null);
+
   const handleResultsScroll = useFetchNextPageOnScroll<HTMLUListElement>({
-    hasNextPage,
+    hasNextPage: Boolean(hasNextPage && !filterMenuOpen && hasResults && !search.isLoading),
     isFetchingNextPage,
     fetchNextPage,
     scrollRef: resultsScrollRef,
@@ -154,12 +165,12 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     // cmdk handles Enter on its selected item; only handle the input fallback here.
     if (event.defaultPrevented || !hasResults) return;
 
-    const result = autocomplete.results[selectedIndex];
+    const result = search.results[selectedIndex];
 
     if (result) {
       trackSelection(result, selectedIndex, 'search_results');
       router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-      autocomplete.onQueryChange('');
+      search.onQueryChange('');
       setOpenSpacesIndex(null);
       onDone();
     }
@@ -169,15 +180,23 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     if (!hasResults) return;
 
     event.preventDefault();
-    setSelectedIndex(prev => (prev - 1 + autocomplete.results.length) % autocomplete.results.length);
+    setSelectedIndex(prev => (prev - 1 + search.results.length) % search.results.length);
   });
 
   useKey('ArrowDown', event => {
     if (!hasResults) return;
 
     event.preventDefault();
-    setSelectedIndex(prev => (prev + 1) % autocomplete.results.length);
+    setSelectedIndex(prev => (prev + 1) % search.results.length);
   });
+
+  useEffect(() => {
+    setSelectedIndex(0);
+  }, [search.query, filterTypeIds, selectedSpaceIds, filterTags, canonicalOnly]);
+
+  useEffect(() => {
+    setSelectedIndex(prev => (prev >= search.results.length ? 0 : prev));
+  }, [search.results.length]);
 
   useEffect(() => {
     if (!hasResults) return;
@@ -200,10 +219,10 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
           <Command.List>
             {view === 'createEntity' && (
               <CreateNewEntityInSpace
-                entityId={autocomplete.query as EntityId}
+                entityId={search.query as EntityId}
                 setIsCreatingNewEntity={setIsCreatingNewEntity}
                 onDone={() => {
-                  autocomplete.onQueryChange('');
+                  search.onQueryChange('');
                   setIsCreatingNewEntity(false);
                   onDone();
                 }}
@@ -213,7 +232,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
               <>
                 <div className="relative border-b border-grey-02 p-1">
                   <AnimatePresence mode="wait">
-                    {autocomplete.isLoading ? (
+                    {search.isLoading ? (
                       <div className="absolute top-[50%] left-4 z-100">
                         <motion.span
                           key="dots"
@@ -241,8 +260,8 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                   </AnimatePresence>
                   <Input
                     withExternalSearchIcon
-                    onChange={e => autocomplete.onQueryChange(e.currentTarget.value)}
-                    value={autocomplete.query}
+                    onChange={e => search.onQueryChange(e.currentTarget.value)}
+                    value={search.query}
                   />
                 </div>
                 <div className="w-full">
@@ -259,38 +278,37 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                       </span>
                     </div>
                   </button>
-                  <ResizableContainer>
-                    {isShowingAdvanced && (
-                      <div className="flex flex-col gap-3 border-b border-grey-02 px-4 py-3">
-                        <AdvancedSearchFilters
-                          canonicalOnly={canonicalOnly}
-                          onToggleCanonicalOnly={toggleCanonicalOnly}
-                          selectedSpaceIds={selectedSpaceIds}
-                          onToggleSpace={toggleSpaceSelected}
-                          typeIds={filterTypeIds}
-                          onToggleType={toggleFilterType}
-                          onClearTypes={clearFilterTypes}
-                          tags={filterTags}
-                          onAddTag={addFilterTag}
-                          onRemoveTag={removeFilterTag}
-                          portalContainer={filterPopoverHost}
-                        />
-                      </div>
-                    )}
-                  </ResizableContainer>
+                  {isShowingAdvanced ? (
+                    <div className="flex flex-col gap-3 border-b border-grey-02 px-4 py-3">
+                      <AdvancedSearchFilters
+                        canonicalOnly={canonicalOnly}
+                        onToggleCanonicalOnly={toggleCanonicalOnly}
+                        selectedSpaceIds={selectedSpaceIds}
+                        onToggleSpace={toggleSpaceSelected}
+                        typeIds={filterTypeIds}
+                        onToggleType={toggleFilterType}
+                        onClearTypes={clearFilterTypes}
+                        tags={filterTags}
+                        onAddTag={addFilterTag}
+                        onRemoveTag={removeFilterTag}
+                        portalContainer={filterPopoverHost}
+                        onFilterMenuOpenChange={setFilterMenuOpen}
+                      />
+                    </div>
+                  ) : null}
                 </div>
                 <ResizableContainer duration={0.15}>
                   <ResultsList ref={resultsScrollRef} onScroll={handleResultsScroll}>
-                    {autocomplete.isEmpty ? (
+                    {search.isEmpty ? (
                       isValidEntityId ? (
                         <div className="px-2 pb-1">
                           <EntityIdNotFound setIsCreatingNewEntity={setIsCreatingNewEntity} />
                         </div>
                       ) : (
-                        <Command.Empty className="px-2 pb-2">No results found for {autocomplete.query}</Command.Empty>
+                        <Command.Empty className="px-2 pb-2">No results found for {search.query}</Command.Empty>
                       )
                     ) : null}
-                    {autocomplete.results.map((result, i) => (
+                    {search.results.map((result, i) => (
                       <motion.div
                         key={result.id}
                         initial={{ opacity: 0, y: -5 }}
@@ -307,7 +325,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                             onSelect={() => {
                               trackSelection(result, i, 'search_results');
                               router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
-                              autocomplete.onQueryChange('');
+                              search.onQueryChange('');
                               setOpenSpacesIndex(null);
                               onDone();
                             }}
@@ -328,7 +346,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         </div>
                       </motion.div>
                     ))}
-                    {autocomplete.isFetchingNextPage ? (
+                    {search.isFetchingNextPage ? (
                       <div className="flex items-center justify-center py-2 text-smallButton">
                         <Dots />
                       </div>
@@ -368,7 +386,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                             onSelect={() => {
                               trackSelection(selectedEntity, i, 'search_spaces');
                               router.push(NavUtils.toEntity(space.spaceId, selectedEntity.id));
-                              autocomplete.onQueryChange('');
+                              search.onQueryChange('');
                               setOpenSpacesIndex(null);
                               onDone();
                             }}
@@ -389,7 +407,6 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
               </div>
             )}
           </Command.List>
-          <div ref={setFilterPopoverHost} />
         </div>
       </div>
     </Command.Dialog>
