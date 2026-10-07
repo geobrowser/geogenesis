@@ -145,7 +145,10 @@ export class DebateGatewayClient {
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
-  /** The newest `lobby_card.as_of` applied per dashless lobby id, so a late patch is dropped. */
+  /**
+   * The newest `lobby_card.as_of` seen per dashless lobby id, removals included, so a late patch is
+   * dropped. A removal without one is Infinity: a closed lobby does not reopen.
+   */
   private readonly lobbyCardAsOf = new Map<string, number>();
 
   private snapshot: DebateGatewaySnapshot = {
@@ -499,8 +502,11 @@ export class DebateGatewayClient {
     if (patch.status === 'listed') {
       const id = dashlessId(patch.lobby.lobby_id);
       const lastAsOf = this.lobbyCardAsOf.get(id);
-      if (lastAsOf !== undefined && patch.asOf < lastAsOf) return true;
+      if (lastAsOf !== undefined && patch.asOf <= lastAsOf) return true;
       this.lobbyCardAsOf.set(id, patch.asOf);
+    } else {
+      const id = dashlessId(patch.lobbyId);
+      this.lobbyCardAsOf.set(id, Math.max(this.lobbyCardAsOf.get(id) ?? -Infinity, patch.asOf ?? Infinity));
     }
 
     this.queryClient.setQueryData<DebateLobbiesResponse>(['debates', 'account', this.accountKey, 'lobbies'], list =>

@@ -374,6 +374,28 @@ describe('DebateGatewayClient', () => {
       expect(cachedIds()).toEqual(['bb:2']);
     });
 
+    it('keeps a removed lobby out when a late insert arrives', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { status: 'removed' } });
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { ...card('bb', 1, '2026-10-07T12:00:09Z'), insert: true } });
+
+      expect(cachedIds()).toEqual(['aa:3']);
+    });
+
+    it('drops patches no newer than a removal’s as_of', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:05Z' } });
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { ...card('bb', 1, '2026-10-07T12:00:05Z'), insert: true } });
+      expect(cachedIds()).toEqual(['aa:3']);
+
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: { ...card('bb', 1, '2026-10-07T12:00:06Z'), insert: true } });
+      expect(cachedIds()).toEqual(['aa:3', 'bb:1']);
+    });
+
     it.each([
       ['no lobby_card', {}],
       ['an unknown status', { lobby_card: { status: 'later' } }],

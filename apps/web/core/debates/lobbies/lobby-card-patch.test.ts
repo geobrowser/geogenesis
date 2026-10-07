@@ -37,7 +37,12 @@ describe('parseLobbyCardPatch', () => {
   });
 
   it('reads a removal against the event’s lobby id', () => {
-    expect(parseLobbyCardPatch('aa', { status: 'removed' })).toEqual({ status: 'removed', lobbyId: 'aa' });
+    expect(parseLobbyCardPatch('aa', { status: 'removed' })).toEqual({ status: 'removed', lobbyId: 'aa', asOf: null });
+    expect(parseLobbyCardPatch('aa', { status: 'removed', as_of: '2026-10-07T12:00:03Z' })).toEqual({
+      status: 'removed',
+      lobbyId: 'aa',
+      asOf: Date.parse('2026-10-07T12:00:03Z'),
+    });
   });
 
   it.each([
@@ -103,8 +108,8 @@ describe('applyLobbyCardPatch', () => {
   it('drops a removed row and leaves a list without it alone', () => {
     const list = { lobbies: [summary({ lobby_id: 'aa' }), summary({ lobby_id: 'bb' })] };
 
-    expect(ids(applyLobbyCardPatch(list, { status: 'removed', lobbyId: 'AA' }))).toEqual(['bb']);
-    expect(applyLobbyCardPatch(list, { status: 'removed', lobbyId: 'cc' })).toBe(list);
+    expect(ids(applyLobbyCardPatch(list, { status: 'removed', lobbyId: 'AA', asOf: null }))).toEqual(['bb']);
+    expect(applyLobbyCardPatch(list, { status: 'removed', lobbyId: 'cc', asOf: null })).toBe(list);
   });
 });
 
