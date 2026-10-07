@@ -89,6 +89,18 @@ describe('demoteSeenInPage', () => {
       }).items
     ).toEqual(page);
   });
+
+  it('never drops a card when a pinned card sits where the lead would', () => {
+    const page = [0, 1, 2, 3];
+    const result = demoteSeenInPage(page, {
+      isDemoted: n => n === 0,
+      typeOf: () => 'x',
+      isPinned: n => n === 0,
+      hasLead: true,
+      canLead: () => true,
+    });
+    expect(result.items).toEqual(page);
+  });
 });
 
 describe('applySeenDemotion', () => {

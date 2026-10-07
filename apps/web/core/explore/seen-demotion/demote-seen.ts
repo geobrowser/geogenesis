@@ -40,7 +40,9 @@ export function demoteSeenInPage<T>(
 ): { items: T[]; demoted: Set<number> } {
   const demotedFlags = items.map(item => options.isDemoted(item));
   const pinned = items.map(item => options.isPinned(item));
-  const hasLead = options.hasLead && items.length > 0;
+  // A fresh card never leads (the fresh slot starts at position 2), but if one ever did, treating
+  // it as the lead would drop a card from the page.
+  const hasLead = options.hasLead && items.length > 0 && !pinned[0];
 
   // Which card leads: the lead itself, or, once seen, the highest unseen playable card of its type.
   let lead = -1;
