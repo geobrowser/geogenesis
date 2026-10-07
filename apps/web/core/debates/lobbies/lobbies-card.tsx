@@ -19,7 +19,7 @@ import { OpenLobbyDialog } from './open-lobby-dialog';
 
 /**
  * Live debate lobbies, at the top of the debates panel (GEO-3133). Signed in and `lobbyJoining`
- * only. Refetched on `debate.lobbies_changed`, which needs the panel's matchmaking scope.
+ * only. Kept current by `debate.lobbies_changed`, which needs the panel's matchmaking scope.
  */
 export function LiveLobbiesCard() {
   const joining = useFeatureFlag('lobbyJoining');

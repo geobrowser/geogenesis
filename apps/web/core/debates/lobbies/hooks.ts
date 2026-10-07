@@ -13,6 +13,7 @@ import {
   endDebateLobby,
   endDebateLobbyStepOut,
   getDebateLobby,
+  getMyDebateLobby,
   listDebateLobbies,
   sendDebateLobbyHeartbeat,
   setDebateLobbyPresence,
@@ -49,7 +50,10 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
-/** The side panel list. No polling: `debate.lobbies_changed` refetches it. */
+/**
+ * The side panel list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount:
+ * patches stop while the panel is closed.
+ */
 export function useDebateLobbies(enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -57,6 +61,19 @@ export function useDebateLobbies(enabled = true) {
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
+    enabled: enabled && ready && authenticated,
+    refetchOnMount: 'always',
+  });
+}
+
+/** The lobby the viewer is on the roster of, across tabs; see `DebateMyLobby`. */
+export function useMyDebateLobby(enabled = true) {
+  const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.myLobby(accountKey),
+    queryFn: ({ signal }) => getMyDebateLobby(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && ready && authenticated,
   });
 }

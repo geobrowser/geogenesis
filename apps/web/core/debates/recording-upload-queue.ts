@@ -3,12 +3,7 @@ import { liveQuery } from 'dexie';
 import { capture } from '~/core/analytics';
 import { db } from '~/core/database/indexeddb';
 
-import {
-  type RecordingByteSource,
-  type StreamedRecordingMultipart,
-  blobByteSource,
-  recordingBytesReleasedError,
-} from './recording-stream';
+import type { StreamedRecordingMultipart } from './recording-stream';
 import { RecordingUploadError, recordingUploadErrorProperties } from './recording-upload-errors';
 
 export type DebateRecordingUploadStage = 'queued' | 'uploaded';
@@ -73,13 +68,6 @@ export type DebateRecordingUpload = {
    * written before streaming existed, which upload as one PUT exactly as before.
    */
   multipart?: StreamedRecordingMultipart | null;
-  /**
-   * The first byte this device keeps. Everything before it went out during the debate in parts
-   * object storage confirmed, so only the rest is stored — however long the debate ran, the queue
-   * holds the tail the live upload had not sent, not the recording. Absent (0) on every row whose
-   * recording is held whole, which is every row not streamed during the debate.
-   */
-  localFromByte?: number;
   attemptCount: number;
   nextAttemptAt: number;
   lastError: string | null;
@@ -102,6 +90,7 @@ export function isDebateRecordingUploadFailed(upload: Pick<DebateRecordingUpload
 export type EnqueueDebateRecordingUpload = {
   userId: string;
   debateId: string;
+  blob: Blob;
   mimeType: string;
   startedAtMs: number;
   endedAtMs: number;
@@ -111,14 +100,7 @@ export type EnqueueDebateRecordingUpload = {
   framerate?: number | null;
   videoBitsPerSecond?: number | null;
   multipart?: StreamedRecordingMultipart | null;
-} & (
-  | { blob: Blob; recording?: never }
-  /**
-   * A recording streamed during the debate, read a range at a time. Only the bytes from its
-   * `availableFrom` are stored; the parts before it are in `multipart`, confirmed.
-   */
-  | { recording: RecordingByteSource; blob?: never }
-);
+};
 
 /**
  * Puts a finished recording in the upload queue.
@@ -142,8 +124,6 @@ export async function enqueueDebateRecordingUpload(
   const existing = await db.debateRecordingUploads.get(id);
   if (existing) return existing;
 
-  const bytes = input.recording ?? blobByteSource(input.blob);
-  const localFromByte = bytes.availableFrom;
   const now = Date.now();
   const upload: DebateRecordingUpload = {
     id,
@@ -154,8 +134,7 @@ export async function enqueueDebateRecordingUpload(
     startedAtMs: input.startedAtMs,
     endedAtMs: input.endedAtMs,
     durationSeconds: input.durationSeconds,
-    byteSize: bytes.size,
-    ...(localFromByte > 0 ? { localFromByte } : {}),
+    byteSize: input.blob.size,
     width: input.width ?? null,
     height: input.height ?? null,
     framerate: input.framerate ?? null,
@@ -173,29 +152,18 @@ export async function enqueueDebateRecordingUpload(
   };
 
   try {
-    await writeRecordingChunks(id, bytes);
-    await verifyRecordingChunks(id, bytes.size - localFromByte);
+    await writeRecordingChunks(id, input.blob);
+    await verifyRecordingChunks(id, input.blob.size);
     const stored = await db.transaction('rw', db.debateRecordingUploads, async () => {
       const raced = await db.debateRecordingUploads.get(id);
       if (raced) return raced;
       await db.debateRecordingUploads.add(upload);
       return upload;
     });
-    if (stored === upload) {
-      if (input.blob) keepRecordingInMemory(id, input.blob);
-      // Bytes already in memory cost nothing more to keep. Ones read back from IndexedDB would.
-      else if (bytes.heldInMemory)
-        keepRecordingInMemory(id, await bytes.read(localFromByte, bytes.size), localFromByte);
-    }
+    if (stored === upload) keepRecordingInMemory(id, input.blob);
     return stored;
   } catch (error) {
     const memoryOnly: DebateRecordingUpload = { ...upload, storage: 'memory' };
-    let held: Blob;
-    try {
-      held = input.blob ?? (await bytes.read(localFromByte, bytes.size));
-    } catch {
-      throw error;
-    }
     try {
       await db.transaction('rw', db.debateRecordingUploads, db.debateRecordingUploadChunks, async () => {
         await db.debateRecordingUploadChunks.where('uploadId').equals(id).delete();
@@ -207,12 +175,12 @@ export async function enqueueDebateRecordingUpload(
       // storage-quota message among them), exactly as before.
       throw error;
     }
-    keepRecordingInMemory(id, held, localFromByte);
+    keepRecordingInMemory(id, input.blob);
     console.warn('[DebateRecording] could not save the recording locally; uploading from this tab:', error);
     capture('debate_recording_upload_fallback', {
       debate_id: input.debateId,
       reason: 'saved_in_memory_only',
-      bytes: held.size,
+      bytes: input.blob.size,
       ...recordingUploadErrorProperties(error, { online: typeof navigator === 'undefined' || navigator.onLine }),
     });
     return (await db.debateRecordingUploads.get(id)) ?? memoryOnly;
@@ -221,18 +189,15 @@ export async function enqueueDebateRecordingUpload(
 
 /**
  * Writes the recording one slice at a time, so no more than one slice is held twice in memory.
- * Any slices left by an earlier attempt that died partway are cleared first. Slice 0 starts at the
- * source's `availableFrom`: the row's `localFromByte`.
+ * Any slices left by an earlier attempt that died partway are cleared first.
  */
-async function writeRecordingChunks(uploadId: string, bytes: RecordingByteSource): Promise<void> {
+async function writeRecordingChunks(uploadId: string, blob: Blob): Promise<void> {
   await db.debateRecordingUploadChunks.where('uploadId').equals(uploadId).delete();
-  const from = bytes.availableFrom;
-  for (let seq = 0; from + seq * RECORDING_UPLOAD_CHUNK_BYTES < bytes.size; seq += 1) {
-    const start = from + seq * RECORDING_UPLOAD_CHUNK_BYTES;
+  for (let seq = 0; seq * RECORDING_UPLOAD_CHUNK_BYTES < blob.size; seq += 1) {
+    const start = seq * RECORDING_UPLOAD_CHUNK_BYTES;
     // Read before the write, never inside a transaction: an IndexedDB transaction commits at the
     // first `await` that is not an IndexedDB request.
-    const slice = await bytes.read(start, Math.min(bytes.size, start + RECORDING_UPLOAD_CHUNK_BYTES));
-    const data = await slice.arrayBuffer();
+    const data = await blob.slice(start, start + RECORDING_UPLOAD_CHUNK_BYTES).arrayBuffer();
     await db.debateRecordingUploadChunks.put({ uploadId, seq, data });
   }
 }
@@ -266,9 +231,7 @@ async function verifyRecordingChunks(uploadId: string, byteSize: number): Promis
  */
 export async function readDebateRecordingUploadBlob(upload: DebateRecordingUpload): Promise<Blob> {
   const inMemory = inMemoryRecordings.get(upload.id);
-  if (inMemory && inMemory.from === 0) return inMemory.blob;
-  // Only the tail is on this device; the rest is in the parts streamed during the debate.
-  if ((upload.localFromByte ?? 0) > 0) throw recordingBytesReleasedError(0);
+  if (inMemory) return inMemory;
 
   if (upload.storage === 'chunks') {
     const chunks = await db.debateRecordingUploadChunks.where('uploadId').equals(upload.id).sortBy('seq');
@@ -306,86 +269,9 @@ export async function readDebateRecordingUploadBlob(upload: DebateRecordingUploa
   throw new RecordingUploadError('This browser no longer has a copy of the recording.', 'blob_unreadable');
 }
 
-/**
- * The recording a queue row points at, read a range at a time (GEO-2955). What a streamed upload
- * sends from: only the parts that did not go out live are read, one at a time, so finishing the
- * upload never holds the whole recording — or, for a row that keeps only the tail, could not.
- *
- * Prefers this tab's own copy where it covers the range, as {@link readDebateRecordingUploadBlob}
- * does, and checks a stored copy adds up before anything is read from it.
- */
-export async function readDebateRecordingUploadBytes(upload: DebateRecordingUpload): Promise<RecordingByteSource> {
-  const localFrom = upload.localFromByte ?? 0;
-  const inMemory = inMemoryRecordings.get(upload.id);
-  if (inMemory && inMemory.from <= localFrom) {
-    return memoryByteSource(upload.byteSize, inMemory);
-  }
-  if (upload.storage === 'chunks') {
-    await verifyStoredRecording(upload.id, upload.byteSize - localFrom);
-    return {
-      size: upload.byteSize,
-      availableFrom: localFrom,
-      heldInMemory: false,
-      read: async (start, end) => {
-        if (inMemory && start >= inMemory.from) return inMemory.blob.slice(start - inMemory.from, end - inMemory.from);
-        if (start < localFrom) throw recordingBytesReleasedError(start);
-        return readStoredRecordingRange(upload, start - localFrom, end - localFrom);
-      },
-    };
-  }
-  if (localFrom > 0) {
-    throw new RecordingUploadError('This browser no longer has a copy of the recording.', 'blob_unreadable');
-  }
-  return blobByteSource(await readDebateRecordingUploadBlob(upload));
-}
-
-function memoryByteSource(size: number, inMemory: InMemoryRecording): RecordingByteSource {
-  return {
-    size,
-    availableFrom: inMemory.from,
-    heldInMemory: true,
-    read: async (start, end) => {
-      if (start < inMemory.from) throw recordingBytesReleasedError(start);
-      return inMemory.blob.slice(start - inMemory.from, end - inMemory.from);
-    },
-  };
-}
-
-/** Like {@link verifyRecordingChunks}, with the message a reader of the copy shows. */
-async function verifyStoredRecording(uploadId: string, storedBytes: number): Promise<void> {
-  try {
-    await verifyRecordingChunks(uploadId, storedBytes);
-  } catch (error) {
-    if (error instanceof RecordingUploadError) {
-      throw new RecordingUploadError('This browser’s saved copy of the recording is incomplete.', 'blob_unreadable');
-    }
-    throw error;
-  }
-}
-
-/** Stored bytes `[start, end)`, counted from the row's `localFromByte`: only the slices they span. */
-async function readStoredRecordingRange(upload: DebateRecordingUpload, start: number, end: number): Promise<Blob> {
-  if (start >= end) return new Blob([], { type: upload.mimeType });
-  const firstSeq = Math.floor(start / RECORDING_UPLOAD_CHUNK_BYTES);
-  const lastSeq = Math.floor((end - 1) / RECORDING_UPLOAD_CHUNK_BYTES);
-  const chunks = await db.debateRecordingUploadChunks
-    .where('[uploadId+seq]')
-    .between([upload.id, firstSeq], [upload.id, lastSeq], true, true)
-    .toArray();
-  chunks.sort((a, b) => a.seq - b.seq);
-  if (chunks.length !== lastSeq - firstSeq + 1 || chunks.some((chunk, index) => chunk.seq !== firstSeq + index)) {
-    throw new RecordingUploadError('This browser’s saved copy of the recording is incomplete.', 'blob_unreadable');
-  }
-  const base = firstSeq * RECORDING_UPLOAD_CHUNK_BYTES;
-  return new Blob(
-    chunks.map(chunk => chunk.data),
-    { type: upload.mimeType }
-  ).slice(start - base, end - base);
-}
-
 /** Rewrites a pre-GEO-3116 row as chunks, dropping its inline `Blob`. Best effort. */
 async function migrateLegacyRecording(id: string, blob: Blob): Promise<void> {
-  await writeRecordingChunks(id, blobByteSource(blob));
+  await writeRecordingChunks(id, blob);
   await verifyRecordingChunks(id, blob.size);
   await db.transaction('rw', db.debateRecordingUploads, async () => {
     const row = await db.debateRecordingUploads.get(id);
@@ -400,13 +286,10 @@ async function migrateLegacyRecording(id: string, blob: Blob): Promise<void> {
  * Deliberately module state: it must outlive the debate room, which unmounts long before the upload
  * coordinator is done, and must not outlive the tab.
  */
-const inMemoryRecordings = new Map<string, InMemoryRecording>();
+const inMemoryRecordings = new Map<string, Blob>();
 
-/** A copy of a recording's bytes from `from` to the end. `from` is 0 unless the row keeps only its tail. */
-type InMemoryRecording = { from: number; blob: Blob };
-
-function keepRecordingInMemory(id: string, blob: Blob, from = 0) {
-  inMemoryRecordings.set(id, { from, blob });
+function keepRecordingInMemory(id: string, blob: Blob) {
+  inMemoryRecordings.set(id, blob);
 }
 
 /** For tests: forget every copy this tab holds, as a reload would. */
@@ -445,21 +328,10 @@ export async function requeueDebateRecordingParts(id: string): Promise<void> {
   await db.transaction('rw', db.debateRecordingUploads, async () => {
     const upload = await db.debateRecordingUploads.get(id);
     if (!upload) return;
-    const multipart = upload.multipart;
-    // Parts whose bytes this device no longer keeps cannot be sent again; resending the rest is
-    // all a retry can do.
-    const kept = upload.localFromByte ?? 0;
     await db.debateRecordingUploads.update(id, {
       stage: 'queued',
       filename: null,
-      multipart: multipart
-        ? {
-            ...multipart,
-            uploadedPartNumbers: multipart.uploadedPartNumbers.filter(
-              partNumber => partNumber * multipart.partSize <= kept
-            ),
-          }
-        : null,
+      multipart: upload.multipart ? { ...upload.multipart, uploadedPartNumbers: [] } : null,
       updatedAt: Date.now(),
     });
   });

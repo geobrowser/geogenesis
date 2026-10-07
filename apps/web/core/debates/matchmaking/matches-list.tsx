@@ -15,7 +15,7 @@ import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
 import { HubFacetRail } from './hub-facet-rail';
 import { HubCardList } from './hub-motion';
-import { HubQueryState } from './hub-states';
+import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import {
@@ -323,8 +323,6 @@ export function MatchesList({
           // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps Lobby off the signed-out
           // hub entirely, so every viewer here holds the gateway scope.
           emptyNote={serverMatches.length === 0 ? <DebateHoursNote live /> : undefined}
-          // Same label as People's, because it is the same action out of the same dead end. Two
-          // names for one button in one panel is a difference that implies something.
           // Clearing the filter is the whole answer when the filter is the cause, and browsing claims
           // cannot be — there are matches, just not in the spaces on screen.
           emptyAction={
@@ -339,11 +337,7 @@ export function MatchesList({
                     setTopicIds([]);
                   },
                 }
-              : // In the rail there is no tab to change to, and the claims list is already on screen
-                // beside this, so the "somewhere to go" half has nowhere to send anyone.
-                onTabChange
-                ? { label: 'Explore claims', onClick: () => onTabChange('explore') }
-                : undefined
+              : exploreClaimsAction(onTabChange)
           }
         >
           <HubCardList>

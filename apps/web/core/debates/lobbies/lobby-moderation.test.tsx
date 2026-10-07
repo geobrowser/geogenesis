@@ -222,7 +222,9 @@ describe('LobbyHostLists', () => {
     api.getDebateLobbyBans.mockResolvedValue(banned);
     renderWith(<LobbyHostLists lobby={lobby({ role: 'speaker', creator: false })} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Banned · 1' }));
-    expect(screen.getByText('Jordan')).toBeTruthy();
+    // The name opens the profile in the side panel; a link would leave the lobby.
+    expect(screen.getByRole('button', { name: 'Jordan' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Jordan' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Unban' })).toBeNull();
   });
 
