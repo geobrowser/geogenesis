@@ -5,6 +5,7 @@ import type { KrispNoiseFilterProcessor } from '@livekit/krisp-noise-filter';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useSetAtom } from 'jotai';
 import type { RoomConnectOptions, RoomOptions } from 'livekit-client';
 import { useRouter } from 'next/navigation';
 
@@ -75,6 +76,14 @@ import {
   useMarkDebateReady,
 } from '~/core/debates/hooks';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
+import {
+  didLocallyLeaveDebate,
+  didLocallyLeaveRematch,
+  markLocalDebateLeave,
+  markLocalRematchLeave,
+  unmarkLocalDebateLeave,
+  unmarkLocalRematchLeave,
+} from '~/core/debates/local-debate-leave';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
   DebateMediaSessionBoundary,
@@ -120,6 +129,8 @@ import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
 import { Toggle } from '~/design-system/toggle';
+
+import { opponentLeftNoticeAtom } from '~/atoms';
 
 type DebateRoomPageClientProps = {
   spaceId: string;
@@ -406,6 +417,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const rematchLeaveRequestedRef = React.useRef(false);
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
+  const setOpponentLeftNotice = useSetAtom(opponentLeftNoticeAtom);
+  const lastActiveDebateStatusRef = React.useRef<Debate['status'] | null>(null);
   const [audioMuted, setAudioMuted] = React.useState(false);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
@@ -747,6 +760,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     countdown.remainingSeconds > rematchAutoConsentLeadSeconds &&
     liveRematchDestination !== null;
 
+  // The stages where the opponent ended it under us: Ready / recording abort (`cancelled`), and
+  // Debate again while still on the thank-you screen (`rematch` ended). Both feed
+  // `shouldAnnounceOpponentLeft` below, which no longer renders anything here — it raises the
+  // app-wide notice atom and returns the viewer out to a normal screen.
+  const opponentLeftFromDebateCancel = Boolean(
+    debate &&
+    debate.status === 'cancelled' &&
+    debate.cancellation_reason !== 'connection_timeout' &&
+    recordingCancelledBy === null &&
+    !didLocallyLeaveDebate(debate.id)
+  );
+  const opponentLeftFromRematchEnd = Boolean(
+    debate &&
+    debate.rematch_session_id &&
+    rematchSessionStatus === 'ended' &&
+    !didLocallyLeaveRematch(debate.rematch_session_id) &&
+    (debate.status === 'thanking' || debate.status === 'complete')
+  );
+  const shouldAnnounceOpponentLeft = opponentLeftFromDebateCancel || opponentLeftFromRematchEnd;
+  const opponentLeftDiscardedRecording =
+    opponentLeftFromDebateCancel &&
+    (lastActiveDebateStatusRef.current === 'preflight' ||
+      lastActiveDebateStatusRef.current === 'in_progress' ||
+      lastActiveDebateStatusRef.current === 'thanking');
   // A completed debate with a live rematch session is a dead end while the room is idle:
   // DebateCoordinator defers to this page so the recording finalizes first, but finalization only
   // runs with a live connection, and an idle room has nothing left to save. Mobile reaches this
@@ -2065,6 +2102,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         await followDestination(destination, debateRematchDestinationClaimKey(session));
         return;
       }
+      // Opponent left rematch on thank-you: leave this screen and show the notice on a normal page.
+      if (session?.status === 'ended' && !didLocallyLeaveRematch(session.id)) {
+        disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
+        localMediaStreamRef.current = null;
+        setRemoteVideoReady(false);
+        setOpponentLeftNotice({ recordingDiscarded: false });
+        returnFromDebate({ forwardOnly: true });
+        return;
+      }
       returnFromDebate();
     },
     [
@@ -2076,6 +2122,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       rematchQuery.data,
       followDestination,
       returnFromDebate,
+      setOpponentLeftNotice,
     ]
   );
 
@@ -2231,6 +2278,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const leave = React.useCallback(async () => {
     if (!debate) return;
+    const rematchId = debate.rematch_session_id;
+    if (debate.status === 'thanking' && rematchId) {
+      markLocalRematchLeave(rematchId);
+    } else if (debate.status === 'complete' && rematchId && rematchQuery.data?.status === 'ended') {
+      markLocalRematchLeave(rematchId);
+    } else if (debate.status !== 'complete') {
+      markLocalDebateLeave(debate.id);
+    }
     setRoomError(null);
     try {
       const leavingLiveRematch =
@@ -2280,8 +2335,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         setRemoteVideoReady(false);
         await abortDebate.mutateAsync();
       }
-      returnFromDebate();
+      returnFromDebate({ forwardOnly: true });
     } catch (error) {
+      if (debate.status === 'thanking' && rematchId) {
+        unmarkLocalRematchLeave(rematchId);
+      } else if (debate.status === 'complete' && rematchId && rematchQuery.data?.status === 'ended') {
+        unmarkLocalRematchLeave(rematchId);
+      } else if (debate.status !== 'complete') {
+        unmarkLocalDebateLeave(debate.id);
+      }
       setRoomError(error instanceof Error ? error.message : 'Could not leave the debate.');
     }
   }, [
@@ -2294,6 +2356,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     localRematchParticipant?.consented_at,
     persistStoppedLocalRecording,
     publishRematchLeave,
+    rematchQuery.data?.status,
     rematchSessionStatus,
     returnFromDebate,
     roomState,
@@ -2402,8 +2465,36 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   React.useEffect(() => {
     if (!shouldReturnFromTerminalDebate) return;
+    if (debate?.status === 'cancelled' && !didLocallyLeaveDebate(debate.id)) return;
     returnFromDebate();
-  }, [returnFromDebate, shouldReturnFromTerminalDebate]);
+  }, [debate, returnFromDebate, shouldReturnFromTerminalDebate]);
+
+  React.useEffect(() => {
+    if (!shouldAnnounceOpponentLeft) return;
+    if (
+      roomState === 'saving' ||
+      debate?.status === 'thanking' ||
+      (debate?.status === 'complete' && roomState !== 'idle')
+    )
+      return;
+    // Leave marks after this render was committed; re-check so the leaver is not announced.
+    if (debate && didLocallyLeaveDebate(debate.id)) return;
+    if (debate?.rematch_session_id && didLocallyLeaveRematch(debate.rematch_session_id)) return;
+    setOpponentLeftNotice({ recordingDiscarded: opponentLeftDiscardedRecording });
+    returnFromDebate({ forwardOnly: true });
+  }, [
+    shouldAnnounceOpponentLeft,
+    roomState,
+    debate,
+    opponentLeftDiscardedRecording,
+    returnFromDebate,
+    setOpponentLeftNotice,
+  ]);
+
+  React.useEffect(() => {
+    if (!debate || debate.status === 'cancelled') return;
+    lastActiveDebateStatusRef.current = debate.status;
+  }, [debate]);
 
   React.useEffect(() => {
     if (!idleRematchDestination) return;

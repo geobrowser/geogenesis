@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { useAtom } from 'jotai';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useFeatureFlag } from '~/core/state/feature-flags';
@@ -36,7 +37,9 @@ import {
 import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
+import { useDebatesHub } from './matchmaking/use-debates-hub';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { OpponentLeftDialog } from './opponent-left-dialog';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { sameId } from './rooms/room-presence';
@@ -50,6 +53,7 @@ import {
 import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
 import { useDebateInteractionReporter } from './use-debate-interaction-reporter';
 import { useScrollLock } from './use-scroll-lock';
+import { opponentLeftNoticeAtom } from '~/atoms';
 
 /**
  * What to tell the viewer about a paused gateway, given why it paused.
@@ -103,6 +107,9 @@ function useDebateGatewayPauseLog(paused: boolean, reason: DebateGatewayPauseRea
 export function DebateCoordinator() {
   const router = useRouter();
   const pathname = usePathname();
+
+  const [opponentLeftNotice, setOpponentLeftNotice] = useAtom(opponentLeftNoticeAtom);
+  const debatesHub = useDebatesHub();
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
   const geoChatAuth = useGeoChatAuth();
   // Presence, not attention or visibility: being available to debate has to survive looking at
@@ -458,6 +465,15 @@ export function DebateCoordinator() {
 
   return (
     <>
+      {opponentLeftNotice && (
+        <OpponentLeftDialog
+          onClose={() => setOpponentLeftNotice(null)}
+          onFindDebate={() => {
+            setOpponentLeftNotice(null);
+            debatesHub.open();
+          }}
+        />
+      )}
       {gateway.paused && debateDebuggingEnabled && (
         <div
           role="status"

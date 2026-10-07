@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { motion } from 'framer-motion';
-import { useAtom } from 'jotai';
+import { useAtom, useSetAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
 import { capture } from '~/core/analytics';
@@ -51,6 +51,11 @@ import {
   useNotInterestedClaimIds,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
+import {
+  didLocallyLeaveRematch,
+  markLocalRematchLeave,
+  unmarkLocalRematchLeave,
+} from '~/core/debates/local-debate-leave';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -121,7 +126,7 @@ import { Text } from '~/design-system/text';
 
 import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
-import { rematchHideAgreedAtom, rematchHideMyPositionsAtom } from '~/atoms';
+import { opponentLeftNoticeAtom, rematchHideAgreedAtom, rematchHideMyPositionsAtom } from '~/atoms';
 
 const NO_PARTICIPANTS: DebateRematchParticipant[] = [];
 const NO_CLAIMS: DebateRematchClaim[] = [];
@@ -298,6 +303,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const viewerIdentityUnresolved = geoChatAuthenticated && currentUserId === null;
   const exitStartedRef = React.useRef(false);
   const leaveRequestedRef = React.useRef(false);
+  const setOpponentLeftNotice = useSetAtom(opponentLeftNoticeAtom);
   const sessionQuery = useDebateRematch(sessionId);
   const [search, setSearch] = React.useState('');
   const { value: debouncedSearch, pending: searchSettling } = useDebouncedSearch(search);
@@ -2469,7 +2475,15 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     } else if (session.status === 'ended' || session.status === 'expired') {
       // Never out of a room: geo-chat expires a `browsing` session once either party has been
       // offline 90 seconds, which is what waiting for someone looks like.
-      if (!inDebateRoom) returnFromSession(session);
+      if (!inDebateRoom) {
+        // The viewer is booted out of a dead session either way; announce 'opponent left'
+        // afterward (via the notice atom, shown by DebateCoordinator) only when the viewer didn't
+        // end it themselves and the lifetime hadn't merely lapsed (`expired`).
+        if (session.status === 'ended' && !didLocallyLeaveRematch(session.id)) {
+          setOpponentLeftNotice({ recordingDiscarded: false });
+        }
+        returnFromSession(session);
+      }
       // geo-chat replaces a finished room session on the next join, which someone who never left
       // would not otherwise send. Once per session, so a refusal cannot loop.
       else if (roomRejoin && rejoinedForRef.current !== session.id) {
@@ -2489,9 +2503,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         });
       }
     }
-  }, [inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session]);
+  }, [inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session, setOpponentLeftNotice]);
 
   const leave = () => {
+    // Durable so a Back-remount into the ended session doesn't read the viewer's own Leave as the
+    // opponent leaving; cleared again if the leave request fails.
+    markLocalRematchLeave(sessionId);
     // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a
     // room that is the wrong verb: leaving is per person and the room stays open to come back to,
     // so this walks out and lets `useRoomPresence` report the departure on unmount.
@@ -2504,6 +2521,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       onSuccess: returnFromSession,
       onError: () => {
         leaveRequestedRef.current = false;
+        unmarkLocalRematchLeave(sessionId);
       },
     });
   };
