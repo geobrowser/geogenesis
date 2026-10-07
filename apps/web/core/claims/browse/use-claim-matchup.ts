@@ -111,11 +111,8 @@ export function useClaimMatchup({
 }
 
 /**
- * What to do when a claim request is refused as `intent_missing`: geo-chat holds no readiness for a
- * side the chain does. The notification that should have made one either has not landed or never
- * will — a readiness row marked withdrawn is not repaired by anything else — so send it again where
- * the indexed side agrees with the pills, then ask for readiness afresh whether or not it went
- * through. Pass the returned handler as the request's `onError`.
+ * A claim request's `onError` for `intent_missing`: re-reports the indexed side when it matches the
+ * pills (nothing else repairs a missing readiness row), then refetches readiness either way.
  */
 export function useMissingIntentRecovery({
   claimId,
