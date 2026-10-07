@@ -52,7 +52,7 @@ import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
 import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes, debateAnalyticsLabel } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
-import { HubQueryState } from './hub-states';
+import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { offlinePerson } from './offline-person';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
 import { PersonMatches } from './person-disagreements';
@@ -441,8 +441,6 @@ export function PeopleTab({
           // Exactly one action, and which one follows the same question the message and the note do.
           // A search the viewer can undo gets the undo; a room that is genuinely empty gets somewhere
           // to go, because there is nothing to undo and waiting is the only other option (GEO-2840).
-          // In the rail there is no tab to change to and the claims list is already on screen beside
-          // this, so the "somewhere to go" half has nowhere to send anyone.
           emptyAction={
             filtersExcludedEveryone
               ? searchIsTheOnlyFilter
@@ -454,9 +452,7 @@ export function PeopleTab({
                       onSpacesClear();
                     },
                   }
-              : onTabChange
-                ? { label: 'Explore claims', onClick: () => onTabChange('explore') }
-                : undefined
+              : exploreClaimsAction(onTabChange)
           }
           signInAction={
             onRequireSignIn

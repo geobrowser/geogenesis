@@ -264,6 +264,16 @@ describe('DebateGatewayClient', () => {
       ],
     ],
     [
+      'own lobby standing',
+      { event_type: 'debate.my_lobby_changed', payload: { lobby_id: 'AB-C' } },
+      [
+        ['debates', 'account', 'user-a', 'lobbies'],
+        ['debates', 'account', 'user-a', 'my-lobby'],
+        ['debates', 'account', 'user-a', 'lobby', 'abc'],
+      ],
+    ],
+    ['an unknown type, which it ignores', { event_type: 'debate.later_changed', payload: { lobby_id: 'abc' } }, []],
+    [
       'one lobby',
       { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD' } },
       [['debates', 'account', 'user-a', 'lobby', 'abcd']],
@@ -286,6 +296,207 @@ describe('DebateGatewayClient', () => {
       expectInvalidated(invalidateQueries, { queryKey, refetchType: 'active' });
     }
     expect(invalidateQueries).toHaveBeenCalledTimes(expectedKeys.length);
+  });
+
+  describe('lobby card patches', () => {
+    const lobbiesKey = ['debates', 'account', 'user-a', 'lobbies'];
+    const myLobbyKey = ['debates', 'account', 'user-a', 'my-lobby'];
+    const row = (lobbyId: string, headcount: number, asOf: string | null = null, viewerReminded = false) => ({
+      lobby_id: lobbyId,
+      name: lobbyId,
+      scheduled: false,
+      starts_at: '2026-10-07T12:00:00Z',
+      opens_at: '2026-10-07T12:00:00Z',
+      open: true,
+      hosts: [],
+      headcount,
+      avatars: [],
+      debating_count: 0,
+      reminder_count: 0,
+      viewer_reminded: viewerReminded,
+      viewer_on_roster: false,
+      as_of: asOf,
+    });
+    const card = (lobbyId: string, headcount: number, asOf: string) => {
+      const { viewer_reminded: _r, viewer_on_roster: _o, as_of: _a, ...lobby } = row(lobbyId, headcount);
+      return { status: 'listed', as_of: asOf, lobby };
+    };
+
+    async function started() {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+    }
+
+    let eventCount = 0;
+    async function lobbiesChanged(payload: Record<string, unknown>) {
+      eventCount += 1;
+      sockets[0]!.receive('EVENT', {
+        event_id: `lobbies-${eventCount}`,
+        event_type: 'debate.lobbies_changed',
+        payload,
+      });
+      await flushInvalidations();
+    }
+
+    const cachedIds = () =>
+      queryClient
+        .getQueryData<{ lobbies: { lobby_id: string; headcount: number }[] }>(lobbiesKey)
+        ?.lobbies.map(lobby => `${lobby.lobby_id}:${lobby.headcount}`);
+
+    it('patches a cached row without refetching, keeping the viewer’s own fields', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, null, true), row('bb', 2)] });
+
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 5, '2026-10-07T12:00:01Z') });
+
+      expect(cachedIds()).toEqual(['bb:5', 'aa:3']);
+      expect(
+        queryClient.getQueryData<{ lobbies: { viewer_reminded: boolean }[] }>(lobbiesKey)?.lobbies[1]
+      ).toMatchObject({ viewer_reminded: true });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbiesKey }));
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: myLobbyKey }));
+      expectInvalidated(invalidateQueries, {
+        queryKey: [...lobbiesKey.slice(0, 3), 'lobby', 'bb'],
+        refetchType: 'active',
+      });
+    });
+
+    it('drops a patch no newer than the row, whether the GET or a patch set it', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, '2026-10-07T12:00:04Z')] });
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 9, '2026-10-07T12:00:04Z') });
+      expect(cachedIds()).toEqual(['aa:3']);
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 6, '2026-10-07T12:00:05Z') });
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:02Z') });
+      expect(cachedIds()).toEqual(['aa:6']);
+    });
+
+    it('never adds a lobby from a patch', async () => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+
+      await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 1, '2026-10-07T12:00:01Z') });
+
+      expect(cachedIds()).toEqual(['aa:3']);
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbiesKey }));
+    });
+
+    /** A list GET per call: each resolves with its response when released, in call order. */
+    function slowLobbyFetches(responses: object[]) {
+      const releases: (() => void)[] = [];
+      const fetchLobbies = vi.fn(() => {
+        const response = responses[Math.min(fetchLobbies.mock.calls.length - 1, responses.length - 1)]!;
+        return new Promise<object>(done => releases.push(() => done(response)));
+      });
+      return { fetchLobbies, release: (index: number) => releases[index]!() };
+    }
+
+    it('keeps a patch that lands during a GET when the older GET arrives, without asking again', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+      const { fetchLobbies, release } = slowLobbyFetches([{ lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] }]);
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+      release(0);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3']));
+
+      void observer.refetch();
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+      expect(cachedIds()).toEqual(['aa:8']);
+      release(1);
+
+      await vi.waitFor(() => expect(fetchLobbies).toHaveBeenCalledTimes(2));
+      await vi.runAllTicks();
+      expect(cachedIds()).toEqual(['aa:8']);
+      unsubscribe();
+    });
+
+    it('applies a patch that lands during the first load once the list arrives', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+      const { fetchLobbies, release } = slowLobbyFetches([{ lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] }]);
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+      release(0);
+
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:8']));
+      expect(fetchLobbies).toHaveBeenCalledTimes(1);
+      unsubscribe();
+    });
+
+    it('does not cancel a slow GET for a stream of patches, and drops held patches the GET has caught up with', async () => {
+      await started();
+      invalidateQueries.mockRestore();
+      const { fetchLobbies, release } = slowLobbyFetches([
+        { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] },
+        { lobbies: [row('aa', 6, '2026-10-07T12:00:04Z')] },
+        { lobbies: [row('aa', 2, '2026-10-07T12:00:09Z')] },
+      ]);
+      const observer = new QueryObserver(queryClient, { queryKey: lobbiesKey, queryFn: fetchLobbies });
+      const unsubscribe = observer.subscribe(() => undefined);
+      release(0);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:3']));
+
+      void observer.refetch();
+      for (const [headcount, second] of [
+        [4, 2],
+        [5, 3],
+        [7, 5],
+      ] as const) {
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', headcount, `2026-10-07T12:00:0${second}Z`) });
+      }
+      release(1);
+      await vi.waitFor(() => expect(fetchLobbies).toHaveBeenCalledTimes(2));
+      await vi.runAllTicks();
+      // The GET read the lobby at :04; the patch from :05 is newer and stays on top.
+      expect(cachedIds()).toEqual(['aa:7']);
+
+      void observer.refetch();
+      release(2);
+      await vi.waitFor(() => expect(cachedIds()).toEqual(['aa:2']));
+      expect(fetchLobbies).toHaveBeenCalledTimes(3);
+      unsubscribe();
+    });
+
+    it.each([
+      ['no lobby_card', {}],
+      ['another status', { lobby_card: { status: 'removed', as_of: '2026-10-07T12:00:01Z' } }],
+      ['a card without as_of', { lobby_card: { ...card('aa', 1, ''), as_of: undefined } }],
+    ])('refetches the list, not the viewer’s own lobby, for %s', async (_label, extra) => {
+      await started();
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+
+      await lobbiesChanged({ lobby_id: 'aa', ...extra });
+
+      expectInvalidated(invalidateQueries, { queryKey: lobbiesKey, refetchType: 'active' });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: myLobbyKey }));
+      expect(cachedIds()).toEqual(['aa:3']);
+    });
+
+    it('leaves the lobby page to debate.lobby_changed while the viewer is connected there', async () => {
+      await started();
+      const lobbyKey = [...lobbiesKey.slice(0, 3), 'lobby', 'aa'];
+      queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+      queryClient.setQueryData(lobbyKey, { viewer: { connected: true } });
+
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:01Z') });
+      expect(invalidateQueries).not.toHaveBeenCalledWith(expect.objectContaining({ queryKey: lobbyKey }));
+
+      queryClient.setQueryData(lobbyKey, { viewer: { connected: false } });
+      await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 5, '2026-10-07T12:00:02Z') });
+      expectInvalidated(invalidateQueries, { queryKey: lobbyKey, refetchType: 'active' });
+    });
   });
 
   it('subscribes to the matchmaking scope and reconciles every hub query on confirmation', async () => {

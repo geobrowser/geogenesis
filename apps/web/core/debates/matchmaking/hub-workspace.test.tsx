@@ -246,19 +246,28 @@ describe('before Privy has restored the session', () => {
 const picker = (label: string) => screen.getAllByRole('button', { name: label })[0];
 
 describe('choosing which claim list the workspace shows', () => {
-  it('opens on Lobby', () => {
+  it('opens on Matches', () => {
     render(<DebatesHubWorkspace />);
 
     expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
-    expect(picker('Lobby')).toBeInTheDocument();
+    expect(picker('Matches')).toBeInTheDocument();
+  });
+
+  // The label changed; the value links and the panel use did not.
+  it('still opens Matches from a ?list=lobby link', () => {
+    mocks.search = 'list=lobby';
+    render(<DebatesHubWorkspace />);
+
+    expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
+    expect(picker('Matches')).toBeInTheDocument();
   });
 
   it('offers the panel’s three lists, in its order', () => {
     render(<DebatesHubWorkspace />);
 
-    fireEvent.click(picker('Lobby'));
+    fireEvent.click(picker('Matches'));
     const labels = screen.getAllByRole('button').map(option => option.textContent ?? '');
-    const offered = ['Lobby', 'Explore', 'My positions'].map(label => labels.findIndex(text => text.includes(label)));
+    const offered = ['Matches', 'Explore', 'My positions'].map(label => labels.findIndex(text => text.includes(label)));
 
     expect(offered.every(index => index > -1)).toBe(true);
     expect(offered).toEqual([...offered].sort((a, b) => a - b));
@@ -267,7 +276,7 @@ describe('choosing which claim list the workspace shows', () => {
   it('swaps the list rather than narrowing it', () => {
     render(<DebatesHubWorkspace />);
 
-    fireEvent.click(picker('Lobby'));
+    fireEvent.click(picker('Matches'));
     fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
 
     expect(screen.getByTestId('claims-tab-positions')).toBeInTheDocument();
@@ -277,7 +286,7 @@ describe('choosing which claim list the workspace shows', () => {
   it('remounts the tab when the list changes, rather than reusing the instance', () => {
     render(<DebatesHubWorkspace />);
 
-    fireEvent.click(picker('Lobby'));
+    fireEvent.click(picker('Matches'));
     fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
     fireEvent.click(picker('Explore'));
     fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
@@ -286,7 +295,7 @@ describe('choosing which claim list the workspace shows', () => {
     expect(mocks.mounts).toContain('positions');
   });
 
-  it('gives Lobby its own component, not a ClaimsTab variant', () => {
+  it('gives Matches its own component, not a ClaimsTab variant', () => {
     render(<DebatesHubWorkspace />);
 
     expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
@@ -306,7 +315,7 @@ describe('choosing which claim list the workspace shows', () => {
     const labels = screen.getAllByRole('button').map(option => option.textContent ?? '');
 
     expect(labels.some(label => label.includes('Explore'))).toBe(true);
-    for (const gated of ['Lobby', 'My positions']) {
+    for (const gated of ['Matches', 'My positions']) {
       expect(labels.some(label => label.includes(gated))).toBe(false);
     }
   });
@@ -322,9 +331,9 @@ describe('choosing which claim list the workspace shows', () => {
   it('hands the picker to whichever list is showing', () => {
     render(<DebatesHubWorkspace />);
 
-    expect(within(screen.getByTestId('lobby-tab')).getAllByRole('button', { name: 'Lobby' })).toHaveLength(1);
+    expect(within(screen.getByTestId('lobby-tab')).getAllByRole('button', { name: 'Matches' })).toHaveLength(1);
 
-    fireEvent.click(picker('Lobby'));
+    fireEvent.click(picker('Matches'));
     fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
 
     expect(within(screen.getByTestId('claims-tab-explore')).getAllByRole('button', { name: 'Explore' })).toHaveLength(

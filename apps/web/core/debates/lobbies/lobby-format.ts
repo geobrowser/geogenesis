@@ -235,6 +235,14 @@ export function memberActions(
   return actions;
 }
 
+/** The roster line for someone in a debate: what they are debating when geo-chat says. */
+export function inDebateLabel(subject: DebateLobbyMember['in_debate_subject']) {
+  if (subject?.phase === 'choosing_claim') return 'In a debate, picking a claim';
+  if (subject?.phase === 'on_claim' && subject.claim_name.trim())
+    return `In a debate on “${subject.claim_name.trim()}”`;
+  return 'In a debate';
+}
+
 /** Raised hands, oldest first. */
 export function raisedHands(members: DebateLobbyMember[]) {
   return members

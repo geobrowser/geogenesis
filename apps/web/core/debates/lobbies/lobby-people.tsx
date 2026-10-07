@@ -1,5 +1,9 @@
 'use client';
 
+import type * as React from 'react';
+
+import { useOpenDebaterProfile } from '~/core/debates/browse/use-open-debater-profile';
+
 import { Avatar } from '~/design-system/avatar';
 import { AvatarGroup } from '~/design-system/avatar-group';
 
@@ -18,5 +22,27 @@ export function LobbyAvatarStack({ people, total }: { people: DebateLobbyPerson[
       ))}
       <AvatarGroup.Overflow count={total - people.length} size={20} />
     </AvatarGroup>
+  );
+}
+
+/**
+ * A person's name that opens their profile in the entity side panel. Not a link: navigating away
+ * unmounts the lobby page, which leaves the lobby and its voice.
+ */
+export function LobbyPersonName({
+  person,
+  interactionSurface,
+  children,
+}: {
+  person: Pick<DebateLobbyPerson, 'profile_space_id'>;
+  interactionSurface: string;
+  children: React.ReactNode;
+}) {
+  const openProfile = useOpenDebaterProfile(person.profile_space_id, { interactionSurface, lazy: true });
+
+  return (
+    <button type="button" onClick={openProfile} className="block max-w-full truncate text-left hover:underline">
+      {children}
+    </button>
   );
 }
