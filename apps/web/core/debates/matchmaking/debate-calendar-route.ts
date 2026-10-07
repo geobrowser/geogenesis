@@ -1,4 +1,6 @@
-import { type CalendarPicks, splitClaimPickKey } from './calendar-narrowing';
+import { normId } from '~/core/utils/norm-id';
+
+import { type CalendarPicks, claimPickKey, splitClaimPickKey } from './calendar-narrowing';
 
 /** Where the calendar was opened from, read for `debate_calendar_opened`'s `opened_from`. */
 export const CALENDAR_FROM_PARAM = 'from';
@@ -24,14 +26,18 @@ export function calendarHref(from: string | null, picks?: CalendarPicks): string
   return query ? `${CALENDAR_PATH}?${query}` : CALENDAR_PATH;
 }
 
-function idList(raw: string | null): string[] {
+/**
+ * A comma-separated list, each entry in its canonical spelling, then deduplicated: in that order,
+ * so one id written hyphenated and bare is one pick, not two.
+ */
+function idList(raw: string | null, canonical: (id: string) => string | null): string[] {
   if (!raw) return [];
   return [
     ...new Set(
-      raw
-        .split(',')
-        .map(id => id.trim().toLowerCase())
-        .filter(Boolean)
+      raw.split(',').flatMap(id => {
+        const value = id.trim() ? canonical(id.trim()) : null;
+        return value ? [value] : [];
+      })
     ),
   ];
 }
@@ -39,12 +45,11 @@ function idList(raw: string | null): string[] {
 /** Picks from the URL. Hyphenated or not, ids come back in the one spelling the panel keys on. */
 export function readCalendarPicks(params: Pick<URLSearchParams, 'get'> | null | undefined): CalendarPicks {
   if (!params) return { people: [], claims: [], matchesOnly: false };
-  const hex = (id: string) => id.replace(/-/g, '');
   return {
-    people: idList(params.get(CALENDAR_PEOPLE_PARAM)).map(hex),
-    claims: idList(params.get(CALENDAR_CLAIMS_PARAM)).flatMap(key => {
+    people: idList(params.get(CALENDAR_PEOPLE_PARAM), normId),
+    claims: idList(params.get(CALENDAR_CLAIMS_PARAM), key => {
       const ids = splitClaimPickKey(key);
-      return ids ? [`${hex(ids.spaceId)}:${hex(ids.claimId)}`] : [];
+      return ids ? claimPickKey(ids.spaceId, ids.claimId) : null;
     }),
     matchesOnly: params.get(CALENDAR_MATCHES_PARAM) === '1',
   };

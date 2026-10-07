@@ -90,6 +90,7 @@ import { HubPillButton } from './hub-pill-button';
 import { HubMessage, HubQueryState } from './hub-states';
 import { INLINE_SLOTS, PersonRow, type PersonSchedule, SetAvailabilityNotice, schedulableAsPerson } from './people-tab';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
+import { claimName } from './person-disagreements';
 import { isPersonId } from './person-records-document';
 import { SpaceFilterPills } from './space-filter-pills';
 import { claimTopicsById, topicsFor } from './topic-facets';
@@ -240,7 +241,7 @@ function DebateCalendarBody({
   const { data: requests } = useDebateRequests(true);
   const scheduled = useScheduledDebates(true);
   const currentUserId = useCurrentGeoChatUserId();
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
   const popoverPortal = useElevatedPopoverPortal();
 
   const now = useMinuteClock();
@@ -324,6 +325,7 @@ function DebateCalendarBody({
     matchesKnown,
     viewerHasPositions,
     matchesLoading,
+    matchesUnavailable,
     matchingSpaceIds,
     matchingClaimNamesById,
     matchingClaimsLoading,
@@ -349,11 +351,13 @@ function DebateCalendarBody({
   // Everyone's positions, for the Claims tab and for claim picks: who holds which claim, on which
   // side. The People tab's read above only knows the claims the viewer answered.
   const viewerProfileSpaceId = personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;
+  // The roster's positions whether or not the viewer has a personal space of their own: someone
+  // still setting one up can pick a claim and see who holds it, just not who opposes them.
   const allPositionParticipants = React.useMemo(
     () =>
-      wantAllPositions && viewerProfileSpaceId
+      wantAllPositions
         ? [
-            { profile_space_id: viewerProfileSpaceId },
+            ...(viewerProfileSpaceId ? [{ profile_space_id: viewerProfileSpaceId }] : []),
             ...allPeople.flatMap(person =>
               isPersonId(person.profile_space_id) ? [{ profile_space_id: person.profile_space_id }] : []
             ),
@@ -362,13 +366,32 @@ function DebateCalendarBody({
     [allPeople, viewerProfileSpaceId, wantAllPositions]
   );
   const allPositions = useParticipantPositions(allPositionParticipants, viewerProfileSpaceId);
-  // Whether a first answer has landed. Not whether the answer is for the current roster: the read is
-  // keyed on everyone on the calendar, online people included, and that list is polled, so the key
-  // moves whenever someone comes or goes. Waiting on `isPlaceholderData` too sent the whole week back
-  // to its skeleton on every such change while a claim was picked (GEO-3220 review: "two cycles of
-  // the calendar reloading"). The held answer is the right one to draw meanwhile; a newcomer's
-  // positions join it when the refetch lands.
-  const allPositionsReady = allPositionParticipants.length > 0 && !allPositions.isLoading;
+  /**
+   * Where everyone's positions stand, for anything that narrows on them.
+   *
+   * `ready` once a first answer has landed, and not again after: the read is keyed on everyone on
+   * the calendar, online people included, and that list is polled, so the key moves whenever someone
+   * comes or goes. Waiting on `isPlaceholderData` too sent the week back to its skeleton on every such
+   * change (GEO-3220 review: "two cycles of the calendar reloading"); the held answer is drawn instead.
+   *
+   * `failed` is a read that errored with nothing in hand, which is not an answer of "nobody holds
+   * it": the picks it would judge are set aside and the page says so, while the read's poll retries.
+   * An empty roster, once it has loaded, is an answer.
+   */
+  const allPositionsState: 'idle' | 'pending' | 'ready' | 'failed' = !wantAllPositions
+    ? 'idle'
+    : personalSpaceLoading
+      ? 'pending'
+      : allPositionParticipants.length === 0
+        ? schedulableQuery.data === undefined
+          ? 'pending'
+          : 'ready'
+        : allPositions.isLoading
+          ? 'pending'
+          : allPositions.error !== null && allPositions.byClaim.size === 0
+            ? 'failed'
+            : 'ready';
+  const allPositionsReady = allPositionsState === 'ready';
   const pool = React.useMemo(() => new Set(allPeople.map(person => normId(person.profile_space_id))), [allPeople]);
   const claimSummaries = React.useMemo(
     () => summarizeClaims(allPositions.byClaim, viewerProfileSpaceId, pool),
@@ -381,11 +404,26 @@ function DebateCalendarBody({
     [viewerHasPositions]
   );
   const effectivePicks = React.useMemo(() => guardPicks(picks), [guardPicks, picks]);
+  /**
+   * The picks as far as the data in hand can judge them. A read that failed leaves its picks unjudged
+   * rather than judging them against nothing — which hid everyone. The panel still shows them ticked.
+   */
+  const judgeable = React.useCallback(
+    (withPicks: CalendarPicks): CalendarPicks => {
+      const claims = allPositionsState === 'failed' ? [] : withPicks.claims;
+      const matchesOnly = withPicks.matchesOnly && !(matchesUnavailable && claims.length === 0);
+      return claims === withPicks.claims && matchesOnly === withPicks.matchesOnly
+        ? withPicks
+        : { ...withPicks, claims, matchesOnly };
+    },
+    [allPositionsState, matchesUnavailable]
+  );
+  const judgedPicks = React.useMemo(() => judgeable(effectivePicks), [effectivePicks, judgeable]);
   // A pick the data to judge it has not arrived for yet: the week waits rather than drawing people
   // the pick is about to hide.
   const picksPending =
-    (effectivePicks.claims.length > 0 && !allPositionsReady) ||
-    (effectivePicks.matchesOnly && effectivePicks.claims.length === 0 && matchesLoading);
+    (judgedPicks.claims.length > 0 && allPositionsState === 'pending') ||
+    (judgedPicks.matchesOnly && judgedPicks.claims.length === 0 && matchesLoading);
 
   // The space filter narrows client-side unless the server already did, in which case its
   // membership answer stands.
@@ -403,9 +441,9 @@ function DebateCalendarBody({
     (withPicks: CalendarPicks) => (userKey: string) => {
       const person = peopleByUser.get(userKey);
       if (!person || !inSpaces(person)) return false;
-      return passesPicks(normId(person.profile_space_id), withPicks, claimSummaries, profileMatchCount);
+      return passesPicks(normId(person.profile_space_id), judgeable(withPicks), claimSummaries, profileMatchCount);
     },
-    [claimSummaries, inSpaces, peopleByUser, profileMatchCount]
+    [claimSummaries, inSpaces, judgeable, peopleByUser, profileMatchCount]
   );
   const include = React.useMemo(() => includeWith(effectivePicks), [effectivePicks, includeWith]);
 
@@ -680,13 +718,22 @@ function DebateCalendarBody({
       return {
         claims: claimListRows(claimSummaries, guarded, spaceIds).map(row => ({
           ...row,
-          name: panelClaimNames.get(normId(row.summary.claimId)) ?? null,
+          name: claimName(row.summary.claimId, panelClaimNames, panelClaimEntitiesLoading),
           opponents: opponentsOf(row.summary.opponents),
         })),
         people: personListRows(personFacts, guarded, claimSummaries),
       };
     },
-    [claimSummaries, guardPicks, panelClaimNames, personFacts, profileToUser, slotsByUser, spaceIds]
+    [
+      claimSummaries,
+      guardPicks,
+      panelClaimEntitiesLoading,
+      panelClaimNames,
+      personFacts,
+      profileToUser,
+      slotsByUser,
+      spaceIds,
+    ]
   );
   const panelRows = React.useMemo(() => panelRowsFor(picks), [panelRowsFor, picks]);
 
@@ -728,7 +775,11 @@ function DebateCalendarBody({
     },
     [freeInWeek, slotsByUser]
   );
-  const shownCountFor = (withPicks: CalendarPicks) => drawnInWeek(weekOffset, includeWith(guardPicks(withPicks)));
+  // Unknown while a draft's claims are still waiting on everyone's positions, rather than a 0.
+  const shownCountFor = (withPicks: CalendarPicks) =>
+    withPicks.claims.length > 0 && allPositionsState === 'pending'
+      ? null
+      : drawnInWeek(weekOffset, includeWith(guardPicks(withPicks)));
   const drawnInOtherWeek = React.useMemo(
     () => drawnInWeek(otherWeekOffset, include),
     [drawnInWeek, include, otherWeekOffset]
@@ -740,7 +791,12 @@ function DebateCalendarBody({
   // or a week still loading would read as empty.
   const picksKey = `${effectivePicks.people.join()}|${effectivePicks.claims.join()}|${effectivePicks.matchesOnly}`;
   const settledPicksKey = React.useRef<string | null>(null);
-  const picksSettled = !schedulableQuery.isLoading && schedulableQuery.data !== undefined && !picksPending;
+  // Settled only on picks the data could judge: a failed read must not use up the one move it gets.
+  const picksSettled =
+    !schedulableQuery.isLoading &&
+    schedulableQuery.data !== undefined &&
+    !picksPending &&
+    judgedPicks === effectivePicks;
   React.useEffect(() => {
     if (!picksSettled || settledPicksKey.current === picksKey) return;
     settledPicksKey.current = picksKey;
@@ -749,13 +805,11 @@ function DebateCalendarBody({
 
   // The line above the week: what is narrowing it, and any pick it is hiding. Only with something
   // picked, so the calendar with nothing picked reads exactly as it did.
-  const narrowNote = hasPicks(effectivePicks)
-    ? narrowingSentence({
-        picks: effectivePicks,
-        shownCount: drawnUsers.size,
-        spaceNames: spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
-      })
-    : null;
+  const narrowNote = narrowingSentence({
+    picks: judgedPicks,
+    shownCount: drawnUsers.size,
+    spaceNames: spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
+  });
   const hiddenNote = hiddenPicksSentence({
     hiddenPeople: picks.people.flatMap(profileKey => {
       const known = profileToUser.get(profileKey);
@@ -824,7 +878,7 @@ function DebateCalendarBody({
         onPicksChange={onPicksChange}
         claims={rows.claims}
         people={rows.people}
-        loading={panelTab === 'claims' ? !allPositionsReady : false}
+        loading={panelTab === 'claims' && allPositionsState === 'pending'}
         viewerHasPositions={viewerHasPositions}
         labelsById={labelsById}
         popoverPortal={portal}
@@ -935,9 +989,14 @@ function DebateCalendarBody({
               Couldn&rsquo;t load your own debates, so they&rsquo;re missing from the week.
             </PartialLoadNote>
           ) : null}
-          {allPositions.error && wantAllPositions ? (
+          {allPositionsState === 'failed' ? (
             <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
               Couldn&rsquo;t load everyone&rsquo;s positions, so claims can&rsquo;t narrow the week yet.
+            </Text>
+          ) : null}
+          {effectivePicks.matchesOnly && judgedPicks.matchesOnly !== effectivePicks.matchesOnly ? (
+            <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
+              Couldn&rsquo;t load your matches, so Matches only can&rsquo;t narrow the week yet.
             </Text>
           ) : null}
           {blockedReason ? (

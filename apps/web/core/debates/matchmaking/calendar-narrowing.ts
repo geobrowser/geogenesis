@@ -173,10 +173,10 @@ export function claimListRows(
   const passes = (summary: ClaimSummary) => {
     if (spaces.size > 0 && !spaces.has(normId(summary.spaceId))) return false;
     if (picks.matchesOnly && summary.opponents.size === 0) return false;
-    if (
-      picks.people.length > 0 &&
-      !picks.people.some(person => summary.agree.has(person) || summary.disagree.has(person))
-    ) {
+    // The week's own test of a picked person against a picked claim, so ticking a claim offered here
+    // never empties the week: with Matches only, a picked person must be on the other side of it, not
+    // merely hold it while somebody else is.
+    if (picks.people.length > 0 && !picks.people.some(person => holdsPickedClaim(person, summary.key, picks, claims))) {
       return false;
     }
     return true;
@@ -288,14 +288,17 @@ export function narrowingSentence({
   shownCount: number;
   spaceNames: readonly string[];
 }): string | null {
-  if (!hasPicks(picks) && spaceNames.length === 0) return null;
+  // Space pills alone are the calendar as it was before the panel, which had no such line.
+  if (!hasPicks(picks)) return null;
   const people = `${shownCount} ${shownCount === 1 ? 'person' : 'people'}`;
   const claimCount = picks.claims.length;
   let sentence: string;
   if (claimCount > 0) {
     sentence =
       `Showing ${people}` +
-      (picks.matchesOnly ? ' who disagree with you on ' : ' with a position on ') +
+      (picks.matchesOnly
+        ? ` who ${shownCount === 1 ? 'disagrees' : 'disagree'} with you on `
+        : ' with a position on ') +
       (claimCount === 1 ? 'the claim you picked' : `any of the ${claimCount} claims you picked`) +
       (picks.people.length > 0 ? ', among the people you picked' : '');
   } else if (picks.people.length > 0) {

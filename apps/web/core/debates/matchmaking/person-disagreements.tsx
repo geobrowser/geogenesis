@@ -122,7 +122,7 @@ export function PersonMatches({
  * the map means the entity loaded successfully, so only that case earns the "Untitled" fallback;
  * a settled lookup with no entity covers both a failed batch and a successfully missing entity.
  */
-function claimName(
+export function claimName(
   claimId: string,
   claimNamesById: ReadonlyMap<string, string | null>,
   claimNamesLoading: boolean

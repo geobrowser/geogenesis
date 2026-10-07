@@ -870,8 +870,11 @@ export function SidePanelProfileName({
   href: string;
   analyticsSurface: DebateAnalyticsSurface;
 }) {
+  // Lazy: a list of these mounts the whole roster at once, and each lookup is a space read. The
+  // first click starts it, and the hook finishes that click when the space lands.
   const openProfile = useOpenDebaterProfile(person.profile_space_id, {
     interactionSurface: analyticsSurface === 'calendar' ? 'debate_calendar' : 'debates_hub_people',
+    lazy: true,
   });
   return (
     <Link

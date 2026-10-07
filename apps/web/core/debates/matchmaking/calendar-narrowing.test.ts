@@ -137,6 +137,20 @@ describe('the panel lists', () => {
     ]);
   });
 
+  it('offers a claim to a picked person only as the week would judge them, with Matches only', () => {
+    // Jonah agrees with the viewer on phones; Maya disagrees. Picking Jonah with Matches only, the
+    // week would hide him on phones, so the list must not offer it to him.
+    const withJonah = { ...NO_PICKS, people: [JONAH], matchesOnly: true };
+    expect(claimListRows(claims, withJonah, []).map(item => item.summary.key)).toEqual([]);
+    const withMaya = { ...NO_PICKS, people: [MAYA], matchesOnly: true };
+    expect(claimListRows(claims, withMaya, []).map(item => item.summary.key)).toEqual([PHONES_KEY]);
+    // And ticking what is offered never empties the week.
+    for (const row of claimListRows(claims, withMaya, [])) {
+      const picked = { ...withMaya, claims: [row.summary.key] };
+      expect(passesPicks(MAYA, picked, claims, () => 1)).toBe(true);
+    }
+  });
+
   it('keeps a claim picked from a link that nobody on the calendar holds', () => {
     const stray = claimPickKey(AI, 'cccccccccccccccccccccccccccccc09');
     const rows = claimListRows(claims, { ...NO_PICKS, claims: [stray] }, []);
@@ -158,8 +172,19 @@ describe('the panel lists', () => {
 });
 
 describe('the line above the week', () => {
-  it('says nothing with nothing picked', () => {
+  it('says nothing with nothing picked, spaces included: that is the calendar as it was', () => {
     expect(narrowingSentence({ picks: NO_PICKS, shownCount: 3, spaceNames: [] })).toBeNull();
+    expect(narrowingSentence({ picks: NO_PICKS, shownCount: 3, spaceNames: ['AI'] })).toBeNull();
+  });
+
+  it('agrees in number', () => {
+    expect(
+      narrowingSentence({
+        picks: { ...NO_PICKS, claims: [PHONES_KEY], matchesOnly: true },
+        shownCount: 1,
+        spaceNames: [],
+      })
+    ).toBe('Showing 1 person who disagrees with you on the claim you picked.');
   });
 
   it('says what is narrowing the week', () => {
@@ -221,6 +246,16 @@ describe('picks in the URL', () => {
     expect(writeCalendarPicks(params, { ...picks, people: [], matchesOnly: false }).toString()).toBe(
       `from=%2Fdebates&claims=${AI}%3A${PHONES}`
     );
+  });
+
+  it('counts one id once, however it is spelled', () => {
+    const hyphenated = '019fedae-72b6-7ab2-927a-df044d57c511';
+    const bare = '019fedae72b67ab2927adf044d57c511';
+    const picks = readCalendarPicks(
+      new URLSearchParams({ people: `${hyphenated},${bare}`, claims: `${AI}:${PHONES},${AI}:${PHONES.toUpperCase()}` })
+    );
+    expect(picks.people).toEqual([bare]);
+    expect(picks.claims).toEqual([PHONES_KEY]);
   });
 
   it('links to a narrowed calendar', () => {

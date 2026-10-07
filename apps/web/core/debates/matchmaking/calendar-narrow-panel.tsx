@@ -77,7 +77,8 @@ export type ClaimOpponent = {
 };
 
 export type PanelClaim = ClaimListRow & {
-  name: string | null;
+  /** What the row calls it: the name, or that it is loading or unavailable (`claimName`). */
+  name: string;
   opponents: ClaimOpponent[];
 };
 
@@ -188,7 +189,7 @@ export function CalendarNarrowPanelBody({
   );
 
   const searchedClaims = React.useMemo(
-    () => (term ? claims.filter(claim => claim.name?.toLowerCase().includes(term)) : claims),
+    () => (term ? claims.filter(claim => claim.name.toLowerCase().includes(term)) : claims),
     [claims, term]
   );
   const searchedPeople = React.useMemo(
@@ -443,7 +444,7 @@ function ClaimRow({
 }) {
   const { summary } = claim;
   const space = spaceLabel(labelsById, summary.spaceId);
-  const name = claim.name?.trim() || 'Untitled claim';
+  const name = claim.name;
   return (
     <PickRow
       label={name}
@@ -721,8 +722,8 @@ export function CalendarNarrowSheet({
   onOpenChange: (open: boolean) => void;
   picks: CalendarPicks;
   onApply: (picks: CalendarPicks) => void;
-  /** How many people the week would show with these picks. */
-  shownCount: (picks: CalendarPicks) => number;
+  /** How many people the week would show with these picks; `null` while that is not known yet. */
+  shownCount: (picks: CalendarPicks) => number | null;
   /** `portal` is inside the sheet: a popover portalled outside a modal sheet could not be pressed. */
   renderBody: (
     draft: CalendarPicks,
@@ -766,7 +767,7 @@ export function CalendarNarrowSheet({
               }}
               className="h-11 w-full rounded-full bg-text text-metadata text-white transition-colors hover:bg-text/90"
             >
-              Show {count} {count === 1 ? 'person' : 'people'}
+              {count === null ? 'Show people' : `Show ${count} ${count === 1 ? 'person' : 'people'}`}
             </button>
           </div>
           <div ref={setPortal} />

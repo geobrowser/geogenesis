@@ -44,6 +44,10 @@ const mocks = vi.hoisted(() => ({
   positions: [] as ParticipantPosition[],
   positionReads: [] as unknown[][],
   positionsPlaceholder: false,
+  positionsError: null as Error | null,
+  matchesUnavailable: false,
+  claimEntitiesLoading: false,
+  profileOpenOptions: [] as unknown[],
   claimNames: new Map<string, string>(),
   openProfile: vi.fn(),
   respond: vi.fn(),
@@ -76,7 +80,8 @@ vi.mock('../participant-positions', () => ({
   useParticipantPositions: (participants: unknown[]) => {
     mocks.positionReads.push(participants);
     const byClaim = new Map<string, ParticipantPosition[]>();
-    if (participants.length > 0) {
+    // A failed read with nothing held: no rows, and the error.
+    if (participants.length > 0 && !mocks.positionsError) {
       for (const row of mocks.positions) byClaim.set(row.claimId, [...(byClaim.get(row.claimId) ?? []), row]);
     }
     return {
@@ -84,7 +89,7 @@ vi.mock('../participant-positions', () => ({
       isLoading: false,
       isPlaceholderData: mocks.positionsPlaceholder,
       isFetching: mocks.positionsPlaceholder,
-      error: null,
+      error: mocks.positionsError,
     };
   },
 }));
@@ -92,7 +97,7 @@ vi.mock('../claim-picker-page', async () => {
   const { TOPICS_PROPERTY_ID } = await import('~/core/claims/ontology');
   return {
     useClaimEntitiesByIds: (ids: string[]) => ({
-      entities: ids.map(id => ({
+      entities: (mocks.claimEntitiesLoading ? [] : ids).map(id => ({
         id,
         name: mocks.claimNames.get(id) ?? null,
         relations: (mocks.claimTopics.get(id) ?? []).map(topic => ({
@@ -101,7 +106,7 @@ vi.mock('../claim-picker-page', async () => {
           spaceId: null,
         })),
       })),
-      isLoading: false,
+      isLoading: mocks.claimEntitiesLoading,
       error: null,
     }),
   };
@@ -124,9 +129,12 @@ vi.mock('../browse/use-debate-claim-response', () => ({
 vi.mock('~/core/sync/use-store', () => ({ useQueryEntity: () => ({ entity: null }) }));
 // Resolving a profile reads the space; here it only has to be asked, with whose.
 vi.mock('../browse/use-open-debater-profile', () => ({
-  useOpenDebaterProfile: (profileSpaceId: string) => (event: { preventDefault: () => void }) => {
-    event.preventDefault();
-    mocks.openProfile(profileSpaceId);
+  useOpenDebaterProfile: (profileSpaceId: string, options?: unknown) => {
+    mocks.profileOpenOptions.push(options);
+    return (event: { preventDefault: () => void }) => {
+      event.preventDefault();
+      mocks.openProfile(profileSpaceId);
+    };
   },
 }));
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
@@ -224,6 +232,7 @@ vi.mock('./use-person-facts', () => ({
     matchAnalysis: { byProfile: mocks.matchesByProfile, countsByProfileAndSpace: new Map() },
     matchesKnown: true,
     viewerHasPositions: mocks.viewerHasPositions,
+    matchesUnavailable: mocks.matchesUnavailable,
     matchingSpaceIds: [],
     matchingClaimNamesById: new Map(),
     matchingClaimsLoading: false,
@@ -389,6 +398,10 @@ beforeEach(() => {
     positions: [],
     positionReads: [],
     positionsPlaceholder: false,
+    positionsError: null,
+    matchesUnavailable: false,
+    claimEntitiesLoading: false,
+    profileOpenOptions: [],
     claimNames: new Map(),
     claimTopics: new Map(),
   });
@@ -1105,7 +1118,7 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(mocks.searchParams.get('matches')).toBe('1');
     expect(thursday()).toHaveAccessibleName(/Elena/);
     expect(thursday()).not.toHaveAccessibleName(/Marco/);
-    expect(screen.getByText(/Showing 1 person who disagree with you on the claim you picked\./)).toBeInTheDocument();
+    expect(screen.getByText(/Showing 1 person who disagrees with you on the claim you picked\./)).toBeInTheDocument();
     expect(filterEvents()).toEqual([{ filter: 'claim' }, { filter: 'matches_only' }]);
   });
 
@@ -1204,6 +1217,61 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 
     expect(screen.queryByLabelText('Loading who is free')).not.toBeInTheDocument();
     expect(thursday()).toHaveAccessibleName(/Elena/);
+  });
+
+  it('narrows to who holds a claim for a viewer with no personal space yet, rather than waiting forever', async () => {
+    mocks.personalSpaceId = null;
+    mocks.viewerHasPositions = false;
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}` });
+    render(<DebateCalendar />);
+
+    // Elena and Marco hold claim one; Ana does not.
+    expect(await screen.findByRole('gridcell', { name: /Thursday.*free:/ })).toHaveAccessibleName(/Elena/);
+    expect(thursday()).toHaveAccessibleName(/Marco/);
+    expect(screen.queryByRole('gridcell', { name: /Friday.*Ana/ })).not.toBeInTheDocument();
+  });
+
+  it("leaves a claim pick unjudged, and says so, when everyone's positions fail to load", () => {
+    mocks.positionsError = new Error('graph down');
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}` });
+    render(<DebateCalendar />);
+
+    // Not an empty week: a failed read is not an answer of "nobody holds it".
+    expect(screen.queryByText(/Nobody who matches those filters/)).not.toBeInTheDocument();
+    expect(cell(/Friday.*free: Ana/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Couldn’t load everyone’s positions, so claims can’t narrow the week yet\./)
+    ).toBeInTheDocument();
+    // The pick itself survives, ticked, for when the read comes back.
+    expect(screen.getByRole('button', { name: 'Claims, 1 picked' })).toBeInTheDocument();
+  });
+
+  it('leaves Matches only unjudged, and says so, when your matches fail to load', () => {
+    mocks.matchesUnavailable = true;
+    mocks.searchParams = new URLSearchParams({ matches: '1' });
+    render(<DebateCalendar />);
+
+    expect(thursday()).toHaveAccessibleName(/Marco/);
+    expect(
+      screen.getByText(/Couldn’t load your matches, so Matches only can’t narrow the week yet\./)
+    ).toBeInTheDocument();
+  });
+
+  it('says a claim is loading rather than calling it untitled', () => {
+    mocks.claimEntitiesLoading = true;
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    expect(within(panel()).getAllByText('Loading claim…').length).toBeGreaterThan(0);
+    expect(within(panel()).queryByText('Untitled claim')).not.toBeInTheDocument();
+  });
+
+  it('reads profiles lazily, on the first click rather than for every row it mounts', () => {
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    expect(mocks.profileOpenOptions.length).toBeGreaterThan(0);
+    expect(mocks.profileOpenOptions.every(options => (options as { lazy?: boolean })?.lazy === true)).toBe(true);
   });
 
   it('keeps picks from the URL on a reload', () => {
