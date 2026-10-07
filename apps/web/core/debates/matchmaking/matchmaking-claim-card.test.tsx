@@ -919,6 +919,26 @@ describe('faces borrowed from the match', () => {
     // And no overflow either, which is the other half of what the merge would have added.
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
   });
+
+  it('borrows nobody where the host supplies its own offer', () => {
+    // The lobby's shape: its offer reaches only people in the room, so an account-level match's
+    // faces would name someone the offer cannot reach.
+    mocks.match = { id: 'match-1', viewer_position: true, positions: matchWithOpponent };
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={[
+          { ...positions[0], present_count: 0, participants: [] },
+          { ...positions[1], present_count: 0, participants: [] },
+        ]}
+        readiness={readiness()}
+        endSlot={<button type="button">Host offer</button>}
+      />
+    );
+
+    expect(within(screen.getByRole('button', { name: /^Disagree/ })).queryAllByTestId('avatar')).toHaveLength(0);
+  });
 });
 
 /**
