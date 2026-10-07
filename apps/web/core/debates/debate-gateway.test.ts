@@ -1745,6 +1745,42 @@ describe('DebateGatewayClient', () => {
     expect(debateSubscribes()).toBe(5);
   });
 
+  it('does not let a READY for another scope re-send a scope waiting on its check backoff', async () => {
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([{ scope: 'space', space_id: 'space-1' }]));
+    client.retainScope({ scope: 'debate', debate_id: 'debate-b' });
+    sockets[0]!.receive('ERROR', {
+      code: 'subscription_check_failed',
+      message: 'try again',
+      subscription: { scope: 'debate', debate_id: 'debate-b' },
+    });
+    const debateSubscribes = () =>
+      sockets[0]!.sent.filter(
+        message => message.op === 'SUBSCRIBE' && (message.payload as { scope: string }).scope === 'debate'
+      ).length;
+
+    // Another scope's subscribe succeeds, and geo-chat answers with READY.
+    client.retainScope({ scope: 'space', space_id: 'space-2' });
+    sockets[0]!.receive(
+      'READY',
+      readyPayload([
+        { scope: 'space', space_id: 'space-1' },
+        { scope: 'space', space_id: 'space-2' },
+      ])
+    );
+    await vi.advanceTimersByTimeAsync(999);
+    expect(debateSubscribes()).toBe(1);
+
+    await vi.advanceTimersByTimeAsync(1);
+    expect(debateSubscribes()).toBe(2);
+  });
+
   it('resets the backoff once READY confirms the scope', async () => {
     client.retainScope({ scope: 'debate', debate_id: 'debate-1' });
     client.start(

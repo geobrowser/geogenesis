@@ -851,7 +851,8 @@ export class DebateGatewayClient {
     if (!this.readyForDebates || !this.socket || this.socket.readyState !== OPEN) return;
     const key = scopeKey(scope);
     if (op === 'SUBSCRIBE') {
-      if (this.sentScopes.has(key) || this.refusedScopes.has(key)) return;
+      // A scope waiting on its check backoff is re-sent only by its own timer, not by each READY.
+      if (this.sentScopes.has(key) || this.refusedScopes.has(key) || this.subscriptionRetries.get(key)?.timer) return;
       this.sentScopes.add(key);
     }
     this.sendEnvelope(op, scope);
