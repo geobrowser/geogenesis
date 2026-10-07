@@ -38,11 +38,8 @@ function storeDestination(stored: StoredDebateReturnDestination) {
 }
 
 /**
- * Read and clear the destination so a later, unrelated debate cannot reuse it.
- *
- * `lobby` is geo-chat's answer when there is one: the lobby the viewer stepped out of, from any tab,
- * or null for none, which also drops a stored lobby that has since ended. Without it, this tab's
- * stored destination decides.
+ * Read and clear the destination so a later, unrelated debate cannot reuse it. `lobby`, geo-chat's
+ * answer when known, overrides any stored lobby; without it this tab's record decides.
  */
 export function consumeDebateReturnDestination(lobby?: { lobbyId: string | null }): string | null {
   const stored = readStoredDestination();
