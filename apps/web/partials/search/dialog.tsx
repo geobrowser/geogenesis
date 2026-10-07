@@ -77,10 +77,13 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
   const filterPopoverHost = useElevatedPopoverPortal();
 
   const hasSelectedSpaces = selectedSpaceIds.length > 0;
+
+  const includeNonCanonical = canonicalOnly || hasSelectedSpaces ? false : true;
+  const alsoSearchSpaceIds = hasSelectedSpaces ? selectedSpaceIds : undefined;
   const search = useSearch({
     enabled: open,
-    includeNonCanonical: canonicalOnly || hasSelectedSpaces ? false : true,
-    alsoSearchSpaceIds: hasSelectedSpaces ? selectedSpaceIds : undefined,
+    includeNonCanonical,
+    alsoSearchSpaceIds,
     analyticsSurface: 'global',
     filterByTypes: filterTypeIds.length > 0 ? filterTypeIds : undefined,
     filterByTags: filterTags.length > 0 ? filterTags.map(tag => tag.id) : undefined,
@@ -291,6 +294,8 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         tags={filterTags}
                         onAddTag={addFilterTag}
                         onRemoveTag={removeFilterTag}
+                        scopeIncludeNonCanonical={includeNonCanonical}
+                        scopeSpaceIds={alsoSearchSpaceIds}
                         portalContainer={filterPopoverHost}
                         onFilterMenuOpenChange={setFilterMenuOpen}
                       />

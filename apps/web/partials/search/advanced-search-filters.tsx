@@ -1,12 +1,12 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
 import cx from 'classnames';
 
-import { EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-scroll';
 import { useSearch } from '~/core/hooks/use-search';
 import { useSpacesQuery } from '~/core/hooks/use-spaces-query';
@@ -33,6 +33,8 @@ type Props = {
   tags: SearchFilterTag[];
   onAddTag: (tag: SearchFilterTag) => void;
   onRemoveTag: (id: string) => void;
+  scopeIncludeNonCanonical: boolean;
+  scopeSpaceIds: string[] | undefined;
   portalContainer: HTMLElement | null;
   onFilterMenuOpenChange?: (open: boolean) => void;
 };
@@ -66,6 +68,8 @@ export function AdvancedSearchFilters({
   tags,
   onAddTag,
   onRemoveTag,
+  scopeIncludeNonCanonical,
+  scopeSpaceIds,
   portalContainer,
   onFilterMenuOpenChange,
 }: Props) {
@@ -94,11 +98,19 @@ export function AdvancedSearchFilters({
           typeIds={typeIds}
           onToggleType={onToggleType}
           onClearTypes={onClearTypes}
+          includeNonCanonical={scopeIncludeNonCanonical}
+          alsoSearchSpaceIds={scopeSpaceIds}
           container={portalContainer}
           onOpenChange={open => notifyMenuOpen('type', open)}
         />
       </div>
-      <TagFilter tags={tags} onAddTag={onAddTag} onRemoveTag={onRemoveTag} />
+      <TagFilter
+        tags={tags}
+        onAddTag={onAddTag}
+        onRemoveTag={onRemoveTag}
+        includeNonCanonical={scopeIncludeNonCanonical}
+        alsoSearchSpaceIds={scopeSpaceIds}
+      />
     </div>
   );
 }
@@ -239,57 +251,85 @@ function TypeFilter({
   typeIds,
   onToggleType,
   onClearTypes,
+  includeNonCanonical,
+  alsoSearchSpaceIds,
   container,
   onOpenChange,
 }: {
   typeIds: string[];
   onToggleType: (id: string) => void;
   onClearTypes: () => void;
+  includeNonCanonical: boolean;
+  alsoSearchSpaceIds: string[] | undefined;
   container: HTMLElement | null;
   onOpenChange?: (open: boolean) => void;
 }) {
-  const selectedTypes = React.useMemo(() => new Set(typeIds), [typeIds]);
-  const [query, setQuery] = React.useState('');
-  const normalized = query.trim().toLowerCase();
-  const filteredTypes = React.useMemo(
-    () =>
-      normalized === ''
-        ? EXPLORE_ENTITY_TYPES
-        : EXPLORE_ENTITY_TYPES.filter(type => type.label.toLowerCase().includes(normalized)),
-    [normalized]
-  );
+  // All types in the graph = entities whose own type is SCHEMA_TYPE. Empty query lists the top
+  // types; typing fuzzy-searches by name.
+  const { query, onQueryChange, results, isLoading, hasNextPage, isFetchingNextPage, fetchNextPage } = useSearch({
+    filterByTypes: [SystemIds.SCHEMA_TYPE],
+    restrictToFilterTypes: true,
+    enabled: true,
+    includeNonCanonical,
+    alsoSearchSpaceIds,
+  });
+
+  const selected = React.useMemo(() => new Set(typeIds), [typeIds]);
+
+  const seenRef = React.useRef<Map<string, string | null>>(new Map());
+  for (const result of results) {
+    seenRef.current.set(result.id, result.name);
+  }
+
+  const rows = React.useMemo(() => {
+    const byId = new Map<string, { id: string; name: string | null }>();
+    for (const id of typeIds) {
+      byId.set(id, { id, name: seenRef.current.get(id) ?? null });
+    }
+    for (const result of results) {
+      byId.set(result.id, { id: result.id, name: result.name });
+    }
+    return [...byId.values()];
+  }, [typeIds, results]);
+
+  const selectedName = typeIds.length === 1 ? (seenRef.current.get(typeIds[0]) ?? null) : null;
   const label =
-    typeIds.length === 0 ? 'Any type' : `${typeIds.length} ${typeIds.length === 1 ? 'type' : 'types'} selected`;
+    typeIds.length === 0 ? 'Any type' : typeIds.length === 1 ? (selectedName ?? '1 type') : `${typeIds.length} types`;
 
   return (
     <FilterDropdown
       label="Types"
       container={container}
+      hasNextPage={hasNextPage}
+      isFetchingNextPage={isFetchingNextPage}
+      fetchNextPage={fetchNextPage}
       onOpenChange={open => {
         onOpenChange?.(open);
-        if (!open) setQuery('');
+        if (!open) onQueryChange('');
       }}
-      header={<FilterSearchInput value={query} onChange={setQuery} placeholder="Filter types…" />}
+      header={<FilterSearchInput value={query} onChange={onQueryChange} placeholder="Filter types…" />}
       trigger={<span className={cx('truncate', typeIds.length === 0 && 'text-grey-04')}>{label}</span>}
     >
       {() => (
         <>
-          {normalized === '' ? (
+          {query.trim() === '' ? (
             <OptionRow selected={typeIds.length === 0} onClick={onClearTypes}>
               Any type
             </OptionRow>
           ) : null}
-          {filteredTypes.map(type => {
-            const selected = selectedTypes.has(type.id);
+          {rows.map(type => {
+            const isSelected = selected.has(type.id);
             return (
-              <OptionRow key={type.id} selected={selected} onClick={() => onToggleType(type.id)}>
-                <CheckboxVisual checked={selected} />
-                <span className="min-w-0 flex-1 truncate text-text">{type.label}</span>
+              <OptionRow key={type.id} selected={isSelected} onClick={() => onToggleType(type.id)}>
+                <CheckboxVisual checked={isSelected} />
+                <span className="min-w-0 flex-1 truncate text-text">{type.name ?? type.id}</span>
               </OptionRow>
             );
           })}
-          {filteredTypes.length === 0 ? (
-            <li className="px-3 py-2 text-footnoteMedium text-grey-04">No matches</li>
+          {isLoading && rows.length === 0 ? (
+            <li className="px-3 py-2 text-footnoteMedium text-grey-04">Loading types…</li>
+          ) : rows.length === 0 ? (
+            <li className="px-3 py-2 text-footnoteMedium text-grey-04">No types</li>
           ) : null}
         </>
       )}
@@ -397,13 +437,17 @@ function TagFilter({
   tags,
   onAddTag,
   onRemoveTag,
+  includeNonCanonical,
+  alsoSearchSpaceIds,
 }: {
   tags: SearchFilterTag[];
   onAddTag: (tag: SearchFilterTag) => void;
   onRemoveTag: (id: string) => void;
+  includeNonCanonical: boolean;
+  alsoSearchSpaceIds: string[] | undefined;
 }) {
   const { query, onQueryChange, results, isLoading, isEmpty, hasNextPage, fetchNextPage, isFetchingNextPage } =
-    useSearch({ includeNonCanonical: true });
+    useSearch({ includeNonCanonical, alsoSearchSpaceIds });
   const selectedIds = React.useMemo(() => new Set(tags.map(tag => tag.id)), [tags]);
   const resultsRef = React.useRef<HTMLUListElement | null>(null);
 
