@@ -778,6 +778,52 @@ describe('DebateCalendar, admin view (GEO-2943)', () => {
     expect(screen.queryByRole('button', { name: /Confirmed$/ })).not.toBeInTheDocument();
   });
 
+  it('draws a busy hour as compact one-line blocks, and lists the rest behind +N more', async () => {
+    const atTen = (id: string, minute: number, participants: [string, string]) =>
+      scheduledMatch({
+        request_id: id,
+        scheduled_start_at: at(8, 10, minute),
+        scheduled_end_at: at(8, 10, minute + 30),
+        invited_by_user_id: participants[0],
+        participants: [
+          { user_id: participants[0], accepted: true },
+          { user_id: participants[1], accepted: null },
+        ],
+      });
+    mocks.admin = adminWith([
+      atTen('one', 0, ['11', '12']),
+      atTen('two', 0, ['12', '13']),
+      atTen('three', 30, ['13', '11']),
+      atTen('four', 30, ['11', '13']),
+    ]);
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    render(<DebateCalendar />);
+
+    // Two compact blocks: the state is in the name and the hover title, not a line of its own.
+    const compact = screen.getByRole('button', { name: /Ana vs Raj, Waiting on Raj$/ });
+    expect(compact).toHaveAttribute('title', 'Ana vs Raj · Waiting on Raj');
+    expect(compact).not.toHaveTextContent('Waiting on Raj');
+    expect(screen.getByRole('button', { name: /Raj vs Mia, Waiting on Mia$/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mia vs Ana/ })).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^All 4 debates at Thursday/ }));
+    const list = await screen.findByRole('dialog');
+    expect(within(list).getAllByRole('listitem')).toHaveLength(4);
+
+    fireEvent.click(within(list).getByRole('button', { name: /Mia vs Ana, Waiting on Ana$/ }));
+    expect(screen.getByRole('dialog')).toHaveTextContent('Mia sent the invite. Waiting on Ana to reply.');
+    fireEvent.click(screen.getByRole('button', { name: /All at 10/ }));
+    expect(within(screen.getByRole('dialog')).getAllByRole('listitem')).toHaveLength(4);
+  });
+
+  it('keeps a lone debate in an hour as the full block', () => {
+    mocks.admin = adminWith(ADMIN_MATCHES);
+    mocks.searchParams = new URLSearchParams({ view: 'debates' });
+    render(<DebateCalendar />);
+
+    expect(screen.getByRole('button', { name: /Ana vs Raj, Waiting on Raj$/ })).toHaveTextContent('Waiting on Raj');
+  });
+
   it('opens New match from the week bar', () => {
     mocks.admin = adminWith(ADMIN_MATCHES);
     mocks.searchParams = new URLSearchParams({ view: 'debates' });

@@ -257,9 +257,7 @@ export function AdminDebatesWeek({
                     )}
                   >
                     {isNowCell ? <NowLine now={now} /> : null}
-                    {inCell.map(debate => (
-                      <AdminDebateBlock key={debate.requestId} debate={debate} debaters={debaters} />
-                    ))}
+                    <CellDebates debates={inCell} debaters={debaters} date={date} hour={hour} />
                   </div>
                 );
               })}
@@ -271,7 +269,59 @@ export function AdminDebatesWeek({
   );
 }
 
-function AdminDebateBlock({ debate, debaters }: { debate: AdminDebate; debaters: Debaters }) {
+/** Compact blocks drawn in a busy hour before the rest collapse into "+N more". */
+const BLOCKS_PER_BUSY_CELL = 2;
+
+/**
+ * An hour's debates. One gets the full block; two or more go compact, one line each, so a busy
+ * hour keeps its row height instead of pushing the rest of the day down. Past two, the rest
+ * collapse into "+N more", which lists the whole hour, as the availability grid's "+N" does.
+ */
+function CellDebates({
+  debates,
+  debaters,
+  date,
+  hour,
+}: {
+  debates: AdminDebate[];
+  debaters: Debaters;
+  date: Date;
+  hour: number;
+}) {
+  if (debates.length === 0) return null;
+  if (debates.length === 1) return <AdminDebateBlock debate={debates[0]} debaters={debaters} />;
+  // Two compact lines and the "+N more" link fit in the row's resting height.
+  const shown = debates.slice(0, BLOCKS_PER_BUSY_CELL);
+  const hidden = debates.length - shown.length;
+  return (
+    <>
+      {shown.map(debate => (
+        <AdminDebateBlock key={debate.requestId} debate={debate} debaters={debaters} compact />
+      ))}
+      {hidden > 0 ? (
+        <HourDebates debates={debates} hidden={hidden} debaters={debaters} date={date} hour={hour} />
+      ) : null}
+    </>
+  );
+}
+
+function blockName(debate: AdminDebate, debaters: Debaters) {
+  return `${timeRangeLabel(debate.start, debate.end)}, ${pairLabel(debate, debaters)}, ${blockLabel(
+    debate,
+    debaters.firstNameOf
+  )}${showsOffHours(debate) ? ', outside availability' : ''}`;
+}
+
+function AdminDebateBlock({
+  debate,
+  debaters,
+  compact = false,
+}: {
+  debate: AdminDebate;
+  debaters: Debaters;
+  /** One line, for an hour holding more than one: the state reads from the fill and border. */
+  compact?: boolean;
+}) {
   const pair = pairLabel(debate, debaters);
   const label = blockLabel(debate, debaters.firstNameOf);
   const struck = debate.state === 'declined' || debate.state === 'closed';
@@ -280,19 +330,34 @@ function AdminDebateBlock({ debate, debaters }: { debate: AdminDebate; debaters:
       <Popover.Trigger asChild>
         <button
           type="button"
-          aria-label={`${timeRangeLabel(debate.start, debate.end)}, ${pair}, ${label}${
-            showsOffHours(debate) ? ', outside availability' : ''
-          }`}
+          aria-label={blockName(debate, debaters)}
+          // The full label is in the name and the card; a pointer gets it on hover too.
+          title={compact ? `${pair} · ${label}` : undefined}
           className={cx(
-            'flex w-full min-w-0 flex-col gap-px rounded-md border px-2 py-1 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text',
+            'flex w-full min-w-0 rounded-md border px-2 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text',
+            compact ? 'items-center gap-1 py-0.5' : 'flex-col gap-px py-1',
             STATE_CLASS_NAMES[debate.state],
             debate.state === 'closed' ? 'text-grey-04' : 'text-text'
           )}
         >
-          <span className="font-medium tabular-nums">{timeRangeLabel(debate.start, debate.end)}</span>
-          <span className={cx('truncate', struck && 'line-through')}>{pair}</span>
-          <span className={cx('truncate font-medium', STATE_LABEL_CLASS_NAMES[debate.state])}>{label}</span>
-          {showsOffHours(debate) ? <OffHoursTag /> : null}
+          {compact ? (
+            <>
+              <span className="shrink-0 font-medium tabular-nums">{timeIn(debate.start, undefined)}</span>
+              <span className={cx('min-w-0 flex-1 truncate', struck && 'line-through')}>{pair}</span>
+              {showsOffHours(debate) ? (
+                <span aria-hidden className="shrink-0 text-purple">
+                  <Time />
+                </span>
+              ) : null}
+            </>
+          ) : (
+            <>
+              <span className="font-medium tabular-nums">{timeRangeLabel(debate.start, debate.end)}</span>
+              <span className={cx('truncate', struck && 'line-through')}>{pair}</span>
+              <span className={cx('truncate font-medium', STATE_LABEL_CLASS_NAMES[debate.state])}>{label}</span>
+              {showsOffHours(debate) ? <OffHoursTag /> : null}
+            </>
+          )}
         </button>
       </Popover.Trigger>
       <Popover.Portal>
@@ -305,6 +370,116 @@ function AdminDebateBlock({ debate, debaters }: { debate: AdminDebate; debaters:
           className="z-100 w-[340px] max-w-[calc(100vw-32px)] rounded-xl border border-grey-02 bg-white p-4 shadow-lg"
         >
           <AdminDebateDetails debate={debate} debaters={debaters} />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/**
+ * "+N more" and the list it opens: every debate in the hour, a row each with its time, pair and
+ * state. A row opens that match's card in place, with a way back to the list.
+ */
+function HourDebates({
+  debates,
+  hidden,
+  debaters,
+  date,
+  hour,
+}: {
+  debates: AdminDebate[];
+  hidden: number;
+  debaters: Debaters;
+  date: Date;
+  hour: number;
+}) {
+  const [open, setOpen] = React.useState(false);
+  const [openId, setOpenId] = React.useState<string | null>(null);
+  const current = debates.find(debate => debate.requestId === openId) ?? null;
+  const heading = `${date.toLocaleDateString(undefined, { weekday: 'long', month: 'short', day: 'numeric' })}, ${hourLabel(hour)}`;
+  return (
+    <Popover.Root
+      open={open}
+      onOpenChange={next => {
+        setOpen(next);
+        if (!next) setOpenId(null);
+      }}
+    >
+      <Popover.Trigger asChild>
+        <button
+          type="button"
+          aria-label={`All ${debates.length} debates at ${heading}`}
+          className="self-start rounded-md px-1 text-footnoteMedium text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+        >
+          +{hidden} more
+        </button>
+      </Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="right"
+          align="start"
+          sideOffset={8}
+          collisionPadding={16}
+          aria-label={
+            current ? `${pairLabel(current, debaters)}, ${timeRangeLabel(current.start, current.end)}` : heading
+          }
+          className="z-100 flex max-h-[min(36rem,calc(100vh-6rem))] w-[340px] max-w-[calc(100vw-32px)] flex-col overflow-y-auto rounded-xl border border-grey-02 bg-white p-4 shadow-lg"
+        >
+          {current ? (
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={() => setOpenId(null)}
+                className="self-start text-footnoteMedium text-grey-04 transition-colors hover:text-text"
+              >
+                ‹ All at {hourLabel(hour)}
+              </button>
+              <AdminDebateDetails debate={current} debaters={debaters} />
+            </div>
+          ) : (
+            <div className="flex flex-col gap-2">
+              <Text as="p" variant="metadataMedium">
+                {heading}
+              </Text>
+              <Text as="p" variant="footnote" color="grey-04">
+                {debates.length} debates this hour
+              </Text>
+              <ul className="flex flex-col">
+                {debates.map(debate => (
+                  <li key={debate.requestId} className="border-b border-grey-02 last:border-b-0">
+                    <button
+                      type="button"
+                      aria-label={blockName(debate, debaters)}
+                      onClick={() => setOpenId(debate.requestId)}
+                      className="grid w-full grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 py-2 text-left hover:bg-grey-01"
+                    >
+                      <Text as="span" variant="footnote" className="tabular-nums">
+                        {timeIn(debate.start, undefined)}
+                      </Text>
+                      <Text
+                        as="span"
+                        variant="metadata"
+                        className={cx(
+                          'truncate',
+                          (debate.state === 'declined' || debate.state === 'closed') && 'text-grey-04 line-through'
+                        )}
+                      >
+                        {pairLabel(debate, debaters)}
+                      </Text>
+                      <span
+                        className={cx(
+                          'rounded-full border px-2 py-0.5 text-footnoteMedium whitespace-nowrap',
+                          STATE_CLASS_NAMES[debate.state]
+                        )}
+                      >
+                        {blockLabel(debate, debaters.firstNameOf)}
+                      </span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
