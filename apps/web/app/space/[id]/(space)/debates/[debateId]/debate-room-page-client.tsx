@@ -48,6 +48,7 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
+import { DebateRoundIndicator, debateRoundIndicatorState } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
   type DebateTabClaimKey,
@@ -3073,6 +3074,10 @@ function DebateRecordingModal({
       />
     </DebateVideoTile>
   );
+  const roundIndicator =
+    countdown.openRounds && debate.open_rounds
+      ? debateRoundIndicatorState(countdown.openRounds, debate.open_rounds.max_rebuttal_rounds)
+      : null;
   const dialogRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => dialogRef.current?.focus(), []);
   useScrollLock();
@@ -3110,6 +3115,21 @@ function DebateRecordingModal({
           sets it so the headline does not change under you at the swap. Everything below it stays
           in the single 430px column the room has always used. */}
       <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]">
+        {/* Where the debate is and the way out, above the claim (GEO-3174). A fixed format has no
+            rounds to count, so its row holds Leave alone. */}
+        <div className="mb-3.5 flex w-full max-w-[430px] items-center justify-between gap-2">
+          {roundIndicator ? <DebateRoundIndicator state={roundIndicator} /> : <span />}
+          <RecordingCircleButton
+            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
+            onClick={onLeave}
+            disabled={leaveDisabled}
+            className="shrink-0"
+          >
+            <LeaveIcon />
+          </RecordingCircleButton>
+        </div>
+
         <h1 className="mb-5 w-full max-w-[900px] text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
           {debate.claim.claim}
         </h1>
@@ -3162,17 +3182,6 @@ function DebateRecordingModal({
             )}
           </div>
         )}
-
-        <div className="mt-5 flex w-full max-w-[430px] justify-end">
-          <RecordingCircleButton
-            ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
-            onClick={onLeave}
-            disabled={leaveDisabled}
-          >
-            <LeaveIcon />
-          </RecordingCircleButton>
-        </div>
       </main>
     </div>
   );
