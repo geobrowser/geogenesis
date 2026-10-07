@@ -1150,6 +1150,48 @@ describe('DebateGatewayClient', () => {
     expect(sockets).toHaveLength(2);
   });
 
+  it('reconnects with a fresh session when the server says the token expired early', async () => {
+    vi.mocked(resetGeoChatSession).mockClear();
+    client.retainScope({ scope: 'space', space_id: 'space-1' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    // Revoked while `expires_at` is still ten minutes out.
+    session = { ...session, access_token: 'fresh-token' };
+    sockets[0]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+
+    expect(resetGeoChatSession).toHaveBeenCalledTimes(1);
+    expect(sockets[0]!.readyState).toBe(FakeWebSocket.CLOSED);
+    expect(client.getSnapshot()).toMatchObject({ paused: true, pauseReason: 'session' });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(getSession).toHaveBeenCalledTimes(2);
+    expect(sockets[1]!.url).toContain('access_token=fresh-token');
+    sockets[1]!.open();
+    sockets[1]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+    expect(client.getSnapshot()).toMatchObject({ status: 'ready', paused: false });
+
+    // A repeat inside the cooldown neither parks nor spins: it reconnects again, on a longer floor.
+    sockets[1]!.receive('ERROR', { code: 'authentication_expired', message: 'token expired' });
+    expect(resetGeoChatSession).toHaveBeenCalledTimes(2);
+    expect(sockets[1]!.readyState).toBe(FakeWebSocket.CLOSED);
+    await vi.advanceTimersByTimeAsync(1_999);
+    expect(sockets).toHaveLength(2);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(sockets).toHaveLength(3);
+    sockets[2]!.open();
+    sockets[2]!.receive('READY', readyPayload([]));
+    expect(sockets[2]!.sent).toContainEqual(
+      expect.objectContaining({ op: 'SUBSCRIBE', payload: { scope: 'space', space_id: 'space-1' } })
+    );
+  });
+
   it('cancels an in-flight snapshot before invalidating it', async () => {
     const cancelQueries = vi.spyOn(queryClient, 'cancelQueries').mockResolvedValue();
     client.start(

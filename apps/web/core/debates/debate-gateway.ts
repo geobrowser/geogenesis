@@ -173,6 +173,8 @@ export class DebateGatewayClient {
   private lastSequence: number | null = null;
   private reconnectAttempt = 0;
   private lastErrorReconnectAt: number | null = null;
+  private authExpiredAttempt = 0;
+  private lastAuthExpiredAt: number | null = null;
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
   private debatePresence = true;
@@ -257,6 +259,8 @@ export class DebateGatewayClient {
     this.lastSequence = null;
     this.reconnectAttempt = 0;
     this.lastErrorReconnectAt = null;
+    this.authExpiredAttempt = 0;
+    this.lastAuthExpiredAt = null;
     this.clearAllTimers();
     this.disposeSocket();
     this.sentScopes.clear();
@@ -381,6 +385,10 @@ export class DebateGatewayClient {
           // A real ceiling, and reconnecting re-sends the same scopes and hits it again. The
           // account-routed stream keeps working; only the scopes past the limit are lost.
           this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'subscription_limit' });
+        } else if (isAuthenticationExpired(envelope.payload)) {
+          // The cached session can still look unexpired, so drop it or the reconnect re-presents it.
+          resetGeoChatSession();
+          this.forceReconnect(socket, this.authExpiredReconnectDelayMs(), 'session');
         } else if (this.refuseForbiddenScope(envelope.payload)) {
           // Only that scope is refused; the socket and every other subscription stay up.
         } else if (this.retryFailedSubscriptionCheck(envelope.payload)) {
@@ -973,6 +981,18 @@ export class DebateGatewayClient {
     if (resetBackoff) this.subscriptionRetries.clear();
   }
 
+  /** `reconnectAttempt` resets on each successful flush, so repeated rejections get their own floor. */
+  private authExpiredReconnectDelayMs() {
+    const now = Date.now();
+    if (this.lastAuthExpiredAt === null || now - this.lastAuthExpiredAt >= ERROR_RECONNECT_COOLDOWN_MS) {
+      this.authExpiredAttempt = 0;
+    }
+    this.lastAuthExpiredAt = now;
+    const delay = this.authExpiredAttempt === 0 ? 0 : Math.min(30_000, 1_000 * 2 ** this.authExpiredAttempt);
+    this.authExpiredAttempt += 1;
+    return delay;
+  }
+
   private canRecoverFromError() {
     return this.lastErrorReconnectAt === null || Date.now() - this.lastErrorReconnectAt >= ERROR_RECONNECT_COOLDOWN_MS;
   }
@@ -1252,6 +1272,10 @@ function parseScope(value: unknown): DebateGatewayScope | null {
 function subscriptionErrorScope(payload: unknown, code: 'subscription_forbidden' | 'subscription_check_failed') {
   if (!isRecord(payload) || payload.code !== code) return null;
   return parseScope(payload.subscription);
+}
+
+function isAuthenticationExpired(payload: unknown) {
+  return isRecord(payload) && payload.code === 'authentication_expired';
 }
 
 function isEventsLagged(payload: unknown) {
