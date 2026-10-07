@@ -9,6 +9,8 @@ export const editingPropertiesAtom = atom<boolean>(false);
 
 export type EntitySidePanelTarget = {
   analyticsContext?: ActionContext;
+  /** A linked entity tab to select when the panel opens. */
+  initialTab?: { tabId?: string; systemTab?: string };
   entityId: string;
   spaceId: string;
   openedWithMainViewEditing: boolean;

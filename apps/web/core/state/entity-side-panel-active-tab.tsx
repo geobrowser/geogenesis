@@ -17,22 +17,34 @@ export function EntitySidePanelActiveTabProvider({
   entityId,
   spaceId,
   children,
+  initialTab,
 }: {
+  initialTab?: { tabId?: string; systemTab?: string };
   entityId: string;
   spaceId: string;
   children: React.ReactNode;
 }) {
   return (
-    <ScopedEntitySidePanelActiveTabProvider key={`${spaceId}:${entityId}`}>
+    <ScopedEntitySidePanelActiveTabProvider key={`${spaceId}:${entityId}`} initialTab={initialTab}>
       {children}
     </ScopedEntitySidePanelActiveTabProvider>
   );
 }
 
 /** A keyed boundary synchronously clears selections before children render in a new entity scope. */
-function ScopedEntitySidePanelActiveTabProvider({ children }: { children: React.ReactNode }) {
-  const [activeTabId, setActiveTabId] = React.useState<string | null>(null);
-  const [activeSystemTab, setActiveSystemTab] = React.useState<string | null>(null);
+function ScopedEntitySidePanelActiveTabProvider({
+  children,
+  initialTab,
+}: {
+  children: React.ReactNode;
+  initialTab?: { tabId?: string; systemTab?: string };
+}) {
+  const [activeTabId, setActiveTabId] = React.useState<string | null>(
+    initialTab?.tabId && validateEntityId(initialTab.tabId) ? initialTab.tabId : null
+  );
+  const [activeSystemTab, setActiveSystemTab] = React.useState<string | null>(
+    activeTabId ? null : (initialTab?.systemTab ?? null)
+  );
 
   const setActiveTabIdValidated = React.useCallback((tabId: string | null) => {
     if (tabId !== null && !validateEntityId(tabId)) return;
