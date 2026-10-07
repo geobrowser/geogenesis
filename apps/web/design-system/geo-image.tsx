@@ -68,13 +68,21 @@ function useStagedImage(value: string, forceUnoptimized: boolean) {
       const current = previous.value === value ? previous : { value, stage: 0, failed: false };
       let next = current.stage + 1;
 
-      if (!value.startsWith('ipfs://')) {
-        while (next < STAGES.length && STAGES[next].level > 0) next++;
+      const isIpfs = value.startsWith('ipfs://');
+      const stage0Unoptimized = forceUnoptimized || !isOptimizableImageSrc(getImagePathAtLevel(value, 0));
+
+      while (
+        next < STAGES.length &&
+        // Non-IPFS values have no alternate gateways — every level resolves to the same URL.
+        ((STAGES[next].level > 0 && !isIpfs) ||
+          (STAGES[next].level === 0 && STAGES[next].unoptimized && stage0Unoptimized))
+      ) {
+        next++;
       }
       if (next >= STAGES.length) return { value, stage: current.stage, failed: true };
       return { value, stage: next, failed: false };
     });
-  }, [value]);
+  }, [value, forceUnoptimized]);
 
   const { level, unoptimized } = STAGES[stage];
   const src = getImagePathAtLevel(value, level);
