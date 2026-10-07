@@ -128,6 +128,17 @@ describe('SetScheduleBanner', () => {
     expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
   });
 
+  // In the panel the title follows its "Debates" h2; the calendar page has only an h1 above it, so
+  // an h3 there would skip a level for anyone navigating by headings.
+  it('titles itself one level under the heading of the surface it sits on', async () => {
+    setup();
+    expect(await screen.findByRole('heading', { name: 'Debate schedule' })).toHaveProperty('tagName', 'H3');
+    cleanup();
+
+    render(<SetScheduleBanner surface="calendar" />);
+    expect(await screen.findByRole('heading', { name: 'Debate schedule' })).toHaveProperty('tagName', 'H2');
+  });
+
   // The calendar page shows the same callout, with its clicks labelled as the calendar's.
   it("labels the calendar page's callout as the calendar's", async () => {
     render(<SetScheduleBanner surface="calendar" />);

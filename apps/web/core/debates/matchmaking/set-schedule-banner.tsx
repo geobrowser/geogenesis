@@ -35,7 +35,10 @@ type Props = {
    * it, so focus moves up here rather than dropping to the page.
    */
   scheduleButtonRef?: React.RefObject<HTMLButtonElement | null>;
-  /** Whose clicks and saves these are: the debates panel's, or the calendar page's. */
+  /**
+   * Whose clicks and saves these are: the debates panel's, or the calendar page's. Also sets the
+   * title's level, one under the surface's own heading: the panel's h2, the page's h1.
+   */
   surface?: 'hub' | 'calendar';
   /** Replaces the panel's spacing, for a page with its own gutters. */
   className?: string;
@@ -70,7 +73,7 @@ function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
   return (
     <div className={cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-[#EFE2FF] p-4')}>
       <div className="flex items-center justify-between gap-3">
-        <Text as="h3" variant="smallTitle">
+        <Text as={surface === 'calendar' ? 'h2' : 'h3'} variant="smallTitle">
           Debate schedule
         </Text>
         <HubPillButton
