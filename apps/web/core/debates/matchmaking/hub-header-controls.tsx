@@ -56,8 +56,8 @@ export function HubHeaderControls({
  * It replaced a full-width "I'm available" switch and a calendar icon for the weekly editor, which
  * sat beside the Calendar button looking identical to it while meaning something else.
  *
- * With no weekly times saved, the pill carries the brand-purple dot the old calendar icon did, so a
- * viewer who closed the set-schedule banner still has something quiet asking.
+ * With no weekly times saved, the pill carries the brand-purple dot the old calendar icon did, so
+ * the ask is still there on screens without the set-schedule banner.
  */
 function AvailabilityMenu({
   triggerRef,

@@ -6,17 +6,24 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import type { AvailabilityBlock } from '~/core/availability/blocks';
+
 import { SetScheduleBanner } from './set-schedule-banner';
 
 // The banner now reads and writes the saved calendar (GEO-2932). These tests are about the
 // callout and the modal opening, not the round trip, so the hooks are stubbed -- the payload
 // conversion has its own tests in core/availability.
-const mocks = vi.hoisted(() => ({ isSet: false, loaded: true, authenticated: true }));
+const mocks = vi.hoisted(() => ({
+  isSet: false,
+  blocks: [] as AvailabilityBlock[],
+  loaded: true,
+  authenticated: true,
+}));
 
 vi.mock('~/core/debates/hooks', () => ({
   useDebateSchedule: () => ({
-    data: mocks.loaded ? { is_set: mocks.isSet } : undefined,
-    blocks: mocks.loaded ? [] : undefined,
+    data: mocks.loaded ? { is_set: mocks.isSet, schedule: { timezone: 'UTC' } } : undefined,
+    blocks: mocks.loaded ? mocks.blocks : undefined,
     isSet: mocks.isSet,
     isError: false,
     refetch: vi.fn(),
@@ -31,12 +38,12 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () =>
 afterEach(() => {
   cleanup();
   mocks.isSet = false;
+  mocks.blocks = [];
   mocks.loaded = true;
   mocks.authenticated = true;
-  // The dismissal is stored per notice id in localStorage, so a dismissal in one case would
-  // otherwise hide the banner in every case after it.
-  window.localStorage.clear();
 });
+
+const weekly: AvailabilityBlock = { id: 'r', kind: 'recurring', weekday: 0, start: 540, end: 600 };
 
 const setup = () => ({ user: userEvent.setup(), ...render(<SetScheduleBanner />) });
 
@@ -47,11 +54,15 @@ describe('SetScheduleBanner', () => {
       'data-geo-analytics-label',
       'Debate hub Open schedule'
     );
-    expect(screen.getByRole('button', { name: 'Dismiss' })).toHaveAttribute(
-      'data-geo-analytics-label',
-      'Debate hub Dismiss schedule prompt'
-    );
-    expect(screen.getByText('Set your debate schedule')).toBeInTheDocument();
+    expect(screen.getByText('Debate schedule')).toBeInTheDocument();
+    expect(screen.getByText(/You can change it any time in the dropdown above/)).toBeInTheDocument();
+  });
+
+  // It only leaves once there is time to book, so there is nothing to close.
+  it('has no dismiss button', async () => {
+    setup();
+    await screen.findByRole('button', { name: 'Set my schedule' });
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).not.toBeInTheDocument();
   });
 
   it('opens the availability calendar when the button is clicked', async () => {
@@ -72,13 +83,30 @@ describe('SetScheduleBanner', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
   });
 
-  // Onboarding only: once a schedule exists, the header's calendar button is where it lives.
-  it('retires once a schedule is saved', () => {
+  // Once there is time to book, the header's availability pill is where the schedule lives.
+  it('retires once the schedule offers upcoming time', () => {
+    mocks.isSet = true;
+    mocks.blocks = [weekly];
+    setup();
+
+    expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
+  });
+
+  // `is_set` stays true once anything was ever saved, so it cannot be what retires the banner.
+  it('comes back for a schedule cleared back to nothing', async () => {
     mocks.isSet = true;
     setup();
 
-    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
+    expect(await screen.findByText('Debate schedule')).toBeInTheDocument();
+  });
+
+  it('comes back once every saved time is in the past', async () => {
+    mocks.isSet = true;
+    mocks.blocks = [{ id: 'd', kind: 'dated', date: '2020-01-06', start: 540, end: 600 }];
+    setup();
+
+    expect(await screen.findByText('Debate schedule')).toBeInTheDocument();
   });
 
   // Defaulting to "unset" before the read answers would flash the banner at everyone who already
@@ -87,7 +115,7 @@ describe('SetScheduleBanner', () => {
     mocks.loaded = false;
     setup();
 
-    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
   });
 
   // Signed out the read is disabled, so the modal it opens would sit on "Loading your schedule"
@@ -96,20 +124,34 @@ describe('SetScheduleBanner', () => {
     mocks.authenticated = false;
     setup();
 
-    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Set my schedule' })).not.toBeInTheDocument();
   });
 
-  it('stays dismissed once closed', async () => {
-    const { user } = setup();
-    await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
+  // In the panel the title follows its "Debates" h2; the calendar page has only an h1 above it, so
+  // an h3 there would skip a level for anyone navigating by headings.
+  it('titles itself one level under the heading of the surface it sits on', async () => {
+    setup();
+    expect(await screen.findByRole('heading', { name: 'Debate schedule' })).toHaveProperty('tagName', 'H3');
+    cleanup();
 
-    await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
+    render(<SetScheduleBanner surface="calendar" />);
+    expect(await screen.findByRole('heading', { name: 'Debate schedule' })).toHaveProperty('tagName', 'H2');
+  });
+
+  // The calendar page shows the same callout, with its clicks labelled as the calendar's.
+  it("labels the calendar page's callout as the calendar's", async () => {
+    render(<SetScheduleBanner surface="calendar" />);
+
+    expect(await screen.findByRole('button', { name: 'Set my schedule' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Open schedule'
+    );
   });
 });
 
-// Both ways the banner leaves take the focused control with it. Focus goes up to the header's
-// calendar — the schedule's standing home — rather than dropping to the page.
+// A save that retires the banner takes the focused control with it, so focus goes up to the
+// header's availability pill — the schedule's standing home. A save that leaves it up does not.
 describe('SetScheduleBanner focus hand-off', () => {
   function Harness() {
     const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -125,28 +167,15 @@ describe('SetScheduleBanner focus hand-off', () => {
 
   const setupWithHeader = () => ({ user: userEvent.setup(), ...render(<Harness />) });
 
-  it('moves focus to the header calendar when dismissed', async () => {
+  // Saving an empty week offers nothing, so the banner stays and keeps focus.
+  it('returns focus to its own button after a save with no upcoming time', async () => {
     const { user } = setupWithHeader();
-    await user.click(await screen.findByRole('button', { name: 'Dismiss' }));
-
-    await waitFor(() => expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument());
-    expect(screen.getByRole('button', { name: 'Header calendar' })).toHaveFocus();
-  });
-
-  it('returns focus to the header calendar after a save, which then retires the banner', async () => {
-    const { user, rerender } = setupWithHeader();
-    await user.click(await screen.findByRole('button', { name: 'Set my schedule' }));
+    const opener = await screen.findByRole('button', { name: 'Set my schedule' });
+    await user.click(opener);
     await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Save schedule' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    const header = screen.getByRole('button', { name: 'Header calendar' });
-    await waitFor(() => expect(header).toHaveFocus());
-
-    // The save lands and the banner retires. Focus was never on it, so nothing is lost.
-    mocks.isSet = true;
-    rerender(<Harness />);
-    expect(screen.queryByText('Set your debate schedule')).not.toBeInTheDocument();
-    expect(header).toHaveFocus();
+    await waitFor(() => expect(opener).toHaveFocus());
   });
 
   // Cancel does not retire anything, so focus goes back where it came from, as any dialog's does.
