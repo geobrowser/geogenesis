@@ -5376,7 +5376,11 @@ describe('DebateRoomPageClient', () => {
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
       expect(openRoundAnnouncement()).toHaveTextContent('You: Extend. Bob: Extend.');
 
+      // The picks stay up for 45% of the 3 s window.
       rerenderAt(view, openRoundsAt('20:02:05.500'), openRoundsRevealRebut());
+      expect(result()).toBeNull();
+
+      rerenderAt(view, openRoundsAt('20:02:05.700'), openRoundsRevealRebut());
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
       expect(result()).toHaveTextContent('Round1You open');
       expect(reveal('local')).toBeNull();
@@ -5384,7 +5388,11 @@ describe('DebateRoomPageClient', () => {
       expect(chips('remote')).toHaveAttribute('data-tile-chips', 'hidden');
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
 
-      rerenderAt(view, openRoundsAt('20:02:06.400'), openRoundsRevealRebut());
+      // "Round 1" holds until 80% of the window.
+      rerenderAt(view, openRoundsAt('20:02:06.500'), openRoundsRevealRebut());
+      expect(result()).toHaveAttribute('data-open-round-result', 'round');
+
+      rerenderAt(view, openRoundsAt('20:02:06.700'), openRoundsRevealRebut());
       await waitFor(() => expect(within(debateVideoTile('local')).getByText('Rebut in')).toBeInTheDocument());
       expect(result()).toBeNull();
       expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
@@ -5396,7 +5404,7 @@ describe('DebateRoomPageClient', () => {
 
     it('names the other debater as the opener on their screen', async () => {
       joinAsBob();
-      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:05.500'));
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:05.700'));
       await renderLiveDebate(openRoundsRevealRebut());
 
       await waitFor(() => expect(result()).toHaveTextContent('Alice opens'));
@@ -5408,9 +5416,9 @@ describe('DebateRoomPageClient', () => {
       await renderLiveDebate(openRoundsRevealRebut());
       await waitFor(() => expect(reveal('local')).toBeInTheDocument());
 
-      // The room clock stays at 20:02:05 (0.8 s in); the reveal's own timer reaches 1.1 s.
+      // The room clock stays at 20:02:05 (0.8 s in); the reveal's own timer reaches 1.35 s.
       await act(async () => {
-        vi.advanceTimersByTime(350);
+        vi.advanceTimersByTime(600);
       });
       expect(result()).toHaveAttribute('data-open-round-result', 'round');
       vi.useRealTimers();
@@ -5440,7 +5448,7 @@ describe('DebateRoomPageClient', () => {
       expect(reveal('remote')).toHaveTextContent('No pick');
       expect(reveal('remote')).toHaveTextContent('End');
 
-      rerenderAt(view, openRoundsAt('20:02:12.600'), openRoundsTimedOut());
+      rerenderAt(view, openRoundsAt('20:02:12.800'), openRoundsTimedOut());
       await waitFor(() => expect(result()).toHaveTextContent("Bob didn't pick in time"));
       expect(openRoundAnnouncement()).toHaveTextContent(
         "You: Extend. Bob: no pick. That's a wrap. Bob didn't pick in time."
@@ -5462,12 +5470,20 @@ describe('DebateRoomPageClient', () => {
       expect(result()).toBeNull();
     });
 
-    it('does not show the maximum when a debate ends on a pick', async () => {
+    it('holds "That\'s a wrap" into thanking before the end card', async () => {
+      // Thanking starts at 20:02:08, at the end of the result window.
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:08.500'));
-      await renderLiveDebate(openRoundsRevealEnd());
+      const view = await renderLiveDebate(openRoundsRevealEnd());
 
+      await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'wrap'));
+      expect(reveal('remote')).toHaveAttribute('data-open-round-reveal', 'end');
+      expect(screen.queryByText('Debate again?')).not.toBeInTheDocument();
+      expect(screen.queryByText('Say thanks')).not.toBeInTheDocument();
+
+      rerenderAt(view, openRoundsAt('20:02:09.600'), openRoundsThankingAfterEnd());
       await waitFor(() => expect(screen.getByText('Debate again?')).toBeInTheDocument());
       expect(result()).toBeNull();
+      expect(reveal('remote')).toBeNull();
     });
   });
 

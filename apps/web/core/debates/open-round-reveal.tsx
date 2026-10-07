@@ -10,24 +10,40 @@ import type { OpenRoundPick } from './api';
 import { recordingLabelTextShadow, recordingOverlayTextShadow } from './debate-video-tile';
 
 /**
- * The Open rounds reveal (GEO-3179): the 3 s result window after a round resolves, on both screens
- * at once because both time it from the server's `decision_resolved_at`.
+ * The Open rounds reveal (GEO-3179): the result window after a round resolves (`result_window_ms`,
+ * 3 s today), on both screens at once because both time it from the server's
+ * `decision_resolved_at`.
  *
  * - `flip`: each tile's card turns from the debater's name to their pick.
  * - `result`: what the picks mean. Two Extends: "Round N" and who opens it. Anything else: "That's a
  *   wrap", with the picks left up so the split explains itself.
  * - `countIn`: Extend only. The opener gets the room's usual count-in into the new round.
+ *
+ * The server starts the next round when the window closes, so an Extend's reveal cannot outlast it.
+ * The steps are shares of the window rather than fixed times, so a longer window lengthens each.
+ * The count-in gets the smallest share: inside the window it only ever reads "1".
  */
 export type OpenRoundRevealStep = 'flip' | 'result' | 'countIn';
 
-/** When the picks have turned and settled, and the result takes over. */
-export const OPEN_ROUND_FLIP_MS = 1_100;
-/** When an Extend's result gives way to the opener's count-in. */
-export const OPEN_ROUND_COUNT_IN_MS = 2_100;
+/** The share of the window the picks have to turn and be read before the result takes over. */
+export const OPEN_ROUND_FLIP_SHARE = 0.45;
+/** The share after which an Extend's result gives way to the opener's count-in. */
+export const OPEN_ROUND_COUNT_IN_SHARE = 0.8;
 
-export function openRoundRevealStep(elapsedMs: number, outcome: OpenRoundPick): OpenRoundRevealStep {
-  if (elapsedMs < OPEN_ROUND_FLIP_MS) return 'flip';
-  if (outcome === 'extend' && elapsedMs >= OPEN_ROUND_COUNT_IN_MS) return 'countIn';
+/**
+ * How long "That's a wrap" stays up into thanking, before the end card. An End has nothing to start
+ * on time after it, so it can hold past the window; an Extend cannot.
+ */
+export const OPEN_ROUND_WRAP_HOLD_MS = 1_500;
+
+function stepBoundaries(windowMs: number) {
+  return [Math.round(windowMs * OPEN_ROUND_FLIP_SHARE), Math.round(windowMs * OPEN_ROUND_COUNT_IN_SHARE)] as const;
+}
+
+export function openRoundRevealStep(elapsedMs: number, outcome: OpenRoundPick, windowMs: number): OpenRoundRevealStep {
+  const [flipEndsMs, countInStartsMs] = stepBoundaries(windowMs);
+  if (elapsedMs < flipEndsMs) return 'flip';
+  if (outcome === 'extend' && elapsedMs >= countInStartsMs) return 'countIn';
   return 'result';
 }
 
@@ -38,20 +54,20 @@ export function openRoundRevealStep(elapsedMs: number, outcome: OpenRoundPick): 
  * half a second apart. This schedules its own re-render at each step boundary instead, measured from
  * the last `elapsedMs` the room gave it.
  */
-export function useOpenRoundRevealStep(elapsedMs: number | null, outcome: OpenRoundPick | null) {
+export function useOpenRoundRevealStep(elapsedMs: number | null, outcome: OpenRoundPick | null, windowMs: number) {
   const [reached, setReached] = React.useState<{ from: number; to: number } | null>(null);
   const effectiveMs = elapsedMs === null ? null : reached?.from === elapsedMs ? reached.to : elapsedMs;
 
   React.useEffect(() => {
     if (elapsedMs === null || effectiveMs === null) return;
-    const next = [OPEN_ROUND_FLIP_MS, OPEN_ROUND_COUNT_IN_MS].find(boundary => boundary > effectiveMs);
+    const next = stepBoundaries(windowMs).find(boundary => boundary > effectiveMs);
     if (next === undefined) return;
     const timer = window.setTimeout(() => setReached({ from: elapsedMs, to: next }), next - effectiveMs);
     return () => window.clearTimeout(timer);
-  }, [elapsedMs, effectiveMs]);
+  }, [elapsedMs, effectiveMs, windowMs]);
 
   if (effectiveMs === null || outcome === null) return null;
-  return openRoundRevealStep(effectiveMs, outcome);
+  return openRoundRevealStep(effectiveMs, outcome, windowMs);
 }
 
 /**

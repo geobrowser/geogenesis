@@ -4,8 +4,6 @@ import { act, cleanup, render, renderHook, screen } from '@testing-library/react
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  OPEN_ROUND_COUNT_IN_MS,
-  OPEN_ROUND_FLIP_MS,
   OpenRoundPickReveal,
   OpenRoundResultOverlay,
   openRoundRevealStep,
@@ -20,38 +18,44 @@ afterEach(() => {
 
 describe('openRoundRevealStep', () => {
   it('turns the picks, then shows the result', () => {
-    expect(openRoundRevealStep(0, 'end')).toBe('flip');
-    expect(openRoundRevealStep(OPEN_ROUND_FLIP_MS - 1, 'end')).toBe('flip');
-    expect(openRoundRevealStep(OPEN_ROUND_FLIP_MS, 'end')).toBe('result');
-    expect(openRoundRevealStep(2_999, 'end')).toBe('result');
+    expect(openRoundRevealStep(0, 'end', 3_000)).toBe('flip');
+    expect(openRoundRevealStep(1_349, 'end', 3_000)).toBe('flip');
+    expect(openRoundRevealStep(1_350, 'end', 3_000)).toBe('result');
+    expect(openRoundRevealStep(2_999, 'end', 3_000)).toBe('result');
   });
 
-  it('counts the opener in after an Extend', () => {
-    expect(openRoundRevealStep(OPEN_ROUND_COUNT_IN_MS - 1, 'extend')).toBe('result');
-    expect(openRoundRevealStep(OPEN_ROUND_COUNT_IN_MS, 'extend')).toBe('countIn');
+  it('counts the opener in for the last fifth of the window after an Extend', () => {
+    expect(openRoundRevealStep(2_399, 'extend', 3_000)).toBe('result');
+    expect(openRoundRevealStep(2_400, 'extend', 3_000)).toBe('countIn');
+  });
+
+  it('stretches every step with a longer window', () => {
+    expect(openRoundRevealStep(1_800, 'extend', 5_000)).toBe('flip');
+    expect(openRoundRevealStep(3_500, 'extend', 5_000)).toBe('result');
+    expect(openRoundRevealStep(4_000, 'extend', 5_000)).toBe('countIn');
   });
 });
 
 describe('useOpenRoundRevealStep', () => {
   it('is null outside a result window', () => {
-    const { result } = renderHook(() => useOpenRoundRevealStep(null, null));
+    const { result } = renderHook(() => useOpenRoundRevealStep(null, null, 3_000));
     expect(result.current).toBeNull();
   });
 
   it('reaches each step on time between the room clock ticks', () => {
     vi.useFakeTimers();
-    const { result } = renderHook(() => useOpenRoundRevealStep(600, 'extend'));
+    const { result } = renderHook(() => useOpenRoundRevealStep(600, 'extend', 3_000));
     expect(result.current).toBe('flip');
 
-    act(() => vi.advanceTimersByTime(OPEN_ROUND_FLIP_MS - 600));
+    act(() => vi.advanceTimersByTime(1_350 - 600));
     expect(result.current).toBe('result');
 
-    act(() => vi.advanceTimersByTime(OPEN_ROUND_COUNT_IN_MS - OPEN_ROUND_FLIP_MS));
+    act(() => vi.advanceTimersByTime(2_400 - 1_350));
     expect(result.current).toBe('countIn');
   });
 
   it('follows the room clock when it ticks', () => {
-    const { result, rerender } = renderHook(({ elapsed }) => useOpenRoundRevealStep(elapsed, 'end'), {
+    const { result, rerender } = renderHook(({ elapsed }) => useOpenRoundRevealStep(elapsed, 'end', 3_000), {
       initialProps: { elapsed: 200 },
     });
     rerender({ elapsed: 1_600 });
