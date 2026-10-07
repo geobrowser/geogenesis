@@ -169,6 +169,10 @@ export const debateQueryKeys = {
   lobby: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby', dashlessId(lobbyId)] as const,
   scheduledDebates: (accountKey: string | null) => ['debates', 'account', accountKey, 'scheduled-debates'] as const,
+  /** Every admin list of scheduled debates, whatever week it was read from: what New match refreshes. */
+  adminScheduledDebatesRoot: ['debates', 'admin-scheduled-debates'] as const,
+  adminScheduledDebates: (accountKey: string | null, from: string) =>
+    [...debateQueryKeys.adminScheduledDebatesRoot, from, accountKey] as const,
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,

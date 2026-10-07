@@ -53,6 +53,7 @@ import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hook
 import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes, debateAnalyticsLabel } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
+import { offlinePerson } from './offline-person';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
 import { PersonMatches } from './person-disagreements';
 import type { PersonRecord } from './person-record';
@@ -118,14 +119,7 @@ function personSchedule(
  * them like anyone else. Not requestable: nobody here can take a request right now.
  */
 export function schedulableAsPerson({ user }: SchedulablePerson): DebatePerson {
-  return {
-    ...user,
-    online: false,
-    available_to_debate: false,
-    in_debate: false,
-    online_since: null,
-    can_challenge: false,
-  };
+  return offlinePerson(user);
 }
 
 /**

@@ -1937,6 +1937,11 @@ export type ScheduledDebateRequest = {
   participants: ScheduledDebateParticipant[];
   /** Whether the viewer is the one holding this up. */
   viewer_must_answer: boolean;
+  /**
+   * The time fell outside at least one debater's availability when the match was made. Only an
+   * admin can book such a time (GEO-2942), so only the admin calendar reads it.
+   */
+  outside_availability?: boolean;
 };
 
 export type ScheduledDebateRequestsResponse = {
@@ -1963,6 +1968,139 @@ export async function listScheduledDebates(
     getPrivyIdentityToken,
     accountKey,
     signal,
+  });
+}
+
+/** What `/admin/scheduled-debates` answers: every request in the window, in any status. */
+export type AdminScheduledDebatesResponse = {
+  matches: ScheduledDebateRequest[];
+};
+
+/** geo-chat's own ceiling on one page of the admin list. */
+export const ADMIN_SCHEDULED_DEBATES_LIMIT = 200;
+
+/**
+ * Every scheduled debate starting at or after `from`, for the admin calendar (GEO-2943).
+ *
+ * Gated server-side on an allowlist of personal space ids (GEO-2967): a viewer not on it gets 403,
+ * and a deployment with no admins configured answers 503 to everyone. Either refusal is how the
+ * client learns the viewer is not an admin; there is no separate "am I an admin" read.
+ */
+export async function listAdminScheduledDebates(
+  { from, limit }: { from: string; limit: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from, limit: String(limit) });
+  return geoChatRequest<AdminScheduledDebatesResponse>(`/admin/scheduled-debates?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** One debater with a saved schedule, as `/admin/debate-schedules` lists them. */
+export type AdminScheduledDebater = {
+  user_id: string;
+  /** Their IANA zone. */
+  timezone: string;
+  block_count: number;
+};
+
+export type AdminDebateSchedulesResponse = {
+  debaters: AdminScheduledDebater[];
+  total: number;
+};
+
+/** geo-chat's page ceiling for the admin schedules list. */
+export const ADMIN_DEBATE_SCHEDULES_PAGE = 200;
+
+/** Everyone who has saved availability, a page at a time (GEO-2942). Admins only. */
+export async function listAdminDebateSchedules(
+  { limit, offset }: { limit: number; offset: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+  return geoChatRequest<AdminDebateSchedulesResponse>(`/admin/debate-schedules?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** One candidate's shared time with the person the overlap is measured from. */
+export type ScheduleOverlapCandidate = {
+  with: string;
+  both_have_schedules: boolean;
+  /** Empty when they have no saved schedule. */
+  with_timezone: string;
+  slots: ScheduleOverlapSlot[];
+  truncated: boolean;
+};
+
+export type ScheduleOverlapBatchResponse = {
+  viewer_timezone: string;
+  viewer_has_schedule: boolean;
+  candidates: ScheduleOverlapCandidate[];
+};
+
+/**
+ * The half-hours two other people are both free (GEO-2942). The same matching a debater sees,
+ * measured from `of` rather than from the caller. Admins only.
+ */
+export async function adminScheduleOverlaps(
+  { of, users, days }: { of: string; users: string[]; days: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ of, users: users.join(','), days: String(days) });
+  return geoChatRequest<ScheduleOverlapBatchResponse>(`/admin/debate-schedules/overlaps?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/**
+ * Matches two debaters and invites both (GEO-2942). Whether the time is outside their availability
+ * is decided by geo-chat from their stored schedules and comes back as `outside_availability`.
+ */
+export async function createAdminScheduledDebate(
+  body: { first_user_id: string; second_user_id: string; scheduled_start_at: string; scheduled_end_at: string },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<ScheduledDebateRequest>('/admin/scheduled-debates', {
+    method: 'POST',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** `sent: false` means they have no email on file, so nothing went out. */
+export type AdminAvailabilityPromptResponse = { sent: boolean };
+
+/** Emails someone asking them to set their availability (GEO-2942). Admins only. */
+export async function sendAdminAvailabilityPrompt(
+  userId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<AdminAvailabilityPromptResponse>('/admin/availability-prompts', {
+    method: 'POST',
+    body: { user_id: userId },
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
   });
 }
 

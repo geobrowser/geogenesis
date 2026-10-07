@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useSearchParams } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
@@ -21,8 +21,9 @@ import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-avail
 import { type DebatePerson, type ScheduledDebateRequest } from '../api';
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth } from '../hooks';
 import { speakerLabel } from '../playback-utils';
-import { useScheduledDebates } from '../rooms/scheduling-hooks';
+import { useAdminScheduledDebates, useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { AdminDebatesBody, type CalendarView, CalendarViewSwitch } from './admin-debate-calendar';
 import { DebateChallengeCard } from './challenge-card';
 import { SpaceTopicFilters } from './claims-tab';
 import {
@@ -32,6 +33,7 @@ import {
   calendarOpened,
   calendarWeekChanged,
 } from './debate-calendar-analytics';
+import { CalendarWeekNav, useMinuteClock } from './debate-calendar-controls';
 import { CalendarDayList } from './debate-calendar-day-list';
 import {
   CALENDAR_WEEKS,
@@ -45,11 +47,9 @@ import {
   viewerFreeSlots,
   weekCells,
   weekDays,
-  weekOffsetLabels,
-  weekRangeLabel,
   weekStart,
 } from './debate-calendar-model';
-import { CALENDAR_FROM_PARAM } from './debate-calendar-route';
+import { CALENDAR_FROM_PARAM, CALENDAR_PATH, CALENDAR_VIEW_PARAM } from './debate-calendar-route';
 import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch } from './disagreement-counts';
@@ -116,8 +116,26 @@ export function DebateCalendar() {
     },
   });
   const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
   const from = searchParams?.get(CALENDAR_FROM_PARAM);
   const isPhone = useMediaQuery(PHONE_QUERY);
+
+  // Admins get a second view, of everyone's scheduled debates (GEO-2943). The admin list is also the
+  // admin check, so it is read for every signed-in viewer and refused for all but the allowlist.
+  // From the start of this week, once per visit: the week moving under an open page is not worth a
+  // second key.
+  const [adminFrom] = React.useState(() => weekStart(new Date(), 0));
+  const admin = useAdminScheduledDebates(authenticated, adminFrom);
+  const requestedView: CalendarView = searchParams?.get(CALENDAR_VIEW_PARAM) === 'debates' ? 'debates' : 'availability';
+  const view: CalendarView = admin.isAdmin ? requestedView : 'availability';
+  const changeView = (next: CalendarView) => {
+    const params = new URLSearchParams(searchParams?.toString());
+    if (next === 'debates') params.set(CALENDAR_VIEW_PARAM, next);
+    else params.delete(CALENDAR_VIEW_PARAM);
+    const query = params.toString();
+    router.replace(query ? `${pathname}?${query}` : (pathname ?? CALENDAR_PATH), { scroll: false });
+  };
 
   const schedule = useDebateSchedule();
   const viewerHasSchedule = authenticated ? schedule.isSet : false;
@@ -142,7 +160,9 @@ export function DebateCalendar() {
         <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
           Debate calendar
         </Text>
-        <HubHeaderControls analyticsSurface="calendar" />
+        <HubHeaderControls analyticsSurface="calendar">
+          {admin.isAdmin ? <CalendarViewSwitch view={view} onChange={changeView} /> : null}
+        </HubHeaderControls>
       </header>
 
       {!ready ? (
@@ -159,6 +179,13 @@ export function DebateCalendar() {
         >
           Sign in to see who&rsquo;s free to debate this week and book a time.
         </HubMessage>
+      ) : requestedView === 'debates' && admin.isAdminPending ? (
+        // A link to the admin view waits to learn whether it may open, rather than flashing the other.
+        <div className="px-6 py-6 md:px-4">
+          <CalendarWeekSkeleton />
+        </div>
+      ) : view === 'debates' ? (
+        <AdminDebatesBody isPhone={isPhone} admin={admin} />
       ) : (
         <DebateCalendarBody isPhone={isPhone} viewerHasSchedule={viewerHasSchedule} schedule={schedule} />
       )}
@@ -183,13 +210,7 @@ function DebateCalendarBody({
   const { personalSpaceId } = usePersonalSpaceId();
   const popoverPortal = useElevatedPopoverPortal();
 
-  // Held in state so slots that pass drop off as the page stays open; React Compiler caches a
-  // `Date.now()` read in render once per mount.
-  const [now, setNow] = React.useState(() => Date.now());
-  React.useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 60_000);
-    return () => clearInterval(interval);
-  }, []);
+  const now = useMinuteClock();
 
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [search, setSearch] = React.useState('');
@@ -497,7 +518,6 @@ function DebateCalendarBody({
   const loadError = schedulableQuery.error && !schedulableQuery.data ? schedulableQuery.error : null;
   const nobodyFree = unfilteredCells.size === 0;
   const filteredOut = !nobodyFree && cells.size === 0;
-  const offsets = weekOffsetLabels(days);
 
   // The viewer's own debates keep the week on screen even with nobody else free in it.
   const ownDebatesThisWeek = debates.some(debate => cellOf(debate.start, days) !== null);
@@ -563,43 +583,15 @@ function DebateCalendarBody({
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-2 px-6 py-3 md:px-4">
-        <HubPillButton
-          aria-label="Previous week"
-          analyticsSurface="calendar"
-          analyticsLabel="Debate calendar Previous week"
-          disabled={weekOffset === 0}
-          onClick={() => goToWeek(weekOffset - 1, 'previous')}
-          className="w-7 px-0"
-        >
-          ‹
-        </HubPillButton>
-        <HubPillButton
-          aria-label="Next week"
-          analyticsSurface="calendar"
-          analyticsLabel="Debate calendar Next week"
-          disabled={weekOffset >= CALENDAR_WEEKS - 1}
-          onClick={() => goToWeek(weekOffset + 1, 'next')}
-          className="w-7 px-0"
-        >
-          ›
-        </HubPillButton>
-        <Text as="span" variant="listSemibold" className="px-1" aria-live="polite">
-          {weekRangeLabel(days)}
-        </Text>
-        <HubPillButton analyticsSurface="calendar" disabled={weekOffset === 0} onClick={() => goToWeek(0, 'today')}>
-          Today
-        </HubPillButton>
-        <span className="flex-1" />
+      <CalendarWeekNav
+        days={days}
+        weekOffset={weekOffset}
+        onGoToWeek={goToWeek}
+        isPhone={isPhone}
+        analyticsLabelPrefix="Debate calendar"
+      >
         <Legend viewerHasSchedule={viewerHasSchedule} />
-        {/* The week grid carries the offset at the top of its time column; the day list has no
-            time column, so a phone shows it here. */}
-        {isPhone ? (
-          <Text as="span" variant="footnote" color="grey-04">
-            {offsets.join(' / ')}
-          </Text>
-        ) : null}
-      </div>
+      </CalendarWeekNav>
 
       {/* Not the error state: everyone's free time loaded and can still be booked. These are the
           reads that only add to it, so a failure says what is missing and the week stays up. */}

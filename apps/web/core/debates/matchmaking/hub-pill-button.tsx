@@ -17,7 +17,8 @@ type Props = {
   analyticsSurface?: DebateAnalyticsSurface;
   /** Explicit override for exceptional actions with a more specific intent. */
   analyticsIntent?: string;
-} & React.ComponentPropsWithoutRef<'button'>;
+  // With the ref, which React 19 passes as a prop: an opener that takes focus back on close needs it.
+} & React.ComponentProps<'button'>;
 
 /**
  * The debates feature has its own pill style — `rounded-full`, `h-7`, `text-metadata` — shared with

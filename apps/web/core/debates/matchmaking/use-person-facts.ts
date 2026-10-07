@@ -35,10 +35,24 @@ function recordsPending(personIds: string[], records: Map<string, PersonRecord>)
  */
 export function usePersonFacts(
   allPeople: DebatePerson[],
-  { authenticated, rosterUnavailable }: { authenticated: boolean; rosterUnavailable: boolean }
+  {
+    authenticated,
+    rosterUnavailable,
+    anchorProfileSpaceId,
+  }: {
+    authenticated: boolean;
+    rosterUnavailable: boolean;
+    /**
+     * Whose matches to count, when it is not the viewer's: admin New match (GEO-2942) ranks everyone
+     * by matches with the debater already picked. `null` counts no matches at all; left out, the
+     * viewer. "Viewer" below means this person.
+     */
+    anchorProfileSpaceId?: string | null;
+  }
 ) {
   const { personalSpaceId } = usePersonalSpaceId();
-  const viewerProfileSpaceId = authenticated && personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;
+  const anchor = anchorProfileSpaceId === undefined ? personalSpaceId : anchorProfileSpaceId;
+  const viewerProfileSpaceId = authenticated && anchor && isPersonId(anchor) ? anchor : null;
   // One graph read for the viewer and the whole roster. Signed-out visitors have no viewer to
   // compare against, so they do not spend a public query fetching everybody else's positions.
   // The presence service can hand us a malformed profile-space id; keep those out of the graph's
