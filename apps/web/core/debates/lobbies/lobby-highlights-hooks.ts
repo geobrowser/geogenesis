@@ -127,7 +127,7 @@ export function useRoomVoteHint(lobbyId: string, vote: DebateLobbyRoomVote | nul
 
   React.useEffect(() => {
     if (!voteId || !inRoom) return;
-    const key = `${dashlessId(lobbyId)}:${voteId}`;
+    const key = `${accountKey}:${dashlessId(lobbyId)}:${voteId}`;
     if (tracking.current.key !== key) {
       tracking.current.sender?.close(false);
       tracking.current = {
@@ -155,8 +155,8 @@ export function useRoomVoteHint(lobbyId: string, vote: DebateLobbyRoomVote | nul
     }
   }, [accountKey, getPrivyIdentityToken, inRoom, lobbyId, snapshot, voteId]);
 
-  // Unmounting drops queued hints but still sends a queued withdrawal. The ref is cleared so a
-  // remount (Strict Mode runs one) builds a fresh sender.
+  // Unmounting still sends the queued hint, so the newest side wins. The ref is cleared so a remount
+  // (Strict Mode runs one) builds a fresh sender.
   React.useEffect(
     () => () => {
       tracking.current.sender?.close(true);

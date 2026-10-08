@@ -175,10 +175,10 @@ export function createRoomVoteHintSender(send: (request: RoomVoteHintRequest) =>
     forget() {
       sent = null;
     },
-    /** Drops what is queued. `keepWithdraw` still sends a queued DELETE, for a page going away. */
-    close(keepWithdraw: boolean) {
+    /** Takes no new requests. `keepQueued` still sends the queued one, for a page going away. */
+    close(keepQueued: boolean) {
       closed = true;
-      if (!keepWithdraw || wanted?.request !== undefined) wanted = null;
+      if (!keepQueued) wanted = null;
     },
   };
 }

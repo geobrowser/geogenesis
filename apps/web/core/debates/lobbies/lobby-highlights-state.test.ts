@@ -265,7 +265,7 @@ describe('createRoomVoteHintSender', () => {
     expect(sent()).toEqual([true, true]);
   });
 
-  it('drops the queue on close, keeping only a withdrawal for a page going away', async () => {
+  it('drops the queue on close, or keeps the queued request for a page going away', async () => {
     const dropped = controlledSend();
     const vote = createRoomVoteHintSender(dropped.send);
     vote.request(true);
@@ -278,20 +278,11 @@ describe('createRoomVoteHintSender', () => {
     const leaving = controlledSend();
     const page = createRoomVoteHintSender(leaving.send);
     page.request(true);
-    page.request(undefined);
-    page.close(true);
     page.request(false);
+    page.close(true);
+    page.request(null);
     leaving.calls[0]!.settle(true);
     await leaving.flush();
-    expect(leaving.sent()).toEqual([true, undefined]);
-
-    const queuedSide = controlledSend();
-    const other = createRoomVoteHintSender(queuedSide.send);
-    other.request(true);
-    other.request(false);
-    other.close(true);
-    queuedSide.calls[0]!.settle(true);
-    await queuedSide.flush();
-    expect(queuedSide.sent()).toEqual([true]);
+    expect(leaving.sent()).toEqual([true, false]);
   });
 });

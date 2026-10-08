@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   hint: vi.fn(async (..._args: unknown[]) => undefined),
   getHighlights: vi.fn(),
   setHighlight: vi.fn(),
+  accountKey: 'user-a',
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -39,7 +40,12 @@ vi.mock('../hooks', () => ({
     ],
   },
   debateQueryNetworkOptions: { retry: false },
-  useGeoChatAuth: () => ({ accountKey: 'user-a', authenticated: true, ready: true, getPrivyIdentityToken: getToken }),
+  useGeoChatAuth: () => ({
+    accountKey: mocks.accountKey,
+    authenticated: true,
+    ready: true,
+    getPrivyIdentityToken: getToken,
+  }),
 }));
 
 const getToken = vi.fn();
@@ -65,6 +71,7 @@ beforeEach(() => {
   mocks.getHighlights.mockReset();
   mocks.setHighlight.mockReset();
   mocks.hint.mockClear();
+  mocks.accountKey = 'user-a';
 });
 
 describe('useRoomVoteHint', () => {
@@ -123,6 +130,34 @@ describe('useRoomVoteHint', () => {
     expect(mocks.hint.mock.calls.map(call => [call[1], call[2]])).toEqual([
       ['VOTE-1', true],
       ['VOTE-2', false],
+    ]);
+  });
+
+  it('still sends the queued side when the page goes away', async () => {
+    let land = () => undefined as void;
+    mocks.hint.mockImplementationOnce(() => new Promise<undefined>(resolve => (land = () => resolve(undefined))));
+    const { rerender, unmount } = renderHook(() => useRoomVoteHint('lobby1', vote, true));
+    mocks.snapshot = run('r1', 'reconciling', 'positive');
+    rerender();
+    mocks.snapshot = run('r2', 'reconciling', 'negative');
+    rerender();
+    unmount();
+    await act(async () => {
+      land();
+    });
+    expect(mocks.hint.mock.calls.map(call => call[2])).toEqual([true, false]);
+  });
+
+  it('builds a fresh sender for another account on the same vote', async () => {
+    mocks.snapshot = run('r1', 'reconciling', 'positive');
+    const { rerender } = renderHook(() => useRoomVoteHint('lobby1', vote, true));
+    await act(async () => undefined);
+    mocks.accountKey = 'user-b';
+    rerender();
+    await act(async () => undefined);
+    expect(mocks.hint.mock.calls.map(call => [call[2], call[4]])).toEqual([
+      [true, 'user-a'],
+      [true, 'user-b'],
     ]);
   });
 
