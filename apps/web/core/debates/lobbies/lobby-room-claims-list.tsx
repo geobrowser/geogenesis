@@ -54,15 +54,27 @@ const FACES_SHOWN = 3;
 export function LobbyRoomClaimsList({
   claims,
   renderOffer,
+  renderHeader,
+  renderMenu,
 }: {
   claims: LobbyRoomClaim[];
   /** The lobby-scoped request control. Only called when someone on the other side can be requested. */
   renderOffer: (offer: LobbyRoomOffer) => React.ReactNode;
+  /** Above the claim, e.g. who highlighted it. */
+  renderHeader?: (entry: LobbyRoomClaim) => React.ReactNode;
+  /** Host controls, beside the offer. */
+  renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
   return (
     <HubCardList>
       {claims.map(entry => (
-        <LobbyRoomClaimCard key={entry.claim.id} entry={entry} renderOffer={renderOffer} />
+        <LobbyRoomClaimCard
+          key={entry.claim.id}
+          entry={entry}
+          renderOffer={renderOffer}
+          renderHeader={renderHeader}
+          renderMenu={renderMenu}
+        />
       ))}
     </HubCardList>
   );
@@ -71,9 +83,13 @@ export function LobbyRoomClaimsList({
 function LobbyRoomClaimCard({
   entry,
   renderOffer,
+  renderHeader,
+  renderMenu,
 }: {
   entry: LobbyRoomClaim;
   renderOffer: (offer: LobbyRoomOffer) => React.ReactNode;
+  renderHeader?: (entry: LobbyRoomClaim) => React.ReactNode;
+  renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
   const { claim } = entry;
   // The card holds its own response reads until it is near the viewport; this one follows it.
@@ -131,6 +147,7 @@ function LobbyRoomClaimCard({
       readiness={entry.readiness}
       activeDebate={entry.activeDebate}
       answersMayComeFromIndex
+      header={renderHeader?.(entry)}
       // Never the card's default slot: its request would not be lobby-scoped. The spacer keeps the
       // meta row's height.
       endSlot={

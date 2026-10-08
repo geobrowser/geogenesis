@@ -10,7 +10,7 @@ import type { DebateLobbyView } from '../api';
 import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { ScrollableTabRow } from '../matchmaking/scrollable-tab-row';
 import { LobbyExploreClaims } from './lobby-explore-claims';
-import { LobbyRoomClaims } from './lobby-room-claims';
+import { LobbyRoomClaimsWithHighlights, LobbyRoomVote } from './lobby-highlights';
 
 export type LobbyClaimsTab = 'room' | 'explore';
 
@@ -25,6 +25,7 @@ export function LobbyClaimsArea({ lobby }: { lobby: DebateLobbyView }) {
 
   return (
     <section className="flex flex-col gap-3" aria-label="Claims">
+      <LobbyRoomVote lobby={lobby} />
       <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Lobby claims" className="gap-4">
         {TABS.map(tab => (
           <button
@@ -50,7 +51,7 @@ export function LobbyClaimsArea({ lobby }: { lobby: DebateLobbyView }) {
         ))}
       </ScrollableTabRow>
       {activeTab === 'room' ? (
-        <LobbyRoomClaims lobby={lobby} onExplore={() => setActiveTab('explore')} />
+        <LobbyRoomClaimsWithHighlights lobby={lobby} onExplore={() => setActiveTab('explore')} />
       ) : (
         <LobbyExploreClaims lobby={lobby} />
       )}

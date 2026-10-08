@@ -35,11 +35,14 @@ export function LobbyRoomClaims({
   lobby,
   excludeClaimIds,
   onExplore,
+  renderMenu,
 }: {
   lobby: DebateLobbyView;
   excludeClaimIds?: ReadonlySet<string>;
   /** Offered when the list is empty. */
   onExplore?: () => void;
+  /** Host controls on each claim. */
+  renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
   const query = useDebateLobbyClaims(lobby.lobby_id);
   const source = query.data?.source ?? 'room';
@@ -70,7 +73,7 @@ export function LobbyRoomClaims({
           <HubMessageNote>{LOBBY_ROOM_CLAIMS_COPY.recent}</HubMessageNote>
         </div>
       ) : null}
-      <LobbyRoomClaimsList claims={claims} renderOffer={renderOffer} />
+      <LobbyRoomClaimsList claims={claims} renderOffer={renderOffer} renderMenu={renderMenu} />
     </HubQueryState>
   );
 }
@@ -106,7 +109,7 @@ export function lobbyRoomClaimFrom(row: DebateLobbyClaim): LobbyRoomClaim {
 }
 
 /** Request debate, offered only to people in this lobby on the other side. */
-function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRoomOffer }) {
+export function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRoomOffer }) {
   const { claim, readiness } = offer.entry;
   const { data: activity } = useDebateActivity(true);
   const { data: requests } = useDebateRequests(true);

@@ -105,6 +105,8 @@ type Props = {
   answersMayComeFromIndex?: boolean;
   /** Why responding is refused outright — an unpublished edit to the claim's own vocabulary. */
   responseBlockedReason?: string | null;
+  /** Rendered above the claim, e.g. who highlighted it in a lobby. */
+  header?: React.ReactNode;
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
@@ -192,6 +194,7 @@ export function MatchmakingClaimCard({
   answersReady,
   answersMayComeFromIndex,
   responseBlockedReason,
+  header,
   footer,
   noteFor,
   onOpenClaim,
@@ -240,6 +243,7 @@ export function MatchmakingClaimCard({
     // `w-full` matters: popLayout absolutely positions an exiting card, which would otherwise
     // collapse to its content width as it fades.
     <motion.article ref={setCardRef} {...hubCardMotion} className="w-full claim-card-panel-surface">
+      {header}
       {isOnGraph ? (
         <RespondableControls
           noteFor={noteFor}
