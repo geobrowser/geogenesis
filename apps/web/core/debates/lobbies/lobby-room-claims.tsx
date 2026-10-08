@@ -29,7 +29,8 @@ export const LOBBY_ROOM_CLAIMS_COPY = {
 
 /**
  * The lobby's "In this room" claims (GEO-3132), in the server's order. `excludeClaimIds` drops rows
- * by `DebateClaimSummary.id`, for a host that shows some of them elsewhere.
+ * by `DebateClaimSummary.id`, for a host that shows some of them elsewhere; the list is only empty
+ * when the room has no claims, not when all of them are shown elsewhere.
  */
 export function LobbyRoomClaims({
   lobby,
@@ -64,11 +65,11 @@ export function LobbyRoomClaims({
       error={query.error}
       failureReason={query.failureReason}
       onRetry={() => void query.refetch()}
-      isEmpty={claims.length === 0}
+      isEmpty={(query.data?.claims.length ?? 0) === 0}
       emptyMessage={LOBBY_ROOM_CLAIMS_COPY.empty}
       emptyAction={onExplore ? { label: 'Explore claims', onClick: onExplore } : undefined}
     >
-      {source === 'recent' ? (
+      {source === 'recent' && claims.length > 0 ? (
         <div className="pb-2">
           <HubMessageNote>{LOBBY_ROOM_CLAIMS_COPY.recent}</HubMessageNote>
         </div>
