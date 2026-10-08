@@ -8,7 +8,7 @@ import type { ReactNode } from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_IS_FACTUAL_PROPERTY_ID, CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 
 import { EntityVoteButtons } from './entity-vote-buttons';
 
@@ -109,6 +109,13 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAvatars: () => null }));
+vi.mock('~/core/topics/follow-topic-button', () => ({
+  FollowTopicButton: (props: { topic: { id: string; name?: string | null } }) => (
+    <button type="button" data-testid="follow-button" data-topic={props.topic.id}>
+      Follow {props.topic.name}
+    </button>
+  ),
+}));
 
 /**
  * As `store.getEntity` returns it when no space is given: relations from every space the entity
@@ -306,5 +313,37 @@ describe('EntityVoteButtons response space resolution', () => {
     await screen.findByText('67%');
     expect(mocks.countsSpaceIds).toContain(BLOCK_SPACE);
     expect(mocks.countsSpaceIds).not.toContain(CLAIM_SPACE);
+  });
+});
+
+describe('EntityVoteButtons on a topic (GEO-3191)', () => {
+  const TOPIC = { id: TOPIC_TYPE_ID, name: 'Topic' };
+
+  it('draws Follow instead of the votes, wherever the entity is listed', () => {
+    mocks.entity = { ...plainEntity({ livesIn: CLAIM_SPACE }), name: 'Nuclear energy', types: [TOPIC] };
+    renderButtons();
+
+    expect(screen.getByTestId('follow-button')).toHaveAttribute('data-topic', 'claim-1');
+    expect(screen.getByText('Follow Nuclear energy')).toBeInTheDocument();
+  });
+
+  it('keeps a claim that is also typed as a topic on the claim controls', async () => {
+    mocks.entity = { ...claimEntity(), types: [{ id: CLAIM_TYPE_ID, name: 'Claim' }, TOPIC] };
+    renderButtons();
+
+    expect(await screen.findByText('67%')).toBeInTheDocument();
+    expect(screen.queryByTestId('follow-button')).toBeNull();
+  });
+
+  it('respects a caller that names the response kind', () => {
+    mocks.entity = { ...plainEntity({ livesIn: CLAIM_SPACE }), types: [TOPIC] };
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(<EntityVoteButtons entityId="claim-1" spaceId={BLOCK_SPACE} responseKind="curation" />, {
+      wrapper: ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    expect(screen.queryByTestId('follow-button')).toBeNull();
   });
 });

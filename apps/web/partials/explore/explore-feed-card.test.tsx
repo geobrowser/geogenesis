@@ -77,6 +77,14 @@ vi.mock('./explore-ranking-card-body', () => ({
   ),
 }));
 
+vi.mock('./topic-explore-feed-card', () => ({
+  TopicExploreFeedCardArticle: (props: { item: ExploreFeedItem; counts: unknown }) => (
+    <div data-testid="topic-card" data-counts={String(props.counts)}>
+      {props.item.title}
+    </div>
+  ),
+}));
+
 vi.mock('./debate-explore-feed-card', () => ({
   DebateExploreFeedCard: ({
     fallback,
@@ -121,6 +129,18 @@ const item: ExploreFeedItem = {
 afterEach(cleanup);
 
 describe('ExploreFeedCard', () => {
+  it('routes Topic-typed items to the topic card, without connection counts (GEO-3191)', () => {
+    const topicItem: ExploreFeedItem = {
+      ...item,
+      types: [{ id: '5ef5a586-0f27-4d8e-8f6c-59ae5b3e89e2', name: 'Topic' }],
+      title: 'Nuclear energy',
+    };
+    render(<ExploreFeedCard item={topicItem} />);
+
+    expect(screen.getByTestId('topic-card')).toHaveAttribute('data-counts', 'null');
+    expect(screen.getByText('Nuclear energy')).toBeInTheDocument();
+  });
+
   it('routes Debate-typed items to the debate card with the generic card as fallback', () => {
     // Hyphenated on purpose: type-id comparison must ignore hyphenation.
     const debateItem: ExploreFeedItem = {
