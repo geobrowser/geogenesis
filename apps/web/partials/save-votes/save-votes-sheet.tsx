@@ -89,6 +89,12 @@ export function SaveVotesSheet() {
 
   const open = reason !== null && ready && !authenticated && (count > 0 || codeEmail !== null);
 
+  // Every vote taken back: the ask was about votes that are gone, and must not reopen for the next
+  // single vote, which on a feed isn't an ask yet. Not mid-code: that step outlives the votes.
+  React.useEffect(() => {
+    if (count === 0 && codeEmail === null) closeSaveVotesPrompt();
+  }, [count, codeEmail]);
+
   // Signed in: the sheet's job is done whichever way they got there, and the saver takes over.
   React.useEffect(() => {
     if (!authenticated) return;

@@ -100,6 +100,19 @@ it('starts the asks afresh once every stored vote has expired', () => {
   expect(readLocalVotes().prompt.shownCount).toBe(0);
 });
 
+// Copilot on #2785 (round 4): a tab can stay open longer than a vote lives.
+it('expires a vote in a tab that stayed open past its 30 days, and does not write it back', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-01T00:00:00Z'));
+  toggleLocalVote(vote('old'));
+  expect(readLocalVotes().votes).toHaveLength(1);
+
+  vi.setSystemTime(Date.now() + LOCAL_VOTE_TTL_MS + 1);
+  expect(readLocalVotes().votes).toEqual([]);
+  toggleLocalVote(vote('new'));
+  expect(readLocalVotes().votes.map(v => v.entityId)).toEqual(['new']);
+});
+
 it('reads corrupt storage as empty', () => {
   window.localStorage.setItem(LOCAL_VOTES_STORAGE_KEY, '{not json');
   expect(readLocalVotes().votes).toEqual([]);

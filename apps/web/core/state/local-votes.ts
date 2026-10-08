@@ -49,7 +49,12 @@ export const LOCAL_VOTE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 const EMPTY: LocalVotesState = { votes: [], prompt: { shownCount: 0, dismissCount: 0 }, save: null };
 
 const listeners = new Set<() => void>();
-let cache: { raw: string | null; state: LocalVotesState } | null = null;
+/**
+ * The last parse, valid while storage holds the same string and no vote in it has expired since. A
+ * tab can stay open past a vote's 30 days, and the string alone would keep serving it — and a later
+ * toggle would write it back.
+ */
+let cache: { raw: string | null; state: LocalVotesState; expiresAt: number } | null = null;
 /** Only when storage throws (private mode, quota): the session still works, it just doesn't persist. */
 let memoryOnly: LocalVotesState | null = null;
 
@@ -123,8 +128,11 @@ export function readLocalVotes(): LocalVotesState {
   if (typeof window === 'undefined') return EMPTY;
   if (memoryOnly) return memoryOnly;
   const raw = readRaw();
-  if (cache && cache.raw === raw) return cache.state;
-  cache = { raw, state: parse(raw) };
+  const now = Date.now();
+  if (cache && cache.raw === raw && now < cache.expiresAt) return cache.state;
+  const state = parse(raw, now);
+  const oldest = Math.min(...state.votes.map(vote => vote.votedAt));
+  cache = { raw, state, expiresAt: oldest + LOCAL_VOTE_TTL_MS };
   return cache.state;
 }
 

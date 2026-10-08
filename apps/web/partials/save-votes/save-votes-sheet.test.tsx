@@ -10,7 +10,7 @@ import {
   savedVotesCopy,
   savingVotesCopy,
 } from '~/core/save-votes-copy';
-import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
+import { clearLocalVotes, readLocalVotes, removeLocalVote, toggleLocalVote } from '~/core/state/local-votes';
 import {
   closeSaveVotesPrompt,
   markPromptedThisSession,
@@ -232,6 +232,27 @@ describe('SaveVotesSheet', () => {
 
     rerender(<SaveVotesSheet />);
     expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+  });
+
+  // Copilot on #2785 (round 4): an ask belongs to the votes it was about.
+  it('does not reopen an old ask for the next vote once every vote was taken back', () => {
+    vote('a');
+    vote('b');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('threshold'));
+    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
+
+    act(() => {
+      removeLocalVote({ entityId: 'a', spaceId: 'space-1', responseKind: 'stance' });
+      removeLocalVote({ entityId: 'b', spaceId: 'space-1', responseKind: 'stance' });
+    });
+    act(() => {
+      vote('c');
+    });
+
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(readSaveVotesPrompt()).toBeNull();
   });
 
   it('shows up to two of the votes, then how many more', () => {
