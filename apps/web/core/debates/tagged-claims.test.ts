@@ -1116,3 +1116,31 @@ describe('spaces matched all at once', () => {
     expect(and).not.toContainEqual(tagIn(SPACE));
   });
 });
+
+/** GEO-3223. The picker needs a distinct claim count, which the space buckets cannot give. */
+describe('the total it reports', () => {
+  function respondWithTotal(nodes: unknown[], totalCount: number) {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(
+        decoder({ entitiesConnection: { totalCount, pageInfo: { hasNextPage: false, endCursor: null }, nodes } })
+      )
+    );
+  }
+
+  it('reports the server’s distinct total while browsing', async () => {
+    respondWithTotal([node('a1', 'One', { tagSpaces: [SPACE, OTHER_SPACE] })], 1);
+    const { result } = renderClaims();
+
+    await waitFor(() => expect(result.current.totalCount).toBe(1));
+    expect(sentQuery()).toContain('totalCount');
+  });
+
+  it('reports no total while a search runs', async () => {
+    respondWithSearch([['a1']]);
+    respondWithTotal([node('a1', 'One')], 1);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'one' });
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(result.current.totalCount).toBeNull();
+  });
+});

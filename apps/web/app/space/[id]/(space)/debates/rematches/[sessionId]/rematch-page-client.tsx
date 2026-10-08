@@ -728,6 +728,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     hasNextPage: taggedHasNextPage,
     fetchNextPage: fetchNextTaggedPage,
     isFetchingNextPage: taggedFetchingNextPage,
+    totalCount: taggedTotalCount,
   } = useTaggedClaims(claimsTagId, taggedFilters, taggedEnabled && !taggedScopePending);
 
   const taggedTopicFacet = useTaggedTopicFacet(claimsTagId, taggedFilters, taggedEnabled && !taggedScopePending);
@@ -1989,29 +1990,27 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // topic whose only claims are hidden, and picking it emptied the list. The list itself still reads
   // `claims`, so a claim agreed with on screen is held rather than dropped — see `visibleClaims`.
   const facetClaims = tab === 'opponent' ? opponentClaimsShown : claims;
-  const offeredSpaces = React.useMemo(
+  /**
+   * The client-side lists' rows under every filter: what both of their menus count, and how many
+   * claims they list. `null` on the tagged source, whose query does all of that on the server.
+   */
+  const narrowedFacetClaims = React.useMemo(
     () =>
       graphFiltered
+        ? null
+        : facetClaims.filter(claim => passesSpace(claim) && passesTopics(claim) && passesSearch(claim)),
+    [facetClaims, graphFiltered, passesSearch, passesSpace, passesTopics]
+  );
+  const offeredSpaces = React.useMemo(
+    () =>
+      narrowedFacetClaims === null
         ? taggedSpaceFacet.spaces
             .filter(space => canPublishDebateIn(space.id) && isClaimSpaceAllowed(space.id, spaceAllowlist))
             .map(space => ({ id: space.id, name: null, count: space.count }))
         : // Co-occurrence over the narrowed rows, the space selection included: spaces are AND
           // (GEO-3223), so a space's count is what picking it would leave.
-          countBy(
-            facetClaims
-              .filter(claim => passesSpace(claim) && passesTopics(claim) && passesSearch(claim))
-              .map(claim => ({ id: claim.claim.space_id, name: null }))
-          ),
-    [
-      canPublishDebateIn,
-      facetClaims,
-      graphFiltered,
-      passesSearch,
-      passesSpace,
-      passesTopics,
-      spaceAllowlist,
-      taggedSpaceFacet.spaces,
-    ]
+          countBy(narrowedFacetClaims.map(claim => ({ id: claim.claim.space_id, name: null }))),
+    [canPublishDebateIn, narrowedFacetClaims, spaceAllowlist, taggedSpaceFacet.spaces]
   );
 
   // A space picked while the gates were still passing everything has to be let go once they reject
@@ -2034,21 +2033,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // rows — co-occurrence over the claims that already carry every picked topic, so the menu offers
   // what appears alongside the selection and nothing on it can lead to an empty list.
   const facetTopics = React.useMemo(() => {
-    if (graphFiltered) return orderFacetOptions(taggedTopicFacet.topics, topicIds);
-    const source = countRowTopics(
-      facetClaims.filter(claim => passesSpace(claim) && passesSearch(claim) && passesTopics(claim))
-    );
-    return orderFacetOptions(source, topicIds);
-  }, [
-    countRowTopics,
-    facetClaims,
-    graphFiltered,
-    passesSearch,
-    passesSpace,
-    passesTopics,
-    taggedTopicFacet.topics,
-    topicIds,
-  ]);
+    if (narrowedFacetClaims === null) return orderFacetOptions(taggedTopicFacet.topics, topicIds);
+    return orderFacetOptions(countRowTopics(narrowedFacetClaims), topicIds);
+  }, [countRowTopics, narrowedFacetClaims, taggedTopicFacet.topics, topicIds]);
 
   /**
    * "From this debate" is one debate's claims in one space, so the space and topic menus are not
@@ -2573,13 +2560,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const setTopicPicked = (topicId: string) => setTopicIds(current => toggleId(current, topicId));
 
   /**
-   * How many claims the filters leave listed, read off the space counts. Those are co-occurrence
-   * over the list (spaces are AND), so with a space picked its count is the list; with none, every
-   * claim is counted under its space and they add up to it. Zero while they load, which the rule
-   * below reads as unknown.
+   * How many distinct claims the filters leave listed: the tagged query's own total, or the narrowed
+   * rows. Not the space counts added up, which a claim tagged in two spaces is counted twice in — so
+   * a space or topic every claim carries would still read as narrowing. Zero while it loads, which
+   * the rule below reads as unknown.
    */
-  const pickedSpaceCount = facetSpaces.find(space => spaceIds.some(picked => idEquals(picked, space.id)))?.count;
-  const listedCount = pickedSpaceCount ?? facetSpaces.reduce((sum, space) => sum + space.count, 0);
+  const listedCount = narrowedFacetClaims === null ? (taggedTotalCount ?? 0) : narrowedFacetClaims.length;
   /**
    * Whether the search box has text. The row holds still while it does: each keystroke would
    * otherwise take pills away and bring them back, and the filters would jump under the reader.

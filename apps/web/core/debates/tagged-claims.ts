@@ -64,6 +64,9 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
       typeIds: { in: [$claimTypeId] }
       filter: $filter
     ) {
+      # Distinct claims under the filter, which the facet buckets cannot give: a claim tagged in two
+      # spaces is counted under both (GEO-3223).
+      totalCount
       pageInfo {
         hasNextPage
         endCursor
@@ -102,6 +105,7 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
 
 type TaggedClaimsQuery = {
   entitiesConnection: {
+    totalCount?: number | null;
     pageInfo: { hasNextPage: boolean; endCursor: string | null } | null;
     nodes: Array<{
       id: string;
@@ -302,6 +306,7 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
 
   return {
     claims,
+    totalCount: data.entitiesConnection?.totalCount ?? null,
     hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
     endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
   };
@@ -766,6 +771,12 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // wasteful — `fetchNextPage` is a manual call and ignores `enabled`, so a sentinel reading a
     // cached `true` pages a query whose scope has not been resolved yet, from an old cursor.
     claims: enabled ? claims : NO_TAGGED_CLAIMS,
+    /**
+     * How many distinct claims the filters match, while browsing — `null` while a search runs (its
+     * rows come from id pages, which carry no total) or before the first page lands. The facet
+     * buckets cannot stand in for it: a claim tagged in two spaces is counted under each.
+     */
+    totalCount: enabled && browsing ? (query.data?.pages[0]?.totalCount ?? null) : null,
     // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
     // "still looking" and never show its empty state.
     //

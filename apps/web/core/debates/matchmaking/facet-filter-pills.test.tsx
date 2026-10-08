@@ -86,6 +86,16 @@ describe('fitPills', () => {
   });
 });
 
+describe('fitPills with options past the measured ones', () => {
+  it('reserves room for "…" even when every measured pill fits', () => {
+    // All + five pills fill two 320px lines exactly. With unmeasured options still to come, the "…"
+    // is drawn regardless, so a pill has to give way for it instead of "…" wrapping to a third line.
+    const items = unpicked(100, 100, 100, 100, 100);
+    expect(fitPills({ leading: 100, items, trailing: 36, available: 320, lines: 2 })).toBe(5);
+    expect(fitPills({ leading: 100, items, trailing: 36, available: 320, lines: 2, moreBeyond: true })).toBe(4);
+  });
+});
+
 describe('rowLines', () => {
   it('stays at two lines while the picks take a line and a half or less', () => {
     // All + two picks: 100 + 8 + 100 + 8 + 100 = 316 of a 320px line, one line.

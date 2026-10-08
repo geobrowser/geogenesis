@@ -490,6 +490,8 @@ vi.mock('~/core/debates/tagged-claims', async importOriginal => ({
     const claims = enabled && !mocks.featuredCatalogError ? applyServerFilters(taggedRowsFor(tagId), filters) : [];
     return {
       claims,
+      // Distinct claims, as the server's `totalCount` is: one per claim however many spaces tag it.
+      totalCount: enabled && !filters.search ? claims.length : null,
       isLoading: enabled && mocks.featuredCatalogLoading,
       error: enabled ? mocks.featuredCatalogError : null,
       hasNextPage: enabled && mocks.taggedHasNextPage,
@@ -6538,6 +6540,22 @@ describe('desktop filter row', () => {
 
     await waitFor(() => expect(pill(/Ethics/)).toBeInTheDocument());
     expect(pill(/^Governance\s?\d/)).toBeNull();
+  });
+
+  // A claim tagged in two spaces is counted under both space buckets, so adding those up overstates
+  // the list — and a space every claim is in would still read as narrowing.
+  it('counts a claim tagged in two spaces once when deciding what narrows', async () => {
+    mocks.debateTagClaims = [
+      debateTag(),
+      debateTag(CLAIM_MORE, 'A newly published claim', SPACE_1, 1),
+      debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pill(/^Governance space/)).toBeInTheDocument());
+
+    // Both claims are tagged in Crypto, so picking it would change nothing.
+    expect(pill(/^Crypto/)).toBeNull();
   });
 
   it('leaves out the space when every listed claim is in it', async () => {

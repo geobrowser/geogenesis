@@ -111,7 +111,8 @@ export function rowLines({
 
 /**
  * How many of the unpicked items fit on `lines` lines of `available` pixels, after a leading item
- * and with a trailing one reserved whenever anything is left over.
+ * and with a trailing one reserved whenever anything is left over — dropped here, or never measured
+ * (`moreBeyond`).
  *
  * Picked items are always kept wherever they sit, so what gives way is the unpicked ones, from the
  * end. The answer is how many unpicked items, counted from the start, stay.
@@ -123,6 +124,7 @@ export function fitPills({
   available,
   lines,
   gap = PILL_GAP_PX,
+  moreBeyond = false,
 }: {
   leading: number;
   items: { width: number; picked: boolean }[];
@@ -130,6 +132,8 @@ export function fitPills({
   available: number;
   lines: number;
   gap?: number;
+  /** Options exist past `items` that were never measured, so the trailing control is always drawn. */
+  moreBeyond?: boolean;
 }): number {
   const unpicked = items.filter(item => !item.picked).length;
   for (let kept = unpicked; kept > 0; kept--) {
@@ -139,7 +143,7 @@ export function fitPills({
       if (item.picked) widths.push(item.width);
       else if (seen++ < kept) widths.push(item.width);
     }
-    if (kept < unpicked) widths.push(trailing);
+    if (kept < unpicked || moreBeyond) widths.push(trailing);
     if (pack(widths, available, gap).lines <= lines) return kept;
   }
   return 0;
@@ -212,7 +216,17 @@ export function FacetFilterPills({
         pickedWidths: items.filter(item => item.picked).map(item => item.width),
         available,
       });
-      setKeptUnpicked(fitPills({ leading: widthOf(leading), items, trailing: widthOf(trailing), available, lines }));
+      setKeptUnpicked(
+        fitPills({
+          leading: widthOf(leading),
+          items,
+          trailing: widthOf(trailing),
+          available,
+          lines,
+          // Past the measuring limit the "…" is drawn whatever fits, so it needs its room too.
+          moreBeyond: options.length > candidates.length,
+        })
+      );
     };
 
     measure();
@@ -223,7 +237,7 @@ export function FacetFilterPills({
     return () => observer?.disconnect();
     // Re-measured whenever the pills or the picks change. Both are memoized, by this component and
     // by the caller's `options` and `pickedIds`, so that is when a width or a forced pill could.
-  }, [candidates, picked]);
+  }, [candidates, options.length, picked]);
 
   const byId = React.useMemo(() => new Map(options.map(option => [option.id, option])), [options]);
   const menuOptions = React.useMemo<HubFilterOption<string>[]>(
