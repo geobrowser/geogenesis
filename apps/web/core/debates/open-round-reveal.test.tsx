@@ -198,6 +198,15 @@ describe('useOpenRoundReveal', () => {
     expect(current.result).toEqual({ kind: 'round', round: 1, opener: 'Alice' });
   });
 
+  it("keeps the opener's announcement up while a stale payload has not brought the new round yet", () => {
+    // Resolved Extend, but this payload predates the next round's turns: the room holds on the result.
+    const stale = { ...revealRebut(), turn_durations_ms: [60_000, 60_000] };
+    const current = reveal({ debate: stale, elapsedMs: 4_000, remainingSeconds: 0 });
+    expect(current.result).toEqual({ kind: 'round', round: 1, opener: null });
+    expect(current.chipsHidden).toBe(true);
+    expect(current.holdsCountIn).toBe(true);
+  });
+
   it("clears the opener's tiles for their count-in", () => {
     const current = reveal({ elapsedMs: 4_000 });
     expect(current.result).toBeNull();

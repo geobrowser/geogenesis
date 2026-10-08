@@ -194,7 +194,7 @@ export function openRoundWrapNote(
 }
 
 type OpenRoundRevealInput = {
-  debate: Pick<Debate, 'open_rounds' | 'first_participant_slot'>;
+  debate: Pick<Debate, 'open_rounds' | 'first_participant_slot' | 'turn_durations_ms'>;
   /** The room's Open rounds phase; `null` for a fixed format. */
   phase: OpenRoundsRoomPhase | null;
   effectiveStatus: Debate['status'];
@@ -262,8 +262,12 @@ export function useOpenRoundReveal({
   const remotePick = pickFor(remote.slot);
 
   const localOpens = localSlot === debate.first_participant_slot;
+  // The count-in counts into the new round's first turn, so it needs that turn. A payload that has
+  // not caught up with an Extend holds on the result without it (`openRoundGapAfterTurn`), and the
+  // announcement stays up rather than leave a blank screen.
+  const countingIn = step === 'countIn' && roundIndex !== null && debate.turn_durations_ms.length > roundIndex * 2 + 2;
   // The opener's own tile counts them in; the other debater keeps the announcement until then.
-  const announcing = step === 'result' || (step === 'countIn' && !localOpens);
+  const announcing = step === 'result' || (step === 'countIn' && (!localOpens || !countingIn));
   let result: OpenRoundResult | null = null;
   if (maxReached) {
     result = { kind: 'max', rounds: openRounds?.max_rebuttal_rounds ?? 0 };
@@ -288,7 +292,7 @@ export function useOpenRoundReveal({
     pickPlacement: step === 'flip' ? 'center' : 'apart',
     chipsHidden: result !== null,
     holdsEndCard: maxReached || wrapHeld,
-    holdsCountIn: resultPhase !== null && step !== 'countIn',
+    holdsCountIn: resultPhase !== null && !countingIn,
     announcedRoundPhase:
       newRound && openRounds
         ? {
