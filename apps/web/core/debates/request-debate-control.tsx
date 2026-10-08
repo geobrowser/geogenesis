@@ -14,9 +14,9 @@ import { Tooltip } from '~/design-system/tooltip';
  * `HubPillButton` in a footer. Same words, same action, two designs and two copies of the state
  * ladder underneath. Moving between the surfaces read as moving between two products.
  *
- * The *action* stays with the caller, because it genuinely differs: the panel sends
- * `create_debate_request_as`, the picker a session-scoped rematch request. Only the offer is shared
- * — what it looks like, what it is called in each state, and how it announces itself.
+ * The action stays with the caller: ordinary matchmaking sends `create_debate_request_as`, while
+ * the picker and its entity panel share `RematchRequestControl` for session-scoped requests. This
+ * primitive supplies the appearance and accessible pending/error announcements for both.
  */
 /**
  * The shape of a control in a claim card's end slot.

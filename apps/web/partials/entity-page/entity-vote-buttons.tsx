@@ -43,6 +43,7 @@ import { useQueryEntity } from '~/core/sync/use-store';
 import { FollowTopicButton } from '~/core/topics/follow-topic-button';
 import { Profile } from '~/core/types';
 import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Avatar } from '~/design-system/avatar';
@@ -792,7 +793,9 @@ function VoterRow({
     return (
       <Link
         href={profile.profileLink}
-        onClick={() => personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })}
+        {...observePanelNavigation(() =>
+          personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })
+        )}
       >
         {content}
       </Link>
