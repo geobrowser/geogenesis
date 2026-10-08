@@ -19,17 +19,26 @@ export const SAVE_VOTES_ANALYTICS = {
 } as const;
 
 /**
- * Whether `attempt` is a sign-in a save prompt started, and not one the visitor walked away from.
+ * What this tab's sign-in means for the votes on the device:
+ *
+ * - `save`: a save prompt started it and it completed. Only now may they be published.
+ * - `pending`: a save prompt started it and it hasn't finished. Privy reports a user before its dialog
+ *   is done, and the visitor can still back out — after which Privy signs them out — so nothing is
+ *   published yet (GEO-3243).
+ * - `not_save`: something else started it, or the visitor left it.
+ * - `elsewhere`: no attempt in this tab, so the sign-in happened in another one, which decides.
  *
  * The attempt is the authorization to save, rather than a flag of our own: it is already recorded per
  * press, survives the OAuth redirect in this tab, is replaced by any later sign-in, and is marked
- * `closed` when the sheet or Privy's dialog is dismissed.
+ * `closed` or `left_after_*` when the visitor leaves it.
  */
-export function isSaveVotesSignIn(attempt: AuthAttempt | undefined) {
-  if (!attempt || attempt.properties.auth_intent !== SAVE_VOTES_ANALYTICS.auth_intent) return false;
-  // Still open, or signed in. Any way of leaving it — closed, superseded, or exited after signing in,
-  // which Privy follows with a sign-out — is not a save.
-  return attempt.outcome === undefined || isSignedInOutcome(attempt.outcome);
+export type SaveVotesSignIn = 'save' | 'pending' | 'not_save' | 'elsewhere';
+
+export function saveVotesSignIn(attempt: AuthAttempt | undefined): SaveVotesSignIn {
+  if (!attempt) return 'elsewhere';
+  if (attempt.properties.auth_intent !== SAVE_VOTES_ANALYTICS.auth_intent) return 'not_save';
+  if (attempt.outcome === undefined) return 'pending';
+  return isSignedInOutcome(attempt.outcome) ? 'save' : 'not_save';
 }
 
 export function saveVotesSignInProperties(auth_control: string, localVoteCount: number) {

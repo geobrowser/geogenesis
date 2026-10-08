@@ -121,7 +121,24 @@ export function captureAuthEvent(event: AnalyticsEventName, properties: Analytic
   }
 }
 
+const listeners = new Set<() => void>();
+
+/**
+ * Notified whenever an attempt in this document is saved — begun, opened, finished. For readers that
+ * must act when a sign-in *completes* rather than when Privy first reports a user, which can come
+ * first (GEO-3243).
+ */
+export function subscribeAuthAttempts(listener: () => void) {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
 function save(attempt: AuthAttempt, activate = true) {
+  saveQuietly(attempt, activate);
+  listeners.forEach(listener => listener());
+}
+
+function saveQuietly(attempt: AuthAttempt, activate: boolean) {
   if (activate || memory?.id === attempt.id) memory = attempt;
   if (!isAnalyticsEnabled) {
     unpersisted.set(attempt.id, attempt);
