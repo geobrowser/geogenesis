@@ -9,7 +9,10 @@ import { Button, PILL_BUTTON_CLASS_NAME } from '~/design-system/button';
 
 import { Environment } from '../environment';
 import { usePrepareOnboarding } from '../hooks/use-prepare-onboarding';
+import { useSaveVotesSignIn } from '../hooks/use-save-votes-sign-in';
 import { useTrackedLogin } from '../hooks/use-tracked-login';
+import { saveVotesNavLabel } from '../save-votes-copy';
+import { useLocalVoteCount } from '../state/local-votes';
 import { GEOGENESIS } from './geo-chain';
 
 const isTestEnv = Environment.variables.isTestEnv;
@@ -45,15 +48,23 @@ function PrivyConnectButton() {
   const prepareOnboarding = usePrepareOnboarding();
 
   const { login } = useTrackedLogin({});
+  // With votes waiting on this device, this is a save prompt (GEO-3214): it names them, and the
+  // sign-in it starts saves them. Returns to this page, since the votes were cast here.
+  const localVoteCount = useLocalVoteCount();
+  const saveSignIn = useSaveVotesSignIn();
 
   const onLogin = () => {
+    if (localVoteCount > 0) {
+      void saveSignIn('navbar', localVoteCount);
+      return;
+    }
     prepareOnboarding({ returnTo: null });
     login({ component: 'navbar', auth_control: 'sign_in', auth_intent: 'sign_in' });
   };
 
   return (
     <Button variant="primary" className={PILL_BUTTON_CLASS_NAME} onClick={onLogin}>
-      Log in
+      {localVoteCount === 0 ? 'Log in' : saveVotesNavLabel(localVoteCount)}
     </Button>
   );
 }

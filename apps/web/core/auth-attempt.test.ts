@@ -13,6 +13,7 @@ import {
   resetAuthAttempt,
   trackAuthOnboarding,
 } from './auth-attempt';
+import { saveVotesSignInProperties } from './save-votes-analytics';
 
 const capture = vi.hoisted(() => vi.fn());
 vi.mock('./analytics', () => ({ capture }));
@@ -37,6 +38,17 @@ const entry = {
   playback_position_ms: 30000,
   item_position: 4,
 };
+// Copilot on #2785 (round 4): the property was set by the save prompts and stripped here.
+it('keeps how many device votes a save sign-in was started for, through to its events', () => {
+  const attempt = beginAuthAttempt(saveVotesSignInProperties('navbar', 3));
+
+  expect(attempt.properties).toMatchObject({ auth_intent: 'save_votes', auth_control: 'navbar', local_vote_count: 3 });
+  expect(capture).toHaveBeenCalledWith(
+    'auth_attempt_started',
+    expect.objectContaining({ auth_intent: 'save_votes', local_vote_count: 3 })
+  );
+});
+
 describe('durable sign-in attempts', () => {
   it('retains an immutable entry through navigation and a new tab', () => {
     const properties = { ...entry, origin_entity_ids: ['debate-1'], email: 'not-stored@example.com' };
