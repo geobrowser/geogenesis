@@ -125,6 +125,8 @@ export function GeoImage({
   const [loadedSrc, setLoadedSrc] = useState<string | null>(null);
   const loaded = loadedSrc === src;
 
+  const [failedPlaceholderSrc, setFailedPlaceholderSrc] = useState<string | null>(null);
+
   if (!isRenderableImageSrc(src)) return <>{fallback ?? null}</>;
 
   const isFill = Boolean(props.fill);
@@ -133,6 +135,7 @@ export function GeoImage({
   const objectFit = (style as CSSProperties | undefined)?.objectFit ?? 'cover';
 
   const placeholderSrc = getImagePathAtLevel(value, 0);
+  const placeholderBroken = failedPlaceholderSrc === placeholderSrc;
   const wantsLqip =
     lqip &&
     isFill &&
@@ -145,19 +148,21 @@ export function GeoImage({
     !isSvgSrc(placeholderSrc) &&
     (fixedWidth === null || fixedWidth >= LQIP_MIN_PX);
 
-  const placeholder = wantsLqip ? (
-    <Image
-      aria-hidden
-      src={placeholderSrc}
-      alt=""
-      fill
-      sizes={LQIP_SIZES}
-      className="scale-105 blur-lg"
-      style={{ objectFit }}
-      priority={props.priority}
-      draggable={false}
-    />
-  ) : null;
+  const placeholder =
+    wantsLqip && !placeholderBroken ? (
+      <Image
+        aria-hidden
+        src={placeholderSrc}
+        alt=""
+        fill
+        sizes={LQIP_SIZES}
+        className="scale-105 blur-lg"
+        style={{ objectFit }}
+        priority={props.priority}
+        draggable={false}
+        onError={() => setFailedPlaceholderSrc(placeholderSrc)}
+      />
+    ) : null;
 
   if (failed) return placeholder ? <>{placeholder}</> : <>{fallback ?? null}</>;
 
