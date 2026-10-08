@@ -196,6 +196,7 @@ it('records claim attribution navigation while opening the profile in the room p
   render(
     <Boundary>
       <ClaimProvenance
+        sourceRows={[]}
         claimId={ENTITY}
         spaceId={SPACE}
         claimRelations={[{ type: { id: SOURCES_PROPERTY_ID }, toEntity: { id: RELATED, name: 'Source' } } as Relation]}
