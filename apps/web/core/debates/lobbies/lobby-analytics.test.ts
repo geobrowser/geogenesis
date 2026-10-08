@@ -49,6 +49,16 @@ describe('lobby sessions', () => {
     ]);
   });
 
+  // The queries take each person's first join, so an unknown flag must not read as not new.
+  it('leaves is_newcomer out when geo-chat did not send it', () => {
+    lobbyJoined(LOBBY, { isNewcomer: null });
+    lobbySteppedOut(LOBBY);
+    lobbyDebateSeen({ id: 'debate-1', lobby_id: DASHLESS });
+
+    expect(events('lobby_joined')[0]).not.toHaveProperty('is_newcomer');
+    expect(events('lobby_debate_started')[0]).not.toHaveProperty('is_newcomer');
+  });
+
   it('falls back to link for an unmarked, stale or other lobby’s entry', () => {
     markLobbyEntry('other', 'side_panel');
     lobbyJoined(LOBBY, { isNewcomer: false });

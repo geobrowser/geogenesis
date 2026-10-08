@@ -50,7 +50,8 @@ type Session = {
   lobbyId: string;
   sessionId: string;
   joinedAt: number;
-  isNewcomer: boolean;
+  /** `null` when geo-chat did not say; then `is_newcomer` is left out rather than sent false. */
+  isNewcomer: boolean | null;
   /** Out to debate, by this tab or by the server; still open until the debate or a leave. */
   steppedOutAt: number | null;
   /** Sent its `lobby_left`; kept until the next join to attribute a debate that follows. */
@@ -103,6 +104,10 @@ function end(exit: LobbyExit, now = Date.now()) {
   });
 }
 
+function newcomerProperty(isNewcomer: boolean | null) {
+  return isNewcomer === null ? {} : { is_newcomer: isNewcomer };
+}
+
 /** Set by the control that leads into the lobby, before navigating or joining. */
 export function markLobbyEntry(lobbyId: string, entry: LobbyEntry) {
   pendingEntry = { lobbyId: dashlessId(lobbyId), entry, at: Date.now() };
@@ -116,7 +121,7 @@ function takeEntry(lobbyId: string): LobbyEntry {
 }
 
 /** The server put the viewer on the roster. Starts a session unless this one is still going. */
-export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boolean }) {
+export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boolean | null }) {
   cancelRelease();
   if (activeFor(lobbyId)) return;
   // Joining one lobby leaves any other; back without a debate ends a stepped-out one.
@@ -136,7 +141,7 @@ export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boole
   send('lobby_joined', {
     lobby_id: started.lobbyId,
     lobby_session_id: started.sessionId,
-    is_newcomer: isNewcomer,
+    ...newcomerProperty(isNewcomer),
     entry: takeEntry(lobbyId),
   });
 }
@@ -190,7 +195,7 @@ export function lobbyDebateSeen(debate: Pick<Debate, 'id' | 'lobby_id'>, now = D
     lobby_id: current.lobbyId,
     lobby_session_id: current.sessionId,
     debate_id: debate.id,
-    is_newcomer: current.isNewcomer,
+    ...newcomerProperty(current.isNewcomer),
     ms_since_join: Math.max(0, Math.round(now - current.joinedAt)),
   });
 }

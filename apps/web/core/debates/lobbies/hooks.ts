@@ -275,7 +275,7 @@ export function useLobbyPresence(
         // A lobby that would not admit answers with its view; the page renders its access.
         joinedRef.current = view.viewer.connected;
         // A reconnect in the same visit is not a new session; `lobbyJoined` tells them apart.
-        if (view.viewer.connected) lobbyJoined(lobbyId, { isNewcomer: view.viewer.newcomer === true });
+        if (view.viewer.connected) lobbyJoined(lobbyId, { isNewcomer: view.viewer.newcomer ?? null });
         setState(view.viewer.connected ? { status: 'joined' } : { status: 'idle' });
       } catch (error) {
         if (generation !== generationRef.current) return;
