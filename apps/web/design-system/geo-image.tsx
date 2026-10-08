@@ -143,7 +143,7 @@ export function GeoImage({
     isOptimizableImageSrc(placeholderSrc) &&
     !isSvgSrc(value) &&
     !isSvgSrc(placeholderSrc) &&
-    (fixedWidth === null || fixedWidth > LQIP_MIN_PX);
+    (fixedWidth === null || fixedWidth >= LQIP_MIN_PX);
 
   const placeholder = wantsLqip ? (
     <Image
