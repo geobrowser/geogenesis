@@ -1,5 +1,7 @@
 -- Attempts are grouped by opening day; completion can occur on a later day.
 -- Unresolved is intentionally separate from explicit closure and has no fake duration.
+-- Exits after Privy had already signed someone in are separate from closure too (GEO-3243): the
+-- account exists, and Privy signed it back out before onboarding.
 WITH excluded AS (
   SELECT coalesce(privy_user_id, user_id, '') AS account_id
   FROM analytics.privy_account_labels
@@ -38,6 +40,8 @@ SELECT toDate(started) AS day, component, control,
   countIf(requested) AS attempts, countIf(viewed) AS prompts,
   countIf(signed_up) AS new_accounts, countIf(signed_in) AS logins,
   countIf(outcome IN ('closed', 'superseded')) AS closed,
+  countIf(outcome = 'left_after_sign_up') AS accounts_created_then_left,
+  countIf(outcome = 'left_after_sign_in') AS logins_then_left,
   countIf(outcome = '' AND NOT signed_up AND NOT signed_in AND started < now() - INTERVAL 24 HOUR) AS unresolved_after_24h,
   avgIf(auth_duration_ms, outcome != '') AS mean_observed_auth_duration_ms
 FROM attempts GROUP BY day, component, control ORDER BY day, component, control;

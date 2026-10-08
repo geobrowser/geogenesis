@@ -205,7 +205,12 @@ export type LocalVoteKey = Pick<LocalVote, 'entityId' | 'spaceId' | 'responseKin
 const sameVote = (vote: LocalVote, key: LocalVoteKey) =>
   vote.entityId === key.entityId && vote.spaceId === key.spaceId && vote.responseKind === key.responseKind;
 
-export type LocalVoteChange = { action: 'cast' | 'switch' | 'remove'; count: number };
+export type LocalVoteChange = {
+  action: 'cast' | 'switch' | 'remove';
+  /** The side this device held before the press, or null. */
+  previous: LocalVoteDirection | null;
+  count: number;
+};
 
 /**
  * A signed-out press: the side the visitor pressed, or none if they pressed the side they hold — the
@@ -217,11 +222,11 @@ export function toggleLocalVote(next: Omit<LocalVote, 'votedAt'>): LocalVoteChan
   const others = current.votes.filter(vote => !sameVote(vote, next));
   if (held?.direction === next.direction) {
     write({ ...current, votes: others });
-    return { action: 'remove', count: others.length };
+    return { action: 'remove', previous: held.direction, count: others.length };
   }
   const votes = [...others, { ...next, votedAt: Date.now() }].slice(-LOCAL_VOTES_CAP);
   write({ ...current, votes });
-  return { action: held ? 'switch' : 'cast', count: votes.length };
+  return { action: held ? 'switch' : 'cast', previous: held?.direction ?? null, count: votes.length };
 }
 
 export function removeLocalVote(key: LocalVoteKey) {

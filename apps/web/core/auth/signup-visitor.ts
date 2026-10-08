@@ -75,22 +75,28 @@ function pendingVisitor(now = Date.now()): SignupVisitor | null {
   return candidate;
 }
 
+/**
+ * Whether an account was created no earlier than `startedAt`: an account a sign-in that began then
+ * could have made. Creation time is the server's, at second precision; `startedAt` is this device's
+ * clock — so the start is floored to the second and given the same skew allowance.
+ */
+export function createdSince(createdAt: Date | string | null | undefined, startedAt: number): boolean {
+  const created = createdAt ? new Date(createdAt).getTime() : NaN;
+  return Number.isFinite(created) && created >= Math.floor(startedAt / 1000) * 1000 - clockSkewMs;
+}
+
 /** A restore can finish signup in another tab without Privy reporting a fresh login. */
 export function signupVisitorProperties(createdAt?: Date | string | null): AnalyticsProperties {
   const now = Date.now();
   const visitor = pendingVisitor(now);
   if (!visitor) return {};
-  if (createdAt !== undefined) {
-    const created = createdAt ? new Date(createdAt).getTime() : NaN;
-    // Account creation has second precision. Bound skew on both sides without
-    // extending the attempt's expiry or admitting established accounts' restores.
-    if (
-      !Number.isFinite(created) ||
-      created < Math.floor(visitor.startedAt / 1000) * 1000 - clockSkewMs ||
-      created > now + clockSkewMs
-    )
-      return {};
-  }
+  // Bound skew on both sides without extending the attempt's expiry or admitting established
+  // accounts' restores.
+  if (
+    createdAt !== undefined &&
+    (!createdSince(createdAt, visitor.startedAt) || new Date(createdAt as Date | string).getTime() > now + clockSkewMs)
+  )
+    return {};
   return {
     signup_anonymous_id: visitor.anonymousId,
     signup_session_id: visitor.sessionId,

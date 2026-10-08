@@ -26,10 +26,10 @@ afterEach(() => vi.useRealTimers());
 
 describe('toggleLocalVote', () => {
   it('casts, switches and takes back a vote, like the pills do signed in', () => {
-    expect(toggleLocalVote(vote('a'))).toEqual({ action: 'cast', count: 1 });
-    expect(toggleLocalVote(vote('a', 'negative'))).toEqual({ action: 'switch', count: 1 });
+    expect(toggleLocalVote(vote('a'))).toEqual({ action: 'cast', previous: null, count: 1 });
+    expect(toggleLocalVote(vote('a', 'negative'))).toEqual({ action: 'switch', previous: 'positive', count: 1 });
     expect(readLocalVotes().votes[0].direction).toBe('negative');
-    expect(toggleLocalVote(vote('a', 'negative'))).toEqual({ action: 'remove', count: 0 });
+    expect(toggleLocalVote(vote('a', 'negative'))).toEqual({ action: 'remove', previous: 'negative', count: 0 });
     expect(readLocalVotes().votes).toEqual([]);
   });
 

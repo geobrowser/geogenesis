@@ -1,7 +1,7 @@
 import { snapshotActionContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
 import { recordAction } from '~/core/analytics-operations';
-import type { AuthAttempt } from '~/core/auth-attempt';
+import { type AuthAttempt, isSignedInOutcome } from '~/core/auth-attempt';
 
 /**
  * Sign-ins a save prompt starts (GEO-3214): the sheet's email, its other ways in, and the navbar's
@@ -19,15 +19,30 @@ export const SAVE_VOTES_ANALYTICS = {
 } as const;
 
 /**
- * Whether `attempt` is a sign-in a save prompt started, and not one the visitor walked away from.
+ * What this tab's sign-in means for the votes on the device:
+ *
+ * - `save`: a save prompt started it and it completed. Only now may they be published.
+ * - `pending`: a save prompt started it and it hasn't finished. Privy reports a user before its dialog
+ *   is done, and the visitor can still back out — after which Privy signs them out — so nothing is
+ *   published yet (GEO-3243).
+ * - `abandoned`: a save prompt started it and the visitor exited after Privy had signed them in. Privy
+ *   signs them out next, but may still report the account for a moment; the votes wait for that
+ *   sign-out and stay on the device for the next save, rather than being cleared as somebody else's.
+ * - `not_save`: something else started it, or the visitor closed it before anyone signed in.
+ * - `elsewhere`: no attempt in this tab, so the sign-in happened in another one, which decides.
  *
  * The attempt is the authorization to save, rather than a flag of our own: it is already recorded per
  * press, survives the OAuth redirect in this tab, is replaced by any later sign-in, and is marked
- * `closed` when the sheet or Privy's dialog is dismissed.
+ * `closed` or `left_after_*` when the visitor leaves it.
  */
-export function isSaveVotesSignIn(attempt: AuthAttempt | undefined) {
-  if (!attempt || attempt.properties.auth_intent !== SAVE_VOTES_ANALYTICS.auth_intent) return false;
-  return attempt.outcome !== 'closed' && attempt.outcome !== 'superseded';
+export type SaveVotesSignIn = 'save' | 'pending' | 'abandoned' | 'not_save' | 'elsewhere';
+
+export function saveVotesSignIn(attempt: AuthAttempt | undefined): SaveVotesSignIn {
+  if (!attempt) return 'elsewhere';
+  if (attempt.properties.auth_intent !== SAVE_VOTES_ANALYTICS.auth_intent) return 'not_save';
+  if (attempt.outcome === undefined) return 'pending';
+  if (attempt.outcome === 'left_after_sign_up' || attempt.outcome === 'left_after_sign_in') return 'abandoned';
+  return isSignedInOutcome(attempt.outcome) ? 'save' : 'not_save';
 }
 
 export function saveVotesSignInProperties(auth_control: string, localVoteCount: number) {

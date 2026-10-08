@@ -230,6 +230,47 @@ export function getResponseActionMethod(kind: ResponseKind, direction: ResponseD
   return RESPONSE_ACTION_METHOD[kind][direction];
 }
 
+/**
+ * The fields every vote's analytics carries: which way, how it changed the viewer's side, and the
+ * vocabulary it was cast in (`response_action`: agree/disagree, upvote/downvote).
+ *
+ * One builder for a vote published from an account and a vote kept on the device before sign-up
+ * (GEO-3243), so the two can be compared field for field. They drifted once: device votes carried
+ * `vote_direction` alone, and read as blank to anything that splits votes by `response_action`.
+ */
+export function voteOutcomeProperties({
+  responseKind,
+  direction,
+  previousResponse,
+  entityId,
+  spaceId,
+}: {
+  responseKind: ResponseKind;
+  direction: ResponseDirection;
+  /** The side held before this vote, or none. */
+  previousResponse: ActiveResponseDirection | null | undefined;
+  entityId: string;
+  spaceId: string;
+}) {
+  const previousDirection =
+    previousResponse === 'positive' ? 'up' : previousResponse === 'negative' ? 'down' : undefined;
+  const voteDirection = direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none';
+  const voteAction =
+    direction === 'clear' ? 'remove' : previousDirection && previousDirection !== voteDirection ? 'switch' : 'cast';
+  return {
+    vote_direction: voteDirection,
+    vote_kind: voteDirection,
+    mutation_kind: voteAction,
+    vote_action: voteAction,
+    previous_vote_direction: previousDirection,
+    response_kind: responseKind,
+    response_action: getResponseActionMethod(responseKind, direction),
+    entity_id: entityId,
+    space_id: spaceId,
+    object_type: 0,
+  };
+}
+
 export function decodeActiveResponseDirection(voteType: unknown): ActiveResponseDirection | null {
   if (voteType === 0) return 'positive';
   if (voteType === 1) return 'negative';

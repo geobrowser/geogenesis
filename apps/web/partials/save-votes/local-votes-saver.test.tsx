@@ -4,7 +4,7 @@ import type { ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { AuthAttempt } from '~/core/auth-attempt';
+import { type AuthAttempt, finishAuthAttempt } from '~/core/auth-attempt';
 import {
   bindSaveToAccount,
   clearLocalVotes,
@@ -57,7 +57,10 @@ vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => mocks.re
 vi.mock('~/core/action-context-provider', () => ({
   ActionContextProvider: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => mocks.attempt }));
+vi.mock('~/core/auth-attempt', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/auth-attempt')>()),
+  currentAuthAttempt: () => mocks.attempt,
+}));
 vi.mock('~/core/save-votes-analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/save-votes-analytics')>()),
   captureLocalVoteDropped: (...args: unknown[]) => mocks.capture(...args),
@@ -359,5 +362,54 @@ describe('LocalVotesSaver', () => {
     expect(readLocalVotes().votes).toHaveLength(1);
     expect(mocks.submit).not.toHaveBeenCalled();
     expect(mocks.capture).not.toHaveBeenCalled();
+  });
+
+  // Copilot on #2791: Privy reports a user before its dialog is done. Publishing then would land the
+  // votes in an account the visitor may still back out of.
+  it('waits for the save sign-in to complete before publishing anything', () => {
+    vote('a');
+    mocks.attempt = attempt('save_votes');
+    signInWithSpace();
+    const { rerender } = render(<LocalVotesSaver />);
+
+    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(readLocalVotes()).toMatchObject({ save: null, votes: [expect.objectContaining({ entityId: 'a' })] });
+
+    saveSignedIn();
+    rerender(<LocalVotesSaver />);
+    expect(readLocalVotes().save).toEqual({ accountId: 'did:privy:me' });
+  });
+
+  it('keeps the votes on the device for the next save when the visitor backs out', () => {
+    vote('a');
+    mocks.attempt = attempt('save_votes');
+    signInWithSpace();
+    const { rerender } = render(<LocalVotesSaver />);
+
+    // Exited after the code was accepted. The exit is recorded while Privy still reports the account
+    // (Copilot on #2791, round 2); its sign-out comes after.
+    mocks.attempt = attempt('save_votes', 'left_after_sign_in');
+    rerender(<LocalVotesSaver />);
+    expect(readLocalVotes().votes).toHaveLength(1);
+
+    mocks.authenticated = false;
+    rerender(<LocalVotesSaver />);
+
+    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(readLocalVotes()).toMatchObject({ save: null, votes: [expect.objectContaining({ entityId: 'a' })] });
+  });
+
+  it('binds the moment the sign-in completes, with nothing else re-rendering', () => {
+    vote('a');
+    mocks.attempt = attempt('save_votes');
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+    expect(readLocalVotes().save).toBeNull();
+
+    // Completion is recorded the way Privy's callback records it, and only that notifies the saver.
+    mocks.attempt = attempt('save_votes', 'signed_in');
+    act(() => finishAuthAttempt('signed_in', { id: 'completion', startedAt: Date.now(), properties: {} }));
+
+    expect(readLocalVotes().save).toEqual({ accountId: 'did:privy:me' });
   });
 });
