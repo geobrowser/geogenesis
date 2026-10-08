@@ -22,6 +22,7 @@ import {
   raisedHands,
   sinceLabel,
 } from './lobby-format';
+import { LobbyPersonName } from './lobby-people';
 import { useLobbyBans, useLobbyHand, useLobbyModerationLog, useModerateLobbyMember } from './moderation-hooks';
 
 const MODERATION_NOTICE_MS = 10_000;
@@ -267,9 +268,11 @@ function PersonRow({ person, detail, action }: { person: DebateLobbyPerson; deta
     <li className="flex items-center gap-3 px-3 py-2">
       <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} alt={personName(person)} size={32} />
       <div className="min-w-0 flex-1">
-        <Text as="p" variant="metadataMedium" className="truncate">
-          {personName(person)}
-        </Text>
+        <LobbyPersonName person={person} interactionSurface="lobby_host_list">
+          <Text as="span" variant="metadataMedium">
+            {personName(person)}
+          </Text>
+        </LobbyPersonName>
         <Text as="p" variant="footnote" color="grey-04">
           {detail}
         </Text>

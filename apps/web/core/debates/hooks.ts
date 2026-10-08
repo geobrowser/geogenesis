@@ -39,6 +39,7 @@ import {
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
   type MatchmakingClaimsQuery,
+  type OpenRoundPick,
   RECIPIENT_AWAY_CODE,
   type TranscriptFormat,
   abortDebate,
@@ -81,6 +82,7 @@ import {
   replaceDebateSchedule,
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
+  saveOpenRoundPick,
   updateDebateAvailability,
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
@@ -163,8 +165,10 @@ export const debateQueryKeys = {
   /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
   room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
   upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
-  /** GEO-3133. Refetched on `debate.lobbies_changed`. */
+  /** GEO-3133. Patched or refetched on `debate.lobbies_changed`. */
   lobbies: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobbies'] as const,
+  /** Refetched on a card-less `debate.lobbies_changed`. */
+  myLobby: (accountKey: string | null) => ['debates', 'account', accountKey, 'my-lobby'] as const,
   /** Dashless, as `debate.lobby_changed` spells it. */
   lobby: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby', dashlessId(lobbyId)] as const,
@@ -941,6 +945,40 @@ export function useEndDebateTurn(debateId: string) {
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
+    },
+  });
+}
+
+/**
+ * Saves an Open rounds pick (GEO-3178). Not retried: the pick card puts the selection back and asks
+ * the debater to tap again, which is the retry, and a silent one would hold up any pick queued
+ * behind it while the decision window runs out.
+ *
+ * `round_already_resolved` is not a failure: the round ended while the save was in flight, the room
+ * is about to show the result, and the debate is re-read for it. It resolves `null`.
+ *
+ * Saves for one debate run one after another (`scope`), so a quick switch is sent only once the
+ * previous pick has answered. Without that, the two PUTs would run concurrently and could reach the
+ * server, or answer, in either order — so the pick switched away from could be what the server
+ * keeps, or what the cache shows last.
+ */
+export function useSaveOpenRoundPick(debateId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    scope: { id: `open-round-pick:${debateId}` },
+    mutationFn: async ({ roundIndex, pick }: { roundIndex: number; pick: OpenRoundPick }) => {
+      try {
+        return await saveOpenRoundPick(debateId, roundIndex, pick, getPrivyIdentityToken, accountKey);
+      } catch (error) {
+        if (error instanceof GeoChatRequestError && error.code === 'round_already_resolved') return null;
+        throw error;
+      }
+    },
+    onSuccess: debate => {
+      if (debate) queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debateId) });
     },
   });
 }

@@ -40,7 +40,9 @@ import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { FollowTopicButton } from '~/core/topics/follow-topic-button';
 import { Profile } from '~/core/types';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
@@ -95,7 +97,27 @@ type EntityVoteButtonsProps = {
   compact?: boolean;
 };
 
-export function EntityVoteButtons({
+/**
+ * An entity's response control, wherever an entity is drawn with one: votes for an ordinary entity,
+ * agree / disagree for a claim, and Follow for a topic (GEO-3191), which is followed, not voted on.
+ *
+ * The topic case is decided here rather than by each caller, so a table row, a gallery tile, a
+ * ranking entry and the sticky header all agree with the topic's own page. Read off the same types
+ * the entity routes on (a claim typed as a topic too stays a claim), and only when the caller hasn't
+ * named a response kind: a caller that has is asking for that kind on purpose. While the entity is
+ * loading, `EntityResponseButtons` draws its skeleton, so a topic never shows votes first.
+ */
+export function EntityVoteButtons(props: EntityVoteButtonsProps) {
+  const inferKind = props.responseKind === undefined;
+  const { entity } = useQueryEntity({ id: props.entityId, includeDeleted: true, enabled: inferKind });
+
+  if (inferKind && entity?.types && entityBrowseViewFromTypes(entity.types) === 'topic') {
+    return <FollowTopicButton topic={{ id: props.entityId, name: entity.name }} />;
+  }
+  return <EntityResponseButtons {...props} />;
+}
+
+function EntityResponseButtons({
   entityId,
   spaceId: requestedSpaceId,
   responseKind: responseKindOverride,

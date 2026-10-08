@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
-import { useMediaQuery } from '~/core/hooks/use-media-query';
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -57,8 +57,9 @@ import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hook
 import { HubHeaderControls } from './hub-header-controls';
 import { HubPillButton } from './hub-pill-button';
 import { HubMessage, HubQueryState } from './hub-states';
-import { INLINE_SLOTS, PersonRow, type PersonSchedule, SetAvailabilityNotice, schedulableAsPerson } from './people-tab';
+import { INLINE_SLOTS, PersonRow, type PersonSchedule, schedulableAsPerson } from './people-tab';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
+import { SetScheduleBanner } from './set-schedule-banner';
 import { SpaceFilterPills } from './space-filter-pills';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useLiveRequestBlock } from './use-live-request-block';
@@ -69,9 +70,6 @@ const EMPTY_MATCHES: ClaimMatch[] = [];
 const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
 const EMPTY_REQUESTS: ScheduledDebateRequest[] = [];
-
-/** Matches `md:` in styles.css: phones get the list by day instead of the grid. */
-const PHONE_QUERY = '(max-width: 767px)';
 
 /**
  * A row's chips: the given half-hours, and whether they have more beyond them. `viewerIsFree` only
@@ -119,7 +117,8 @@ export function DebateCalendar() {
   const router = useRouter();
   const pathname = usePathname();
   const from = searchParams?.get(CALENDAR_FROM_PARAM);
-  const isPhone = useMediaQuery(PHONE_QUERY);
+  // Phones get the list by day instead of the grid.
+  const isPhone = useIsPhoneLayout();
 
   // Admins get a second view, of everyone's scheduled debates (GEO-2943). The admin list is also the
   // admin check, so it is read for every signed-in viewer and refused for all but the allowlist.
@@ -139,6 +138,7 @@ export function DebateCalendar() {
 
   const schedule = useDebateSchedule();
   const viewerHasSchedule = authenticated ? schedule.isSet : false;
+  const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   // Once per visit, when what it reports is known: signed out, or signed in with the viewer's own
   // schedule read. Fired before that, `viewer_has_schedule` would be a guess.
@@ -160,7 +160,7 @@ export function DebateCalendar() {
         <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
           Debate calendar
         </Text>
-        <HubHeaderControls analyticsSurface="calendar">
+        <HubHeaderControls analyticsSurface="calendar" scheduleButtonRef={scheduleButtonRef}>
           {admin.isAdmin ? <CalendarViewSwitch view={view} onChange={changeView} /> : null}
         </HubHeaderControls>
       </header>
@@ -187,7 +187,12 @@ export function DebateCalendar() {
       ) : view === 'debates' ? (
         <AdminDebatesBody isPhone={isPhone} admin={admin} />
       ) : (
-        <DebateCalendarBody isPhone={isPhone} viewerHasSchedule={viewerHasSchedule} schedule={schedule} />
+        <DebateCalendarBody
+          isPhone={isPhone}
+          viewerHasSchedule={viewerHasSchedule}
+          schedule={schedule}
+          scheduleButtonRef={scheduleButtonRef}
+        />
       )}
     </div>
   );
@@ -197,10 +202,12 @@ function DebateCalendarBody({
   isPhone,
   viewerHasSchedule,
   schedule,
+  scheduleButtonRef,
 }: {
   isPhone: boolean;
   viewerHasSchedule: boolean;
   schedule: ReturnType<typeof useDebateSchedule>;
+  scheduleButtonRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const peopleQuery = useDebatePeople(true);
   const { data: activity } = useDebateActivity(true);
@@ -570,18 +577,9 @@ function DebateCalendarBody({
         )}
       </div>
 
-      {!viewerHasSchedule && !schedule.isLoading ? (
-        <div className="px-6 pt-3 md:px-4">
-          <SetAvailabilityNotice
-            message={
-              isPhone
-                ? 'Set your availability so others can book you too.'
-                : 'Set your availability so others can book you too, and to see which of these times you share.'
-            }
-            surface="calendar"
-          />
-        </div>
-      ) : null}
+      {/* The debates panel's own callout, so the prompt reads the same wherever it is met. It hides
+          itself while the viewer's schedule offers upcoming time. */}
+      <SetScheduleBanner surface="calendar" scheduleButtonRef={scheduleButtonRef} className="mx-6 mt-3 md:mx-4" />
 
       <CalendarWeekNav
         days={days}

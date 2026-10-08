@@ -37,15 +37,24 @@ function storeDestination(stored: StoredDebateReturnDestination) {
   }
 }
 
-/** Read and clear the destination so a later, unrelated debate cannot reuse it. */
-export function consumeDebateReturnDestination(): string | null {
-  const destination = peekDebateReturnDestination();
+/**
+ * Read and clear the destination so a later, unrelated debate cannot reuse it. `lobby`, geo-chat's
+ * answer when known, overrides any stored lobby; without it this tab's record decides.
+ */
+export function consumeDebateReturnDestination(lobby?: { lobbyId: string | null }): string | null {
+  const stored = readStoredDestination();
   clearDebateReturnDestination();
-  return destination;
+  if (!lobby) return stored?.href ?? null;
+  if (lobby.lobbyId) return debateRoomPath(lobby.lobbyId);
+  return stored && !stored.lobby ? stored.href : null;
 }
 
 /** The destination the flow will return to, left in place. */
 export function peekDebateReturnDestination(): string | null {
+  return readStoredDestination()?.href ?? null;
+}
+
+function readStoredDestination(): { href: string; lobby: boolean } | null {
   let raw: string | null = null;
   try {
     raw = window.sessionStorage.getItem(debateReturnDestinationKey);
@@ -60,8 +69,8 @@ export function peekDebateReturnDestination(): string | null {
     if (Date.now() - stored.capturedAt > debateReturnDestinationMaxAgeMs) return null;
     const destination = safeInternalHref(stored.href);
     if (!destination) return null;
-    if (stored.lobby === true) return isDebateRoomPath(destination) ? destination : null;
-    return isDebateFlowHref(destination) ? null : destination;
+    if (stored.lobby === true) return isDebateRoomPath(destination) ? { href: destination, lobby: true } : null;
+    return isDebateFlowHref(destination) ? null : { href: destination, lobby: false };
   } catch {
     return null;
   }

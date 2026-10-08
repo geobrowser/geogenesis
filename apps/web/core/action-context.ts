@@ -28,6 +28,7 @@ export const ACTION_COMPONENTS = [
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',
+  'topic_follow_button',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
@@ -39,6 +40,8 @@ export type ActionKind =
   | 'edit'
   | 'share'
   | 'join_space'
+  | 'follow_topic'
+  | 'unfollow_topic'
   | 'bounty_interest'
   | 'start_debate'
   | 'join_debate'
@@ -75,11 +78,15 @@ export type ActionContext = {
    * GEO-3140 / GEO-3144. The feed version that put this card on the page (e.g. `best-1`,
    * `for-you-1.0+web.1`), and on an interleaved page which arm picked it and in which experiment,
    * so engagement can be credited per version. `feed_exploration` marks a For you exploration slot.
+   * `feed_slot: 'fresh'` marks a card Best's fresh slot placed (GEO-3221).
    */
   feed_version?: string;
   feed_arm?: 'a' | 'b';
   feed_experiment_id?: string;
   feed_exploration?: boolean;
+  feed_slot?: 'fresh';
+  /** GEO-3234. The card was moved down because this visitor had already seen it. */
+  feed_seen_demoted?: boolean;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -106,6 +113,8 @@ export const ACTION_CONTEXT_FIELDS = [
   'feed_arm',
   'feed_experiment_id',
   'feed_exploration',
+  'feed_slot',
+  'feed_seen_demoted',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',

@@ -6,7 +6,7 @@ import { NEWS_STORY_TYPE_ID } from '~/core/explore/explore-constants';
 
 import { GET } from './route';
 
-const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn(), viewer: vi.fn() }));
+const mocks = vi.hoisted(() => ({ fetchFeed: vi.fn(), viewer: vi.fn(), freshState: vi.fn() }));
 
 vi.mock('~/core/explore/fetch-explore-feed', () => ({
   fetchExploreFeed: (args: unknown) => mocks.fetchFeed(args),
@@ -19,6 +19,9 @@ vi.mock('~/core/explore/resolve-explore-feed-request-context', () => ({
     personalMemberSpaceId: null,
   }),
 }));
+vi.mock('~/core/explore/fresh-slot/fresh-slot-store', () => ({
+  readServingFreshSlotState: () => mocks.freshState(),
+}));
 vi.mock('~/core/explore/for-you/resolve-for-you-viewer', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/explore/for-you/resolve-for-you-viewer')>()),
   resolveForYouViewer: (...args: unknown[]) => mocks.viewer(...args),
@@ -29,8 +32,12 @@ beforeEach(() => {
   mocks.fetchFeed.mockResolvedValue({ items: [], nextCursor: null });
   mocks.viewer.mockReset();
   mocks.viewer.mockResolvedValue(null);
+  mocks.freshState.mockReset();
+  mocks.freshState.mockResolvedValue({ config: FRESH_ON, revision: 4, updatedAt: null, updatedBy: null });
   vi.unstubAllEnvs();
 });
+
+const FRESH_ON = { enabled: true, cadence: 4, firstPosition: 3, maxPerPage: 3, freshnessHours: 48, perTypeCaps: {} };
 
 const sentArgs = () =>
   mocks.fetchFeed.mock.calls[0]?.[0] as {
@@ -40,9 +47,61 @@ const sentArgs = () =>
     forYouTopicIds: string[];
     cursor: string | null;
     reorderWindow?: unknown;
+    freshSlot?: { config: unknown; revision: number };
+    markPlayableLeads?: boolean;
   };
 
 describe('GET /api/explore/feed', () => {
+  // GEO-3221. The live fresh slot config reaches Best, and only Best.
+  it("hands Best the fresh slot's live config", async () => {
+    await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+    expect(sentArgs().freshSlot).toEqual({ config: FRESH_ON, revision: 4 });
+  });
+
+  it.each(['new', 'top', 'for-you'])('does not read the fresh slot for %s', async sort => {
+    await GET(new Request(`https://example.com/api/explore/feed?sort=${sort}`));
+
+    expect(sentArgs().freshSlot).toBeUndefined();
+    expect(mocks.freshState).not.toHaveBeenCalled();
+  });
+
+  // GEO-3234. Seen demotion runs in the browser; the page only says whether it is on.
+  describe('seen demotion', () => {
+    const SEEN_ON = { ...FRESH_ON, seenDemotion: { enabled: true, minViews: 2, days: 3 } };
+    const bestPage = { items: [], nextCursor: null, feed: { name: 'best', version: 'best-1' } };
+
+    it('ships the knobs with a Best page and asks for the playable leads, while on', async () => {
+      mocks.freshState.mockResolvedValue({ config: SEEN_ON, revision: 5, updatedAt: null, updatedBy: null });
+      mocks.fetchFeed.mockResolvedValue(bestPage);
+
+      const response = await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+      expect(sentArgs().markPlayableLeads).toBe(true);
+      expect((await response.json()).seenDemotion).toEqual({ minViews: 2, days: 3 });
+      // Nothing per-visitor, so nothing stops a shared cache keeping it.
+      expect(response.headers.get('cache-control')).toBeNull();
+    });
+
+    it('leaves the page exactly as it was while off', async () => {
+      mocks.fetchFeed.mockResolvedValue(bestPage);
+
+      const response = await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+      expect(sentArgs().markPlayableLeads).toBe(false);
+      expect(await response.json()).toEqual(bestPage);
+    });
+
+    it('leaves an interleaved page alone', async () => {
+      mocks.freshState.mockResolvedValue({ config: SEEN_ON, revision: 5, updatedAt: null, updatedBy: null });
+      mocks.fetchFeed.mockResolvedValue({ ...bestPage, feed: { name: 'interleaved', version: 'interleave(a,b)' } });
+
+      const response = await GET(new Request('https://example.com/api/explore/feed?sort=best'));
+
+      expect((await response.json()).seenDemotion).toBeUndefined();
+    });
+  });
+
   it('serves debates and claims when the client sends no types', async () => {
     await GET(new Request('https://example.com/api/explore/feed?sort=best'));
 

@@ -9,7 +9,7 @@ import { type AnalyticsProperties } from '~/core/analytics';
 import { personProfileOpened } from '~/core/analytics';
 import { SLOT_MINUTES } from '~/core/availability/blocks';
 import { PEER_SCHEDULE_DAYS, slotStarts } from '~/core/availability/peer-schedule';
-import type { ScheduleEditorSurface, ScheduleEntry } from '~/core/availability/schedule-analytics';
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -52,7 +52,7 @@ import { FilterSwitch } from './filter-switch';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
 import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes, debateAnalyticsLabel } from './hub-analytics';
 import { HUB_ICON_BUTTON_CLASS_NAME, HubPillButton } from './hub-pill-button';
-import { HubQueryState } from './hub-states';
+import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { offlinePerson } from './offline-person';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
 import { PersonMatches } from './person-disagreements';
@@ -441,8 +441,6 @@ export function PeopleTab({
           // Exactly one action, and which one follows the same question the message and the note do.
           // A search the viewer can undo gets the undo; a room that is genuinely empty gets somewhere
           // to go, because there is nothing to undo and waiting is the only other option (GEO-2840).
-          // In the rail there is no tab to change to and the claims list is already on screen beside
-          // this, so the "somewhere to go" half has nowhere to send anyone.
           emptyAction={
             filtersExcludedEveryone
               ? searchIsTheOnlyFilter
@@ -454,9 +452,7 @@ export function PeopleTab({
                       onSpacesClear();
                     },
                   }
-              : onTabChange
-                ? { label: 'Explore claims', onClick: () => onTabChange('explore') }
-                : undefined
+              : exploreClaimsAction(onTabChange)
           }
           signInAction={
             onRequireSignIn
@@ -900,28 +896,20 @@ function formatSlot(iso: string, now: Date = new Date()): string {
  * Shown with "Online only" off when the viewer has no availability saved (GEO-2937, GEO-2936).
  * Offline people are listed for them anyway (GEO-3154), so it says what hours do get them instead.
  */
-export function SetAvailabilityNotice({
-  message = 'Set your availability so others can schedule a debate with you, and to see which times you share.',
-  surface = 'people_tab',
-}: {
-  message?: string;
-  surface?: ScheduleEditorSurface;
-} = {}) {
+function SetAvailabilityNotice() {
   const [open, setOpen] = React.useState(false);
   const { blocks, isError, refetch } = useDebateSchedule();
-  const saveSchedule = useSaveDebateSchedule({ surface });
-  // The prompt's clicks belong to the screen it sits on, as its saves already do.
-  const analyticsSurface: DebateAnalyticsSurface = surface === 'calendar' ? 'calendar' : 'hub';
+  const saveSchedule = useSaveDebateSchedule({ surface: 'people_tab' });
   const openerRef = React.useRef<HTMLElement | null>(null);
 
   return (
     <div className="mb-3 flex items-center justify-between gap-3 rounded-lg bg-grey-01 p-3">
       <Text as="p" variant="footnote">
-        {message}
+        Set your availability so others can schedule a debate with you, and to see which times you share.
       </Text>
       <HubPillButton
-        analyticsSurface={analyticsSurface}
-        analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Set availability')}
+        analyticsSurface="hub"
+        analyticsLabel={debateAnalyticsLabel('hub', 'Set availability')}
         analyticsIntent="open_debate_schedule"
         onClick={event => {
           openerRef.current = event.currentTarget;

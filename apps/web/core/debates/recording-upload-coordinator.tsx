@@ -567,7 +567,10 @@ export function DebateRecordingUploadCoordinator() {
   }, [activeUploadId, activeUploads]);
 
   React.useEffect(() => {
-    if (!userId || !online || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
+    // Not gated on `navigator.onLine`. Chrome can report offline on a connection that works, and a
+    // recording held back by that waited forever with nothing reported (GEO-3171). An attempt that
+    // really is offline fails at once, is classified `offline`, and spends none of the retries.
+    if (!userId || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
     const upload = activeUploads.find(
       candidate =>
         retryNowRef.current.has(candidate.id) ||

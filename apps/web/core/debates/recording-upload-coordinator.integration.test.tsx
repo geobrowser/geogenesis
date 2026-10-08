@@ -355,6 +355,18 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
   });
 
+  it('still tries a due upload when the browser reports offline (GEO-3171)', async () => {
+    // Chrome can report offline on a connection that works. Held back on that alone, a recording
+    // that never streamed waited for ever and nothing reported it.
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    mocks.thankingDebateId = null;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+  });
+
   it('uploads queued recordings sequentially', async () => {
     const firstCompletion = deferred<void>();
     mocks.completeUpload.mockImplementation((debateId: string) =>

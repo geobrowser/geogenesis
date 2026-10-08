@@ -13,14 +13,18 @@ import {
 } from '~/core/responses/claim-response-summary-query-keys';
 
 import {
+  type DebateLobbiesResponse,
+  type DebateLobbyView,
   GeoChatRequestError,
   type GeoChatSession,
   type GetPrivyIdentityToken,
   dashlessId,
   getGeoChatApiBaseUrl,
   getGeoChatSession,
+  getStoredGeoChatAccessToken,
   resetGeoChatSession,
 } from './api';
+import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
 
 export type DebateGatewaySession = GeoChatSession;
 
@@ -65,6 +69,8 @@ type DebateEventPayload = {
   debate_id?: string;
   rematch_session_id?: string;
   lobby_id?: string;
+  /** On `debate.lobbies_changed`; see `parseLobbyCardPatch`. */
+  lobby_card?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -137,10 +143,20 @@ export class DebateGatewayClient {
   private readonly scopes = new Map<string, { scope: DebateGatewayScope; count: number }>();
   private readonly sentScopes = new Set<string>();
   private readonly confirmedScopes = new Set<string>();
+  /** Retained scopes the server refused; not re-sent on this socket. Retried once per connection. */
+  private readonly refusedScopes = new Set<string>();
+  /** Backoff for scopes whose subscription check failed transiently; reset once READY confirms them. */
+  private readonly subscriptionRetries = new Map<
+    string,
+    { attempt: number; timer: ReturnType<typeof setTimeout> | null }
+  >();
   private readonly recentEventIds = new Set<string>();
   private readonly recentEventIdOrder: string[] = [];
   private readonly pendingInvalidations = new Map<string, InvalidationFilters>();
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
+  /** The newest card patch per dashless lobby id, laid over each list GET until one catches up. */
+  private readonly heldLobbyPatches = new Map<string, DebateLobbyCardPatch>();
+  private unsubscribeLobbyFetches: (() => void) | null = null;
 
   private snapshot: DebateGatewaySnapshot = {
     status: 'idle',
@@ -152,12 +168,16 @@ export class DebateGatewayClient {
   private getPrivyIdentityToken: GetPrivyIdentityToken | null = null;
   private accountKey: string | null = null;
   private socket: WebSocketLike | null = null;
+  /** The access token `socket` authenticated with. */
+  private socketAccessToken: string | null = null;
   private enabled = false;
   private hasReachedReady = false;
   private readyForDebates = false;
   private lastSequence: number | null = null;
   private reconnectAttempt = 0;
   private lastErrorReconnectAt: number | null = null;
+  private authExpiredAttempt = 0;
+  private lastAuthExpiredAt: number | null = null;
   private heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
   private heartbeatsAwaitingAck = 0;
   private debatePresence = true;
@@ -197,6 +217,13 @@ export class DebateGatewayClient {
     if (debatePresence !== undefined) this.setDebatePresence(debatePresence);
     this.getPrivyIdentityToken = getPrivyIdentityToken;
     this.accountKey = accountKey;
+    this.unsubscribeLobbyFetches ??= this.queryClient.getQueryCache().subscribe(event => {
+      // A fetch's own success; the overlay's `setQueryData` is `manual` and does not come back here.
+      if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
+      if (this.accountKey && isLobbiesQueryKey(event.query.queryKey, this.accountKey)) {
+        this.overlayHeldLobbyPatches(event.query.state.data as DebateLobbiesResponse | undefined);
+      }
+    });
     if (this.enabled) return;
     this.enabled = true;
     this.setSnapshot({ status: 'connecting', paused: false, pauseReason: null });
@@ -235,13 +262,20 @@ export class DebateGatewayClient {
     this.lastSequence = null;
     this.reconnectAttempt = 0;
     this.lastErrorReconnectAt = null;
+    this.authExpiredAttempt = 0;
+    this.lastAuthExpiredAt = null;
     this.clearAllTimers();
     this.disposeSocket();
     this.sentScopes.clear();
     this.confirmedScopes.clear();
+    this.refusedScopes.clear();
+    this.clearSubscriptionRetries();
     this.pendingInvalidations.clear();
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
+    this.heldLobbyPatches.clear();
+    this.unsubscribeLobbyFetches?.();
+    this.unsubscribeLobbyFetches = null;
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
     this.setSnapshot({ status: 'idle', paused: false, pauseReason: null });
   }
@@ -267,6 +301,9 @@ export class DebateGatewayClient {
       this.scopes.delete(key);
       this.sentScopes.delete(key);
       this.confirmedScopes.delete(key);
+      this.clearSubscriptionRetry(key);
+      // The server never held a refused scope, so there is nothing to unsubscribe.
+      if (this.refusedScopes.delete(key)) return;
       this.sendSubscription(scope, 'UNSUBSCRIBE');
     };
   }
@@ -283,9 +320,12 @@ export class DebateGatewayClient {
 
       const socket = this.createWebSocket(gatewayWebSocketUrl(this.getApiBaseUrl(), session.access_token));
       this.socket = socket;
+      this.socketAccessToken = session.access_token;
       this.readyForDebates = false;
       this.sentScopes.clear();
       this.confirmedScopes.clear();
+      this.refusedScopes.clear();
+      // Pending check retries keep their timers, so READY skips them and each goes out when due.
       this.scheduleTokenRotation(session);
       this.handshakeTimer = setTimeout(() => this.forceReconnect(socket), HANDSHAKE_TIMEOUT_MS);
 
@@ -348,6 +388,15 @@ export class DebateGatewayClient {
           // A real ceiling, and reconnecting re-sends the same scopes and hits it again. The
           // account-routed stream keeps working; only the scopes past the limit are lost.
           this.setSnapshot({ status: 'degraded', paused: true, pauseReason: 'subscription_limit' });
+        } else if (isAuthenticationExpired(envelope.payload)) {
+          // The cached session can still look unexpired, so drop it or the reconnect re-presents it.
+          // Only if it is still this socket's: another tab may already have stored a newer one.
+          if (getStoredGeoChatAccessToken() === this.socketAccessToken) resetGeoChatSession();
+          this.forceReconnect(socket, this.authExpiredReconnectDelayMs(), 'session');
+        } else if (this.refuseForbiddenScope(envelope.payload)) {
+          // Only that scope is refused; the socket and every other subscription stay up.
+        } else if (this.retryFailedSubscriptionCheck(envelope.payload)) {
+          // Transient, and only for that scope; it is re-sent on its own backoff.
         } else if (this.canRecoverFromError()) {
           // Anything else is not known to be permanent, and parking here was a dead end: nothing in
           // this branch closes the socket, so heartbeats keep being acked, `heartbeatsAwaitingAck`
@@ -402,22 +451,23 @@ export class DebateGatewayClient {
       this.hasReachedReady = true;
     }
 
-    const readyScopes = new Map<string, DebateGatewayScope>();
+    const readyScopes = new Set<string>();
     for (const subscription of Array.isArray(ready.subscriptions) ? ready.subscriptions : []) {
       const scope = parseScope(subscription);
-      if (!scope) continue;
-      const key = scopeKey(scope);
-      readyScopes.set(key, scope);
+      if (scope) readyScopes.add(scopeKey(scope));
     }
 
     for (const key of this.confirmedScopes) {
       if (!readyScopes.has(key)) this.confirmedScopes.delete(key);
     }
 
-    for (const [key, scope] of readyScopes) {
-      if (!this.scopes.has(key) || this.confirmedScopes.has(key)) continue;
+    for (const key of readyScopes) {
+      this.clearSubscriptionRetry(key);
+      const retained = this.scopes.get(key);
+      if (!retained || this.confirmedScopes.has(key)) continue;
       this.confirmedScopes.add(key);
-      this.queueScopeReconcile(scope);
+      // The retained spelling, which is what the query keys were built from.
+      this.queueScopeReconcile(retained.scope);
     }
 
     for (const { scope } of this.scopes.values()) this.sendSubscription(scope, 'SUBSCRIBE');
@@ -472,8 +522,24 @@ export class DebateGatewayClient {
         break;
       // GEO-3133. Sent to matchmaking subscribers: the lobbies card, and a lobby page whose viewer
       // is not inside, which `debate.lobby_changed` does not reach.
-      case 'debate.lobbies_changed':
+      case 'debate.lobbies_changed': {
+        const patch = parseLobbyCardPatch(identifiers.lobby_card);
+        const lobbyId = identifiers.lobby_id ? dashlessId(identifiers.lobby_id) : null;
+        if (!patch) {
+          // Card-less: a lobby was created, opened or closed.
+          this.queueAccountQuery('lobbies');
+          if (lobbyId) this.queueAccountQuery('lobby', lobbyId);
+        } else {
+          this.holdLobbyPatch(patch);
+          if (lobbyId && !this.isInsideLobby(lobbyId)) this.queueAccountQuery('lobby', lobbyId);
+        }
+        break;
+      }
+      // Sent to this viewer alone when their own standing in a lobby changes.
+      // A ban, unban or reminder can change the viewer's lobby page without a `debate.lobby_changed`.
+      case 'debate.my_lobby_changed':
         this.queueAccountQuery('lobbies');
+        this.queueAccountQuery('my-lobby');
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
@@ -481,6 +547,51 @@ export class DebateGatewayClient {
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
     }
+  }
+
+  /** Connected to that lobby's page here, so `debate.lobby_changed` already keeps it current. */
+  private isInsideLobby(lobbyId: string) {
+    if (!this.accountKey) return false;
+    const view = this.queryClient.getQueryData<DebateLobbyView>([
+      'debates',
+      'account',
+      this.accountKey,
+      'lobby',
+      lobbyId,
+    ]);
+    return view?.viewer.connected === true;
+  }
+
+  /**
+   * Applies a card patch and holds it, so a GET that read the list before the patch cannot undo it.
+   * A GET in flight is never cancelled for a patch: patches can outpace its round trip.
+   */
+  private holdLobbyPatch(patch: DebateLobbyCardPatch) {
+    const id = dashlessId(patch.lobby.lobby_id);
+    const held = this.heldLobbyPatches.get(id);
+    if (held && Date.parse(held.asOf) >= Date.parse(patch.asOf)) return;
+    this.heldLobbyPatches.set(id, patch);
+    this.overlayHeldLobbyPatches();
+  }
+
+  /** Lays held patches over the cached list. `fetched`, a GET's result, also drops those it has caught up with. */
+  private overlayHeldLobbyPatches(fetched?: DebateLobbiesResponse) {
+    if (!this.accountKey) return;
+    const key = ['debates', 'account', this.accountKey, 'lobbies'];
+    const list = this.queryClient.getQueryData<DebateLobbiesResponse>(key);
+    if (!list) return;
+
+    if (fetched) {
+      for (const row of fetched.lobbies) {
+        const id = dashlessId(row.lobby_id);
+        const held = this.heldLobbyPatches.get(id);
+        if (held && row.as_of && Date.parse(row.as_of) >= Date.parse(held.asOf)) this.heldLobbyPatches.delete(id);
+      }
+    }
+
+    let next = list;
+    for (const patch of this.heldLobbyPatches.values()) next = applyLobbyCardPatch(next, patch);
+    if (next !== list) this.queryClient.setQueryData(key, next);
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {
@@ -552,7 +663,8 @@ export class DebateGatewayClient {
       | 'upcoming-rooms'
       | 'room'
       | 'lobbies'
-      | 'lobby',
+      | 'lobby'
+      | 'my-lobby',
     id?: string
   ) {
     if (!this.accountKey) return;
@@ -751,7 +863,8 @@ export class DebateGatewayClient {
     if (!this.readyForDebates || !this.socket || this.socket.readyState !== OPEN) return;
     const key = scopeKey(scope);
     if (op === 'SUBSCRIBE') {
-      if (this.sentScopes.has(key)) return;
+      // A scope waiting on its check backoff is re-sent only by its own timer, not by each READY.
+      if (this.sentScopes.has(key) || this.refusedScopes.has(key) || this.subscriptionRetries.get(key)?.timer) return;
       this.sentScopes.add(key);
     }
     this.sendEnvelope(op, scope);
@@ -820,6 +933,67 @@ export class DebateGatewayClient {
     if (!this.enabled) return;
     this.setSnapshot({ status: 'degraded', paused: true, pauseReason: reason });
     this.scheduleReconnect(minimumDelayMs);
+  }
+
+  /** `false` when the ERROR names no scope (older geo-chat, or a room), leaving the generic path. */
+  private refuseForbiddenScope(payload: unknown) {
+    const scope = subscriptionErrorScope(payload, 'subscription_forbidden');
+    if (!scope) return false;
+    const key = scopeKey(scope);
+    this.sentScopes.delete(key);
+    this.confirmedScopes.delete(key);
+    this.clearSubscriptionRetry(key);
+    if (this.scopes.has(key)) this.refusedScopes.add(key);
+    return true;
+  }
+
+  /** `false` when the ERROR names no scope (older geo-chat), leaving the generic path. */
+  private retryFailedSubscriptionCheck(payload: unknown) {
+    const scope = subscriptionErrorScope(payload, 'subscription_check_failed');
+    if (!scope) return false;
+    const key = scopeKey(scope);
+    this.sentScopes.delete(key);
+    this.confirmedScopes.delete(key);
+    if (!this.scopes.has(key)) return true;
+
+    const retry = this.subscriptionRetries.get(key) ?? { attempt: 0, timer: null };
+    if (retry.timer) clearTimeout(retry.timer);
+    const baseDelay = Math.min(30_000, 1_000 * 2 ** retry.attempt);
+    const delay = Math.min(30_000, Math.round(baseDelay + baseDelay * 0.2 * this.random()));
+    retry.attempt += 1;
+    // Survives a reconnect: a retry that comes due while no socket is ready is left to the next READY.
+    retry.timer = setTimeout(() => {
+      retry.timer = null;
+      const retained = this.scopes.get(key);
+      if (retained) this.sendSubscription(retained.scope, 'SUBSCRIBE');
+    }, delay);
+    this.subscriptionRetries.set(key, retry);
+    return true;
+  }
+
+  private clearSubscriptionRetry(key: string) {
+    const retry = this.subscriptionRetries.get(key);
+    if (retry?.timer) clearTimeout(retry.timer);
+    this.subscriptionRetries.delete(key);
+  }
+
+  private clearSubscriptionRetries() {
+    for (const retry of this.subscriptionRetries.values()) {
+      if (retry.timer) clearTimeout(retry.timer);
+    }
+    this.subscriptionRetries.clear();
+  }
+
+  /** `reconnectAttempt` resets on each successful flush, so repeated rejections get their own floor. */
+  private authExpiredReconnectDelayMs() {
+    const now = Date.now();
+    if (this.lastAuthExpiredAt === null || now - this.lastAuthExpiredAt >= ERROR_RECONNECT_COOLDOWN_MS) {
+      this.authExpiredAttempt = 0;
+    }
+    this.lastAuthExpiredAt = now;
+    const delay = this.authExpiredAttempt === 0 ? 0 : Math.min(30_000, 1_000 * 2 ** this.authExpiredAttempt);
+    this.authExpiredAttempt += 1;
+    return delay;
   }
 
   private canRecoverFromError() {
@@ -1077,10 +1251,24 @@ function gatewayWebSocketUrl(apiBaseUrl: string, accessToken: string) {
   return url.toString();
 }
 
+/**
+ * Canonical, so a scope retained from a route matches geo-chat's READY and ERROR echoes whatever
+ * spelling each uses. Payloads keep the retained spelling; only keys are normalized.
+ */
 function scopeKey(scope: DebateGatewayScope) {
-  if (scope.scope === 'space') return `space:${scope.space_id}`;
+  if (scope.scope === 'space') return `space:${canonicalSpaceId(scope.space_id)}`;
   if (scope.scope === 'matchmaking') return 'matchmaking';
-  return `debate:${scope.debate_id}`;
+  return `debate:${dashlessId(scope.debate_id.trim())}`;
+}
+
+/** Mirrors geo-chat's `normalize_space_id`, including its zero-padded 32-byte form. */
+function canonicalSpaceId(value: string) {
+  const trimmed = value.trim().toLowerCase();
+  const withoutPrefix = trimmed.startsWith('0x') ? trimmed.slice(2) : trimmed;
+  if (/^[0-9a-f]{32}0{32}$/.test(withoutPrefix)) return withoutPrefix.slice(0, 32);
+  const compact = withoutPrefix.replace(/-/g, '');
+  if (/^[0-9a-f]{32}$/.test(compact)) return compact;
+  return trimmed;
 }
 
 function parseScope(value: unknown): DebateGatewayScope | null {
@@ -1095,6 +1283,16 @@ function parseScope(value: unknown): DebateGatewayScope | null {
     return { scope: 'matchmaking' };
   }
   return null;
+}
+
+/** The scope a subscription ERROR names, when geo-chat echoes one this client can send. */
+function subscriptionErrorScope(payload: unknown, code: 'subscription_forbidden' | 'subscription_check_failed') {
+  if (!isRecord(payload) || payload.code !== code) return null;
+  return parseScope(payload.subscription);
+}
+
+function isAuthenticationExpired(payload: unknown) {
+  return isRecord(payload) && payload.code === 'authentication_expired';
 }
 
 function isEventsLagged(payload: unknown) {
@@ -1117,6 +1315,16 @@ function rateLimitRetryDelayMs(payload: unknown) {
 
 function isGatewayEnvelope(value: unknown): value is GatewayEnvelope {
   return isRecord(value) && value.v === 1 && typeof value.op === 'string' && 'payload' in value;
+}
+
+function isLobbiesQueryKey(queryKey: readonly unknown[], accountKey: string) {
+  return (
+    queryKey.length === 4 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[2] === accountKey &&
+    queryKey[3] === 'lobbies'
+  );
 }
 
 function isDebateEvent(value: unknown): value is DebateInvalidationEvent {

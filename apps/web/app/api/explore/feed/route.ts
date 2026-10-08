@@ -1,8 +1,8 @@
 import { NextResponse } from 'next/server';
 
 import { browseSidebarVisibleSpaces } from '~/core/browse/fetch-browse-sidebar-data';
-import { EXPLORE_EXCLUDED_TYPE_IDS } from '~/core/explore/explore-constants';
 import { parseExplorePageSort, parseExploreTime } from '~/core/explore/explore-feed-params';
+import { EXPLORE_FEED_POLICY } from '~/core/explore/explore-feed-policy';
 import { parseExploreTypeIdsParam } from '~/core/explore/explore-type-filter';
 import { feedUnavailableResponse } from '~/core/explore/feed-route-response';
 import { type ExploreSort, fetchExploreFeed } from '~/core/explore/fetch-explore-feed';
@@ -12,7 +12,9 @@ import {
   encodePersonalizedCursor,
   resolveForYouViewer,
 } from '~/core/explore/for-you/resolve-for-you-viewer';
+import { readServingFreshSlotState } from '~/core/explore/fresh-slot/fresh-slot-store';
 import { resolveExploreFeedRequestContext } from '~/core/explore/resolve-explore-feed-request-context';
+import { seenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { normId } from '~/core/utils/norm-id';
 
 /** Enough for any real follow list; the query string stays under ~7 KB. */
@@ -87,6 +89,13 @@ export async function GET(request: Request) {
     if (visible.length > 0) spaceFilter = visible;
   }
 
+  // GEO-3221. Best's fresh slot, read from the ranking lab's live config (disabled unless an admin
+  // turned it on). Plain Best only; For you is left as it is.
+  const freshState = pageSort === 'best' ? await readServingFreshSlotState() : null;
+  // GEO-3234. Seen demotion runs in the browser; the page only carries whether it is on and its
+  // knobs, identical for every visitor, so nothing per-visitor reaches this response or its caches.
+  const seenDemotion = seenDemotionPageConfig(freshState?.config.seenDemotion);
+
   try {
     const result = await fetchExploreFeed({
       browse,
@@ -97,13 +106,7 @@ export async function GET(request: Request) {
       walletAddress,
       memberOrEditorSpaceIds,
       typeIds,
-      excludeTypeIds: EXPLORE_EXCLUDED_TYPE_IDS,
-      requireName: true,
-      // GEO-2835. A restriction on the feed rather than on the selection, unlike the types filter:
-      // ticking Claim asks for the claims Explore has, and an untagged one is not among them.
-      requireDebateTagOnClaims: true,
-      // GEO-3070. Explore's Best opens on a playable debate.
-      leadWithPlayableDebate: true,
+      ...EXPLORE_FEED_POLICY,
       forYouTopicIds,
       reorderWindow:
         viewerId !== null
@@ -114,6 +117,8 @@ export async function GET(request: Request) {
               interleavingEnabled: interleaving,
             })
           : undefined,
+      freshSlot: freshState ? { config: freshState.config, revision: freshState.revision } : undefined,
+      markPlayableLeads: seenDemotion !== null,
     });
     // Every card names the version that put it there, so engagement can be credited to it.
     const feed = result.feed;
@@ -122,6 +127,8 @@ export async function GET(request: Request) {
       : result.items;
     const body = {
       ...result,
+      // Plain Best only: For you and an interleaving experiment are left alone, as with the fresh slot.
+      ...(seenDemotion && feed?.name === 'best' && !personalized ? { seenDemotion } : {}),
       items,
       nextCursor: personalized ? encodePersonalizedCursor(asOf, result.nextCursor) : result.nextCursor,
     };

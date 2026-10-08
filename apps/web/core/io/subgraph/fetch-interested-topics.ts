@@ -1,7 +1,7 @@
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
-import { INTERESTED_VOTE_KIND, type InterestedTopicRow } from '~/core/topics/interested';
+import { type InterestedTopicRow, interestedVoteCondition } from '~/core/topics/interested';
 import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
@@ -21,11 +21,9 @@ type NetworkResult = {
  * the Interested was cast in, because clearing has to name it.
  */
 export function interestedTopicsQuery(spaceId: string, after: string | null): string {
-  const space = JSON.stringify(spaceId);
-
   return `query {
     userVotesConnection(
-      condition: { userId: ${space}, voteKind: ${INTERESTED_VOTE_KIND}, voteType: 0, objectType: 0 }
+      condition: { ${interestedVoteCondition({ userId: spaceId })} }
       first: ${PAGE_SIZE}
       after: ${JSON.stringify(after)}
     ) {

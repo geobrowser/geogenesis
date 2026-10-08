@@ -19,7 +19,7 @@ import { useHubFilterOwner } from './use-hub-filter-owner';
 import type { DebatesHubTab } from '~/atoms';
 
 const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
-  { value: 'lobby', label: 'Lobby' },
+  { value: 'lobby', label: 'Matches' },
   { value: 'explore', label: 'Explore' },
   { value: 'positions', label: 'My positions' },
 ];

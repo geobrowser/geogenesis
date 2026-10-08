@@ -63,8 +63,6 @@ export function useNarrowedDefault(
 ): {
   /** Whether the narrowed list is the one to draw. */
   showNarrowed: boolean;
-  /** Whether that is a step back from the stored preference rather than the preference itself. */
-  steppedBack: boolean;
   /** Call when the viewer sets the preference themselves — their answer outranks this one. */
   rearm: () => void;
 } {
@@ -103,5 +101,5 @@ export function useNarrowedDefault(
     setSteppedBack(false);
   }, []);
 
-  return { showNarrowed: preferred && !steppedBack, steppedBack, rearm };
+  return { showNarrowed: preferred && !steppedBack, rearm };
 }
