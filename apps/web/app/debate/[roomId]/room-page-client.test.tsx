@@ -17,6 +17,8 @@ const mocks = vi.hoisted(() => ({
   access: { status: 'admitted' } as { status: string; opens_at?: string },
   kind: 'debate' as 'debate' | 'lobby',
   lobbyJoining: false,
+  authenticated: true,
+  search: new URLSearchParams(),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.lobbyJoining }));
@@ -26,10 +28,18 @@ vi.mock('~/core/debates/lobbies/lobby-page', () => ({
   LobbiesUnavailable: () => <div>Lobbies are not available right now.</div>,
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mocks.replace, push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: mocks.replace, push: vi.fn() }),
+  useSearchParams: () => mocks.search,
+}));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: mocks.authenticated,
+    accountKey: 'acct',
+    getPrivyIdentityToken: vi.fn(),
+  }),
 }));
 
 vi.mock('~/core/debates/rooms/hooks', () => ({
@@ -73,9 +83,33 @@ afterEach(() => {
   mocks.access = { status: 'admitted' };
   mocks.kind = 'debate';
   mocks.lobbyJoining = false;
+  mocks.authenticated = true;
+  mocks.search = new URLSearchParams();
 });
 
 describe('DebateRoomPageClient', () => {
+  it('signs a signed-out visitor in as a room visitor', () => {
+    mocks.authenticated = false;
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(screen.getByText('Sign in to join your debate.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/debate/room-1?modal=signin&via=room'
+    );
+  });
+
+  // GEO-3126. Signed out, the room's kind is unknown; a lobby's shared link carries `via=lobby`.
+  it('signs a visitor from a lobby’s shared link in as a lobby visitor', () => {
+    mocks.authenticated = false;
+    mocks.search = new URLSearchParams('via=lobby');
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(screen.getByText('Sign in to join the lobby.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/debate/room-1?modal=signin&via=lobby'
+    );
+  });
+
   // GEO-3131. A lobby's room view is `not_a_participant`, which must not redirect.
   it('opens the lobby page for a lobby when joining is on', () => {
     mocks.kind = 'lobby';

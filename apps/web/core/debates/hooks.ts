@@ -23,6 +23,7 @@ import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availabi
 import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
+  type CreateDebateChallengeBody,
   type Debate,
   type DebateActivity,
   type DebateClaimsResponse,
@@ -1336,7 +1337,7 @@ export function useCreateDebateChallenge() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
   const mutation = useMutation({
-    mutationFn: (request: { recipient_profile_space_id: string }) =>
+    mutationFn: (request: CreateDebateChallengeBody) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
     onSuccess: challenge => {
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>

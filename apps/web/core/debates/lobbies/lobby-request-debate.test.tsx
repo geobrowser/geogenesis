@@ -2,10 +2,11 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyMember } from '../api';
+import { type DebateLobbyMember, GeoChatRequestError } from '../api';
 
 const mocks = vi.hoisted(() => ({
   viewerId: 'viewer' as string | null,
+  requested: vi.fn(),
   create: { mutate: vi.fn(), isPending: false, error: null as Error | null },
   cancel: { mutate: vi.fn(), isPending: false, error: null as Error | null },
   block: {
@@ -23,6 +24,7 @@ vi.mock('../hooks', () => ({
 }));
 vi.mock('../matchmaking/hooks', () => ({ useDebateRequests: () => ({ data: undefined }) }));
 vi.mock('../matchmaking/use-live-request-block', () => ({ useLiveRequestBlock: () => mocks.block }));
+vi.mock('./lobby-analytics', () => ({ lobbyDebateRequested: mocks.requested }));
 
 const { LobbyRequestDebate, canRequestLobbyMember } = await import('./lobby-request-debate');
 
@@ -69,32 +71,43 @@ describe('canRequestLobbyMember', () => {
 });
 
 describe('LobbyRequestDebate', () => {
-  it('sends a challenge to the member’s profile space', () => {
-    render(<LobbyRequestDebate member={member()} />);
+  it('sends a challenge scoped to the lobby, and records it once the server accepts it', () => {
+    render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Request a debate with Other' }));
-    expect(mocks.create.mutate).toHaveBeenCalledWith({ recipient_profile_space_id: 'space-other' });
+    const [body, options] = mocks.create.mutate.mock.calls[0]!;
+    expect(body).toEqual({ recipient_profile_space_id: 'space-other', lobby_id: 'lobby1' });
+    expect(mocks.requested).not.toHaveBeenCalled();
+
+    options.onSuccess({ id: 'challenge-1' });
+    expect(mocks.requested).toHaveBeenCalledWith('LOBBY-1', { kind: 'person', requestId: 'challenge-1' });
+  });
+
+  it('words geo-chat’s lobby refusals', () => {
+    mocks.create.error = new GeoChatRequestError('gone', 'lobby_recipient_not_present', 409);
+    render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member()} />);
+    expect(screen.getByRole('alert').textContent).toBe('They’re not in the lobby right now.');
   });
 
   it('renders nothing for someone in a debate', () => {
-    const { container } = render(<LobbyRequestDebate member={member({ in_debate: true })} />);
+    const { container } = render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member({ in_debate: true })} />);
     expect(container.innerHTML).toBe('');
   });
 
   it('shows the pending label while sending', () => {
     mocks.create.isPending = true;
-    render(<LobbyRequestDebate member={member()} />);
+    render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member()} />);
     expect(screen.getByRole('button', { name: 'Request a debate with Other' }).textContent).toBe('Requesting…');
   });
 
   it('shows the server’s refusal', () => {
     mocks.create.error = new Error('this person is already in a debate');
-    render(<LobbyRequestDebate member={member()} />);
+    render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member()} />);
     expect(screen.getByRole('alert').textContent).toBe('this person is already in a debate');
   });
 
   it('greys out with the reason while another request is open', () => {
     mocks.block = { outboundChallenge: null, blockedReason: "You're already in a debate.", buttonsDisabled: true };
-    render(<LobbyRequestDebate member={member()} />);
+    render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member()} />);
     const button = screen.getByRole<HTMLButtonElement>('button', { name: 'Request a debate with Other' });
     expect(button.disabled).toBe(true);
     expect(button.title).toBe("You're already in a debate.");
@@ -106,7 +119,7 @@ describe('LobbyRequestDebate', () => {
       blockedReason: null,
       buttonsDisabled: true,
     };
-    render(<LobbyRequestDebate member={member()} />);
+    render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member()} />);
     screen.getByText('Awaiting response');
     fireEvent.click(screen.getByRole('button', { name: 'Cancel request' }));
     expect(mocks.cancel.mutate).toHaveBeenCalledWith('challenge-1');

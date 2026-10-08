@@ -4,11 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
+import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
 import { DebateLobbyPage, LobbiesUnavailable } from '~/core/debates/lobbies/lobby-page';
 import {
   useDebateRoom,
@@ -39,6 +40,7 @@ import { DebateRematchPageClient } from '../../space/[id]/(space)/debates/rematc
  */
 export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const roomQuery = useDebateRoom(roomId);
   const room = roomQuery.data ?? null;
   // A lobby answers `not_a_participant` here, so it is never a denial.
@@ -90,10 +92,17 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
 
   // A room link is pasted into a calendar invite, so the person opening it is often signed out.
   // The room cannot say who they are, and an error card is a dead end.
+  // Signed out, the room's kind is unknown; a lobby's shared link says so itself.
   if (ready && !authenticated) {
+    const lobbyLink = searchParams?.get('via') === LOBBY_LINK_VIA;
     return (
-      <RoomNotice action={{ href: toSignIn({ pathname: debateRoomPath(roomId), via: 'room' }), label: 'Sign in' }}>
-        Sign in to join your debate.
+      <RoomNotice
+        action={{
+          href: toSignIn({ pathname: debateRoomPath(roomId), via: lobbyLink ? LOBBY_LINK_VIA : 'room' }),
+          label: 'Sign in',
+        }}
+      >
+        {lobbyLink ? 'Sign in to join the lobby.' : 'Sign in to join your debate.'}
       </RoomNotice>
     );
   }
