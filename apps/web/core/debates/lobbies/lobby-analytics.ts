@@ -7,18 +7,9 @@ import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
 
 /**
- * Lobby analytics (GEO-3126): whether lobbies get newcomers into a first debate. Registered in
- * `geobrowser/analytics` (`semantic/events.yaml`); the runtime and the collector drop names they do
- * not know. No `measurement_version` (the collector then demands a measurement contract), and no
- * `source` or `duration*` keys.
- *
- * A lobby session is one visit, from the join that put the viewer on the roster to leaving it, held
- * in memory only. A reconnect, lapsed lease, back-forward cache restore or StrictMode remount stays
- * in the same session; coming back after a debate starts a new one. Stepping out keeps it open until
- * the debate arrives (`lobby_left` with exit `debate_started`), and an ended session is kept until
- * the next join so a debate that follows is still attributed to it.
- *
- * Module state is read and written only from effects and event handlers, never during render.
+ * Lobby analytics (GEO-3126). Events must be registered in `geobrowser/analytics`; never send
+ * `measurement_version`, `source` or `duration*`. A session is one visit, in memory only, and is
+ * touched only from effects and handlers.
  */
 
 /** How the viewer got to the lobby, as of the join that starts the session. */
@@ -54,7 +45,7 @@ export function lobbyShareUrl(lobbyId: string) {
 
 /** A marked entry older than this is stale: the navigation it was set for never joined. */
 const ENTRY_TTL_MS = 60_000;
-/** A debate this long after stepping out or leaving is no longer attributed to the session. */
+/** How long after stepping out or leaving a debate still counts for the session. */
 const DEBATE_ATTRIBUTION_MS = 60 * 60_000;
 
 type Session = {
@@ -152,7 +143,7 @@ export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boole
   });
 }
 
-/** Left on purpose, or taken out by the server. Leave also ends a stepped-out session. */
+/** Leave, or the server took them out. Also ends a stepped-out session. */
 export function lobbyLeft(lobbyId: string, exit: Exclude<LobbyExit, 'debate_started'>) {
   if (session && sameId(session.lobbyId, lobbyId)) end(exit);
 }
