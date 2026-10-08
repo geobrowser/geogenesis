@@ -3,9 +3,11 @@
 import * as React from 'react';
 
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
+import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals } from '~/core/id/normalize';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
+import { isDebatePublishableSpace } from './debate-publish-target';
 import { defaultDebateFormatId } from './formats';
 import { useDebateRematchClaims } from './hooks';
 import type { RematchPanelContext } from './rematch-panel-context';
@@ -15,7 +17,6 @@ export function RematchClaimEndSlot({
   context,
   claimId,
   spaceId,
-  viewerPosition,
   enabled = true,
   variant,
   className,
@@ -23,13 +24,18 @@ export function RematchClaimEndSlot({
   context: RematchPanelContext;
   claimId: string;
   spaceId: string;
-  viewerPosition: boolean | null | undefined;
   enabled?: boolean;
   variant?: 'inline' | 'block';
   className?: string;
 }) {
   const { sessionId, session, currentUserId, opponentPresent, canPublishDebateIn, createRequest } = context;
   const claimIds = React.useMemo(() => [claimId], [claimId]);
+  const {
+    spacesById,
+    isLoading: isSpaceLoading,
+    isPlaceholderData: isSpacePlaceholder,
+  } = useSpacesByIds([spaceId], enabled);
+  const space = [...spacesById].find(([id]) => idEquals(id, spaceId))?.[1];
   const { data } = useDebateRematchClaims(sessionId, claimIds, enabled);
   const indexing = useEntityResponseIndexingSnapshot({ entityId: claimId, spaceId, responseKind: CLAIM_RESPONSE_KIND });
   const row = data?.claims.find(
@@ -43,14 +49,13 @@ export function RematchClaimEndSlot({
       ? row.viewer_position
       : row?.participants.find(person => currentUserId && idEquals(person.user_id, currentUserId))?.position;
   const pendingResponse = indexing.pending?.expectedResponse;
+  // The session confirms rematch eligibility; only an in-flight local response takes precedence.
   const localPosition =
     pendingResponse !== undefined
       ? pendingResponse === null
         ? null
         : pendingResponse === 'positive'
-      : viewerPosition !== undefined
-        ? viewerPosition
-        : (chatPosition ?? null);
+      : (chatPosition ?? null);
   const rejected = row?.recently_rejected || session?.recently_rejected_claim_ids.some(id => idEquals(id, claimId));
   const isCurrentRequest = Boolean(
     createRequest.variables &&
@@ -65,6 +70,10 @@ export function RematchClaimEndSlot({
     !session ||
     !session.participants.some(person => idEquals(person.user_id, currentUserId)) ||
     !row ||
+    isSpaceLoading ||
+    isSpacePlaceholder ||
+    !space ||
+    !isDebatePublishableSpace(space) ||
     !canPublishDebateIn(spaceId) ||
     data?.excluded_claim_ids.some(id => idEquals(id, claimId))
   )
@@ -73,6 +82,7 @@ export function RematchClaimEndSlot({
     <RematchRequestControl
       session={session}
       claimId={claimId}
+      spaceId={spaceId}
       chatPosition={chatPosition}
       localPosition={localPosition}
       remotePosition={remotePosition}

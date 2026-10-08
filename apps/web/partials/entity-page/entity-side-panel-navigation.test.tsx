@@ -78,6 +78,15 @@ describe('debate room side-panel navigation', () => {
     expect(window.open).not.toHaveBeenCalled();
   });
 
+  it('opens a debate video separately and preserves its timecode', () => {
+    const href = `${relatedHref}?t=722`;
+    render(<View href={href} data-entity-side-panel-full-page />);
+    fireEvent.click(screen.getByText('Related claim'));
+    expect(window.open).toHaveBeenCalledWith(new URL(href, window.location.href).href, '_blank', 'noopener,noreferrer');
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
+
   it('keeps portal links inside the panel too', () => {
     render(<View portal />);
     fireEvent.click(screen.getByText('Related claim'));
@@ -145,6 +154,14 @@ describe('debate room side-panel navigation', () => {
   it('allows the explicit Open in new tab link', () => {
     render(<View target="_blank" rel="noopener noreferrer" />);
     fireEvent.click(screen.getByText('Related claim'));
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+    expect(window.open).not.toHaveBeenCalled();
+  });
+
+  it('does not bypass a disabled link’s click handler', () => {
+    render(<View aria-disabled="true" />);
+    fireEvent.click(screen.getByText('Related claim'));
+    expect(mocks.navigate).toHaveBeenCalledOnce();
     expect(mocks.openSidePanel).not.toHaveBeenCalled();
     expect(window.open).not.toHaveBeenCalled();
   });

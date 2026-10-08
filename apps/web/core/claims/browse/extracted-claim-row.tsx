@@ -195,6 +195,7 @@ export function ExtractedClaimRow({
           {timecodeHref ? (
             <Link
               href={timecodeHref}
+              data-entity-side-panel-full-page
               // The label says what pressing it does, because "12:04" on its own reads as a fact
               // about the claim rather than as a control.
               aria-label={`Watch from ${formatTimecode(moment!.startMs)}`}

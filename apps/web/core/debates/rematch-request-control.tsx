@@ -15,6 +15,7 @@ import { ROOM_REQUEST_WAITING } from './rooms/room-copy';
 export function RematchRequestControl({
   session,
   claimId,
+  spaceId,
   chatPosition,
   localPosition,
   remotePosition,
@@ -31,6 +32,7 @@ export function RematchRequestControl({
 }: {
   session: DebateRematchSession | null;
   claimId: string;
+  spaceId: string;
   chatPosition: boolean | null | undefined;
   localPosition: boolean | null;
   remotePosition: boolean | null;
@@ -55,7 +57,8 @@ export function RematchRequestControl({
   const requesting =
     session?.status === 'request_pending' &&
     session.request != null &&
-    idEquals(session.request.claim.claim_entity_id, claimId);
+    idEquals(session.request.claim.claim_entity_id, claimId) &&
+    idEquals(session.request.claim.space_id, spaceId);
   if (!session || !['browsing', 'request_pending'].includes(session.status)) return null;
   if (!gate.canRequest && !gate.pending && !gate.awaitingOpponent && !requesting && !recentlyRejected && !requestError)
     return null;

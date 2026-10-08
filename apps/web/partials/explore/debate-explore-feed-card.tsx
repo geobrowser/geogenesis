@@ -368,6 +368,7 @@ export function DebateExploreFeedCard({
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {endSlot}
               <FullscreenLink
+                requiresFullPage
                 href={NavUtils.toEntity(item.spaceId, item.entityId)}
                 entityId={item.entityId}
                 spaceId={item.spaceId}

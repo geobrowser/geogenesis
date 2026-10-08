@@ -58,7 +58,8 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, section, c
   // normally headed by the claim it argued (`exploreCardHeading`), and that heading points at the
   // Claim, which the panel serves well. The exception is for the debate itself, which a heading
   // only names when the Claims relation is missing.
-  const opensPanel = opensSidePanel && !isDebateEntity(item.types);
+  const requiresFullPage = isDebateEntity(item.types);
+  const opensPanel = opensSidePanel && !requiresFullPage;
 
   // GEO-3144: an open is engagement, credited like a vote or comment to the feed version behind the
   // card, which the card's action scope carries. Recorded on every click that opens it, panel or page.
@@ -95,6 +96,7 @@ export function ExploreCardEntityLink({ item, opensSidePanel = false, section, c
       spaceId={item.spaceId}
       onClick={onClick}
       onAuxClick={recordOpen}
+      data-entity-side-panel-full-page={requiresFullPage || undefined}
       // Exempts this link from the panel's capture-phase outside-pointerdown close
       // (`entity-side-panel.tsx`). Without it, clicking a second card while the panel is open
       // tears the panel down on `pointerdown` and the `onClick` below builds it again — a

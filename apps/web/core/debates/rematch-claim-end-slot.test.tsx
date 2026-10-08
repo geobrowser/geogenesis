@@ -14,8 +14,10 @@ const mocks = vi.hoisted(() => ({
   data: { claims: [] as DebateRematchClaim[], excluded_claim_ids: [] as string[] },
   indexing: { status: 'idle', pending: undefined as undefined | { expectedResponse: 'positive' | 'negative' | null } },
   matchmaking: vi.fn(),
+  spaces: { spacesById: new Map<string, { type: 'DAO' | 'PERSONAL' }>(), isLoading: false, isPlaceholderData: false },
 }));
 vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
+vi.mock('~/core/hooks/use-spaces-by-ids', () => ({ useSpacesByIds: () => mocks.spaces }));
 vi.mock('./hooks', () => ({ useDebateRematchClaims: () => ({ data: mocks.data }) }));
 vi.mock('~/core/hooks/use-entity-vote', () => ({ useEntityResponseIndexingSnapshot: () => mocks.indexing }));
 vi.mock('~/core/claims/browse/use-claim-matchup', () => ({ useClaimMatchup: mocks.matchmaking }));
@@ -27,16 +29,17 @@ function Picker() {
   useRegisterRematchPanelContext(context);
   return null;
 }
-function View({ picker = true }: { picker?: boolean }) {
+function View({ picker = true, viewerPosition = true }: { picker?: boolean; viewerPosition?: boolean | null }) {
   return (
     <Provider>
       {picker && <Picker />}
-      <ClaimEndSlot claimId="claim-1" spaceId="space-1" viewerPosition={true} variant="block" />
+      <ClaimEndSlot claimId="claim-1" spaceId="space-1" viewerPosition={viewerPosition} variant="block" />
     </Provider>
   );
 }
 beforeEach(() => {
   mocks.pathname = '/debate/room-1';
+  mocks.spaces = { spacesById: new Map([['space-1', { type: 'DAO' }]]), isLoading: false, isPlaceholderData: false };
   mocks.indexing = { status: 'idle', pending: undefined };
   mocks.matchmaking.mockReset().mockReturnValue({ match: null });
   mocks.data = {
@@ -68,6 +71,56 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('claim side panel in a debate-again session', () => {
+  it.each([false, null])('trusts the confirmed session position over a stale graph position of %s', viewerPosition => {
+    render(<View viewerPosition={viewerPosition} />);
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    expect(screen.queryByText('Publishing your position…')).toBeNull();
+  });
+  it('does not resurrect a position withdrawn in the session from a stale graph vote', () => {
+    mocks.data.claims[0]!.viewer_position = null;
+    render(<View />);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+  it('honors a pending withdrawal before the session confirms it', () => {
+    mocks.indexing.pending = { expectedResponse: null };
+    render(<View />);
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+  it.each(['loading', 'placeholder', 'missing', 'personal'] as const)(
+    'withholds the request for a newly visited space that is %s',
+    state => {
+      mocks.spaces = {
+        spacesById: new Map(
+          state === 'missing' ? [] : [['space-1', { type: state === 'personal' ? 'PERSONAL' : 'DAO' }]]
+        ),
+        isLoading: state === 'loading',
+        isPlaceholderData: state === 'placeholder',
+      };
+      const view = render(<View />);
+      expect(screen.queryByRole('button')).toBeNull();
+      mocks.spaces = {
+        spacesById: new Map([['space-1', { type: 'DAO' }]]),
+        isLoading: false,
+        isPlaceholderData: false,
+      };
+      view.rerender(<View />);
+      expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+    }
+  );
+  it.each(['space-1', 'another-space'])(
+    'associates a pending session request with its claim and space: %s',
+    spaceId => {
+      context.session!.status = 'request_pending';
+      context.session!.request = {
+        claim: { claim_entity_id: 'claim-1', space_id: spaceId },
+      } as DebateRematchSession['request'];
+      render(<View />);
+      expect(
+        screen.getByRole('button', { name: spaceId === 'space-1' ? 'Requesting…' : 'Request debate' })
+      ).toBeDisabled();
+    }
+  );
+
   it('requests the claim through the current session from a sibling panel', () => {
     render(<View />);
     mocks.matchmaking.mockClear();

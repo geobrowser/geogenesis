@@ -68,7 +68,7 @@ const mocks = vi.hoisted(() => ({
   rejectMutate: vi.fn(),
   /** The last rematch request error and its variables. */
   requestError: null as Error | null,
-  requestVariables: undefined as { claim_id: string } | undefined,
+  requestVariables: undefined as { claim_id: string; source_space_id: string } | undefined,
   submitResponse: vi.fn(),
   optimisticResponses: new Map<string, 'positive' | 'negative' | null>(),
   /** Overrides the snapshot status, so the window where it is `indexed` is reachable. */
@@ -4311,7 +4311,7 @@ describe('DebateRematchPageClient', () => {
   it('reports a refused request on the card it was sent from', async () => {
     // Through the press, so the claim the error is keyed to is the one the mutation was actually
     // sent for — `variables` is react-query's record of that call, not a value this test picks.
-    mocks.mutate.mockImplementation((variables: { claim_id: string }) => {
+    mocks.mutate.mockImplementation((variables: { claim_id: string; source_space_id: string }) => {
       mocks.requestVariables = variables;
     });
     mocks.requestError = new Error('respond to this claim before requesting a rematch');
@@ -4333,13 +4333,23 @@ describe('DebateRematchPageClient', () => {
   // than letting the message go down with it.
   it('keeps a refusal on the page when its card is not on screen', async () => {
     mocks.requestError = new Error('respond to this claim before requesting a rematch');
-    mocks.requestVariables = { claim_id: 'a-claim-this-tab-does-not-show' };
+    mocks.requestVariables = { claim_id: 'a-claim-this-tab-does-not-show', source_space_id: SPACE_1 };
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showOpponentClaims();
 
     const card = screen.getByText('A claim both participants chose').closest('article');
     expect(within(card!).queryByRole('alert')).not.toBeInTheDocument();
     expect(screen.getByRole('alert')).toHaveTextContent('respond to this claim before requesting a rematch');
+  });
+
+  it('keeps a refusal for the same claim in another space off this card', async () => {
+    mocks.requestError = new Error('Other space request failed');
+    mocks.requestVariables = { claim_id: CLAIM_SHARED, source_space_id: 'another-space' };
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showOpponentClaims();
+    const card = screen.getByText('A claim both participants chose').closest('article');
+    expect(within(card!).queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('alert')).toHaveTextContent('Other space request failed');
   });
 
   // GEO-2652. The wait is real — a publish, an index and a notification — so it is named rather

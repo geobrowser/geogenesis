@@ -2516,17 +2516,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
 
   /** The last request failure, and whether the claim it was sent for is still on screen. */
   const requestError = createRequest.error instanceof Error ? createRequest.error.message : null;
-  const requestErrorClaimId = requestError ? createRequest.variables?.claim_id : undefined;
+  const requestErrorTarget = requestError ? createRequest.variables : undefined;
   // Compared canonically: the error carries whichever spelling the failed request used, and the row
   // carries this page's.
-  const hasClaimId = (claim: DebateRematchClaim) =>
-    requestErrorClaimId != null && idEquals(claim.claim.claim_entity_id, requestErrorClaimId);
+  const hasRequestTarget = (claim: DebateRematchClaim) =>
+    requestErrorTarget != null &&
+    idEquals(claim.claim.claim_entity_id, requestErrorTarget.claim_id) &&
+    idEquals(claim.claim.space_id, requestErrorTarget.source_space_id);
   const requestErrorHasCard =
-    requestErrorClaimId !== undefined &&
-    (visibleDebatedClaims.some(hasClaimId) ||
+    requestErrorTarget !== undefined &&
+    (visibleDebatedClaims.some(hasRequestTarget) ||
       (showsSections
-        ? visibleSections.some(section => section.claims.some(hasClaimId))
-        : visibleClaims.some(hasClaimId)));
+        ? visibleSections.some(section => section.claims.some(hasRequestTarget))
+        : visibleClaims.some(hasRequestTarget)));
 
   /** On "From this debate", who said the claim — the one thing that tab knows that a row does not. */
   const debateContextFor = (claim: DebateRematchClaim) => {
@@ -2563,7 +2565,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       }
       busy={createRequest.isPending || session?.status === 'request_pending'}
       // Associate the shared mutation error with the claim that initiated it.
-      requestError={hasClaimId(claim) ? requestError : null}
+      requestError={hasRequestTarget(claim) ? requestError : null}
     />
   );
 
@@ -3251,6 +3253,7 @@ function RematchClaimCard({
         <RematchRequestControl
           session={session}
           claimId={claim.claim.claim_entity_id}
+          spaceId={claim.claim.space_id}
           chatPosition={chatPosition}
           localPosition={localPosition}
           remotePosition={remotePosition}

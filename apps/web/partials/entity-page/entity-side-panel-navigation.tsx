@@ -31,6 +31,8 @@ export function EntitySidePanelNavigation({
     const target = event.target;
     const link = target instanceof Element ? target.closest('a[href]') : null;
     if (!(link instanceof HTMLAnchorElement) || link.hasAttribute('download') || link.target === '_blank') return;
+    // Disabled controls own their refusal in onClick; capture must not activate them first.
+    if (link.getAttribute('aria-disabled') === 'true') return;
     const href = link.getAttribute('href');
     if (!href || href.startsWith('#')) return;
     const url = new URL(link.href, window.location.href);
@@ -50,8 +52,8 @@ export function EntitySidePanelNavigation({
       (parts.length === 3 || (parts.length === 4 && SYSTEM_TABS.has(systemTab!))) &&
       url.searchParams.get('edit') !== 'true';
 
-    if (!isEntity) {
-      // Space homepages, external sources and full-screen tools have no entity-panel surface.
+    if (!isEntity || link.hasAttribute('data-entity-side-panel-full-page')) {
+      // Debate videos, space homepages, external sources and full-screen tools need a full page.
       // They must never replace the live room in this tab.
       window.open(url.href, '_blank', 'noopener,noreferrer');
       return;
