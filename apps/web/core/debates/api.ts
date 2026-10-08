@@ -244,6 +244,8 @@ export type Debate = {
   started_at: string | null;
   completed_at: string | null;
   rematch_session_id?: string | null;
+  /** Dashless. The lobby the debate was requested in (GEO-3126); absent otherwise. */
+  lobby_id?: string | null;
   participants: DebateParticipant[];
   turn_yields?: DebateTurnYield[];
   recordings: DebateRecording[];
@@ -388,6 +390,8 @@ export type DebateChallenge = {
   rematch_session_id: string | null;
   created_at: string;
   expires_at: string;
+  /** Dashless. The lobby a scoped challenge was sent in; absent when unscoped. */
+  lobby_id?: string | null;
 };
 
 export type DebateChallengeActionResponse = {
@@ -1837,8 +1841,14 @@ export async function getDebateProfile(
   });
 }
 
+export type CreateDebateChallengeBody = {
+  recipient_profile_space_id: string;
+  /** Dashless. Sent from a lobby: both people must be in it (GEO-3126). */
+  lobby_id?: string;
+};
+
 export async function createDebateChallenge(
-  request: { recipient_profile_space_id: string },
+  request: CreateDebateChallengeBody,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
@@ -2369,6 +2379,8 @@ export type DebateLobbyView = {
     hand_raised_at?: string | null;
     /** The latest action another person took on the viewer here; never `end`. */
     last_moderation?: { action: DebateLobbyModerationAction; at: string } | null;
+    /** No completed debate yet (GEO-3126); absent from a geo-chat that predates it. */
+    newcomer?: boolean;
   };
 };
 

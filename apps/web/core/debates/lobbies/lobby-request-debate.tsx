@@ -2,7 +2,7 @@
 
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbyMember } from '../api';
+import { type DebateLobbyMember, GeoChatRequestError, dashlessId } from '../api';
 import { useCreateDebateChallenge, useDebateActivity, useRejectDebateChallenge } from '../hooks';
 import { useDebateRequests } from '../matchmaking/hooks';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
@@ -10,6 +10,7 @@ import { useLiveRequestBlock } from '../matchmaking/use-live-request-block';
 import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { personName } from './lobby-format';
+import { lobbyClaimRequestErrorMessage } from './lobby-room-claims-hooks';
 
 /** Someone else, in the room and not debating. A signed-out viewer has no id and asks nobody. */
 export function canRequestLobbyMember(member: DebateLobbyMember, viewerId: string | null) {
@@ -17,11 +18,19 @@ export function canRequestLobbyMember(member: DebateLobbyMember, viewerId: strin
   return !member.in_debate && !member.stepped_out;
 }
 
+/** geo-chat's refusals of a lobby challenge, as the claim request words them; null for any other. */
+export function lobbyChallengeErrorMessage(error: unknown) {
+  if (error instanceof GeoChatRequestError && error.code === 'lobby_recipient_not_present') {
+    return 'They’re not in the lobby right now.';
+  }
+  return lobbyClaimRequestErrorMessage(error);
+}
+
 /**
  * Asks one lobby member for a claimless debate, the same challenge a profile or the People tab
  * sends. Accepting routes both into the picker through `DebateCoordinator`.
  */
-export function LobbyRequestDebate({ member }: { member: DebateLobbyMember }) {
+export function LobbyRequestDebate({ lobbyId, member }: { lobbyId: string; member: DebateLobbyMember }) {
   const viewerId = useCurrentGeoChatUserId();
   const visible = canRequestLobbyMember(member, viewerId);
   const { data: activity } = useDebateActivity(visible);
@@ -61,7 +70,12 @@ export function LobbyRequestDebate({ member }: { member: DebateLobbyMember }) {
           title={buttonsDisabled ? (blockedReason ?? 'You have a debate request awaiting a reply.') : undefined}
           pending={createChallenge.isPending}
           pendingLabel="Requesting…"
-          onClick={() => createChallenge.mutate({ recipient_profile_space_id: member.profile_space_id })}
+          onClick={() =>
+            createChallenge.mutate({
+              recipient_profile_space_id: member.profile_space_id,
+              lobby_id: dashlessId(lobbyId),
+            })
+          }
         >
           Request debate
         </HubPillButton>
@@ -69,7 +83,7 @@ export function LobbyRequestDebate({ member }: { member: DebateLobbyMember }) {
       {error instanceof Error ? (
         <div role="alert">
           <Text as="p" variant="footnote" color="red-01">
-            {error.message}
+            {lobbyChallengeErrorMessage(error) ?? error.message}
           </Text>
         </div>
       ) : null}

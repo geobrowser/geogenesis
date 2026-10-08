@@ -12,6 +12,7 @@ import { Text } from '~/design-system/text';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useScrollLock } from '../use-scroll-lock';
 import { useCreateDebateLobby } from './hooks';
+import { lobbyShareUrl, markLobbyEntry } from './lobby-analytics';
 import { MAX_SCHEDULE_AHEAD_DAYS, NAME_MAX_CHARS, lobbyErrorMessage, lobbyScheduleLabel } from './lobby-format';
 
 /** `<input type="datetime-local">` reads and writes local wall time without a zone. */
@@ -61,7 +62,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   }, [onClose]);
 
   const created = create.data ?? null;
-  const link = created ? `${window.location.origin}${debateRoomPath(created.lobby_id)}` : null;
+  const link = created ? lobbyShareUrl(created.lobby_id) : null;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
@@ -123,7 +124,10 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
               </button>
               <Link
                 href={debateRoomPath(created.lobby_id)}
-                onClick={onClose}
+                onClick={() => {
+                  markLobbyEntry(created.lobby_id, 'created');
+                  onClose();
+                }}
                 className={`${DIALOG_ACTION_BUTTON_CLASS_NAME} text-center`}
               >
                 Go to lobby
