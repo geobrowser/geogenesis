@@ -10,18 +10,16 @@ const ADA = '73a82967cb12f604f9589ac4bc8024cb';
 const MARCUS = 'e1fbf3a014554cef945bdd49613b2a05';
 
 describe('topicFollowersQuery', () => {
-  it('counts Interested votes with totals only, one alias per topic, plus the viewer', () => {
+  it('reads Interested rows for each topic in one request, one alias each, plus the viewer', () => {
     const query = topicFollowersQuery([TOPIC_A, TOPIC_B], true, ADA);
 
     expect(query).toContain('t0: userVotesConnection');
     expect(query).toContain('t1: userVotesConnection');
     // Dashless, however the caller spelled the id.
     expect(query).toContain('objectId: "0004ff1e446e4c22a5a742163b21ef5b"');
-    expect(query).toContain(
-      `v0: userVotesConnection(condition: { objectId: "0004ff1e446e4c22a5a742163b21ef5b", userId: "${ADA}"`
-    );
-    // Totals, never the rows: a feed of popular topics would otherwise download every follower.
-    expect(query).not.toContain('nodes');
+    expect(query).toContain('nodes { userId spaceId }');
+    // The viewer's follow as cast in their own space, and only that.
+    expect(query).toContain(`userId: "${ADA}", spaceId: "${ADA}"`);
   });
 
   it('asks nothing about a viewer who is signed out', () => {
@@ -33,14 +31,34 @@ describe('topicFollowersQuery', () => {
 
     expect(query).toContain('t0: relationsConnection');
     expect(query).toContain('typeId: { is: "f374b8f2d33148a3a220ba3648992e93" }');
+    expect(query).toContain(`fromEntityId: { is: "${ADA}" }`);
     expect(query).not.toContain('userVotesConnection');
   });
 });
 
 describe('readTopicFollowers', () => {
-  it('takes the Interested total, and the viewer from their own count', () => {
-    expect(readTopicFollowers({ totalCount: 42 }, { totalCount: 1 }, ADA)).toEqual({ count: 42, viewerIndexed: true });
-    expect(readTopicFollowers({ totalCount: 42 }, { totalCount: 0 }, ADA)).toEqual({ count: 42, viewerIndexed: false });
+  it('counts a person once, however many Interested votes they hold on the topic', () => {
+    // Cast in their own space and again in another: one follower.
+    const followers = readTopicFollowers(
+      {
+        totalCount: 3,
+        nodes: [
+          { userId: ADA, spaceId: ADA },
+          { userId: ADA, spaceId: MARCUS },
+          { userId: MARCUS, spaceId: MARCUS },
+        ],
+      },
+      null
+    );
+
+    expect(followers.count).toBe(2);
+  });
+
+  it("ignores an Interested vote cast into someone else's space", () => {
+    // The permissionless action takes any space, so a vote elsewhere could otherwise be stacked.
+    const followers = readTopicFollowers({ totalCount: 1, nodes: [{ userId: ADA, spaceId: MARCUS }] }, null);
+
+    expect(followers.count).toBe(0);
   });
 
   it('counts a personal space once, however many Following rows it has', () => {
@@ -53,28 +71,32 @@ describe('readTopicFollowers', () => {
           { fromEntityId: MARCUS, spaceId: MARCUS },
         ],
       },
-      null,
-      ADA
+      null
     );
 
-    expect(followers).toEqual({ count: 2, viewerIndexed: true });
+    expect(followers.count).toBe(2);
   });
 
   it("ignores a Following relation written from someone else's entity", () => {
     // Anyone can write a relation *from* any entity into a space they control.
-    const followers = readTopicFollowers({ totalCount: 1, nodes: [{ fromEntityId: ADA, spaceId: MARCUS }] }, null, ADA);
+    const followers = readTopicFollowers({ totalCount: 1, nodes: [{ fromEntityId: ADA, spaceId: MARCUS }] }, null);
 
-    expect(followers).toEqual({ count: 0, viewerIndexed: false });
+    expect(followers.count).toBe(0);
   });
 
-  it("takes the server's total once there are more Following rows than were read", () => {
-    const followers = readTopicFollowers({ totalCount: 4200, nodes: [{ fromEntityId: ADA, spaceId: ADA }] }, null);
+  it('reads the viewer from their own-space total', () => {
+    expect(readTopicFollowers({ totalCount: 0, nodes: [] }, { totalCount: 1 }).viewerIndexed).toBe(true);
+    expect(readTopicFollowers({ totalCount: 0, nodes: [] }, { totalCount: 0 }).viewerIndexed).toBe(false);
+  });
+
+  it("takes the server's total once there are more rows than were read", () => {
+    const followers = readTopicFollowers({ totalCount: 4200, nodes: [{ userId: ADA, spaceId: ADA }] }, null);
 
     expect(followers.count).toBe(4200);
   });
 
   it('reads a missing connection as no followers', () => {
-    expect(readTopicFollowers(null, null, ADA)).toEqual({ count: 0, viewerIndexed: false });
+    expect(readTopicFollowers(null, null)).toEqual({ count: 0, viewerIndexed: false });
   });
 });
 

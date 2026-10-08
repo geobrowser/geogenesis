@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   pendingIds: new Set<string>(),
   followedIds: new Set<string>(),
   isLoadingFollows: false,
+  authReady: true,
+  authenticated: true,
   smartAccount: {} as object | null,
   personalSpaceId: 'personal-space' as string | null,
   isRegistered: true,
@@ -26,6 +28,9 @@ const mocks = vi.hoisted(() => ({
   observed: vi.fn(),
 }));
 
+vi.mock('@geogenesis/auth', () => ({
+  usePrivy: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated }),
+}));
 vi.mock('./use-follow-topics', () => ({
   useFollowTopics: () => ({
     follow: mocks.follow,
@@ -75,6 +80,8 @@ beforeEach(() => {
   mocks.pendingIds = new Set();
   mocks.followedIds = new Set();
   mocks.isLoadingFollows = false;
+  mocks.authReady = true;
+  mocks.authenticated = true;
   mocks.smartAccount = {};
   mocks.personalSpaceId = 'personal-space';
   mocks.isRegistered = true;
@@ -136,6 +143,7 @@ describe('FollowTopicButton', () => {
   });
 
   it('queues the follow and opens sign-in when signed out', () => {
+    mocks.authenticated = false;
     mocks.smartAccount = null;
     mocks.personalSpaceId = null;
     renderButton();
@@ -144,6 +152,28 @@ describe('FollowTopicButton', () => {
     expect(mocks.queue).toHaveBeenCalled();
     expect(mocks.promptSignIn).toHaveBeenCalledWith(undefined, { onCancel: mocks.cancel });
     expect(mocks.follow).not.toHaveBeenCalled();
+  });
+
+  it('waits rather than opening sign-in while a signed-in account is still loading', () => {
+    mocks.smartAccount = null;
+    mocks.personalSpaceId = null;
+    mocks.isLoadingPersonalSpace = true;
+    renderButton();
+    const button = screen.getByRole('button');
+
+    expect(button).toBeDisabled();
+    fireEvent.click(button);
+    expect(mocks.promptSignIn).not.toHaveBeenCalled();
+    expect(mocks.queue).not.toHaveBeenCalled();
+  });
+
+  it('waits while Privy is still starting', () => {
+    mocks.authReady = false;
+    mocks.authenticated = false;
+    mocks.smartAccount = null;
+    renderButton();
+
+    expect(screen.getByRole('button')).toBeDisabled();
   });
 
   it('says why when signed in with no personal space', () => {
@@ -177,6 +207,7 @@ describe('FollowTopicButton', () => {
   });
 
   it('draws a queued follow as Following, and a second press withdraws it', () => {
+    mocks.authenticated = false;
     mocks.smartAccount = null;
     mocks.personalSpaceId = null;
     mocks.isQueued = true;

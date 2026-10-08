@@ -700,9 +700,9 @@ export function FollowingTopics({ spaceId }: { spaceId: string }) {
       >
         {topics.map(({ id, meta }) => {
           const name = meta?.name ?? 'Untitled topic';
-          // A space the topic is published in. A follow carries none of its own: the space it
-          // was cast in is the follower's.
-          const homeSpaceId = meta?.spaceIds[0];
+          // The topic's own space. A follow carries none of its own: the space it was cast in is
+          // the follower's.
+          const homeSpaceId = meta?.homeSpaceId;
           const label = (
             <>
               <RailListThumb image={meta?.image} />

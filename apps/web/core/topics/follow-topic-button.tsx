@@ -1,5 +1,7 @@
 'use client';
 
+import { usePrivy } from '@geogenesis/auth';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -68,6 +70,7 @@ export function FollowTopicButton({
   const topicId = normId(topic.id);
   const { follow, unfollow, isPending } = useFollowTopics();
   const { topicIds, isLoading: isLoadingFollows } = useFollowedTopics();
+  const { ready: authReady, authenticated } = usePrivy();
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId: anyPersonalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
   // An Interested follow is cast from the personal space on chain, so one not yet registered there
@@ -116,9 +119,12 @@ export function FollowTopicButton({
   const saving = isPending(topicId);
   const shownFollowed = followed || queuedFollow.isQueued;
   const signedIn = Boolean(smartAccount);
+  // Not yet known to be signed out: Privy still starting, or signed in with the account still
+  // loading. A press then would open sign-in for someone already signed in, so it waits instead.
+  const authResolving = !authReady || (authenticated && !signedIn);
   const noPersonalSpace =
     signedIn && !personalSpaceId && !isLoadingPersonalSpace && !isAccountSetupPending && !queuedFollow.isQueued;
-  const disabled = noPersonalSpace || (Boolean(personalSpaceId) && isLoadingFollows);
+  const disabled = authResolving || noPersonalSpace || (Boolean(personalSpaceId) && isLoadingFollows);
 
   const onPress = (event: React.MouseEvent) => {
     // Cards are links and side-panel triggers underneath; the press is the button's alone.

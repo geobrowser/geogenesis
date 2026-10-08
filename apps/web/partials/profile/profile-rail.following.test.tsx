@@ -14,7 +14,7 @@ const TOPIC_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const TOPIC_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const TOPIC_HOME = '33333333333333333333333333333333';
 
-type Meta = { name: string | null; image: string; spaceIds: string[] };
+type Meta = { name: string | null; image: string; homeSpaceId: string | null };
 
 const mocks = vi.hoisted(() => ({
   // Inlined literal (not OWNER_SPACE): vi.hoisted runs before the module's const declarations.
@@ -134,7 +134,7 @@ describe('Following row data', () => {
   it('lists Interested follows, which have no Following relation rows', async () => {
     // #2685 read the relation rows, so with the Interested flag on the row never appeared.
     mocks.topicIds = [TOPIC_A];
-    mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', spaceIds: [TOPIC_HOME] });
+    mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', homeSpaceId: TOPIC_HOME });
     renderFollowing();
     await userEvent.click(screen.getByLabelText('Following 1 topic'));
 
@@ -143,8 +143,8 @@ describe('Following row data', () => {
 
   it('orders the list by name', async () => {
     mocks.topicIds = [TOPIC_A, TOPIC_B];
-    mocks.metadata.set(TOPIC_A, { name: 'Zoning', image: 'ipfs://a', spaceIds: [TOPIC_HOME] });
-    mocks.metadata.set(TOPIC_B, { name: 'Energy', image: 'ipfs://b', spaceIds: [TOPIC_HOME] });
+    mocks.metadata.set(TOPIC_A, { name: 'Zoning', image: 'ipfs://a', homeSpaceId: TOPIC_HOME });
+    mocks.metadata.set(TOPIC_B, { name: 'Energy', image: 'ipfs://b', homeSpaceId: TOPIC_HOME });
     renderFollowing();
     await userEvent.click(screen.getByLabelText('Following 2 topics'));
 
@@ -165,7 +165,7 @@ describe('Following row count and stack', () => {
       mocks.metadata.set(toEntityId, {
         name: `Topic ${toEntityId[0]}`,
         image: `ipfs://${toEntityId}`,
-        spaceIds: [TOPIC_HOME],
+        homeSpaceId: TOPIC_HOME,
       });
     }
   });
@@ -185,12 +185,12 @@ describe('Following row count and stack', () => {
 describe('Following dropdown', () => {
   beforeEach(() => {
     mocks.topicIds = [TOPIC_A, TOPIC_B];
-    mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', spaceIds: [TOPIC_HOME] });
+    mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', homeSpaceId: TOPIC_HOME });
     // No image → the placeholder stands in, in both stack and list.
     mocks.metadata.set(TOPIC_B, {
       name: 'Russia-Ukraine war',
       image: PLACEHOLDER_SPACE_IMAGE,
-      spaceIds: [TOPIC_HOME],
+      homeSpaceId: TOPIC_HOME,
     });
   });
 
@@ -229,7 +229,7 @@ describe('Following dropdown', () => {
 describe('Following unfollow control', () => {
   beforeEach(() => {
     mocks.topicIds = [TOPIC_A];
-    mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', spaceIds: [TOPIC_HOME] });
+    mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', homeSpaceId: TOPIC_HOME });
   });
 
   it('lets the owner unfollow a topic from the list', async () => {

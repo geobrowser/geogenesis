@@ -1,6 +1,9 @@
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+
 import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
+import { entityHomeSpaceId } from '~/core/utils/space/entity-home-space';
 
 import { graphql } from './graphql';
 import {
@@ -22,6 +25,8 @@ interface TopicMetadataNode {
   name: string | null;
   description: string | null;
   spaceIds: string[] | null;
+  /** The topic's name in every space that names it: where it is published, rather than cited. */
+  names?: { spaceId: string; text: string | null }[];
   relationsList: SpaceImageRelationNode[];
   spacesByTopicIdConnection: {
     totalCount: number;
@@ -39,8 +44,11 @@ export type TopicMetadata = {
   image: string;
   spaces: TopicUsage['spaces'];
   spacesCount: number;
-  /** Spaces the topic entity is published in — where its own page is. `spaces` are spaces whose topic it is. */
-  spaceIds: string[];
+  /**
+   * The space the topic's own page is in, by `entityHomeSpaceId`: a space that names it, before one
+   * that merely cites it. `spaces` are something else: spaces whose topic it is.
+   */
+  homeSpaceId: string | null;
 };
 
 const topicMetadataQuery = (topicIds: string[]) => `
@@ -50,6 +58,10 @@ const topicMetadataQuery = (topicIds: string[]) => `
       name
       description
       spaceIds
+      names: valuesList(filter: { propertyId: { is: ${JSON.stringify(SystemIds.NAME_PROPERTY)} } }) {
+        spaceId
+        text
+      }
       relationsList(filter: { typeId: { in: [${JSON.stringify(AVATAR_PROPERTY_ID)}, ${JSON.stringify(COVER_PROPERTY_ID)}] } }) {
         typeId
         toEntity {
@@ -109,7 +121,14 @@ export async function fetchTopicMetadata(topicIds: string[]): Promise<Map<string
         image: resolveSpaceImage(entity.relationsList),
         spaces: mergeTopicUsageSpaces(entity.spacesByTopicIdConnection.nodes),
         spacesCount: entity.spacesByTopicIdConnection.totalCount,
-        spaceIds: entity.spaceIds ?? [],
+        homeSpaceId: entityHomeSpaceId({
+          spaces: entity.spaceIds ?? [],
+          values: (entity.names ?? []).map(name => ({
+            property: { id: SystemIds.NAME_PROPERTY },
+            spaceId: name.spaceId,
+            value: name.text,
+          })),
+        }),
       },
     ])
   );

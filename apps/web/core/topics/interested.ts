@@ -14,12 +14,21 @@ export const INTERESTED_VOTE_KIND = 3;
 
 /**
  * A `userVotesConnection` condition for current Interested votes on entities, narrowed to an object,
- * a voter, or both. Vote type 0 only: a cleared Interested is its row rewritten to type 2.
+ * a voter, the space it was cast in, or any mix. Vote type 0 only: a cleared Interested is its row rewritten to type 2.
  */
-export function interestedVoteCondition({ objectId, userId }: { objectId?: string; userId?: string }): string {
+export function interestedVoteCondition({
+  objectId,
+  userId,
+  spaceId,
+}: {
+  objectId?: string;
+  userId?: string;
+  spaceId?: string;
+}): string {
   const narrowed = [
     objectId ? `objectId: ${JSON.stringify(objectId)}` : null,
     userId ? `userId: ${JSON.stringify(userId)}` : null,
+    spaceId ? `spaceId: ${JSON.stringify(spaceId)}` : null,
   ].filter(Boolean);
   return [...narrowed, `voteKind: ${INTERESTED_VOTE_KIND}`, 'voteType: 0', 'objectType: 0'].join(', ');
 }
