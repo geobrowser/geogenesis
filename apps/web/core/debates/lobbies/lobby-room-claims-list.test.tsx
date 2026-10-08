@@ -13,6 +13,7 @@ import {
 } from './lobby-room-claims-list';
 
 const mocks = vi.hoisted(() => ({
+  backfill: vi.fn(),
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -22,6 +23,15 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.snapshot,
+}));
+
+vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  useClaimResponseSummary: () => ({ indexedViewerDirection: null, isViewerResponseLoading: false }),
+}));
+
+vi.mock('../backfill-readiness-for-held-position', async importOriginal => ({
+  ...(await importOriginal<typeof import('../backfill-readiness-for-held-position')>()),
+  useBackfillReadinessForHeldPosition: mocks.backfill,
 }));
 
 // The card is tested on its own; here only what the list hands it matters.
@@ -137,5 +147,29 @@ describe('LobbyRoomClaimsList', () => {
     );
 
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('backfills readiness for the side the viewer holds, from geo-chat’s own row', () => {
+    const claim = entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)]);
+    render(<LobbyRoomClaimsList claims={[claim]} renderOffer={renderOffer} />);
+
+    expect(mocks.backfill).toHaveBeenCalledWith({
+      readiness: claim.readiness,
+      entityId: 'claim-1',
+      spaceId: 'space-1',
+      indexedPosition: null,
+    });
+  });
+
+  it('points at a live debate when there is no offer, and never draws one beside the offer', () => {
+    const live = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)]), activeDebate: true };
+    const { unmount } = render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} />);
+    expect(screen.getByRole('link', { name: 'Watch live' }).getAttribute('href')).toBe('/space/space-1/debates');
+    unmount();
+
+    const offered = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 1)]), activeDebate: true };
+    render(<LobbyRoomClaimsList claims={[offered]} renderOffer={renderOffer} />);
+    expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
+    expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
   });
 });

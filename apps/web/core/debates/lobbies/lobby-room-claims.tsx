@@ -13,8 +13,10 @@ import { useDebateActivity } from '../hooks';
 import { useCreateDebateRequest, useDebateRequests } from '../matchmaking/hooks';
 import { HubMessageNote, HubQueryState } from '../matchmaking/hub-states';
 import { RequestDebateControl } from '../request-debate-control';
+import { debateRequestGate } from '../request-gate';
 import {
   lobbyClaimRequestErrorMessage,
+  readinessDisabledMessage,
   useDebateLobbyClaims,
   useRefreshLobbyClaimsOnRefusal,
 } from './lobby-room-claims-hooks';
@@ -23,7 +25,6 @@ import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from '.
 export const LOBBY_ROOM_CLAIMS_COPY = {
   empty: 'Nobody here has taken a side on a claim yet.',
   recent: 'Nobody here has taken a side yet. These claims were voted on recently.',
-  confirming: 'Confirming your side…',
 } as const;
 
 /**
@@ -114,12 +115,26 @@ function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRo
     claimId: claim.claim_entity_id,
     spaceId: claim.space_id,
     viewerPosition: offer.viewerPosition,
+    indexedViewerPosition: offer.indexedPosition,
   });
   const refreshOnRefusal = useRefreshLobbyClaimsOnRefusal(lobbyId);
-  const blockedReason = claimRequestBlockedReason(activity, requests);
-  // geo-chat refuses the request until it holds the viewer's side, which a vote from this list
-  // reaches only once its response-indexed report returns and the list refetches.
-  const sideConfirming = readiness.viewer_response?.position !== offer.viewerPosition;
+
+  // A request is checked against a ready readiness row, so only a ready side counts as geo-chat's.
+  const gate = debateRequestGate({
+    chatPosition: readiness.viewer_debate_ready ? (readiness.viewer_response?.position ?? null) : null,
+    localPosition: offer.viewerPosition,
+    opponentReady: true,
+    indexingDelayed: offer.indexingDelayed,
+  });
+  // Only while the side on screen is geo-chat's (a newer vote clears the reason once it lands), and
+  // not for a withdrawn row the chain holds a side on again, which the card's backfill repairs.
+  const reason = readiness.readiness_disabled_reason;
+  const repairing = reason === 'claim_response_withdrawn' && offer.indexedPosition !== null;
+  const readinessBlock =
+    readiness.viewer_response?.position === offer.viewerPosition && !repairing
+      ? readinessDisabledMessage(reason)
+      : null;
+  const blockedReason = claimRequestBlockedReason(activity, requests) ?? readinessBlock ?? undefined;
 
   return (
     <RequestDebateControl
@@ -134,11 +149,11 @@ function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRo
           }
         )
       }
-      disabled={Boolean(blockedReason)}
+      disabled={Boolean(blockedReason) || !gate.canRequest}
       blockedReason={blockedReason}
       isRequesting={createRequest.isPending}
-      pending={sideConfirming}
-      pendingLabel={LOBBY_ROOM_CLAIMS_COPY.confirming}
+      pending={!readinessBlock && gate.pending}
+      pendingLabel={gate.pendingLabel}
       requestError={
         lobbyClaimRequestErrorMessage(createRequest.error) ??
         debateRequestErrorMessage(createRequest.error, offer.viewerPosition)

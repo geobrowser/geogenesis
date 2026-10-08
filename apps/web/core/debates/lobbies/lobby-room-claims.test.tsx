@@ -5,12 +5,15 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyClaim, DebateLobbyClaims, DebateLobbyView } from '../api';
+import { REQUEST_PENDING_LABEL } from '../request-gate';
 import { LOBBY_ROOM_CLAIMS_COPY, LobbyRoomClaims, lobbyRoomClaimFrom } from './lobby-room-claims';
 
 const mocks = vi.hoisted(() => ({
   data: undefined as DebateLobbyClaims | undefined,
   mutate: vi.fn(),
   recover: vi.fn(),
+  backfill: vi.fn(),
+  indexed: null as 'positive' | 'negative' | null,
   refreshOnRefusal: vi.fn(),
   activity: undefined as { available_to_debate: boolean; outbound_request?: unknown } | undefined,
   snapshot: { status: 'idle', pending: null, runId: null } as {
@@ -36,6 +39,15 @@ vi.mock('./lobby-room-claims-hooks', async importOriginal => ({
 vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/claims/browse/use-claim-matchup')>()),
   useMissingIntentRecovery: () => mocks.recover,
+}));
+
+vi.mock('../backfill-readiness-for-held-position', async importOriginal => ({
+  ...(await importOriginal<typeof import('../backfill-readiness-for-held-position')>()),
+  useBackfillReadinessForHeldPosition: mocks.backfill,
+}));
+
+vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  useClaimResponseSummary: () => ({ indexedViewerDirection: mocks.indexed, isViewerResponseLoading: false }),
 }));
 
 vi.mock('../hooks', () => ({ useDebateActivity: () => ({ data: mocks.activity }) }));
@@ -118,6 +130,8 @@ afterEach(() => {
   mocks.data = undefined;
   mocks.mutate.mockReset();
   mocks.recover.mockReset();
+  mocks.backfill.mockReset();
+  mocks.indexed = null;
   mocks.refreshOnRefusal.mockReset();
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
 });
@@ -153,8 +167,53 @@ describe('LobbyRoomClaims', () => {
     mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', null, 1)] };
     render(<LobbyRoomClaims lobby={lobby} />);
 
-    const offer = screen.getByRole('button', { name: LOBBY_ROOM_CLAIMS_COPY.confirming });
+    const offer = screen.getByRole('button', { name: REQUEST_PENDING_LABEL });
     expect(offer.hasAttribute('disabled')).toBe(true);
+  });
+
+  it('holds the offer while geo-chat has the side but not a ready row for it', () => {
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [{ ...row('a', true, 1), viewer_debate_ready: false }],
+    };
+    render(<LobbyRoomClaims lobby={lobby} />);
+
+    expect(screen.queryByRole('button', { name: 'Request debate' })).toBeNull();
+    expect(screen.getByRole('button', { name: REQUEST_PENDING_LABEL }).hasAttribute('disabled')).toBe(true);
+  });
+
+  it('says why when geo-chat disabled the side, instead of waiting', () => {
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [
+        { ...row('a', true, 1), viewer_debate_ready: false, readiness_disabled_reason: 'claim_response_withdrawn' },
+      ],
+    };
+    render(<LobbyRoomClaims lobby={lobby} />);
+
+    const button = screen.getByRole('button', { name: 'Request debate' });
+    expect(button.hasAttribute('disabled')).toBe(true);
+    expect(screen.queryByRole('button', { name: REQUEST_PENDING_LABEL })).toBeNull();
+    fireEvent.click(button);
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('waits for the backfill on a withdrawn row the viewer has re-answered on chain', () => {
+    mocks.indexed = 'positive';
+    const withdrawn = {
+      ...row('a', null, 1),
+      viewer_debate_ready: false,
+      readiness_disabled_reason: 'claim_response_withdrawn',
+    };
+    // geo-chat has no side for the viewer, so only Disagree people are requestable against Agree.
+    withdrawn.positions = withdrawn.positions.map(side => ({ ...side, requestable_count: side.position ? 0 : 1 }));
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [withdrawn] };
+    render(<LobbyRoomClaims lobby={lobby} />);
+
+    expect(mocks.backfill).toHaveBeenCalledWith(expect.objectContaining({ indexedPosition: true }));
+    expect(screen.getByRole('button', { name: REQUEST_PENDING_LABEL }).hasAttribute('disabled')).toBe(true);
   });
 
   it('holds the offer while the viewer is not available', () => {

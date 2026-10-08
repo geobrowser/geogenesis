@@ -2,7 +2,10 @@
 
 import * as React from 'react';
 
+import { WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
+import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';
@@ -15,6 +18,7 @@ import type {
   DebateParticipantSummary,
   MatchmakingReadiness,
 } from '../api';
+import { trustedIndexedPosition, useBackfillReadinessForHeldPosition } from '../backfill-readiness-for-held-position';
 import { HubCardList } from '../matchmaking/hub-motion';
 import { MatchmakingClaimCard } from '../matchmaking/matchmaking-claim-card';
 import { hostsLabel, personName } from './lobby-format';
@@ -39,6 +43,10 @@ export type LobbyRoomOffer = {
   viewerPosition: boolean;
   /** People on the other side the viewer can request. */
   requestableCount: number;
+  /** The chain's side for the viewer, or null where it can't be trusted yet. */
+  indexedPosition: boolean | null;
+  /** The viewer's response has been slow to index. */
+  indexingDelayed: boolean;
 };
 
 const FACES_SHOWN = 3;
@@ -67,43 +75,71 @@ function LobbyRoomClaimCard({
   entry: LobbyRoomClaim;
   renderOffer: (offer: LobbyRoomOffer) => React.ReactNode;
 }) {
-  const viewerPosition = useViewerPosition(entry);
+  const { claim } = entry;
+  // The card holds its own response reads until it is near the viewport; this one follows it.
+  const { ref, nearViewport } = useNearViewport();
+  const indexing = useEntityResponseIndexingSnapshot({
+    entityId: claim.claim_entity_id,
+    entityName: claim.claim,
+    spaceId: claim.space_id,
+    responseKind: CLAIM_RESPONSE_KIND,
+  });
+  const summary = useClaimResponseSummary(claim.claim_entity_id, claim.space_id, CLAIM_RESPONSE_KIND, nearViewport);
+  const indexedPosition = trustedIndexedPosition(
+    summary,
+    indexing.status === 'reconciling' || indexing.status === 'delayed'
+  );
+  // The viewer's own response while it publishes and indexes; then geo-chat's, or the chain's where
+  // geo-chat holds none (a withdrawn row the viewer has since re-answered). The card draws the same.
+  const viewerPosition =
+    indexing.status !== 'idle' && indexing.pending
+      ? indexing.pending.expectedResponse === null
+        ? null
+        : indexing.pending.expectedResponse === 'positive'
+      : (entry.readiness.viewer_response?.position ?? indexedPosition);
+  // A held side geo-chat hasn't marked ready can't send or receive a request.
+  useBackfillReadinessForHeldPosition({
+    readiness: entry.readiness,
+    entityId: claim.claim_entity_id,
+    spaceId: claim.space_id,
+    indexedPosition,
+  });
   const opposing = roomSideOpposing(entry.positions, viewerPosition);
   const requestableCount = opposing?.requestable_count ?? 0;
   const offer =
-    viewerPosition !== null && requestableCount > 0 ? renderOffer({ entry, viewerPosition, requestableCount }) : null;
+    viewerPosition !== null && requestableCount > 0
+      ? renderOffer({
+          entry,
+          viewerPosition,
+          requestableCount,
+          indexedPosition,
+          indexingDelayed: indexing.status === 'delayed',
+        })
+      : null;
 
   return (
     <MatchmakingClaimCard
-      claim={entry.claim}
+      ref={ref}
+      claim={claim}
       positions={entry.positions}
       readiness={entry.readiness}
       activeDebate={entry.activeDebate}
       answersMayComeFromIndex
-      // Keeps the meta row's height when there is no offer.
-      endSlot={offer ?? <span className="h-5 shrink-0" aria-hidden />}
+      // Never the card's default slot: its request would not be lobby-scoped. The spacer keeps the
+      // meta row's height.
+      endSlot={
+        offer ??
+        (entry.activeDebate ? (
+          <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
+        ) : (
+          <span className="h-5 shrink-0" aria-hidden />
+        ))
+      }
       footer={
         opposing && opposing.participants.length > 0 ? <DisagreeingInRoom people={opposing.participants} /> : undefined
       }
     />
   );
-}
-
-/**
- * The viewer's side: their own response while it publishes and indexes, geo-chat's otherwise. The
- * card draws the same optimistic side, so the offer and the footer follow a vote at once.
- */
-function useViewerPosition(entry: LobbyRoomClaim): boolean | null {
-  const snapshot = useEntityResponseIndexingSnapshot({
-    entityId: entry.claim.claim_entity_id,
-    entityName: entry.claim.claim,
-    spaceId: entry.claim.space_id,
-    responseKind: CLAIM_RESPONSE_KIND,
-  });
-  if (snapshot.status !== 'idle' && snapshot.pending) {
-    return snapshot.pending.expectedResponse === null ? null : snapshot.pending.expectedResponse === 'positive';
-  }
-  return entry.readiness.viewer_response?.position ?? null;
 }
 
 /** The side opposite the viewer's, or null when they hold none. */

@@ -51,3 +51,16 @@ export function lobbyClaimRequestErrorMessage(error: unknown) {
       return null;
   }
 }
+
+/** Why geo-chat won't use the viewer's held side for a request, or null to wait it out. */
+export function readinessDisabledMessage(reason: string | null) {
+  switch (reason) {
+    case null:
+      return null;
+    case 'claim_response_withdrawn':
+    case 'claim_response_kind_changed':
+      return 'Choose Agree or Disagree again to debate this claim.';
+    default:
+      return 'You can’t request a debate on this claim right now.';
+  }
+}
