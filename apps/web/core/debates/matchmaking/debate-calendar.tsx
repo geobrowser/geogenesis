@@ -38,6 +38,7 @@ import {
   type CalendarPicks,
   NO_PICKS,
   type PanelTopic,
+  calendarPicksKey,
   claimListRows,
   hasPicks,
   hiddenPicksSentence,
@@ -73,13 +74,7 @@ import {
   weekDays,
   weekStart,
 } from './debate-calendar-model';
-import {
-  CALENDAR_FROM_PARAM,
-  CALENDAR_PATH,
-  CALENDAR_VIEW_PARAM,
-  readCalendarPicks,
-  writeCalendarPicks,
-} from './debate-calendar-route';
+import { CALENDAR_FROM_PARAM, CALENDAR_PATH, CALENDAR_VIEW_PARAM } from './debate-calendar-route';
 import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch } from './disagreement-counts';
@@ -94,6 +89,7 @@ import { claimName } from './person-disagreements';
 import { isPersonId } from './person-records-document';
 import { SpaceFilterPills } from './space-filter-pills';
 import { claimTopicsById, topicsFor } from './topic-facets';
+import { useCalendarPicks } from './use-calendar-picks';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useLiveRequestBlock } from './use-live-request-block';
 import { usePersonFacts } from './use-person-facts';
@@ -245,24 +241,12 @@ function DebateCalendarBody({
   const popoverPortal = useElevatedPopoverPortal();
 
   const now = useMinuteClock();
-  const searchParams = useSearchParams();
-  const router = useRouter();
-  const pathname = usePathname();
 
   const [weekOffset, setWeekOffset] = React.useState(0);
   const [spaceIds, setSpaceIds] = React.useState<string[]>(EMPTY_SPACE_IDS);
 
-  // The panel's picks live in the URL (GEO-3220), so a narrowed week survives a reload and can be
-  // shared. The URL is the only copy: every write goes through it and every read comes from it.
-  const picks = React.useMemo(() => readCalendarPicks(searchParams), [searchParams]);
-  const setPicks = React.useCallback(
-    (next: CalendarPicks) => {
-      const params = writeCalendarPicks(new URLSearchParams(searchParams?.toString()), next);
-      const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : (pathname ?? CALENDAR_PATH), { scroll: false });
-    },
-    [pathname, router, searchParams]
-  );
+  // The panel's picks (GEO-3220), mirrored to the URL so a narrowed week reloads and shares.
+  const [picks, setPicks] = useCalendarPicks();
   const [panelTab, setPanelTab] = React.useState<NarrowTab | null>(null);
   // Everyone's positions are read the first time the panel opens, not on page load: the calendar
   // with nothing picked needs only the viewer's own claims. A link that arrives with a claim picked
@@ -419,11 +403,22 @@ function DebateCalendarBody({
     [allPositionsState, matchesUnavailable]
   );
   const judgedPicks = React.useMemo(() => judgeable(effectivePicks), [effectivePicks, judgeable]);
-  // A pick the data to judge it has not arrived for yet: the week waits rather than drawing people
-  // the pick is about to hide.
-  const picksPending =
-    (judgedPicks.claims.length > 0 && allPositionsState === 'pending') ||
-    (judgedPicks.matchesOnly && judgedPicks.claims.length === 0 && matchesLoading);
+  /**
+   * Whether picks are waiting on data that has not arrived: claims on everyone's positions, Matches
+   * only alone on the viewer's matches. One answer for the week, the panel's lists and a phone's
+   * "Show N people", so none of them reads "nobody" while the rest still waits.
+   */
+  const picksPendingFor = React.useCallback(
+    (withPicks: CalendarPicks) => {
+      const judged = judgeable(guardPicks(withPicks));
+      return (
+        (judged.claims.length > 0 && allPositionsState === 'pending') ||
+        (judged.matchesOnly && judged.claims.length === 0 && matchesLoading)
+      );
+    },
+    [allPositionsState, guardPicks, judgeable, matchesLoading]
+  );
+  const picksPending = picksPendingFor(picks);
 
   // The space filter narrows client-side unless the server already did, in which case its
   // membership answer stands.
@@ -707,7 +702,8 @@ function DebateCalendarBody({
   );
   const panelRowsFor = React.useCallback(
     (withPicks: CalendarPicks): { claims: PanelClaim[]; people: PanelPerson[] } => {
-      const guarded = guardPicks(withPicks);
+      // Judged as the week judges them, so a failed read hides nobody in the lists either.
+      const guarded = judgeable(guardPicks(withPicks));
       const opponentsOf = (profileKeys: ReadonlySet<string>): ClaimOpponent[] =>
         [...profileKeys]
           .flatMap(profileKey => {
@@ -727,6 +723,7 @@ function DebateCalendarBody({
     [
       claimSummaries,
       guardPicks,
+      judgeable,
       panelClaimEntitiesLoading,
       panelClaimNames,
       personFacts,
@@ -775,11 +772,9 @@ function DebateCalendarBody({
     },
     [freeInWeek, slotsByUser]
   );
-  // Unknown while a draft's claims are still waiting on everyone's positions, rather than a 0.
+  // Unknown while a draft's picks still wait on their data, rather than a 0.
   const shownCountFor = (withPicks: CalendarPicks) =>
-    withPicks.claims.length > 0 && allPositionsState === 'pending'
-      ? null
-      : drawnInWeek(weekOffset, includeWith(guardPicks(withPicks)));
+    picksPendingFor(withPicks) ? null : drawnInWeek(weekOffset, includeWith(guardPicks(withPicks)));
   const drawnInOtherWeek = React.useMemo(
     () => drawnInWeek(otherWeekOffset, include),
     [drawnInWeek, include, otherWeekOffset]
@@ -789,7 +784,7 @@ function DebateCalendarBody({
   // picking someone free only next week should show them, not an empty week. Once per change, so
   // moving back by hand afterwards sticks. Only after everything the picks are judged on has landed,
   // or a week still loading would read as empty.
-  const picksKey = `${effectivePicks.people.join()}|${effectivePicks.claims.join()}|${effectivePicks.matchesOnly}`;
+  const picksKey = calendarPicksKey(effectivePicks);
   const settledPicksKey = React.useRef<string | null>(null);
   // Settled only on picks the data could judge: a failed read must not use up the one move it gets.
   const picksSettled =
@@ -878,7 +873,9 @@ function DebateCalendarBody({
         onPicksChange={onPicksChange}
         claims={rows.claims}
         people={rows.people}
-        loading={panelTab === 'claims' && allPositionsState === 'pending'}
+        // The Claims list is everyone's positions; the People list waits only on what its picks need.
+        loading={panelTab === 'claims' ? allPositionsState === 'pending' : picksPendingFor(withPicks)}
+        unavailable={panelTab === 'claims' && allPositionsState === 'failed'}
         viewerHasPositions={viewerHasPositions}
         labelsById={labelsById}
         popoverPortal={portal}

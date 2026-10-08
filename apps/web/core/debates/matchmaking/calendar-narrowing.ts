@@ -26,6 +26,11 @@ export type CalendarPicks = {
 
 export const NO_PICKS: CalendarPicks = { people: [], claims: [], matchesOnly: false };
 
+/** One string per distinct set of picks, for telling a change of picks from a re-render. */
+export function calendarPicksKey(picks: CalendarPicks): string {
+  return `${picks.people.join()}|${picks.claims.join()}|${picks.matchesOnly}`;
+}
+
 export function hasPicks(picks: CalendarPicks): boolean {
   return picks.people.length > 0 || picks.claims.length > 0 || picks.matchesOnly;
 }

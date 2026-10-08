@@ -131,8 +131,10 @@ type BodyProps = {
   onPicksChange: (picks: CalendarPicks) => void;
   claims: PanelClaim[];
   people: PanelPerson[];
-  /** Everyone's positions are still loading, the first time the panel opens. */
+  /** What this tab's list is drawn from is still loading. */
   loading: boolean;
+  /** Everyone's positions failed to load, so the Claims list has nothing true to say yet. */
+  unavailable?: boolean;
   /** `false` when the viewer holds no position, `null` while that is unknown. */
   viewerHasPositions: boolean | null;
   labelsById: Map<string, SpaceLabel>;
@@ -161,6 +163,7 @@ export function CalendarNarrowPanelBody({
   claims,
   people,
   loading,
+  unavailable = false,
   viewerHasPositions,
   labelsById,
   popoverPortal,
@@ -328,6 +331,10 @@ export function CalendarNarrowPanelBody({
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-2">
         {loading ? (
           <PanelSkeleton />
+        ) : unavailable ? (
+          <Text as="p" variant="footnote" color="grey-04" className="px-2 py-4">
+            Couldn&rsquo;t load everyone&rsquo;s positions. Trying again&hellip;
+          </Text>
         ) : listCount === 0 ? (
           <div className="flex flex-col items-start gap-3 px-2 py-4">
             <Text as="p" variant="footnote" color="grey-04">

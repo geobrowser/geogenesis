@@ -53,9 +53,19 @@ const mocks = vi.hoisted(() => ({
   respond: vi.fn(),
   claimTopics: new Map<string, { id: string; name: string }[]>(),
   paramListeners: new Set<() => void>(),
+  // Next lands a replace in useSearchParams a beat later; deferred, writes wait for `flushRouter`.
+  routerDeferred: false,
+  routerQueue: [] as string[],
+  positionsLoading: false,
+  matchesLoading: false,
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
+function setUrl(href: string) {
+  mocks.searchParams = new URLSearchParams(href.split('?')[1] ?? '');
+  for (const listener of mocks.paramListeners) listener();
+}
+
 // The URL is the panel's state (GEO-3220), so a replace has to land the way Next's does: new params,
 // and a render that reads them.
 vi.mock('next/navigation', async () => {
@@ -70,8 +80,8 @@ vi.mock('next/navigation', async () => {
     useRouter: () => ({
       replace: (href: string, options?: unknown) => {
         mocks.routerReplace(href, options);
-        mocks.searchParams = new URLSearchParams(href.split('?')[1] ?? '');
-        for (const listener of mocks.paramListeners) listener();
+        if (mocks.routerDeferred) mocks.routerQueue.push(href);
+        else setUrl(href);
       },
     }),
   };
@@ -85,8 +95,8 @@ vi.mock('../participant-positions', () => ({
       for (const row of mocks.positions) byClaim.set(row.claimId, [...(byClaim.get(row.claimId) ?? []), row]);
     }
     return {
-      byClaim,
-      isLoading: false,
+      byClaim: mocks.positionsLoading ? new Map() : byClaim,
+      isLoading: mocks.positionsLoading,
       isPlaceholderData: mocks.positionsPlaceholder,
       isFetching: mocks.positionsPlaceholder,
       error: mocks.positionsError,
@@ -233,6 +243,7 @@ vi.mock('./use-person-facts', () => ({
     matchesKnown: true,
     viewerHasPositions: mocks.viewerHasPositions,
     matchesUnavailable: mocks.matchesUnavailable,
+    matchesLoading: mocks.matchesLoading,
     matchingSpaceIds: [],
     matchingClaimNamesById: new Map(),
     matchingClaimsLoading: false,
@@ -402,6 +413,10 @@ beforeEach(() => {
     matchesUnavailable: false,
     claimEntitiesLoading: false,
     profileOpenOptions: [],
+    routerDeferred: false,
+    routerQueue: [],
+    positionsLoading: false,
+    matchesLoading: false,
     claimNames: new Map(),
     claimTopics: new Map(),
   });
@@ -1272,6 +1287,74 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 
     expect(mocks.profileOpenOptions.length).toBeGreaterThan(0);
     expect(mocks.profileOpenOptions.every(options => (options as { lazy?: boolean })?.lazy === true)).toBe(true);
+  });
+
+  it('keeps every pick made faster than the URL can update', () => {
+    mocks.routerDeferred = true;
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Elena' }));
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Marco' }));
+    // Both ticked before either write has landed.
+    expect(within(panel()).getByRole('checkbox', { name: 'Elena' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(panel()).getByRole('checkbox', { name: 'Marco' })).toHaveAttribute('aria-checked', 'true');
+
+    // The writes land one at a time. The first is an echo of a write already superseded: adopting
+    // it would untick Marco.
+    const [first, second] = mocks.routerQueue.splice(0);
+    act(() => setUrl(first));
+    expect(within(panel()).getByRole('checkbox', { name: 'Marco' })).toHaveAttribute('aria-checked', 'true');
+    act(() => setUrl(second));
+    expect(mocks.searchParams.get('people')).toBe(`${PROFILE('11')},${PROFILE('12')}`);
+    expect(within(panel()).getByRole('checkbox', { name: 'Elena' })).toHaveAttribute('aria-checked', 'true');
+    expect(within(panel()).getByRole('checkbox', { name: 'Marco' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('follows the URL when it changes from outside, as on Back', () => {
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Elena' }));
+
+    act(() => setUrl(`/matchmaking/calendar?people=${PROFILE('12')}`));
+
+    expect(within(panel()).getByRole('checkbox', { name: 'Elena' })).toHaveAttribute('aria-checked', 'false');
+    expect(within(panel()).getByRole('checkbox', { name: 'Marco' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('keeps People loading, not empty, while a picked claim waits on everyone’s positions', () => {
+    mocks.positionsLoading = true;
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}` });
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    expect(within(panel()).getByLabelText('Loading')).toBeInTheDocument();
+    expect(within(panel()).queryByText(/Nobody on the calendar/)).not.toBeInTheDocument();
+  });
+
+  it('lists everyone, and says why on Claims, when everyone’s positions fail to load', () => {
+    mocks.positionsError = new Error('graph down');
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}` });
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    // The People list judges picks as the week does: the failed claim pick hides nobody.
+    expect(within(panel()).getByRole('checkbox', { name: 'Ana' })).toBeInTheDocument();
+    fireEvent.click(within(panel()).getByRole('tab', { name: /Claims/ }));
+    expect(within(panel()).getByText(/Couldn’t load everyone’s positions\. Trying again/)).toBeInTheDocument();
+  });
+
+  it('does not count a phone draft as 0 while Matches only waits on your matches', () => {
+    mocks.isPhone = true;
+    mocks.matchesLoading = true;
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+    const sheet = screen.getByRole('dialog', { name: 'Narrow the calendar' });
+
+    fireEvent.click(within(sheet).getByRole('switch', { name: 'Matches only' }));
+
+    expect(within(sheet).getByRole('button', { name: 'Show people' })).toBeInTheDocument();
+    expect(within(sheet).queryByRole('button', { name: /Show 0 people/ })).not.toBeInTheDocument();
   });
 
   it('keeps picks from the URL on a reload', () => {
