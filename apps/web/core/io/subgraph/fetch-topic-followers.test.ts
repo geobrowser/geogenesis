@@ -101,6 +101,24 @@ describe('readTopicFollowers', () => {
 });
 
 describe('followerCountForViewer', () => {
+  it('drops a viewer who held Interested in several spaces by exactly one when they unfollow', () => {
+    // Copilot's case: the viewer's votes in two spaces must not count, or be subtracted, twice.
+    const followers = readTopicFollowers(
+      {
+        totalCount: 3,
+        nodes: [
+          { userId: ADA, spaceId: ADA },
+          { userId: ADA, spaceId: MARCUS },
+          { userId: MARCUS, spaceId: MARCUS },
+        ],
+      },
+      { totalCount: 1 }
+    );
+
+    expect(followerCountForViewer(followers, true)).toBe(2);
+    expect(followerCountForViewer(followers, false)).toBe(1);
+  });
+
   it('adds the viewer as soon as they follow, before the indexer has them', () => {
     expect(followerCountForViewer({ count: 1, viewerIndexed: false }, true)).toBe(2);
   });
