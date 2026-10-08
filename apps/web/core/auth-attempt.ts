@@ -13,9 +13,17 @@ export type AuthAttempt = {
   startedAt: number;
   openedAt?: number;
   endedAt?: number;
-  outcome?: 'signed_up' | 'signed_in' | 'closed' | 'superseded';
+  /**
+   * How the attempt ended. `closed` is a dialog dismissed before anyone signed in. The two `left_after_*`
+   * outcomes are a dialog exited *after* Privy had signed someone in — a new account
+   * (`left_after_sign_up`) or an existing one — which Privy then signs back out (GEO-3243). They were
+   * recorded as `closed`, so a created account read as an abandoned sign-in.
+   */
+  outcome?: 'signed_up' | 'signed_in' | 'closed' | 'superseded' | 'left_after_sign_up' | 'left_after_sign_in';
   properties: AnalyticsProperties;
   actionSucceeded?: boolean;
+  /** `step:outcome` pairs of onboarding already reported for this attempt; see `trackAuthOnboarding`. */
+  onboardingReported?: string[];
 };
 let memory: AuthAttempt | undefined;
 // sessionStorage can be copied into another tab. Only this document's own presses
@@ -182,9 +190,17 @@ export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger
   save(attempt);
   captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
 }
+/** Outcomes only the document that started the attempt can record: the visitor left this one. */
+const ENDED_BY_LEAVING: ReadonlySet<NonNullable<AuthAttempt['outcome']>> = new Set([
+  'closed',
+  'superseded',
+  'left_after_sign_up',
+  'left_after_sign_in',
+]);
+
 export function finishAuthAttempt(outcome: NonNullable<AuthAttempt['outcome']>, attempt = currentAuthAttempt()) {
   if (!attempt || attempt.endedAt) return;
-  if ((outcome === 'closed' || outcome === 'superseded') && attempt.id !== ownedAttemptId) return;
+  if (ENDED_BY_LEAVING.has(outcome) && attempt.id !== ownedAttemptId) return;
   attempt.endedAt = Date.now();
   attempt.outcome = outcome;
   save(attempt);
@@ -232,6 +248,13 @@ export function marketingAuthProperties(search: string): AnalyticsProperties {
 export function trackAuthOnboarding(step: string, outcome: 'viewed' | 'completed' | 'dismissed' | 'failed') {
   const attempt = currentAuthAttempt();
   if (!attempt || !['signed_up', 'signed_in'].includes(attempt.outcome ?? '')) return;
+  // Once per attempt. Two reporters can see the same moment — the personal space runner can resolve
+  // one creation twice when its effect re-runs mid-flight, by design (GEO-3243) — and a duplicate
+  // inflates raw counts while saying nothing new.
+  const reported = `${step}:${outcome}`;
+  if (attempt.onboardingReported?.includes(reported)) return;
+  attempt.onboardingReported = [...(attempt.onboardingReported ?? []), reported];
+  save(attempt, false);
   captureAuthEvent('auth_onboarding_progress', { ...attemptProperties(attempt), onboarding_step: step, outcome });
 }
 

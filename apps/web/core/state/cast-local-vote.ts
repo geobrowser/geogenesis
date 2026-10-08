@@ -2,7 +2,7 @@
 
 import type { ActionContext } from '~/core/action-context';
 import { recordAction } from '~/core/analytics-operations';
-import type { ResponseKind } from '~/core/responses/entity-response';
+import { type ResponseKind, voteOutcomeProperties } from '~/core/responses/entity-response';
 
 import { type LocalVoteChange, type LocalVoteDirection, readLocalVotes, toggleLocalVote } from './local-votes';
 import {
@@ -41,12 +41,16 @@ export function castLocalVote({
   // The visit they voted in is not the "return visit" the sheet waits for.
   markPromptedThisSession();
   try {
+    const opposite = direction === 'positive' ? 'negative' : 'positive';
     recordAction('local_vote', attribution, {
-      vote_direction: change.action === 'remove' ? 'none' : direction === 'positive' ? 'up' : 'down',
-      vote_action: change.action,
-      response_kind: responseKind,
-      entity_id: entityId,
-      space_id: spaceId,
+      // The same fields a vote published from an account carries, so the two compare directly.
+      ...voteOutcomeProperties({
+        responseKind,
+        direction: change.action === 'remove' ? 'clear' : direction,
+        previousResponse: change.action === 'cast' ? null : change.action === 'switch' ? opposite : direction,
+        entityId,
+        spaceId,
+      }),
       local_vote_count: change.count,
     });
   } catch {

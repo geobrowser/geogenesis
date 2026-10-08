@@ -29,8 +29,27 @@ export function beginPrivyAuth(
   return beginAuthAttempt(properties);
 }
 
-export function cancelPrivyAuth() {
-  finishAuthAttempt('closed');
+/** Privy's account when its flow was exited: the signed-in user, or null if nobody had signed in. */
+export type ExitedFlowAccount = { createdAt?: Date | string | null } | null;
+
+/** Creation time is the server's, the attempt's start the device's: the same tolerance as signup visitors. */
+const CREATION_CLOCK_SKEW_MS = 60_000;
+
+/**
+ * How an exited sign-in ended (GEO-3243). Exiting Privy's flow after the email code has been accepted
+ * still leaves an account behind — a new one, if this attempt created it — so it is not a sign-in the
+ * visitor gave up on, and recording it as `closed` hid every such account from the funnel.
+ */
+function exitOutcome(account: ExitedFlowAccount) {
+  if (!account) return 'closed' as const;
+  const attempt = currentAuthAttempt();
+  const created = account.createdAt ? new Date(account.createdAt).getTime() : NaN;
+  const createdHere = attempt && Number.isFinite(created) && created >= attempt.startedAt - CREATION_CLOCK_SKEW_MS;
+  return createdHere ? ('left_after_sign_up' as const) : ('left_after_sign_in' as const);
+}
+
+export function cancelPrivyAuth(account: ExitedFlowAccount = null) {
+  finishAuthAttempt(exitOutcome(account));
   clearSignupVisitor();
   runSignInAbandoned();
 }

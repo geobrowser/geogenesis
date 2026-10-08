@@ -6,7 +6,7 @@ import { useEffect, useRef } from 'react';
 
 import { openAuthAttempt } from './auth-attempt';
 import { useOnSignOut } from './hooks/use-on-sign-out';
-import { cancelPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
+import { type ExitedFlowAccount, cancelPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
 
 function isOAuthCallback() {
   if (typeof window === 'undefined') return false;
@@ -19,6 +19,10 @@ export function PrivyAuthTracker() {
   // Privy removes callback parameters while completing OAuth. Remember only the
   // boolean so its status modal cannot replace the originating document's attempt.
   const oauthCallback = useRef(isOAuthCallback());
+  const { authenticated, isModalOpen, user } = usePrivy();
+  // Read when the flow is exited, which can come after Privy has already signed someone in.
+  const signedIn = useRef<ExitedFlowAccount>(null);
+  signedIn.current = authenticated && user ? user : null;
   usePrivyLogin({
     onComplete: args => {
       completePrivyAuth(args);
@@ -28,13 +32,12 @@ export function PrivyAuthTracker() {
       // Invalid codes and transient failures leave the modal open for a retry. Keep the
       // initiating attribution until dismissal; the next login press also replaces it.
       if (error === 'exited_auth_flow') {
-        cancelPrivyAuth();
+        cancelPrivyAuth(signedIn.current);
         oauthCallback.current = false;
       }
     },
   });
   useLogout({ onSuccess: resetPrivyAuthSession });
-  const { authenticated, isModalOpen } = usePrivy();
   useEffect(() => {
     if (!isModalOpen || authenticated || oauthCallback.current) return;
     openAuthAttempt();

@@ -27,7 +27,9 @@ export const SAVE_VOTES_ANALYTICS = {
  */
 export function isSaveVotesSignIn(attempt: AuthAttempt | undefined) {
   if (!attempt || attempt.properties.auth_intent !== SAVE_VOTES_ANALYTICS.auth_intent) return false;
-  return attempt.outcome !== 'closed' && attempt.outcome !== 'superseded';
+  // Still open, or signed in. Any way of leaving it — closed, superseded, or exited after signing in,
+  // which Privy follows with a sign-out — is not a save.
+  return attempt.outcome === undefined || attempt.outcome === 'signed_up' || attempt.outcome === 'signed_in';
 }
 
 export function saveVotesSignInProperties(auth_control: string, localVoteCount: number) {
