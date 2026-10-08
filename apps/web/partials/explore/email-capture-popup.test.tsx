@@ -179,7 +179,13 @@ describe('ExploreEmailCapturePopup', () => {
   // trusting the comment beside it.
   // GEO-3214: a visitor with votes on this device gets the save sheet, which asks for the same email.
   it('yields to the save sheet for a visitor with votes on this device', () => {
-    toggleLocalVote({ claimId: 'claim', spaceId: 'space', direction: 'positive', title: 'A claim' });
+    toggleLocalVote({
+      responseKind: 'stance',
+      entityId: 'claim',
+      spaceId: 'space',
+      direction: 'positive',
+      title: 'A claim',
+    });
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
 

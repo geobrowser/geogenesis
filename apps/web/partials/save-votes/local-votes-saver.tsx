@@ -6,12 +6,10 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
-import { CLAIM_RESPONSE_OBJECT_TYPE } from '~/core/claims/browse/claim-response-summary';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSetToast } from '~/core/hooks/use-toast';
-import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { captureLocalVoteDropped } from '~/core/save-votes-analytics';
 import {
@@ -71,7 +69,7 @@ export function LocalVotesSaver() {
       confirmSaveRequest();
       return;
     }
-    state.votes.forEach(vote => captureLocalVoteDropped('other_sign_in', vote.claimId, voteCount));
+    state.votes.forEach(vote => captureLocalVoteDropped('other_sign_in', vote, voteCount));
     clearLocalVotes();
   }, [authenticated, confirmed, ready, state, voteCount]);
 
@@ -106,8 +104,8 @@ export function LocalVotesSaver() {
   const next = saving ? state.votes[0] : null;
 
   const onSaved = React.useCallback((vote: LocalVote, outcome: 'saved' | 'already_held', remaining: number) => {
-    if (outcome === 'already_held') captureLocalVoteDropped('already_held', vote.claimId, remaining);
-    removeLocalVote(vote.claimId, vote.spaceId);
+    if (outcome === 'already_held') captureLocalVoteDropped('already_held', vote, remaining);
+    removeLocalVote(vote);
   }, []);
 
   const onFailed = React.useCallback(
@@ -126,7 +124,7 @@ export function LocalVotesSaver() {
     // Saved votes are told apart from votes cast signed in by this list id on `action_completed`.
     <ActionContextProvider value={{ list_id: 'local_votes' }}>
       <LocalVoteWriter
-        key={`${next.claimId}:${next.spaceId}:${next.direction}`}
+        key={`${next.entityId}:${next.spaceId}:${next.responseKind}:${next.direction}`}
         vote={next}
         onSaved={outcome => onSaved(next, outcome, voteCount)}
         onFailed={onFailed}
@@ -150,10 +148,10 @@ function LocalVoteWriter({
 }) {
   const queryClient = useQueryClient();
   const { submitResponseAsync } = useEntityResponse({
-    entityId: vote.claimId,
+    entityId: vote.entityId,
     entityName: vote.title || null,
     spaceId: vote.spaceId,
-    responseKind: CLAIM_RESPONSE_KIND,
+    responseKind: vote.responseKind,
   });
   const latest = React.useRef({ submitResponseAsync, onSaved, onFailed });
   latest.current = { submitResponseAsync, onSaved, onFailed };
@@ -166,10 +164,11 @@ function LocalVoteWriter({
     void (async () => {
       try {
         const held = await readViewerResponseForReplay(queryClient, {
-          entityId: vote.claimId,
+          entityId: vote.entityId,
           spaceId: vote.spaceId,
-          responseKind: CLAIM_RESPONSE_KIND,
-          objectType: CLAIM_RESPONSE_OBJECT_TYPE,
+          responseKind: vote.responseKind,
+          // Votes on the entity itself, never on a relation.
+          objectType: 0,
         });
         if (held === vote.direction) {
           latest.current.onSaved('already_held');

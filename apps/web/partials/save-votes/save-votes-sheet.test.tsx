@@ -44,8 +44,8 @@ vi.mock('~/partials/explore/email-capture-account-step', () => ({
   AccountStep: ({ email }: { email: string }) => <p>Enter the code we sent to {email}</p>,
 }));
 
-const vote = (claimId: string, title = claimId) =>
-  toggleLocalVote({ claimId, spaceId: 'space-1', direction: 'positive', title });
+const vote = (entityId: string, title = entityId) =>
+  toggleLocalVote({ entityId, spaceId: 'space-1', responseKind: 'stance', direction: 'positive', title });
 
 afterEach(cleanup);
 

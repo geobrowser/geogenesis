@@ -37,10 +37,22 @@ export function captureSaveVotesImpression(promptReason: string, localVoteCount:
 }
 
 /** A local vote nobody will publish: already held by the account, or a sign-in that wasn't a save. */
-export function captureLocalVoteDropped(reason: 'already_held' | 'other_sign_in', claimId: string, count: number) {
+export function captureLocalVoteDropped(
+  reason: 'already_held' | 'other_sign_in',
+  vote: { entityId: string; responseKind: string },
+  count: number
+) {
   try {
     capture('action_completed', {
-      ...snapshotActionContext('save_votes_prompt', 'claim', claimId, {}, {}, { ignoreEventContext: true }),
+      ...snapshotActionContext(
+        'save_votes_prompt',
+        vote.responseKind === 'curation' ? 'entity' : 'claim',
+        vote.entityId,
+        {},
+        {},
+        { ignoreEventContext: true }
+      ),
+      response_kind: vote.responseKind,
       operation_id: crypto.randomUUID(),
       action_kind: 'local_vote_dropped',
       outcome: 'succeeded',

@@ -949,7 +949,7 @@ describe('a side picked before the account can publish', () => {
     expect(onRequireSignIn).not.toHaveBeenCalled();
     expect(queued()).toHaveLength(0);
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
-    expect(readLocalVotes().votes).toMatchObject([{ claimId: claim.claim_entity_id, direction: 'negative' }]);
+    expect(readLocalVotes().votes).toMatchObject([{ entityId: claim.claim_entity_id, direction: 'negative' }]);
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveTextContent('not counted yet');
     expect(screen.getByText(/Not counted yet/)).toBeInTheDocument();
@@ -986,7 +986,13 @@ describe('a side picked before the account can publish', () => {
   it('opens the save sheet on the second vote', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
-    toggleLocalVote({ claimId: 'other-claim', spaceId: claim.space_id, direction: 'positive', title: 'Another claim' });
+    toggleLocalVote({
+      responseKind: 'stance',
+      entityId: 'other-claim',
+      spaceId: claim.space_id,
+      direction: 'positive',
+      title: 'Another claim',
+    });
     renderCard(signedOutCard(vi.fn()));
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));

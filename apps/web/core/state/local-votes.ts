@@ -2,9 +2,11 @@
 
 import { useCallback, useSyncExternalStore } from 'react';
 
+import type { ResponseKind } from '~/core/responses/entity-response';
+
 /**
- * Claim votes a signed-out visitor cast on this device, held until they save them with an account
- * (GEO-3214).
+ * Votes a signed-out visitor cast on this device — a side on a claim, or an up/downvote — held until
+ * they save them with an account (GEO-3214).
  *
  * A plain store over localStorage rather than a jotai atom: the navbar reads the count for its
  * "Save N votes" pill, and the navbar's tests replace `jotai` wholesale, so a module-level atom in
@@ -16,10 +18,12 @@ import { useCallback, useSyncExternalStore } from 'react';
 export type LocalVoteDirection = 'positive' | 'negative';
 
 export type LocalVote = {
-  claimId: string;
+  entityId: string;
   spaceId: string;
+  /** `stance` for a side on a claim, `curation` for an up/downvote. One vote per entity, space and kind. */
+  responseKind: ResponseKind;
   direction: LocalVoteDirection;
-  /** The claim's sentence, for the save sheet's reminder chips. */
+  /** The claim's sentence or the entity's name, for the save sheet's reminder chips. */
   title: string;
   votedAt: number;
 };
@@ -63,11 +67,24 @@ function isVote(value: unknown): value is LocalVote {
   return (
     typeof vote === 'object' &&
     vote !== null &&
-    typeof vote.claimId === 'string' &&
+    typeof vote.entityId === 'string' &&
+    (vote.responseKind === 'stance' || vote.responseKind === 'curation') &&
     typeof vote.spaceId === 'string' &&
     (vote.direction === 'positive' || vote.direction === 'negative') &&
     typeof vote.votedAt === 'number'
   );
+}
+
+/**
+ * The first build of this store held claim sides only, as `claimId` with no kind. Read those as the
+ * stance votes they were, rather than dropping votes someone cast on the preview.
+ */
+function withoutLegacyShape(value: unknown): unknown {
+  const legacy = value as { claimId?: unknown; entityId?: unknown; responseKind?: unknown };
+  if (typeof legacy !== 'object' || legacy === null || legacy.entityId !== undefined) return value;
+  if (typeof legacy.claimId !== 'string') return value;
+  const { claimId, ...rest } = legacy;
+  return { ...rest, entityId: claimId, responseKind: legacy.responseKind ?? 'stance' };
 }
 
 function parse(raw: string | null, now = Date.now()): LocalVotesState {
@@ -75,6 +92,7 @@ function parse(raw: string | null, now = Date.now()): LocalVotesState {
   try {
     const parsed = JSON.parse(raw) as Partial<LocalVotesState>;
     const votes = (Array.isArray(parsed.votes) ? parsed.votes : [])
+      .map(withoutLegacyShape)
       .filter(isVote)
       .map(vote => ({ ...vote, title: typeof vote.title === 'string' ? vote.title : '' }))
       .filter(vote => now - vote.votedAt < LOCAL_VOTE_TTL_MS);
@@ -145,11 +163,18 @@ export function useLocalVotes(): LocalVotesState {
   return useSyncExternalStore(subscribe, readLocalVotes, serverSnapshot);
 }
 
-/** The side this device holds on a claim, or null. Selected down so a feed row re-renders only for its own claim. */
-export function useLocalVote(claimId: string, spaceId: string): LocalVoteDirection | null {
+/** The side this device holds, or null. Selected down so a feed row re-renders only for its own vote. */
+export function useLocalVote(
+  entityId: string,
+  spaceId: string,
+  responseKind: ResponseKind | null
+): LocalVoteDirection | null {
   const select = useCallback(
-    () => readLocalVotes().votes.find(vote => vote.claimId === claimId && vote.spaceId === spaceId)?.direction ?? null,
-    [claimId, spaceId]
+    () =>
+      responseKind === null
+        ? null
+        : (readLocalVotes().votes.find(vote => sameVote(vote, { entityId, spaceId, responseKind }))?.direction ?? null),
+    [entityId, spaceId, responseKind]
   );
   return useSyncExternalStore(subscribe, select, () => null);
 }
@@ -162,32 +187,34 @@ export function useLocalVoteCount(): number {
   );
 }
 
-const sameClaim = (vote: LocalVote, claimId: string, spaceId: string) =>
-  vote.claimId === claimId && vote.spaceId === spaceId;
+export type LocalVoteKey = Pick<LocalVote, 'entityId' | 'spaceId' | 'responseKind'>;
+
+const sameVote = (vote: LocalVote, key: LocalVoteKey) =>
+  vote.entityId === key.entityId && vote.spaceId === key.spaceId && vote.responseKind === key.responseKind;
 
 export type LocalVoteChange = { action: 'cast' | 'switch' | 'remove'; count: number };
 
 /**
  * A signed-out press: the side the visitor pressed, or none if they pressed the side they hold — the
- * same toggle the pills have signed in.
+ * same toggle the controls have signed in.
  */
-export function toggleLocalVote({ claimId, spaceId, direction, title }: Omit<LocalVote, 'votedAt'>): LocalVoteChange {
+export function toggleLocalVote(next: Omit<LocalVote, 'votedAt'>): LocalVoteChange {
   const current = readLocalVotes();
-  const held = current.votes.find(vote => sameClaim(vote, claimId, spaceId));
-  const others = current.votes.filter(vote => !sameClaim(vote, claimId, spaceId));
-  if (held?.direction === direction) {
+  const held = current.votes.find(vote => sameVote(vote, next));
+  const others = current.votes.filter(vote => !sameVote(vote, next));
+  if (held?.direction === next.direction) {
     write({ ...current, votes: others });
     return { action: 'remove', count: others.length };
   }
-  const votes = [...others, { claimId, spaceId, direction, title, votedAt: Date.now() }].slice(-LOCAL_VOTES_CAP);
+  const votes = [...others, { ...next, votedAt: Date.now() }].slice(-LOCAL_VOTES_CAP);
   write({ ...current, votes });
   return { action: held ? 'switch' : 'cast', count: votes.length };
 }
 
-export function removeLocalVote(claimId: string, spaceId: string) {
+export function removeLocalVote(key: LocalVoteKey) {
   const current = readLocalVotes();
-  if (!current.votes.some(vote => sameClaim(vote, claimId, spaceId))) return;
-  write({ ...current, votes: current.votes.filter(vote => !sameClaim(vote, claimId, spaceId)) });
+  if (!current.votes.some(vote => sameVote(vote, key))) return;
+  write({ ...current, votes: current.votes.filter(vote => !sameVote(vote, key)) });
 }
 
 export function clearLocalVotes() {

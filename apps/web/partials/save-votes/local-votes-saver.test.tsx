@@ -30,8 +30,10 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isRegistered: mocks.isRegistered }),
 }));
 vi.mock('~/core/hooks/use-entity-vote', () => ({
-  useEntityResponse: ({ entityId }: { entityId: string }) => ({
-    submitResponseAsync: (direction: string) => mocks.submit(entityId, direction),
+  useEntityResponse: ({ entityId, responseKind }: { entityId: string; responseKind: string }) => ({
+    // Named with its kind when it isn't a side on a claim, so a test can tell an upvote from a side.
+    submitResponseAsync: (direction: string) =>
+      mocks.submit(responseKind === 'stance' ? entityId : `${entityId}:${responseKind}`, direction),
   }),
 }));
 vi.mock('~/core/responses/replay-viewer-response', () => ({
@@ -47,8 +49,11 @@ vi.mock('~/core/save-votes-analytics', () => ({
   captureLocalVoteDropped: (...args: unknown[]) => mocks.capture(...args),
 }));
 
-const vote = (claimId: string, direction: 'positive' | 'negative' = 'positive') =>
-  toggleLocalVote({ claimId, spaceId: 'space-1', direction, title: claimId });
+const vote = (
+  entityId: string,
+  direction: 'positive' | 'negative' = 'positive',
+  responseKind: 'stance' | 'curation' = 'stance'
+) => toggleLocalVote({ entityId, spaceId: 'space-1', responseKind, direction, title: entityId });
 
 function signInWithSpace() {
   mocks.authenticated = true;
@@ -89,7 +94,7 @@ describe('LocalVotesSaver', () => {
 
     expect(readLocalVotes().votes).toEqual([]);
     expect(mocks.submit).not.toHaveBeenCalled();
-    expect(mocks.capture).toHaveBeenCalledWith('other_sign_in', 'a', 2);
+    expect(mocks.capture).toHaveBeenCalledWith('other_sign_in', expect.objectContaining({ entityId: 'a' }), 2);
   });
 
   it('waits for the personal space, then saves each vote in turn', async () => {
@@ -114,6 +119,20 @@ describe('LocalVotesSaver', () => {
     expect(readLocalVotes().save).toBeNull();
   });
 
+  it('saves an up/downvote as one, beside the sides on claims', async () => {
+    vote('claim');
+    vote('entity', 'negative', 'curation');
+    markSaveRequested();
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+
+    await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
+    expect(mocks.submit.mock.calls).toEqual([
+      ['claim', 'positive'],
+      ['entity:curation', 'negative'],
+    ]);
+  });
+
   it('skips a side the account already holds, and switches one it holds the other way', async () => {
     vote('held');
     vote('opposite');
@@ -125,7 +144,7 @@ describe('LocalVotesSaver', () => {
 
     await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
     expect(mocks.submit.mock.calls).toEqual([['opposite', 'positive']]);
-    expect(mocks.capture).toHaveBeenCalledWith('already_held', 'held', 2);
+    expect(mocks.capture).toHaveBeenCalledWith('already_held', expect.objectContaining({ entityId: 'held' }), 2);
   });
 
   it('keeps the votes and offers a retry when a write fails', async () => {

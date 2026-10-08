@@ -10,7 +10,6 @@ import Link from 'next/link';
 
 import { useActionContext } from '~/core/action-context-provider';
 import { type AnalyticsProperties } from '~/core/analytics';
-import { observeOperation } from '~/core/analytics-operations';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { viewerResponseWithIndexedFallback } from '~/core/claims/browse/claim-position-summaries';
 import { CLAIM_RESPONSE_OBJECT_TYPE, useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
@@ -38,15 +37,11 @@ import {
 } from '~/core/responses/entity-response';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import { readLocalVotes, removeLocalVote, toggleLocalVote, useLocalVote } from '~/core/state/local-votes';
+import { castLocalVote } from '~/core/state/cast-local-vote';
+import { removeLocalVote, useLocalVote } from '~/core/state/local-votes';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
-import {
-  type SavePromptSurface,
-  markPromptedThisSession,
-  openSaveVotesPrompt,
-  savePromptReasonAfterVote,
-} from '~/core/state/save-votes-prompt';
+import type { SavePromptSurface } from '~/core/state/save-votes-prompt';
 import { NavUtils, validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -536,7 +531,7 @@ export function useClaimPositionControl({
   // A side picked signed out and kept on this device until a save publishes it (GEO-3214). Drawn as
   // the viewer's, below a queued press and above the server's answer: until `LocalVotesSaver` has
   // written it, it is the newest thing the viewer said.
-  const localDirection = useLocalVote(claim.claim_entity_id, claim.space_id);
+  const localDirection = useLocalVote(claim.claim_entity_id, claim.space_id, CLAIM_RESPONSE_KIND);
   const localPosition = localDirection === null ? null : localDirection === 'positive';
   const viewerPosition = pendingResponse
     ? optimisticPosition
@@ -621,36 +616,17 @@ export function useClaimPositionControl({
    * once, with no sign-in in the way; the save sheet asks for an account once they have a few. It
    * replaced opening Privy's dialog at the press, which about half of visitors closed.
    */
-  const voteOnThisDevice = (position: boolean) => {
-    const direction = position ? 'positive' : 'negative';
-    const change = toggleLocalVote({
-      claimId: claim.claim_entity_id,
+  const voteOnThisDevice = (position: boolean) =>
+    castLocalVote({
+      entityId: claim.claim_entity_id,
       spaceId: claim.space_id,
-      direction,
+      responseKind: CLAIM_RESPONSE_KIND,
+      direction: position ? 'positive' : 'negative',
       title: claim.claim,
-    });
-    // The visit they voted in is not the "return visit" the sheet waits for.
-    markPromptedThisSession();
-    try {
-      observeOperation('local_vote', 'claim', claim.claim_entity_id, undefined, getSignInContext()).succeeded({
-        vote_direction: change.action === 'remove' ? 'none' : position ? 'up' : 'down',
-        vote_action: change.action,
-        response_kind: CLAIM_RESPONSE_KIND,
-        entity_id: claim.claim_entity_id,
-        space_id: claim.space_id,
-        local_vote_count: change.count,
-      });
-    } catch {
-      /* Never fail a vote over analytics. */
-    }
-    if (change.action !== 'cast') return;
-    const reason = savePromptReasonAfterVote({
-      count: change.count,
       surface: savePromptSurface,
-      shownCount: readLocalVotes().prompt.shownCount,
+      targetType: 'claim',
+      attribution: getSignInContext(),
     });
-    if (reason) openSaveVotesPrompt(reason);
-  };
 
   const respond = (position: boolean) => {
     if (!isConnected) {
@@ -659,7 +635,12 @@ export function useClaimPositionControl({
       // has nothing coming that would ever publish it.
       if (isAccountSetupPending) {
         // The queue owns this claim's side now; a device vote left behind would be saved over it.
-        if (localPosition !== null) removeLocalVote(claim.claim_entity_id, claim.space_id);
+        if (localPosition !== null)
+          removeLocalVote({
+            entityId: claim.claim_entity_id,
+            spaceId: claim.space_id,
+            responseKind: CLAIM_RESPONSE_KIND,
+          });
         // Pressing the side already queued takes it back, as pressing a held side does.
         if (queuedPosition === position) queuedPositionAction.cancel();
         else queuePosition(position);
@@ -675,7 +656,7 @@ export function useClaimPositionControl({
     // Signed in with this claim's device vote still waiting to be saved: this press is newer, so it
     // replaces that vote rather than being overwritten by it when the save reaches this claim.
     if (localPosition !== null) {
-      removeLocalVote(claim.claim_entity_id, claim.space_id);
+      removeLocalVote({ entityId: claim.claim_entity_id, spaceId: claim.space_id, responseKind: CLAIM_RESPONSE_KIND });
       if (isResponseSubmitting) return;
       setResponseError(null);
       const serverPosition = readiness.viewer_response?.position ?? null;

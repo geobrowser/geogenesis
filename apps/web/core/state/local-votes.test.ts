@@ -17,11 +17,12 @@ import {
   toggleLocalVote,
 } from './local-votes';
 
-const vote = (claimId: string, direction: 'positive' | 'negative' = 'positive') => ({
-  claimId,
+const vote = (entityId: string, direction: 'positive' | 'negative' = 'positive') => ({
+  entityId,
   spaceId: 'space-1',
+  responseKind: 'stance' as const,
   direction,
-  title: `Claim ${claimId}`,
+  title: `Claim ${entityId}`,
 });
 
 beforeEach(() => clearLocalVotes());
@@ -46,7 +47,7 @@ describe('toggleLocalVote', () => {
     for (let i = 0; i <= LOCAL_VOTES_CAP; i++) toggleLocalVote(vote(`c${i}`));
     const { votes } = readLocalVotes();
     expect(votes).toHaveLength(LOCAL_VOTES_CAP);
-    expect(votes[0].claimId).toBe('c1');
+    expect(votes[0].entityId).toBe('c1');
   });
 });
 
@@ -56,16 +57,37 @@ it('forgets votes older than 30 days', () => {
   toggleLocalVote(vote('old'));
   vi.setSystemTime(Date.now() + LOCAL_VOTE_TTL_MS + 1);
   toggleLocalVote(vote('new'));
-  expect(readLocalVotes().votes.map(v => v.claimId)).toEqual(['new']);
+  expect(readLocalVotes().votes.map(v => v.entityId)).toEqual(['new']);
 });
 
 it('removes the storage entry once nothing is left to hold', () => {
   toggleLocalVote(vote('a'));
   recordSavePromptShown();
   expect(window.localStorage.getItem(LOCAL_VOTES_STORAGE_KEY)).not.toBeNull();
-  removeLocalVote('a', 'space-1');
+  removeLocalVote({ entityId: 'a', spaceId: 'space-1', responseKind: 'stance' });
   expect(window.localStorage.getItem(LOCAL_VOTES_STORAGE_KEY)).toBeNull();
   expect(readLocalVotes().prompt.shownCount).toBe(0);
+});
+
+it('keeps an upvote and a side on the same entity apart', () => {
+  toggleLocalVote(vote('a'));
+  toggleLocalVote({ ...vote('a', 'negative'), responseKind: 'curation' });
+  expect(readLocalVotes().votes.map(v => [v.responseKind, v.direction])).toEqual([
+    ['stance', 'positive'],
+    ['curation', 'negative'],
+  ]);
+});
+
+it('reads votes stored before up/downvotes joined as sides on claims', () => {
+  window.localStorage.setItem(
+    LOCAL_VOTES_STORAGE_KEY,
+    JSON.stringify({
+      votes: [{ claimId: 'old', spaceId: 'space-1', direction: 'negative', title: 'Old', votedAt: Date.now() }],
+      prompt: { shownCount: 1, dismissCount: 0 },
+      save: null,
+    })
+  );
+  expect(readLocalVotes().votes).toMatchObject([{ entityId: 'old', responseKind: 'stance', direction: 'negative' }]);
 });
 
 it('reads corrupt storage as empty', () => {

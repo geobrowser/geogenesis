@@ -47,8 +47,8 @@ describe('GeoConnectButton', () => {
 
   // GEO-3214: with votes waiting on this device, the pill is a save prompt.
   it('offers to save the votes on this device, and signs in as a save', () => {
-    toggleLocalVote({ claimId: 'a', spaceId: 's', direction: 'positive', title: 'A' });
-    toggleLocalVote({ claimId: 'b', spaceId: 's', direction: 'negative', title: 'B' });
+    toggleLocalVote({ responseKind: 'stance', entityId: 'a', spaceId: 's', direction: 'positive', title: 'A' });
+    toggleLocalVote({ responseKind: 'stance', entityId: 'b', spaceId: 's', direction: 'negative', title: 'B' });
     render(<GeoConnectButton />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save 2 votes' }));
@@ -62,7 +62,7 @@ describe('GeoConnectButton', () => {
   });
 
   it('says "Save 1 vote" for one', () => {
-    toggleLocalVote({ claimId: 'a', spaceId: 's', direction: 'positive', title: 'A' });
+    toggleLocalVote({ responseKind: 'stance', entityId: 'a', spaceId: 's', direction: 'positive', title: 'A' });
     render(<GeoConnectButton />);
     expect(screen.getByRole('button', { name: 'Save 1 vote' })).toBeInTheDocument();
   });

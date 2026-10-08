@@ -1,5 +1,6 @@
 'use client';
 
+import { usePrivy } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -12,6 +13,7 @@ import { useStore } from 'jotai';
 import { withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { personProfileOpened } from '~/core/analytics';
+import { LOCAL_VOTE_TITLE } from '~/core/claims/browse/local-vote-note';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -37,6 +39,8 @@ import {
 } from '~/core/responses/entity-response';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
+import { castLocalVote } from '~/core/state/cast-local-vote';
+import { removeLocalVote, useLocalVote } from '~/core/state/local-votes';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -155,6 +159,7 @@ export function EntityVoteButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
+  const { authenticated } = usePrivy();
   const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
   // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
@@ -234,6 +239,11 @@ export function EntityVoteButtons({
   // replayed and cleared from the queue, at which point the mutation's state takes over.
   const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
   const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
+  // A vote cast signed out and kept on this device until a save publishes it (GEO-3214). Drawn as the
+  // viewer's — the arrow fills — but left out of the score and the split: it doesn't count until it
+  // is saved, and the counts say so by not moving. `activeResponse` stays the counted side.
+  const localDirection = useLocalVote(entityId, spaceId, responseKind);
+  const drawnResponse = effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse;
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
@@ -259,10 +269,29 @@ export function EntityVoteButtons({
 
   function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
+      // Signed out: vote on this device, with no sign-in in the way. The save sheet asks for an
+      // account once there are a few. Signed in with the account still loading, the old prompt stays.
+      if (!authenticated && responseKind !== null) {
+        castLocalVote({
+          entityId,
+          spaceId,
+          responseKind,
+          direction,
+          title: entity?.name ?? '',
+          targetType: responseKind === 'curation' ? 'entity' : 'claim',
+          attribution: getContext(),
+        });
+        return;
+      }
       openPrivySignIn(direction);
       return;
     }
     if (spaceOnTheWay) queueVoteWrite(direction);
+  }
+
+  /** A press signed in replaces this entity's device vote rather than being saved over by it. */
+  function dropLocalVote() {
+    if (localDirection !== null && responseKind !== null) removeLocalVote({ entityId, spaceId, responseKind });
   }
 
   function handlePositiveResponse() {
@@ -270,6 +299,7 @@ export function EntityVoteButtons({
       queueResponse('positive');
       return;
     }
+    dropLocalVote();
     submitResponse(activeResponse === 'positive' ? 'clear' : 'positive');
   }
 
@@ -278,13 +308,14 @@ export function EntityVoteButtons({
       queueResponse('negative');
       return;
     }
+    dropLocalVote();
     submitResponse(activeResponse === 'negative' ? 'clear' : 'negative');
   }
 
   const scoreLabel = formatScore(displayScore);
 
-  const positiveActive = activeResponse === 'positive';
-  const negativeActive = activeResponse === 'negative';
+  const positiveActive = drawnResponse === 'positive';
+  const negativeActive = drawnResponse === 'negative';
   // Never block the buttons: when the personal space isn't ready the click queues the vote
   // instead of writing it, so the user is never stopped from acting while it's being created.
   const responseDisabled = false;
@@ -294,14 +325,22 @@ export function EntityVoteButtons({
   const positiveTitle = !isConnected
     ? smartAccount
       ? signedInTitle
-      : responseCopy.signIn
+      : !authenticated
+        ? localDirection === 'positive'
+          ? LOCAL_VOTE_TITLE
+          : responseCopy.positiveAction
+        : responseCopy.signIn
     : positiveActive
       ? responseCopy.removePositive
       : responseCopy.positiveAction;
   const negativeTitle = !isConnected
     ? smartAccount
       ? signedInTitle
-      : responseCopy.signIn
+      : !authenticated
+        ? localDirection === 'negative'
+          ? LOCAL_VOTE_TITLE
+          : responseCopy.negativeAction
+        : responseCopy.signIn
     : negativeActive
       ? responseCopy.removeNegative
       : responseCopy.negativeAction;
@@ -309,9 +348,13 @@ export function EntityVoteButtons({
   const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 
   const optimisticPositiveDelta =
-    effectiveOptimistic !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined
+      ? (activeResponse === 'positive' ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0)
+      : 0;
   const optimisticNegativeDelta =
-    effectiveOptimistic !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined
+      ? (activeResponse === 'negative' ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0)
+      : 0;
   const effectivePositive = Math.max(0, (responseCounts?.positive ?? 0) + optimisticPositiveDelta);
   const effectiveNegative = Math.max(0, (responseCounts?.negative ?? 0) + optimisticNegativeDelta);
   const effectiveTotal = effectivePositive + effectiveNegative;

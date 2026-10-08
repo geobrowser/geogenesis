@@ -243,6 +243,11 @@ export function SaveVotesSheet() {
   );
 }
 
+function chipLabel(vote: LocalVote) {
+  if (vote.responseKind === 'curation') return vote.direction === 'positive' ? 'Upvote:' : 'Downvote:';
+  return vote.direction === 'positive' ? 'Agree:' : 'Disagree:';
+}
+
 /** Up to two of the visitor's votes, then how many more: a reminder of what closing this leaves behind. */
 function VoteChips({ votes }: { votes: LocalVote[] }) {
   const newest = [...votes].reverse();
@@ -253,13 +258,13 @@ function VoteChips({ votes }: { votes: LocalVote[] }) {
     <ul className="mt-[14px] flex flex-wrap justify-center gap-1" aria-label="Your votes">
       {shown.map(vote => (
         <li
-          key={`${vote.claimId}:${vote.spaceId}`}
+          key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
           className="flex max-w-[132px] items-center gap-1 rounded-full border border-grey-02 bg-grey-01 px-2 py-[3px] text-[12px] leading-[14px] text-text"
         >
           <span aria-hidden className="shrink-0">
-            <ResponsePositionIcon responseKind="stance" position={vote.direction === 'positive'} selected />
+            <ResponsePositionIcon responseKind={vote.responseKind} position={vote.direction === 'positive'} selected />
           </span>
-          <span className="sr-only">{vote.direction === 'positive' ? 'Agree:' : 'Disagree:'}</span>
+          <span className="sr-only">{chipLabel(vote)}</span>
           <span className="truncate">{vote.title}</span>
         </li>
       ))}
