@@ -4,7 +4,14 @@ import type { ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { clearLocalVotes, markSaveRequested, readLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
+import type { AuthAttempt } from '~/core/auth-attempt';
+import {
+  bindSaveToAccount,
+  clearLocalVotes,
+  readLocalVotes,
+  removeLocalVote,
+  toggleLocalVote,
+} from '~/core/state/local-votes';
 
 import { LocalVotesSaver } from './local-votes-saver';
 
@@ -19,10 +26,15 @@ const mocks = vi.hoisted(() => ({
   setToast: vi.fn(),
   reportError: vi.fn(),
   capture: vi.fn(),
+  accountId: 'did:privy:me',
+  /** The sign-in that just completed, as `auth-attempt` reports it. */
+  attempt: undefined as AuthAttempt | undefined,
+  /** Reads held open by a test, per entity, so it can act while the saver is waiting on one. */
+  heldReads: new Map<string, Promise<string | null>>(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({
-  usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated }),
+  usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, user: { id: mocks.accountId } }),
 }));
 vi.mock('@tanstack/react-query', () => ({ useQueryClient: () => ({}) }));
 vi.mock('~/core/hooks/use-smart-account', () => ({ useSmartAccount: () => ({ smartAccount: mocks.smartAccount }) }));
@@ -38,16 +50,29 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 }));
 vi.mock('~/core/responses/replay-viewer-response', () => ({
   readViewerResponseForReplay: async (_client: unknown, { entityId }: { entityId: string }) =>
-    mocks.held.get(entityId) ?? null,
+    mocks.heldReads.get(entityId) ?? mocks.held.get(entityId) ?? null,
 }));
 vi.mock('~/core/hooks/use-toast', () => ({ useSetToast: () => mocks.setToast }));
 vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => mocks.reportError }));
 vi.mock('~/core/action-context-provider', () => ({
   ActionContextProvider: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock('~/core/save-votes-analytics', () => ({
+vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => mocks.attempt }));
+vi.mock('~/core/save-votes-analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/save-votes-analytics')>()),
   captureLocalVoteDropped: (...args: unknown[]) => mocks.capture(...args),
 }));
+
+const attempt = (auth_intent: string, outcome?: AuthAttempt['outcome']): AuthAttempt => ({
+  id: 'attempt-1',
+  startedAt: Date.now(),
+  outcome,
+  properties: { auth_intent },
+});
+/** A save prompt's sign-in, completed. */
+const saveSignedIn = () => {
+  mocks.attempt = attempt('save_votes', 'signed_up');
+};
 
 const vote = (
   entityId: string,
@@ -72,6 +97,9 @@ beforeEach(() => {
   mocks.personalSpaceId = null;
   mocks.isRegistered = false;
   mocks.held.clear();
+  mocks.heldReads.clear();
+  mocks.accountId = 'did:privy:me';
+  mocks.attempt = undefined;
   mocks.submit.mockReset().mockResolvedValue(undefined);
   mocks.setToast.mockReset();
   mocks.reportError.mockReset();
@@ -89,6 +117,7 @@ describe('LocalVotesSaver', () => {
   it('clears the votes when the sign-in was not a save', () => {
     vote('a');
     vote('b');
+    mocks.attempt = attempt('vote', 'signed_in');
     signInWithSpace();
     render(<LocalVotesSaver />);
 
@@ -100,10 +129,10 @@ describe('LocalVotesSaver', () => {
   it('waits for the personal space, then saves each vote in turn', async () => {
     vote('a');
     vote('b', 'negative');
-    markSaveRequested();
+    saveSignedIn();
     mocks.authenticated = true;
     const { rerender } = render(<LocalVotesSaver />);
-    expect(readLocalVotes().save?.confirmed).toBe(true);
+    expect(readLocalVotes().save).toEqual({ accountId: 'did:privy:me' });
     expect(mocks.submit).not.toHaveBeenCalled();
 
     signInWithSpace();
@@ -122,7 +151,7 @@ describe('LocalVotesSaver', () => {
   it('saves an up/downvote as one, beside the sides on claims', async () => {
     vote('claim');
     vote('entity', 'negative', 'curation');
-    markSaveRequested();
+    saveSignedIn();
     signInWithSpace();
     render(<LocalVotesSaver />);
 
@@ -138,7 +167,7 @@ describe('LocalVotesSaver', () => {
     vote('opposite');
     mocks.held.set('held', 'positive');
     mocks.held.set('opposite', 'negative');
-    markSaveRequested();
+    saveSignedIn();
     signInWithSpace();
     render(<LocalVotesSaver />);
 
@@ -151,7 +180,7 @@ describe('LocalVotesSaver', () => {
     vote('a');
     vote('b');
     mocks.submit.mockRejectedValueOnce(new Error('bundler down'));
-    markSaveRequested();
+    saveSignedIn();
     signInWithSpace();
     render(<LocalVotesSaver />);
 
@@ -161,5 +190,43 @@ describe('LocalVotesSaver', () => {
 
     act(() => mocks.reportError.mock.calls[0][1]());
     await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
+  });
+
+  // Copilot on #2785: the authorization to save is the sign-in itself, not a flag of our own.
+  it('does not save when the save sign-in was closed and another one completed', () => {
+    vote('a');
+    mocks.attempt = attempt('save_votes', 'closed');
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+
+    expect(readLocalVotes().votes).toEqual([]);
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it('clears votes a save bound to another account, rather than publishing them as this one', () => {
+    vote('a');
+    bindSaveToAccount('did:privy:someone-else');
+    // Even with a save prompt's sign-in on record: the binding is to the account, not to the browser.
+    saveSignedIn();
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+
+    expect(readLocalVotes().votes).toEqual([]);
+    expect(mocks.submit).not.toHaveBeenCalled();
+  });
+
+  it('does not publish a vote replaced while it was reading the account’s side', async () => {
+    vote('a');
+    let finishRead: (side: string | null) => void = () => {};
+    mocks.heldReads.set('a', new Promise(resolve => (finishRead = resolve)));
+    saveSignedIn();
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+
+    // A signed-in press on the claim: it removes the device vote and publishes its own side.
+    act(() => removeLocalVote({ entityId: 'a', spaceId: 'space-1', responseKind: 'stance' }));
+    await act(async () => finishRead(null));
+
+    expect(mocks.submit).not.toHaveBeenCalled();
   });
 });

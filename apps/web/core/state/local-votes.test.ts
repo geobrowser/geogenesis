@@ -4,12 +4,9 @@ import {
   LOCAL_VOTES_CAP,
   LOCAL_VOTES_STORAGE_KEY,
   LOCAL_VOTE_TTL_MS,
-  SAVE_REQUEST_TTL_MS,
+  bindSaveToAccount,
   clearLocalVotes,
-  clearSaveRequested,
-  confirmSaveRequest,
-  isSaveRequestLive,
-  markSaveRequested,
+  isLocalVoteCurrent,
   readLocalVotes,
   recordSavePromptShown,
   removeLocalVote,
@@ -95,32 +92,50 @@ it('reads corrupt storage as empty', () => {
   expect(readLocalVotes().votes).toEqual([]);
 });
 
-describe('save requests', () => {
-  it('counts only a recent request, until the sign-in it started confirms it', () => {
-    vi.useFakeTimers();
-    vi.setSystemTime(new Date('2026-10-01T00:00:00Z'));
+describe('a save bound to an account', () => {
+  it('is bound, and a sign-out resets it', () => {
     toggleLocalVote(vote('a'));
-    markSaveRequested();
-    expect(isSaveRequestLive(readLocalVotes())).toBe(true);
-
-    vi.setSystemTime(Date.now() + SAVE_REQUEST_TTL_MS + 1);
-    expect(isSaveRequestLive(readLocalVotes())).toBe(false);
-
-    confirmSaveRequest();
-    expect(isSaveRequestLive(readLocalVotes())).toBe(true);
-  });
-
-  it('withdraws an unconfirmed request, and only a sign-out resets a confirmed one', () => {
-    toggleLocalVote(vote('a'));
-    markSaveRequested();
-    clearSaveRequested();
-    expect(readLocalVotes().save).toBeNull();
-
-    markSaveRequested();
-    confirmSaveRequest();
-    clearSaveRequested();
-    expect(readLocalVotes().save?.confirmed).toBe(true);
+    bindSaveToAccount('did:privy:me');
+    expect(readLocalVotes().save).toEqual({ accountId: 'did:privy:me' });
     resetSaveRequest();
     expect(readLocalVotes().save).toBeNull();
   });
+
+  it('drops the first build’s timestamp marker, which bound to no account', () => {
+    window.localStorage.setItem(
+      LOCAL_VOTES_STORAGE_KEY,
+      JSON.stringify({
+        votes: [
+          {
+            entityId: 'a',
+            spaceId: 'space-1',
+            responseKind: 'stance',
+            direction: 'positive',
+            title: 'A',
+            votedAt: Date.now(),
+          },
+        ],
+        prompt: { shownCount: 0, dismissCount: 0 },
+        save: { requestedAt: Date.now(), confirmed: true },
+      })
+    );
+    expect(readLocalVotes().save).toBeNull();
+  });
+});
+
+it('says whether a vote is still the one held, after it was switched or re-cast', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-01T00:00:00Z'));
+  toggleLocalVote(vote('a'));
+  const [cast] = readLocalVotes().votes;
+  expect(isLocalVoteCurrent(cast)).toBe(true);
+
+  toggleLocalVote(vote('a', 'negative'));
+  expect(isLocalVoteCurrent(cast)).toBe(false);
+
+  toggleLocalVote(vote('a', 'negative'));
+  vi.setSystemTime(Date.now() + 1000);
+  toggleLocalVote(vote('a'));
+  // Same side as before, cast again later: a different vote.
+  expect(isLocalVoteCurrent(cast)).toBe(false);
 });

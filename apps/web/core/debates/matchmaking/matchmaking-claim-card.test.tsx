@@ -34,6 +34,8 @@ const mocks = vi.hoisted(() => ({
   freshRead: null as Promise<'positive' | 'negative' | null> | null,
   /** Privy's answer on whether anyone is signed in. */
   authenticated: true,
+  /** Privy has finished restoring any session; `authenticated: false` before this means nothing. */
+  authReady: true,
   /** A new account whose personal space is still being created in the background. */
   accountSetupPending: false,
   indexing: { status: 'idle', pending: null, runId: null } as {
@@ -81,7 +83,7 @@ vi.mock('../hooks', () => ({
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
-  useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: 'account-1' }),
 }));
 
 // The end slot asks the hub whether there is a debate to be had. That is one shared query at
@@ -282,6 +284,7 @@ beforeEach(() => {
   mocks.freshViewerDirection = null;
   mocks.freshRead = null;
   mocks.authenticated = true;
+  mocks.authReady = true;
   mocks.accountSetupPending = false;
   queueStore = createStore();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
@@ -979,6 +982,19 @@ describe('a side picked before the account can publish', () => {
     expect(readLocalVotes().votes).toHaveLength(0);
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
     expect(screen.queryByText(/Not counted yet/)).not.toBeInTheDocument();
+  });
+
+  // Copilot on #2785: before Privy has restored a session, signed out is not known yet.
+  it('drops a press while a session is still being restored, rather than keeping it as a visitor’s', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    mocks.authReady = false;
+    renderCard(signedOutCard());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(readLocalVotes().votes).toHaveLength(0);
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
   });
 
   it('opens the save sheet on the second vote', () => {

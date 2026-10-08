@@ -456,7 +456,11 @@ export function useClaimPositionControl({
   // Publishing before the personal space finishes registering fails, so a press in that window is
   // queued for the runner (`respond`) rather than published or refused.
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
-  const { authenticated } = useGeoChatAuth();
+  const { ready: authReady, authenticated } = useGeoChatAuth();
+  // Known to be signed out. Privy reports `authenticated: false` while it is still restoring a
+  // session, and a press in that window is a returning account's, not a visitor's to keep on the
+  // device — the saver would clear it as somebody else's the moment the session came back.
+  const signedOut = authReady && !authenticated;
   const queryClient = useQueryClient();
 
   const copy = CLAIM_RESPONSE_COPY;
@@ -641,7 +645,9 @@ export function useClaimPositionControl({
       // Signed in with no space and none being made: nothing would ever publish a queued side. A host
       // that doesn't allow signed-out votes leaves the pills disabled, so there is nothing to keep
       // for either.
-      if (authenticated || !allowsSignedOutVotes) return;
+      // Still restoring a session, the press is dropped rather than guessed at: it lasts a moment, and
+      // the alternative is a returning account's vote kept as a visitor's and then cleared.
+      if (!signedOut || !allowsSignedOutVotes) return;
       voteOnThisDevice(position);
       return;
     }
@@ -671,7 +677,7 @@ export function useClaimPositionControl({
     // the side they cannot take yet is the least useful thing to say about a dead control.
     if (!answersReady && !isAccountSetupPending) return 'Loading this claim’s responses…';
     // Signed out where a press is kept on this device: the pill does what its label says.
-    if (!isConnected && !authenticated && allowsSignedOutVotes) {
+    if (!isConnected && signedOut && allowsSignedOutVotes) {
       return localPosition === position ? RESPONSE_LOCAL_ONLY_COPY : responsePositionLabel(position);
     }
     if (!isConnected && !isAccountSetupPending) return copy.connect;
@@ -690,7 +696,7 @@ export function useClaimPositionControl({
      * The side held only on this device, for `PositionRow`'s "Not counted yet · Save" note. Null once
      * signed in: a save is under way by then, or the votes were cleared.
      */
-    localVoteSide: !authenticated && localPosition !== null ? localPosition : null,
+    localVoteSide: signedOut && localPosition !== null ? localPosition : null,
     isConnected,
     /**
      * The viewer's response is on its way to the chain and not yet indexed. For readers deciding

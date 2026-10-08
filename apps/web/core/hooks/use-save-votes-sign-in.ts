@@ -3,24 +3,18 @@
 import { useCallback } from 'react';
 
 import { saveVotesSignInProperties } from '~/core/save-votes-analytics';
-import { clearSaveRequested, markSaveRequested } from '~/core/state/local-votes';
 
 import { usePrivySignIn } from './use-privy-sign-in';
 
 /**
- * Opens Privy's sign-in as a save of the votes on this device (GEO-3214). Only a sign-in a save
- * prompt started saves them; any other sign-in clears them (see `LocalVotesSaver`).
- *
- * Dismissing the dialog withdraws the request, so a later sign-in some other way still reads as "not
- * a save".
+ * Opens Privy's sign-in as a save of the votes on this device (GEO-3214). The attempt it starts
+ * carries `auth_intent: 'save_votes'`, which is what `LocalVotesSaver` checks before it saves: any
+ * other sign-in clears the votes, and dismissing this one records it as closed.
  */
 export function useSaveVotesSignIn() {
   const signIn = usePrivySignIn();
   return useCallback(
-    (authControl: string, localVoteCount: number) => {
-      markSaveRequested();
-      return signIn(saveVotesSignInProperties(authControl, localVoteCount), { onCancel: clearSaveRequested });
-    },
+    (authControl: string, localVoteCount: number) => signIn(saveVotesSignInProperties(authControl, localVoteCount)),
     [signIn]
   );
 }

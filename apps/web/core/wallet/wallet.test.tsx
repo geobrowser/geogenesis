@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '../state/local-votes';
+import { clearLocalVotes, toggleLocalVote } from '../state/local-votes';
 import { GeoConnectButton } from './wallet';
 
 const mocks = vi.hoisted(() => ({
@@ -53,11 +53,15 @@ describe('GeoConnectButton', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Save 2 votes' }));
 
+    // The attempt's own `auth_intent` is what lets the saver publish them after this sign-in.
     expect(mocks.saveSignIn).toHaveBeenCalledWith(
-      expect.objectContaining({ component: 'save_votes_prompt', auth_control: 'navbar', local_vote_count: 2 }),
-      expect.objectContaining({ onCancel: expect.any(Function) })
+      expect.objectContaining({
+        component: 'save_votes_prompt',
+        auth_intent: 'save_votes',
+        auth_control: 'navbar',
+        local_vote_count: 2,
+      })
     );
-    expect(readLocalVotes().save).not.toBeNull();
     expect(mocks.login).not.toHaveBeenCalled();
   });
 

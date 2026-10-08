@@ -27,12 +27,13 @@ const mocks = vi.hoisted(() => ({
   beginPrivyAuth: vi.fn(),
   cancelPrivyAuth: vi.fn(),
   impression: vi.fn(),
+  anyModalOpen: false,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, isModalOpen: false }),
 }));
-vi.mock('~/core/hooks/use-any-modal-open', () => ({ useAnyModalOpen: () => false }));
+vi.mock('~/core/hooks/use-any-modal-open', () => ({ useAnyModalOpen: () => mocks.anyModalOpen }));
 vi.mock('~/core/hooks/use-prepare-onboarding', () => ({ usePrepareOnboarding: () => vi.fn() }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.signIn }));
 vi.mock('~/core/privy-auth-events', () => ({
@@ -66,6 +67,7 @@ beforeEach(() => {
   mocks.beginPrivyAuth.mockReset();
   mocks.cancelPrivyAuth.mockReset();
   mocks.impression.mockReset();
+  mocks.anyModalOpen = false;
 });
 
 describe('copy', () => {
@@ -136,7 +138,6 @@ describe('SaveVotesSheet', () => {
     fireEvent.change(screen.getByRole('textbox', { name: 'Email address' }), { target: { value: ' sam@hey.com ' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save votes' }));
 
-    expect(readLocalVotes().save).toMatchObject({ confirmed: false });
     expect(mocks.beginPrivyAuth).toHaveBeenCalledWith(expect.objectContaining({ auth_control: 'email' }));
     expect(screen.getByText('Check your email')).toBeInTheDocument();
     expect(screen.getByText('Enter the code we sent to sam@hey.com')).toBeInTheDocument();
@@ -155,11 +156,11 @@ describe('SaveVotesSheet', () => {
 
     expect(readSaveVotesPrompt()).toBeNull();
     expect(mocks.cancelPrivyAuth).toHaveBeenCalled();
-    expect(readLocalVotes()).toMatchObject({ save: null, prompt: { dismissCount: 1 } });
+    expect(readLocalVotes().prompt.dismissCount).toBe(1);
     expect(readLocalVotes().votes).toHaveLength(2);
   });
 
-  it('offers the other ways in, as a save that a dismissal withdraws', () => {
+  it('offers the other ways in, as a save sign-in', () => {
     vote('a');
     markPromptedThisSession();
     render(<SaveVotesSheet />);
@@ -167,13 +168,43 @@ describe('SaveVotesSheet', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Other ways to sign in' }));
 
-    expect(mocks.signIn).toHaveBeenCalledWith(
-      expect.objectContaining({ auth_control: 'other_sign_in' }),
-      expect.objectContaining({ onCancel: expect.any(Function) })
-    );
-    expect(readLocalVotes().save).not.toBeNull();
-    mocks.signIn.mock.calls[0][1].onCancel();
-    expect(readLocalVotes().save).toBeNull();
+    expect(mocks.signIn).toHaveBeenCalledWith(expect.objectContaining({ auth_control: 'other_sign_in' }));
+    expect(readSaveVotesPrompt()).toBeNull();
+  });
+
+  // Copilot on #2785: an ask that opens on its own uses one up, return visits included.
+  it('counts a return-visit ask toward the next one', () => {
+    vote('a');
+    render(<SaveVotesSheet />);
+    expect(screen.getByText('You have 1 unsaved vote')).toBeInTheDocument();
+    expect(readLocalVotes().prompt.shownCount).toBe(1);
+  });
+
+  // Copilot on #2785: waiting behind an overlay is not being shown.
+  it('neither counts nor measures an ask until it is out from behind an overlay', () => {
+    vote('a');
+    vote('b');
+    markPromptedThisSession();
+    mocks.anyModalOpen = true;
+    const { rerender } = render(<SaveVotesSheet />);
+    act(() => openSaveVotesPrompt('threshold'));
+
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(readLocalVotes().prompt.shownCount).toBe(0);
+    expect(mocks.impression).not.toHaveBeenCalled();
+
+    mocks.anyModalOpen = false;
+    rerender(<SaveVotesSheet />);
+    expect(readLocalVotes().prompt.shownCount).toBe(1);
+    expect(mocks.impression).toHaveBeenCalledOnce();
+
+    // Covered and uncovered again, it is the same opening.
+    mocks.anyModalOpen = true;
+    rerender(<SaveVotesSheet />);
+    mocks.anyModalOpen = false;
+    rerender(<SaveVotesSheet />);
+    expect(readLocalVotes().prompt.shownCount).toBe(1);
+    expect(mocks.impression).toHaveBeenCalledOnce();
   });
 
   it('shows up to two of the votes, then how many more', () => {

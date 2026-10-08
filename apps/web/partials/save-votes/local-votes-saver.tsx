@@ -6,19 +6,20 @@ import { useQueryClient } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
+import { currentAuthAttempt } from '~/core/auth-attempt';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { useOnSignOut } from '~/core/hooks/use-on-sign-out';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
-import { captureLocalVoteDropped } from '~/core/save-votes-analytics';
+import { captureLocalVoteDropped, isSaveVotesSignIn } from '~/core/save-votes-analytics';
 import { savedVotesCopy, savingVotesCopy } from '~/core/save-votes-copy';
 import {
   type LocalVote,
+  bindSaveToAccount,
   clearLocalVotes,
-  confirmSaveRequest,
-  isSaveRequestLive,
+  isLocalVoteCurrent,
   removeLocalVote,
   resetSaveRequest,
   useLocalVotes,
@@ -40,10 +41,12 @@ import { describeError } from '~/core/utils/error-diagnostics';
  * others would trip the queue's two-minute wait.
  *
  * A sign-in no save prompt started clears the votes instead: on a shared browser, they may be
- * somebody else's.
+ * somebody else's. A save is bound to the account its sign-in completed for, so a different account
+ * signing in later — after a session expired, say — clears what is left rather than inheriting it.
  */
 export function LocalVotesSaver() {
-  const { ready, authenticated } = usePrivy();
+  const { ready, authenticated, user } = usePrivy();
+  const accountId = authenticated ? (user?.id ?? null) : null;
   const state = useLocalVotes();
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
@@ -54,27 +57,29 @@ export function LocalVotesSaver() {
   const totalRef = React.useRef(0);
 
   const voteCount = state.votes.length;
-  const confirmed = state.save?.confirmed ?? false;
+  const boundTo = state.save?.accountId ?? null;
+  const bound = accountId !== null && boundTo === accountId;
 
-  // Signed in: a save if a save prompt started it, otherwise somebody else's votes.
+  // Signed in: a save if the sign-in that just completed was a save prompt's, otherwise somebody
+  // else's votes — including a save bound to another account.
   React.useEffect(() => {
-    if (!ready || !authenticated || voteCount === 0 || confirmed) return;
-    if (isSaveRequestLive(state)) {
-      confirmSaveRequest();
+    if (!ready || accountId === null || voteCount === 0 || bound) return;
+    if (boundTo === null && isSaveVotesSignIn(currentAuthAttempt())) {
+      bindSaveToAccount(accountId);
       return;
     }
     state.votes.forEach(vote => captureLocalVoteDropped('other_sign_in', vote, voteCount));
     clearLocalVotes();
-  }, [authenticated, confirmed, ready, state, voteCount]);
+  }, [accountId, bound, boundTo, ready, state, voteCount]);
 
-  // Signed out mid-save: what is left was confirmed for that account, not for the next one here.
+  // Signed out mid-save: what is left was bound to that account, not to the next one here.
   useOnSignOut(() => {
     resetSaveRequest();
     totalRef.current = 0;
   });
 
   const hasPersonalSpace = Boolean(smartAccount && isRegistered && personalSpaceId);
-  const saving = authenticated && confirmed && hasPersonalSpace && voteCount > 0 && !failed;
+  const saving = bound && hasPersonalSpace && voteCount > 0 && !failed;
 
   React.useEffect(() => {
     if (!saving || totalRef.current > 0) return;
@@ -84,11 +89,11 @@ export function LocalVotesSaver() {
 
   // Every vote written: say so, and forget the save, so the next signed-out session starts clean.
   React.useEffect(() => {
-    if (!confirmed || voteCount > 0) return;
+    if (!bound || voteCount > 0) return;
     if (totalRef.current > 0) setToast(<span>{savedVotesCopy(totalRef.current)}</span>);
     totalRef.current = 0;
     clearLocalVotes();
-  }, [confirmed, setToast, voteCount]);
+  }, [bound, setToast, voteCount]);
 
   const next = saving ? state.votes[0] : null;
 
@@ -163,6 +168,9 @@ function LocalVoteWriter({
           latest.current.onSaved('already_held');
           return;
         }
+        // Replaced while the read was out — a signed-in press on this claim removes its device vote
+        // and publishes its own side. Publishing this one now would overwrite the newer press.
+        if (!isLocalVoteCurrent(vote)) return;
         await latest.current.submitResponseAsync(vote.direction);
         latest.current.onSaved('saved');
       } catch (error) {

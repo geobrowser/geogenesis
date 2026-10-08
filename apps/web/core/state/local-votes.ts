@@ -34,19 +34,17 @@ export type LocalVotesState = {
   /** How many times the save sheet has opened on its own, and been closed. Drives when it asks again. */
   prompt: { shownCount: number; dismissCount: number };
   /**
-   * Set when a save prompt starts a sign-in. Only a sign-in a save prompt started saves the votes;
-   * any other sign-in clears them, so one person's votes on a shared browser never land in another
-   * person's account. `confirmed` once the account it was for has signed in.
+   * The account a save prompt signed in, once it has. Only a sign-in a save prompt started saves the
+   * votes, and only to the account it signed in; any other sign-in clears them, so one person's
+   * votes on a shared browser never land in another person's account (see `LocalVotesSaver`).
    */
-  save: { requestedAt: number; confirmed: boolean } | null;
+  save: { accountId: string } | null;
 };
 
 export const LOCAL_VOTES_STORAGE_KEY = 'geo:local-votes:v1';
 /** Past this the oldest vote is dropped. One transaction per vote on save, so this bounds that too. */
 export const LOCAL_VOTES_CAP = 50;
 export const LOCAL_VOTE_TTL_MS = 30 * 24 * 60 * 60 * 1000;
-/** A save prompt's sign-in has to finish within this to count as the one it started. */
-export const SAVE_REQUEST_TTL_MS = 30 * 60 * 1000;
 
 const EMPTY: LocalVotesState = { votes: [], prompt: { shownCount: 0, dismissCount: 0 }, save: null };
 
@@ -103,10 +101,7 @@ function parse(raw: string | null, now = Date.now()): LocalVotesState {
         shownCount: Number(parsed.prompt?.shownCount) || 0,
         dismissCount: Number(parsed.prompt?.dismissCount) || 0,
       },
-      save:
-        parsed.save && typeof parsed.save.requestedAt === 'number'
-          ? { requestedAt: parsed.save.requestedAt, confirmed: Boolean(parsed.save.confirmed) }
-          : null,
+      save: parsed.save && typeof parsed.save.accountId === 'string' ? { accountId: parsed.save.accountId } : null,
     };
   } catch {
     return EMPTY;
@@ -218,6 +213,16 @@ export function removeLocalVote(key: LocalVoteKey) {
   write({ ...current, votes: current.votes.filter(vote => !sameVote(vote, key)) });
 }
 
+/**
+ * Whether `vote` is still the one this device holds: not removed, switched or re-cast since it was
+ * read. A write that awaited anything re-checks this before publishing, so a newer press wins.
+ */
+export function isLocalVoteCurrent(vote: LocalVote) {
+  return readLocalVotes().votes.some(
+    held => sameVote(held, vote) && held.direction === vote.direction && held.votedAt === vote.votedAt
+  );
+}
+
 export function clearLocalVotes() {
   write(EMPTY);
 }
@@ -230,25 +235,12 @@ export function recordSavePromptDismissed() {
   update(current => ({ ...current, prompt: { ...current.prompt, dismissCount: current.prompt.dismissCount + 1 } }));
 }
 
-export function markSaveRequested() {
-  update(current => ({ ...current, save: { requestedAt: Date.now(), confirmed: false } }));
+/** A save prompt's sign-in completed for `accountId`: these votes are that account's to publish. */
+export function bindSaveToAccount(accountId: string) {
+  update(current => ({ ...current, save: { accountId } }));
 }
 
-export function clearSaveRequested() {
-  update(current => (current.save && !current.save.confirmed ? { ...current, save: null } : current));
-}
-
-/** Signed out mid-save: whatever was confirmed was for that account, not whoever signs in next. */
+/** Signed out mid-save: whatever was bound was for that account, not whoever signs in next. */
 export function resetSaveRequest() {
   update(current => (current.save ? { ...current, save: null } : current));
-}
-
-export function confirmSaveRequest() {
-  update(current => (current.save ? { ...current, save: { ...current.save, confirmed: true } } : current));
-}
-
-/** Whether a save prompt started the sign-in that just completed (or one already confirmed). */
-export function isSaveRequestLive(state: LocalVotesState, now = Date.now()) {
-  if (!state.save) return false;
-  return state.save.confirmed || now - state.save.requestedAt < SAVE_REQUEST_TTL_MS;
 }

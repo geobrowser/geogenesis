@@ -17,8 +17,6 @@ import { saveVotesHeading, saveVotesSubmitLabel, saveVotesSubtext } from '~/core
 import { isChatOpenAtom } from '~/core/state/chat-store';
 import {
   type LocalVote,
-  clearSaveRequested,
-  markSaveRequested,
   recordSavePromptDismissed,
   recordSavePromptShown,
   useLocalVotes,
@@ -46,8 +44,16 @@ import {
   fieldClass,
 } from '~/partials/explore/email-capture-styles';
 
-/** Asks that open on their own count toward when the sheet asks again; a press on "Save" does not. */
-const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set(['threshold', 'single_claim', 'repeat']);
+/**
+ * Asks that open on their own count toward when the sheet asks again; a press on "Save" does not. The
+ * return-visit ask counts too, or closing it and voting once more would ask again straight away.
+ */
+const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
+  'threshold',
+  'single_claim',
+  'repeat',
+  'return_visit',
+]);
 
 /**
  * "Save your N votes": asks a signed-out visitor who has voted to keep their votes by making an
@@ -82,15 +88,6 @@ export function SaveVotesSheet() {
 
   const open = reason !== null && ready && !authenticated && (count > 0 || codeEmail !== null);
 
-  // Counted and measured once per opening, not per render.
-  React.useEffect(() => {
-    if (!open || !reason) return;
-    if (AUTOMATIC_REASONS.has(reason)) recordSavePromptShown();
-    captureSaveVotesImpression(reason, count);
-    // Per opening.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, reason]);
-
   // Signed in: the sheet's job is done whichever way they got there, and the saver takes over.
   React.useEffect(() => {
     if (!authenticated) return;
@@ -100,12 +97,25 @@ export function SaveVotesSheet() {
 
   const isAnyModalOpen = useAnyModalOpen(open);
   const overlayOpen = isModalOpen || isChatOpen || isAnyModalOpen;
+  const visible = open && !overlayOpen;
+
+  // Counted and measured once per opening, and only once the visitor can see it: an ask that waits
+  // behind an overlay and is never shown neither uses up an ask nor reports an impression.
+  const recordedFor = React.useRef<SaveVotesPromptReason | null>(null);
+  React.useEffect(() => {
+    if (!open) recordedFor.current = null;
+    if (!visible || !reason || recordedFor.current === reason) return;
+    recordedFor.current = reason;
+    if (AUTOMATIC_REASONS.has(reason)) recordSavePromptShown();
+    captureSaveVotesImpression(reason, count);
+    // Per opening; `count` is read at that moment.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, visible, reason]);
 
   const close = React.useCallback(() => {
-    // Ends this sheet's own sign-in as closed, once a code is out.
+    // Ends this sheet's own sign-in as closed, once a code is out, so it no longer counts as a save.
     if (codeEmail !== null) cancelPrivyAuth();
     // Not now, not never: the votes stay on the device and the pills still offer "Save".
-    clearSaveRequested();
     recordSavePromptDismissed();
     setCodeEmail(null);
     closeSaveVotesPrompt();
@@ -118,7 +128,6 @@ export function SaveVotesSheet() {
       setInvalid(true);
       return;
     }
-    markSaveRequested();
     beginPrivyAuth(saveVotesSignInProperties('email', count));
     prepareOnboarding();
     setCodeEmail(trimmed);

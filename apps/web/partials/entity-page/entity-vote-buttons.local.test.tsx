@@ -18,6 +18,7 @@ const SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 
 const mocks = vi.hoisted(() => ({
   submitResponseAsync: vi.fn(),
+  authReady: true,
   /** Signed in, with no registered personal space yet. */
   personalSpace: { personalSpaceId: null as string | null, isRegistered: false, isLoading: false },
   accountSetupPending: false,
@@ -32,7 +33,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@geogenesis/auth', () => ({
-  usePrivy: () => ({ authenticated: false }),
+  usePrivy: () => ({ ready: mocks.authReady, authenticated: false }),
   useGeoLogin: () => ({ login: vi.fn() }),
 }));
 vi.mock('~/core/analytics', () => ({
@@ -95,6 +96,7 @@ beforeEach(() => {
   mocks.submitResponseAsync.mockReset();
   mocks.submitResponseAsync.mockResolvedValue(undefined);
   clearLocalVotes();
+  mocks.authReady = true;
   closeSaveVotesPrompt();
   window.sessionStorage.clear();
 });
@@ -117,6 +119,17 @@ describe('a vote from a signed-out visitor', () => {
     expect(upvote()).toHaveAttribute('title', 'Only on this device. Save it to count.');
     // 2 up, 1 down: still 1, because a vote on this device isn't counted until it is saved.
     expect(screen.getByText('1')).toBeInTheDocument();
+  });
+
+  // Copilot on #2785: before Privy has restored a session, signed out is not known yet.
+  it('drops a press while a session is still being restored', () => {
+    mocks.authReady = false;
+    render(<EntityVoteButtons entityId="entity-1" spaceId={SPACE} responseKind="curation" />, { wrapper });
+
+    fireEvent.click(upvote());
+
+    expect(readLocalVotes().votes).toEqual([]);
+    expect(queued()).toHaveLength(0);
   });
 
   it('switches and takes back, like the arrows do signed in', () => {

@@ -159,7 +159,9 @@ export function EntityVoteButtons({
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-  const { authenticated } = usePrivy();
+  const { ready: authReady, authenticated } = usePrivy();
+  // Known to be signed out — not still restoring a session, when `authenticated` reads false too.
+  const signedOut = authReady && !authenticated;
   const queryClient = useQueryClient();
   // Signed in without a usable space, a vote is held only when one is on its way: being created for
   // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
@@ -271,7 +273,10 @@ export function EntityVoteButtons({
     if (!smartAccount) {
       // Signed out: vote on this device, with no sign-in in the way. The save sheet asks for an
       // account once there are a few. Signed in with the account still loading, the old prompt stays.
-      if (!authenticated && responseKind !== null) {
+      // Still restoring a session, the press is dropped: kept as a visitor's, a returning account's
+      // vote would be cleared as somebody else's the moment the session came back.
+      if (!authReady) return;
+      if (signedOut && responseKind !== null) {
         castLocalVote({
           entityId,
           spaceId,
@@ -329,7 +334,7 @@ export function EntityVoteButtons({
     }
     if (smartAccount) return signedInTitle;
     // Signed out, a press votes on this device: the arrow does what it says (GEO-3214).
-    if (!authenticated) {
+    if (signedOut) {
       if (localDirection === direction) return RESPONSE_LOCAL_ONLY_COPY;
       return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
     }
