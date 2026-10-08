@@ -326,6 +326,10 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
  * (GEO-2696): the menu answers "what else do the claims I have narrowed to carry", so it *is*
  * counted over the topic selection — and each picked topic comes back with its current result
  * count, which is what lets it be un-picked.
+ *
+ * That is the hub's arrangement, `spaceMatch: 'any'`. The debate again picker asks for
+ * `spaceMatch: 'all'` (GEO-3223), where spaces work as topics do: AND, and counted as co-occurrence
+ * over the selection.
  */
 /**
  * The clause that says "tagged with this, in these spaces, carrying these topics, matching this
@@ -1063,7 +1067,8 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
 }
 
 /**
- * The space menu, counted the same way and narrowed by everything except the space selection.
+ * The space menu, counted the same way and narrowed by everything except the space selection —
+ * or, with `spaceMatch: 'all'`, by the space selection too, as co-occurrence.
  *
  * Grouped on the tag relation's own `SPACE_ID`, so a space is offered for the claims tagged *in* it
  * rather than for every space the claim happens to be named in.

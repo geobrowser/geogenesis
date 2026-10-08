@@ -772,17 +772,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Spent once per session and never unspent within it: a viewer who has opened Explore has the
   // cache this exists to fill, and one who has not is on a tab that reads none of it.
   //
-  // What it warms is the *unfiltered* key, and for a viewer with member spaces on the menu that is
-  // not the key Explore settles on: the membership default lands on arrival and re-keys the catalog
-  // and the topic facet once more. That second request is deliberate and predates this — see
-  // `offeredSpaces` below, where the seed is drawn from the menu rather than from the eligible set
-  // precisely so it cannot tick a space the tag has nothing in. The seeded key is therefore
-  // unknowable until the unfiltered one has been fetched: the menu comes from the facet *and* the
-  // publishability gate, and that gate is built from the catalog's own rows.
-  //
-  // So the warm-up cannot remove that wave, and is not trying to. What it removes is the first one:
-  // the click lands on rows rather than on a skeleton, and `keepPreviousData` holds them while the
-  // narrowed page arrives, so the seed reads as a filter applying rather than as a reload.
+  // What it warms is the *unfiltered* key, which is the key Explore opens on: it has no default
+  // selection since GEO-3223, when the membership default that used to re-key it on arrival went.
+  // So the click lands on rows rather than on a skeleton.
   React.useEffect(() => {
     if (browseWarmed || !taggedEnabled || taggedScopePending) return;
     if (taggedCatalogLoading || taggedTopicFacet.isLoading || taggedSpaceFacet.isLoading) return;
@@ -1935,11 +1927,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * about the "Matches only" switch), so a menu could offer an option with a count beside it that
    * produced nothing when picked.
    *
-   * What a menu does with its own selection follows from how that dimension combines. Space is OR
-   * within the dimension, so its menu leaves its own selection out and each count answers "how many
-   * rows would ticking this add". Topics are AND — {@link carriesEveryTopic} asks for every picked
-   * one — so the topic menu is co-occurrence over the rows that already carry the selection, or it
-   * would offer a topic with no claim in common with what is picked and empty the list (GEO-2696).
+   * Both dimensions are AND, and both menus are co-occurrence over the rows that already carry the
+   * selection. Topics have been since GEO-2696 — {@link carriesEveryTopic} asks for every picked one,
+   * or a menu would offer a topic with no claim in common with what is picked and empty the list.
+   * Spaces joined them with GEO-3223, when the two became one row of pills: they used to be OR, with
+   * a menu that left its own selection out. Each count answers "what would picking this leave".
    */
   const passesSpace = React.useCallback(
     // Canonically, as everything that joins a row's space to another source's now is. A row carries
@@ -1965,9 +1957,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [debouncedSearch, searchTopicsOn]
   );
 
-  // Both menus come from the server's own count over the tag, each narrowed by every dimension but
-  // its own (GEO-2796). Counting from the rows could only ever describe the page in hand, which is
-  // the thing paging makes wrong.
+  // Both menus come from the server's own count over the tag (GEO-2796), each counted as
+  // co-occurrence over every dimension, its own included — spaces as well as topics since GEO-3223.
+  // Counting from the rows could only ever describe the page in hand, which is the thing paging makes
+  // wrong.
   //
   // Filtered by publishability on the way out: the server was sent the viewer's allowlist, but not
   // which spaces can carry a published debate — that is derived from the claims themselves.
@@ -1976,16 +1969,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // they are deliberately *not* narrowed by the viewer's allowlist — a debater's own claims live in
   // their personal space, which nobody else has joined. Their spaces have to be in the menu with
   // them or the rows are visible and unfilterable, so those two count from the rows on screen.
-  // What the menu offers before the viewer's own selection is folded back in. Split out because the
-  // default is seeded from exactly this list rather than from the eligible set, which is the wider
-  // and more obvious source.
   //
-  // Not for the id shapes: those agreed once GEO-2798 normalized the facet's keys, and `normId` and
-  // `uuidToHex` are the same function. It is that this list is the spaces that actually *have*
-  // claims. Seeding from the eligible set would tick a space the viewer belongs to and the tag has
-  // nothing in, landing them on an empty list behind a filter they never set. The cost is a second
-  // request — the list loads unfiltered, then again narrowed — which is the price of not defaulting
-  // to nothing.
+  // This is what the menu offers before the viewer's own selection is folded back in: the spaces that
+  // actually *have* claims under the filters, rather than every space the viewer may see.
   // On their tab, without the claims "Hide agreed" takes out: a menu counting them offered a space or
   // topic whose only claims are hidden, and picking it emptied the list. The list itself still reads
   // `claims`, so a claim agreed with on screen is held rather than dropped — see `visibleClaims`.
