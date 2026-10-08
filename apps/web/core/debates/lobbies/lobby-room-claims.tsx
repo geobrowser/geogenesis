@@ -29,17 +29,21 @@ export const LOBBY_ROOM_CLAIMS_COPY = {
 
 /**
  * The lobby's "In this room" claims (GEO-3132), in the server's order. `excludeClaimIds` drops rows
- * by `DebateClaimSummary.id`, for a host that shows some of them elsewhere.
+ * by `DebateClaimSummary.id`, for a host that shows some of them elsewhere; the list is only empty
+ * when the room has no claims, not when all of them are shown elsewhere.
  */
 export function LobbyRoomClaims({
   lobby,
   excludeClaimIds,
   onExplore,
+  renderMenu,
 }: {
   lobby: DebateLobbyView;
   excludeClaimIds?: ReadonlySet<string>;
   /** Offered when the list is empty. */
   onExplore?: () => void;
+  /** Host controls on each claim. */
+  renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
   const query = useDebateLobbyClaims(lobby.lobby_id);
   const source = query.data?.source ?? 'room';
@@ -61,16 +65,16 @@ export function LobbyRoomClaims({
       error={query.error}
       failureReason={query.failureReason}
       onRetry={() => void query.refetch()}
-      isEmpty={claims.length === 0}
+      isEmpty={(query.data?.claims.length ?? 0) === 0}
       emptyMessage={LOBBY_ROOM_CLAIMS_COPY.empty}
       emptyAction={onExplore ? { label: 'Explore claims', onClick: onExplore } : undefined}
     >
-      {source === 'recent' ? (
+      {source === 'recent' && claims.length > 0 ? (
         <div className="pb-2">
           <HubMessageNote>{LOBBY_ROOM_CLAIMS_COPY.recent}</HubMessageNote>
         </div>
       ) : null}
-      <LobbyRoomClaimsList claims={claims} renderOffer={renderOffer} />
+      <LobbyRoomClaimsList claims={claims} renderOffer={renderOffer} renderMenu={renderMenu} />
     </HubQueryState>
   );
 }
@@ -106,7 +110,7 @@ export function lobbyRoomClaimFrom(row: DebateLobbyClaim): LobbyRoomClaim {
 }
 
 /** Request debate, offered only to people in this lobby on the other side. */
-function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRoomOffer }) {
+export function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRoomOffer }) {
   const { claim, readiness } = offer.entry;
   const { data: activity } = useDebateActivity(true);
   const { data: requests } = useDebateRequests(true);

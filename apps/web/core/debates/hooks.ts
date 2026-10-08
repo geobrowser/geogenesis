@@ -175,6 +175,9 @@ export const debateQueryKeys = {
   /** Dashless. Refetched on `debate.lobby_changed`, and after the viewer's own vote is reported. */
   lobbyClaims: (accountKey: string | null, lobbyId: string) =>
     ['debates', 'account', accountKey, 'lobby-claims', dashlessId(lobbyId)] as const,
+  /** Dashless. Replaced by `debate.lobby_highlights_changed`; fetched on mount and reconnect only. */
+  lobbyHighlights: (accountKey: string | null, lobbyId: string) =>
+    ['debates', 'account', accountKey, 'lobby-highlights', dashlessId(lobbyId)] as const,
   scheduledDebates: (accountKey: string | null) => ['debates', 'account', accountKey, 'scheduled-debates'] as const,
   /** Every admin list of scheduled debates, whatever week it was read from: what New match refreshes. */
   adminScheduledDebatesRoot: ['debates', 'admin-scheduled-debates'] as const,

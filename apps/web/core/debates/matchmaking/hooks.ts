@@ -120,7 +120,7 @@ const WARMING_UP_RETRIES = 9;
  * 404 that means matchmaking is not deployed, the 400 that means the request was malformed — and
  * asking again gets the same answer. Those still surface at once.
  */
-const viewerReadRetryOptions = (accountKey: string | null) => ({
+export const viewerReadRetryOptions = (accountKey: string | null) => ({
   retry: (failureCount: number, error: Error) => {
     // An account geo-chat has not registered yet is the long one. It refuses the session exchange
     // with a 401 and keeps refusing for a minute or two after sign-up, then simply starts working —

@@ -54,15 +54,27 @@ const FACES_SHOWN = 3;
 export function LobbyRoomClaimsList({
   claims,
   renderOffer,
+  renderHeader,
+  renderMenu,
 }: {
   claims: LobbyRoomClaim[];
   /** The lobby-scoped request control. Only called when someone on the other side can be requested. */
   renderOffer: (offer: LobbyRoomOffer) => React.ReactNode;
+  /** Above the claim, e.g. who highlighted it. */
+  renderHeader?: (entry: LobbyRoomClaim) => React.ReactNode;
+  /** Host controls, beside the offer. */
+  renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
   return (
     <HubCardList>
       {claims.map(entry => (
-        <LobbyRoomClaimCard key={entry.claim.id} entry={entry} renderOffer={renderOffer} />
+        <LobbyRoomClaimCard
+          key={entry.claim.id}
+          entry={entry}
+          renderOffer={renderOffer}
+          renderHeader={renderHeader}
+          renderMenu={renderMenu}
+        />
       ))}
     </HubCardList>
   );
@@ -71,9 +83,13 @@ export function LobbyRoomClaimsList({
 function LobbyRoomClaimCard({
   entry,
   renderOffer,
+  renderHeader,
+  renderMenu,
 }: {
   entry: LobbyRoomClaim;
   renderOffer: (offer: LobbyRoomOffer) => React.ReactNode;
+  renderHeader?: (entry: LobbyRoomClaim) => React.ReactNode;
+  renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
   const { claim } = entry;
   // The card holds its own response reads until it is near the viewport; this one follows it.
@@ -122,6 +138,9 @@ function LobbyRoomClaimCard({
           indexingDelayed: indexing.status === 'delayed',
         })
       : null;
+  const menu = renderMenu?.(entry);
+  const action =
+    offer ?? (entry.activeDebate ? <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} /> : null);
 
   return (
     <MatchmakingClaimCard
@@ -131,15 +150,18 @@ function LobbyRoomClaimCard({
       readiness={entry.readiness}
       activeDebate={entry.activeDebate}
       answersMayComeFromIndex
+      header={renderHeader?.(entry)}
       // Never the card's default slot: its request would not be lobby-scoped. The spacer keeps the
-      // meta row's height.
+      // meta row's height when there is neither an action nor a host menu.
       endSlot={
-        offer ??
-        (entry.activeDebate ? (
-          <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
+        menu ? (
+          <span className="flex shrink-0 items-center gap-1">
+            {action}
+            {menu}
+          </span>
         ) : (
-          <span className="h-5 shrink-0" aria-hidden />
-        ))
+          (action ?? <span className="h-5 shrink-0" aria-hidden />)
+        )
       }
       footer={
         opposing && opposing.participants.length > 0 ? <DisagreeingInRoom people={opposing.participants} /> : undefined

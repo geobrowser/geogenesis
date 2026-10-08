@@ -38,8 +38,17 @@ vi.mock('../backfill-readiness-for-held-position', async importOriginal => ({
 // The card is tested on its own; here only what the list hands it matters.
 vi.mock('../matchmaking/matchmaking-claim-card', () => ({
   isResolvableClaim: () => true,
-  MatchmakingClaimCard: ({ endSlot, footer }: { endSlot?: React.ReactNode; footer?: React.ReactNode }) => (
+  MatchmakingClaimCard: ({
+    header,
+    endSlot,
+    footer,
+  }: {
+    header?: React.ReactNode;
+    endSlot?: React.ReactNode;
+    footer?: React.ReactNode;
+  }) => (
     <article>
+      {header}
       {endSlot}
       {footer}
     </article>
@@ -174,6 +183,39 @@ describe('LobbyRoomClaimsList', () => {
     render(<LobbyRoomClaimsList claims={[offered]} renderOffer={renderOffer} />);
     expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
+  });
+
+  describe('a host menu', () => {
+    const renderMenu = () => <button type="button">Claim options</button>;
+
+    it('sits beside the offer', () => {
+      const offered = entry(true, [side(true, [], 0), side(false, [person('Ben')], 1)]);
+      render(<LobbyRoomClaimsList claims={[offered]} renderOffer={renderOffer} renderMenu={renderMenu} />);
+      expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Claim options' })).toBeTruthy();
+    });
+
+    it('sits beside Watch live', () => {
+      const live = { ...entry(true, [side(true, [], 0), side(false, [], 0)]), activeDebate: true };
+      render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} renderMenu={renderMenu} />);
+      expect(screen.getByRole('link', { name: 'Watch live' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Claim options' })).toBeTruthy();
+    });
+
+    it('stands alone in place of the spacer, under the header', () => {
+      const quiet = entry(null, [side(true, [], 0), side(false, [], 0)]);
+      const { container } = render(
+        <LobbyRoomClaimsList
+          claims={[quiet]}
+          renderOffer={renderOffer}
+          renderMenu={renderMenu}
+          renderHeader={() => <p>Highlighted by Ana</p>}
+        />
+      );
+      expect(screen.getAllByRole('button').map(button => button.textContent)).toEqual(['Claim options']);
+      expect(screen.getByText('Highlighted by Ana')).toBeTruthy();
+      expect(container.querySelector('[aria-hidden]')).toBeNull();
+    });
   });
 
   it('takes the chain’s side only for a withdrawn row, never where geo-chat simply has none', () => {

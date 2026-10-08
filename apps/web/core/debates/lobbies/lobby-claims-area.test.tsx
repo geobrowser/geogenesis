@@ -8,6 +8,10 @@ import { LobbyClaimsArea } from './lobby-claims-area';
 vi.mock('./lobby-room-claims', () => ({
   LobbyRoomClaims: () => <p data-testid="lobby-room-claims" />,
 }));
+vi.mock('./lobby-highlights', () => ({
+  LobbyRoomVote: () => null,
+  LobbyRoomClaimsWithHighlights: () => <p data-testid="lobby-room-claims" />,
+}));
 
 const lobby = { lobby_id: 'lobby-1' } as DebateLobbyView;
 

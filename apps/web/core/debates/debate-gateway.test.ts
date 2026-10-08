@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
+import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
@@ -504,6 +505,145 @@ describe('DebateGatewayClient', () => {
       queryClient.setQueryData(lobbyKey, { viewer: { connected: false } });
       await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 5, '2026-10-07T12:00:02Z') });
       expectInvalidated(invalidateQueries, { queryKey: lobbyKey, refetchType: 'active' });
+    });
+  });
+
+  describe('lobby highlights', () => {
+    const highlightsKey = ['debates', 'account', 'user-a', 'lobby-highlights', 'abcd'];
+    const state = (asOf: string | null, agree: number) => ({
+      lobby_id: 'AB-CD',
+      as_of: asOf,
+      highlights: [],
+      room_vote: {
+        vote_id: 'v1',
+        claim: { id: 'c1', space_id: 's', claim_entity_id: 'e', claim: 'Claim', description: null },
+        started_by: null,
+        started_at: '2026-10-07T12:00:00Z',
+        tally: { agree, disagree: 0, eligible: 4 },
+      },
+    });
+
+    async function started() {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+    }
+
+    let eventCount = 0;
+    async function highlightsChanged(lobbyHighlights: unknown) {
+      eventCount += 1;
+      sockets[0]!.receive('EVENT', {
+        event_id: `highlights-${eventCount}`,
+        event_type: 'debate.lobby_highlights_changed',
+        payload: { lobby_id: 'AB-CD', lobby_highlights: lobbyHighlights },
+      });
+      await flushInvalidations();
+    }
+
+    const cachedAgree = () =>
+      queryClient.getQueryData<{ room_vote: { tally: { agree: number } } }>(highlightsKey)?.room_vote.tally.agree;
+
+    it('replaces the cached state with a newer one, keeping the viewer, and never refetches', async () => {
+      await started();
+      queryClient.setQueryData(highlightsKey, {
+        ...state('2026-10-07T12:00:01.000100Z', 1),
+        viewer: { room_vote_position: true, vote_id: 'v1' },
+      });
+
+      await highlightsChanged(state('2026-10-07T12:00:01.000200Z', 2));
+
+      expect(cachedAgree()).toBe(2);
+      expect(queryClient.getQueryData<{ viewer: unknown }>(highlightsKey)?.viewer).toEqual({
+        room_vote_position: true,
+        vote_id: 'v1',
+      });
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an older state', state('2026-10-07T12:00:00.9Z', 5)],
+      ['the same state', state('2026-10-07T12:00:01.0001Z', 5)],
+      ['an unreadable payload', { lobby_id: 'AB-CD' }],
+    ])('ignores %s', async (_label, payload) => {
+      await started();
+      queryClient.setQueryData(highlightsKey, {
+        ...state('2026-10-07T12:00:01.000100Z', 1),
+        viewer: { room_vote_position: null, vote_id: 'v1' },
+      });
+
+      await highlightsChanged(payload);
+
+      expect(cachedAgree()).toBe(1);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('seeds the cache while the first GET is in flight, and an older GET keeps it', async () => {
+      await started();
+      let respond!: (value: LobbyHighlightsState) => void;
+      const fetched = new Promise<LobbyHighlightsState>(resolve => (respond = resolve));
+      // As `useLobbyHighlights` does: the GET settles against whatever the cache holds by then.
+      const fetching = queryClient.fetchQuery({
+        queryKey: highlightsKey,
+        queryFn: async () => {
+          const response = await fetched;
+          return settleFetchedLobbyHighlights(queryClient.getQueryData<LobbyHighlightsState>(highlightsKey), response);
+        },
+      });
+
+      await highlightsChanged(state('2026-10-07T12:00:02Z', 3));
+      expect(cachedAgree()).toBe(3);
+      expect(queryClient.getQueryData<{ viewer: unknown }>(highlightsKey)?.viewer).toEqual({
+        room_vote_position: null,
+        vote_id: null,
+      });
+
+      respond({ ...state('2026-10-07T12:00:01Z', 1), viewer: { room_vote_position: true, vote_id: 'v1' } });
+      await fetching;
+      expect(cachedAgree()).toBe(3);
+      expect(queryClient.getQueryData<{ viewer: unknown }>(highlightsKey)?.viewer).toEqual({
+        room_vote_position: true,
+        vote_id: 'v1',
+      });
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('applies an event to a lobby on screen whose first GET failed, but not once nothing shows it', async () => {
+      await started();
+      const observer = new QueryObserver(queryClient, {
+        queryKey: highlightsKey,
+        queryFn: () => Promise.reject(new Error('down')),
+        retry: false,
+      });
+      const unsubscribe = observer.subscribe(() => undefined);
+      await vi.waitFor(() => expect(observer.getCurrentResult().isError).toBe(true));
+
+      await highlightsChanged(state('2026-10-07T12:00:01Z', 2));
+      expect(cachedAgree()).toBe(2);
+
+      unsubscribe();
+      queryClient.removeQueries({ queryKey: highlightsKey });
+      const unshown = new QueryObserver(queryClient, {
+        queryKey: highlightsKey,
+        queryFn: () => Promise.reject(new Error('down')),
+        retry: false,
+      });
+      const stop = unshown.subscribe(() => undefined);
+      await vi.waitFor(() => expect(unshown.getCurrentResult().isError).toBe(true));
+      stop();
+      await highlightsChanged(state('2026-10-07T12:00:02Z', 4));
+      expect(queryClient.getQueryData(highlightsKey)).toBeUndefined();
+    });
+
+    it('leaves a lobby whose highlights were never read uncached', async () => {
+      await started();
+      await highlightsChanged(state('2026-10-07T12:00:01Z', 1));
+      expect(queryClient.getQueryData(highlightsKey)).toBeUndefined();
     });
   });
 

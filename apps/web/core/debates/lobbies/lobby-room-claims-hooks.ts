@@ -4,16 +4,18 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { GeoChatRequestError, dashlessId, getDebateLobbyClaims } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { viewerReadRetryOptions } from '../matchmaking/hooks';
 
 /**
  * The lobby's "In this room" claims. Refetched on `debate.lobby_changed`, after the viewer's own vote
- * is reported, and on reconnect, so no polling.
+ * is reported, and on reconnect, so no polling. A failed read retries, since a quiet lobby sends none.
  */
 export function useDebateLobbyClaims(lobbyId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
     ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobbyClaims(accountKey, lobbyId),
     queryFn: ({ signal }) => getDebateLobbyClaims(dashlessId(lobbyId), getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,

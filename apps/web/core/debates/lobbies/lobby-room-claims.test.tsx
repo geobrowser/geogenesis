@@ -233,6 +233,15 @@ describe('LobbyRoomClaims', () => {
     expect(screen.getByTestId('claim-card')).toBeTruthy();
   });
 
+  it('shows no empty state when every claim is shown elsewhere', () => {
+    mocks.data = { lobby_id: '0192abc', source: 'recent', claims: [row('a', null, 0)] };
+    render(<LobbyRoomClaims lobby={lobby} excludeClaimIds={new Set(['a'])} onExplore={vi.fn()} />);
+
+    expect(screen.queryByText(LOBBY_ROOM_CLAIMS_COPY.empty)).toBeNull();
+    expect(screen.queryByText(LOBBY_ROOM_CLAIMS_COPY.recent)).toBeNull();
+    expect(screen.queryByTestId('claim-card')).toBeNull();
+  });
+
   it('offers Explore when there is nothing to show', () => {
     const onExplore = vi.fn();
     mocks.data = { lobby_id: '0192abc', source: 'recent', claims: [] };

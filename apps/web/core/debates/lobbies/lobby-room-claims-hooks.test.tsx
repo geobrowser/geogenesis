@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook } from '@testing-library/react';
+import { renderHook, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -7,7 +7,14 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from '../api';
 import { debateQueryKeys } from '../hooks';
-import { useRefreshLobbyClaimsOnRefusal } from './lobby-room-claims-hooks';
+import { useDebateLobbyClaims, useRefreshLobbyClaimsOnRefusal } from './lobby-room-claims-hooks';
+
+const getClaims = vi.hoisted(() => vi.fn());
+
+vi.mock('../api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  getDebateLobbyClaims: getClaims,
+}));
 
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
@@ -37,5 +44,22 @@ describe('useRefreshLobbyClaimsOnRefusal', () => {
     refresh(new GeoChatRequestError('respond first', 'intent_missing', 409));
     refresh(new Error('offline'));
     expect(invalidate).not.toHaveBeenCalled();
+  });
+});
+
+describe('useDebateLobbyClaims', () => {
+  it('retries a failed read rather than leaving the list empty', async () => {
+    getClaims
+      .mockRejectedValueOnce(new GeoChatRequestError('busy', 'unavailable', 503))
+      .mockResolvedValueOnce({ lobby_id: '0192abc', source: 'room', claims: [] });
+    const queryClient = new QueryClient();
+    const { result } = renderHook(() => useDebateLobbyClaims('0192-abc'), {
+      wrapper: ({ children }: { children: React.ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      ),
+    });
+
+    await waitFor(() => expect(result.current.data?.source).toBe('room'), { timeout: 5000 });
+    expect(getClaims).toHaveBeenCalledTimes(2);
   });
 });
