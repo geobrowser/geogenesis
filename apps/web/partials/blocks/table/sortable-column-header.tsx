@@ -24,8 +24,8 @@ export function SortableColumnHeader({
   variant = 'smallTitle',
   children,
 }: SortableColumnHeaderProps) {
-  const isActive = sort?.columnId === columnId;
-  const direction = isActive ? sort.direction : null;
+  const direction = sort?.kind === 'property' && sort.columnId === columnId ? sort.direction : null;
+  const isActive = direction !== null;
 
   const handleClick = (e: React.MouseEvent) => {
     // Don't intercept clicks on child interactive elements (rename input, nested buttons)

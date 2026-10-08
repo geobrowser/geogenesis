@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 
 import { DATA_BLOCK_DROPDOWNS_PROPERTY_ID } from '~/core/blocks/data/block-ontology-ids';
+import { parsePersistedSort } from '~/core/blocks/data/persisted-sort';
 import { DATA_BLOCK_VIEW_EXPLORE_ID } from '~/core/data-block-ids';
 import { getBatchEntities } from '~/core/io/queries';
 import { RANKING_VIEW_PILL_ID } from '~/core/ranking-block-ids';
@@ -16,6 +17,7 @@ import { hasMarkdownSyntax, renderMarkdownDocument, renderMarkdownInline } from 
 import { reactiveRelations } from '~/core/sync/store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
 import { SORT_PROPERTY } from '~/core/system-ids';
+import { builtInSortLabel } from '~/core/utils/column-sort';
 import type {
   BlockChange,
   DataBlockChange,
@@ -1053,12 +1055,8 @@ function extractEntityIdsFromConfigValues(configValues: ValueChange[]): string[]
   const ids = new Set<string>();
 
   const extractFromSortJson = (raw: string) => {
-    try {
-      const parsed = JSON.parse(raw);
-      maybeAddEntityBatchId(ids, parsed.sort_by);
-    } catch {
-      // ignore
-    }
+    const sort = parsePersistedSort(raw);
+    if (sort?.kind === 'property') maybeAddEntityBatchId(ids, sort.columnId);
   };
 
   const extractFromFilterJson = (raw: string) => {
@@ -1561,15 +1559,11 @@ function getSortValue(sortValues: ValueChange[], side: 'before' | 'after'): stri
 }
 
 function formatSortDisplay(value: string, nameMap: Map<string, string>): string {
-  try {
-    const parsed = JSON.parse(value);
-    const direction = parsed.sort_direction === 'ascending' ? 'Ascending' : 'Descending';
-    const columnId = parsed.sort_by ?? 'unknown';
-    const columnName = nameMap.get(columnId) ?? columnId;
-    return `${columnName}, ${direction}`;
-  } catch {
-    return value;
-  }
+  const sort = parsePersistedSort(value);
+  if (!sort) return value;
+  const direction = sort.direction === 'asc' ? 'Ascending' : 'Descending';
+  const name = sort.kind === 'builtin' ? builtInSortLabel(sort.sort) : (nameMap.get(sort.columnId) ?? sort.columnId);
+  return `${name}, ${direction}`;
 }
 
 function formatFilterDisplay(value: string, nameMap: Map<string, string>): string {

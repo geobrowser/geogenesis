@@ -3,6 +3,7 @@ import { keepPreviousData } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import type { EntitiesOrderBy } from '~/core/gql/graphql';
 import { useEditorStoreLite } from '~/core/state/editor/use-editor';
 import { WhereCondition } from '~/core/sync/experimental_query-layer';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
@@ -29,7 +30,7 @@ export interface CollectionProps {
    * Active page index (0-based). Used to slice locally-known collection
    * relations into a window before issuing the entity fetch. Cursor-based
    * pagination on the server is keyed off `after` + `offset` and is only
-   * relevant when a server-side `sort` is active.
+   * relevant when a server-side `sort` or `orderBy` is active.
    */
   pageNumber?: number;
   after?: string;
@@ -37,9 +38,11 @@ export interface CollectionProps {
   offset?: number;
   where?: WhereCondition;
   sort?: { propertyId: string; direction: 'asc' | 'desc'; dataType?: string; includeWithoutValue?: boolean };
+  /** Entity-level ordering (Best, Created) applied server-side when no property `sort` is set. */
+  orderBy?: EntitiesOrderBy[];
 }
 
-export function useCollection({ source, first, pageNumber = 0, after, offset, where, sort }: CollectionProps) {
+export function useCollection({ source, first, pageNumber = 0, after, offset, where, sort, orderBy }: CollectionProps) {
   const { entityId, spaceId } = useDataBlockInstance();
 
   const { initialBlockEntities, initialCollectionItems } = useEditorStoreLite();
@@ -68,15 +71,19 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
 
   // When filters are present, we need to fetch ALL collection items first,
   // apply the filter, then paginate the filtered results.
-  // When sort is active, we fetch ALL IDs but let the server sort + paginate.
+  // When a sort is active (property `sort` or built-in `orderBy`), we fetch
+  // ALL IDs but let the server sort + paginate.
   const hasFilters = where && Object.keys(where).length > 0;
+  const serverOrdered = Boolean(sort) || Boolean(orderBy);
 
   const allEntityIds = orderedCollectionRelations.map(r => r.toEntity.id);
   const pageSize = first ?? 9;
   const skip = pageNumber * pageSize;
 
   const entityIdsToFetch =
-    hasFilters || sort ? allEntityIds : orderedCollectionRelations.slice(skip, skip + pageSize).map(r => r.toEntity.id);
+    hasFilters || serverOrdered
+      ? allEntityIds
+      : orderedCollectionRelations.slice(skip, skip + pageSize).map(r => r.toEntity.id);
 
   const collectionItemsWhere: WhereCondition = {
     id: {
@@ -98,15 +105,16 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
   } = useQueryEntities({
     enabled: entityIdsToFetch.length > 0,
     where: collectionItemsWhere,
-    first: sort ? pageSize : entityIdsToFetch.length || undefined,
-    after: sort ? after : undefined,
-    offset: sort ? offset : undefined,
+    first: serverOrdered ? pageSize : entityIdsToFetch.length || undefined,
+    after: serverOrdered ? after : undefined,
+    offset: serverOrdered ? offset : undefined,
     placeholderData: keepPreviousData,
     sort,
+    orderBy,
   });
 
   const { entities: localCollectionItemsFallback } = useQueryEntities({
-    enabled: source.type === 'COLLECTION' && Boolean(sort) && !hasFilters && entityIdsToFetch.length > 0,
+    enabled: source.type === 'COLLECTION' && serverOrdered && !hasFilters && entityIdsToFetch.length > 0,
     where: {
       id: {
         in: entityIdsToFetch,
@@ -130,7 +138,7 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
   // Use the server-returned order directly instead of re-ordering by position.
   const collectionItemsMap = new Map(collectionItems.map(item => [item.id, item]));
 
-  const orderedCollectionItems = sort
+  const orderedCollectionItems = serverOrdered
     ? collectionItems
     : paginatedRelations
         .map(relation => collectionItemsMap.get(relation.toEntity.id))
@@ -159,7 +167,7 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
 
   // When sort is active, build relations matching the server-returned item order
   // so that downstream features (drag-and-drop, position tracking) still work.
-  const sortedRelations = sort
+  const sortedRelations = serverOrdered
     ? collectionItems
         .map(item => deduplicatedRelations.find(r => r.toEntity.id === item.id))
         .filter(r => r !== undefined)
@@ -170,15 +178,15 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
   const canUseSSRFallback = ssrItems && ssrItems.length > 0 && isFirstPage && !hasFilters;
   const shouldFallbackToSSR = canUseSSRFallback && orderedCollectionItems.length === 0 && isCollectionItemsLoading;
   const shouldFallbackToLocalCollectionItems =
-    Boolean(sort) && !hasFilters && orderedCollectionItems.length === 0 && localCollectionItemsFallback.length > 0;
+    serverOrdered && !hasFilters && orderedCollectionItems.length === 0 && localCollectionItemsFallback.length > 0;
   const shouldFallbackToLastVisibleCollectionItems =
-    Boolean(sort) &&
+    serverOrdered &&
     !hasFilters &&
     orderedCollectionItems.length === 0 &&
     localCollectionItemsFallback.length === 0 &&
     lastVisibleCollectionItemsRef.current.length > 0;
   const shouldFallbackToRelationItems =
-    Boolean(sort) &&
+    serverOrdered &&
     !hasFilters &&
     orderedCollectionItems.length === 0 &&
     localCollectionItemsFallback.length === 0 &&
