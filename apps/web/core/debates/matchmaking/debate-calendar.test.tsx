@@ -61,6 +61,8 @@ const mocks = vi.hoisted(() => ({
   // The viewer's own in-flight responses, overlaid on whatever the read returned — even nothing.
   positionsOverlay: [] as ParticipantPosition[],
   sidePanelTarget: null as { entityId: string } | null,
+  spaceLabels: new Map<string, { name: string; image: string | null }>(),
+  labelRequests: [] as string[][],
   sidePanelListeners: new Set<() => void>(),
 }));
 
@@ -181,7 +183,10 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
 }));
 vi.mock('~/core/hooks/use-space-labels', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/hooks/use-space-labels')>()),
-  useSpaceLabels: () => ({ labelsById: new Map() }),
+  useSpaceLabels: (ids: string[]) => {
+    mocks.labelRequests.push(ids);
+    return { labelsById: mocks.spaceLabels };
+  },
 }));
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({
@@ -446,6 +451,8 @@ beforeEach(() => {
     matchesLoading: false,
     positionsOverlay: [],
     sidePanelTarget: null,
+    spaceLabels: new Map(),
+    labelRequests: [],
     claimNames: new Map(),
     claimTopics: new Map(),
   });
@@ -1412,6 +1419,34 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 
     expect(mocks.openProfile).toHaveBeenCalledWith(summary('11', '').profile_space_id);
     expect(screen.queryByRole('dialog', { name: 'Narrow the calendar' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a picked person who drops off the calendar, named, with a row to untick', () => {
+    const { rerender } = render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Ana' }));
+
+    // Ana goes offline with her last open time gone: off the roster entirely.
+    mocks.schedulable = response([free('11', 'Elena', [thursdaySix]), free('12', 'Marco', [thursdaySix])]);
+    rerender(<DebateCalendar />);
+
+    const ana = within(panel()).getByRole('checkbox', { name: 'Ana (hidden by your other filters)' });
+    expect(ana).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText(/Ana isn't on the calendar in the next two weeks\./)).toBeInTheDocument();
+    fireEvent.click(ana);
+    expect(mocks.searchParams.get('people')).toBeNull();
+  });
+
+  it('names a picked person the calendar has never listed from their personal space', () => {
+    const stranger = PROFILE('77');
+    mocks.spaceLabels = new Map([[stranger, { name: 'Zed', image: null }]]);
+    mocks.searchParams = new URLSearchParams({ people: stranger });
+    render(<DebateCalendar />);
+
+    expect(mocks.labelRequests.at(-1)).toContain(stranger);
+    expect(screen.getByText(/Zed isn't on the calendar in the next two weeks\./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'People, 1 picked' }));
+    expect(within(panel()).getByRole('checkbox', { name: 'Zed (hidden by your other filters)' })).toBeInTheDocument();
   });
 
   it('keeps picks from the URL on a reload', () => {

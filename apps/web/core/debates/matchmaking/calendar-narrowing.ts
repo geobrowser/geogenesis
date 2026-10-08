@@ -322,13 +322,17 @@ export function narrowingSentence({
  * which, is the way forward, where "isn't free this week" alone reads as "not available" — which,
  * late in a week, is most people (GEO-3220 review).
  */
+/** A picked person the week is not showing. `absent`: not on the calendar at all — offline with no
+ * open times, or past a capped list. */
+export type HiddenPick = { name: string; freeThisWeek: boolean; freeOtherWeek?: boolean; absent?: boolean };
+
 export function hiddenPicksSentence({
   hiddenPeople,
   hiddenClaimCount,
   weekLabel = 'this week',
   otherWeekLabel = 'next week',
 }: {
-  hiddenPeople: readonly { name: string; freeThisWeek: boolean; freeOtherWeek?: boolean }[];
+  hiddenPeople: readonly HiddenPick[];
   hiddenClaimCount: number;
   /** How the week on screen is named, and the calendar's other week. */
   weekLabel?: string;
@@ -337,8 +341,14 @@ export function hiddenPicksSentence({
   const parts: string[] = [];
   const names = (filter: (person: (typeof hiddenPeople)[number]) => boolean) =>
     hiddenPeople.filter(filter).map(person => person.name);
-  const elsewhere = names(person => !person.freeThisWeek && Boolean(person.freeOtherWeek));
-  const notFree = names(person => !person.freeThisWeek && !person.freeOtherWeek);
+  const absent = names(person => Boolean(person.absent));
+  const elsewhere = names(person => !person.absent && !person.freeThisWeek && Boolean(person.freeOtherWeek));
+  const notFree = names(person => !person.absent && !person.freeThisWeek && !person.freeOtherWeek);
+  if (absent.length > 0) {
+    parts.push(
+      `${listNames(absent)} ${absent.length === 1 ? "isn't" : "aren't"} on the calendar in the next two weeks.`
+    );
+  }
   const filtered = names(person => person.freeThisWeek);
   if (elsewhere.length > 0) {
     parts.push(
@@ -359,6 +369,33 @@ export function hiddenPicksSentence({
     );
   }
   return parts.length > 0 ? parts.join(' ') : null;
+}
+
+/**
+ * What an empty panel list says, naming whatever emptied it: the search, the topics, both, or the
+ * filters the list started from.
+ */
+export function panelEmptyMessage({
+  tab,
+  searched,
+  topicCount,
+  matchesOnly,
+}: {
+  tab: 'people' | 'claims';
+  searched: boolean;
+  topicCount: number;
+  matchesOnly: boolean;
+}): string {
+  const claims = tab === 'claims';
+  const topics = topicCount === 1 ? 'that topic' : 'those topics';
+  if (searched && topicCount > 0)
+    return claims ? 'No claims match that search and topic.' : 'Nobody matches that search and topic.';
+  if (searched) return claims ? 'No claims match that search.' : 'Nobody matches that search.';
+  if (topicCount > 0) return claims ? `No claims in ${topics}.` : `Nobody holds a claim in ${topics}.`;
+  if (matchesOnly) return 'Nobody free this week disagrees with you on a claim yet.';
+  return claims
+    ? 'Nobody on the calendar holds a position on a claim yet.'
+    : 'Nobody on the calendar matches these filters.';
 }
 
 function listNames(names: string[]): string {

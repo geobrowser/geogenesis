@@ -8,6 +8,7 @@ import {
   coversTopics,
   hiddenPicksSentence,
   narrowingSentence,
+  panelEmptyMessage,
   passesPicks,
   personListRows,
   summarizeClaims,
@@ -225,6 +226,19 @@ describe('the line above the week', () => {
       })
     ).toBe('Maya is free this week, not next week.');
     expect(hiddenPicksSentence({ hiddenPeople: [], hiddenClaimCount: 0 })).toBeNull();
+  });
+});
+
+describe('an empty panel list', () => {
+  const message = (over: Partial<Parameters<typeof panelEmptyMessage>[0]>) =>
+    panelEmptyMessage({ tab: 'claims', searched: false, topicCount: 0, matchesOnly: false, ...over });
+
+  it('names the control that emptied it', () => {
+    expect(message({ searched: true })).toBe('No claims match that search.');
+    expect(message({ topicCount: 1 })).toBe('No claims in that topic.');
+    expect(message({ tab: 'people', topicCount: 2 })).toBe('Nobody holds a claim in those topics.');
+    expect(message({ searched: true, topicCount: 1 })).toBe('No claims match that search and topic.');
+    expect(message({ matchesOnly: true })).toBe('Nobody free this week disagrees with you on a claim yet.');
   });
 });
 

@@ -82,6 +82,12 @@ describe('usePersonFacts, for surfaces that narrow on matches (GEO-3220)', () =>
     expect(facts().matchesUnavailable).toBe(true);
   });
 
+  it('keeps a known "no positions" through a later failed poll', () => {
+    // The graph answered (no rows for the viewer), then a poll failed: still known, still false.
+    mocks.positions = { ...mocks.positions, error: new Error('graph down'), hasFetchedData: true };
+    expect(facts().viewerHasPositions).toBe(false);
+  });
+
   it('keeps using rows it already holds when a later read fails', () => {
     const row: ParticipantPosition = {
       profileSpaceId: VIEWER,

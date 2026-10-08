@@ -38,6 +38,7 @@ import {
   type PersonListRow,
   type TopicSets,
   coversTopics,
+  panelEmptyMessage,
   pickLabel,
   topicFacet,
 } from './calendar-narrowing';
@@ -81,6 +82,11 @@ export type PanelClaim = ClaimListRow & {
   name: string;
   opponents: ClaimOpponent[];
 };
+
+/** A picked person the calendar does not list: enough to name them and untick them. */
+export type AbsentPick = { profileKey: string; name: string; avatarUrl: string | null };
+
+const NO_ABSENT: readonly AbsentPick[] = [];
 
 export type PanelPerson = PersonListRow<PersonFacts & { person: DebatePerson; matches: ClaimMatch[] }>;
 
@@ -148,6 +154,12 @@ type BodyProps = {
   topicsPending: boolean;
   /** A People row: the calendar's own `PersonRow`, as the debates hub's People tab draws it, ticked. */
   renderPerson: (row: PanelPerson, onToggle: () => void) => React.ReactNode;
+  /**
+   * Picked people the calendar no longer lists — offline with no open times, or past a capped list.
+   * There is no `PersonRow` to draw for them, but the pick still narrows the week, so it keeps a row
+   * of its own to be unticked.
+   */
+  absentPeople?: readonly AbsentPick[];
 };
 
 /**
@@ -172,6 +184,7 @@ export function CalendarNarrowPanelBody({
   heldByPerson,
   topicsPending,
   renderPerson,
+  absentPeople = NO_ABSENT,
 }: BodyProps) {
   const [searches, setSearches] = React.useState<Record<NarrowTab, string>>({ people: '', claims: '' });
   // Topics, like search, help find something to pick rather than being a pick: they narrow the list,
@@ -210,7 +223,11 @@ export function CalendarNarrowPanelBody({
 
   const onClaims = tab === 'claims';
   const picked = onClaims ? picks.claims.length : picks.people.length;
-  const listCount = onClaims ? visibleClaims.length : visiblePeople.length;
+  const visibleAbsent = React.useMemo(
+    () => (term ? absentPeople.filter(absent => absent.name.toLowerCase().includes(term)) : absentPeople),
+    [absentPeople, term]
+  );
+  const listCount = onClaims ? visibleClaims.length : visiblePeople.length + visibleAbsent.length;
   const tabTopics = topics[tab];
   // Over the list as everything but the topics leaves it, so each count says what picking that topic
   // would leave.
@@ -248,22 +265,19 @@ export function CalendarNarrowPanelBody({
   );
 
   const narrowedByList = term !== '' || tabTopics.length > 0;
-  const emptyMessage = narrowedByList
-    ? onClaims
-      ? 'No claims match that search.'
-      : 'Nobody matches that search.'
-    : picks.matchesOnly
-      ? 'Nobody free this week disagrees with you on a claim yet.'
-      : onClaims
-        ? 'Nobody on the calendar holds a position on a claim yet.'
-        : 'Nobody on the calendar matches these filters.';
+  const emptyMessage = panelEmptyMessage({
+    tab,
+    searched: term !== '',
+    topicCount: tabTopics.length,
+    matchesOnly: picks.matchesOnly,
+  });
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex flex-col gap-3 border-b border-grey-02 px-4 pb-3">
         <div className="-mx-4 flex items-center justify-between gap-3 border-b border-divider px-4">
           <div role="tablist" aria-label="Narrow the calendar by" className="flex gap-5">
-            {tabButton('people', 'People', people.length)}
+            {tabButton('people', 'People', people.length + absentPeople.length)}
             {tabButton('claims', 'Claims', claims.length)}
           </div>
           <button
@@ -366,6 +380,33 @@ export function CalendarNarrowPanelBody({
           </ul>
         ) : (
           <ul aria-label="People" className="m-0 flex list-none flex-col px-2 py-0">
+            {visibleAbsent.map(absent => (
+              <PickRow
+                key={absent.profileKey}
+                label={absent.name}
+                selected
+                hidden
+                analyticsAction="Person pick"
+                onToggle={() => onPicksChange({ ...picks, people: toggleId(picks.people, absent.profileKey) })}
+              >
+                <div className="grid grid-cols-[1rem_2rem_minmax(0,1fr)] items-start gap-2.5">
+                  <span className="mt-2">
+                    <CheckboxVisual checked />
+                  </span>
+                  <span className="block size-8 overflow-hidden rounded-full">
+                    <Avatar avatarUrl={absent.avatarUrl} value={absent.profileKey} size={32} />
+                  </span>
+                  <span className="flex min-w-0 flex-col gap-0.5">
+                    <Text as="span" variant="metadataMedium" className="truncate">
+                      {absent.name}
+                    </Text>
+                    <Text as="span" variant="footnote" color="grey-04">
+                      Not on the calendar in the next two weeks
+                    </Text>
+                  </span>
+                </div>
+              </PickRow>
+            ))}
             {visiblePeople.map(row => (
               <React.Fragment key={row.person.profileKey}>
                 {renderPerson(row, () =>

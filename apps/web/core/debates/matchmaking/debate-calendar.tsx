@@ -37,6 +37,7 @@ import {
 } from './calendar-narrow-panel';
 import {
   type CalendarPicks,
+  type HiddenPick,
   NO_PICKS,
   type PanelTopic,
   calendarPicksKey,
@@ -389,6 +390,32 @@ function DebateCalendarBody({
             : 'ready';
   const allPositionsReady = allPositionsState === 'ready';
   const pool = React.useMemo(() => new Set(allPeople.map(person => normId(person.profile_space_id))), [allPeople]);
+
+  // Picked people as last seen on the roster. Someone can drop off it — offline with no open times
+  // left, or past a capped list — and their pick still narrows the week, so it keeps a name and a row
+  // to untick rather than turning into "Someone you picked".
+  const [seenPicked, setSeenPicked] = React.useState<ReadonlyMap<string, DebatePerson>>(() => new Map());
+  React.useEffect(() => {
+    setSeenPicked(current => {
+      const next = new Map<string, DebatePerson>();
+      for (const profileKey of picks.people) {
+        const person =
+          allPeople.find(candidate => normId(candidate.profile_space_id) === profileKey) ?? current.get(profileKey);
+        if (person) next.set(profileKey, person);
+      }
+      // Compared on what is shown of them: the roster rebuilds its person objects on every poll, and
+      // swapping in an equal one would only render again, and again.
+      const shown = (person: DebatePerson | undefined) =>
+        person ? `${speakerLabel(person)}|${person.avatar_cid}` : '';
+      const same =
+        next.size === current.size && [...next].every(([key, person]) => shown(current.get(key)) === shown(person));
+      return same ? current : next;
+    });
+  }, [allPeople, picks.people]);
+  const absentPickIds = React.useMemo(
+    () => picks.people.filter(profileKey => !pool.has(profileKey)),
+    [picks.people, pool]
+  );
   const claimSummaries = React.useMemo(
     () => summarizeClaims(allPositions.byClaim, viewerProfileSpaceId, pool),
     [allPositions.byClaim, pool, viewerProfileSpaceId]
@@ -558,8 +585,16 @@ function DebateCalendarBody({
   });
   const { labelsById } = useSpaceLabels(
     React.useMemo(
-      () => [...new Set([...facetSpaces.map(space => space.id), ...spaceIds, ...matchingSpaceIds])],
-      [facetSpaces, matchingSpaceIds, spaceIds]
+      // Absent picks never seen on the roster are named from their personal space, in the same read.
+      () => [
+        ...new Set([
+          ...facetSpaces.map(space => space.id),
+          ...spaceIds,
+          ...matchingSpaceIds,
+          ...absentPickIds.filter(profileKey => !seenPicked.has(profileKey)),
+        ]),
+      ],
+      [absentPickIds, facetSpaces, matchingSpaceIds, seenPicked, spaceIds]
     )
   );
 
@@ -745,6 +780,16 @@ function DebateCalendarBody({
     ]
   );
   const panelRows = React.useMemo(() => panelRowsFor(picks), [panelRowsFor, picks]);
+  /** An absent pick's name: as last seen on the roster, else their personal space's. */
+  const absentName = (profileKey: string) => {
+    const seen = seenPicked.get(profileKey);
+    return seen ? speakerLabel(seen) : spaceLabel(labelsById, profileKey)?.name?.trim() || 'Someone you picked';
+  };
+  const absentPeople = absentPickIds.map(profileKey => ({
+    profileKey,
+    name: absentName(profileKey),
+    avatarUrl: seenPicked.get(profileKey)?.avatar_cid ?? spaceLabel(labelsById, profileKey)?.image ?? null,
+  }));
 
   // Who the week draws, and how many a phone's draft would.
   const drawnUsers = React.useMemo(() => {
@@ -818,14 +863,15 @@ function DebateCalendarBody({
     spaceNames: spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
   });
   const hiddenNote = hiddenPicksSentence({
-    hiddenPeople: picks.people.flatMap(profileKey => {
+    hiddenPeople: picks.people.flatMap((profileKey): HiddenPick[] => {
       const known = profileToUser.get(profileKey);
       if (known && drawnUsers.has(known.userKey)) return [];
+      if (!known) return [{ name: absentName(profileKey), freeThisWeek: false, absent: true }];
       return [
         {
-          name: known ? speakerLabel(known.person) : 'Someone you picked',
-          freeThisWeek: known ? freeThisWeek(known.userKey) : false,
-          freeOtherWeek: known ? freeInWeek(known.userKey, otherWeekOffset) : false,
+          name: speakerLabel(known.person),
+          freeThisWeek: freeThisWeek(known.userKey),
+          freeOtherWeek: freeInWeek(known.userKey, otherWeekOffset),
         },
       ];
     }),
@@ -885,6 +931,8 @@ function DebateCalendarBody({
         onPicksChange={onPicksChange}
         claims={rows.claims}
         people={rows.people}
+        // The draft's absent picks on a phone, the page's otherwise: those it still holds.
+        absentPeople={absentPeople.filter(absent => withPicks.people.includes(absent.profileKey))}
         // The Claims list is everyone's positions; the People list waits only on what its picks need.
         loading={panelTab === 'claims' ? allPositionsState === 'pending' : picksPendingFor(withPicks)}
         unavailable={panelTab === 'claims' && allPositionsState === 'failed'}

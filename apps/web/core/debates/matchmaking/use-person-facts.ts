@@ -105,13 +105,23 @@ export function usePersonFacts(
   // The scoped read always carries the viewer's own rows. `null` while that is not known.
   const viewerHasPositions = React.useMemo(() => {
     if (!viewerProfileSpaceId) return authenticated && !viewerPending ? false : null;
-    if (positionsLoading || positionsError !== null) return null;
+    // A failed poll with an earlier answer in hand keeps that answer: only a failure with nothing
+    // fetched leaves this unknown.
+    if (positionsLoading || (positionsError !== null && !positionsHaveFetchedData)) return null;
     const viewerId = normId(viewerProfileSpaceId);
     for (const rows of positionsByClaim.values()) {
       if (rows.some(row => normId(row.profileSpaceId) === viewerId)) return true;
     }
     return false;
-  }, [authenticated, positionsByClaim, positionsError, positionsLoading, viewerPending, viewerProfileSpaceId]);
+  }, [
+    authenticated,
+    positionsByClaim,
+    positionsError,
+    positionsHaveFetchedData,
+    positionsLoading,
+    viewerPending,
+    viewerProfileSpaceId,
+  ]);
   const matchingClaimIds = React.useMemo(
     () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
     [matchAnalysis]
