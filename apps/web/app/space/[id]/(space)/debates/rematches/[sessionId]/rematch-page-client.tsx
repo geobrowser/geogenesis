@@ -414,12 +414,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // whether the source is worth showing. Applying it there emptied both tabs in the ordinary case:
   // a debater's claims live in their personal space, which nobody else is a member of, so the
   // opponent's positions and a curator's page were dropped wholesale on the other side.
-  const {
-    allowlist: spaceAllowlist,
-    memberSpaceIds,
-    isLoading: allowlistLoading,
-    isSettlingMemberships,
-  } = useClaimSpaceAllowlist();
+  const { allowlist: spaceAllowlist, isLoading: allowlistLoading } = useClaimSpaceAllowlist();
 
   // While it is still resolving there is no telling an allowed space from one the viewer has
   // nothing to do with. Every list waits for it rather than showing the unfiltered set and
@@ -433,13 +428,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // differently, and when this list is unknown — no acceptor configured, a failed lookup — the
   // type test still rules out the case that actually bit us, claims living in a personal space.
   //
-  // `isLoading` is read, not discarded. This lookup answers `null` for *unknown* — a load in
-  // flight and a failed one alike — and `isSpaceDebatePublishable` reads null as "don't filter", so
-  // during the load the menu offers spaces it will go on to reject. Only the seed cares about the
-  // difference: everything else is happy to fail open, but a default taken from a provisional menu
-  // is spent on a space the reconciliation then removes, leaving the viewer with no default at all.
-  // After an error `isLoading` is false and the ids stay null, so fail-open is preserved.
-  const { publishableSpaceIds, isLoading: publishableSpacesLoading } = useDebatePublishableSpaces();
+  // This lookup answers `null` for *unknown* — a load in flight and a failed one alike — and
+  // `isSpaceDebatePublishable` reads null as "don't filter", so it fails open.
+  const { publishableSpaceIds } = useDebatePublishableSpaces();
 
   /* -----------------------------------------------------------------------------------------------
    * GEO-2758. Related claims: the tab the pair land on straight out of a debate.
@@ -2295,54 +2286,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 ? viewerClaimsSettling
                 : taggedClaimsSettling);
 
-  // The menu, and the handlers that drive it. Defaults to the spaces the viewer belongs to
-  // (GEO-2789).
-  //
-  // Gated on `tabIsLoading` rather than a hand-listed set of queries. GEO-2798 made this menu a
-  // server facet instead of an accumulation over every row source, so the tab's own composite —
-  // which already waits from the top of each chain, where a disabled lookup reports nothing — is
-  // now the whole answer. `publishabilityPending` is the exception it cannot know about: an
-  // unresolved space type reads as publishable, so the menu can still be offering a space this
-  // page will go on to reject.
+  // The menu, and the handlers that drive it. No default selection (GEO-3223): GEO-2789 ticked
+  // every space the viewer belongs to, which read as "any of these" while spaces were OR. With spaces
+  // AND, as one row with the topics, it would ask for claims tagged in all of them at once and empty
+  // the list. Explore opens unfiltered, already scoped to the spaces the viewer may see.
   const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
     offeredSpaces,
     spaceIds,
     setSpaceIds,
-    memberSpaceIds,
-    // Every gate that decides `offeredSpaces`, because the seed is spent on whatever it sees. A
-    // space offered provisionally and rejected a moment later takes the default with it.
-    // `sourceDebateQuery` for the same reason from the other end: the source debate's own claim is
-    // one of the exclusions, so until it lands a row-derived menu can still be counting its space.
-    //
-    // `isSettlingMemberships` is the same rule applied to the *viewer's* side of the match rather
-    // than the menu's: sign-up sends one membership proposal per picked space and they land
-    // seconds apart, so the first non-empty answer is a fraction of what they chose (GEO-2834).
-    //
-    // And only on Explore. That list is the one the default is about; the opponent's positions are
-    // the claims *they* hold a side on, and seeding those with the spaces the viewer belongs to
-    // would hide the opponent's positions everywhere else — the one thing the tab is for.
-    //
-    // Written as "not browsing" rather than "not the opponent's tab", which was the same sentence
-    // while there were two tabs to choose between and stopped being one when GEO-2758 added a
-    // third: the seed is spent against whatever menu it sees, and on Related that is a menu of one
-    // space — the debated claim's — which Explore would then inherit as a deliberate-looking choice
-    // the viewer never made.
-    //
-    // Not gated on the *source*, though. Explore always opens on a browsing one, so the seed is
-    // already spent by the time My positions can be picked, and it inherits the filter bar from
-    // whatever was showing — the same as switching between All claims and Featured does.
-    pending:
-      !browsing ||
-      tabIsLoading ||
-      publishabilityPending ||
-      publishableSpacesLoading ||
-      sourceDebateQuery.isLoading ||
-      isSettlingMemberships ||
-      (graphFiltered && !taggedSpaceFacet.settled),
-    // No default any more (GEO-3223). The seed ticked every space the viewer belongs to, which read
-    // as "any of these" while spaces were OR; with spaces AND, as one row with the topics, it would
-    // ask for claims tagged in all of them at once and empty the list. Explore opens unfiltered,
-    // already scoped to the spaces the viewer may see.
+    memberSpaceIds: null,
+    pending: false,
     seedSpent: true,
   });
 
