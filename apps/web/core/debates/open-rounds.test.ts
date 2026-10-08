@@ -9,6 +9,8 @@ import {
   isOpenRoundsDebate,
   openRebuttalRoundCount,
   openRoundGapAfterTurn,
+  openRoundLastWord,
+  openRoundRevealedPicks,
   openRoundsRoomPhase,
 } from './open-rounds';
 import {
@@ -279,5 +281,82 @@ describe('openRebuttalRoundCount', () => {
 
   it('counts the cap round, which never resolves into rounds[]', () => {
     expect(openRebuttalRoundCount(capRoundLastTurn())).toBe(10);
+  });
+});
+
+describe('open rounds: the reveal (GEO-3179)', () => {
+  it('has no picks to show while the round is undecided', () => {
+    expect(
+      openRoundRevealedPicks(deciding({ my_pick: 'extend', opponent_has_picked: true }).open_rounds!, 0)
+    ).toBeNull();
+  });
+
+  it('reads the picks from the block in the result window', () => {
+    expect(openRoundRevealedPicks(revealEnd().open_rounds!, 0)).toEqual([
+      { participant_slot: 1, pick: 'extend' },
+      { participant_slot: 2, pick: 'end' },
+    ]);
+  });
+
+  it('keeps a missing pick as null', () => {
+    expect(openRoundRevealedPicks(timedOut().open_rounds!, 0)).toContainEqual({ participant_slot: 2, pick: null });
+  });
+
+  it('reads an earlier round from the history once the block has moved on', () => {
+    const block = roundOneSpeaking().open_rounds!;
+    expect(block.round_index).toBe(1);
+    expect(openRoundRevealedPicks(block, 0)).toEqual([
+      { participant_slot: 1, pick: 'extend' },
+      { participant_slot: 2, pick: 'extend' },
+    ]);
+    expect(openRoundRevealedPicks(block, 1)).toBeNull();
+  });
+});
+
+describe('open rounds: the last word (GEO-3179)', () => {
+  it('belongs to the second turn of every round', () => {
+    expect(openRoundLastWord(listening(), 0)).toBeNull();
+    expect(openRoundLastWord(listening(), 1)).toBe('round');
+    expect(openRoundLastWord(revealRebut(), 2)).toBeNull();
+    expect(openRoundLastWord(revealRebut(), 3)).toBe('round');
+  });
+
+  it('is the last word of the debate in the cap round', () => {
+    expect(openRoundLastWord(capRoundLastTurn(), 20)).toBeNull();
+    expect(openRoundLastWord(capRoundLastTurn(), 21)).toBe('debate');
+  });
+
+  it('never applies to a fixed format or a turn that is not running', () => {
+    expect(openRoundLastWord(fixedDebate([60_000, 60_000]), 1)).toBeNull();
+    expect(openRoundLastWord(listening(), null)).toBeNull();
+  });
+});
+
+describe('open rounds: the count-in after an Extend (GEO-3179)', () => {
+  const withCountIn = (debate: Debate): Debate => ({
+    ...debate,
+    open_rounds: { ...debate.open_rounds!, extend_count_in_ms: 5_000 },
+  });
+
+  it('holds on the result until the count-in ends, then starts the next round', () => {
+    // Resolved Extend at 20:02:04.2: window to 20:02:07.2, count-in to 20:02:12.2.
+    const debate = withCountIn(revealRebut());
+    const roundEnd = at('20:02:00.000');
+    expect(openRoundGapAfterTurn(debate, 1, roundEnd, at('20:02:10.000'))).toMatchObject({
+      kind: 'hold',
+      phase: { phase: 'result', nextPhaseStartsAtMs: at('20:02:12.200') },
+    });
+    expect(openRoundGapAfterTurn(debate, 1, roundEnd, at('20:02:12.300'))).toEqual({
+      kind: 'continue',
+      nextTurnStartsAtMs: at('20:02:12.200'),
+    });
+  });
+
+  it('does not delay thanking after an End', () => {
+    const debate = withCountIn(revealEnd());
+    expect(openRoundGapAfterTurn(debate, 1, at('20:02:00.000'), at('20:02:09.000'))).toEqual({
+      kind: 'thanking',
+      startsAtMs: at('20:02:08.000'),
+    });
   });
 });

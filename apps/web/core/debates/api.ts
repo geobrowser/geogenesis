@@ -309,6 +309,14 @@ export type DebateOpenRounds = {
   rebuttal_turn_ms: number;
   decision_window_ms: number;
   result_window_ms: number;
+  /**
+   * After an Extend, how long the opener is counted into the new round once the result window
+   * closes (GEO-3179), so the next round starts at `decision_resolved_at + result_window_ms +
+   * extend_count_in_ms`; `next_phase_starts_at` stays the end of the result window. An End goes to
+   * thanking at the end of the result window as before. Snapshotted per debate, and absent from a
+   * geo-chat that predates it, which reads as no count-in.
+   */
+  extend_count_in_ms?: number;
   /** The round this block describes. In `result` it is the round that just resolved. */
   round_index: number;
   phase: OpenRoundsPhase;
