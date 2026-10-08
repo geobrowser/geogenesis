@@ -62,6 +62,8 @@ type Session = {
 };
 
 let session: Session | null = null;
+/** Earlier sessions by dashless lobby id, so a debate or request answered after moving on still counts. */
+const retained = new Map<string, Session>();
 let pendingEntry: { lobbyId: string; entry: LobbyEntry; at: number } | null = null;
 let releaseTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -90,10 +92,23 @@ function activeFor(lobbyId: string) {
     : null;
 }
 
-/** Ends the open session with its one `lobby_left`. */
-function end(exit: LobbyExit, now = Date.now()) {
-  cancelRelease();
-  const ended = session;
+function withinWindow(target: Session, now: number) {
+  const outSince = target.endedAt ?? target.steppedOutAt;
+  return outSince === null || now - outSince <= DEBATE_ATTRIBUTION_MS;
+}
+
+/** The session a debate or request for this lobby belongs to: the current one first, then a retained one. */
+function sessionFor(lobbyId: string, now: number) {
+  for (const [id, earlier] of retained) {
+    if (!withinWindow(earlier, now)) retained.delete(id);
+  }
+  const found = session && sameId(session.lobbyId, lobbyId) ? session : (retained.get(dashlessId(lobbyId)) ?? null);
+  return found && withinWindow(found, now) ? found : null;
+}
+
+/** Ends a session with its one `lobby_left`. */
+function end(exit: LobbyExit, now = Date.now(), ended = session) {
+  if (ended === session) cancelRelease();
   if (!ended || ended.endedAt !== null) return;
   ended.endedAt = now;
   send('lobby_left', {
@@ -125,7 +140,10 @@ export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boole
   cancelRelease();
   if (activeFor(lobbyId)) return;
   // Joining one lobby leaves any other; back without a debate ends a stepped-out one.
-  if (session) end(session.steppedOutAt === null ? 'left' : 'unknown');
+  if (session) {
+    end(session.steppedOutAt === null ? 'left' : 'unknown');
+    retained.set(session.lobbyId, session);
+  }
   const started: Session = {
     // geo-chat's spelling, so events join its `lobby_id` and `Debate.lobby_id`.
     lobbyId: dashlessId(lobbyId),
@@ -138,6 +156,7 @@ export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boole
     requests: new Set(),
   };
   session = started;
+  retained.delete(started.lobbyId);
   send('lobby_joined', {
     lobby_id: started.lobbyId,
     lobby_session_id: started.sessionId,
@@ -180,17 +199,15 @@ export function lobbyPageClosed(lobbyId: string) {
 }
 
 /**
- * A debate this viewer is in. Counts once per session and debate, when the debate was requested in
- * the lobby of the open session, or of one that stepped out or ended within the hour.
+ * A debate this viewer is in. Counts once per session and debate, against the session of the
+ * debate's lobby: the open one, or one that stepped out or ended within the hour.
  */
 export function lobbyDebateSeen(debate: Pick<Debate, 'id' | 'lobby_id'>, now = Date.now()) {
-  const current = session;
-  if (!current || !debate.lobby_id || !sameId(debate.lobby_id, current.lobbyId)) return;
-  const outSince = current.endedAt ?? current.steppedOutAt;
-  if (outSince !== null && now - outSince > DEBATE_ATTRIBUTION_MS) return;
-  if (current.debates.has(debate.id)) return;
+  if (!debate.lobby_id) return;
+  const current = sessionFor(debate.lobby_id, now);
+  if (!current || current.debates.has(debate.id)) return;
   current.debates.add(debate.id);
-  end('debate_started', now);
+  end('debate_started', now, current);
   send('lobby_debate_started', {
     lobby_id: current.lobbyId,
     lobby_session_id: current.sessionId,
@@ -212,16 +229,17 @@ export function useLobbyDebateAnalytics(debate: Pick<Debate, 'id' | 'lobby_id'> 
   }, [debateId, lobbyId]);
 }
 
-/** A request the server accepted, sent from a lobby. Dropped outside a session of that lobby. */
+/** A request the server accepted, sent from a lobby. Dropped without a session of that lobby in the window. */
 export function lobbyDebateRequested(
   lobbyId: string,
   request: { kind: 'claim'; requestId: string; claimId: string } | { kind: 'person'; requestId: string }
 ) {
-  if (!session || !sameId(session.lobbyId, lobbyId) || session.requests.has(request.requestId)) return;
-  session.requests.add(request.requestId);
+  const target = sessionFor(lobbyId, Date.now());
+  if (!target || target.requests.has(request.requestId)) return;
+  target.requests.add(request.requestId);
   send('lobby_debate_requested', {
-    lobby_id: session.lobbyId,
-    lobby_session_id: session.sessionId,
+    lobby_id: target.lobbyId,
+    lobby_session_id: target.sessionId,
     request_kind: request.kind,
     request_id: request.requestId,
     ...(request.kind === 'claim' ? { target_id: request.claimId } : {}),
@@ -236,5 +254,6 @@ export function lobbyCreated(lobbyId: string, { scheduled }: { scheduled: boolea
 export function resetLobbyAnalytics() {
   cancelRelease();
   session = null;
+  retained.clear();
   pendingEntry = null;
 }

@@ -210,6 +210,45 @@ describe('lobby_debate_started', () => {
   });
 });
 
+describe('a debate or request for a lobby the viewer moved on from', () => {
+  const OTHER = 'b'.repeat(32);
+
+  it('counts a debate for the earlier lobby once, against its session, within the hour', () => {
+    lobbyJoined(LOBBY, { isNewcomer: true });
+    const first = events('lobby_joined')[0]!.lobby_session_id;
+    lobbyJoined(OTHER, { isNewcomer: true });
+    vi.advanceTimersByTime(10 * 60_000);
+    lobbyDebateSeen({ id: 'debate-1', lobby_id: DASHLESS });
+    lobbyDebateSeen({ id: 'debate-1', lobby_id: DASHLESS });
+
+    expect(events('lobby_debate_started')).toEqual([
+      expect.objectContaining({ lobby_id: DASHLESS, lobby_session_id: first, debate_id: 'debate-1' }),
+    ]);
+    // The earlier session already left when the viewer moved; the current one is untouched.
+    expect(events('lobby_left')).toEqual([expect.objectContaining({ lobby_session_id: first, exit: 'left' })]);
+  });
+
+  it('drops it after the hour', () => {
+    lobbyJoined(LOBBY, { isNewcomer: false });
+    lobbyJoined(OTHER, { isNewcomer: false });
+    vi.advanceTimersByTime(61 * 60_000);
+    lobbyDebateSeen({ id: 'debate-1', lobby_id: DASHLESS });
+
+    expect(events('lobby_debate_started')).toEqual([]);
+  });
+
+  it('counts a request answered after moving on against the lobby it was sent from', () => {
+    lobbyJoined(LOBBY, { isNewcomer: false });
+    const first = events('lobby_joined')[0]!.lobby_session_id;
+    lobbyJoined(OTHER, { isNewcomer: false });
+    lobbyDebateRequested(LOBBY, { kind: 'person', requestId: 'challenge-1' });
+
+    expect(events('lobby_debate_requested')).toEqual([
+      expect.objectContaining({ lobby_id: DASHLESS, lobby_session_id: first, request_id: 'challenge-1' }),
+    ]);
+  });
+});
+
 describe('lobby_debate_requested and lobby_created', () => {
   it('records each request once, with the claim as target for a claim request', () => {
     lobbyJoined(LOBBY, { isNewcomer: false });
