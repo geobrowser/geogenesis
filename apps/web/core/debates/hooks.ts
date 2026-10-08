@@ -90,6 +90,7 @@ import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
+import { lobbyDebateRequested } from './lobbies/lobby-analytics';
 import type { RecordingPlaybackVariant } from './mobile-rendition';
 import {
   type ParticipantAvatarMapper,
@@ -1339,7 +1340,9 @@ export function useCreateDebateChallenge() {
   const mutation = useMutation({
     mutationFn: (request: CreateDebateChallengeBody) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
-    onSuccess: challenge => {
+    // Runs even if the caller unmounted before the response.
+    onSuccess: (challenge, request) => {
+      if (request.lobby_id) lobbyDebateRequested(request.lobby_id, { kind: 'person', requestId: challenge.id });
       queryClient.setQueryData<DebateActivity>(debateQueryKeys.activity(accountKey), current =>
         current ? { ...current, challenge } : current
       );

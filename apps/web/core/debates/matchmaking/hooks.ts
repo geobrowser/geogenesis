@@ -44,6 +44,7 @@ import {
   invalidateDebatesOutsideRematchClaims,
   useGeoChatAuth,
 } from '../hooks';
+import { lobbyDebateRequested } from '../lobbies/lobby-analytics';
 import { routeIntoDebate } from '../lobbies/step-out';
 
 const MATCHMAKING_CLAIMS_PAGE_SIZE = 20;
@@ -400,7 +401,17 @@ export function useCreateDebateRequest() {
 
   const mutation = useMutation({
     mutationFn: (request: CreateDebateRequestBody) => createDebateRequest(request, getPrivyIdentityToken, accountKey),
-    onSuccess: () => void invalidateDebatesOutsideRematchClaims(queryClient),
+    // Runs even if the caller unmounted before the response.
+    onSuccess: (created, request) => {
+      if (request.lobby_id) {
+        lobbyDebateRequested(request.lobby_id, {
+          kind: 'claim',
+          requestId: created.id,
+          claimId: request.claim_entity_id,
+        });
+      }
+      void invalidateDebatesOutsideRematchClaims(queryClient);
+    },
   });
   return useObservedMutation(mutation, 'start_debate', request =>
     getContext({ target_type: 'claim', target_id: request.claim_entity_id })

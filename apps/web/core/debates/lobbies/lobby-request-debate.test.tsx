@@ -6,7 +6,6 @@ import { type DebateLobbyMember, GeoChatRequestError } from '../api';
 
 const mocks = vi.hoisted(() => ({
   viewerId: 'viewer' as string | null,
-  requested: vi.fn(),
   create: { mutate: vi.fn(), isPending: false, error: null as Error | null },
   cancel: { mutate: vi.fn(), isPending: false, error: null as Error | null },
   block: {
@@ -24,7 +23,6 @@ vi.mock('../hooks', () => ({
 }));
 vi.mock('../matchmaking/hooks', () => ({ useDebateRequests: () => ({ data: undefined }) }));
 vi.mock('../matchmaking/use-live-request-block', () => ({ useLiveRequestBlock: () => mocks.block }));
-vi.mock('./lobby-analytics', () => ({ lobbyDebateRequested: mocks.requested }));
 
 const { LobbyRequestDebate, canRequestLobbyMember } = await import('./lobby-request-debate');
 
@@ -71,15 +69,10 @@ describe('canRequestLobbyMember', () => {
 });
 
 describe('LobbyRequestDebate', () => {
-  it('sends a challenge scoped to the lobby, and records it once the server accepts it', () => {
+  it('sends a challenge scoped to the lobby', () => {
     render(<LobbyRequestDebate lobbyId="LOBBY-1" member={member()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Request a debate with Other' }));
-    const [body, options] = mocks.create.mutate.mock.calls[0]!;
-    expect(body).toEqual({ recipient_profile_space_id: 'space-other', lobby_id: 'lobby1' });
-    expect(mocks.requested).not.toHaveBeenCalled();
-
-    options.onSuccess({ id: 'challenge-1' });
-    expect(mocks.requested).toHaveBeenCalledWith('LOBBY-1', { kind: 'person', requestId: 'challenge-1' });
+    expect(mocks.create.mutate).toHaveBeenCalledWith({ recipient_profile_space_id: 'space-other', lobby_id: 'lobby1' });
   });
 
   it('words geo-chat’s lobby refusals', () => {

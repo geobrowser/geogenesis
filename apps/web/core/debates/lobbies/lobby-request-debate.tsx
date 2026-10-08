@@ -9,7 +9,6 @@ import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { useLiveRequestBlock } from '../matchmaking/use-live-request-block';
 import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
-import { lobbyDebateRequested } from './lobby-analytics';
 import { personName } from './lobby-format';
 import { lobbyClaimRequestErrorMessage } from './lobby-room-claims-hooks';
 
@@ -72,10 +71,10 @@ export function LobbyRequestDebate({ lobbyId, member }: { lobbyId: string; membe
           pending={createChallenge.isPending}
           pendingLabel="Requesting…"
           onClick={() =>
-            createChallenge.mutate(
-              { recipient_profile_space_id: member.profile_space_id, lobby_id: dashlessId(lobbyId) },
-              { onSuccess: challenge => lobbyDebateRequested(lobbyId, { kind: 'person', requestId: challenge.id }) }
-            )
+            createChallenge.mutate({
+              recipient_profile_space_id: member.profile_space_id,
+              lobby_id: dashlessId(lobbyId),
+            })
           }
         >
           Request debate

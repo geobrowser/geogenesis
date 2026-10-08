@@ -11,7 +11,6 @@ import { LOBBY_ROOM_CLAIMS_COPY, LobbyRoomClaims, lobbyRoomClaimFrom } from './l
 const mocks = vi.hoisted(() => ({
   data: undefined as DebateLobbyClaims | undefined,
   mutate: vi.fn(),
-  requested: vi.fn(),
   recover: vi.fn(),
   backfill: vi.fn(),
   indexed: null as 'positive' | 'negative' | null,
@@ -23,8 +22,6 @@ const mocks = vi.hoisted(() => ({
     runId: string | null;
   },
 }));
-
-vi.mock('./lobby-analytics', () => ({ lobbyDebateRequested: mocks.requested }));
 
 vi.mock('./lobby-room-claims-hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('./lobby-room-claims-hooks')>()),
@@ -137,7 +134,6 @@ afterEach(() => {
   mocks.backfill.mockReset();
   mocks.indexed = null;
   mocks.refreshOnRefusal.mockReset();
-  mocks.requested.mockReset();
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
 });
 
@@ -157,17 +153,8 @@ describe('LobbyRoomClaims', () => {
     fireEvent.click(requests[0]!);
     expect(mocks.mutate).toHaveBeenCalledWith(
       { space_id: 'space-1', claim_entity_id: 'entity-b', lobby_id: '0192abc' },
-      { onSuccess: expect.any(Function), onError: expect.any(Function) }
+      { onError: expect.any(Function) }
     );
-
-    // Recorded only once the server accepts the request.
-    expect(mocks.requested).not.toHaveBeenCalled();
-    mocks.mutate.mock.calls[0]![1].onSuccess({ id: 'request-1' });
-    expect(mocks.requested).toHaveBeenCalledWith('0192-abc', {
-      kind: 'claim',
-      requestId: 'request-1',
-      claimId: 'entity-b',
-    });
 
     // A refusal reaches both the intent recovery and the stale-offer refresh.
     const refusal = new Error('refused');

@@ -14,7 +14,6 @@ import { useCreateDebateRequest, useDebateRequests } from '../matchmaking/hooks'
 import { HubMessageNote, HubQueryState } from '../matchmaking/hub-states';
 import { RequestDebateControl } from '../request-debate-control';
 import { debateRequestGate } from '../request-gate';
-import { lobbyDebateRequested } from './lobby-analytics';
 import {
   lobbyClaimRequestErrorMessage,
   readinessDisabledMessage,
@@ -147,12 +146,6 @@ export function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: 
         createRequest.mutate(
           { space_id: claim.space_id, claim_entity_id: claim.claim_entity_id, lobby_id: dashlessId(lobbyId) },
           {
-            onSuccess: request =>
-              lobbyDebateRequested(lobbyId, {
-                kind: 'claim',
-                requestId: request.id,
-                claimId: claim.claim_entity_id,
-              }),
             onError: error => {
               recoverFromMissingIntent(error);
               refreshOnRefusal(error);
