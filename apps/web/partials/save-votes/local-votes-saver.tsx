@@ -76,9 +76,10 @@ export function LocalVotesSaver() {
         bindSaveToAccount(accountId);
         return;
       }
-      // Still finishing, so the visitor can back out; or signed in from another tab, whose saver
-      // decides and binds or clears for both. Clearing here could beat it to the votes.
-      if (signIn === 'pending' || signIn === 'elsewhere') return;
+      // Still finishing, so the visitor can back out; backed out, and about to be signed out, with
+      // the votes theirs to save next time; or signed in from another tab, whose saver decides and
+      // binds or clears for both. Clearing in any of these could take votes that are not anyone else's.
+      if (signIn !== 'not_save') return;
     }
     state.votes.forEach(vote => captureLocalVoteDropped('other_sign_in', vote, voteCount));
     clearLocalVotes();

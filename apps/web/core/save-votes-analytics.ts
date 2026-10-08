@@ -25,19 +25,23 @@ export const SAVE_VOTES_ANALYTICS = {
  * - `pending`: a save prompt started it and it hasn't finished. Privy reports a user before its dialog
  *   is done, and the visitor can still back out — after which Privy signs them out — so nothing is
  *   published yet (GEO-3243).
- * - `not_save`: something else started it, or the visitor left it.
+ * - `abandoned`: a save prompt started it and the visitor exited after Privy had signed them in. Privy
+ *   signs them out next, but may still report the account for a moment; the votes wait for that
+ *   sign-out and stay on the device for the next save, rather than being cleared as somebody else's.
+ * - `not_save`: something else started it, or the visitor closed it before anyone signed in.
  * - `elsewhere`: no attempt in this tab, so the sign-in happened in another one, which decides.
  *
  * The attempt is the authorization to save, rather than a flag of our own: it is already recorded per
  * press, survives the OAuth redirect in this tab, is replaced by any later sign-in, and is marked
  * `closed` or `left_after_*` when the visitor leaves it.
  */
-export type SaveVotesSignIn = 'save' | 'pending' | 'not_save' | 'elsewhere';
+export type SaveVotesSignIn = 'save' | 'pending' | 'abandoned' | 'not_save' | 'elsewhere';
 
 export function saveVotesSignIn(attempt: AuthAttempt | undefined): SaveVotesSignIn {
   if (!attempt) return 'elsewhere';
   if (attempt.properties.auth_intent !== SAVE_VOTES_ANALYTICS.auth_intent) return 'not_save';
   if (attempt.outcome === undefined) return 'pending';
+  if (attempt.outcome === 'left_after_sign_up' || attempt.outcome === 'left_after_sign_in') return 'abandoned';
   return isSignedInOutcome(attempt.outcome) ? 'save' : 'not_save';
 }
 

@@ -20,9 +20,15 @@ export function PrivyAuthTracker() {
   // boolean so its status modal cannot replace the originating document's attempt.
   const oauthCallback = useRef(isOAuthCallback());
   const { authenticated, isModalOpen, user } = usePrivy();
-  // Read when the flow is exited, which can come after Privy has already signed someone in.
-  const signedIn = useRef<ExitedFlowAccount>(null);
-  signedIn.current = authenticated && user ? user : null;
+  // The account this session signed in, kept until the session ends rather than read live. Exiting
+  // the flow after Privy signed someone in is followed by Privy signing them out, and the two can be
+  // seen in either order; whichever ends the attempt classifies it with this (GEO-3243).
+  const sessionAccount = useRef<ExitedFlowAccount>(null);
+  if (authenticated && user) sessionAccount.current = user;
+  const endSession = () => {
+    resetPrivyAuthSession(sessionAccount.current);
+    sessionAccount.current = null;
+  };
   usePrivyLogin({
     onComplete: args => {
       completePrivyAuth(args);
@@ -32,17 +38,17 @@ export function PrivyAuthTracker() {
       // Invalid codes and transient failures leave the modal open for a retry. Keep the
       // initiating attribution until dismissal; the next login press also replaces it.
       if (error === 'exited_auth_flow') {
-        cancelPrivyAuth(signedIn.current);
+        cancelPrivyAuth(sessionAccount.current);
         oauthCallback.current = false;
       }
     },
   });
-  useLogout({ onSuccess: resetPrivyAuthSession });
+  useLogout({ onSuccess: endSession });
   useEffect(() => {
     if (!isModalOpen || authenticated || oauthCallback.current) return;
     openAuthAttempt();
   }, [isModalOpen, authenticated]);
   // Expiry and logout in another tab need not fire this tab's useLogout callback.
-  useOnSignOut(resetPrivyAuthSession);
+  useOnSignOut(endSession);
   return null;
 }

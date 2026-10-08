@@ -50,9 +50,14 @@ export function cancelPrivyAuth(account: ExitedFlowAccount = null) {
   runSignInAbandoned();
 }
 
-export function resetPrivyAuthSession() {
+/**
+ * Signed out. `account` is whoever the open attempt had signed in, if anyone: Privy signs an exited
+ * flow's account out, and that sign-out can be seen before the exit itself, so it classifies the
+ * attempt the same way the exit would have.
+ */
+export function resetPrivyAuthSession(account: ExitedFlowAccount = null) {
   completedUserId = null;
-  cancelPrivyAuth();
+  cancelPrivyAuth(account);
   resetAuthAttempt();
 }
 

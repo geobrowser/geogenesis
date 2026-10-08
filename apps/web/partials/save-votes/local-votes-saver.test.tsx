@@ -386,8 +386,12 @@ describe('LocalVotesSaver', () => {
     signInWithSpace();
     const { rerender } = render(<LocalVotesSaver />);
 
-    // Exited after the code was accepted; Privy signs them back out.
+    // Exited after the code was accepted. The exit is recorded while Privy still reports the account
+    // (Copilot on #2791, round 2); its sign-out comes after.
     mocks.attempt = attempt('save_votes', 'left_after_sign_in');
+    rerender(<LocalVotesSaver />);
+    expect(readLocalVotes().votes).toHaveLength(1);
+
     mocks.authenticated = false;
     rerender(<LocalVotesSaver />);
 

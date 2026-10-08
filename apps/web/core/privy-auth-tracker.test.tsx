@@ -155,6 +155,52 @@ describe('a sign-in exited after Privy signed someone in', () => {
     expect(readAuthAttempt(attempt.id)?.outcome).toBe('left_after_sign_in');
   });
 
+  // Copilot on #2791 (round 2): Privy's sign-out of the exited account can be seen before the exit.
+  it('is recorded the same way when the sign-out is seen before the exit', () => {
+    const { attempt, rerender } = pressSignIn();
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:new', createdAt: new Date() };
+    rerender();
+
+    mocks.authenticated = false;
+    mocks.user = null;
+    rerender();
+    dismiss();
+
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('left_after_sign_up');
+  });
+
+  it('is recorded the same way when Privy’s logout callback comes first', () => {
+    const { attempt, rerender } = pressSignIn();
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:new', createdAt: new Date() };
+    rerender();
+
+    act(() => mocks.logout?.());
+    dismiss();
+
+    expect(readAuthAttempt(attempt.id)?.outcome).toBe('left_after_sign_up');
+  });
+
+  it('forgets the account once its session ends, so a later sign-in closed unsigned stays closed', () => {
+    const { rerender } = pressSignIn();
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:old', createdAt: new Date('2025-01-01T00:00:00Z') };
+    rerender();
+    mocks.authenticated = false;
+    mocks.user = null;
+    rerender();
+
+    const control = renderHook(() => usePrivySignIn());
+    act(() => {
+      control.result.current({ component: 'navbar', auth_control: 'sign_in' });
+    });
+    const next = currentAuthAttempt()!;
+    dismiss();
+
+    expect(readAuthAttempt(next.id)?.outcome).toBe('closed');
+  });
+
   it('is still closed when nobody had signed in', () => {
     const { attempt } = pressSignIn();
     dismiss();
