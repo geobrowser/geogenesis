@@ -10,7 +10,8 @@ import type { ResponseKind } from '~/core/responses/entity-response';
  *
  * A plain store over localStorage rather than a jotai atom: the navbar reads the count for its
  * "Save N votes" pill, and the navbar's tests replace `jotai` wholesale, so a module-level atom in
- * its import graph fails that suite at collection.
+ * its import graph fails that suite at collection. Same shape, and the same reason, as
+ * `core/debates/watched-debates.ts`.
  *
  * Nothing here is written to the graph. A vote only counts once `LocalVotesSaver` publishes it from
  * a real account, so the store opens no write path anybody could abuse.

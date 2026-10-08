@@ -19,7 +19,7 @@ import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
-import { MatchmakingClaimCard, type RequireSignIn } from './matchmaking-claim-card';
+import { MatchmakingClaimCard } from './matchmaking-claim-card';
 
 // Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
 // refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
@@ -932,8 +932,8 @@ describe('a side picked before the account can publish', () => {
     window.sessionStorage.clear();
   });
 
-  const signedOutCard = (onRequireSignIn: RequireSignIn) => (
-    <MatchmakingClaimCard claim={claim} positions={positions} readiness={signedOut} onRequireSignIn={onRequireSignIn} />
+  const signedOutCard = () => (
+    <MatchmakingClaimCard claim={claim} positions={positions} readiness={signedOut} allowsSignedOutVotes />
   );
 
   // GEO-3214: a signed-out press is kept on this device, with no sign-in in the way. The sheet asks
@@ -941,12 +941,10 @@ describe('a side picked before the account can publish', () => {
   it('keeps a signed-out press on this device instead of opening sign-in', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
-    const onRequireSignIn = vi.fn();
-    renderCard(signedOutCard(onRequireSignIn));
+    renderCard(signedOutCard());
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
-    expect(onRequireSignIn).not.toHaveBeenCalled();
     expect(queued()).toHaveLength(0);
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
     expect(readLocalVotes().votes).toMatchObject([{ entityId: claim.claim_entity_id, direction: 'negative' }]);
@@ -961,19 +959,19 @@ describe('a side picked before the account can publish', () => {
   it('still draws the device vote after the card remounts', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
-    const { unmount } = renderCard(signedOutCard(vi.fn()));
+    const { unmount } = renderCard(signedOutCard());
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
     unmount();
 
-    renderCard(signedOutCard(vi.fn()));
+    renderCard(signedOutCard());
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   it('takes the device vote back when the held side is pressed again', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
-    renderCard(signedOutCard(vi.fn()));
+    renderCard(signedOutCard());
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
@@ -993,7 +991,7 @@ describe('a side picked before the account can publish', () => {
       direction: 'positive',
       title: 'Another claim',
     });
-    renderCard(signedOutCard(vi.fn()));
+    renderCard(signedOutCard());
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
@@ -1003,7 +1001,7 @@ describe('a side picked before the account can publish', () => {
   it('opens the save sheet from the note under the pill', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
-    renderCard(signedOutCard(vi.fn()));
+    renderCard(signedOutCard());
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Save' }));
@@ -1014,13 +1012,13 @@ describe('a side picked before the account can publish', () => {
   // Signed in with no space and no setup under way: nothing would ever publish a queued side.
   it('queues nothing for a signed-in account with no space being made', () => {
     mocks.isConnected = false;
-    const onRequireSignIn = vi.fn();
-    renderCard(signedOutCard(onRequireSignIn), { smartAccount: { account: { address: '0xviewer' } } });
+    renderCard(signedOutCard(), { smartAccount: { account: { address: '0xviewer' } } });
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
     expect(queued()).toHaveLength(0);
-    expect(onRequireSignIn).not.toHaveBeenCalled();
+    // Nor kept on the device: this is an account, and only signed-out votes wait for a save.
+    expect(readLocalVotes().votes).toHaveLength(0);
   });
 });
 
@@ -1034,14 +1032,13 @@ describe('while a new account is still being set up', () => {
   it('keeps the pills live, even before the claim’s lookups answer, and queues a press', () => {
     mocks.isConnected = false;
     mocks.accountSetupPending = true;
-    const onRequireSignIn = vi.fn();
     renderCard(
       <MatchmakingClaimCard
         claim={claim}
         positions={positions}
         readiness={settingUp}
         answersReady={false}
-        onRequireSignIn={onRequireSignIn}
+        allowsSignedOutVotes
       />
     );
 
@@ -1049,7 +1046,7 @@ describe('while a new account is still being set up', () => {
     expect(agree).toBeEnabled();
     fireEvent.click(agree);
 
-    expect(onRequireSignIn).not.toHaveBeenCalled();
+    expect(readLocalVotes().votes).toHaveLength(0);
     expect(queued()).toEqual([expect.objectContaining({ intent: 'positive', requires: 'personalSpace' })]);
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
   });

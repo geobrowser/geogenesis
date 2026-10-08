@@ -1,7 +1,7 @@
 'use client';
 
 import type { ActionContext } from '~/core/action-context';
-import { observeOperation } from '~/core/analytics-operations';
+import { recordAction } from '~/core/analytics-operations';
 import type { ResponseKind } from '~/core/responses/entity-response';
 
 import { type LocalVoteChange, type LocalVoteDirection, readLocalVotes, toggleLocalVote } from './local-votes';
@@ -26,7 +26,6 @@ export function castLocalVote({
   direction,
   title,
   surface = 'feed',
-  targetType,
   attribution,
 }: {
   entityId: string;
@@ -35,14 +34,14 @@ export function castLocalVote({
   direction: LocalVoteDirection;
   title: string;
   surface?: SavePromptSurface;
-  targetType: string;
+  /** The pressed control's own action context, which also names the target. */
   attribution: ActionContext;
 }): LocalVoteChange {
   const change = toggleLocalVote({ entityId, spaceId, responseKind, direction, title });
   // The visit they voted in is not the "return visit" the sheet waits for.
   markPromptedThisSession();
   try {
-    observeOperation('local_vote', targetType, entityId, undefined, attribution).succeeded({
+    recordAction('local_vote', attribution, {
       vote_direction: change.action === 'remove' ? 'none' : direction === 'positive' ? 'up' : 'down',
       vote_action: change.action,
       response_kind: responseKind,

@@ -7,11 +7,13 @@ import * as React from 'react';
 
 import { ActionContextProvider } from '~/core/action-context-provider';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
+import { useOnSignOut } from '~/core/hooks/use-on-sign-out';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSetToast } from '~/core/hooks/use-toast';
 import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { captureLocalVoteDropped } from '~/core/save-votes-analytics';
+import { savedVotesCopy, savingVotesCopy } from '~/core/save-votes-copy';
 import {
   type LocalVote,
   clearLocalVotes,
@@ -23,14 +25,6 @@ import {
 } from '~/core/state/local-votes';
 import { useReportError } from '~/core/state/status-bar-store';
 import { describeError } from '~/core/utils/error-diagnostics';
-
-export function savingVotesCopy(count: number) {
-  return count === 1 ? 'Saving your vote…' : `Saving ${count} votes…`;
-}
-
-export function savedVotesCopy(count: number) {
-  return count === 1 ? 'Vote saved' : `${count} votes saved`;
-}
 
 /**
  * Publishes the votes a visitor cast on this device once a save prompt has signed them in
@@ -74,15 +68,10 @@ export function LocalVotesSaver() {
   }, [authenticated, confirmed, ready, state, voteCount]);
 
   // Signed out mid-save: what is left was confirmed for that account, not for the next one here.
-  const wasAuthenticated = React.useRef(false);
-  React.useEffect(() => {
-    if (!ready) return;
-    if (wasAuthenticated.current && !authenticated) {
-      resetSaveRequest();
-      totalRef.current = 0;
-    }
-    wasAuthenticated.current = authenticated;
-  }, [authenticated, ready]);
+  useOnSignOut(() => {
+    resetSaveRequest();
+    totalRef.current = 0;
+  });
 
   const hasPersonalSpace = Boolean(smartAccount && isRegistered && personalSpaceId);
   const saving = authenticated && confirmed && hasPersonalSpace && voteCount > 0 && !failed;

@@ -9,10 +9,10 @@ import { Button, PILL_BUTTON_CLASS_NAME } from '~/design-system/button';
 
 import { Environment } from '../environment';
 import { usePrepareOnboarding } from '../hooks/use-prepare-onboarding';
-import { usePrivySignIn } from '../hooks/use-privy-sign-in';
+import { useSaveVotesSignIn } from '../hooks/use-save-votes-sign-in';
 import { useTrackedLogin } from '../hooks/use-tracked-login';
-import { saveVotesSignInProperties } from '../save-votes-analytics';
-import { clearSaveRequested, markSaveRequested, useLocalVoteCount } from '../state/local-votes';
+import { saveVotesNavLabel } from '../save-votes-copy';
+import { useLocalVoteCount } from '../state/local-votes';
 import { GEOGENESIS } from './geo-chain';
 
 const isTestEnv = Environment.variables.isTestEnv;
@@ -51,12 +51,11 @@ function PrivyConnectButton() {
   // With votes waiting on this device, this is a save prompt (GEO-3214): it names them, and the
   // sign-in it starts saves them. Returns to this page, since the votes were cast here.
   const localVoteCount = useLocalVoteCount();
-  const saveSignIn = usePrivySignIn();
+  const saveSignIn = useSaveVotesSignIn();
 
   const onLogin = () => {
     if (localVoteCount > 0) {
-      markSaveRequested();
-      void saveSignIn(saveVotesSignInProperties('navbar', localVoteCount), { onCancel: clearSaveRequested });
+      void saveSignIn('navbar', localVoteCount);
       return;
     }
     prepareOnboarding({ returnTo: null });
@@ -65,7 +64,7 @@ function PrivyConnectButton() {
 
   return (
     <Button variant="primary" className={PILL_BUTTON_CLASS_NAME} onClick={onLogin}>
-      {localVoteCount === 0 ? 'Log in' : localVoteCount === 1 ? 'Save 1 vote' : `Save ${localVoteCount} votes`}
+      {localVoteCount === 0 ? 'Log in' : saveVotesNavLabel(localVoteCount)}
     </Button>
   );
 }

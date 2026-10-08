@@ -13,7 +13,6 @@ import { useStore } from 'jotai';
 import { withActionContext } from '~/core/action-context';
 import { useActionContext } from '~/core/action-context-provider';
 import { personProfileOpened } from '~/core/analytics';
-import { LOCAL_VOTE_TITLE } from '~/core/claims/browse/local-vote-note';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -29,6 +28,7 @@ import {
   type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
   RESPONSE_CONFIRMING_COPY,
+  RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
@@ -278,7 +278,6 @@ export function EntityVoteButtons({
           responseKind,
           direction,
           title: entity?.name ?? '',
-          targetType: responseKind === 'curation' ? 'entity' : 'claim',
           attribution: getContext(),
         });
         return;
@@ -322,28 +321,22 @@ export function EntityVoteButtons({
   const signedInTitle = spaceOnTheWay
     ? 'Vote now — saved until your account is ready'
     : 'Finish setting up your account to vote';
-  const positiveTitle = !isConnected
-    ? smartAccount
-      ? signedInTitle
-      : !authenticated
-        ? localDirection === 'positive'
-          ? LOCAL_VOTE_TITLE
-          : responseCopy.positiveAction
-        : responseCopy.signIn
-    : positiveActive
-      ? responseCopy.removePositive
-      : responseCopy.positiveAction;
-  const negativeTitle = !isConnected
-    ? smartAccount
-      ? signedInTitle
-      : !authenticated
-        ? localDirection === 'negative'
-          ? LOCAL_VOTE_TITLE
-          : responseCopy.negativeAction
-        : responseCopy.signIn
-    : negativeActive
-      ? responseCopy.removeNegative
-      : responseCopy.negativeAction;
+  const voteTitle = (direction: ActiveResponseDirection) => {
+    const active = direction === 'positive' ? positiveActive : negativeActive;
+    if (isConnected) {
+      if (!active) return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
+      return direction === 'positive' ? responseCopy.removePositive : responseCopy.removeNegative;
+    }
+    if (smartAccount) return signedInTitle;
+    // Signed out, a press votes on this device: the arrow does what it says (GEO-3214).
+    if (!authenticated) {
+      if (localDirection === direction) return RESPONSE_LOCAL_ONLY_COPY;
+      return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
+    }
+    return responseCopy.signIn;
+  };
+  const positiveTitle = voteTitle('positive');
+  const negativeTitle = voteTitle('negative');
 
   const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 

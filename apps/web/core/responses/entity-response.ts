@@ -91,6 +91,12 @@ export const ENTITY_RESPONSE_COPY: Record<ResponseKind, EntityResponseCopy> = {
 export const RESPONSE_CONFIRMING_COPY = 'Response submitted. Waiting for confirmation.';
 
 /**
+ * A signed-out vote kept on this device until it is saved with an account (GEO-3214). One sentence
+ * for the pills and the arrows alike, for the same reason as the line above.
+ */
+export const RESPONSE_LOCAL_ONLY_COPY = 'Only on this device. Save it to count.';
+
+/**
  * Whether the viewer's response is still on its way to the bundler — the only part of a write the
  * UI waits on (GEO-2889).
  *
@@ -173,7 +179,9 @@ export function getEntityResponseKind({ isClaim }: { isClaim: boolean }): Respon
  * the Types relation is read across every space the entity lives in, which is what lets a claim
  * collected into another space still draw the claim controls.
  */
-export function resolveEntityResponseKind(entity: Pick<Entity, 'relations' | 'values'> | null | undefined): ResponseKind {
+export function resolveEntityResponseKind(
+  entity: Pick<Entity, 'relations' | 'values'> | null | undefined
+): ResponseKind {
   const activeRelations = entity?.relations.filter(relation => !relation.isDeleted) ?? [];
 
   const isClaim = activeRelations.some(

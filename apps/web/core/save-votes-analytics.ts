@@ -1,5 +1,6 @@
 import { snapshotActionContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
+import { recordAction } from '~/core/analytics-operations';
 
 /**
  * Sign-ins a save prompt starts (GEO-3214): the sheet's email, its other ways in, and the navbar's
@@ -43,24 +44,12 @@ export function captureLocalVoteDropped(
   count: number
 ) {
   try {
-    capture('action_completed', {
-      ...snapshotActionContext(
-        'save_votes_prompt',
-        vote.responseKind === 'curation' ? 'entity' : 'claim',
-        vote.entityId,
-        {},
-        {},
-        { ignoreEventContext: true }
-      ),
-      response_kind: vote.responseKind,
-      operation_id: crypto.randomUUID(),
-      action_kind: 'local_vote_dropped',
-      outcome: 'succeeded',
-      reason,
-      local_vote_count: count,
-      action_context_version: 'v1',
-      measurement_version: 'growth-v2',
-    });
+    const targetType = vote.responseKind === 'curation' ? 'entity' : 'claim';
+    recordAction(
+      'local_vote_dropped',
+      snapshotActionContext('save_votes_prompt', targetType, vote.entityId, {}, {}, { ignoreEventContext: true }),
+      { drop_reason: reason, response_kind: vote.responseKind, entity_id: vote.entityId, local_vote_count: count }
+    );
   } catch {
     /* Analytics never blocks a save. */
   }

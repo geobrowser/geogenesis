@@ -20,7 +20,6 @@ import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
 
@@ -139,17 +138,13 @@ export function ClaimExploreFeedCard({
     enabled: nearViewport,
   });
 
-  // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the claim
-  // page does — and through the same hook, which also keeps Privy's session restoration from being
-  // mistaken for a login somebody asked for.
-  const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({
     claim,
     positions,
     readiness,
     answersReady: isResponseKindResolved && isViewerResponseResolved,
     responseBlockedReason,
-    onRequireSignIn: promptSignIn,
+    allowsSignedOutVotes: true,
   });
   // geo-chat's own row, not the merged `readiness` above — that one falls back to the graph, and
   // this repair is only for the gap where geo-chat holds the response and not the readiness.

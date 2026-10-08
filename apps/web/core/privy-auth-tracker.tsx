@@ -5,6 +5,7 @@ import { useLogout, usePrivy, usePrivyLogin } from '@geogenesis/auth';
 import { useEffect, useRef } from 'react';
 
 import { openAuthAttempt } from './auth-attempt';
+import { useOnSignOut } from './hooks/use-on-sign-out';
 import { cancelPrivyAuth, completePrivyAuth, resetPrivyAuthSession } from './privy-auth-events';
 
 function isOAuthCallback() {
@@ -33,17 +34,12 @@ export function PrivyAuthTracker() {
     },
   });
   useLogout({ onSuccess: resetPrivyAuthSession });
-  const { ready, authenticated, isModalOpen } = usePrivy();
+  const { authenticated, isModalOpen } = usePrivy();
   useEffect(() => {
     if (!isModalOpen || authenticated || oauthCallback.current) return;
     openAuthAttempt();
   }, [isModalOpen, authenticated]);
-  const wasAuthenticated = useRef(false);
-  useEffect(() => {
-    if (!ready) return;
-    // Expiry and logout in another tab need not fire this tab's useLogout callback.
-    if (wasAuthenticated.current && !authenticated) resetPrivyAuthSession();
-    wasAuthenticated.current = authenticated;
-  }, [ready, authenticated]);
+  // Expiry and logout in another tab need not fire this tab's useLogout callback.
+  useOnSignOut(resetPrivyAuthSession);
   return null;
 }

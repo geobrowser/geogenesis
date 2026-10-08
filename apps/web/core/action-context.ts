@@ -34,6 +34,7 @@ export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
   | 'vote'
   | 'local_vote'
+  | 'local_vote_dropped'
   | 'ranking'
   | 'comment'
   | 'edit_comment'

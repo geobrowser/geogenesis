@@ -1,11 +1,10 @@
 'use client';
 
-import { usePrivy } from '@geogenesis/auth';
-
 import * as React from 'react';
 
 import { useAtom } from 'jotai';
 
+import { useOnSignOut } from '~/core/hooks/use-on-sign-out';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
@@ -26,13 +25,7 @@ export function PendingActionsRunner() {
   // this tab reloads the page and takes the queue with it, but the other two leave this tab running:
   // a queued action would otherwise wait for the next account to sign in here and publish as them.
   // Privy's `authenticated`, not the smart account, which reads null for a moment mid-sign-up.
-  const { ready: authReady, authenticated } = usePrivy();
-  const wasAuthenticated = React.useRef(false);
-  React.useEffect(() => {
-    if (!authReady) return;
-    if (wasAuthenticated.current && !authenticated) setActions([]);
-    wasAuthenticated.current = authenticated;
-  }, [authReady, authenticated, setActions]);
+  useOnSignOut(() => setActions([]));
 
   const runningRef = React.useRef<Set<string>>(new Set());
   const [retryNonce, setRetryNonce] = React.useState(0);

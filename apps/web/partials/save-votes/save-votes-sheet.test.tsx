@@ -3,6 +3,13 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  saveVotesHeading,
+  saveVotesNavLabel,
+  saveVotesSubtext,
+  savedVotesCopy,
+  savingVotesCopy,
+} from '~/core/save-votes-copy';
 import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
 import {
   closeSaveVotesPrompt,
@@ -11,7 +18,7 @@ import {
   readSaveVotesPrompt,
 } from '~/core/state/save-votes-prompt';
 
-import { SaveVotesSheet, saveVotesHeading, saveVotesSubtext } from './save-votes-sheet';
+import { SaveVotesSheet } from './save-votes-sheet';
 
 const mocks = vi.hoisted(() => ({
   ready: true,
@@ -63,16 +70,20 @@ beforeEach(() => {
 
 describe('copy', () => {
   it('names the votes, singular and plural', () => {
-    expect(saveVotesHeading(1, 'single_claim')).toBe('Save your vote');
-    expect(saveVotesHeading(2, 'threshold')).toBe('Save your 2 votes');
-    expect(saveVotesHeading(1, 'return_visit')).toBe('You have 1 unsaved vote');
-    expect(saveVotesHeading(3, 'return_visit')).toBe('You have 3 unsaved votes');
-    expect(saveVotesSubtext(1, 'threshold')).toBe(
+    expect(saveVotesHeading(1, false)).toBe('Save your vote');
+    expect(saveVotesHeading(2, false)).toBe('Save your 2 votes');
+    expect(saveVotesHeading(1, true)).toBe('You have 1 unsaved vote');
+    expect(saveVotesHeading(3, true)).toBe('You have 3 unsaved votes');
+    expect(saveVotesSubtext(1, false)).toBe(
       'It’s only on this device for now. Add your email and it counts toward the result.'
     );
-    expect(saveVotesSubtext(2, 'return_visit')).toBe(
+    expect(saveVotesSubtext(2, true)).toBe(
       'They’re still on this device. Add your email and they count toward the result.'
     );
+    expect(saveVotesNavLabel(1)).toBe('Save 1 vote');
+    expect(saveVotesNavLabel(4)).toBe('Save 4 votes');
+    expect([savingVotesCopy(1), savingVotesCopy(3)]).toEqual(['Saving your vote…', 'Saving 3 votes…']);
+    expect([savedVotesCopy(1), savedVotesCopy(3)]).toEqual(['Vote saved', '3 votes saved']);
   });
 });
 

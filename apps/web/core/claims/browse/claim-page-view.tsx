@@ -18,7 +18,6 @@ import {
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useComments } from '~/core/hooks/use-comments';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { ID } from '~/core/id';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
@@ -669,17 +668,13 @@ function ClaimPositionSection({
   const { claim, positions, readiness, isResponseKindResolved, isViewerResponseResolved, responseBlockedReason } =
     state;
 
-  // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the vote
-  // arrows on an entity page do — and through the same hook, which also keeps Privy's session
-  // restoration from being mistaken for a login somebody asked for.
-  const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({
     claim,
     positions,
     readiness,
     answersReady: isResponseKindResolved && isViewerResponseResolved,
     responseBlockedReason,
-    onRequireSignIn: promptSignIn,
+    allowsSignedOutVotes: true,
     // One claim on the page, so the save sheet asks after the first vote rather than the second.
     savePromptSurface: 'single',
   });
