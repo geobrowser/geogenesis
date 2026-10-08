@@ -56,6 +56,25 @@ describe('useOpenRoundRevealStep', () => {
     expect(result.current).toBe('countIn');
   });
 
+  it('starts every round at the flip, whatever the previous round reached', () => {
+    vi.useFakeTimers();
+    // Round 0: the room samples 600 ms, and the hook's own timer carries it on to the result.
+    const { result, rerender } = renderHook(
+      ({ elapsed }: { elapsed: number | null }) => useOpenRoundRevealStep(elapsed, 'extend', 3_000),
+      { initialProps: { elapsed: 600 as number | null } }
+    );
+    act(() => vi.advanceTimersByTime(1_350 - 600));
+    expect(result.current).toBe('result');
+
+    // A round is spoken between the two reveals.
+    rerender({ elapsed: null });
+    expect(result.current).toBeNull();
+
+    // Round 1's first sample happens to land on the same 600 ms.
+    rerender({ elapsed: 600 });
+    expect(result.current).toBe('flip');
+  });
+
   it('follows the room clock when it ticks', () => {
     const { result, rerender } = renderHook(({ elapsed }) => useOpenRoundRevealStep(elapsed, 'end', 3_000), {
       initialProps: { elapsed: 200 },

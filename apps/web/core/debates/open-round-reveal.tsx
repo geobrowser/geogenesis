@@ -53,6 +53,10 @@ export function openRoundRevealStep(elapsedMs: number, outcome: OpenRoundPick, w
  */
 export function useOpenRoundRevealStep(elapsedMs: number | null, outcome: OpenRoundPick | null, windowMs: number) {
   const [reached, setReached] = React.useState<{ from: number; to: number } | null>(null);
+  // The room stays mounted across rounds, and every round passes through `null` between reveals, so
+  // forget the last boundary there. Otherwise a later round whose first sample lands on the same
+  // `from` would start past its flip.
+  if (elapsedMs === null && reached !== null) setReached(null);
   const effectiveMs = elapsedMs === null ? null : reached?.from === elapsedMs ? reached.to : elapsedMs;
 
   React.useEffect(() => {
