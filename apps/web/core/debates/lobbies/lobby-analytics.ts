@@ -1,0 +1,246 @@
+import * as React from 'react';
+
+import { capture } from '~/core/analytics';
+
+import { type Debate, dashlessId } from '../api';
+import { sameId } from '../rooms/room-presence';
+import { debateRoomPath } from '../rooms/room-routes';
+
+/**
+ * Lobby analytics (GEO-3126): whether lobbies get newcomers into a first debate. Registered in
+ * `geobrowser/analytics` (`semantic/events.yaml`); the runtime and the collector drop names they do
+ * not know. No `measurement_version` (the collector then demands a measurement contract), and no
+ * `source` or `duration*` keys.
+ *
+ * A lobby session is one visit, from the join that put the viewer on the roster to leaving it, held
+ * in memory only. A reconnect, lapsed lease, back-forward cache restore or StrictMode remount stays
+ * in the same session; coming back after a debate starts a new one. Stepping out keeps it open until
+ * the debate arrives (`lobby_left` with exit `debate_started`), and an ended session is kept until
+ * the next join so a debate that follows is still attributed to it.
+ *
+ * Module state is read and written only from effects and event handlers, never during render.
+ */
+
+/** How the viewer got to the lobby, as of the join that starts the session. */
+export type LobbyEntry =
+  /** No in-app control marked it: a pasted or shared link, a typed URL, a reload. */
+  | 'link'
+  /** The lobbies card in the side panel. */
+  | 'side_panel'
+  /** Go to lobby, right after creating it. */
+  | 'created'
+  /** Back to the room, on a debate's end card or on the lobby's stepped-out prompt. */
+  | 'back_after_debate'
+  /** Rejoin after leaving, being removed, or being moved out by another tab. */
+  | 'rejoin'
+  /** A link on another lobby's page. */
+  | 'other_lobby'
+  | 'unknown';
+
+export type LobbyExit = 'left' | 'debate_started' | 'page_closed' | 'lobby_ended' | 'unknown';
+
+export type LobbyRequestKind = 'claim' | 'person';
+
+/**
+ * `via` on a lobby's shared link. A signed-out visitor's room page cannot read the room's kind, so
+ * the link says it is a lobby and sign-in attributes the sign-up to it. Bare room links stay `room`.
+ */
+export const LOBBY_LINK_VIA = 'lobby';
+
+/** The link a lobby hands out to share. */
+export function lobbyShareUrl(lobbyId: string) {
+  return `${window.location.origin}${debateRoomPath(lobbyId)}?via=${LOBBY_LINK_VIA}`;
+}
+
+/** A marked entry older than this is stale: the navigation it was set for never joined. */
+const ENTRY_TTL_MS = 60_000;
+/** A debate this long after stepping out or leaving is no longer attributed to the session. */
+const DEBATE_ATTRIBUTION_MS = 60 * 60_000;
+
+type Session = {
+  lobbyId: string;
+  sessionId: string;
+  joinedAt: number;
+  isNewcomer: boolean;
+  /** Out to debate, by this tab or by the server; still open until the debate or a leave. */
+  steppedOutAt: number | null;
+  /** Sent its `lobby_left`; kept until the next join to attribute a debate that follows. */
+  endedAt: number | null;
+  debates: Set<string>;
+  /** A repeat click reuses a pending challenge, so ids are counted once. */
+  requests: Set<string>;
+};
+
+let session: Session | null = null;
+let pendingEntry: { lobbyId: string; entry: LobbyEntry; at: number } | null = null;
+let releaseTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** Analytics never gets in the way of the lobby. */
+function send(...args: Parameters<typeof capture>) {
+  try {
+    capture(...args);
+  } catch {
+    // Dropped.
+  }
+}
+
+function cancelRelease() {
+  if (releaseTimer === null) return;
+  clearTimeout(releaseTimer);
+  releaseTimer = null;
+}
+
+/** In the room: joined, not stepped out, not ended. */
+function activeFor(lobbyId: string) {
+  return session !== null &&
+    sameId(session.lobbyId, lobbyId) &&
+    session.steppedOutAt === null &&
+    session.endedAt === null
+    ? session
+    : null;
+}
+
+/** Ends the open session with its one `lobby_left`. */
+function end(exit: LobbyExit, now = Date.now()) {
+  cancelRelease();
+  const ended = session;
+  if (!ended || ended.endedAt !== null) return;
+  ended.endedAt = now;
+  send('lobby_left', {
+    lobby_id: ended.lobbyId,
+    lobby_session_id: ended.sessionId,
+    time_in_lobby_ms: Math.max(0, Math.round((ended.steppedOutAt ?? now) - ended.joinedAt)),
+    exit,
+  });
+}
+
+/** Set by the control that leads into the lobby, before navigating or joining. */
+export function markLobbyEntry(lobbyId: string, entry: LobbyEntry) {
+  pendingEntry = { lobbyId: dashlessId(lobbyId), entry, at: Date.now() };
+}
+
+function takeEntry(lobbyId: string): LobbyEntry {
+  const pending = pendingEntry;
+  pendingEntry = null;
+  if (!pending || !sameId(pending.lobbyId, lobbyId) || Date.now() - pending.at > ENTRY_TTL_MS) return 'link';
+  return pending.entry;
+}
+
+/** The server put the viewer on the roster. Starts a session unless this one is still going. */
+export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boolean }) {
+  cancelRelease();
+  if (activeFor(lobbyId)) return;
+  // Joining one lobby leaves any other; back without a debate ends a stepped-out one.
+  if (session) end(session.steppedOutAt === null ? 'left' : 'unknown');
+  const started: Session = {
+    // geo-chat's spelling, so events join its `lobby_id` and `Debate.lobby_id`.
+    lobbyId: dashlessId(lobbyId),
+    sessionId: crypto.randomUUID(),
+    joinedAt: Date.now(),
+    isNewcomer,
+    steppedOutAt: null,
+    endedAt: null,
+    debates: new Set(),
+    requests: new Set(),
+  };
+  session = started;
+  send('lobby_joined', {
+    lobby_id: started.lobbyId,
+    lobby_session_id: started.sessionId,
+    is_newcomer: isNewcomer,
+    entry: takeEntry(lobbyId),
+  });
+}
+
+/** Left on purpose, or taken out by the server. Leave also ends a stepped-out session. */
+export function lobbyLeft(lobbyId: string, exit: Exclude<LobbyExit, 'debate_started'>) {
+  if (session && sameId(session.lobbyId, lobbyId)) end(exit);
+}
+
+/** Out to debate, by this tab or by the server. `lobby_left` waits for the debate. */
+export function lobbySteppedOut(lobbyId: string, now = Date.now()) {
+  const active = activeFor(lobbyId);
+  if (!active) return;
+  cancelRelease();
+  active.steppedOutAt = now;
+}
+
+/** The lobby page mounted. Cancels the end a StrictMode unmount just scheduled. */
+export function lobbyPageMounted(lobbyId: string) {
+  if (session && sameId(session.lobbyId, lobbyId)) cancelRelease();
+}
+
+/** The lobby page unmounted: navigated away, unless it remounts in the same tick. */
+export function lobbyPageUnmounted(lobbyId: string) {
+  if (!activeFor(lobbyId)) return;
+  cancelRelease();
+  releaseTimer = setTimeout(() => {
+    releaseTimer = null;
+    if (activeFor(lobbyId)) end('left');
+  }, 0);
+}
+
+/** The page is being unloaded, not kept in the back-forward cache. Best effort. */
+export function lobbyPageClosed(lobbyId: string) {
+  if (activeFor(lobbyId)) end('page_closed');
+}
+
+/**
+ * A debate this viewer is in. Counts once per session and debate, when the debate was requested in
+ * the lobby of the open session, or of one that stepped out or ended within the hour.
+ */
+export function lobbyDebateSeen(debate: Pick<Debate, 'id' | 'lobby_id'>, now = Date.now()) {
+  const current = session;
+  if (!current || !debate.lobby_id || !sameId(debate.lobby_id, current.lobbyId)) return;
+  const outSince = current.endedAt ?? current.steppedOutAt;
+  if (outSince !== null && now - outSince > DEBATE_ATTRIBUTION_MS) return;
+  if (current.debates.has(debate.id)) return;
+  current.debates.add(debate.id);
+  end('debate_started', now);
+  send('lobby_debate_started', {
+    lobby_id: current.lobbyId,
+    lobby_session_id: current.sessionId,
+    debate_id: debate.id,
+    is_newcomer: current.isNewcomer,
+    ms_since_join: Math.max(0, Math.round(now - current.joinedAt)),
+  });
+}
+
+/**
+ * The viewer's current debate, from the coordinator's activity. Covers every way into a debate,
+ * including the server stepping people out when a debate starts with no call from this tab.
+ */
+export function useLobbyDebateAnalytics(debate: Pick<Debate, 'id' | 'lobby_id'> | null | undefined) {
+  const debateId = debate?.id ?? null;
+  const lobbyId = debate?.lobby_id ?? null;
+  React.useEffect(() => {
+    if (debateId && lobbyId) lobbyDebateSeen({ id: debateId, lobby_id: lobbyId });
+  }, [debateId, lobbyId]);
+}
+
+/** A request the server accepted, sent from a lobby. Dropped outside a session of that lobby. */
+export function lobbyDebateRequested(
+  lobbyId: string,
+  request: { kind: 'claim'; requestId: string; claimId: string } | { kind: 'person'; requestId: string }
+) {
+  if (!session || !sameId(session.lobbyId, lobbyId) || session.requests.has(request.requestId)) return;
+  session.requests.add(request.requestId);
+  send('lobby_debate_requested', {
+    lobby_id: session.lobbyId,
+    lobby_session_id: session.sessionId,
+    request_kind: request.kind,
+    request_id: request.requestId,
+    ...(request.kind === 'claim' ? { target_id: request.claimId } : {}),
+  });
+}
+
+export function lobbyCreated(lobbyId: string, { scheduled }: { scheduled: boolean }) {
+  send('lobby_created', { lobby_id: dashlessId(lobbyId), scheduled });
+}
+
+/** Tests only. */
+export function resetLobbyAnalytics() {
+  cancelRelease();
+  session = null;
+  pendingEntry = null;
+}

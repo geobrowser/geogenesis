@@ -33,6 +33,7 @@ import {
   useHandleDebateSharePrompt,
   useRejectDebateChallenge,
 } from './hooks';
+import { useLobbyDebateAnalytics } from './lobbies/lobby-analytics';
 import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
@@ -125,6 +126,7 @@ export function DebateCoordinator() {
   const activityQuery = useDebateActivity();
   const currentUserId = useCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
+  useLobbyDebateAnalytics(activity?.debate);
   // Hiding the tab drops presence after a short grace (GEO-3119), but never at the cost of the
   // viewer's own pending things: geo-chat refuses an accept from an offline requester, hides their
   // request from its recipient, and ends a debate-again session whose people went offline. So while
