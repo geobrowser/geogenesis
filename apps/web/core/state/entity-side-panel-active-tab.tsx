@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 import { validateEntityId } from '~/core/utils/utils';
 
 export type EntitySidePanelActiveTabContextValue = {
@@ -19,7 +20,7 @@ export function EntitySidePanelActiveTabProvider({
   children,
   initialTab,
 }: {
-  initialTab?: { tabId?: string; systemTab?: string };
+  initialTab?: EntitySidePanelTabSelection;
   entityId: string;
   spaceId: string;
   children: React.ReactNode;
@@ -37,7 +38,7 @@ function ScopedEntitySidePanelActiveTabProvider({
   initialTab,
 }: {
   children: React.ReactNode;
-  initialTab?: { tabId?: string; systemTab?: string };
+  initialTab?: EntitySidePanelTabSelection;
 }) {
   const [activeTabId, setActiveTabId] = React.useState<string | null>(
     initialTab?.tabId && validateEntityId(initialTab.tabId) ? initialTab.tabId : null

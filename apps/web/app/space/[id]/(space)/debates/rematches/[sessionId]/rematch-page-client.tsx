@@ -83,10 +83,8 @@ import {
 } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
 import { useRegisterRematchPanelContext } from '~/core/debates/rematch-panel-context';
-import { RequestDebateControl } from '~/core/debates/request-debate-control';
-import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
+import { RematchRequestControl } from '~/core/debates/rematch-request-control';
 import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
-import { ROOM_REQUEST_WAITING } from '~/core/debates/rooms/room-copy';
 import { DebateRoomPresenceIndicator } from '~/core/debates/rooms/room-presence-indicator';
 import {
   type TaggedClaimFilters,
@@ -3151,7 +3149,6 @@ function RematchClaimCard({
   /** Drawn under the card, above any refusal — "From this debate" says who said the claim. */
   context?: React.ReactNode;
 }) {
-  const inRoom = useInDebateRoom();
   // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
   const roomOpponentPresent = useRoomOpponentPresent();
   const remotePosition = claim.participants.find(side => side.user_id !== currentUserId)?.position ?? null;
@@ -3208,58 +3205,7 @@ function RematchClaimCard({
         ? null
         : inFlightResponse === 'positive';
 
-  const opposing = localPosition !== null && remotePosition !== null && localPosition !== remotePosition;
-  /**
-   * GEO-2652. The side you picked highlights immediately off the optimistic answer, but the request
-   * has to wait for geo-chat's copy, which trails by a publish, an index and a notification. That
-   * is not a moment — it is an on-chain write and an indexer.
-   *
-   * This used to render nothing at all, on the reasoning that a button you cannot press yet reads
-   * as broken and the wait is short. The first half holds; the second does not. So say what is
-   * happening instead of showing an empty space where the button will be: Preston's report is
-   * precisely that the viewer has no idea what they are waiting on.
-   *
-   * Not made optimistic, which the ticket would prefer, because it cannot be done from here.
-   * geo-chat validates the request against its *own* copy of the position and rejects it with
-   * `claim_response_required` — so a request sent early does not race ahead, it fails. Accepting one
-   * before the response is indexed is a backend decision about whether a debate may be created on a
-   * position that does not exist on-chain yet.
-   */
-  /**
-   * The shared gate, so this reads the same fact the hub reads and wears the same label.
-   *
-   * `chatPosition` rather than the graph's view of the viewer's side, which is the whole fix: the
-   * latter arrives via `participantSidesOn`, and comparing it against a `localPosition` that fell
-   * back to it whenever there was no optimistic answer went trivially true and opened a button
-   * geo-chat would still reject.
-   *
-   * `delayed` is only reachable from the response mutation's `onSuccess`, so by the time it is set
-   * the publish has landed and the wait is the index. That changes the label, never the gate.
-   */
-  const requestGate = debateRequestGate({
-    chatPosition,
-    localPosition,
-    opponentReady: opposing,
-    // `true` off this route, where there is no join event to wait on. Inside a room (GEO-2941) the
-    // request waits for the opponent to arrive.
-    opponentPresent: roomOpponentPresent,
-    indexingDelayed: responseIndexing.status === 'delayed',
-  });
-  // Ended or expired while the viewer is still in the room: someone went offline long enough for
-  // geo-chat to end it, and it refuses requests until the room hands out a new one.
-  const roomSessionEnded = inRoom && (session?.status === 'ended' || session?.status === 'expired');
-  const canRequest = requestGate.canRequest && !roomSessionEnded;
-  // In a room the button is what state 3 turns on, so it stays on screen, disabled, until then.
-  const awaitingOpponent = requestGate.awaitingOpponent;
-  const awaitingResponse = requestGate.pending;
-  const awaitingLabel = requestGate.pendingLabel ?? REQUEST_PENDING_LABEL;
   const { openSidePanel } = useEntitySidePanel();
-  const request = session?.request;
-
-  const requesting =
-    session?.status === 'request_pending' &&
-    request != null &&
-    idEquals(request.claim.claim_entity_id, claim.claim.claim_entity_id);
 
   const positions = React.useMemo(() => rematchPositionSummaries(claim, session), [claim, session]);
 
@@ -3296,36 +3242,25 @@ function RematchClaimCard({
       // in the same place instead of a footer button of its own (GEO-2825). Nothing to watch here
       // either: the picker has no active-debate signal, and it is mid-session anyway, so
       // `activeDebate` has no reader.
-      // `hideEndSlot` stays for when there is no offer: the slot falls through to the card's own
-      // `ClaimEndSlot` otherwise, which sends the wrong mutation entirely.
+      // The picker already has the session rows. Use their shared rematch control instead of
+      // falling through to the per-claim lookup used by the entity panel.
       hideEndSlot
       // Only when there is something to offer, the same way the side panel renders its control only
       // once a match exists. Rendering it unconditionally put a dead disabled button on every card.
       endSlot={
-        awaitingResponse || canRequest || awaitingOpponent || requesting || claim.recently_rejected ? (
-          <RequestDebateControl
-            onRequest={onRequest}
-            disabled={!canRequest || busy || claim.recently_rejected}
-            isRequesting={requesting}
-            pending={awaitingResponse}
-            pendingLabel={awaitingLabel}
-            note={
-              claim.recently_rejected ? (
-                <Text as="span" variant="footnote" color="grey-04">
-                  Recently rejected
-                </Text>
-              ) : awaitingOpponent ? (
-                <Text as="span" variant="footnote" color="grey-04">
-                  {ROOM_REQUEST_WAITING}
-                </Text>
-              ) : previouslyDebated ? (
-                <Text as="span" variant="footnote" color="grey-04">
-                  Already debated
-                </Text>
-              ) : null
-            }
-          />
-        ) : null
+        <RematchRequestControl
+          session={session}
+          claimId={claim.claim.claim_entity_id}
+          chatPosition={chatPosition}
+          localPosition={localPosition}
+          remotePosition={remotePosition}
+          opponentPresent={roomOpponentPresent}
+          indexingDelayed={responseIndexing.status === 'delayed'}
+          busy={busy}
+          recentlyRejected={claim.recently_rejected}
+          previouslyDebated={previouslyDebated}
+          onRequest={onRequest}
+        />
       }
       // The refusal stays in a full-width row rather than riding the control into the header. The
       // end slot cannot shrink — it holds a fixed-height pill beside the space chip — so a sentence

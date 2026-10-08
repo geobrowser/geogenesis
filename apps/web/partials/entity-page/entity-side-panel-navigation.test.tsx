@@ -120,20 +120,20 @@ describe('debate room side-panel navigation', () => {
     );
   });
 
-  it.each([`/space/${SPACE}`, '/debate/other-room', `${relatedHref}/power-tools`, 'https://example.com/source'])(
-    'opens %s separately so it cannot replace the room',
-    href => {
-      render(<View href={href} />);
-      fireEvent.click(screen.getByText('Related claim'));
-      expect(window.open).toHaveBeenCalledWith(
-        new URL(href, window.location.href).href,
-        '_blank',
-        'noopener,noreferrer'
-      );
-      expect(mocks.navigate).not.toHaveBeenCalled();
-      expect(mocks.openSidePanel).not.toHaveBeenCalled();
-    }
-  );
+  it.each([
+    `/space/${SPACE}`,
+    '/debate/other-room',
+    `${relatedHref}/power-tools`,
+    `${relatedHref}/comments`,
+    `${relatedHref}/activity`,
+    'https://example.com/source',
+  ])('opens %s separately so it cannot replace the room', href => {
+    render(<View href={href} />);
+    fireEvent.click(screen.getByText('Related claim'));
+    expect(window.open).toHaveBeenCalledWith(new URL(href, window.location.href).href, '_blank', 'noopener,noreferrer');
+    expect(mocks.navigate).not.toHaveBeenCalled();
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
 
   it.each([{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }])('preserves modified clicks: %o', modifier => {
     render(<View />);

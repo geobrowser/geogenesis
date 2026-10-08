@@ -3506,7 +3506,8 @@ describe('DebateRematchPageClient', () => {
     // The shared claim sits in Crypto; the published one is in Governance space.
     selectFilter('Any space', 'Crypto');
 
-    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    // The filter may restart the gallery transition; wait for the retained claim to render.
+    expect(await screen.findByText('A claim both participants chose')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByText('A newly published claim')).toBeNull());
   });
 

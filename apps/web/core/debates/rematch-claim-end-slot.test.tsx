@@ -96,7 +96,7 @@ describe('claim side panel in a debate-again session', () => {
     render(<View />);
     expect(screen.getByRole('button', { name: 'Publishing your position…' })).toBeDisabled();
   });
-  it.each(['ended', 'expired', 'converted'] as const)('removes the offer for a %s session', status => {
+  it.each(['deciding', 'ended', 'expired', 'converted'] as const)('removes the offer for a %s session', status => {
     context.session!.status = status;
     render(<View />);
     expect(screen.queryByRole('button')).toBeNull();
@@ -126,6 +126,14 @@ describe('claim side panel in a debate-again session', () => {
     view.rerender(<View />);
     expect(screen.getByRole('alert')).toHaveTextContent('Request failed');
   });
+  it('does not show a request error from the same claim in another space', () => {
+    context.createRequest.error = new Error('Wrong space request');
+    context.createRequest.variables = { source_space_id: 'another-space', claim_id: 'claim-1', format_id: 'format' };
+    render(<View />);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();
+  });
+
   it('clears the session when the picker unmounts', () => {
     const view = render(<View />);
     expect(screen.getByRole('button', { name: 'Request debate' })).toBeEnabled();

@@ -1,5 +1,7 @@
 import { validateEntityId } from './utils';
 
+export type EntitySidePanelTabSelection = { tabId: string; systemTab?: never } | { systemTab: string; tabId?: never };
+
 export function entityTabIdFromHref(href: string): string | null {
   const queryStart = href.indexOf('?');
   if (queryStart === -1) return null;

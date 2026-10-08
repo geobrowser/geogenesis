@@ -35,6 +35,7 @@ import {
   shouldSuppressSidePanelPathnameAutoClose,
 } from '~/core/state/personal-profile/create-post-flow';
 import type { Entity } from '~/core/types';
+import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils } from '~/core/utils/utils';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
@@ -308,7 +309,7 @@ export function EntitySidePanelSurface({
    * is a new request — the panel passes its target, which a second click on the same card replaces.
    */
   scrollToCommentsRequest?: object | null;
-  initialTab?: { tabId?: string; systemTab?: string };
+  initialTab?: EntitySidePanelTabSelection;
   onClose: () => void;
 }) {
   const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);

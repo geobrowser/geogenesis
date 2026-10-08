@@ -6,10 +6,11 @@ import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { equals as idEquals } from '~/core/id/normalize';
 import { useEntitySidePanelActiveTab } from '~/core/state/entity-side-panel-active-tab';
+import { entityTabIdFromHref } from '~/core/utils/entity-tab-navigation';
 import { isModifiedClick } from '~/core/utils/is-modified-click';
 import { validateEntityId, validateSpaceId } from '~/core/utils/utils';
 
-const SYSTEM_TABS = new Set(['claims', 'debates', 'topics', 'sources', 'activity', 'comments']);
+const SYSTEM_TABS = new Set(['claims', 'debates', 'topics', 'sources']);
 
 /** Capture before Next links or card handlers can navigate the room out from under the panel. */
 export function EntitySidePanelNavigation({
@@ -40,7 +41,7 @@ export function EntitySidePanelNavigation({
     event.stopPropagation();
     const parts = url.pathname.split('/').filter(Boolean);
     const [, nextSpaceId, nextEntityId, systemTab] = parts;
-    const tabId = url.searchParams.get('tabId');
+    const tabId = entityTabIdFromHref(url.href);
     const isEntity =
       url.origin === window.location.origin &&
       parts[0] === 'space' &&
@@ -56,7 +57,7 @@ export function EntitySidePanelNavigation({
       return;
     }
 
-    const initialTab = tabId && validateEntityId(tabId) ? { tabId } : systemTab ? { systemTab } : undefined;
+    const initialTab = tabId ? { tabId } : systemTab ? { systemTab } : undefined;
     const scrollToComments = url.hash === '#entity-comments';
     if (idEquals(entityId, nextEntityId!) && idEquals(spaceId, nextSpaceId!)) {
       if (initialTab?.systemTab) tabs?.setActiveSystemTab(initialTab.systemTab);

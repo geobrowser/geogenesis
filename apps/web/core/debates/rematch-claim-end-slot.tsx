@@ -9,9 +9,7 @@ import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 import { defaultDebateFormatId } from './formats';
 import { useDebateRematchClaims } from './hooks';
 import type { RematchPanelContext } from './rematch-panel-context';
-import { RequestDebateControl } from './request-debate-control';
-import { debateRequestGate } from './request-gate';
-import { ROOM_REQUEST_WAITING } from './rooms/room-copy';
+import { RematchRequestControl } from './rematch-request-control';
 
 export function RematchClaimEndSlot({
   context,
@@ -53,24 +51,13 @@ export function RematchClaimEndSlot({
       : viewerPosition !== undefined
         ? viewerPosition
         : (chatPosition ?? null);
-  const gate = debateRequestGate({
-    chatPosition,
-    localPosition,
-    opponentReady: localPosition !== null && remotePosition !== null && localPosition !== remotePosition,
-    opponentPresent,
-    indexingDelayed: indexing.status === 'delayed',
-  });
   const rejected = row?.recently_rejected || session?.recently_rejected_claim_ids.some(id => idEquals(id, claimId));
-  const requesting =
-    session?.status === 'request_pending' &&
-    session.request &&
-    idEquals(session.request.claim.claim_entity_id, claimId);
-  const error =
-    createRequest.error instanceof Error &&
+  const isCurrentRequest = Boolean(
     createRequest.variables &&
-    idEquals(createRequest.variables.claim_id, claimId)
-      ? createRequest.error.message
-      : null;
+    idEquals(createRequest.variables.claim_id, claimId) &&
+    idEquals(createRequest.variables.source_space_id, spaceId)
+  );
+  const error = isCurrentRequest && createRequest.error instanceof Error ? createRequest.error.message : null;
 
   if (
     !enabled ||
@@ -79,31 +66,26 @@ export function RematchClaimEndSlot({
     !session.participants.some(person => idEquals(person.user_id, currentUserId)) ||
     !row ||
     !canPublishDebateIn(spaceId) ||
-    data?.excluded_claim_ids.some(id => idEquals(id, claimId)) ||
-    !['browsing', 'request_pending'].includes(session.status)
+    data?.excluded_claim_ids.some(id => idEquals(id, claimId))
   )
     return null;
-  if (!gate.canRequest && !gate.pending && !gate.awaitingOpponent && !requesting && !rejected && !error) return null;
-
-  const note = rejected ? 'Recently rejected' : gate.awaitingOpponent ? ROOM_REQUEST_WAITING : null;
-  const disabled =
-    !gate.canRequest || createRequest.isPending || session.status === 'request_pending' || Boolean(rejected);
   return (
-    <RequestDebateControl
+    <RematchRequestControl
+      session={session}
+      claimId={claimId}
+      chatPosition={chatPosition}
+      localPosition={localPosition}
+      remotePosition={remotePosition}
+      opponentPresent={opponentPresent}
+      indexingDelayed={indexing.status === 'delayed'}
+      busy={createRequest.isPending}
+      recentlyRejected={Boolean(rejected)}
+      previouslyDebated={row.previously_debated}
       onRequest={() => {
-        if (disabled) return;
         createRequest.mutate({ source_space_id: spaceId, claim_id: claimId, format_id: defaultDebateFormatId });
       }}
-      disabled={disabled}
-      isRequesting={
-        Boolean(requesting) ||
-        (createRequest.isPending &&
-          Boolean(createRequest.variables && idEquals(createRequest.variables.claim_id, claimId)))
-      }
-      pending={gate.pending}
-      pendingLabel={gate.pendingLabel}
+      isSending={createRequest.isPending && isCurrentRequest}
       requestError={error}
-      note={note ? <span className="text-footnote text-grey-04">{note}</span> : null}
       variant={variant}
       className={className}
     />
