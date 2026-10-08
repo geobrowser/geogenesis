@@ -5285,6 +5285,40 @@ describe('DebateRoomPageClient', () => {
       expect(mocks.savePickMutateAsync).toHaveBeenCalledWith({ roundIndex: 0, pick: 'extend' });
     });
 
+    it('reports a saved pick with how long before the deadline it came (GEO-3182)', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      mocks.savePickMutateAsync.mockResolvedValue(openRoundsDeciding({ my_pick: 'extend' }));
+      await renderLiveDebate(openRoundsDeciding());
+
+      fireEvent.click(await screen.findByRole('button', { name: /Extend/ }));
+      await waitFor(() =>
+        expect(mocks.capture).toHaveBeenCalledWith(
+          'debate_round_pick_set',
+          expect.objectContaining({
+            round_index: 0,
+            pick: 'extend',
+            is_change: false,
+            previous_pick: null,
+            during_decision: true,
+            turn_index: 1,
+            ms_before_deadline: 7_000,
+            decision_window_ms: 10_000,
+          })
+        )
+      );
+    });
+
+    it('does not report a pick that landed after the round resolved (GEO-3182)', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
+      mocks.savePickMutateAsync.mockResolvedValue(null);
+      await renderLiveDebate(openRoundsDeciding());
+
+      fireEvent.click(await screen.findByRole('button', { name: /Extend/ }));
+      await waitFor(() => expect(mocks.savePickMutateAsync).toHaveBeenCalled());
+      await act(async () => undefined);
+      expect(mocks.capture).not.toHaveBeenCalledWith('debate_round_pick_set', expect.anything());
+    });
+
     it('shows the saved pick after a reload', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:03.000'));
       await renderLiveDebate(openRoundsDeciding({ my_pick: 'end' }));
