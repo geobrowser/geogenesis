@@ -8,7 +8,11 @@ import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import { Cell, Property, Row } from '~/core/types';
-import { propertyForSort, shouldIncludeWithoutValueForPropertySort } from '~/core/utils/column-sort';
+import {
+  builtInSortOrderBy,
+  propertyForSort,
+  shouldIncludeWithoutValueForPropertySort,
+} from '~/core/utils/column-sort';
 import { sortRows } from '~/core/utils/utils';
 
 import { useProperties } from '../../hooks/use-properties';
@@ -171,7 +175,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // Look up from shown columns first, then fall back to all filterable properties
   // (allows sorting by properties not currently visible in the table).
   const serverSort = React.useMemo(() => {
-    if (!sortState) return undefined;
+    if (sortState?.kind !== 'property') return undefined;
     const property = propertyForSort(sortState.columnId, [
       ...(propertiesSchema ? Object.values(propertiesSchema) : []),
       ...filterableProperties,
@@ -183,6 +187,14 @@ export function useDataBlock(options?: UseDataBlockOptions) {
       includeWithoutValue: shouldIncludeWithoutValueForPropertySort(sortState.columnId),
     };
   }, [sortState, propertiesSchema, filterableProperties]);
+
+  // Built-in sorts (Best, Created) are entity-level orderings, not property
+  // sorts, so they travel as `orderBy` on the entities connection instead.
+  const serverOrderBy = React.useMemo(
+    () => (sortState?.kind === 'builtin' ? builtInSortOrderBy(sortState) : undefined),
+    [sortState]
+  );
+  const isServerOrdered = serverSort !== undefined || serverOrderBy !== undefined;
 
   // Fetch collection data with server-side filtering and sorting
   const {
@@ -203,6 +215,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     offset: currentOffset !== undefined ? currentOffset * pageSize : undefined,
     where: where,
     sort: serverSort,
+    orderBy: serverOrderBy,
   });
 
   // For COLLECTION sources we already have the row ids locally (from
@@ -244,6 +257,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
     deferUntilFetched: true,
     includeUnpublishedLocal: true,
     sort: serverSort,
+    orderBy: serverOrderBy,
   });
 
   // Anchor the cursor of the page we just fetched so subsequent forward
@@ -260,13 +274,13 @@ export function useDataBlock(options?: UseDataBlockOptions) {
 
   React.useEffect(() => {
     if (source.type !== 'COLLECTION') return;
-    if (!serverSort) return;
+    if (!isServerOrdered) return;
     if (!isCollectionFetched) return;
     if (isCollectionPlaceholder) return;
     recordEndCursor(pageNumber, collectionEndCursor);
   }, [
     source.type,
-    serverSort,
+    isServerOrdered,
     isCollectionFetched,
     isCollectionPlaceholder,
     collectionEndCursor,
@@ -403,7 +417,10 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // Reset to page 0 (and drop all cursor anchors) when the filter or sort
   // signature changes — cursors are tied to a specific filter+sort combination
   // and stop being meaningful when either changes.
-  const sortKey = React.useMemo(() => stableStringify(serverSort ?? null), [serverSort]);
+  const sortKey = React.useMemo(
+    () => stableStringify({ sort: serverSort ?? null, orderBy: serverOrderBy ?? null }),
+    [serverSort, serverOrderBy]
+  );
   const lastResetKeyRef = React.useRef<string | null>(null);
   React.useEffect(() => {
     const key = `${filterStateKey}::${sortKey}::${pageSize}`;
@@ -459,7 +476,7 @@ export function useDataBlock(options?: UseDataBlockOptions) {
   // For SPACES/GEO we read the cursor signal directly off the GraphQL response.
   const hasNextPage =
     source.type === 'COLLECTION'
-      ? serverSort
+      ? isServerOrdered
         ? collectionHasNextPage
         : (pageNumber + 1) * pageSize < collectionData.totalCount
       : source.type === 'GEO' || source.type === 'SPACES'
