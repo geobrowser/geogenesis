@@ -21,9 +21,9 @@ import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../h
 import {
   type LobbyHighlightsState,
   lobbyHighlightsFromResponse,
-  mergeLobbyHighlights,
   roomVoteHintAction,
   settleFetchedLobbyHighlights,
+  withLobbyHighlights,
 } from './lobby-highlights-state';
 
 /**
@@ -50,13 +50,13 @@ export function useLobbyHighlights(lobbyId: string, enabled = true) {
   });
 }
 
-/** Lays a host action's returned state over the cache, when newer. */
+/** Lays a host action's returned state over the cache when newer, or seeds it after a failed first GET. */
 function useStoreLobbyHighlights(lobbyId: string) {
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
   return (state: DebateLobbyHighlights) =>
     queryClient.setQueryData<LobbyHighlightsState>(debateQueryKeys.lobbyHighlights(accountKey, lobbyId), current =>
-      current ? mergeLobbyHighlights(current, state) : current
+      withLobbyHighlights(current, state)
     );
 }
 

@@ -1,15 +1,20 @@
-import { renderHook } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { act, renderHook, waitFor } from '@testing-library/react';
+
+import * as React from 'react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 
-import type { DebateLobbyRoomVote } from '../api';
-import { useRoomVoteHint } from './lobby-highlights-hooks';
+import { type DebateLobbyHighlights, type DebateLobbyRoomVote, GeoChatRequestError } from '../api';
+import { useLobbyHighlights, useRoomVoteHint, useSetLobbyHighlight } from './lobby-highlights-hooks';
 
 const mocks = vi.hoisted(() => ({
   snapshot: { status: 'idle', pending: null, runId: null } as EntityResponseIndexingState,
   hint: vi.fn(async () => undefined),
+  getHighlights: vi.fn(),
+  setHighlight: vi.fn(),
 }));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
@@ -19,12 +24,22 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 vi.mock('../api', async importOriginal => ({
   ...(await importOriginal<typeof import('../api')>()),
   setDebateLobbyRoomVoteHint: mocks.hint,
+  getDebateLobbyHighlights: mocks.getHighlights,
+  setDebateLobbyHighlight: mocks.setHighlight,
 }));
 
 vi.mock('../hooks', () => ({
-  debateQueryKeys: {},
-  debateQueryNetworkOptions: {},
-  useGeoChatAuth: () => ({ accountKey: 'user-a', getPrivyIdentityToken: getToken }),
+  debateQueryKeys: {
+    lobbyHighlights: (accountKey: string | null, lobbyId: string) => [
+      'debates',
+      'account',
+      accountKey,
+      'lobby-highlights',
+      lobbyId,
+    ],
+  },
+  debateQueryNetworkOptions: { retry: false },
+  useGeoChatAuth: () => ({ accountKey: 'user-a', authenticated: true, ready: true, getPrivyIdentityToken: getToken }),
 }));
 
 const getToken = vi.fn();
@@ -96,5 +111,29 @@ describe('useRoomVoteHint', () => {
     renderHook(() => useRoomVoteHint('lobby1', vote, false));
     renderHook(() => useRoomVoteHint('lobby1', null, true));
     expect(mocks.hint).not.toHaveBeenCalled();
+  });
+});
+
+describe('host actions', () => {
+  it('show their state after the first GET failed', async () => {
+    mocks.getHighlights.mockRejectedValueOnce(new GeoChatRequestError('busy', 'unavailable', 503));
+    const highlighted: DebateLobbyHighlights = {
+      lobby_id: 'lobby1',
+      as_of: '2026-10-07T12:00:01Z',
+      highlights: [{ claim: vote.claim, highlighted_by: null, highlighted_at: '2026-10-07T12:00:01Z' }],
+      room_vote: null,
+    };
+    mocks.setHighlight.mockResolvedValueOnce(highlighted);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(
+      () => ({ read: useLobbyHighlights('lobby1'), highlight: useSetLobbyHighlight('lobby1') }),
+      { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> }
+    );
+    await waitFor(() => expect(result.current.read.isError).toBe(true));
+
+    await act(() => result.current.highlight.mutateAsync({ claimId: 'c', highlighted: true }));
+
+    await waitFor(() => expect(result.current.read.data?.highlights.map(row => row.claim.id)).toEqual(['c']));
+    expect(result.current.read.data?.viewer).toEqual({ room_vote_position: null, vote_id: null });
   });
 });

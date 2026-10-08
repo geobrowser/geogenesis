@@ -25,11 +25,7 @@ import {
   resetGeoChatSession,
 } from './api';
 import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
-import {
-  type LobbyHighlightsState,
-  mergeLobbyHighlights,
-  parseLobbyHighlights,
-} from './lobbies/lobby-highlights-state';
+import { type LobbyHighlightsState, parseLobbyHighlights, withLobbyHighlights } from './lobbies/lobby-highlights-state';
 
 export type DebateGatewaySession = GeoChatSession;
 
@@ -560,18 +556,16 @@ export class DebateGatewayClient {
         break;
       }
       // GEO-3135. Full state to the roster: replaces the cached copy when newer, never refetches.
-      // While the first GET is in flight it seeds the cache, and the GET keeps whichever is newer.
+      // An empty cache is seeded only for a lobby on screen (its GET in flight or failed), never for
+      // one the page isn't showing.
       case 'debate.lobby_highlights_changed': {
         const highlights = parseLobbyHighlights(identifiers.lobby_highlights);
         if (!highlights || !this.accountKey) break;
         const key = ['debates', 'account', this.accountKey, 'lobby-highlights', dashlessId(highlights.lobby_id)];
-        const loading = this.queryClient.getQueryState(key)?.fetchStatus === 'fetching';
+        const query = this.queryClient.getQueryCache().find({ queryKey: key, exact: true });
+        const shown = query !== undefined && (query.state.fetchStatus === 'fetching' || query.getObserversCount() > 0);
         this.queryClient.setQueryData<LobbyHighlightsState>(key, current =>
-          current
-            ? mergeLobbyHighlights(current, highlights)
-            : loading
-              ? { ...highlights, viewer: { room_vote_position: null, vote_id: null } }
-              : current
+          current || shown ? withLobbyHighlights(current, highlights) : current
         );
         break;
       }

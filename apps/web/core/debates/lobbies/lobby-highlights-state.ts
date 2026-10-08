@@ -67,6 +67,24 @@ export function mergeLobbyHighlights(
 }
 
 /**
+ * `incoming` over the cached copy, or, with none cached (a first GET in flight or failed), on its
+ * own with the viewer's side unknown.
+ */
+export function withLobbyHighlights(
+  current: LobbyHighlightsState | undefined,
+  incoming: DebateLobbyHighlights
+): LobbyHighlightsState {
+  if (current) return mergeLobbyHighlights(current, incoming);
+  return {
+    lobby_id: incoming.lobby_id,
+    as_of: incoming.as_of,
+    highlights: incoming.highlights,
+    room_vote: incoming.room_vote,
+    viewer: { room_vote_position: null, vote_id: null },
+  };
+}
+
+/**
  * A GET's result, unless the cache already holds a newer state from an event that overtook it.
  * Then the cache stands, and the GET's viewer side comes along tagged with the vote it read.
  */

@@ -613,6 +613,33 @@ describe('DebateGatewayClient', () => {
       expect(invalidateQueries).not.toHaveBeenCalled();
     });
 
+    it('applies an event to a lobby on screen whose first GET failed, but not once nothing shows it', async () => {
+      await started();
+      const observer = new QueryObserver(queryClient, {
+        queryKey: highlightsKey,
+        queryFn: () => Promise.reject(new Error('down')),
+        retry: false,
+      });
+      const unsubscribe = observer.subscribe(() => undefined);
+      await vi.waitFor(() => expect(observer.getCurrentResult().isError).toBe(true));
+
+      await highlightsChanged(state('2026-10-07T12:00:01Z', 2));
+      expect(cachedAgree()).toBe(2);
+
+      unsubscribe();
+      queryClient.removeQueries({ queryKey: highlightsKey });
+      const unshown = new QueryObserver(queryClient, {
+        queryKey: highlightsKey,
+        queryFn: () => Promise.reject(new Error('down')),
+        retry: false,
+      });
+      const stop = unshown.subscribe(() => undefined);
+      await vi.waitFor(() => expect(unshown.getCurrentResult().isError).toBe(true));
+      stop();
+      await highlightsChanged(state('2026-10-07T12:00:02Z', 4));
+      expect(queryClient.getQueryData(highlightsKey)).toBeUndefined();
+    });
+
     it('leaves a lobby whose highlights were never read uncached', async () => {
       await started();
       await highlightsChanged(state('2026-10-07T12:00:01Z', 1));
