@@ -57,7 +57,10 @@ vi.mock('~/core/state/status-bar-store', () => ({ useReportError: () => mocks.re
 vi.mock('~/core/action-context-provider', () => ({
   ActionContextProvider: ({ children }: { children: ReactNode }) => children,
 }));
-vi.mock('~/core/auth-attempt', () => ({ currentAuthAttempt: () => mocks.attempt }));
+vi.mock('~/core/auth-attempt', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/auth-attempt')>()),
+  currentAuthAttempt: () => mocks.attempt,
+}));
 vi.mock('~/core/save-votes-analytics', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/save-votes-analytics')>()),
   captureLocalVoteDropped: (...args: unknown[]) => mocks.capture(...args),

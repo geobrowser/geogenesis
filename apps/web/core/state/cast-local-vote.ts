@@ -41,13 +41,12 @@ export function castLocalVote({
   // The visit they voted in is not the "return visit" the sheet waits for.
   markPromptedThisSession();
   try {
-    const opposite = direction === 'positive' ? 'negative' : 'positive';
     recordAction('local_vote', attribution, {
       // The same fields a vote published from an account carries, so the two compare directly.
       ...voteOutcomeProperties({
         responseKind,
         direction: change.action === 'remove' ? 'clear' : direction,
-        previousResponse: change.action === 'cast' ? null : change.action === 'switch' ? opposite : direction,
+        previousResponse: change.previous,
         entityId,
         spaceId,
       }),

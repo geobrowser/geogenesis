@@ -1,7 +1,7 @@
 import { snapshotActionContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
 import { recordAction } from '~/core/analytics-operations';
-import type { AuthAttempt } from '~/core/auth-attempt';
+import { type AuthAttempt, isSignedInOutcome } from '~/core/auth-attempt';
 
 /**
  * Sign-ins a save prompt starts (GEO-3214): the sheet's email, its other ways in, and the navbar's
@@ -29,7 +29,7 @@ export function isSaveVotesSignIn(attempt: AuthAttempt | undefined) {
   if (!attempt || attempt.properties.auth_intent !== SAVE_VOTES_ANALYTICS.auth_intent) return false;
   // Still open, or signed in. Any way of leaving it — closed, superseded, or exited after signing in,
   // which Privy follows with a sign-out — is not a save.
-  return attempt.outcome === undefined || attempt.outcome === 'signed_up' || attempt.outcome === 'signed_in';
+  return attempt.outcome === undefined || isSignedInOutcome(attempt.outcome);
 }
 
 export function saveVotesSignInProperties(auth_control: string, localVoteCount: number) {

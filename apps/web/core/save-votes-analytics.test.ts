@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import type { AuthAttempt } from './auth-attempt';
+import type { AuthAttempt, AuthAttemptOutcome } from './auth-attempt';
 import { isSaveVotesSignIn } from './save-votes-analytics';
 
-const attempt = (outcome?: AuthAttempt['outcome'], auth_intent = 'save_votes'): AuthAttempt => ({
+const attempt = (outcome?: AuthAttemptOutcome, auth_intent = 'save_votes'): AuthAttempt => ({
   id: 'attempt',
   startedAt: Date.now(),
   outcome,
@@ -12,9 +12,9 @@ const attempt = (outcome?: AuthAttempt['outcome'], auth_intent = 'save_votes'): 
 
 describe('isSaveVotesSignIn', () => {
   it('is a save while open or once signed in', () => {
-    expect(
-      [undefined, 'signed_up', 'signed_in'].map(o => isSaveVotesSignIn(attempt(o as AuthAttempt['outcome'])))
-    ).toEqual([true, true, true]);
+    expect([undefined, 'signed_up', 'signed_in'].map(o => isSaveVotesSignIn(attempt(o as AuthAttemptOutcome)))).toEqual(
+      [true, true, true]
+    );
   });
 
   // GEO-3243: leaving after Privy signed someone in is followed by a sign-out; it is not a save.

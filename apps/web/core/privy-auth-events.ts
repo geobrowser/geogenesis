@@ -2,6 +2,7 @@
 
 import { type AnalyticsProperties, restorePrivySession, trackPrivyAuth } from './analytics';
 import {
+  type AuthAttemptOutcome,
   attemptProperties,
   beginAuthAttempt,
   captureAuthEvent,
@@ -11,7 +12,7 @@ import {
   resetAuthAttempt,
 } from './auth-attempt';
 import { clearSignInAbandoned, runSignInAbandoned } from './auth/sign-in-abandoned';
-import { beginSignupVisitor, clearSignupVisitor, signupVisitorProperties } from './auth/signup-visitor';
+import { beginSignupVisitor, clearSignupVisitor, createdSince, signupVisitorProperties } from './auth/signup-visitor';
 
 type Completion = Parameters<typeof trackPrivyAuth>[0];
 
@@ -32,20 +33,15 @@ export function beginPrivyAuth(
 /** Privy's account when its flow was exited: the signed-in user, or null if nobody had signed in. */
 export type ExitedFlowAccount = { createdAt?: Date | string | null } | null;
 
-/** Creation time is the server's, the attempt's start the device's: the same tolerance as signup visitors. */
-const CREATION_CLOCK_SKEW_MS = 60_000;
-
 /**
  * How an exited sign-in ended (GEO-3243). Exiting Privy's flow after the email code has been accepted
  * still leaves an account behind — a new one, if this attempt created it — so it is not a sign-in the
  * visitor gave up on, and recording it as `closed` hid every such account from the funnel.
  */
-function exitOutcome(account: ExitedFlowAccount) {
-  if (!account) return 'closed' as const;
+function exitOutcome(account: ExitedFlowAccount): AuthAttemptOutcome {
+  if (!account) return 'closed';
   const attempt = currentAuthAttempt();
-  const created = account.createdAt ? new Date(account.createdAt).getTime() : NaN;
-  const createdHere = attempt && Number.isFinite(created) && created >= attempt.startedAt - CREATION_CLOCK_SKEW_MS;
-  return createdHere ? ('left_after_sign_up' as const) : ('left_after_sign_in' as const);
+  return attempt && createdSince(account.createdAt, attempt.startedAt) ? 'left_after_sign_up' : 'left_after_sign_in';
 }
 
 export function cancelPrivyAuth(account: ExitedFlowAccount = null) {

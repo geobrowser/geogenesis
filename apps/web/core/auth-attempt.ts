@@ -8,18 +8,26 @@ import { equals } from './id/normalize';
 const PREFIX = 'geo:auth-attempt:v1:';
 const POINTER = 'geo:auth-attempt:active';
 const TTL = 24 * 60 * 60 * 1000;
+/**
+ * How an attempt ended. `closed` is a dialog dismissed before anyone signed in. The two `left_after_*`
+ * outcomes are a dialog exited *after* Privy had signed someone in — a new account
+ * (`left_after_sign_up`) or an existing one — which Privy then signs back out (GEO-3243). They were
+ * recorded as `closed`, so a created account read as an abandoned sign-in.
+ */
+export type AuthAttemptOutcome =
+  'signed_up' | 'signed_in' | 'closed' | 'superseded' | 'left_after_sign_up' | 'left_after_sign_in';
+
+/** The attempt signed someone in, and they stayed signed in. */
+export function isSignedInOutcome(outcome: AuthAttemptOutcome | undefined) {
+  return outcome === 'signed_up' || outcome === 'signed_in';
+}
+
 export type AuthAttempt = {
   id: string;
   startedAt: number;
   openedAt?: number;
   endedAt?: number;
-  /**
-   * How the attempt ended. `closed` is a dialog dismissed before anyone signed in. The two `left_after_*`
-   * outcomes are a dialog exited *after* Privy had signed someone in — a new account
-   * (`left_after_sign_up`) or an existing one — which Privy then signs back out (GEO-3243). They were
-   * recorded as `closed`, so a created account read as an abandoned sign-in.
-   */
-  outcome?: 'signed_up' | 'signed_in' | 'closed' | 'superseded' | 'left_after_sign_up' | 'left_after_sign_in';
+  outcome?: AuthAttemptOutcome;
   properties: AnalyticsProperties;
   actionSucceeded?: boolean;
   /** `step:outcome` pairs of onboarding already reported for this attempt; see `trackAuthOnboarding`. */
@@ -191,14 +199,14 @@ export function openAuthAttempt(properties: AnalyticsProperties = { auth_trigger
   captureAuthEvent('auth_prompt_viewed', attemptProperties(attempt));
 }
 /** Outcomes only the document that started the attempt can record: the visitor left this one. */
-const ENDED_BY_LEAVING: ReadonlySet<NonNullable<AuthAttempt['outcome']>> = new Set([
+const ENDED_BY_LEAVING: ReadonlySet<AuthAttemptOutcome> = new Set([
   'closed',
   'superseded',
   'left_after_sign_up',
   'left_after_sign_in',
 ]);
 
-export function finishAuthAttempt(outcome: NonNullable<AuthAttempt['outcome']>, attempt = currentAuthAttempt()) {
+export function finishAuthAttempt(outcome: AuthAttemptOutcome, attempt = currentAuthAttempt()) {
   if (!attempt || attempt.endedAt) return;
   if (ENDED_BY_LEAVING.has(outcome) && attempt.id !== ownedAttemptId) return;
   attempt.endedAt = Date.now();
@@ -247,7 +255,7 @@ export function marketingAuthProperties(search: string): AnalyticsProperties {
 /** Progress is resumable; an explicit dismissal is separate from the last step seen. */
 export function trackAuthOnboarding(step: string, outcome: 'viewed' | 'completed' | 'dismissed' | 'failed') {
   const attempt = currentAuthAttempt();
-  if (!attempt || !['signed_up', 'signed_in'].includes(attempt.outcome ?? '')) return;
+  if (!attempt || !isSignedInOutcome(attempt.outcome)) return;
   // Once per attempt. Two reporters can see the same moment — the personal space runner can resolve
   // one creation twice when its effect re-runs mid-flight, by design (GEO-3243) — and a duplicate
   // inflates raw counts while saying nothing new.
@@ -261,7 +269,7 @@ export function trackAuthOnboarding(step: string, outcome: 'viewed' | 'completed
 /** Join only the intended action on the same target, never all later account activity. */
 export function authAttemptForAction(action: string, targetId: string, attemptId?: string): AuthAttempt | undefined {
   const attempt = attemptId ? read(attemptId) : currentAuthAttempt();
-  if (!attempt || !['signed_up', 'signed_in'].includes(attempt.outcome ?? '')) return;
+  if (!attempt || !isSignedInOutcome(attempt.outcome)) return;
   if (!attemptId && attempt.properties.auth_continuation !== 'resume') return;
   if (attempt.actionSucceeded || attempt.properties.auth_intent !== action) return;
   if (!attemptId && !equals(String(attempt.properties.target_id), targetId)) return;

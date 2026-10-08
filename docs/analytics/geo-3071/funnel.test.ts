@@ -13,6 +13,8 @@ const scenarios = [
   { name: 'recent_open_attempt', recent: true, unresolved: 0 },
   { name: 'explicit_close', outcome: 'closed', unresolved: 0 },
   { name: 'superseded', outcome: 'superseded', unresolved: 0 },
+  { name: 'account_created_then_left', outcome: 'left_after_sign_up', unresolved: 0 },
+  { name: 'login_then_left', outcome: 'left_after_sign_in', unresolved: 0 },
   { name: 'terminal_signup_only', outcome: 'signed_up', unresolved: 0 },
   { name: 'terminal_login_only', outcome: 'signed_in', unresolved: 0 },
   {
@@ -88,6 +90,14 @@ try {
       assert.equal(
         Number(row.closed),
         ['closed', 'superseded'].includes(scenario.outcome ?? '') ? 1 : 0
+      )
+      assert.equal(
+        Number(row.accounts_created_then_left),
+        scenario.outcome === 'left_after_sign_up' ? 1 : 0
+      )
+      assert.equal(
+        Number(row.logins_then_left),
+        scenario.outcome === 'left_after_sign_in' ? 1 : 0
       )
       assert.equal(Number(row.unresolved_after_24h), scenario.unresolved)
       assert.equal(
