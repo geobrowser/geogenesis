@@ -14,11 +14,19 @@ import { type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubPillButton } from './hub-pill-button';
 import { formatFacetCount } from './topic-facets';
 
-/** How many lines of pills the row may take before the rest go behind "…". */
+/** How many lines of pills the row takes before the rest go behind "…", unless picks need more. */
 export const FACET_PILL_LINES = 2;
 
 /**
- * The most options measured for the row. Two lines at the picker's width hold well under this, so
+ * How close the picked pills may come to filling the row before it grows a line. At half a line
+ * short — picks running past a line and a half of two — there is too little room left beside them
+ * for anything that could still be picked, and a row that is mostly filters in force has stopped
+ * offering anything.
+ */
+const PICKED_SLACK_LINES = 0.5;
+
+/**
+ * The most options measured for the row. A few lines at the picker's width hold well under this, so
  * measuring the whole facet — which grows with the corpus — would be work spent on pills that can
  * never be drawn. Picked options are measured past it, since they are always drawn.
  */
@@ -41,9 +49,9 @@ export type FacetPillOption = {
 type Props = {
   analyticsSurface: DebateAnalyticsSurface;
   /**
-   * The options to offer, in the order they should be drawn: picked first in the order they were
-   * picked, then by count — the topic menu's own order (`orderFacetOptions`), so the row refills on
-   * each press the way the menu does.
+   * The options to offer, in the order they should be drawn: every space before any topic, and
+   * within each, picked first in the order they were picked, then by count — the topic menu's own
+   * order (`orderFacetOptions`), so the row refills on each press the way the menu does.
    */
   options: FacetPillOption[];
   /** Every picked space and topic id. */
@@ -57,50 +65,87 @@ type Props = {
 };
 
 /**
- * How many of `widths` fit on `lines` lines of `available` pixels, after a leading item and with a
- * trailing one reserved whenever anything is left over.
+ * Lays `widths` out as flex-wrap would across lines of `available` pixels. Returns how many lines
+ * that takes, and how far along the last one it ends.
  *
- * Mirrors flex-wrap: an item that does not fit on the current line starts the next, and an item
- * wider than a whole line still takes a line of its own. `forced` items are always kept, so the
- * answer is never smaller than that.
+ * An item that does not fit on the current line starts the next, and an item wider than a whole
+ * line still takes a line of its own.
+ */
+function pack(widths: number[], available: number, gap: number) {
+  let lines = 1;
+  let x = 0;
+  for (const width of widths) {
+    if (x > 0 && x + gap + width > available) {
+      lines += 1;
+      x = width;
+    } else {
+      x += (x > 0 ? gap : 0) + width;
+    }
+  }
+  return { lines, x };
+}
+
+/**
+ * How many lines the row gets: {@link FACET_PILL_LINES}, plus one for every time the picked pills
+ * alone (after the leading All) reach past half a line short of what it has. Two lines, until the
+ * picks run past a line and a half; then three, until they run past two and a half; and so on.
+ */
+export function rowLines({
+  leading,
+  pickedWidths,
+  available,
+  gap = PILL_GAP_PX,
+  base = FACET_PILL_LINES,
+}: {
+  leading: number;
+  pickedWidths: number[];
+  available: number;
+  gap?: number;
+  base?: number;
+}): number {
+  // Nothing measured, nothing to grow for.
+  if (available <= 0 || pickedWidths.length === 0) return base;
+  const { lines, x } = pack([leading, ...pickedWidths], available, gap);
+  const extent = lines - 1 + x / available;
+  let allowed = base;
+  while (extent > allowed - PICKED_SLACK_LINES) allowed += 1;
+  return allowed;
+}
+
+/**
+ * How many of the unpicked items fit on `lines` lines of `available` pixels, after a leading item
+ * and with a trailing one reserved whenever anything is left over.
+ *
+ * Picked items are always kept wherever they sit, so what gives way is the unpicked ones, from the
+ * end. The answer is how many unpicked items, counted from the start, stay.
  */
 export function fitPills({
   leading,
-  widths,
+  items,
   trailing,
   available,
   lines,
   gap = PILL_GAP_PX,
-  forced = 0,
 }: {
   leading: number;
-  widths: number[];
+  items: { width: number; picked: boolean }[];
   trailing: number;
   available: number;
   lines: number;
   gap?: number;
-  forced?: number;
 }): number {
-  const linesUsed = (items: number[]) => {
-    let used = 1;
-    let x = 0;
-    for (const width of items) {
-      if (x > 0 && x + gap + width > available) {
-        used += 1;
-        x = width;
-      } else {
-        x += (x > 0 ? gap : 0) + width;
-      }
+  const unpicked = items.filter(item => !item.picked).length;
+  for (let kept = unpicked; kept > 0; kept--) {
+    let seen = 0;
+    const widths = [leading];
+    for (const item of items) {
+      if (item.picked) widths.push(item.width);
+      else if (seen++ < kept) widths.push(item.width);
     }
-    return used;
-  };
-
-  for (let count = widths.length; count > forced; count--) {
-    const items = [leading, ...widths.slice(0, count)];
-    if (count < widths.length) items.push(trailing);
-    if (linesUsed(items) <= lines) return count;
+    if (kept < unpicked) widths.push(trailing);
+    if (pack(widths, available, gap).lines <= lines) return kept;
   }
-  return Math.min(forced, widths.length);
+  return 0;
 }
 
 /**
@@ -110,13 +155,14 @@ export function fitPills({
  * One row because the split was the product's and not the reader's: to someone looking for a claim,
  * "Crypto" and "Regulation" are both things to narrow by, and two rows with two rules asked them to
  * know which was which. So both kinds follow the topic menu's rules — AND, counted as co-occurrence
- * — and the row is that menu's top: picked options first in the order they were picked, then
- * whatever the remaining claims carry, by count. Each press re-runs that, so the row refills with
- * what can still narrow the list, and a pressed pill moves to the front with the other picks.
+ * — and each press refills the row with what can still narrow the list. Spaces lead, since there are
+ * few of them and they are the coarsest cut; within each kind, picked options come first in the
+ * order they were picked, then by count.
  *
  * The facet grows with the corpus, so the row holds what fits on two lines at the width it has,
  * measured, and the full list opens from the "…" at its end. Picked options are always drawn,
- * however many there are: every filter in force stays on screen to be undone.
+ * however many there are: every filter in force stays on screen to be undone. Once they take more
+ * than a line and a half, the row grows a line, so there is still room for something to pick.
  */
 export function FacetFilterPills({
   analyticsSurface,
@@ -132,24 +178,22 @@ export function FacetFilterPills({
 
   const picked = React.useMemo(() => new Set(pickedIds.map(normId)), [pickedIds]);
   const isPicked = (id: string) => picked.has(normId(id));
-  const pickedCount = options.filter(option => isPicked(option.id)).length;
 
   const candidates = React.useMemo(
     () => options.filter((option, index) => index < MEASURED_OPTION_LIMIT || picked.has(normId(option.id))),
     [options, picked]
   );
 
-  // Everything until measured. A layout effect answers before the first paint, so this is only ever
-  // seen where nothing can be measured at all — and there every pill is the honest answer.
-  const [fitted, setFitted] = React.useState(candidates.length);
-  // Picked options are drawn whatever the measurement says.
-  const shownCount = Math.max(Math.min(fitted, candidates.length), pickedCount);
-  const shown = candidates.slice(0, shownCount);
+  // Every unpicked candidate until measured. A layout effect answers before the first paint, so this
+  // is only ever seen where nothing can be measured at all — and there every pill is the honest
+  // answer.
+  const [keptUnpicked, setKeptUnpicked] = React.useState(Number.POSITIVE_INFINITY);
+  // Picked options are drawn whatever the measurement says; unpicked ones as far as they fit.
+  const shown = React.useMemo(() => {
+    let seen = 0;
+    return candidates.filter(option => picked.has(normId(option.id)) || seen++ < keptUnpicked);
+  }, [candidates, keptUnpicked, picked]);
   const hiddenCount = options.length - shown.length;
-
-  // Re-measured when anything a pill's width depends on changes: which options, their names, their
-  // counts, and how many are forced.
-  const measureKey = candidates.map(option => `${option.id}:${option.name ?? ''}:${option.count}`).join('|');
 
   React.useLayoutEffect(() => {
     const row = rowRef.current;
@@ -161,16 +205,17 @@ export function FacetFilterPills({
       const widthOf = (element: HTMLElement | undefined) => element?.getBoundingClientRect().width ?? 0;
       const [leading, ...rest] = children;
       const trailing = rest.pop();
-      setFitted(
-        fitPills({
-          leading: widthOf(leading),
-          widths: rest.map(widthOf),
-          trailing: widthOf(trailing),
-          available: row.clientWidth,
-          lines: FACET_PILL_LINES,
-          forced: pickedCount,
-        })
-      );
+      const items = rest.map((element, index) => ({
+        width: widthOf(element),
+        picked: picked.has(normId(candidates[index]?.id ?? '')),
+      }));
+      const available = row.clientWidth;
+      const lines = rowLines({
+        leading: widthOf(leading),
+        pickedWidths: items.filter(item => item.picked).map(item => item.width),
+        available,
+      });
+      setKeptUnpicked(fitPills({ leading: widthOf(leading), items, trailing: widthOf(trailing), available, lines }));
     };
 
     measure();
@@ -179,7 +224,9 @@ export function FacetFilterPills({
     const observer = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(measure);
     observer?.observe(row);
     return () => observer?.disconnect();
-  }, [measureKey, pickedCount]);
+    // Re-measured whenever the pills or the picks change. Both are memoized, by this component and
+    // by the caller's `options` and `pickedIds`, so that is when a width or a forced pill could.
+  }, [candidates, picked]);
 
   const byId = React.useMemo(() => new Map(options.map(option => [option.id, option])), [options]);
   const menuOptions = React.useMemo<HubFilterOption<string>[]>(
@@ -273,6 +320,10 @@ export function FacetFilterPills({
             clearLabel="All"
             countsPending={countsPending}
             showImages
+            // The menu draws the field once its list runs past what it can show, which with options
+            // already left off the row is the usual case.
+            searchPlaceholder="Search spaces and topics"
+            searchEmptyLabel="No spaces or topics match"
           />
         ) : null}
       </div>

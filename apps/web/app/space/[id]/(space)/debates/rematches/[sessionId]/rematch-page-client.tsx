@@ -2634,8 +2634,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const { labelsById: spaceLabelsById, isLoading: spaceLabelsLoading } = useSpaceLabels(facetSpaceIds);
 
   /**
-   * GEO-3223. Spaces and topics as one row of pills, under the topic menu's rules: picked first in
-   * the order they were picked, then by count. A space or topic every listed claim is in narrows
+   * GEO-3223. Spaces and topics as one row of pills, under the topic menu's rules: spaces first,
+   * then topics, each with its picks first in the order they were picked, then by count. A space or topic every listed claim is in narrows
    * nothing, so it is left out; that is also what hides the spaces when every claim is in one.
    */
   const pillOptions = React.useMemo<FacetPillOption[]>(() => {
@@ -2657,8 +2657,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       name: topic.name,
       count: topic.count,
     }));
-    return orderFacetOptions<FacetPillOption>([...spaces, ...topics], [...spaceIds, ...topicIds]);
+    // Every space before any topic: there are few of them and they are the coarsest cut, so they
+    // lead whatever their counts. Each kind keeps the menu's order within it.
+    return [...orderFacetOptions(spaces, spaceIds), ...orderFacetOptions(topics, topicIds)];
   }, [facetSpaces, facetTopics, listedCount, spaceIds, spaceLabelsById, spaceLabelsLoading, topicIds, typing]);
+  const pickedFilterIds = React.useMemo(() => [...spaceIds, ...topicIds], [spaceIds, topicIds]);
 
   /**
    * The topics the search box suggests: named by the text, counted under the space and topic filters
@@ -2977,13 +2980,14 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             ) : (
               // GEO-3223: on a desktop the two menus become one row of pills, so the spaces and
               // topics are on screen to be picked rather than behind "Any space" and "Any topic".
-              // The source menu and the list's switch keep a row of their own beneath it.
+              // The source menu keeps a row of its own beneath it; the list's switch moves under
+              // the search box.
               <div className="flex flex-col gap-2">
                 {pillOptions.length > 0 ? (
                   <FacetFilterPills
                     analyticsSurface="rematch"
                     options={pillOptions}
-                    pickedIds={[...spaceIds, ...topicIds]}
+                    pickedIds={pickedFilterIds}
                     onToggle={option =>
                       option.kind === 'space' ? onSpaceToggle(option.id) : setTopicPicked(option.id)
                     }
@@ -2994,13 +2998,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     countsPending={filterCountsPending}
                   />
                 ) : null}
-                {sourceMenu || listSwitch ? (
-                  <div className="flex flex-wrap items-center gap-2">
-                    {sourceMenu}
-                    <span className="flex-1" />
-                    {listSwitch}
-                  </div>
-                ) : null}
+                {sourceMenu ? <div className="flex flex-wrap items-center gap-2">{sourceMenu}</div> : null}
               </div>
             )}
             <Input
@@ -3019,6 +3017,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 setSearch('');
               }}
             />
+            {/* Under the search box at the right on a desktop: it changes which rows the list
+                shows rather than narrowing by a space or topic, so it sits with the list, apart
+                from the pills. A phone keeps it at the end of its menu row. */}
+            {!isPhone && !searchOnly && listSwitch ? <div className="flex justify-end">{listSwitch}</div> : null}
           </div>
         </div>
 

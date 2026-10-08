@@ -3,7 +3,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { FacetFilterPills, type FacetPillOption, fitPills } from './facet-filter-pills';
+import { FacetFilterPills, type FacetPillOption, fitPills, rowLines } from './facet-filter-pills';
 
 const topics = (n: number): FacetPillOption[] =>
   Array.from({ length: n }, (_, index) => ({
@@ -64,23 +64,47 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const unpicked = (...widths: number[]) => widths.map(width => ({ width, picked: false }));
+
 describe('fitPills', () => {
-  it('keeps every pill when they all fit on two lines', () => {
-    expect(fitPills({ leading: 50, widths: [50, 50, 50], trailing: 30, available: 400, lines: 2 })).toBe(3);
+  it('keeps every pill when they all fit', () => {
+    expect(fitPills({ leading: 50, items: unpicked(50, 50, 50), trailing: 30, available: 400, lines: 2 })).toBe(3);
   });
 
-  it('stops at two lines, leaving room for the trailing control', () => {
+  it('stops at the line cap, leaving room for the trailing control', () => {
     // 100px pills with 8px gaps: three to a 320px line. All + 5 pills fill two lines exactly, so
     // with "…" to fit as well, one pill has to go.
     expect(
-      fitPills({ leading: 100, widths: [100, 100, 100, 100, 100, 100], trailing: 36, available: 320, lines: 2 })
+      fitPills({ leading: 100, items: unpicked(100, 100, 100, 100, 100, 100), trailing: 36, available: 320, lines: 2 })
     ).toBe(4);
   });
 
-  it('never drops below the forced count', () => {
-    expect(fitPills({ leading: 300, widths: [300, 300, 300], trailing: 36, available: 320, lines: 2, forced: 3 })).toBe(
-      3
-    );
+  it('keeps picked pills wherever they sit, and gives way with the unpicked ones', () => {
+    const items = [...unpicked(100, 100, 100, 100, 100), { width: 100, picked: true }];
+    // All, the pick at the end and "…" leave room for three of the five unpicked pills.
+    expect(fitPills({ leading: 100, items, trailing: 36, available: 320, lines: 2 })).toBe(3);
+  });
+});
+
+describe('rowLines', () => {
+  it('stays at two lines while the picks take a line and a half or less', () => {
+    // All + two picks: 100 + 8 + 100 + 8 + 100 = 316 of a 320px line, one line.
+    expect(rowLines({ leading: 100, pickedWidths: [100, 100], available: 320 })).toBe(2);
+  });
+
+  it('grows a line once the picks run past a line and a half', () => {
+    // All + five picks: a full line, then two pills (208px) into the second, 1.65 lines.
+    expect(rowLines({ leading: 100, pickedWidths: [100, 100, 100, 100, 100], available: 320 })).toBe(3);
+  });
+
+  it('keeps growing a line at a time', () => {
+    // Eight picks: three full lines in all, ending past the half of a fourth.
+    expect(rowLines({ leading: 100, pickedWidths: Array(10).fill(100), available: 320 })).toBe(5);
+  });
+
+  it('stays at two with nothing picked or nothing measured', () => {
+    expect(rowLines({ leading: 100, pickedWidths: [], available: 320 })).toBe(2);
+    expect(rowLines({ leading: 0, pickedWidths: [0, 0], available: 0 })).toBe(2);
   });
 });
 
@@ -139,10 +163,38 @@ describe('FacetFilterPills', () => {
     expect(onToggle).toHaveBeenCalledWith(options[9]);
   });
 
+  it('grows a line when the picks take more than a line and a half', () => {
+    layOut({ pill: 100, row: 320 });
+    // Five picks after All run 1.65 lines, so the row gets three: picks, then one unpicked pill and
+    // "…" on the third line.
+    renderPills({ options: topics(10), pickedIds: ['t0', 't1', 't2', 't3', 't4'] });
+
+    expect(within(row()).getAllByRole('button', { name: /^Topic/ })).toHaveLength(7);
+    expect(within(row()).getByRole('button', { name: 'All filters (10)' })).toBeInTheDocument();
+  });
+
   it('always draws every picked option, however full the row is', () => {
     layOut({ pill: 300, row: 320 });
     renderPills({ options: topics(6), pickedIds: ['t0', 't1', 't2'] });
 
     expect(within(row()).getAllByRole('button', { name: /^Topic/ })).toHaveLength(3);
+  });
+});
+
+describe('the "…" menu search', () => {
+  it('offers a search field once the list runs past the menu, and narrows by it', () => {
+    vi.stubGlobal('ResizeObserver', ResizeObserverStub);
+    layOut({ pill: 100, row: 320 });
+    // The menu's own overflow test: a list taller than its viewport.
+    vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1000);
+    vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300);
+    renderPills({ options: [space('s1', 'Crypto', 9), ...topics(10)] });
+
+    fireEvent.click(within(row()).getByRole('button', { name: 'All filters (11)' }));
+    const field = screen.getByRole('textbox', { name: 'Search spaces and topics' });
+    fireEvent.change(field, { target: { value: 'Topic 9' } });
+
+    expect(screen.getByRole('button', { name: /Topic 9/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Topic 8/ })).toBeNull();
   });
 });

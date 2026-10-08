@@ -6462,6 +6462,41 @@ describe('desktop filter row', () => {
     expect(screen.queryByRole('button', { name: /Any topic/ })).toBeNull();
   });
 
+  it('lists every space before any topic, whatever the counts', async () => {
+    // Two claims in the Governance space carry Governance and Ethics, so those topics (2) outnumber
+    // the Crypto space (1) — and still come after it.
+    mocks.entities = [sharedEntity(), publishedEntity(), publishedEntity(CLAIM_FRESH, 'Another published claim')];
+    mocks.debateTagClaims = [
+      debateTag(),
+      debateTag(CLAIM_SHARED, 'A claim both participants chose', SPACE_1, 2),
+      debateTag(CLAIM_FRESH, 'Another published claim', SPACE_2, 3),
+    ];
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+    await waitFor(() => expect(pill(/^Governance\s?\d/)).toBeInTheDocument());
+
+    const order = within(pillRow()!)
+      .getAllByRole('button')
+      .map(button => button.textContent ?? '');
+    const lastSpace = Math.max(
+      order.findIndex(text => text.startsWith('Crypto')),
+      order.findIndex(text => text.startsWith('Governance space'))
+    );
+    const firstTopic = Math.min(
+      order.findIndex(text => /^Governance\d/.test(text)),
+      order.findIndex(text => text.startsWith('Ethics'))
+    );
+    expect(lastSpace).toBeLessThan(firstTopic);
+  });
+
+  it('puts the list switch under the search box', async () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+    await showAllClaims();
+
+    const toggle = await screen.findByText('Hide my positions');
+    expect(searchBox().compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it('narrows the list from a topic pill, as the menu did', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
     await showAllClaims();
