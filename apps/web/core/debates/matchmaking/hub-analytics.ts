@@ -89,7 +89,7 @@ export function debateSurfaceAnalyticsAttributes(
 
 /**
  * Stable metadata for hub-only controls that cannot use {@link HubPillButton} because their visual
- * treatment is different (inline links, menus, and the schedule callout).
+ * treatment is different (inline links and menus).
  */
 export function hubAnalyticsAttributes(action: string, intent?: string) {
   return debateActionAnalyticsAttributes('hub', action, intent);
