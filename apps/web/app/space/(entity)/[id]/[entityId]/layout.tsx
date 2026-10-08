@@ -106,9 +106,7 @@ export default async function ProfileLayout(props: Props) {
   // Mounted here rather than per page: every entity surface below this — the generic page, a
   // claim, a topic, a profile, and each of the type-owned record tabs — hangs off this one layout,
   // and the bar has no business being drawn four times with four ideas of what it shows.
-  // The page type from the server, so a topic's bar offers Follow from its first paint rather than
-  // votes until the client entity query has its types.
-  const stickyHeader = <EntityStickyHeader entityId={entityId} spaceId={spaceId} isTopic={pageType === 'topic'} />;
+  const stickyHeader = <EntityStickyHeader entityId={entityId} spaceId={spaceId} />;
 
   if (entityBrowseViewFromTypes(entityTypes) !== 'person') {
     return (

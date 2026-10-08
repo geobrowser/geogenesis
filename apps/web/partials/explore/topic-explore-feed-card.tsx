@@ -7,7 +7,6 @@ import cx from 'classnames';
 import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import type { TopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
-import { FollowTopicButton } from '~/core/topics/follow-topic-button';
 import { TopicFollowerCount } from '~/core/topics/topic-follow-control';
 import { useTopicFollowerCount } from '~/core/topics/use-topic-follower-count';
 
@@ -44,8 +43,8 @@ type TopicCardProps = {
  * with the counts passed into the body's `meta` slot. Reproducing the body here instead would have
  * been the third copy of that layout in this directory, and the first two drifted.
  *
- * The shared action row, with Follow in place of the votes (GEO-3191), then the comment count.
- * Following is a topic's one action; an upvote said nothing about wanting to see more of it.
+ * Its action row is the shared one: `EntityVoteButtons` draws Follow for a topic in place of the
+ * votes (GEO-3191), since following is a topic's one action.
  *
  * The connection counts are a second request, which the claim page's Topics tab pays for. The main
  * explore feed pre-mounts cards thousands of pixels below the fold, so its dispatch passes `null`
@@ -76,12 +75,7 @@ export function TopicExploreFeedCardArticle({
         item={item}
         titleOpensSidePanel={titleOpensSidePanel}
         meta={<TopicConnectionMeta counts={counts} followerCount={followerCount} />}
-        actions={
-          <ExploreCardActions
-            item={item}
-            response={<FollowTopicButton topic={{ id: item.entityId, name: item.title }} />}
-          />
-        }
+        actions={<ExploreCardActions item={item} />}
       />
     </ActionSurfaceArticle>
   );

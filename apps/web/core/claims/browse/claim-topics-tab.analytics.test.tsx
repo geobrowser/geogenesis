@@ -37,14 +37,14 @@ vi.mock('~/partials/explore/explore-card-title', () => ({
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
-// A topic card's one action is Follow (GEO-3191); this stands in for it to read the attribution.
-vi.mock('~/core/topics/follow-topic-button', () => ({
-  FollowTopicButton: ({ topic }: { topic: { id: string } }) => {
-    const getContext = useActionContext('topic_follow_button', 'topic', topic.id);
-    return <button onClick={() => recordAction('follow_topic', getContext())}>Follow {topic.id}</button>;
+// The card leads its counts line with followers; that hook reads the account, which isn't here.
+vi.mock('~/core/topics/use-topic-follower-count', () => ({ useTopicFollowerCount: () => null }));
+vi.mock('~/partials/entity-page/entity-row-actions', () => ({
+  EntityRowActions: ({ entityId }: { entityId: string }) => {
+    const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
+    return <button onClick={() => recordAction('vote', getContext())}>Vote {entityId}</button>;
   },
 }));
-vi.mock('~/core/topics/use-topic-follower-count', () => ({ useTopicFollowerCount: () => null }));
 const observers = new Map<Element, IntersectionObserverCallback>();
 beforeEach(() => {
   window.history.replaceState({}, '', '/space/space/claim');
@@ -106,7 +106,7 @@ it('attributes custom topic actions to their sorted row and own entity metadata'
   mount();
   expect(screen.getAllByRole('heading').map(node => node.textContent)).toEqual(['b', 'a']);
   for (const [index, id] of ['b', 'a'].entries()) {
-    fireEvent.click(screen.getByRole('button', { name: `Follow ${id}` }));
+    fireEvent.click(screen.getByRole('button', { name: `Vote ${id}` }));
     const action = capture.mock.calls.at(-1)!;
     expect(action[0]).toBe('action_completed');
     expect(action[1]).toMatchObject({
@@ -147,6 +147,6 @@ it('measures the existing topic articles once and joins visible cards to actions
     item_position: 1,
     list_id: 'claim_topics',
   });
-  fireEvent.click(screen.getByRole('button', { name: 'Follow b' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Vote b' }));
   expect(capture.mock.calls.at(-1)![1].presentation_instance_id).toBe(impressions[0][1].presentation_instance_id);
 });

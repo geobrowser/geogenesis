@@ -54,14 +54,6 @@ vi.mock('~/core/utils/use-entity-media', () => ({
 }));
 // The real control reaches for the sync engine, wallet and response queries. What matters here is
 // that the bar hands it the entity, not what it draws.
-vi.mock('~/core/topics/follow-topic-button', () => ({
-  FollowTopicButton: (props: { topic: { id: string; name?: string | null } }) => (
-    <button type="button" data-testid="follow-button" data-topic={props.topic.id}>
-      Follow
-    </button>
-  ),
-}));
-
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   EntityVoteButtons: (props: Record<string, unknown>) => {
     mocks.voteProps = props;
@@ -69,7 +61,7 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   },
 }));
 
-function renderBar({ withHost = true, isTopic = false }: { withHost?: boolean; isTopic?: boolean } = {}) {
+function renderBar({ withHost = true }: { withHost?: boolean } = {}) {
   const store = createStore();
 
   if (withHost) {
@@ -80,7 +72,7 @@ function renderBar({ withHost = true, isTopic = false }: { withHost?: boolean; i
 
   return render(
     <Provider store={store}>
-      <EntityStickyHeader entityId="entity-1" spaceId="space-1" isTopic={isTopic} />
+      <EntityStickyHeader entityId="entity-1" spaceId="space-1" />
     </Provider>
   );
 }
@@ -105,13 +97,6 @@ afterEach(() => {
 });
 
 describe('EntityStickyHeader', () => {
-  it('offers Follow instead of the votes on a topic (GEO-3191)', () => {
-    renderBar({ isTopic: true });
-
-    expect(screen.getByTestId('follow-button')).toHaveAttribute('data-topic', 'entity-1');
-    expect(screen.queryByTestId('vote-buttons')).toBeNull();
-  });
-
   it('draws the name and the entity interaction once the title has scrolled away', () => {
     renderBar();
 

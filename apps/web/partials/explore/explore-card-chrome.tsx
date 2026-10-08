@@ -70,13 +70,10 @@ export function ExploreCardSurface({
   );
 }
 
-/**
- * The vote and comment row every card body ends on. `response` replaces the votes for a card whose
- * entity answers differently: a topic is followed, not voted on (GEO-3191).
- */
-export function ExploreCardActions({ item, response }: { item: ExploreFeedItem; response?: React.ReactNode }) {
+/** The vote and comment row every card body ends on. */
+export function ExploreCardActions({ item }: { item: ExploreFeedItem }) {
   return (
-    <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1" response={response}>
+    <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
       <ExploreFeedCommentLink
         href={`${NavUtils.toEntity(item.spaceId, item.entityId)}#${ENTITY_COMMENTS_ANCHOR_ID}`}
         count={item.commentCount}

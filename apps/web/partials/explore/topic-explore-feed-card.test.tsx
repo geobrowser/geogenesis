@@ -35,20 +35,10 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-row-actions', () => ({
-  EntityRowActions: (props: { children?: React.ReactNode; response?: React.ReactNode }) => (
-    <div data-testid="actions">
-      {props.response ?? <span data-testid="votes" />}
+  EntityRowActions: (props: { entityId: string; children?: React.ReactNode }) => (
+    <div data-testid="actions" data-entity={props.entityId}>
       {props.children}
     </div>
-  ),
-}));
-
-// Follow writes through the account and reads the viewer's follows; both have their own suites.
-vi.mock('~/core/topics/follow-topic-button', () => ({
-  FollowTopicButton: (props: { topic: { id: string; name?: string | null } }) => (
-    <button type="button" data-testid="follow-button" data-topic={props.topic.id}>
-      Follow
-    </button>
   ),
 }));
 
@@ -150,15 +140,14 @@ describe('TopicExploreFeedCard', () => {
     expect(screen.getByTestId('meta-row')).toHaveAttribute('data-hide-join', 'true');
     expect(screen.getByTestId('title')).toHaveAttribute('data-opens-panel', 'true');
     expect(screen.getByText('Preventing harm from advanced AI systems.')).toBeInTheDocument();
-    expect(screen.getByTestId('follow-button')).toBeInTheDocument();
+    expect(screen.getByTestId('actions')).toBeInTheDocument();
   });
 
-  it('ends on Follow and the comment count, with no votes (GEO-3191)', () => {
+  it('ends on the shared action row, which draws Follow for a topic, and the comment count', () => {
     render(<TopicExploreFeedCard item={item({ commentCount: 4 })} counts={null} />);
 
-    expect(screen.getByTestId('follow-button')).toHaveAttribute('data-topic', 'topic-1');
+    expect(screen.getByTestId('actions')).toHaveAttribute('data-entity', 'topic-1');
     expect(screen.getByText('4')).toBeInTheDocument();
-    expect(screen.queryByTestId('votes')).toBeNull();
   });
 
   it('leads the metadata line with the follower count', () => {

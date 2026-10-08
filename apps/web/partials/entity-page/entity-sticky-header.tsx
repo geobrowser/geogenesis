@@ -11,7 +11,6 @@ import { type ContentColumnBox, useMirroredContentColumn } from '~/core/hooks/us
 import { useScrolledPastElement } from '~/core/hooks/use-scrolled-past-element';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
-import { FollowTopicButton } from '~/core/topics/follow-topic-button';
 import { useEntityMedia } from '~/core/utils/use-entity-media';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -34,8 +33,7 @@ import { entityStickyHeaderHostElementAtom } from '~/atoms';
  * Nameless entities get nothing. The bar exists to say which entity this is, and an id in that slot
  * says less than the empty bar it would replace.
  *
- * The interaction on the right is Follow on a topic (GEO-3191), the topic header's one action.
- * Anywhere else it is `EntityVoteButtons`, which resolves what it should offer from the
+ * The interaction on the right is `EntityVoteButtons`, which resolves what it should offer from the
  * entity's own types: upvote/downvote for an ordinary entity, agree/disagree for a claim. Every
  * claim, since #2541 — `ResponseKind` is `curation | stance` and the factual flag no longer picks a
  * third. Reproducing that choice here would be a second place for it to be made, and a second place
@@ -52,16 +50,7 @@ import { entityStickyHeaderHostElementAtom } from '~/atoms';
  * number here would be one more opinion that drifts — as it would have when #2580 changed the topic
  * page's width out from under this. See `useMirroredContentColumn`.
  */
-export function EntityStickyHeader({
-  entityId,
-  spaceId,
-  isTopic = false,
-}: {
-  entityId: string;
-  spaceId: string;
-  /** From the route's server-read types: a topic's bar offers Follow, which replaces its votes. */
-  isTopic?: boolean;
-}) {
+export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; spaceId: string }) {
   const host = useAtomValue(entityStickyHeaderHostElementAtom);
 
   // The scoped store first, so a name being edited on this page is the name on the bar; the
@@ -126,16 +115,12 @@ export function EntityStickyHeader({
                 lines would take back most of the room it exists to give. */}
             <span className="min-w-0 flex-1 truncate text-metadataMedium text-text">{name}</span>
             <span className="flex shrink-0 items-center">
-              {isTopic ? (
-                <FollowTopicButton topic={{ id: entityId, name }} />
-              ) : (
-                <EntityVoteButtons
-                  entityId={entityId}
-                  spaceId={spaceId}
-                  claimResponderAvatarsPosition="trailing"
-                  compact
-                />
-              )}
+              <EntityVoteButtons
+                entityId={entityId}
+                spaceId={spaceId}
+                claimResponderAvatarsPosition="trailing"
+                compact
+              />
             </span>
           </div>
         </motion.div>
