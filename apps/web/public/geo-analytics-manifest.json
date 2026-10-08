@@ -4,13 +4,13 @@
   "hashAlgorithm": "sha256",
   "schemaVersion": "2026-05-09",
   "sourceHash": "4d5bc6e19c0f24c2c8fad63b14082cd71d3a7cdda7b4a0127e69790df9cc0bde",
-  "eventRegistryHash": "7a10eb7be8c230de29251d7148111836e42fb393def34379b2d2041fabd3f71f",
-  "hash": "d35ae1c6bf7e26acebc09a05f9d83251d06c7690c6a759515af8fe77607751ee",
-  "shortHash": "d35ae1c6bf7e",
-  "integrity": "sha256-01rhxr9+JqzrwJoF+dgyUdBsdpDGp1lRWvj+d2B3Ue4=",
+  "eventRegistryHash": "5971c90393e73d1a544589cf6b66bdede45fbd61b24daf29c053fa50ee089e38",
+  "hash": "4b85875523c774dbb7f39ca297fd0e8427c99e977c7d657b0c56c47d80fb6f3d",
+  "shortHash": "4b85875523c7",
+  "integrity": "sha256-S4WHVSPHdNu385yil/0OhCfJnpd8fWV7DFbEfYD7bz0=",
   "files": {
     "stable": "ga.js",
     "latest": "ga-latest.js",
-    "hashed": "ga-d35ae1c6bf7e.js"
+    "hashed": "ga-4b85875523c7.js"
   }
 }
