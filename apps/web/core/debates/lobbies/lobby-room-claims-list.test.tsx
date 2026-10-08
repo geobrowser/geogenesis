@@ -14,6 +14,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   backfill: vi.fn(),
+  indexed: null as 'positive' | 'negative' | null,
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -26,7 +27,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 }));
 
 vi.mock('~/core/claims/browse/claim-response-summary', () => ({
-  useClaimResponseSummary: () => ({ indexedViewerDirection: null, isViewerResponseLoading: false }),
+  useClaimResponseSummary: () => ({ indexedViewerDirection: mocks.indexed, isViewerResponseLoading: false }),
 }));
 
 vi.mock('../backfill-readiness-for-held-position', async importOriginal => ({
@@ -36,6 +37,7 @@ vi.mock('../backfill-readiness-for-held-position', async importOriginal => ({
 
 // The card is tested on its own; here only what the list hands it matters.
 vi.mock('../matchmaking/matchmaking-claim-card', () => ({
+  isResolvableClaim: () => true,
   MatchmakingClaimCard: ({ endSlot, footer }: { endSlot?: React.ReactNode; footer?: React.ReactNode }) => (
     <article>
       {endSlot}
@@ -49,6 +51,7 @@ vi.mock('~/design-system/avatar', () => ({ Avatar: () => <span data-testid="avat
 afterEach(() => {
   cleanup();
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
+  mocks.indexed = null;
 });
 
 function person(name: string): DebateParticipantSummary {
@@ -171,5 +174,20 @@ describe('LobbyRoomClaimsList', () => {
     render(<LobbyRoomClaimsList claims={[offered]} renderOffer={renderOffer} />);
     expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
+  });
+
+  it('takes the chain’s side only for a withdrawn row, never where geo-chat simply has none', () => {
+    mocks.indexed = 'positive';
+    const noRow = entry(null, [side(true, [], 0), side(false, [person('Ben')], 1)]);
+    const { unmount } = render(<LobbyRoomClaimsList claims={[noRow]} renderOffer={renderOffer} />);
+    expect(screen.queryByRole('button')).toBeNull();
+    unmount();
+
+    const withdrawn = {
+      ...noRow,
+      readiness: { ...noRow.readiness, readiness_disabled_reason: 'claim_response_withdrawn' },
+    };
+    render(<LobbyRoomClaimsList claims={[withdrawn]} renderOffer={renderOffer} />);
+    expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
   });
 });

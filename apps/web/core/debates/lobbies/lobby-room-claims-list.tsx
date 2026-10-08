@@ -20,7 +20,7 @@ import type {
 } from '../api';
 import { trustedIndexedPosition, useBackfillReadinessForHeldPosition } from '../backfill-readiness-for-held-position';
 import { HubCardList } from '../matchmaking/hub-motion';
-import { MatchmakingClaimCard } from '../matchmaking/matchmaking-claim-card';
+import { MatchmakingClaimCard, isResolvableClaim } from '../matchmaking/matchmaking-claim-card';
 import { hostsLabel, personName } from './lobby-format';
 
 /** One side of an "In this room" claim, counted over the people in the room. */
@@ -84,19 +84,25 @@ function LobbyRoomClaimCard({
     spaceId: claim.space_id,
     responseKind: CLAIM_RESPONSE_KIND,
   });
-  const summary = useClaimResponseSummary(claim.claim_entity_id, claim.space_id, CLAIM_RESPONSE_KIND, nearViewport);
+  const summary = useClaimResponseSummary(
+    claim.claim_entity_id,
+    claim.space_id,
+    CLAIM_RESPONSE_KIND,
+    nearViewport && isResolvableClaim(claim)
+  );
   const indexedPosition = trustedIndexedPosition(
     summary,
     indexing.status === 'reconciling' || indexing.status === 'delayed'
   );
-  // The viewer's own response while it publishes and indexes; then geo-chat's, or the chain's where
-  // geo-chat holds none (a withdrawn row the viewer has since re-answered). The card draws the same.
+  // The viewer's own response while it publishes and indexes; then geo-chat's. The chain's only for a
+  // withdrawn row the viewer has re-answered, the one gap the backfill below repairs.
+  const retaken = entry.readiness.readiness_disabled_reason === 'claim_response_withdrawn';
   const viewerPosition =
     indexing.status !== 'idle' && indexing.pending
       ? indexing.pending.expectedResponse === null
         ? null
         : indexing.pending.expectedResponse === 'positive'
-      : (entry.readiness.viewer_response?.position ?? indexedPosition);
+      : (entry.readiness.viewer_response?.position ?? (retaken ? indexedPosition : null));
   // A held side geo-chat hasn't marked ready can't send or receive a request.
   useBackfillReadinessForHeldPosition({
     readiness: entry.readiness,

@@ -89,6 +89,7 @@ vi.mock('../matchmaking/hub-states', () => ({
 }));
 
 vi.mock('../matchmaking/matchmaking-claim-card', () => ({
+  isResolvableClaim: () => true,
   MatchmakingClaimCard: ({ claim, endSlot }: { claim: { claim: string }; endSlot?: React.ReactNode }) => (
     <article data-testid="claim-card">
       <h3>{claim.claim}</h3>
