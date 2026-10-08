@@ -8,8 +8,10 @@ import {
   OpenRoundResultOverlay,
   openRoundRevealStep,
   openRoundWrapNote,
+  useOpenRoundReveal,
   useOpenRoundRevealStep,
 } from './open-round-reveal';
+import { revealEnd, revealRebut, timedOut } from './open-rounds-fixtures';
 
 afterEach(() => {
   cleanup();
@@ -94,7 +96,7 @@ describe('OpenRoundResultOverlay', () => {
   });
 
   it('says "You open" to the opener', () => {
-    render(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: 'You' }} />);
+    render(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: null }} />);
     expect(screen.getByText('You open')).toBeInTheDocument();
   });
 
@@ -111,7 +113,7 @@ describe('OpenRoundResultOverlay', () => {
   });
 
   it('drops the burst for reduced motion', () => {
-    const { container } = render(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: 'You' }} />);
+    const { container } = render(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: null }} />);
     expect(container.querySelector('.motion-reduce\\:hidden')).toBeInTheDocument();
   });
 });
@@ -126,5 +128,102 @@ describe('openRoundWrapNote', () => {
   it('says nothing for a split or an unknown pick', () => {
     expect(openRoundWrapNote('extend', { name: 'Bob', pick: 'end' })).toBeNull();
     expect(openRoundWrapNote(undefined, { name: 'Bob', pick: undefined })).toBeNull();
+  });
+});
+
+describe('useOpenRoundReveal', () => {
+  const resolvedRebut = {
+    phase: 'result' as const,
+    roundIndex: 0,
+    isFinalRound: false as const,
+    outcome: 'extend' as const,
+    resolvedAtMs: 0,
+    nextPhaseStartsAtMs: 8_000,
+  };
+  const bob = { slot: 2 as const, name: 'Bob' };
+  const reveal = (input: Partial<Parameters<typeof useOpenRoundReveal>[0]>) =>
+    renderHook(() =>
+      useOpenRoundReveal({
+        debate: revealRebut(),
+        phase: resolvedRebut,
+        effectiveStatus: 'in_progress',
+        elapsedMs: 0,
+        remainingSeconds: 8,
+        localSlot: 1,
+        remote: bob,
+        ...input,
+      })
+    ).result.current;
+
+  it('turns both picks over first, with nothing announced', () => {
+    const current = reveal({ elapsedMs: 500 });
+    expect(current.step).toBe('flip');
+    expect(current.localPick?.pick).toBe('extend');
+    expect(current.remotePick?.pick).toBe('extend');
+    expect(current.result).toBeNull();
+    expect(current.holdsCountIn).toBe(true);
+    expect(current.announcement).toBe('You: Extend. Bob: Extend.');
+  });
+
+  it('announces the new round to its opener as "You", and moves the counter to it', () => {
+    const current = reveal({ elapsedMs: 2_000 });
+    expect(current.result).toEqual({ kind: 'round', round: 1, opener: null });
+    expect(current.localPick).toBeNull();
+    expect(current.chipsHidden).toBe(true);
+    expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
+  });
+
+  it('names the opener to the other debater, and keeps it up through the count-in', () => {
+    const current = reveal({ elapsedMs: 4_000, localSlot: 2, remote: { slot: 1, name: 'Alice' } });
+    expect(current.step).toBe('countIn');
+    expect(current.result).toEqual({ kind: 'round', round: 1, opener: 'Alice' });
+  });
+
+  it("clears the opener's tiles for their count-in", () => {
+    const current = reveal({ elapsedMs: 4_000 });
+    expect(current.result).toBeNull();
+    expect(current.holdsCountIn).toBe(false);
+  });
+
+  it('keeps the picks up beside a wrap, with the reason when a pick was missing', () => {
+    const current = reveal({
+      debate: timedOut(),
+      phase: { ...resolvedRebut, outcome: 'end', nextPhaseStartsAtMs: 3_000 },
+      elapsedMs: 2_000,
+    });
+    expect(current.result).toEqual({ kind: 'wrap', note: "Bob didn't pick in time" });
+    expect(current.remotePick).toEqual({ participant_slot: 2, pick: null });
+    expect(current.pickPlacement).toBe('apart');
+  });
+
+  it('holds the wrap into the start of thanking, then lets the end card through', () => {
+    const finished = { phase: 'finished' as const, roundIndex: 0, isFinalRound: false };
+    const held = reveal({ debate: revealEnd(), phase: finished, effectiveStatus: 'thanking', elapsedMs: 1_000 });
+    expect(held.result).toMatchObject({ kind: 'wrap' });
+    expect(held.holdsEndCard).toBe(true);
+
+    const released = reveal({ debate: revealEnd(), phase: finished, effectiveStatus: 'thanking', elapsedMs: 1_600 });
+    expect(released.result).toBeNull();
+    expect(released.holdsEndCard).toBe(false);
+  });
+
+  it('says the cap was reached at the start of thanking after the last round', () => {
+    const current = reveal({
+      phase: { phase: 'finished', roundIndex: 10, isFinalRound: true },
+      effectiveStatus: 'thanking',
+      elapsedMs: 1_000,
+    });
+    expect(current.result).toEqual({ kind: 'max', rounds: 10 });
+    expect(current.holdsEndCard).toBe(true);
+    expect(current.announcement).toBe("That's the max: 10 rebuttal rounds.");
+  });
+
+  it('does nothing for a fixed format', () => {
+    const { open_rounds: _openRounds, ...fixed } = revealRebut();
+    const current = reveal({ debate: fixed, phase: null });
+    expect(current.step).toBeNull();
+    expect(current.result).toBeNull();
+    expect(current.holdsEndCard).toBe(false);
+    expect(current.holdsCountIn).toBe(false);
   });
 });

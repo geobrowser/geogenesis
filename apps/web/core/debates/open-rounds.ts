@@ -199,7 +199,7 @@ export function openRoundGapAfterTurn(
 }
 
 /** The opener's count-in after an Extend. `0` from a geo-chat that does not send it. */
-export function openRoundCountInMs(openRounds: Pick<DebateOpenRounds, 'extend_count_in_ms'>) {
+function openRoundCountInMs(openRounds: Pick<DebateOpenRounds, 'extend_count_in_ms'>) {
   return Math.max(0, openRounds.extend_count_in_ms ?? 0);
 }
 

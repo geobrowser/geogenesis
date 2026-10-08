@@ -88,15 +88,7 @@ import {
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard } from '~/core/debates/open-round-pick-card';
-import {
-  OPEN_ROUND_WRAP_HOLD_MS,
-  OpenRoundPickReveal,
-  type OpenRoundResult,
-  OpenRoundResultOverlay,
-  type OpenRoundRevealStep,
-  openRoundWrapNote,
-  useOpenRoundRevealStep,
-} from '~/core/debates/open-round-reveal';
+import { OpenRoundPickReveal, OpenRoundResultOverlay, useOpenRoundReveal } from '~/core/debates/open-round-reveal';
 import {
   type OpenRoundGap,
   type OpenRoundsRoomPhase,
@@ -106,7 +98,6 @@ import {
   openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundLastWord,
-  openRoundRevealedPicks,
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
@@ -2981,83 +2972,24 @@ function DebateRecordingModal({
   const remoteParticipant =
     debate.participants.find(participant => participant.user_id !== localParticipant?.user_id) ?? null;
   const remoteName = remoteParticipant ? speakerName(remoteParticipant) : 'The other debater';
-  // The reveal (GEO-3179). The room holds in `result` for the window after a round resolves; both
-  // screens step through it from the server's resolution time, so both picks turn at once.
-  const openRoundResultPhase = countdown.openRounds?.phase === 'result' ? countdown.openRounds : null;
-  const openRoundsThankingStarted =
-    countdown.effectiveStatus === 'thanking' &&
-    countdown.openRounds?.phase === 'finished' &&
-    debate.open_rounds !== undefined &&
-    countdown.remainingSeconds > 0;
-  // An End has nothing to start on time after it, so "That's a wrap" holds into thanking a moment
-  // before the end card, where an Extend's reveal has to give way to the next round.
-  const openRoundWrapHeld =
-    openRoundsThankingStarted && !countdown.openRounds?.isFinalRound && countdown.elapsedMs < OPEN_ROUND_WRAP_HOLD_MS;
-  const revealRoundIndex =
-    openRoundResultPhase?.roundIndex ?? (openRoundWrapHeld ? (countdown.openRounds?.roundIndex ?? null) : null);
-  const revealOutcome = openRoundResultPhase?.outcome ?? (openRoundWrapHeld ? 'end' : null);
-  const timedRevealStep = useOpenRoundRevealStep(
-    openRoundResultPhase ? countdown.elapsedMs : null,
-    openRoundResultPhase?.outcome ?? null,
-    debate.open_rounds?.result_window_ms ?? 0
-  );
-  const revealStep: OpenRoundRevealStep | null = openRoundWrapHeld ? 'result' : timedRevealStep;
-  const revealedPicks =
-    revealRoundIndex !== null && debate.open_rounds
-      ? openRoundRevealedPicks(debate.open_rounds, revealRoundIndex)
-      : null;
-  const localRevealedPick = revealedPicks?.find(entry => entry.participant_slot === localSlot);
-  const remoteRevealedPick = revealedPicks?.find(
-    entry => entry.participant_slot === remoteParticipant?.participant_slot
-  );
-  // The cap round goes straight to thanking with no pick, so its result is the first moments of
-  // thanking rather than a result window.
-  const openRoundsMaxReached =
-    openRoundsThankingStarted &&
-    Boolean(countdown.openRounds?.isFinalRound) &&
-    countdown.elapsedMs < (debate.open_rounds?.result_window_ms ?? 0);
-  // Either way the end card waits until the result has been read.
-  const openRoundsEndHeld = openRoundsMaxReached || openRoundWrapHeld;
-  const openRoundResult: OpenRoundResult | null = openRoundsMaxReached
-    ? { kind: 'max', rounds: debate.open_rounds?.max_rebuttal_rounds ?? 0 }
-    : revealRoundIndex !== null &&
-        (revealStep === 'result' ||
-          // The opener's own tile counts them in; the other debater keeps the announcement until then.
-          (revealStep === 'countIn' && localSlot !== debate.first_participant_slot))
-      ? revealOutcome === 'extend'
-        ? {
-            kind: 'round',
-            round: revealRoundIndex + 1,
-            // The first slot opens every round.
-            opener:
-              debate.first_participant_slot === localSlot
-                ? 'You'
-                : speakerNameForSlot(debate, debate.first_participant_slot),
-          }
-        : {
-            kind: 'wrap',
-            note: openRoundWrapNote(localRevealedPick?.pick, { name: remoteName, pick: remoteRevealedPick?.pick }),
-          }
-      : null;
-  // The picks turn, then stay up beside "That's a wrap" so a split explains itself. A new round
-  // takes the tiles back for its own text.
-  const revealPicksShown = revealStep === 'flip' || (revealStep === 'result' && revealOutcome === 'end');
-  const tileChipsHidden = openRoundResult !== null;
+  const reveal = useOpenRoundReveal({
+    debate,
+    phase: countdown.openRounds,
+    effectiveStatus: countdown.effectiveStatus,
+    elapsedMs: countdown.elapsedMs,
+    remainingSeconds: countdown.remainingSeconds,
+    localSlot,
+    remote: { slot: remoteParticipant?.participant_slot ?? null, name: remoteName },
+  });
   const localTileFirst = localParticipant?.position !== false;
-  const pickReveal = (name: string, entry: OpenRoundRevealedPick | undefined, first: boolean) =>
-    revealPicksShown && entry ? (
+  const pickReveal = (name: string, pick: OpenRoundRevealedPick | null, first: boolean) =>
+    pick ? (
       <OpenRoundPickReveal
         name={name}
-        pick={entry.pick}
-        placement={revealStep === 'flip' ? 'center' : first ? 'raised' : 'lowered'}
+        pick={pick.pick}
+        placement={reveal.pickPlacement === 'center' ? 'center' : first ? 'raised' : 'lowered'}
       />
     ) : null;
-  const openRoundAnnouncement = openRoundAnnouncementText({
-    step: revealStep,
-    result: openRoundResult,
-    localPick: localRevealedPick,
-    remote: { name: remoteName, entry: remoteRevealedPick },
-  });
   const lastWord =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.openRounds?.phase === 'speaking' &&
@@ -3074,9 +3006,7 @@ function DebateRecordingModal({
       <span className="hidden mobile:inline">{lastWord === 'debate' ? 'Final word' : 'Last word'}</span>
     </DebateTileChip>
   ) : null;
-  // During a reveal the opener's count-in waits until the result has been read.
-  const localUpcomingSeconds =
-    openRoundResultPhase && revealStep !== 'countIn' ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
+  const localUpcomingSeconds = reveal.holdsCountIn ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
   const localUpcomingLabel =
     countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
@@ -3084,7 +3014,7 @@ function DebateRecordingModal({
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
-  const thankingSlot = openRoundsEndHeld ? null : thankingParticipantSlot(debate, countdown);
+  const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
   const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
   const remoteInactive = participantIsInactive(
     countdown.effectiveStatus,
@@ -3123,7 +3053,7 @@ function DebateRecordingModal({
     countdown.activeSlot === null &&
     countdown.yieldingSlot === null &&
     !openRoundDeciding &&
-    !openRoundResultPhase
+    countdown.openRounds?.phase !== 'result'
       ? countdownRing
       : null;
   const localCountdown = localEndingTurn
@@ -3202,8 +3132,8 @@ function DebateRecordingModal({
       }
       status={<DebateRecordingStatusPill recording={capturing} />}
       tileControls={countdown.activeSlot === localSlot ? lastWordChip : null}
-      reveal={pickReveal('You', localRevealedPick, localTileFirst)}
-      chipsHidden={tileChipsHidden}
+      reveal={pickReveal('You', reveal.localPick, localTileFirst)}
+      chipsHidden={reveal.chipsHidden}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
     </DebateVideoTile>
@@ -3234,8 +3164,8 @@ function DebateRecordingModal({
       tileControls={
         remoteParticipant && countdown.activeSlot === remoteParticipant.participant_slot ? lastWordChip : null
       }
-      reveal={pickReveal(remoteName, remoteRevealedPick, !localTileFirst)}
-      chipsHidden={tileChipsHidden}
+      reveal={pickReveal(remoteName, reveal.remotePick, !localTileFirst)}
+      chipsHidden={reveal.chipsHidden}
     >
       <div
         ref={setRemoteMediaElement}
@@ -3290,15 +3220,7 @@ function DebateRecordingModal({
           {countdown.openRounds && debate.open_rounds && (
             <DebateRoundIndicator
               // Once the new round is announced, the counter moves to it.
-              phase={
-                openRoundResultPhase?.outcome === 'extend' && (revealStep === 'result' || revealStep === 'countIn')
-                  ? {
-                      phase: 'speaking',
-                      roundIndex: openRoundResultPhase.roundIndex + 1,
-                      isFinalRound: openRoundResultPhase.roundIndex + 1 >= debate.open_rounds.max_rebuttal_rounds,
-                    }
-                  : countdown.openRounds
-              }
+              phase={reveal.announcedRoundPhase ?? countdown.openRounds}
               maxRounds={debate.open_rounds.max_rebuttal_rounds}
             />
           )}
@@ -3329,20 +3251,18 @@ function DebateRecordingModal({
               progress={countdown.progress}
               onPick={pick => onPickOpenRound(openRoundDeciding.roundIndex, pick)}
               localReconnecting={roomState === 'reconnecting'}
-              reconnectingOpponentName={
-                remoteDisconnected ? (remoteParticipant ? speakerName(remoteParticipant) : 'The other debater') : null
-              }
+              reconnectingOpponentName={remoteDisconnected ? remoteName : null}
             />
           )}
 
-          {openRoundResult && <OpenRoundResultOverlay result={openRoundResult} />}
+          {reveal.result && <OpenRoundResultOverlay result={reveal.result} />}
           {debate.open_rounds && (
             <p role="status" aria-live="polite" data-open-round-announcement className="sr-only">
-              {openRoundAnnouncement}
+              {reveal.announcement}
             </p>
           )}
 
-          {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && !openRoundsEndHeld && (
+          {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && !reveal.holdsEndCard && (
             <DebateAgainCard
               opponentName={
                 remoteRematchParticipant?.display_name ||
@@ -4465,43 +4385,6 @@ function labelForSlot(debate: Debate, slot: ParticipantSlot) {
   // geo-chat still calls factual — see `positionSummariesFromCounts`.
   const participant = debate.participants.find(candidate => candidate.participant_slot === slot);
   return participant ? responsePositionLabel(participant.position) : 'Position';
-}
-
-function speakerNameForSlot(debate: Debate, slot: ParticipantSlot) {
-  const participant = debate.participants.find(candidate => candidate.participant_slot === slot);
-  return participant ? speakerName(participant) : 'The other debater';
-}
-
-/**
- * The reveal for screen readers, which cannot see the cards turn: both picks, then what they mean.
- * A missing pick is said as such, since it is why the debate ended.
- */
-function openRoundAnnouncementText({
-  step,
-  result,
-  localPick,
-  remote,
-}: {
-  step: OpenRoundRevealStep | null;
-  result: OpenRoundResult | null;
-  localPick: OpenRoundRevealedPick | undefined;
-  remote: { name: string; entry: OpenRoundRevealedPick | undefined };
-}) {
-  if (result?.kind === 'max') return `That's the max: ${rebuttalRoundsLabel(result.rounds)}.`;
-  if (step === null) return '';
-  const said = (entry: OpenRoundRevealedPick | undefined) =>
-    entry === undefined ? null : entry.pick === null ? 'no pick' : entry.pick === 'extend' ? 'Extend' : 'End';
-  const picks = [
-    said(localPick) && `You: ${said(localPick)}.`,
-    said(remote.entry) && `${remote.name}: ${said(remote.entry)}.`,
-  ]
-    .filter(Boolean)
-    .join(' ');
-  // Held from the flip onwards, so the region does not re-announce the picks at every step.
-  if (step === 'flip' || !result) return picks;
-  if (result.kind === 'round')
-    return `${picks} Round ${result.round}. ${result.opener === 'You' ? 'You open' : `${result.opener} opens`}.`;
-  return `${picks} That's a wrap.${result.note ? ` ${result.note}.` : ''}`;
 }
 
 function speakerName(participant: Pick<Debate['participants'][number], 'display_name' | 'profile_space_id'>) {

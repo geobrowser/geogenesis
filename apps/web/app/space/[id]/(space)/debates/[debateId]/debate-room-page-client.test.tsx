@@ -5155,11 +5155,6 @@ describe('DebateRoomPageClient', () => {
   // GEO-3175. An Open rounds debate has no end until a round resolves End, so the recorder must not
   // stop at the summed turn list, which only ever holds the rounds decided so far.
   describe('open rounds recording (GEO-3175)', () => {
-    const rerenderAt = (view: ReturnType<typeof render>, time: string, debate: Debate) => {
-      vi.mocked(Date.now).mockReturnValue(openRoundsAt(time));
-      mocks.debate = debate;
-      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    };
     const publishedThanking = () => mocks.setThankingDebate.mock.calls.some(([value]) => value !== null);
 
     it('records through every decision and stops a post-roll after thanking starts', async () => {
@@ -5262,11 +5257,6 @@ describe('DebateRoomPageClient', () => {
   // tiles. Picks are blind until the reveal.
   describe('open rounds pick card (GEO-3178)', () => {
     const pickCard = () => screen.queryByRole('region', { name: /Keep debating\?|Locked in/ });
-    const rerenderAt = (view: ReturnType<typeof render>, time: string, debate: Debate) => {
-      vi.mocked(Date.now).mockReturnValue(openRoundsAt(time));
-      mocks.debate = debate;
-      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    };
 
     beforeEach(() => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
@@ -5352,11 +5342,6 @@ describe('DebateRoomPageClient', () => {
       debateVideoTile(participant).querySelector('[data-open-round-reveal]');
     const result = () => document.querySelector('[data-open-round-result]');
     const chips = (participant: 'local' | 'remote') => debateVideoTile(participant).querySelector('[data-tile-chips]');
-    const rerenderAt = (view: ReturnType<typeof render>, time: number, debate: Debate) => {
-      vi.mocked(Date.now).mockReturnValue(time);
-      mocks.debate = debate;
-      view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-    };
 
     beforeEach(() => {
       mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
@@ -5377,10 +5362,10 @@ describe('DebateRoomPageClient', () => {
       expect(openRoundAnnouncement()).toHaveTextContent('You: Extend. Bob: Extend.');
 
       // The picks stay up for 45% of the 3 s window.
-      rerenderAt(view, openRoundsAt('20:02:05.500'), openRoundsRevealRebut());
+      rerenderAt(view, '20:02:05.500', openRoundsRevealRebut());
       expect(result()).toBeNull();
 
-      rerenderAt(view, openRoundsAt('20:02:05.700'), openRoundsRevealRebut());
+      rerenderAt(view, '20:02:05.700', openRoundsRevealRebut());
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
       expect(result()?.textContent).toBe('Round1You open');
       expect(document.querySelector('[data-debate-round-indicator]')).toHaveAttribute(
@@ -5393,7 +5378,7 @@ describe('DebateRoomPageClient', () => {
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
 
       // With no count-in from geo-chat, "Round 1" holds to the end of the window.
-      rerenderAt(view, openRoundsAt('20:02:06.900'), openRoundsRevealRebut());
+      rerenderAt(view, '20:02:06.900', openRoundsRevealRebut());
       expect(result()?.textContent).toBe('Round1You open');
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
@@ -5415,17 +5400,17 @@ describe('DebateRoomPageClient', () => {
       const view = await renderLiveDebate(revealRebutWithCountIn());
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
 
-      rerenderAt(view, openRoundsAt('20:02:07.300'), revealRebutWithCountIn());
+      rerenderAt(view, '20:02:07.300', revealRebutWithCountIn());
       await waitFor(() => expect(within(debateVideoTile('local')).getByText('Rebut in')).toBeInTheDocument());
       expect(within(debateVideoTile('local')).getByText('5')).toBeInTheDocument();
       expect(result()).toBeNull();
       expect(chips('local')).toHaveAttribute('data-tile-chips', 'visible');
 
-      rerenderAt(view, openRoundsAt('20:02:11.300'), revealRebutWithCountIn());
+      rerenderAt(view, '20:02:11.300', revealRebutWithCountIn());
       await waitFor(() => expect(within(debateVideoTile('local')).getByText('1')).toBeInTheDocument());
 
       // Round 1 starts at 20:02:12.2, Alice first.
-      rerenderAt(view, openRoundsAt('20:02:12.400'), revealRebutWithCountIn());
+      rerenderAt(view, '20:02:12.400', revealRebutWithCountIn());
       await waitFor(() => expect(debateVideoTile('local')).toHaveAttribute('data-active-speaker', 'true'));
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
@@ -5485,7 +5470,7 @@ describe('DebateRoomPageClient', () => {
       expect(reveal('remote')).toHaveTextContent('No pick');
       expect(reveal('remote')).toHaveTextContent('End');
 
-      rerenderAt(view, openRoundsAt('20:02:12.800'), openRoundsTimedOut());
+      rerenderAt(view, '20:02:12.800', openRoundsTimedOut());
       await waitFor(() => expect(result()).toHaveTextContent("Bob didn't pick in time"));
       expect(openRoundAnnouncement()).toHaveTextContent(
         "You: Extend. Bob: no pick. That's a wrap. Bob didn't pick in time."
@@ -5517,7 +5502,7 @@ describe('DebateRoomPageClient', () => {
       expect(screen.queryByText('Debate again?')).not.toBeInTheDocument();
       expect(screen.queryByText('Say thanks')).not.toBeInTheDocument();
 
-      rerenderAt(view, openRoundsAt('20:02:09.600'), openRoundsThankingAfterEnd());
+      rerenderAt(view, '20:02:09.600', openRoundsThankingAfterEnd());
       await waitFor(() => expect(screen.getByText('Debate again?')).toBeInTheDocument());
       expect(result()).toBeNull();
       expect(reveal('remote')).toBeNull();
@@ -5780,6 +5765,13 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 });
+
+/** Moves the room's clock to `time` (an Open rounds fixture time, or epoch ms) and serves `debate`. */
+function rerenderAt(view: ReturnType<typeof render>, time: string | number, debate: Debate) {
+  vi.mocked(Date.now).mockReturnValue(typeof time === 'string' ? openRoundsAt(time) : time);
+  mocks.debate = debate;
+  view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+}
 
 /** Puts the viewer in Bob's seat: slot 2, arguing No. */
 function joinAsBob() {
