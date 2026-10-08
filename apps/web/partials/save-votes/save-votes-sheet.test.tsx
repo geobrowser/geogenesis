@@ -18,7 +18,15 @@ import {
   readSaveVotesPrompt,
 } from '~/core/state/save-votes-prompt';
 
+import { useMarkEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
+
 import { SaveVotesSheet } from './save-votes-sheet';
+
+/** Stands in for the Explore email capture card, which shares the sheet's corner. */
+function EmailCaptureCard() {
+  useMarkEmailCaptureShowing();
+  return null;
+}
 
 const mocks = vi.hoisted(() => ({
   ready: true,
@@ -205,6 +213,25 @@ describe('SaveVotesSheet', () => {
     rerender(<SaveVotesSheet />);
     expect(readLocalVotes().prompt.shownCount).toBe(1);
     expect(mocks.impression).toHaveBeenCalledOnce();
+  });
+
+  // Copilot on #2785 (round 2): the two cards share a corner and neither is a dialog.
+  it('waits behind the email capture card while it is up', () => {
+    vote('a');
+    vote('b');
+    markPromptedThisSession();
+    const { rerender } = render(
+      <>
+        <EmailCaptureCard />
+        <SaveVotesSheet />
+      </>
+    );
+    act(() => openSaveVotesPrompt('threshold'));
+    expect(screen.queryByRole('region', { name: 'Save your votes' })).not.toBeInTheDocument();
+    expect(mocks.impression).not.toHaveBeenCalled();
+
+    rerender(<SaveVotesSheet />);
+    expect(screen.getByRole('region', { name: 'Save your votes' })).toBeInTheDocument();
   });
 
   it('shows up to two of the votes, then how many more', () => {

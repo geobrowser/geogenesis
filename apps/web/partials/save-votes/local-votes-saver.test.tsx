@@ -229,4 +229,111 @@ describe('LocalVotesSaver', () => {
 
     expect(mocks.submit).not.toHaveBeenCalled();
   });
+
+  // Copilot on #2785 (round 2): every open tab mounts a saver over the same stored votes.
+  it('writes each vote once when two savers share the votes, as two tabs do', async () => {
+    // Web Locks, one holder at a time, as the browser grants them.
+    let held = Promise.resolve();
+    const locks = {
+      request: (_name: string, run: () => Promise<void>) => {
+        const granted = held.then(run);
+        held = granted.catch(() => {});
+        return granted;
+      },
+    };
+    Object.defineProperty(navigator, 'locks', { value: locks, configurable: true });
+    try {
+      vote('a');
+      vote('b', 'negative');
+      saveSignedIn();
+      signInWithSpace();
+      render(
+        <>
+          <LocalVotesSaver />
+          <LocalVotesSaver />
+        </>
+      );
+
+      await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
+      expect(mocks.submit.mock.calls).toEqual([
+        ['a', 'positive'],
+        ['b', 'negative'],
+      ]);
+    } finally {
+      Reflect.deleteProperty(navigator, 'locks');
+    }
+  });
+
+  // Copilot on #2785 (round 2): a vote replaced mid-save must survive whichever way the save ends.
+  it('saves a vote cast in place of one the account already held, and drops nothing', async () => {
+    vote('a');
+    let finishRead: (side: string | null) => void = () => {};
+    mocks.heldReads.set('a', new Promise(resolve => (finishRead = resolve)));
+    saveSignedIn();
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+
+    act(() => {
+      vote('a');
+      vote('a', 'negative');
+    });
+    await act(async () => finishRead('positive'));
+
+    await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
+    expect(mocks.submit.mock.calls).toEqual([['a', 'negative']]);
+    // The replaced vote's read answered "already held", but it is no longer the vote to report on.
+    expect(mocks.capture).not.toHaveBeenCalledWith('already_held', expect.anything(), expect.anything());
+  });
+
+  it('keeps a vote cast in place of one whose write finishes after it', async () => {
+    vote('a');
+    let finishWrite: () => void = () => {};
+    mocks.submit.mockImplementationOnce(() => new Promise<void>(resolve => (finishWrite = resolve)));
+    saveSignedIn();
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+    await waitFor(() => expect(mocks.submit).toHaveBeenCalledOnce());
+
+    // The replacement's own save is held at its read, so the older write lands first.
+    mocks.heldReads.set('a', new Promise(() => {}));
+    act(() => {
+      vote('a');
+      vote('a', 'negative');
+    });
+    await act(async () => finishWrite());
+
+    expect(readLocalVotes().votes).toMatchObject([{ entityId: 'a', direction: 'negative' }]);
+  });
+
+  // Copilot on #2785 (round 2): a failure belongs to the session it happened in.
+  it('saves for the next account after a failed save and a sign-out, without its Retry', async () => {
+    vote('a');
+    mocks.submit.mockRejectedValueOnce(new Error('bundler down'));
+    saveSignedIn();
+    signInWithSpace();
+    const { rerender } = render(<LocalVotesSaver />);
+    await waitFor(() => expect(mocks.reportError).toHaveBeenCalled());
+
+    mocks.authenticated = false;
+    rerender(<LocalVotesSaver />);
+    mocks.accountId = 'did:privy:next';
+    saveSignedIn();
+    signInWithSpace();
+    rerender(<LocalVotesSaver />);
+
+    await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
+    expect(mocks.submit).toHaveBeenCalledTimes(2);
+  });
+
+  it('leaves a sign-in from another tab to that tab, rather than clearing the votes it is saving', () => {
+    vote('a');
+    // Signed in, with no attempt in this tab: the sign-in happened in another one.
+    mocks.attempt = undefined;
+    signInWithSpace();
+    render(<LocalVotesSaver />);
+
+    expect(readLocalVotes().votes).toHaveLength(1);
+    expect(mocks.submit).not.toHaveBeenCalled();
+    expect(mocks.capture).not.toHaveBeenCalled();
+  });
 });

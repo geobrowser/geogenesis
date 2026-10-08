@@ -23,6 +23,7 @@ import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
 import { ACCOUNT_ANALYTICS, AccountStep } from './email-capture-account-step';
+import { useMarkEmailCaptureShowing } from './email-capture-presence';
 import {
   CARD_CLASS,
   CLOSE_BUTTON_CLASS,
@@ -301,6 +302,7 @@ function EmailCapturePopup() {
       // an overlay closes. With reduced motion it only fades.
       className={CARD_CLASS}
     >
+      <ShowingMarker />
       <DesktopArtwork />
       <MobileArtwork />
 
@@ -442,6 +444,12 @@ function EmailCapturePopup() {
       </div>
     </div>
   );
+}
+
+/** Tells the save-votes sheet this card holds the corner, for as long as the card is mounted. */
+function ShowingMarker() {
+  useMarkEmailCaptureShowing();
+  return null;
 }
 
 const ASSET = '/explore-email-capture';

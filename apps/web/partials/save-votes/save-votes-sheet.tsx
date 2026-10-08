@@ -33,6 +33,7 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 
 import { AccountStep } from '~/partials/explore/email-capture-account-step';
+import { useIsEmailCaptureShowing } from '~/partials/explore/email-capture-presence';
 import {
   CARD_CLASS,
   CLOSE_BUTTON_CLASS,
@@ -96,7 +97,9 @@ export function SaveVotesSheet() {
   }, [authenticated]);
 
   const isAnyModalOpen = useAnyModalOpen(open);
-  const overlayOpen = isModalOpen || isChatOpen || isAnyModalOpen;
+  // The email capture card shares this corner, and is mid-signup if it is still up once votes exist.
+  const isEmailCaptureShowing = useIsEmailCaptureShowing();
+  const overlayOpen = isModalOpen || isChatOpen || isAnyModalOpen || isEmailCaptureShowing;
   const visible = open && !overlayOpen;
 
   // Counted and measured once per opening, and only once the visitor can see it: an ask that waits

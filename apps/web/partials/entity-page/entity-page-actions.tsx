@@ -31,12 +31,7 @@ interface EntityPageActionsProps {
 }
 
 /** Votes, create, history, and menu — separate from type metadata */
-export function EntityPageActions({
-  entityId,
-  spaceId,
-  isVoteable = false,
-  compact = false,
-}: EntityPageActionsProps) {
+export function EntityPageActions({ entityId, spaceId, isVoteable = false, compact = false }: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
   const name = useName(entityId, spaceId);

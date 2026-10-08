@@ -64,18 +64,26 @@ export function LocalVotesSaver() {
   // else's votes — including a save bound to another account.
   React.useEffect(() => {
     if (!ready || accountId === null || voteCount === 0 || bound) return;
-    if (boundTo === null && isSaveVotesSignIn(currentAuthAttempt())) {
-      bindSaveToAccount(accountId);
-      return;
+    if (boundTo === null) {
+      const attempt = currentAuthAttempt();
+      if (isSaveVotesSignIn(attempt)) {
+        bindSaveToAccount(accountId);
+        return;
+      }
+      // Signed in from another tab, which has no attempt here: that tab's saver decides, and binds or
+      // clears for both. Clearing here could beat it to the votes it is about to save.
+      if (!attempt) return;
     }
     state.votes.forEach(vote => captureLocalVoteDropped('other_sign_in', vote, voteCount));
     clearLocalVotes();
   }, [accountId, bound, boundTo, ready, state, voteCount]);
 
-  // Signed out mid-save: what is left was bound to that account, not to the next one here.
+  // Signed out mid-save: what is left was bound to that account, not to the next one here, and a
+  // failure was that session's — the next save starts afresh rather than waiting on its Retry.
   useOnSignOut(() => {
     resetSaveRequest();
     totalRef.current = 0;
+    setFailed(false);
   });
 
   const hasPersonalSpace = Boolean(smartAccount && isRegistered && personalSpaceId);
@@ -99,7 +107,8 @@ export function LocalVotesSaver() {
 
   const onSaved = React.useCallback((vote: LocalVote, outcome: 'saved' | 'already_held', remaining: number) => {
     if (outcome === 'already_held') captureLocalVoteDropped('already_held', vote, remaining);
-    removeLocalVote(vote);
+    // Only this exact vote. Removing by key would take a newer one cast in its place with it, unsaved.
+    if (isLocalVoteCurrent(vote)) removeLocalVote(vote);
   }, []);
 
   const onFailed = React.useCallback(
@@ -125,6 +134,19 @@ export function LocalVotesSaver() {
       />
     </ActionContextProvider>
   );
+}
+
+/**
+ * Every open tab mounts a saver, and they share the votes through localStorage, so two tabs signed in
+ * to the same account would otherwise each publish the first vote. A Web Lock lets one write at a
+ * time across tabs; the next re-checks the vote is still there, so it is written once. Without Web
+ * Locks (old browsers, tests) a write just runs — one tab is the usual case.
+ */
+const SAVE_LOCK = 'geo:local-votes-saver';
+
+function withSaveLock(run: () => Promise<void>): Promise<void> {
+  const locks = typeof navigator === 'undefined' ? undefined : navigator.locks;
+  return locks ? locks.request(SAVE_LOCK, run) : run();
 }
 
 /**
@@ -155,8 +177,10 @@ function LocalVoteWriter({
   React.useEffect(() => {
     if (started.current) return;
     started.current = true;
-    void (async () => {
+    void withSaveLock(async () => {
       try {
+        // Another tab saved it while this one waited for the lock.
+        if (!isLocalVoteCurrent(vote)) return;
         const held = await readViewerResponseForReplay(queryClient, {
           entityId: vote.entityId,
           spaceId: vote.spaceId,
@@ -164,19 +188,20 @@ function LocalVoteWriter({
           // Votes on the entity itself, never on a relation.
           objectType: 0,
         });
+        // Replaced while the read was out — a signed-in press on this claim removes its device vote
+        // and publishes its own side. Neither outcome below may follow: publishing would overwrite
+        // the newer press, and "already held" would remove whatever is there now.
+        if (!isLocalVoteCurrent(vote)) return;
         if (held === vote.direction) {
           latest.current.onSaved('already_held');
           return;
         }
-        // Replaced while the read was out — a signed-in press on this claim removes its device vote
-        // and publishes its own side. Publishing this one now would overwrite the newer press.
-        if (!isLocalVoteCurrent(vote)) return;
         await latest.current.submitResponseAsync(vote.direction);
         latest.current.onSaved('saved');
       } catch (error) {
         latest.current.onFailed(error);
       }
-    })();
+    });
   }, [queryClient, vote]);
 
   return null;
