@@ -10,6 +10,7 @@ import { parse } from 'graphql';
 
 import { graphql } from '~/core/io/graphql-client';
 import { decodeActiveResponseDirection, responseKindToVoteKind } from '~/core/responses/entity-response';
+import { type CursorPage, collectCursorPages } from '~/core/sync/collect-cursor-pages';
 
 import type { DebateRematchParticipant, DebateResponseKind } from './api';
 import { claimResponseIndexedEvent, pendingClaimResponse } from './claim-response-indexed-notifier';
@@ -43,18 +44,22 @@ export type ParticipantPosition = {
 
 export type ParticipantPositionsByClaim = Map<string, ParticipantPosition[]>;
 
-export function participantPositionsQueryKey(profileSpaceIds: string[]) {
-  return [PARTICIPANT_POSITIONS_QUERY_ROOT, [...profileSpaceIds].sort()] as const;
+/** `onViewerClaims` keys the scoped read apart, since it answers a narrower question. */
+export function participantPositionsQueryKey(profileSpaceIds: string[], onViewerClaims?: string | null) {
+  const ids = [...profileSpaceIds].sort();
+  return onViewerClaims
+    ? ([PARTICIPANT_POSITIONS_QUERY_ROOT, ids, { onViewerClaims }] as const)
+    : ([PARTICIPANT_POSITIONS_QUERY_ROOT, ids] as const);
 }
 
 export function isParticipantPositionsQueryKey(queryKey: readonly unknown[]) {
   return queryKey[0] === PARTICIPANT_POSITIONS_QUERY_ROOT;
 }
 
-const VOTE_KIND_TO_RESPONSE_KIND = new Map<number, DebateResponseKind>([
-  [responseKindToVoteKind('stance'), 'stance'],
-  [responseKindToVoteKind('veracity'), 'veracity'],
-]);
+// Vote kind 2 — the old veracity responses — is deliberately absent. Those rows are no longer read
+// anywhere, so a participant's position on a claim they verified before the vocabularies were
+// merged does not show. See the PR that removed Verify/Dispute.
+const VOTE_KIND_TO_RESPONSE_KIND = new Map<number, DebateResponseKind>([[responseKindToVoteKind('stance'), 'stance']]);
 
 /**
  * Hand-written rather than generated so it doesn't require regenerating `gql.ts`. The generated
@@ -62,13 +67,19 @@ const VOTE_KIND_TO_RESPONSE_KIND = new Map<number, DebateResponseKind>([
  * here: a response counts only in the space the claim lives in.
  */
 const PARTICIPANT_POSITIONS_SOURCE = /* GraphQL */ `
-  query ParticipantPositions($filter: UserVoteFilter!, $first: Int!, $offset: Int!) {
-    userVotes(filter: $filter, first: $first, offset: $offset, orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]) {
-      userId
-      objectId
-      spaceId
-      voteType
-      voteKind
+  query ParticipantPositions($filter: UserVoteFilter!, $first: Int!, $after: Cursor) {
+    userVotesConnection(filter: $filter, first: $first, after: $after, orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]) {
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+      nodes {
+        userId
+        objectId
+        spaceId
+        voteType
+        voteKind
+      }
     }
   }
 `;
@@ -76,33 +87,47 @@ const PARTICIPANT_POSITIONS_SOURCE = /* GraphQL */ `
 type ParticipantPositionRow = { userId: string; objectId: string; spaceId: string; voteType: number; voteKind: number };
 type ParticipantPositionsFilter = {
   userId: { in: string[] };
+  objectId?: { in: string[] };
   objectType: { is: number };
   voteType: { in: number[] };
   voteKind: { in: number[] };
 };
 const participantPositionsDocument = parse(PARTICIPANT_POSITIONS_SOURCE) as TypedDocumentNode<
-  { userVotes: Array<ParticipantPositionRow | null> | null },
-  { filter: ParticipantPositionsFilter; first: number; offset: number }
+  {
+    userVotesConnection: {
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      nodes: Array<ParticipantPositionRow | null>;
+    } | null;
+  },
+  { filter: ParticipantPositionsFilter; first: number; after?: string }
 >;
 
 type FetchPage = (
   filter: ParticipantPositionsFilter,
   first: number,
-  offset: number,
+  after: string | undefined,
   signal?: AbortSignal
-) => Promise<ParticipantPositionRow[]>;
+) => Promise<CursorPage<ParticipantPositionRow>>;
 
-function defaultFetchPage(filter: ParticipantPositionsFilter, first: number, offset: number, signal?: AbortSignal) {
+function defaultFetchPage(
+  filter: ParticipantPositionsFilter,
+  first: number,
+  after: string | undefined,
+  signal?: AbortSignal
+) {
   return Effect.runPromise(
     graphql({
       query: participantPositionsDocument,
-      decoder: data =>
-        (data.userVotes ?? []).flatMap(row =>
+      decoder: data => ({
+        items: (data.userVotesConnection?.nodes ?? []).flatMap(row =>
           row
             ? [{ ...row, userId: String(row.userId), objectId: String(row.objectId), spaceId: String(row.spaceId) }]
             : []
         ),
-      variables: { filter, first, offset },
+        endCursor: data.userVotesConnection?.pageInfo.endCursor ?? null,
+        hasNextPage: data.userVotesConnection?.pageInfo.hasNextPage ?? false,
+      }),
+      variables: { filter, first, after },
       signal,
     })
   );
@@ -121,22 +146,16 @@ export const POSITION_VOTE_FILTER = {
   voteKind: { in: [...VOTE_KIND_TO_RESPONSE_KIND.keys()] },
 };
 
-export async function fetchParticipantPositions(
-  profileSpaceIds: string[],
-  signal?: AbortSignal,
-  fetchPage: FetchPage = defaultFetchPage
+/** Every active position matching `filter`, across as many pages as it takes. */
+async function fetchPositions(
+  filter: ParticipantPositionsFilter,
+  signal: AbortSignal | undefined,
+  fetchPage: FetchPage
 ): Promise<ParticipantPosition[]> {
-  if (profileSpaceIds.length === 0) return [];
-  const filter = { userId: { in: profileSpaceIds }, ...POSITION_VOTE_FILTER };
-
-  const rows: ParticipantPositionRow[] = [];
-  let offset = 0;
-  while (true) {
-    const page = await fetchPage(filter, PAGE_SIZE, offset, signal);
-    rows.push(...page);
-    if (page.length < PAGE_SIZE) break;
-    offset += PAGE_SIZE;
-  }
+  // Cursors, not offsets: the graph rejects an offset past 1000, so offset paging threw on the
+  // fourth page and every match count vanished once the People tab's participants held more than
+  // 1,500 positions between them.
+  const rows = await collectCursorPages(after => fetchPage(filter, PAGE_SIZE, after, signal));
 
   return rows.flatMap(row => {
     const direction = decodeActiveResponseDirection(row.voteType);
@@ -152,6 +171,42 @@ export async function fetchParticipantPositions(
       },
     ];
   });
+}
+
+export async function fetchParticipantPositions(
+  profileSpaceIds: string[],
+  signal?: AbortSignal,
+  fetchPage: FetchPage = defaultFetchPage
+): Promise<ParticipantPosition[]> {
+  if (profileSpaceIds.length === 0) return [];
+  return fetchPositions({ userId: { in: profileSpaceIds }, ...POSITION_VOTE_FILTER }, signal, fetchPage);
+}
+
+/**
+ * The viewer's positions, and everyone else's only on the claims the viewer has answered.
+ *
+ * For callers that compare everyone against the viewer, like the People tab's match counts: a
+ * claim the viewer never answered cannot be a match, so fetching it is wasted. With everyone who
+ * has availability on the tab, the unscoped read was 4,080 rows over nine sequential pages on
+ * testnet, re-polled every 20s; scoped, the heaviest viewers need 830–1,633 and a light one ~120.
+ */
+export async function fetchPositionsOnViewerClaims(
+  viewerProfileSpaceId: string,
+  profileSpaceIds: string[],
+  signal?: AbortSignal,
+  fetchPage: FetchPage = defaultFetchPage
+): Promise<ParticipantPosition[]> {
+  const viewer = await fetchParticipantPositions([viewerProfileSpaceId], signal, fetchPage);
+  const others = profileSpaceIds.filter(id => !sameId(id, viewerProfileSpaceId));
+  const claimIds = [...new Set(viewer.map(position => position.claimId))];
+  if (others.length === 0 || claimIds.length === 0) return viewer;
+
+  const theirs = await fetchPositions(
+    { userId: { in: others }, objectId: { in: claimIds }, ...POSITION_VOTE_FILTER },
+    signal,
+    fetchPage
+  );
+  return [...viewer, ...theirs];
 }
 
 export function groupParticipantPositions(positions: ParticipantPosition[]): ParticipantPositionsByClaim {
@@ -382,9 +437,14 @@ export function applyPendingPositions(
 }
 
 export function useParticipantPositions(
-  participants: DebateRematchParticipant[],
+  participants: Array<Pick<DebateRematchParticipant, 'profile_space_id'>>,
   /** The viewer's own personal space id, so their in-flight writes can be shown immediately. */
-  localProfileSpaceId?: string | null
+  localProfileSpaceId?: string | null,
+  /**
+   * Only read others' positions on claims the viewer has answered (`fetchPositionsOnViewerClaims`).
+   * For callers that only compare people against the viewer; needs `localProfileSpaceId`.
+   */
+  { onlyViewerClaims = false }: { onlyViewerClaims?: boolean } = {}
 ) {
   const queryClient = useQueryClient();
   const foreground = useDebateAttention();
@@ -392,7 +452,11 @@ export function useParticipantPositions(
     () => [...new Set(participants.map(participant => participant.profile_space_id))].sort(),
     [participants]
   );
-  const queryKey = React.useMemo(() => participantPositionsQueryKey(profileSpaceIds), [profileSpaceIds]);
+  const viewerScope = onlyViewerClaims ? (localProfileSpaceId ?? null) : null;
+  const queryKey = React.useMemo(
+    () => participantPositionsQueryKey(profileSpaceIds, viewerScope),
+    [profileSpaceIds, viewerScope]
+  );
 
   // The viewer's own response lands in the graph a beat before anyone tells geo-chat about it;
   // the indexing snapshot turning `indexed` is that beat, so re-ask then rather than wait on the
@@ -408,7 +472,10 @@ export function useParticipantPositions(
 
   const query = useQuery({
     queryKey,
-    queryFn: ({ signal }) => fetchParticipantPositions(profileSpaceIds, signal),
+    queryFn: ({ signal }) =>
+      viewerScope
+        ? fetchPositionsOnViewerClaims(viewerScope, profileSpaceIds, signal)
+        : fetchParticipantPositions(profileSpaceIds, signal),
     enabled: profileSpaceIds.length > 0,
     // `debate.claims_changed` only reaches this tab for spaces it holds a scope on; the opponent
     // can respond somewhere it doesn't, and that claim should still turn up. A slow poll covers it.
@@ -449,6 +516,8 @@ export function useParticipantPositions(
   return {
     byClaim,
     isLoading: query.isLoading,
+    /** The visible rows belong to the previous participant set while a new key is loading. */
+    isPlaceholderData: query.isPlaceholderData,
     /**
      * Whether an answer for *this* key is still on its way.
      *

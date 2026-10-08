@@ -7,7 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
-import { EntityPageTitle } from './entity-page-title';
+import { EntityPageTitle, titleBottomSpacing } from './entity-page-title';
 
 const LONG_NAME =
   'A name long enough that it would have run past the three lines the old header clamped it to, ' +
@@ -119,5 +119,26 @@ describe('EntityPageTitle accessory', () => {
     renderTitle({ isEditing: true, accessory: <span data-testid="verified" /> });
 
     expect(screen.queryByTestId('verified')).toBeNull();
+  });
+});
+
+/**
+ * A row that centres controls against the title has to draw the gap itself — inside the title it
+ * counts toward the centre and sits the controls below the name. See `EditableSpaceHeading`.
+ */
+describe('EntityPageTitle bottom spacing', () => {
+  const spacerHeights = (container: HTMLElement) =>
+    [...container.querySelectorAll<HTMLElement>('div[style]')].map(el => el.style.height).filter(Boolean);
+
+  it('draws the gap under the title by default, in both modes', () => {
+    expect(spacerHeights(renderTitle().container)).toEqual([`${titleBottomSpacing(false)}px`]);
+    cleanup();
+    expect(spacerHeights(renderTitle({ isEditing: true }).container)).toEqual([`${titleBottomSpacing(true)}px`]);
+  });
+
+  it('leaves the gap out when the row draws it', () => {
+    expect(spacerHeights(renderTitle({ withBottomSpacing: false }).container)).toEqual([]);
+    cleanup();
+    expect(spacerHeights(renderTitle({ withBottomSpacing: false, isEditing: true }).container)).toEqual([]);
   });
 });

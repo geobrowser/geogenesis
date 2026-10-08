@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ActionContextProvider, ActionSurface } from '~/core/action-context-provider';
 import { ClaimSummary } from '~/core/claims/browse/claim-summary';
 import type { Debate, DebateClaim } from '~/core/debates/api';
 import {
@@ -41,7 +42,26 @@ const COLLAPSED_CLAIM_COUNT = 3;
  * relation points at the speaker's personal space — the same `profile_space_id` these rows already
  * key on. See `core/debates/transcript-claims.ts`.
  */
-export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose: () => void }) {
+export function DebateClaimsPanel(props: Parameters<typeof DebateClaimsPanelBody>[0]) {
+  return (
+    <ActionSurface
+      className="contents"
+      value={{
+        component: 'debate_claims_panel',
+        target_id: props.debate.id,
+        target_type: 'debate',
+        debate_id: props.debate.id,
+        overlay: 'entity_side_panel',
+        overlay_entity_id: props.debate.id,
+        overlay_entity_type: 'debate',
+      }}
+    >
+      <DebateClaimsPanelBody {...props} />
+    </ActionSurface>
+  );
+}
+
+function DebateClaimsPanelBody({ debate, onClose }: { debate: Debate; onClose: () => void }) {
   const participants = orderedParticipants(debate);
   // Same query key as the player's hook, so voting in either place updates both.
   const votes = useDebateVotes(debate);
@@ -150,7 +170,14 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
         <Text as="h2" variant="cardEntityTitle" color="text">
           Claims · {claims.totalCount}
         </Text>
-        <button type="button" aria-label="Close" onClick={onClose} className="text-grey-04 hover:text-text">
+        <button
+          type="button"
+          data-geo-analytics-label="Close debate claims panel"
+          data-geo-analytics-intent="debate_side_panel_action"
+          aria-label="Close"
+          onClick={onClose}
+          className="text-grey-04 hover:text-text"
+        >
           <Close />
         </button>
       </header>
@@ -175,9 +202,7 @@ export function DebateClaimsPanel({ debate, onClose }: { debate: Debate; onClose
               />
             </div>
             <ClaimList
-              claims={
-                isOrdering ? [] : inSpokenOrder(claimsForParticipant(claims, participant.profile_space_id))
-              }
+              claims={isOrdering ? [] : inSpokenOrder(claimsForParticipant(claims, participant.profile_space_id))}
               rowsByClaimId={rowsByClaimId}
               entitiesByClaimId={entitiesByClaimId}
               timings={timings}
@@ -247,14 +272,16 @@ function ClaimList({
   return (
     <>
       <ul className="mt-4 space-y-3">
-        {visible.map(claim => (
+        {visible.map((claim, index) => (
           <li key={claim.id}>
-            <ClaimRow
-              claim={claim}
-              row={rowsByClaimId.get(claim.id) ?? null}
-              entity={entitiesByClaimId.get(claim.id) ?? null}
-              timing={timings.get(claim.id) ?? null}
-            />
+            <ActionContextProvider value={{ list_id: 'debate_claims', item_position: index + 1 }}>
+              <ClaimRow
+                claim={claim}
+                row={rowsByClaimId.get(claim.id) ?? null}
+                entity={entitiesByClaimId.get(claim.id) ?? null}
+                timing={timings.get(claim.id) ?? null}
+              />
+            </ActionContextProvider>
           </li>
         ))}
       </ul>
@@ -376,7 +403,9 @@ function PanelClaimControls({
         viewerPosition={control.viewerPosition}
         onRespond={control.respond}
         disabled={!control.canRespond}
+        pending={control.isResponseSubmitting}
         titleFor={control.actionTitle}
+        localSide={control.localVoteSide}
       />
       {control.responseError ? (
         <div role="alert" className="mt-1.5">

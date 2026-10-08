@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { DebateRoundPips, rebuttalRoundsLabel } from '~/core/debates/debate-round-indicator';
 import type { ResponseKind } from '~/core/responses/entity-response';
 
 import { Warning } from '~/design-system/icons/warning';
@@ -12,6 +13,7 @@ import { Text } from '~/design-system/text';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { Comment, Share } from './icons';
+import { CIRCLE_ACTION_CLASS, CIRCLE_SHAPE_CLASS, PILL_ACTION_CLASS, PILL_SHAPE_CLASS } from './pill-action';
 
 type InteractionBarProps = {
   orientation: 'vertical' | 'horizontal';
@@ -39,6 +41,11 @@ type InteractionBarProps = {
   onShare?: () => void;
   shareOpen?: boolean;
   /**
+   * Rebuttal rounds an Open rounds debate unlocked (GEO-3180), from `openRebuttalRoundCount`. Shown
+   * only above zero: a debate that ended after the opening, and every fixed format, show nothing.
+   */
+  rebuttalRounds?: number | null;
+  /**
    * What kind of response the vote control records, or `'infer'` to let `EntityVoteButtons` read
    * it off the entity.
    *
@@ -53,8 +60,22 @@ type InteractionBarProps = {
    * control looks like.
    */
   responseKind?: ResponseKind | 'infer';
+  /**
+   * The debate's overflow menu, drawn last. Its host decides what is in it and whether it is drawn
+   * at all — today only the full-screen feed's Remove debate (GEO-2785), for the few who may.
+   */
+  overflow?: React.ReactNode;
   className?: string;
 };
+
+type DebateActionKind = 'comments' | 'claims' | 'share';
+
+function debateActionAnalyticsProps(actionKind: DebateActionKind) {
+  return {
+    'data-geo-analytics-label': `Debate ${actionKind}`,
+    'data-geo-analytics-intent': 'debate_action',
+  } as const;
+}
 
 /**
  * The upvote/downvote/comment/claims/share bar beside each debate. Entity votes
@@ -75,7 +96,9 @@ export function DebateInteractionBar({
   onClaims,
   onShare,
   shareOpen,
+  rebuttalRounds,
   responseKind = 'curation',
+  overflow,
   className,
 }: InteractionBarProps) {
   // Defined at all means comments open in the app's global panel rather than in one this bar's
@@ -91,6 +114,7 @@ export function DebateInteractionBar({
 
   const commentsLabel = `Comments (${commentCount})`;
   const claimsLabel = `Claims (${claimsCount ?? 0})`;
+  const rounds = rebuttalRounds != null && rebuttalRounds > 0 ? rebuttalRounds : null;
 
   if (orientation === 'vertical') {
     return (
@@ -106,6 +130,7 @@ export function DebateInteractionBar({
           onClick={onComment}
           icon={<Comment />}
           ariaLabel={commentsLabel}
+          actionKind="comments"
           open={commentsPanelOpen}
           commentsPanelOpener={opensGlobalCommentsPanel}
         />
@@ -115,6 +140,7 @@ export function DebateInteractionBar({
             onClick={onClaims}
             icon={<Warning />}
             ariaLabel={claimsLabel}
+            actionKind="claims"
           />
         )}
         {onShare && (
@@ -123,9 +149,12 @@ export function DebateInteractionBar({
             onClick={onShare}
             icon={<Share />}
             ariaLabel="Share debate"
+            actionKind="share"
             expanded={shareOpen}
           />
         )}
+        {rounds !== null && <RoundsIndicator rounds={rounds} orientation="vertical" />}
+        {overflow}
       </div>
     );
   }
@@ -143,6 +172,7 @@ export function DebateInteractionBar({
         icon={<Comment />}
         label={String(commentCount)}
         ariaLabel={commentsLabel}
+        actionKind="comments"
         open={commentsPanelOpen}
         commentsPanelOpener={opensGlobalCommentsPanel}
         compact={compact}
@@ -153,6 +183,7 @@ export function DebateInteractionBar({
           icon={<Warning />}
           label={String(claimsCount ?? 0)}
           ariaLabel={claimsLabel}
+          actionKind="claims"
           compact={compact}
         />
       )}
@@ -162,12 +193,73 @@ export function DebateInteractionBar({
           icon={<Share />}
           label="Share"
           ariaLabel="Share debate"
+          actionKind="share"
           expanded={shareOpen}
           compact={compact}
           hideLabel={compact}
         />
       )}
+      {rounds !== null && <RoundsIndicator rounds={rounds} orientation="horizontal" compact={compact} />}
+      {overflow}
     </div>
+  );
+}
+
+/** A horizontal pill's padding, shared by the actions and the rounds pill so they line up. */
+function pillPaddingClass(compact: boolean) {
+  return compact ? 'gap-1 px-1.5' : 'gap-1.5 px-2.5';
+}
+
+/**
+ * How far the debate went (GEO-3180). Not an action, so a plain element cut to the actions' shape
+ * rather than a button, in purple to read as the debate's result rather than a control. The
+ * visible text is shorthand, so readers get {@link rebuttalRoundsLabel} instead, the way the room's
+ * round counter does it.
+ */
+function RoundsIndicator({
+  rounds,
+  orientation,
+  compact = false,
+}: {
+  rounds: number;
+  orientation: 'vertical' | 'horizontal';
+  compact?: boolean;
+}) {
+  const label = <span className="sr-only">{rebuttalRoundsLabel(rounds)}</span>;
+
+  if (orientation === 'vertical') {
+    return (
+      <div data-debate-rounds={rounds} className="flex flex-col items-center gap-1">
+        <span aria-hidden="true" className={cx(CIRCLE_SHAPE_CLASS, 'border-purple/35')}>
+          <Text as="span" variant="metadataMedium" color="purple" className="tabular-nums">
+            {rounds}
+          </Text>
+        </span>
+        <Text as="span" variant="tag" color="grey-04" aria-hidden="true">
+          {rounds === 1 ? 'Round' : 'Rounds'}
+        </Text>
+        {label}
+      </div>
+    );
+  }
+
+  return (
+    <span
+      data-debate-rounds={rounds}
+      className={cx(PILL_SHAPE_CLASS, 'shrink-0 border-purple/35 text-purple', pillPaddingClass(compact))}
+    >
+      {!compact && <DebateRoundPips rounds={rounds} />}
+      <Text
+        as="span"
+        variant="metadataMedium"
+        color="purple"
+        className="whitespace-nowrap tabular-nums"
+        aria-hidden="true"
+      >
+        {rounds === 1 ? '1 round' : `${rounds} rounds`}
+      </Text>
+      {label}
+    </span>
   );
 }
 
@@ -176,6 +268,7 @@ function CircleAction({
   icon,
   onClick,
   ariaLabel,
+  actionKind,
   expanded,
   open,
   commentsPanelOpener,
@@ -184,6 +277,8 @@ function CircleAction({
   icon: React.ReactNode;
   onClick: () => void;
   ariaLabel: string;
+  /** Stable analytics dimension; unlike the accessible label it deliberately excludes live counts. */
+  actionKind: DebateActionKind;
   // When set, the button opens a dialog — announce that and its open/closed state to screen readers,
   // which Radix would do via <Trigger> if the trigger lived in the sheet's own subtree.
   expanded?: boolean;
@@ -202,12 +297,13 @@ function CircleAction({
     <div className="flex flex-col items-center gap-1">
       <button
         type="button"
+        {...debateActionAnalyticsProps(actionKind)}
         aria-label={ariaLabel}
         aria-haspopup={expanded === undefined ? undefined : 'dialog'}
         aria-expanded={expanded ?? open}
         data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
         onClick={onClick}
-        className="grid size-9 place-items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text"
+        className={CIRCLE_ACTION_CLASS}
       >
         {icon}
       </button>
@@ -223,6 +319,7 @@ function PillAction({
   icon,
   onClick,
   ariaLabel,
+  actionKind,
   expanded,
   open,
   commentsPanelOpener,
@@ -234,6 +331,8 @@ function PillAction({
   icon: React.ReactNode;
   onClick: () => void;
   ariaLabel: string;
+  /** Stable analytics dimension; unlike the accessible label it deliberately excludes live counts. */
+  actionKind: DebateActionKind;
   // See {@link CircleAction}: announces the dialog and its open state when this button opens one.
   expanded?: boolean;
   // See {@link CircleAction}.
@@ -248,14 +347,15 @@ function PillAction({
   return (
     <button
       type="button"
+      {...debateActionAnalyticsProps(actionKind)}
       aria-label={ariaLabel}
       aria-haspopup={expanded === undefined ? undefined : 'dialog'}
       aria-expanded={expanded ?? open}
       data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
       onClick={onClick}
       className={cx(
-        'flex h-7 items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text',
-        compact ? (hideLabel ? 'size-7 justify-center px-0' : 'gap-1 px-1.5') : 'gap-1.5 px-2.5',
+        PILL_ACTION_CLASS,
+        compact && hideLabel ? 'size-7 justify-center px-0' : pillPaddingClass(compact),
         className
       )}
     >

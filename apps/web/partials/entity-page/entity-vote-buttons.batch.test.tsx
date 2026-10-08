@@ -17,6 +17,7 @@ import {
   useClaimResponseSummaryBatch,
 } from '~/core/responses/use-claim-response-summaries';
 
+import { EntitySidePanelNavigation } from './entity-side-panel-navigation';
 import { EntityVoteButtons, RespondersPopoverContent } from './entity-vote-buttons';
 
 const mocks = vi.hoisted(() => ({
@@ -30,7 +31,10 @@ const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
   responderAvatarProps: [] as unknown[],
   getProfiles: vi.fn(),
+  personProfileOpened: vi.fn(),
 }));
+
+vi.mock('~/core/debates/rematch-panel-context', () => ({ useRematchPanelContext: () => ({}) }));
 
 vi.mock('@geogenesis/auth', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
@@ -40,6 +44,7 @@ vi.mock('@geogenesis/auth', () => ({
 
 vi.mock('~/core/analytics', () => ({
   downvoted: vi.fn(),
+  personProfileOpened: mocks.personProfileOpened,
   trackPrivyAuth: vi.fn(),
   upvoted: vi.fn(),
   voteCast: vi.fn(),
@@ -93,6 +98,14 @@ vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
   },
 }));
 
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, href, ...props }: { children: ReactNode; href: string }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+
 beforeEach(() => {
   mocks.getCounts.mockReset();
   mocks.getCounts.mockReturnValue({ positive: 2, negative: 1 });
@@ -109,9 +122,13 @@ beforeEach(() => {
   mocks.responderAvatarProps.length = 0;
   mocks.getProfiles.mockReset();
   mocks.getProfiles.mockReturnValue([]);
+  mocks.personProfileOpened.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('EntityVoteButtons claims-page batching', () => {
   it('skips entity hydration and all individual response queries while the page batch is unresolved', async () => {
@@ -128,19 +145,24 @@ describe('EntityVoteButtons claims-page batching', () => {
   it('uses the batch-seeded caches without fetching or hydrating Entity once batching resolves', async () => {
     renderButtons(true, true);
 
-    await waitFor(() => expect(mocks.queryEntityOptions).toHaveLength(1));
+    await waitFor(() => expect(mocks.queryEntityOptions.length).toBeGreaterThan(0));
     expect(mocks.getCounts).not.toHaveBeenCalled();
     expect(mocks.getViewerResponse).not.toHaveBeenCalled();
-    expect(mocks.queryEntityOptions.at(-1)).toMatchObject({ enabled: false });
+    // Every render, not a count of them: the queue subscription can re-run the component once on
+    // mount without changing anything, and what matters is that no render ever enabled the query.
+    for (const options of mocks.queryEntityOptions) expect(options).toMatchObject({ enabled: false });
   });
 
-  it('renders factual claims with the original chevron controls and no explanatory label', () => {
-    const view = renderButtons(true, true, 'veracity');
+  // This used to assert chevrons — the `0 0 16 16` glyphs a factual claim drew. Claims are thumbs
+  // now, which are `0 0 12 12`, so the case is kept and its expectation inverted: the chevrons must
+  // not come back on a claim.
+  it('renders a claim with thumb controls and no explanatory label', () => {
+    const view = renderButtons(true, true, 'stance');
 
     expect(view.queryByText('Is factual')).not.toBeInTheDocument();
     const responseIcons = [...view.container.querySelectorAll('svg')];
     expect(responseIcons).toHaveLength(2);
-    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 16 16')).toBe(true);
+    expect(responseIcons.every(icon => icon.getAttribute('viewBox') === '0 0 12 12')).toBe(true);
   });
 
   it('renders persisted curation state in the fullscreen debate pill', () => {
@@ -215,7 +237,7 @@ describe('EntityVoteButtons claims-page batching', () => {
   it('renders 50 batched claims with one summary request and no individual response requests', async () => {
     const targets = Array.from({ length: 50 }, (_, index) => ({
       entityId: `claim-${index}`,
-      responseKind: index % 2 === 0 ? ('stance' as const) : ('veracity' as const),
+      responseKind: 'stance' as const,
     }));
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -236,7 +258,7 @@ describe('EntityVoteButtons claims-page batching', () => {
   });
 });
 
-function BatchedClaims({ targets }: { targets: Array<{ entityId: string; responseKind: 'stance' | 'veracity' }> }) {
+function BatchedClaims({ targets }: { targets: Array<{ entityId: string; responseKind: 'stance' }> }) {
   const batch = useClaimResponseSummaryBatch({ spaceId: 'space-1', targets, enabled: true });
   return (
     <ClaimResponseBatchBoundary ready={batch.isSuccess}>
@@ -252,7 +274,7 @@ function BatchedClaims({ targets }: { targets: Array<{ entityId: string; respons
   );
 }
 
-function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance' | 'veracity' = 'stance') {
+function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance' = 'stance') {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   if (seedCaches) {
     queryClient.setQueryData(entityResponseCountsQueryKey('claim-1', 'space-1', 0, responseKind), {
@@ -287,10 +309,16 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
  * not part of the boundary's `ready`.
  */
 describe('RespondersPopoverContent under a batch', () => {
-  const renderPopover = (queryClient: QueryClient) =>
+  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance', inRoom = false) =>
     render(
       <ClaimResponseBatchBoundary ready>
-        <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind="stance" />
+        {inRoom ? (
+          <EntitySidePanelNavigation entityId="claim-1" spaceId="space-1">
+            <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+          </EntitySidePanelNavigation>
+        ) : (
+          <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+        )}
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -342,5 +370,37 @@ describe('RespondersPopoverContent under a batch', () => {
 
     await waitFor(() => expect(view.getByText('Dovile')).toBeInTheDocument());
     expect(view.container.querySelector('.overflow-y-auto')?.className).toContain('overscroll-contain');
+  });
+
+  it.each([
+    ['stance', 'claim_vote_list'],
+    ['curation', 'entity_vote_list'],
+  ] as const)('attributes %s responder navigation to the right surface', async (responseKind, interactionSurface) => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    queryClient.setQueryData(entityRespondersQueryKey('claim-1', 'space-1', 0, responseKind), [
+      { userId: 'profile-9', direction: 'positive' },
+    ]);
+    mocks.getProfiles.mockReturnValue([
+      {
+        id: 'person-9',
+        spaceId: 'profile-9',
+        address: '0x1234567890abcdef',
+        avatarUrl: null,
+        coverUrl: null,
+        name: 'Dovile',
+        profileLink: '/space/profile-9',
+      },
+    ]);
+
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const view = renderPopover(queryClient, responseKind, true);
+    const profileLink = await view.findByRole('link', { name: 'Dovile' });
+    fireEvent.click(profileLink);
+    expect(open).toHaveBeenCalledTimes(1);
+    open.mockRestore();
+
+    expect(mocks.personProfileOpened).toHaveBeenCalledExactlyOnceWith('profile-9', 'person-9', {
+      interaction_surface: interactionSurface,
+    });
   });
 });

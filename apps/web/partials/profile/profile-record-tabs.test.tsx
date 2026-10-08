@@ -12,16 +12,14 @@ const mocks = vi.hoisted(() => ({
   facts: { debates: 10, positions: 59, proposals: 0 } as Record<string, number>,
   isLoadingFacts: false,
   isFactsError: false,
-  /** What the vote table says, which is what decides Positions. */
-  heldPositions: 59 as number | null,
+  personalSpaceId: 'space-1' as string | null,
 }));
 
 vi.mock('~/core/hooks/use-profile-facts', () => ({
   useProfileFacts: () => ({ facts: mocks.facts, isLoading: mocks.isLoadingFacts, isError: mocks.isFactsError }),
 }));
-vi.mock('~/core/profile/use-person-positions', () => ({
-  usePersonResponses: () => ({ total: mocks.heldPositions, isError: false }),
-  heldPositionsCount: () => mocks.heldPositions,
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId }),
 }));
 vi.mock('~/core/hooks/use-profiles-by-space-ids', () => ({
   useProfilesBySpaceIds: () => ({ profilesBySpaceId: new Map() }),
@@ -53,7 +51,7 @@ beforeEach(() => {
   mocks.facts = { debates: 10, positions: 59, proposals: 0 };
   mocks.isLoadingFacts = false;
   mocks.isFactsError = false;
-  mocks.heldPositions = 59;
+  mocks.personalSpaceId = 'space-1';
 });
 
 afterEach(cleanup);
@@ -127,7 +125,21 @@ describe('ProfileRecordTabs', () => {
 
   it('keeps About whatever the counts say, because it is the rail', () => {
     mocks.facts = { debates: 0, positions: 0, proposals: 0 };
-    mocks.heldPositions = 0;
+    renderTabs();
+
+    expect(tabNames()).toEqual(['Overview', 'About']);
+  });
+
+  it('keeps Debates available to the owner when every debate is hidden', () => {
+    mocks.facts = { debates: 0, totalDebates: 1, positions: 0, proposals: 0 };
+    renderTabs();
+
+    expect(tabNames()).toEqual(['Overview', 'Debates', 'About']);
+  });
+
+  it('keeps an all-hidden Debates tab out of the public profile', () => {
+    mocks.personalSpaceId = 'another-space';
+    mocks.facts = { debates: 0, totalDebates: 1, positions: 0, proposals: 0 };
     renderTabs();
 
     expect(tabNames()).toEqual(['Overview', 'About']);
@@ -152,47 +164,15 @@ describe('ProfileRecordTabs', () => {
   });
 
   /**
-   * Positions is decided by the vote table, not by `facts.positions`.
-   *
-   * `entitiesConnection(votedBy:)` counts a retracted vote as a position, so the
-   * server count can say 4 over a record that holds none — and the tab would open
-   * on an empty list.
+   * Positions is `facts.positions`, which counts held positions only — the
+   * server leaves a retracted one out (`votedByTypes`, GEO-2962). So a record
+   * whose every position was taken back reads zero, and the tab goes.
    */
-  it('hides Positions when every position was retracted', () => {
-    mocks.facts = { debates: 10, positions: 4, proposals: 0 };
-    mocks.heldPositions = 0;
+  it('hides Positions when the count is zero', () => {
+    mocks.facts = { debates: 10, positions: 0, proposals: 0 };
     renderTabs();
 
     expect(tabNames()).not.toContain('Positions');
-  });
-
-  /**
-   * The counts arrive after the first paint, so a tab can stop being offered
-   * while the reader is standing on it — which would leave them on a list
-   * nothing points at.
-   */
-  /**
-   * Positions is the one count that knows on its own.
-   *
-   * It comes from the vote table, a different request from the facts — so a
-   * facts failure says nothing about it, and a zero there is a definite zero.
-   * Reading both through one "are the counts known" flag left an empty Positions
-   * tab standing whenever the facts request happened to fail.
-   */
-  it('still hides Positions on a definite zero when the facts failed', () => {
-    mocks.isFactsError = true;
-    mocks.heldPositions = 0;
-    renderTabs();
-
-    expect(tabNames()).not.toContain('Positions');
-  });
-
-  it('offers Positions when neither source could answer', () => {
-    mocks.isFactsError = true;
-    mocks.heldPositions = null;
-    renderTabs();
-
-    expect(tabNames()).toContain('Positions');
   });
 
   /**

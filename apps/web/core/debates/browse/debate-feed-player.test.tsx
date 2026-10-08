@@ -1,16 +1,58 @@
-import { fireEvent, render } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateParticipant } from '~/core/debates/api';
+import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
+import { turnSpansForDurations } from '~/core/debates/playback-utils';
 
 import { DebateFeedPlayer } from './debate-feed-player';
+
+const SPACE_1 = '11111111111111111111111111111111';
+const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
+const SPACE_2 = '22222222222222222222222222222222';
 
 const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
+  bylines: new Map<string, string>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
+  /** Each call's `enabled`, so a test can see when the end card's numbers are asked for. */
+  endCardEnabled: [] as boolean[],
+  /** Each call's `shown`, so a test can see when the card's numbers are refreshed. */
+  endCardShown: [] as boolean[],
+}));
+
+const watchedMocks = vi.hoisted(() => ({ markDebateWatched: vi.fn() }));
+vi.mock('~/core/debates/watched-debates', () => ({ markDebateWatched: watchedMocks.markDebateWatched }));
+
+// The card's data is its own hook's business, tested beside it. Here only *when* it is asked for.
+vi.mock('./use-debate-end-card', () => ({
+  useDebateEndCard: (_debate: unknown, enabled: boolean, shown: boolean) => {
+    mocks.endCardEnabled.push(enabled);
+    mocks.endCardShown.push(shown);
+    return {};
+  },
+}));
+
+// A stand-in for the card, so the player's half is what is under test: when the card is shown, what
+// it is handed for replay, and whether the claims opener reaches it.
+vi.mock('./debate-end-card', () => ({
+  DebateEndCard: ({ onReplay, onOpenClaims }: { onReplay: () => void; onOpenClaims?: () => void }) => (
+    <div data-testid="end-card">
+      <button type="button" onClick={onReplay}>
+        Replay debate
+      </button>
+      <button type="button" onClick={() => onOpenClaims?.()}>
+        open claims
+      </button>
+    </div>
+  ),
+}));
+
+vi.mock('~/core/debates/participant-bylines', () => ({
+  useParticipantBylines: () => mocks.bylines,
 }));
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
@@ -59,11 +101,17 @@ vi.mock('./debate-claim-ticker', () => ({
   ClaimScrubberMarkers: () => null,
 }));
 
+/**
+ * `position_label` is set to the retired wording on purpose. geo-chat still sends "Verify" and
+ * "Dispute" for a claim it calls factual, and the chip is named from `position` instead — so the
+ * chip reading "Agree"/"Disagree" below is what proves the server's label is not the source.
+ */
 const participant = (slot: 1 | 2): DebateParticipant =>
   ({
     participant_slot: slot,
-    profile_space_id: `space-${slot}`,
-    position_label: slot === 1 ? 'For' : 'Against',
+    profile_space_id: slot === 1 ? SPACE_1_DASHED : SPACE_2,
+    position: slot === 1,
+    position_label: slot === 1 ? 'Verify' : 'Dispute',
   }) as unknown as DebateParticipant;
 
 /** Only what the player reads: its id, and the space the ticker looks for claims in. */
@@ -82,14 +130,35 @@ function controllerFixture(overrides: {
   playing?: boolean;
   playbackEnded?: boolean;
   subtitle?: string | null;
+  /** A freshly signed recording, as `refreshSlotUrl` produces — or no recording yet, as the
+   * blanking pass that precedes a different pair leaves behind. */
+  urls?: { slot1: string | null; slot2: string | null };
+  /** False before the media can be seeked. A seek issued then is dropped by the element. */
+  ready?: boolean;
+  /** Shared across re-renders where a test needs to count the calls the component made. */
+  seekBoth?: ReturnType<typeof vi.fn>;
+  /** Where the playhead sits, which is all a round cue reads. */
+  playheadSeconds?: number;
 }) {
+  /*
+   * Four 30s turns from `turnSlot`, and `turnState` read off them rather than pinned.
+   *
+   * `turnSpansForDurations` takes the debate's *first* slot, so pinning `turnState.slot` to it
+   * made the fixture contradict itself the moment a test moved the playhead past the first turn:
+   * at 30.5s the spans say slot 2 is speaking while `turnState` still said slot 1. The reply tests
+   * were then checking that a badge existed somewhere rather than that it had crossed tiles.
+   */
+  const turnSpans = turnSpansForDurations(overrides.turnSlot, [30_000, 30_000, 30_000, 30_000]);
+  const playheadSeconds = overrides.playheadSeconds ?? 5;
+  const speakingSlot = turnSpans.find(span => playheadSeconds < span.endSeconds)?.slot ?? overrides.turnSlot;
+
   return {
     slot1VideoRef: { current: null },
     slot2VideoRef: { current: null },
     slot1Participant: participant(1),
     slot2Participant: participant(2),
-    urls: { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
-    ready: true,
+    urls: overrides.urls ?? { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
+    ready: overrides.ready ?? true,
     error: null,
     playing: overrides.playing ?? true,
     autoplayBlocked: overrides.autoplayBlocked ?? false,
@@ -99,17 +168,24 @@ function controllerFixture(overrides: {
     playbackEnded: overrides.playbackEnded ?? false,
     mutedByUser: overrides.mutedByUser,
     setMutedByUser: vi.fn(),
-    playheadSeconds: 5,
-    timelineSeconds: 60,
-    turnState: { slot: overrides.turnSlot, seconds: 10, progress: 0.5 },
-    activeSlot: overrides.turnSlot,
+    playheadSeconds,
+    // Four 30s turns, so the whole timeline is 120s.
+    timelineSeconds: 120,
+    turnState: { slot: speakingSlot, seconds: 10, progress: 0.5 },
+    turnSpans,
+    // The format's count, which is what names a round. Equal to the spans here because nothing was
+    // yielded early; the two part company on a debate that was.
+    turnCount: 4,
+    activeSlot: speakingSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
+    resyncSlot: vi.fn(),
+    refreshSlotUrl: vi.fn(),
     togglePlayback: vi.fn(),
     playFromStart: vi.fn(),
     resumeBoth: vi.fn(),
     suspend: vi.fn(),
-    seekBoth: vi.fn(),
+    seekBoth: overrides.seekBoth ?? vi.fn(),
     beginScrub: vi.fn(),
     endScrub: vi.fn(),
   };
@@ -145,12 +221,26 @@ function renderPlayer(
 beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
+  mocks.bylines = new Map();
   mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
 
-afterEach(() => vi.restoreAllMocks());
+// GEO-3110. This file renders `DebateFeedPlayer` (and so `usePairReadiness`'s real `setTimeout`
+// backstop, `PAIR_HOLD_TIMEOUT_MS`) roughly eighty times without ever calling `unmount()` itself —
+// relying on this to tear each one down is what was missing. Left mounted, that backstop is a real
+// timer that outlives this test file; if it fires after vitest has torn the file's jsdom globals
+// off `globalThis` (which happens as soon as the file's tests are done, not when the timer
+// chooses to fire), its callback runs with `window` genuinely undefined —
+// `ReferenceError: window is not defined`, reported against whichever file happened to be running
+// when that race was lost. `cleanup()` unmounts every render from the test before it, which runs
+// `usePairReadiness`'s own effect cleanup and clears that timer (and any other), so none is left
+// pending once the file's tests finish.
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('player layout', () => {
   it('keeps both stacked videos at the original aspect ratio', () => {
@@ -166,6 +256,85 @@ describe('player layout', () => {
     expect(tiles).toHaveLength(2);
     expect(tiles.every(tile => tile?.className.includes('aspect-480/289'))).toBe(true);
   });
+
+  /**
+   * GEO-3022. The chip was dropped from the tile alongside the "Winner?" pill in #2439, which left
+   * the two videos saying who was speaking but not which side they were arguing — the one thing a
+   * viewer dropping into the middle of a debate cannot infer.
+   */
+  it("puts each debater's position immediately after their name", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.bylines = new Map([
+      [SPACE_1, 'A deliberately much longer affiliation than the participant name'],
+      [SPACE_2, 'Another affiliation whose width must not place the position chip'],
+    ]);
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const { getByText } = within(container);
+
+    for (const [name, position, affiliation] of [
+      [SPACE_1_DASHED, 'Agree', 'A deliberately much longer affiliation than the participant name'],
+      [SPACE_2, 'Disagree', 'Another affiliation whose width must not place the position chip'],
+    ]) {
+      const chip = getByText(position);
+      const nameNode = getByText(name);
+      const nameRow = nameNode.parentElement;
+
+      expect(chip.parentElement).toBe(nameRow);
+      expect(nameNode.nextElementSibling).toBe(chip);
+      expect(nameRow?.nextElementSibling).toBe(getByText(affiliation));
+      expect(nameNode.closest('button')?.className).toContain('items-center');
+    }
+  });
+
+  it('keeps the position chip in the video playback surface', () => {
+    const controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.controller = controller;
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    fireEvent.click(within(container).getByText('Agree'));
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * A test here covered an empty `position_label`, which typed non-null but arrived from geo-chat
+   * and would have drawn a bare pill. The chip is named from `position` now — a non-null boolean —
+   * so there is no label for the server to leave blank and the case is gone rather than untested.
+   * What replaces it is the fixture above: a stale server label that must not reach the chip.
+   */
+  it('names the side itself rather than repeating the label geo-chat sent', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const { queryByText, getByText } = within(container);
+
+    expect(getByText('Agree')).not.toBeNull();
+    expect(getByText('Disagree')).not.toBeNull();
+    expect(queryByText('Verify')).toBeNull();
+    expect(queryByText('Dispute')).toBeNull();
+  });
+
+  it('shows each participant byline below their name, clamped with the full line on hover', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const description = 'Researcher exploring decentralized knowledge and collective intelligence.';
+    mocks.bylines = new Map([
+      [SPACE_1, 'Head of Product at Geo'],
+      [SPACE_2, description],
+    ]);
+
+    const { getByTitle, getByText } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(getByText('Head of Product at Geo').hasAttribute('data-debate-byline')).toBe(true);
+    expect(getByText(description).className).toContain('truncate');
+    expect(getByTitle(description)).not.toBeNull();
+  });
+
+  it('leaves no byline row when a participant has no affiliation or description', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(container.querySelector('[data-debate-byline]')).toBeNull();
+  });
 });
 
 describe('overlay variants', () => {
@@ -179,6 +348,20 @@ describe('overlay variants', () => {
     const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
 
     expect(queryByTestId('claim-stack')).toBeNull();
+  });
+
+  it('hides participant bylines in a compact debate card', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.bylines = new Map([
+      [SPACE_1, 'Head of Product at Geo'],
+      [SPACE_2, 'PhD student, Economics at Stanford'],
+    ]);
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    const { queryByText } = within(container);
+
+    expect(queryByText('Head of Product at Geo')).toBeNull();
+    expect(queryByText('PhD student, Economics at Stanford')).toBeNull();
   });
 
   it('shows subtitles only for an active, playing, muted compact debate', () => {
@@ -245,6 +428,119 @@ describe('DebateFeedPlayer audio gating (GEO-2947)', () => {
   });
 });
 
+describe('the Unmute tap and iOS gesture activation (GEO-3115)', () => {
+  /**
+   * A running element that keeps its own `paused`, as a browser does: `pause()` stops it and
+   * `play()` starts it again synchronously. `calls` is every pause/play, in order.
+   */
+  function running(video: HTMLVideoElement) {
+    let paused = false;
+    const calls: Array<'pause' | 'play'> = [];
+    let settle: () => void = () => {};
+    Object.defineProperty(video, 'paused', { configurable: true, get: () => paused });
+    video.pause = () => {
+      calls.push('pause');
+      paused = true;
+    };
+    video.play = () => {
+      calls.push('play');
+      paused = false;
+      return new Promise<void>(resolve => (settle = resolve));
+    };
+    return { calls, settle: () => settle() };
+  }
+  const muteButton = (video: HTMLVideoElement, name: 'Mute' | 'Unmute') =>
+    within(video.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name });
+
+  it('pauses and re-plays both recordings inside the Unmute tap, before any re-render', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    const one = running(slot1);
+    const two = running(slot2);
+    const controller = mocks.controller as ReturnType<typeof controllerFixture>;
+    // The fixture's setter changes nothing, so anything seen here was done by the handler itself.
+    const atTap: unknown[] = [];
+    controller.setMutedByUser.mockImplementation(() =>
+      atTap.push([[...one.calls], [...two.calls], slot1.muted, slot2.muted, slot1.paused, slot2.paused])
+    );
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+
+    // A real paused -> playing transition on each, no mute written (the listener stays muted), and
+    // both left playing.
+    expect(atTap).toEqual([[['pause', 'play'], ['pause', 'play'], true, true, false, false]]);
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+    expect(
+      within(slot1.closest('[data-debate-slot]') as HTMLElement).getByRole('button', { name: 'Pause debate' })
+    ).toBeTruthy();
+  });
+
+  it('holds the pause events it causes from the playback tick, then ticks once the plays settle', async () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    const one = running(slot1);
+    const two = running(slot2);
+    const controller = mocks.controller as ReturnType<typeof controllerFixture>;
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+    act(() => {
+      slot1.dispatchEvent(new Event('pause'));
+      slot2.dispatchEvent(new Event('pause'));
+    });
+    expect(controller.onPlaybackTick).not.toHaveBeenCalled();
+
+    await act(async () => {
+      one.settle();
+      two.settle();
+    });
+    expect(controller.onPlaybackTick).toHaveBeenCalledTimes(1);
+
+    // Outside an activation a pause is the ordinary tick again.
+    act(() => void slot1.dispatchEvent(new Event('pause')));
+    expect(controller.onPlaybackTick).toHaveBeenCalledTimes(2);
+  });
+
+  it('starts nothing when the pair is paused', () => {
+    const { slot1, slot2 } = renderPlayer({ mutedByUser: true, turnSlot: 1, playing: false });
+    const one = running(slot1);
+    const two = running(slot2);
+    slot1.pause();
+    slot2.pause();
+    one.calls.length = 0;
+    two.calls.length = 0;
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+
+    expect(one.calls).toEqual([]);
+    expect(two.calls).toEqual([]);
+  });
+
+  it('touches neither element on Mute, and mutes both', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: false, turnSlot: 1 });
+    const one = running(slot1);
+    const two = running(slot2);
+
+    fireEvent.click(muteButton(slot1, 'Mute'));
+    expect(one.calls).toEqual([]);
+    expect(two.calls).toEqual([]);
+
+    update({ mutedByUser: true, turnSlot: 1 });
+    expect(slot1.muted).toBe(true);
+    expect(slot2.muted).toBe(true);
+  });
+
+  it('still moves the mute with the turn after an unmute', () => {
+    const { slot1, slot2, update } = renderPlayer({ mutedByUser: true, turnSlot: 1 });
+    running(slot1);
+    running(slot2);
+
+    fireEvent.click(muteButton(slot1, 'Unmute'));
+    update({ mutedByUser: false, turnSlot: 1 });
+    expect([slot1.muted, slot2.muted]).toEqual([false, true]);
+
+    update({ mutedByUser: false, turnSlot: 2 });
+    expect([slot1.muted, slot2.muted]).toEqual([true, false]);
+  });
+});
+
 describe('DebateFeedPlayer repairs a mute made behind React (GEO-2947)', () => {
   it('re-asserts the rendered mute once the resume is over', () => {
     const { slot1, update } = renderPlayer({ mutedByUser: false, turnSlot: 1, isResuming: true });
@@ -307,6 +603,27 @@ describe('DebateFeedPlayer media release (GEO-2963)', () => {
   });
 });
 
+describe('DebateFeedPlayer releaseMedia (GEO-3067)', () => {
+  it('releases both videos while held back and re-attaches the same URLs on return', () => {
+    const load = vi.mocked(HTMLMediaElement.prototype.load);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} releaseMedia />);
+
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(slot1.hasAttribute('src')).toBe(false);
+    expect(slot2.hasAttribute('src')).toBe(false);
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} />);
+
+    const sources = Array.from(container.querySelectorAll('video')).map(video => video.getAttribute('src'));
+    expect(sources).toEqual(['https://cdn.test/slot1.webm', 'https://cdn.test/slot2.webm']);
+  });
+});
+
 /**
  * A refused autoplay has to reach the screen (GEO-2978).
  *
@@ -340,7 +657,7 @@ describe('a refused autoplay', () => {
 });
 
 describe('ended playback', () => {
-  it('centers one replay button over the video', () => {
+  it('centers one replay button over a compact tile, which has no room for the end card', () => {
     const controller = controllerFixture({
       mutedByUser: true,
       turnSlot: 1,
@@ -348,7 +665,7 @@ describe('ended playback', () => {
       playbackEnded: true,
     });
     mocks.controller = controller;
-    const { getByRole } = render(<DebateFeedPlayer debate={debate} active />);
+    const { getByRole } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
 
     const replayButton = getByRole('button', { name: 'Replay debate' });
     expect([...replayButton.classList]).toEqual(
@@ -407,6 +724,28 @@ describe('a backlog latch outliving its stack', () => {
     expect(lastOpen()).toBe(false);
   });
 
+  /**
+   * GEO-3114. On a small player the opened list is a sheet: as wide as the live card and pinned
+   * below the tile's top controls, so a claim prints whole. Behind `@max-md:` only, so the wide
+   * panel's 45%/62% column is untouched — and only while open, so the live card keeps the corner.
+   */
+  it('turns the opened corner into a sheet on a small panel, and only the opened one', () => {
+    mocks.ticker = withCardsForSlot1();
+    const { container } = render(renderAt(false));
+    const corner = () => container.querySelector('[data-claim-corner]') as HTMLElement;
+
+    const classes = () => [...corner().classList];
+
+    expect(classes()).not.toContain('@max-md:top-14');
+    expect(classes()).toContain('w-[calc(100%-1.75rem)]');
+
+    fireEvent.click(stackIn(container) as HTMLElement);
+
+    expect(classes()).toEqual(
+      expect.arrayContaining(['w-[45%]', '@min-md:md:w-[62%]', '@max-md:top-14', '@max-md:w-[calc(100%-1.75rem)]'])
+    );
+  });
+
   // The same latch, released by the same cleanup: a tile scrolled out of the preload window empties
   // the ticker, which takes the stack with it.
   it('closes the corner when the ticker empties rather than the debate ending', () => {
@@ -423,5 +762,1049 @@ describe('a backlog latch outliving its stack', () => {
     mocks.ticker = withCardsForSlot1();
     rerender(renderAt(false));
     expect(lastOpen()).toBe(false);
+  });
+});
+
+/**
+ * GEO-2985. Chrome gives up on one of the two cue-less WebM recordings — `error.code === 2`,
+ * `FFmpegDemuxer: demuxer seek failed` — after the element has sat in the explore feed's
+ * look-ahead preload long enough for the browser to suspend its fetch and resume it. A `<video>`
+ * that reports an error is finished: nothing retries it, it paints nothing, and the debate plays
+ * on in the other tile with that debater simply absent. That is the reported "one debater's video
+ * never loads in the explore feed, while the same debate is fine full screen".
+ */
+describe('a recording whose pipeline dies is rebuilt (GEO-2985)', () => {
+  const controller = () => mocks.controller as ReturnType<typeof controllerFixture>;
+
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /**
+   * `active` defaults on. The tests about `preload` itself pass it off: an active card buffers its
+   * recordings anyway (GEO-2965), which would hide whether the rebuild raised anything — and the
+   * look-ahead card, which is not active, is where this failure was observed.
+   */
+  function renderPair({ active = true }: { active?: boolean } = {}) {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2 });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={active} />);
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    /** Hand the pair different URLs — or none, which is how a new recording arrives. */
+    const hand = (urls: { slot1: string | null; slot2: string | null }) => {
+      mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 2, urls });
+      rerender(<DebateFeedPlayer debate={debate} active={active} />);
+    };
+    return {
+      slot1,
+      slot2,
+      container,
+      hand,
+      /** What `refreshSlotUrl` does to this tile: the same recording, signed again. */
+      resign: (url: string) => hand({ slot1: url, slot2: 'https://cdn.test/slot2.webm' }),
+    };
+  }
+
+  /** The control an exhausted tile offers, if it is offering one. */
+  const retryButton = (container: HTMLElement) =>
+    container.querySelector<HTMLButtonElement>('[aria-label^="Retry"][aria-label$="video"]');
+
+  it('re-attaches the source and asks the controller to put it back in step', () => {
+    const { slot1 } = renderPair();
+    const src = slot1.getAttribute('src');
+
+    fireEvent.error(slot1);
+    // Spaced rather than immediate, so a transient failure has a chance to be over.
+    expect(controller().resyncSlot).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(500));
+
+    // `load()` alone cannot revive an element holding a MediaError — resource selection would run
+    // against the src it already has. Detaching first is what makes this a new fetch.
+    expect(slot1.getAttribute('src')).toBe(src);
+    expect(HTMLMediaElement.prototype.load).toHaveBeenCalled();
+    expect(controller().resyncSlot).toHaveBeenCalledWith(1);
+  });
+
+  /**
+   * The rebuild's other half, and the half that makes it work at all.
+   *
+   * `preload="metadata"` is what kills these recordings: MediaRecorder WebM carries no duration
+   * and no cues, so the demuxer seeks to find the length, and metadata mode has already stopped
+   * fetching by then. A rebuild that keeps it therefore fails identically every time — which is a
+   * whole budget spent, a URL re-signed for nothing, and a tile that ends up saying the recording
+   * did not load while the same recording plays fine on a page that autoplays it.
+   */
+  it('raises preload past the mode that killed the pipeline', () => {
+    const { slot1, slot2 } = renderPair({ active: false });
+    expect(slot1.preload).toBe('metadata');
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(slot1.preload).toBe('auto');
+    // The tile that is fine keeps the cheap fetch. Several of these are mounted at once.
+    expect(slot2.preload).toBe('metadata');
+  });
+
+  /**
+   * And raised with the re-fetch, not somewhere later.
+   *
+   * What the recording actually needs is the raise landing before the new fetch has got far enough
+   * to fail again, and Chrome is looser about that than the spec's wording suggests: measured
+   * against the 89MB slot-1 recording, raising it *after* both `load()` calls still recovers, and
+   * so does deferring it by a task. Deferring it by 500ms does not — `error.code === 2` comes
+   * straight back, exactly as when nothing raises it at all.
+   *
+   * That is a window, not a rule, and a window is not something to leave a fix sitting inside. So
+   * what is pinned here is the position with margin — in the same breath as the re-fetch — by
+   * watching the property at the instant each `load()` runs. It is deliberately stricter than the
+   * browser demands: nothing wants the raise anywhere else, and the failure it guards against
+   * (the raise drifting into an effect or a timer, where `exhausted` once put it) leaves every
+   * end-state assertion green.
+   */
+  it('raises preload in the same breath as the rebuild re-fetches', () => {
+    const { slot1 } = renderPair();
+    const preloadAtLoad: string[] = [];
+    vi.mocked(HTMLMediaElement.prototype.load).mockImplementation(function (this: HTMLMediaElement) {
+      preloadAtLoad.push(this.preload);
+    });
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    // Both of them: `reattachVideoSource` detaches and re-loads before it re-attaches and re-loads.
+    expect(preloadAtLoad.length).toBeGreaterThan(0);
+    expect(preloadAtLoad).toEqual(preloadAtLoad.map(() => 'auto'));
+  });
+
+  /**
+   * The re-signed URL keeps it. `onExhausted` re-signs the recording that has just failed every
+   * rebuild it was allowed under `metadata`, so handing the fresh URL that same mode would spend
+   * an attempt and a multi-megabyte load proving the point a second time.
+   */
+  it('keeps the raised preload across a re-signed URL', () => {
+    const { slot1, resign, container } = renderPair();
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+    expect(slot1.preload).toBe('auto');
+
+    resign('https://cdn.test/slot1-resigned.webm');
+
+    const [resigned] = Array.from(container.querySelectorAll('video'));
+    expect(resigned).toBe(slot1);
+    expect(resigned.preload).toBe('auto');
+  });
+
+  /**
+   * And a genuinely different recording gets the light fetch back without anything here putting it
+   * back, which is what makes the escalation per-source rather than per-tile.
+   *
+   * `useDebatePlayback` blanks both URLs before fetching a new pair, so the element the raised
+   * `preload` was written on is gone by the time the new recording has a URL, and React builds its
+   * replacement from the JSX default. Pinned because the blanking pass is load-bearing from over
+   * here and reads like a mere loading state from over there.
+   */
+  it('starts a different recording from a fresh element', () => {
+    const { slot1, hand, container } = renderPair({ active: false });
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+    expect(slot1.preload).toBe('auto');
+
+    hand({ slot1: null, slot2: null });
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    hand({ slot1: 'https://cdn.test/other1.webm', slot2: 'https://cdn.test/other2.webm' });
+    const [next] = Array.from(container.querySelectorAll('video'));
+    expect(next).not.toBe(slot1);
+    expect(next.preload).toBe('metadata');
+  });
+
+  it('repairs each tile independently', () => {
+    const { slot2 } = renderPair();
+
+    fireEvent.error(slot2);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(controller().resyncSlot).toHaveBeenCalledWith(2);
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(1);
+  });
+
+  // A genuinely unreadable source answers every rebuild with another error. Unbounded, that is a
+  // tile re-fetching a multi-megabyte recording forever — worse than the blank tile it replaces.
+  it('gives up after a bounded number of attempts', () => {
+    const { slot1 } = renderPair();
+
+    for (let attempt = 0; attempt < 6; attempt++) {
+      fireEvent.error(slot1);
+      act(() => vi.advanceTimersByTime(2_000));
+    }
+
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(3);
+  });
+
+  /**
+   * `error.code === 2` covers a dead URL as well as a dead pipeline, and every rebuild re-fetches
+   * the same bytes from the same signature — so the budget running out is the moment to ask
+   * whether the signature is what expired, rather than the moment to give up.
+   */
+  it('escalates to a freshly signed URL once the budget is spent', () => {
+    const { slot1 } = renderPair();
+
+    const exhaust = () => {
+      for (let attempt = 0; attempt < 4; attempt++) {
+        fireEvent.error(slot1);
+        act(() => vi.advanceTimersByTime(2_000));
+      }
+    };
+    exhaust();
+
+    expect(controller().refreshSlotUrl).toHaveBeenCalledWith(1);
+    expect(controller().refreshSlotUrl).toHaveBeenCalledTimes(1);
+
+    // And it stays one ask. `load()` on a dead source answers with another `error`, so without a
+    // bound here the tile would re-ask on every one of them and lean on the hook's ceiling to
+    // absorb it.
+    exhaust();
+    expect(controller().refreshSlotUrl).toHaveBeenCalledTimes(1);
+  });
+
+  it('spends a fresh budget on the re-signed recording', () => {
+    const { slot1, resign } = renderPair();
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      fireEvent.error(slot1);
+      act(() => vi.advanceTimersByTime(2_000));
+    }
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(3);
+
+    resign('https://cdn.test/slot1-resigned.webm');
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(controller().resyncSlot).toHaveBeenCalledWith(1);
+  });
+
+  /**
+   * Before the rebuild existed this state was undetectable, so saying nothing was the only option.
+   * It is detected now, and a blank half of a playing debate that accounts for itself in no way is
+   * the report that opened this ticket.
+   */
+  it('offers the viewer a retry once it has run out of its own', () => {
+    const { slot1, container } = renderPair();
+    expect(retryButton(container)).toBeNull();
+
+    for (let attempt = 0; attempt < 4; attempt++) {
+      fireEvent.error(slot1);
+      act(() => vi.advanceTimersByTime(2_000));
+    }
+
+    const retry = retryButton(container);
+    expect(retry).not.toBeNull();
+    expect(container.textContent).toContain('This recording didn’t load');
+
+    act(() => {
+      fireEvent.click(retry as HTMLButtonElement);
+      vi.advanceTimersByTime(2_000);
+    });
+
+    // A person asking is worth a fresh budget, and the tile goes back to showing the recording.
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(4);
+    expect(retryButton(container)).toBeNull();
+  });
+
+  it('does not offer it over a recording that repaired itself', () => {
+    const { slot1, container } = renderPair();
+
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(500));
+
+    expect(retryButton(container)).toBeNull();
+  });
+
+  // `load()` itself can fire `error` again before the first repair has finished, and each of
+  // those must not book its own rebuild.
+  it('does not stack repairs while one is pending', () => {
+    const { slot1 } = renderPair();
+
+    fireEvent.error(slot1);
+    fireEvent.error(slot1);
+    fireEvent.error(slot1);
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().resyncSlot).toHaveBeenCalledTimes(1);
+  });
+
+  // The feed keys its cards by claim, so a re-rank hands a different debate to the same tile. A
+  // repair booked for the recording that has just been replaced must not touch the new one.
+  it('drops a pending repair when the tile is handed a different recording', () => {
+    const { slot1 } = renderPair();
+
+    fireEvent.error(slot1);
+    slot1.setAttribute('src', 'https://cdn.test/another.webm');
+    act(() => vi.advanceTimersByTime(2_000));
+
+    expect(controller().resyncSlot).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * A link that named a moment — the timecode on a claim extracted from this debate — and the one
+ * chance the player gets to honour it.
+ *
+ * Three things have to hold at once, and they pull against each other. The seek cannot fire on mount,
+ * because before the media is seekable the element drops it and the reader lands at zero. It cannot
+ * fire more than once, because the feed re-renders and re-activates cards as the viewer scrolls, and
+ * a second seek would yank the playhead back to where the link pointed after they had moved it
+ * themselves. And it has to fire again for a different debate, because the same mounted card is
+ * reused as the feed scrolls from one to the next.
+ */
+describe('a seek asked for by the link that brought the reader here', () => {
+  function renderWithSeek(initialSeekSeconds: number | null, { ready = true }: { ready?: boolean } = {}) {
+    // One recorder, but a *fresh* function identity on every render — which is what the controller
+    // hook hands back, and what makes the effect re-run. An identity held stable across renders
+    // would keep the effect from running a second time at all, so the latch under test would never
+    // be asked to do anything and the test would pass against no latch whatsoever.
+    const seeks: number[] = [];
+    const makeSeek = () => vi.fn((seconds: number) => void seeks.push(seconds));
+
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, ready, seekBoth: makeSeek() });
+    const view = render(<DebateFeedPlayer debate={debate} active initialSeekSeconds={initialSeekSeconds} />);
+
+    return {
+      seeks,
+      /** Re-render as the feed does, optionally with the media now seekable or a different debate. */
+      update(next: { ready?: boolean; active?: boolean; debateId?: string; seekSeconds?: number | null } = {}) {
+        mocks.controller = controllerFixture({
+          mutedByUser: true,
+          turnSlot: 1,
+          ready: next.ready ?? ready,
+          seekBoth: makeSeek(),
+        });
+        view.rerender(
+          <DebateFeedPlayer
+            debate={next.debateId == null ? debate : ({ ...debate, id: next.debateId } as typeof debate)}
+            active={next.active ?? true}
+            initialSeekSeconds={'seekSeconds' in next ? next.seekSeconds : initialSeekSeconds}
+          />
+        );
+      },
+    };
+  }
+
+  it('waits for the media to be seekable rather than firing on mount', () => {
+    const player = renderWithSeek(124, { ready: false });
+
+    expect(player.seeks).toEqual([]);
+
+    player.update({ ready: true });
+
+    expect(player.seeks).toEqual([124]);
+  });
+
+  it('fires once, and not again when the card re-renders or is scrolled back to', () => {
+    const player = renderWithSeek(124);
+
+    expect(player.seeks).toEqual([124]);
+
+    player.update();
+    // Out of view and back again, which is what scrolling past a card and returning to it looks like.
+    player.update({ active: false });
+    player.update({ active: true });
+
+    expect(player.seeks).toEqual([124]);
+  });
+
+  it('fires again for a different debate, because the same card is reused down the feed', () => {
+    const player = renderWithSeek(124);
+    expect(player.seeks).toEqual([124]);
+
+    player.update({ debateId: 'debate-2' });
+
+    expect(player.seeks).toEqual([124, 124]);
+  });
+
+  /**
+   * Two claims extracted from one debate carry two timecodes, and following one after the other is a
+   * client-side navigation: `initialSeekSeconds` changes and this card is not remounted. Latched on the
+   * debate alone, the second timecode did nothing at all.
+   */
+  it('fires again for a different moment in the same debate', () => {
+    const player = renderWithSeek(124);
+    expect(player.seeks).toEqual([124]);
+
+    player.update({ seekSeconds: 500 });
+
+    expect(player.seeks).toEqual([124, 500]);
+  });
+
+  it('still does not re-seek when the same moment is asked for again', () => {
+    const player = renderWithSeek(124);
+
+    player.update({ seekSeconds: 124 });
+    player.update();
+
+    expect(player.seeks).toEqual([124]);
+  });
+
+  /**
+   * A timecode, then none, then the same timecode again is a new request for that moment — it is what
+   * browser Back produces after following a link and then a plain one. The latch kept the first request
+   * through the gap, so the return matched it and the player never seeked.
+   */
+  it('seeks again for the same moment once the timecode has gone and come back', () => {
+    const player = renderWithSeek(124);
+    expect(player.seeks).toEqual([124]);
+
+    player.update({ seekSeconds: null });
+    expect(player.seeks).toEqual([124]);
+
+    player.update({ seekSeconds: 124 });
+    expect(player.seeks).toEqual([124, 124]);
+  });
+
+  // Letting go of the latch is for a missing timecode only. A render that is merely not ready must not
+  // clear it, or the same request would fire twice across a buffering stall.
+  it('does not let go of the latch just because the media is not ready', () => {
+    const player = renderWithSeek(124);
+
+    player.update({ ready: false });
+    player.update({ ready: true });
+
+    expect(player.seeks).toEqual([124]);
+  });
+
+  it('does nothing at all when the link named no moment', () => {
+    const player = renderWithSeek(null);
+
+    player.update();
+
+    expect(player.seeks).toEqual([]);
+  });
+});
+
+describe('the round it is playing', () => {
+  const at = (playheadSeconds: number, extra: { playing?: boolean } = {}) =>
+    controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...extra });
+
+  it('announces the round once, on the seam between the tiles', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const cards = [...container.querySelectorAll('[data-round-card]')];
+
+    // One card for the player, not one per tile: the round is about both of them.
+    expect(cards).toHaveLength(1);
+    expect(cards[0].getAttribute('data-round-card')).toBe('Round 1 · Opening');
+  });
+
+  it('takes the top tile\u2019s name with it and gives it straight back', () => {
+    // A lower third under a title card is something no broadcast does, because neither gets read.
+    // It crossfades against the card, so at full card the name is gone and a second later it is
+    // not — and the bottom tile's name, half a player away, never moves.
+    mocks.ticker = emptyTicker();
+
+    mocks.controller = at(0.5);
+    const up = render(<DebateFeedPlayer debate={debate} active />).container;
+    const [topUnder, bottomUnder] = [...up.querySelectorAll('[data-debater-row]')] as HTMLElement[];
+    expect(topUnder.style.opacity).toBe('0');
+    expect(bottomUnder.style.opacity).toBe('1');
+
+    mocks.controller = at(12);
+    const after = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect((after.querySelector('[data-debater-row]') as HTMLElement).style.opacity).toBe('1');
+  });
+
+  it('brings the name back for a viewer who tabs to it under the card', () => {
+    // Fading a control out does not take it out of the tab order. Rather than make it `inert` for
+    // the card's 1.8s — which would blur anyone already standing there — the row comes back into
+    // view when the keyboard reaches it, the same answer the scrubber gives.
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+    expect(row.style.opacity).toBe('0');
+
+    fireEvent.focus(row.querySelector('button') as HTMLElement);
+    expect(row.style.opacity).toBe('1');
+
+    // And leaves again once focus goes somewhere outside the row.
+    fireEvent.blur(row.querySelector('button') as HTMLElement, { relatedTarget: container });
+    expect(row.style.opacity).toBe('0');
+  });
+
+  it('lets CSS carry the crossfade between playhead samples', () => {
+    // The playhead arrives about four times a second against a 250ms fade, so without this the
+    // name steps once and is gone rather than leaving — and where it lands in that step varies
+    // from round to round. The row can do this because it is always mounted; the card and the
+    // badge are drawn only inside their windows and have nothing to interpolate from.
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+
+    expect([...row.classList]).toContain('transition-[padding-bottom,opacity]');
+  });
+
+  it('does not leave an invisible profile link on the pause surface', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const row = container.querySelector('[data-debater-row]') as HTMLElement;
+
+    expect([...row.classList]).toContain('[&_button]:pointer-events-none');
+  });
+
+  it('keeps the seam to itself while it is up', () => {
+    const subtitle = 'The line under the round card';
+    mocks.controller = { ...at(0.5), subtitle };
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).not.toBeNull();
+    expect(container.textContent).not.toContain(subtitle);
+  });
+
+  it('parks it beside the timer for the rest of the turn', () => {
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    // Only the speaking tile has a timer, so only it carries the label.
+    const badges = [...container.querySelectorAll('[data-round-badge]')];
+    expect(badges).toHaveLength(1);
+    expect(badges[0].getAttribute('data-round-badge')).toBe('Round 1 · Opening');
+  });
+
+  it('does not announce the round again when the other debater replies', () => {
+    // Turn 2 of 4 starts at 30s. The badge is already carrying the round; a second card would be
+    // the same announcement made twice.
+    mocks.controller = at(30.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')?.getAttribute('data-round-badge')).toBe('Round 1 · Opening');
+  });
+
+  it('carries the badge across to the tile whose turn it now is', () => {
+    // The same round on the other debater: the badge belongs to the timer, and the timer follows
+    // the speaker. Slot 1 opens, so at 12s it is on slot 1's tile and at 30.5s on slot 2's.
+    mocks.ticker = emptyTicker();
+
+    mocks.controller = at(12);
+    const opening = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(opening.querySelector('[data-debate-slot="1"] [data-round-badge]')).not.toBeNull();
+    expect(opening.querySelector('[data-debate-slot="2"] [data-round-badge]')).toBeNull();
+
+    mocks.controller = at(30.5);
+    const reply = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(reply.querySelector('[data-debate-slot="2"] [data-round-badge]')).not.toBeNull();
+    expect(reply.querySelector('[data-debate-slot="1"] [data-round-badge]')).toBeNull();
+  });
+
+  it('names the round in words a screen reader can read', () => {
+    // The card is aria-hidden, so this badge is the only non-visual route to the one thing the
+    // page states nowhere else: whether this turn is an opening, a rebuttal or a closing.
+    mocks.controller = at(12);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const badge = container.querySelector('[data-round-badge]') as HTMLElement;
+
+    expect(badge.hasAttribute('aria-hidden')).toBe(false);
+    expect(badge.querySelector('.sr-only')?.textContent).toBe('Round 1, Opening');
+  });
+
+  it('names the round the playhead is actually in', () => {
+    mocks.controller = at(60.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')?.getAttribute('data-round-card')).toBe('Round 2 · Rebuttal');
+  });
+
+  it('stands down while the viewer has the debate paused', () => {
+    // A card frozen on a paused tile is an announcement with no turn behind it.
+    mocks.controller = at(0.5, { playing: false });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')).toBeNull();
+  });
+
+  it('stays off a compact gallery tile, where there is no room for a phrase', () => {
+    mocks.controller = at(0.5);
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-badge]')).toBeNull();
+  });
+});
+
+describe('the end card', () => {
+  const ended = (extra: { subtitle?: string } = {}) =>
+    controllerFixture({ mutedByUser: false, turnSlot: 1, playing: false, playbackEnded: true, ...extra });
+
+  it('lands an ended debate on the end card, which takes over replay', () => {
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const card = within(container).getByTestId('end-card');
+    const replays = within(container).getAllByRole('button', { name: 'Replay debate' });
+
+    // One replay, and it is the card's rather than a second one over the middle of the video.
+    expect(replays).toHaveLength(1);
+    expect(card.contains(replays[0])).toBe(true);
+
+    fireEvent.click(replays[0]);
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('is not drawn while the debate is still playing', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(within(container).queryByTestId('end-card')).toBeNull();
+  });
+
+  it('stays off a compact tile', () => {
+    mocks.controller = ended();
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(within(container).queryByTestId('end-card')).toBeNull();
+  });
+
+  it('records a debate watched to the end even on a compact tile, which never shows the end card', () => {
+    watchedMocks.markDebateWatched.mockClear();
+    mocks.controller = ended();
+    mocks.ticker = emptyTicker();
+
+    render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(watchedMocks.markDebateWatched).toHaveBeenCalledWith(debate.id);
+  });
+
+  it('does not record a debate that is still playing', () => {
+    watchedMocks.markDebateWatched.mockClear();
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    mocks.ticker = emptyTicker();
+
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(watchedMocks.markDebateWatched).not.toHaveBeenCalled();
+  });
+
+  it('hands the claims opener through to the card', () => {
+    mocks.controller = ended();
+    mocks.ticker = emptyTicker();
+    const onOpenClaims = vi.fn();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active onOpenClaims={onOpenClaims} />);
+    fireEvent.click(within(container).getByRole('button', { name: 'open claims' }));
+
+    expect(onOpenClaims).toHaveBeenCalledTimes(1);
+  });
+
+  it('stands the subtitle down under the card', () => {
+    const subtitle = 'The last line of the debate';
+    mocks.controller = ended({ subtitle });
+    mocks.ticker = emptyTicker();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.textContent).not.toContain(subtitle);
+  });
+
+  it('takes the tiles under the card out of reach, and gives them back once it goes', () => {
+    // The play/pause surface, the scrubber and the name links are still in the DOM under the card;
+    // without this a keyboard tabbed onto controls it could not see and restarted the video behind it.
+    mocks.ticker = emptyTicker();
+
+    mocks.controller = ended();
+    const covered = render(<DebateFeedPlayer debate={debate} active />).container;
+    const coveredTiles = [...covered.querySelectorAll('[data-debate-slot]')];
+    expect(coveredTiles).toHaveLength(2);
+    expect(coveredTiles.every(tile => tile.hasAttribute('inert'))).toBe(true);
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    const playing = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect([...playing.querySelectorAll('[data-debate-slot]')].some(tile => tile.hasAttribute('inert'))).toBe(false);
+  });
+
+  it('holds a replay pressed before this player may play, and carries it out when it may', () => {
+    // In a row of cards the first press hands playback over, which arrives a render later. Playing
+    // at once would run beside the old owner; dropping the press made Replay take two taps.
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    fireEvent.click(within(container).getByRole('button', { name: 'Replay debate' }));
+    expect(controller.playFromStart).not.toHaveBeenCalled();
+
+    rerender(<DebateFeedPlayer debate={debate} active />);
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('asks to become the active debate when Replay is pressed on one that is not', () => {
+    // The debates feed has no click capture to hand playback over, so without asking, the replay
+    // waited on the scroll observer — and fired whenever the viewer next landed on the debate.
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+    const onPlaybackRequest = vi.fn();
+
+    const { container, rerender } = render(
+      <DebateFeedPlayer debate={debate} active={false} onPlaybackRequest={onPlaybackRequest} />
+    );
+    fireEvent.click(within(container).getByRole('button', { name: 'Replay debate' }));
+    expect(onPlaybackRequest).toHaveBeenCalledTimes(1);
+
+    rerender(<DebateFeedPlayer debate={debate} active onPlaybackRequest={onPlaybackRequest} />);
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not ask for playback when the debate already has it', () => {
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+    const onPlaybackRequest = vi.fn();
+
+    const { container } = render(<DebateFeedPlayer debate={debate} active onPlaybackRequest={onPlaybackRequest} />);
+    fireEvent.click(within(container).getByRole('button', { name: 'Replay debate' }));
+
+    expect(onPlaybackRequest).not.toHaveBeenCalled();
+    expect(controller.playFromStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("tells the card's numbers when the card is on screen, so they can be brought up to date", () => {
+    mocks.ticker = emptyTicker();
+
+    mocks.endCardShown = [];
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(mocks.endCardShown.at(-1)).toBe(false);
+
+    mocks.endCardShown = [];
+    mocks.controller = ended();
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(mocks.endCardShown.at(-1)).toBe(true);
+  });
+
+  it('lets a held replay lapse if the debate stops being ended first', () => {
+    const controller = ended();
+    mocks.controller = controller;
+    mocks.ticker = emptyTicker();
+
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active={false} />);
+    fireEvent.click(within(container).getByRole('button', { name: 'Replay debate' }));
+
+    mocks.controller = { ...controller, playbackEnded: false };
+    rerender(<DebateFeedPlayer debate={debate} active={false} />);
+    mocks.controller = controller;
+    rerender(<DebateFeedPlayer debate={debate} active />);
+
+    expect(controller.playFromStart).not.toHaveBeenCalled();
+  });
+
+  it("asks for the card's numbers while the debate is active, so they are there when it ends", () => {
+    mocks.ticker = emptyTicker();
+
+    mocks.endCardEnabled = [];
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1 });
+    render(<DebateFeedPlayer debate={debate} active />);
+    expect(mocks.endCardEnabled.at(-1)).toBe(true);
+
+    mocks.endCardEnabled = [];
+    render(<DebateFeedPlayer debate={debate} active={false} />);
+    expect(mocks.endCardEnabled.at(-1)).toBe(false);
+
+    mocks.endCardEnabled = [];
+    render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(mocks.endCardEnabled.at(-1)).toBe(false);
+  });
+});
+
+/**
+ * GEO-2965. Both recordings are held until both can play, then started together — the report was
+ * one panel painting and running, subtitles and countdown already moving, beside a grey tile.
+ *
+ * jsdom's media elements never load, so each test sets `readyState` and `networkState` by hand and
+ * fires the event a browser would, which is all the hold listens to.
+ */
+describe('the pair becomes watchable together (GEO-2965)', () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  function setMedia(video: HTMLVideoElement, state: { readyState: number; networkState?: number }, event?: string) {
+    Object.defineProperty(video, 'readyState', { configurable: true, value: state.readyState });
+    Object.defineProperty(video, 'networkState', { configurable: true, value: state.networkState ?? 2 });
+    if (event) fireEvent(video, new Event(event));
+  }
+
+  /** A stopped card whose URLs have landed, which is where autoplay decides whether to start it. */
+  function renderHeld({
+    active = true,
+    onPlaybackState,
+  }: {
+    active?: boolean;
+    onPlaybackState?: (state: unknown) => void;
+  } = {}) {
+    const fixture = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    mocks.controller = fixture;
+    const view = render(<DebateFeedPlayer debate={debate} active={active} onPlaybackState={onPlaybackState} />);
+    const [slot1, slot2] = Array.from(view.container.querySelectorAll('video'));
+    const root = view.container.querySelector('[data-debate-ready]') as HTMLElement;
+    const rerender = (next: { active?: boolean; debateId?: string } = {}) =>
+      view.rerender(
+        <DebateFeedPlayer
+          debate={next.debateId ? ({ ...debate, id: next.debateId } as Debate) : debate}
+          active={next.active ?? active}
+          onPlaybackState={onPlaybackState}
+        />
+      );
+    return { fixture, slot1, slot2, root, rerender };
+  }
+
+  const concealed = (video: HTMLVideoElement) => video.className.includes('opacity-0');
+
+  it('starts neither recording while only one of them can play', () => {
+    const { fixture, slot1, slot2, root } = renderHeld();
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+    expect(root.getAttribute('data-debate-pair-held')).toBe('true');
+
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+    // And neither is drawn: slot 1 alone has a frame, and drawing it is the asymmetry.
+    expect(concealed(slot1)).toBe(true);
+    expect(concealed(slot2)).toBe(true);
+  });
+
+  it('starts and reveals both the moment the second can play', () => {
+    const { fixture, slot1, slot2, root } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    act(() => setMedia(slot2, { readyState: 3 }, 'canplay'));
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+    expect(concealed(slot1)).toBe(false);
+    expect(concealed(slot2)).toBe(false);
+    expect(root.getAttribute('data-debate-pair-held')).toBe('false');
+  });
+
+  it('does not wait at all for a pair the look-ahead already loaded', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld({ active: false });
+    act(() => {
+      setMedia(slot1, { readyState: 4 }, 'canplaythrough');
+      setMedia(slot2, { readyState: 4 }, 'canplaythrough');
+    });
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    rerender({ active: true });
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  it('reveals a look-ahead pair together once both have a frame, without starting it', () => {
+    const { fixture, slot1, slot2 } = renderHeld({ active: false });
+    act(() => setMedia(slot1, { readyState: 2 }, 'loadeddata'));
+    expect(concealed(slot1)).toBe(true);
+
+    act(() => setMedia(slot2, { readyState: 2 }, 'loadeddata'));
+
+    expect(concealed(slot1)).toBe(false);
+    expect(concealed(slot2)).toBe(false);
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+  });
+
+  it('plays whatever is ready once the hold times out', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+
+    act(() => vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS - 1));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(1));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+    // Revealed as it starts: holding slot 1 invisible while it plays would be the same asymmetry
+    // the other way round.
+    expect(concealed(slot1)).toBe(false);
+    expect(concealed(slot2)).toBe(false);
+  });
+
+  it('runs the timeout only while the card is the one being watched', () => {
+    const { fixture, rerender } = renderHeld({ active: false });
+    act(() => vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS * 2));
+    rerender({ active: true });
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(PAIR_HOLD_TIMEOUT_MS));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // iOS Safari ignores `preload`: the element opens its header, goes idle, and will not fetch more
+  // until it is played. Waiting for it would only run out the clock.
+  it('stops holding for an element the browser has stopped loading short of playable', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    act(() => setMedia(slot2, { readyState: 1, networkState: 1 }, 'suspend'));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS));
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // The same browser, arriving at a look-ahead card: its `suspend` fired before the card was the
+  // active one, and no second one is coming.
+  it('stops holding for an element that was already idle when the card became active', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld({ active: false });
+    act(() => {
+      setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend');
+      setMedia(slot2, { readyState: 1, networkState: 1 }, 'suspend');
+    });
+
+    rerender({ active: true });
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS));
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // Where the raise to `preload="auto"` is honoured, the idle element starts fetching again inside
+  // the grace, and the pair is held for it as it should be.
+  it('keeps holding an idle element that resumes fetching once the card is active', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld({ active: false });
+    act(() => {
+      setMedia(slot1, { readyState: 4, networkState: 1 }, 'canplay');
+      setMedia(slot2, { readyState: 1, networkState: 1 }, 'suspend');
+    });
+
+    rerender({ active: true });
+    act(() => setMedia(slot2, { readyState: 1, networkState: 2 }, 'loadstart'));
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS));
+
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+    act(() => setMedia(slot2, { readyState: 4 }, 'canplay'));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // Chrome fires `suspend` a millisecond before `canplay` on these files. Read as "stopped", that
+  // would release every pair on the first element's suspend and hold nothing at all.
+  it('keeps holding when a suspend is followed by the element becoming playable', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 1, networkState: 1 }, 'suspend'));
+    act(() => setMedia(slot1, { readyState: 4, networkState: 1 }, 'canplay'));
+
+    act(() => vi.advanceTimersByTime(SUSPEND_GRACE_MS));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    act(() => setMedia(slot2, { readyState: 4 }, 'canplay'));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // The playback hook moves a fresh pair to where the debate starts as soon as both know their
+  // shape. Data at the old position says nothing about data at the new one.
+  it('keeps holding while an element is seeking to where it will start', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    Object.defineProperty(slot2, 'seeking', { configurable: true, value: true });
+    act(() => setMedia(slot2, { readyState: 4 }, 'seeking'));
+    expect(fixture.resumeBoth).not.toHaveBeenCalled();
+
+    Object.defineProperty(slot2, 'seeking', { configurable: true, value: false });
+    act(() => setMedia(slot2, { readyState: 4 }, 'seeked'));
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a failed recording through to the rebuild rather than holding its partner', () => {
+    const { fixture, slot1, slot2 } = renderHeld();
+    act(() => setMedia(slot1, { readyState: 4 }, 'canplay'));
+    Object.defineProperty(slot2, 'error', { configurable: true, value: { code: 2 } });
+    act(() => {
+      fireEvent.error(slot2);
+    });
+
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a tap start playback without waiting', () => {
+    const { fixture, slot1 } = renderHeld();
+    fireEvent.click(slot1.closest('button') as HTMLElement);
+
+    expect(fixture.togglePlayback).toHaveBeenCalledTimes(1);
+    expect(concealed(slot1)).toBe(false);
+  });
+
+  it('never holds a pair again once it has been let go, whatever its elements do later', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld();
+    act(() => {
+      setMedia(slot1, { readyState: 4 }, 'canplay');
+      setMedia(slot2, { readyState: 4 }, 'canplay');
+    });
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+
+    // A seek drops `readyState` while the element fetches the new position; scrolling away and
+    // back re-runs autoplay. Neither is a new pair.
+    act(() => setMedia(slot2, { readyState: 1 }, 'waiting'));
+    rerender({ active: false });
+    rerender({ active: true });
+
+    expect(concealed(slot2)).toBe(false);
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(2);
+  });
+
+  it('holds a different debate handed to the same card on its own terms', () => {
+    const { fixture, slot1, slot2, rerender } = renderHeld();
+    act(() => {
+      setMedia(slot1, { readyState: 4 }, 'canplay');
+      setMedia(slot2, { readyState: 4 }, 'canplay');
+    });
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+    act(() => {
+      setMedia(slot1, { readyState: 0 });
+      setMedia(slot2, { readyState: 0 });
+    });
+
+    rerender({ debateId: 'debate-2' });
+
+    expect(concealed(slot1)).toBe(true);
+    expect(fixture.resumeBoth).toHaveBeenCalledTimes(1);
+  });
+
+  // GEO-3074's outcome must read the same as before: `ready` still means "URLs in hand", and the
+  // hold is reported beside it.
+  it('reports the hold to the page outcome without changing what ready means', () => {
+    const states: unknown[] = [];
+    const { slot1, slot2 } = renderHeld({ onPlaybackState: state => states.push(state) });
+
+    expect(states.at(-1)).toEqual({
+      ready: true,
+      playing: false,
+      autoplayBlocked: false,
+      error: false,
+      pairHeld: true,
+    });
+
+    act(() => {
+      setMedia(slot1, { readyState: 4 }, 'canplay');
+      setMedia(slot2, { readyState: 4 }, 'canplay');
+    });
+
+    expect(states.at(-1)).toMatchObject({ ready: true, pairHeld: false });
+  });
+
+  it('buffers the active card and keeps the look-ahead default for the others', () => {
+    const active = renderHeld();
+    expect(active.slot1.preload).toBe('auto');
+    expect(active.slot2.preload).toBe('auto');
   });
 });

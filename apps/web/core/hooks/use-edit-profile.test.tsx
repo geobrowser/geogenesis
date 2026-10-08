@@ -4,6 +4,7 @@ import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { ID } from '~/core/id';
+import { TAGLINE_MAX_LENGTH, TAGLINE_PROPERTY } from '~/core/profile/profile-ontology';
 import type { Relation, Value } from '~/core/types';
 
 import { useEditProfile } from './use-edit-profile';
@@ -17,6 +18,8 @@ const ADDRESS = '0xA452380716c7699581aE129f178cafa8a49e5e80';
 const NEW_ENTITY_ID = 'a1b2c3d4e5f6478899aabbccddeeff00';
 
 const mocks = vi.hoisted(() => ({
+  capture: vi.fn(),
+  revision: 0,
   makeProposal: vi.fn(),
   createAndLink: vi.fn(),
   deleteRelations: vi.fn(),
@@ -32,9 +35,11 @@ const mocks = vi.hoisted(() => ({
   reviewState: 'idle' as string,
   entityName: 'Preston' as string | null,
   hydrationStatus: 'success' as string | null,
+  profileUpdated: vi.fn(),
   coverUrl: 'ipfs://old-banner' as string | undefined,
   avatarUrl: 'ipfs://old-avatar' as string | undefined,
   entityDescription: 'Working on debates.' as string | null,
+  entityValues: [] as Value[],
   // Literals, not the consts above: vi.hoisted runs before their initialisers.
   personalEntityId: '3eb17193b0ae44fe9083ce931bc9210e' as string | null,
   profile: {
@@ -45,6 +50,12 @@ const mocks = vi.hoisted(() => ({
   } as { id: string; spaceId: string; name: string | null; avatarUrl: string | null } | null,
   storeValues: [] as Value[],
   storeRelations: [] as Relation[],
+}));
+
+vi.mock('~/core/analytics', () => ({
+  profileUpdated: mocks.profileUpdated,
+  analyticsContextRevision: () => mocks.revision,
+  capture: mocks.capture,
 }));
 
 vi.mock('jotai', () => ({ useSetAtom: () => mocks.setStoredAvatar }));
@@ -83,6 +94,8 @@ vi.mock('~/core/database/entities', () => ({
   useEntity: () => ({
     name: mocks.entityName,
     description: mocks.entityDescription,
+    // The tagline has no field of its own on the entity, so the hook reads it off here.
+    values: mocks.entityValues,
     relations: [],
     isLoading: false,
   }),
@@ -148,6 +161,7 @@ const stagedValue = (propertyId: string) =>
 
 const draft = (overrides: Partial<Parameters<ReturnType<typeof useEditProfile>['publish']>[0]> = {}) => ({
   name: 'Preston',
+  tagline: '',
   description: 'Working on debates.',
   banner: UNCHANGED,
   avatar: UNCHANGED,
@@ -158,9 +172,11 @@ beforeEach(() => {
   Object.values(mocks).forEach(value => {
     if (typeof value === 'function' && 'mockReset' in value) value.mockReset();
   });
+  mocks.revision = 0;
   mocks.reviewState = 'idle';
   mocks.entityName = 'Preston';
   mocks.entityDescription = 'Working on debates.';
+  mocks.entityValues = [];
   mocks.personalEntityId = ENTITY_ID;
   mocks.hydrationStatus = 'success';
   mocks.coverUrl = 'ipfs://old-banner';
@@ -308,6 +324,41 @@ describe('useEditProfile', () => {
         value: 'Preston M',
       })
     );
+  });
+
+  it('writes a changed tagline against the Tagline property, cut to the limit', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ tagline: 'y'.repeat(TAGLINE_MAX_LENGTH + 40) }));
+    });
+
+    expect(mocks.setValue).toHaveBeenCalledWith(
+      expect.objectContaining({
+        property: expect.objectContaining({ id: TAGLINE_PROPERTY, name: 'Tagline' }),
+        value: 'y'.repeat(TAGLINE_MAX_LENGTH),
+      })
+    );
+  });
+
+  it('deletes the tagline value when the field is cleared', async () => {
+    const existing = {
+      id: 'tagline-value',
+      entity: { id: ENTITY_ID },
+      property: { id: TAGLINE_PROPERTY },
+      spaceId: SPACE_ID,
+      value: 'Engineer at Geo',
+    } as unknown as Value;
+    mocks.entityValues = [existing];
+    mocks.storeValues = [existing];
+
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+
+    await act(async () => {
+      await result.current.publish(draft({ tagline: '' }));
+    });
+
+    expect(mocks.deleteValues).toHaveBeenCalledWith([existing]);
   });
 
   it('deletes the description value when the field is cleared', async () => {
@@ -751,6 +802,7 @@ describe('useEditProfile', () => {
 
     expect(mocks.makeProposal).not.toHaveBeenCalled();
     expect(result.current.status).toBe('published');
+    expect(mocks.profileUpdated).not.toHaveBeenCalled();
   });
 
   // A removal can publish nothing but a tombstone left by another pending edit.
@@ -785,6 +837,7 @@ describe('useEditProfile', () => {
       await result.current.publish(draft({ name: 'Preston M' }));
     });
     await waitFor(() => expect(result.current.status).toBe('published'));
+    expect(mocks.profileUpdated).toHaveBeenCalledWith(ENTITY_ID, SPACE_ID);
 
     act(() => result.current.reset());
 
@@ -1317,5 +1370,77 @@ describe('the rows the history sections publish alongside', () => {
 
     const [{ values }] = mocks.makeProposal.mock.calls.at(-1)!;
     expect(values).toContainEqual(expect.objectContaining({ id: 'history-value-1', value: 'edited retry' }));
+  });
+});
+
+describe('canonical profile save outcomes', () => {
+  const completed = () => mocks.capture.mock.calls.filter(([event]) => event === 'action_completed');
+  it.each(['avatar', 'banner'] as const)('records a failed %s upload without publishing', async field => {
+    mocks.createAndLink.mockRejectedValueOnce(new Error('IPFS failed'));
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+    await act(async () => {
+      await result.current.publish(draft({ [field]: { kind: 'replaced', file: new File([''], 'image.png') } }));
+    });
+    expect(completed()).toHaveLength(1);
+    expect(completed()[0][1]).toMatchObject({
+      action_kind: 'publish',
+      target_id: ENTITY_ID,
+      outcome: 'failed',
+      failure_code: 'unavailable',
+    });
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+  it.each(['avatar', 'banner'] as const)('records unresolved %s removal as invalid input', async field => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+    await act(async () => {
+      await result.current.publish(draft({ [field]: { kind: 'removed' } }));
+    });
+    expect(completed()).toHaveLength(1);
+    expect(completed()[0][1]).toMatchObject({ outcome: 'failed', failure_code: 'invalid_input' });
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+  it('records an unchanged save as completed without publishing', async () => {
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+    await act(async () => {
+      await result.current.publish(draft());
+    });
+    expect(completed()).toHaveLength(1);
+    expect(completed()[0][1]).toMatchObject({ outcome: 'succeeded', target_id: ENTITY_ID });
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+  });
+  it('retains the initiating identity through staging', async () => {
+    let finish!: (value: { imageId: string; relationId: string }) => void;
+    mocks.createAndLink.mockReturnValueOnce(
+      new Promise(resolve => {
+        finish = resolve;
+      })
+    );
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    mocks.makeProposal.mockImplementationOnce(async ({ onSuccess }) => onSuccess());
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+    let saving!: Promise<void>;
+    act(() => {
+      saving = result.current.publish(
+        draft({ name: 'changed', avatar: { kind: 'replaced', file: new File([''], 'image.png') } })
+      );
+    });
+    mocks.revision++;
+    await act(async () => {
+      finish({ imageId: 'image', relationId: 'relation' });
+      await saving;
+    });
+    expect(mocks.makeProposal).toHaveBeenCalledTimes(1);
+    expect(completed()).toHaveLength(0);
+  });
+  it('records a thrown publish request once and preserves the error', async () => {
+    mocks.storeValues = [stagedValue(SystemIds.NAME_PROPERTY)];
+    const error = new Error('transport failed');
+    mocks.makeProposal.mockRejectedValueOnce(error);
+    const { result } = renderHook(() => useEditProfile({ isOpen: true }));
+    await act(async () => {
+      await expect(result.current.publish(draft({ name: 'changed' }))).rejects.toBe(error);
+    });
+    expect(completed()).toHaveLength(1);
+    expect(completed()[0][1]).toMatchObject({ outcome: 'unknown' });
   });
 });

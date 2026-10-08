@@ -14,8 +14,8 @@ import { FallbackImage } from '~/design-system/fallback-image';
  * gradient beam, which is a different picture for every organisation and reads
  * as a logo somebody chose rather than as the absence of one.
  */
-export function OrganizationImage({ url, size }: { url: string | null | undefined; size: 16 | 20 | 36 }) {
-  const box = size === 36 ? 'h-9 w-9 rounded' : size === 20 ? 'h-5 w-5 rounded-sm' : 'h-4 w-4 rounded-sm';
+export function OrganizationImage({ url, size }: { url: string | null | undefined; size: 16 | 20 | 50 }) {
+  const box = size === 50 ? 'h-[50px] w-[50px] rounded' : size === 20 ? 'h-5 w-5 rounded-sm' : 'h-4 w-4 rounded-sm';
 
   return (
     <span className={`relative shrink-0 overflow-hidden bg-grey-01 ${box}`}>

@@ -2,10 +2,18 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { DEBATE_OPPOSED_BY_PROPERTY, DEBATE_SUPPORTED_BY_PROPERTY, DEBATE_TYPE } from '~/core/profile/history-ontology';
-import { type ProfileFacts, type ProfileSpace, type Verifier, orderSpaces } from '~/core/profile/profile-facts';
-import { normId } from '~/core/utils/norm-id';
+import { debateVisibilityCounts } from '~/core/profile/profile-debate-visibility';
+import {
+  POSITION_VOTE_KINDS,
+  POSITION_VOTE_TYPES,
+  type ProfileFacts,
+  type ProfileSpace,
+  type Verifier,
+  orderSpaces,
+} from '~/core/profile/profile-facts';
 
 import { graphql } from './graphql';
+import { hiddenProfileRelationTargetsConnection } from './hidden-profile-relations-query';
 
 /** A space, named the way `SpaceDto` names one: topic first, then page. */
 type NamedSpace = {
@@ -31,17 +39,23 @@ interface NetworkResult {
   positions: { totalCount: number } | null;
   supported: { nodes: { fromEntity: { id: string } | null }[] } | null;
   opposed: { nodes: { fromEntity: { id: string } | null }[] } | null;
+  hidden: { nodes: { toEntityId: string }[] } | null;
   verifiedBy: { nodes: VerifierNode[] } | null;
   person: { createdAt: string | null } | null;
 }
 
 /**
- * The vote kinds that mean "a position on a claim".
+ * The vote kinds that mean "a position on a claim", spelled for interpolation into the query.
  *
- * 1 is a stance and 2 is veracity. The table holds other kinds, and counting it
- * unfiltered overstates the figure roughly threefold.
+ * Derived from {@link POSITION_VOTE_KINDS} rather than written out, because this count sits
+ * directly above the list that hook builds from the same kinds — and the two were separate
+ * literals, so narrowing the set to drop the retired veracity kind meant editing both by hand and
+ * hoping. One of them is now the other.
  */
-const POSITION_KINDS = '[1, 2]';
+const POSITION_KINDS = `[${POSITION_VOTE_KINDS.join(', ')}]`;
+
+/** Held positions only — a retraction is a row, not an absence. See {@link POSITION_VOTE_TYPES}. */
+const POSITION_TYPES = `[${POSITION_VOTE_TYPES.join(', ')}]`;
 
 /**
  * One side of a debate, pointed at this space.
@@ -84,18 +98,6 @@ function debateSide(typeId: string, sp: string) {
  */
 const spaceName = (space: NamedSpace): string | null => space?.topic?.name ?? space?.page?.name ?? null;
 
-/** Distinct non-null values, which is what every count on this rail means. */
-function distinctCount<T>(nodes: T[], key: (node: T) => string | null | undefined): number {
-  const seen = new Set<string>();
-
-  for (const node of nodes) {
-    const id = key(node);
-    if (id) seen.add(normId(id));
-  }
-
-  return seen.size;
-}
-
 /**
  * Everything the rail states, in one request.
  *
@@ -119,9 +121,12 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
       nodes { spaceId space { topic { name } page { name } } }
     }
     proposals: proposalsConnection(filter: { proposedBy: { is: ${sp} } }) { totalCount }
-    positions: entitiesConnection(votedBy: ${sp}, votedByKinds: ${POSITION_KINDS}) { totalCount }
+    positions: entitiesConnection(votedBy: ${sp}, votedByKinds: ${POSITION_KINDS}, votedByTypes: ${POSITION_TYPES}) {
+      totalCount
+    }
     supported: ${debateSide(DEBATE_SUPPORTED_BY_PROPERTY, sp)}
     opposed: ${debateSide(DEBATE_OPPOSED_BY_PROPERTY, sp)}
+    hidden: ${hiddenProfileRelationTargetsConnection(spaceId)}
     verifiedBy: subspacesConnection(
       filter: { childSpaceId: { is: ${sp} }, type: { is: VERIFIED } }, first: 60
     ) {
@@ -132,7 +137,11 @@ function profileFactsQuery(spaceId: string, personEntityId: string | null) {
 }
 
 export function profileFactsQueryKey(spaceId: string, personEntityId: string | null) {
-  return ['profile-facts', spaceId, personEntityId] as const;
+  return [...profileFactsQueryPrefix(spaceId), personEntityId] as const;
+}
+
+export function profileFactsQueryPrefix(spaceId: string) {
+  return ['profile-facts', spaceId] as const;
 }
 
 export async function fetchProfileFacts(spaceId: string, personEntityId: string | null): Promise<ProfileFacts> {
@@ -187,20 +196,27 @@ export async function fetchProfileFacts(spaceId: string, personEntityId: string 
     isPerson: node.parentSpace?.type === 'PERSONAL',
   }));
 
+  const debateCounts = debateVisibilityCounts(
+    [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])].flatMap(node =>
+      node.fromEntity?.id ? [node.fromEntity.id] : []
+    ),
+    (data.hidden?.nodes ?? []).map(node => node.toEntityId)
+  );
+
   return {
     proposals: data.proposals?.totalCount ?? 0,
-    // Claims, not vote rows. `votedBy` counts entities, so the stance and
-    // veracity votes somebody cast on the same claim are one row here — which
-    // is what the tab shows, and what `userVotesConnection.totalCount` could
-    // never say. Verified against both: 194 vote rows, 190 claims.
+    // Claims, not vote rows. `votedBy` counts entities, so a claim answered in
+    // two spaces is one here — which is what the tab shows, and what
+    // `userVotesConnection.totalCount` could never say. Positions still held
+    // only (`votedByTypes`), so this is the number the tab lists: 253 on the
+    // reference account, against 259 with the retractions counted.
     positions: data.positions?.totalCount ?? 0,
     // Distinct debates across both sides. Adding the two totals counts a debate
     // twice where it names the same person on both — and counts duplicate writes
-    // as separate debates, which is how 10 becomes 13.
-    debates: distinctCount(
-      [...(data.supported?.nodes ?? []), ...(data.opposed?.nodes ?? [])],
-      node => node.fromEntity?.id
-    ),
+    // as separate debates, which is how 10 becomes 13. The public count excludes
+    // hidden targets; the total keeps the owner's route to restoring them.
+    debates: debateCounts.visible,
+    totalDebates: debateCounts.total,
     spaces: orderSpaces([...byId.values()]),
     verifiedBy,
     joinedAt: data.person?.createdAt ? Number(data.person.createdAt) : null,

@@ -4,27 +4,31 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import { ClaimEndSlot } from '~/core/claims/browse/claim-end-slot';
 import { ClaimPositionCommentControl } from '~/core/claims/browse/claim-position-comment';
 import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { ClaimSides, ClaimSplitBar, ClaimSummary, ControversialTag } from '~/core/claims/browse/claim-summary';
 import { useClaimResponseState } from '~/core/claims/browse/use-claim-response-state';
 import type { DebateClaim } from '~/core/debates/api';
-import { useBackfillReadinessForHeldPosition } from '~/core/debates/backfill-readiness-for-held-position';
+import {
+  trustedIndexedPosition,
+  useBackfillReadinessForHeldPosition,
+} from '~/core/debates/backfill-readiness-for-held-position';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-response';
 import { useQueryEntity } from '~/core/sync/use-store';
 
 import { Text } from '~/design-system/text';
 
-import { EntityCommentsButton } from '~/partials/comments/entity-comments-button';
+import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
 
 import { ExploreCardEntityLink } from './explore-card-entity-link';
+import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 
 /**
@@ -91,7 +95,7 @@ export function ClaimExploreFeedCard({
    * only this card knows. Absent everywhere else, which is every surface where
    * the only answer worth reporting is the reader's own.
    */
-  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
+  responseNote?: (position: boolean) => React.ReactNode;
 }) {
   // The feed pre-mounts cards thousands of pixels below the fold, so the counts and the geo-chat
   // row are gated on proximity rather than on mount — otherwise every claim in every loaded page
@@ -134,17 +138,13 @@ export function ClaimExploreFeedCard({
     enabled: nearViewport,
   });
 
-  // A signed-out visitor gets the sign-in prompt rather than two dead pills, the same way the claim
-  // page does — and through the same hook, which also keeps Privy's session restoration from being
-  // mistaken for a login somebody asked for.
-  const promptSignIn = usePrivySignIn();
   const control = useClaimPositionControl({
     claim,
     positions,
     readiness,
     answersReady: isResponseKindResolved && isViewerResponseResolved,
     responseBlockedReason,
-    onRequireSignIn: promptSignIn,
+    allowsSignedOutVotes: true,
   });
   // geo-chat's own row, not the merged `readiness` above — that one falls back to the graph, and
   // this repair is only for the gap where geo-chat holds the response and not the readiness.
@@ -152,13 +152,28 @@ export function ClaimExploreFeedCard({
   // The feed is where the gap showed itself: a viewer scrolling past claims they hold positions on
   // saw their own face on the repaired ones and not the rest (GEO-2821). The card cannot be the one
   // surface that draws a held position without standing the viewer up on it.
-  useBackfillReadinessForHeldPosition({ readiness: row, entityId: item.entityId, spaceId: item.spaceId });
+  useBackfillReadinessForHeldPosition({
+    readiness: row,
+    entityId: item.entityId,
+    spaceId: item.spaceId,
+    indexedPosition: trustedIndexedPosition(summary, control.isResponsePending),
+  });
 
-  // Read the same live cache as `EntityCommentsButton` before deciding whether the row has a third
-  // action at all. Checking only the server seed would keep the button hidden after this card's
-  // optional composer publishes the first comment; rendering a button that returns null would leave
-  // PositionRow in its three-column layout with an empty final column.
-  const liveCommentCount = useCommentCount(item.entityId, item.commentCount);
+  // Read the live comment cache before deciding whether the row has a third action at all. Checking
+  // only the server seed would keep the pill hidden after this card's optional composer publishes the
+  // first comment; rendering a pill that returns null would leave PositionRow in its three-column
+  // layout with an empty final column.
+  // What the claim page's Activity heading says: its debates, the claims extracted from them, and
+  // every comment in that tree — not only the comments filed directly on the claim. The two read
+  // from one query so a reader who opens the card is not told a different number. Falls back to the
+  // comment count for a row built somewhere that does not fetch it.
+  const activityCount = item.activityCount ?? item.commentCount;
+  // The activity total counts debates and extracted claims as well as comments, so the live comment
+  // list replaces only its own share of it — see `useCommentCount`. A card falling back to the plain
+  // comment count passes nothing and keeps the old behaviour, because there the list really is the
+  // same measurement.
+  const commentsInCount = item.activityCount != null ? item.activityCommentCount : undefined;
+  const liveCommentCount = useCommentCount(item.entityId, activityCount, { commentsInSeed: commentsInCount });
 
   // Withheld while the counts are still out, so the column does not appear a beat after the card.
   // `hasCounts` as well as a non-zero total. The two are equivalent as the hook computes them —
@@ -175,27 +190,26 @@ export function ClaimExploreFeedCard({
    *
    * It went beside the type and the age first, on the reasoning that it is
    * another fact about the claim in a row that already holds facts about it. On
-   * a real record that row is rarely as empty as it looks in isolation: the
-   * space chip, the type, the age, Controversial and the debate offer are
+   * a real record that row was rarely as empty as it looked in isolation: the
+   * space chip, the type, the age, Controversial and the debate offer were
    * already competing for it, and a sixth segment wrapped the line.
    *
    * Under the matching pill it needs no words to say which side it means —
    * "Susan agrees" beneath Agree. The pills hold the card's own grid row, so
    * nothing else moves.
    *
-   * Held back until the response kind is known, or a factual claim reads
-   * "agrees" for a beat and then corrects itself to "verifies".
+   * No longer held back on the claim's metadata. It was, because a factual claim would have read
+   * "agrees" for a beat and then corrected itself to "verifies" — and there is one wording now, so
+   * there is nothing to correct. Waiting only delayed an answer already in hand, and hid it for
+   * good on a card where both metadata reads fail.
    */
-  const noteFor = React.useCallback(
-    (position: boolean) => (isResponseKindResolved ? responseNote?.(responseKind, position) : null),
-    [isResponseKindResolved, responseKind, responseNote]
-  );
+  const noteFor = React.useCallback((position: boolean) => responseNote?.(position), [responseNote]);
 
   const hasVerdict = !summary.isLoading && summary.hasCounts && summary.total > 0;
   const matchesDebatePanelOnMobile = variant === 'debate-panel-mobile';
 
   return (
-    // The `<article>` is the root and stays the root. Two things depend on that and neither is
+    // The `<ActionSurfaceArticle>` is the root and stays the root. Two things depend on that and neither is
     // visible from here: `table-block-explore-items-dnd` sizes these through `[&>article]`, a
     // direct-child rule that a wrapper silently breaks, and `last:` is only meaningful on an
     // element that is actually a sibling of the other cards — inside a wrapper every card is an
@@ -204,7 +218,7 @@ export function ClaimExploreFeedCard({
     // The mobile Explore shell is selected by a viewport query rather than this article's container
     // query. That lets the root itself take the debates panel's border, radius and padding while the
     // card's internal wide/narrow decision remains local to the space it actually has.
-    <article
+    <ActionSurfaceArticle
       ref={setContainer}
       className={cx(
         '@container flex flex-col gap-4',
@@ -311,16 +325,18 @@ export function ClaimExploreFeedCard({
             onRespond={control.respond}
             promptForComment={control.isConnected}
             disabled={!control.canRespond}
+            pending={control.isResponseSubmitting}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
+            localSide={control.localVoteSide}
             positionRowClassName="max-w-[360px]"
             positionRowEndSlot={
               liveCommentCount > 0 ? (
-                <EntityCommentsButton
-                  entityId={item.entityId}
-                  spaceId={item.spaceId}
-                  count={item.commentCount}
-                  className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+                <ClaimActivityLink
+                  item={item}
+                  count={liveCommentCount}
+                  measuresActivity={commentsInCount != null}
+                  opensSidePanel={titleOpensSidePanel}
                 />
               ) : undefined
             }
@@ -349,9 +365,54 @@ export function ClaimExploreFeedCard({
           </div>
         ) : null}
       </div>
-    </article>
+    </ActionSurfaceArticle>
   );
 }
+
+/**
+ * The count beside the pills, and the way through to the claim's Activity section.
+ *
+ * Not the global comments panel. That lists only the comments filed directly on the claim, while the
+ * number here is the claim's whole activity — its debates, the claims extracted from them, and every
+ * comment under those — so it showed a shorter list than the count promised, without the debates it
+ * was counting. The claim's Activity section is the one place that draws all of it.
+ *
+ * Where it opens follows the title, through `opensSidePanel`: on Explore the side panel, scrolled to
+ * Activity (see `useScrollToCommentsOnOpen`); everywhere else the claim page at `#entity-comments`,
+ * which `CommentSection` scrolls to on arrival. It is the title's own link pointed at a position, so it
+ * inherits the title's rules rather than restating them: a real anchor, modified clicks left to the
+ * browser, and the side-panel opener mark only where it opens the panel.
+ */
+function ClaimActivityLink({
+  item,
+  count,
+  measuresActivity,
+  opensSidePanel,
+}: {
+  item: ExploreFeedItem;
+  count: number;
+  /** Whether `count` is the claim's whole activity rather than its own comments — see `commentsInCount`. */
+  measuresActivity: boolean;
+  opensSidePanel: boolean;
+}) {
+  return (
+    <ExploreCardEntityLink
+      item={item}
+      opensSidePanel={opensSidePanel}
+      section={ACTIVITY_SECTION}
+      aria-label={`${measuresActivity ? 'Activity' : 'Comments'} (${count})`}
+      data-geo-analytics-label="Open claim activity"
+      data-geo-analytics-intent="open_claim_activity"
+      className="inline-flex h-7 shrink-0 items-center gap-2 rounded-full border border-grey-02 px-2.5 text-[14px] leading-[13px] font-normal text-text tabular-nums transition-colors hover:border-text"
+    >
+      <ExploreCommentsIcon />
+      <span className="text-[14px] font-normal tabular-nums">{count}</span>
+    </ExploreCardEntityLink>
+  );
+}
+
+/** Module-level so the link's click handler is not rebuilt on every render. */
+const ACTIVITY_SECTION = { hash: ENTITY_COMMENTS_ANCHOR_ID, sidePanel: { scrollToComments: true } };
 
 /**
  * The share, the split and who answered — or an invitation where nobody has.
@@ -372,8 +433,12 @@ export function ClaimExploreFeedCard({
  * `ClaimSummary`'s responder cluster read the *same* `entityRespondersQueryKey`, so react-query
  * serves both from one cache entry and one request. That is worth knowing before either side is
  * repointed at a query of its own.
+ *
+ * Exported for the claim page's hero, which is this card's layout at page scale: the same column,
+ * so the page and the feed cannot describe one claim in two shapes. The caller supplies the
+ * `@container` the `claim-card-narrow` rules measure.
  */
-function ClaimVerdictColumn({
+export function ClaimVerdictColumn({
   entityId,
   spaceId,
   responseKind,
@@ -382,11 +447,11 @@ function ClaimVerdictColumn({
 }: {
   entityId: string;
   spaceId: string;
-  responseKind: 'stance' | 'veracity';
+  responseKind: ResponseKind;
   summary: ClaimResponseSummary;
   matchDebatePanelOnMobile: boolean;
 }) {
-  const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const copy = CLAIM_RESPONSE_COPY;
 
   const percent = summary.percent ?? 0;
 
@@ -411,7 +476,7 @@ function ClaimVerdictColumn({
             {copy.positiveAction.toLowerCase()}
           </Text>
         </div>
-        <ClaimSplitBar percent={percent} responseKind={responseKind} className="mt-3 h-1.5" />
+        <ClaimSplitBar percent={percent} className="mt-3 h-1.5" />
         {/* The Controversial tag is not repeated here — it sits beside the space chip, where it says
           what kind of claim this is rather than adding a second voice to the split. */}
         {/* Stacked, because this is the 220px rail and it cannot hold both across. The phone's

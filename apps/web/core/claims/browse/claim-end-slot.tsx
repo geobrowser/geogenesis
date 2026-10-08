@@ -11,6 +11,8 @@ import Link from 'next/link';
 
 import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
+import { RematchClaimEndSlot } from '~/core/debates/rematch-claim-end-slot';
+import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { RequestDebateControl, claimSlotPillClass } from '~/core/debates/request-debate-control';
 
 import { useClaimMatchup } from './use-claim-matchup';
@@ -38,13 +40,21 @@ import { useClaimMatchup } from './use-claim-matchup';
  * Request outranks live because it is the only one that needs the viewer: a live debate is still
  * there a second later, whereas a match evaporates when either party is taken.
  */
-export function ClaimEndSlot({
+export function ClaimEndSlot(props: React.ComponentProps<typeof MatchmakingClaimEndSlot>) {
+  // Every claim opened beside the picker belongs to that pair, including related claims.
+  // An unavailable rematch must never fall back to requesting a different matchmaking opponent.
+  const context = useRematchPanelContext();
+  return context ? <RematchClaimEndSlot {...props} context={context} /> : <MatchmakingClaimEndSlot {...props} />;
+}
+
+function MatchmakingClaimEndSlot({
   claimId,
   spaceId,
   activeDebate,
   enabled = true,
   variant = 'inline',
   viewerPosition,
+  indexedViewerPosition,
   className,
 }: {
   claimId: string;
@@ -65,6 +75,8 @@ export function ClaimEndSlot({
    * reader is on. Silence is not a contradiction.
    */
   viewerPosition: boolean | null | undefined;
+  /** The chain's side, where the host has it — see `useClaimMatchup`. */
+  indexedViewerPosition?: boolean | null;
   /**
    * The live debate on this claim.
    *
@@ -103,11 +115,9 @@ export function ClaimEndSlot({
     claimId,
     spaceId,
     enabled,
+    viewerPosition,
+    indexedViewerPosition,
   });
-
-  // The live-debate link below shares its shape with this offer, so both read the size from one
-  // place — see `claimSlotPillClass` for the metrics and for why it is not the debates pill.
-  const base = claimSlotPillClass(variant);
 
   // Whether the match is still about the side the viewer is on.
   //
@@ -153,19 +163,7 @@ export function ClaimEndSlot({
   }
 
   if (activeDebate) {
-    // The room where it is happening, or the feed when all we were told is that it is happening.
-    //
-    // `debatePath` rather than this host's own `spaceId`: a debate room lives under the space its
-    // *claim* came from, and the two agree only for as long as every surface renders rows it
-    // fetched under the space it is showing. The panel already fetches its rows per claim space.
-    const href = typeof activeDebate === 'object' ? debatePath(activeDebate) : `/space/${spaceId}/debates`;
-
-    return (
-      <Link href={href} className={cx(base, 'border border-red-01 text-red-01 hover:bg-red-01/5', className)}>
-        <span className="size-1 shrink-0 animate-pulse rounded-full bg-red-01" aria-hidden />
-        Watch live
-      </Link>
-    );
+    return <WatchLiveLink activeDebate={activeDebate} spaceId={spaceId} variant={variant} className={className} />;
   }
 
   // An empty box of exactly the slot's height, rather than nothing.
@@ -185,4 +183,33 @@ export function ClaimEndSlot({
   if (variant === 'block') return null;
 
   return <span className={cx('h-5 shrink-0', className)} aria-hidden />;
+}
+
+/** "Watch live": the room where a debate on this claim is running, or the space's feed. */
+export function WatchLiveLink({
+  activeDebate,
+  spaceId,
+  variant = 'inline',
+  className,
+}: {
+  /** The debate, or `true` where geo-chat only says one is running. */
+  activeDebate: Debate | true;
+  spaceId: string;
+  variant?: 'inline' | 'block';
+  className?: string;
+}) {
+  // `debatePath` rather than this host's own `spaceId`: a debate room lives under the space its
+  // *claim* came from, and the two agree only for as long as every surface renders rows it
+  // fetched under the space it is showing. The panel already fetches its rows per claim space.
+  const href = typeof activeDebate === 'object' ? debatePath(activeDebate) : `/space/${spaceId}/debates`;
+
+  return (
+    <Link
+      href={href}
+      className={cx(claimSlotPillClass(variant), 'border border-red-01 text-red-01 hover:bg-red-01/5', className)}
+    >
+      <span className="size-1 shrink-0 animate-pulse rounded-full bg-red-01" aria-hidden />
+      Watch live
+    </Link>
+  );
 }

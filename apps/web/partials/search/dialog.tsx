@@ -12,6 +12,7 @@ import { useFetchNextPageOnScroll } from '~/core/hooks/use-fetch-next-page-on-sc
 import { useKey } from '~/core/hooks/use-key';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSearch } from '~/core/hooks/use-search';
+import { useSearchResultAction } from '~/core/hooks/use-search-result-action';
 import { useSpace } from '~/core/hooks/use-space';
 import { useSpacesWhereMember } from '~/core/hooks/use-spaces-where-member';
 import { EntityId } from '~/core/io/substream-schema';
@@ -59,13 +60,18 @@ export const SearchDialog = ({ open, onDone }: Props) => {
 };
 
 const SearchDialogComponent = ({ open, onDone }: Props) => {
+  const trackSelection = useSearchResultAction({ overlay: 'modal' });
   const router = useRouter();
   const [canonicalOnly, setCanonicalOnly] = useState<boolean>(readCanonicalOnly);
   const [isShowingAdvanced, setIsShowingAdvanced] = useState<boolean>(false);
   // Explicit `true` (not just omitted) when off — useSearch uses this to tell
   // "user asked for unrestricted search" apart from "caller has no opinion",
   // and drops the canonical-plus-scoped-spaces eligibility filter accordingly.
-  const autocomplete = useSearch({ enabled: open, includeNonCanonical: canonicalOnly ? false : true });
+  const autocomplete = useSearch({
+    enabled: open,
+    includeNonCanonical: canonicalOnly ? false : true,
+    analyticsSurface: 'global',
+  });
   const { fetchNextPage, hasNextPage, isFetchingNextPage } = autocomplete;
 
   const toggleCanonicalOnly = useCallback(() => {
@@ -113,12 +119,14 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
     scrollRef: resultsScrollRef,
   });
 
-  useKey('Enter', () => {
-    if (!hasResults) return;
+  useKey('Enter', event => {
+    // cmdk handles Enter on its selected item; only handle the input fallback here.
+    if (event.defaultPrevented || !hasResults) return;
 
     const result = autocomplete.results[selectedIndex];
 
     if (result) {
+      trackSelection(result, selectedIndex, 'search_results');
       router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
       autocomplete.onQueryChange('');
       setOpenSpacesIndex(null);
@@ -263,6 +271,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                               hydrate([result.id]);
                             }}
                             onSelect={() => {
+                              trackSelection(result, i, 'search_results');
                               router.push(NavUtils.toEntity(result.spaces[0].spaceId, result.id));
                               autocomplete.onQueryChange('');
                               setOpenSpacesIndex(null);
@@ -323,6 +332,7 @@ const SearchDialogComponent = ({ open, onDone }: Props) => {
                         <div>
                           <Command.Item
                             onSelect={() => {
+                              trackSelection(selectedEntity, i, 'search_spaces');
                               router.push(NavUtils.toEntity(space.spaceId, selectedEntity.id));
                               autocomplete.onQueryChange('');
                               setOpenSpacesIndex(null);

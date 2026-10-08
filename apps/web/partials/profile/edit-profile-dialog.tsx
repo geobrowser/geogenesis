@@ -9,6 +9,7 @@ import cx from 'classnames';
 import { type ProfileImageEdit, useEditProfile } from '~/core/hooks/use-edit-profile';
 import { useProfileHistory } from '~/core/hooks/use-profile-history';
 import type { EducationEntry, EmploymentEntry, HistoryCard, HistoryEntry } from '~/core/profile/normalize-history';
+import { TAGLINE_MAX_LENGTH, normalizeTagline, taglineLengthHint } from '~/core/profile/profile-ontology';
 import {
   type EducationDraft,
   type PositionDraft,
@@ -16,15 +17,18 @@ import {
   positionDraftFromEntry,
 } from '~/core/profile/stage-history';
 
-import { Button, SquareButton } from '~/design-system/button';
+import { SquareButton } from '~/design-system/button';
 import { Close } from '~/design-system/icons/close';
 import { Warning } from '~/design-system/icons/warning';
 import { Input, inputStyles } from '~/design-system/input';
 
 import { AddEducationSheet } from './add-education-sheet';
 import { AddPositionSheet } from './add-position-sheet';
+import { DiscardEditsDialog, useDiscardEditsGuard } from './discard-edits-dialog';
 import { HistorySection } from './history-section';
 import { ProfileImageField } from './profile-image-field';
+import { profilePillClassName } from './profile-pill';
+import { useBackdropDismiss } from './use-backdrop-dismiss';
 
 const UNCHANGED: ProfileImageEdit = { kind: 'unchanged' };
 
@@ -42,7 +46,7 @@ type Props = {
 };
 
 /**
- * Edit profile (GEO-2839). Four fields, published straight to the viewer's
+ * Edit profile (GEO-2839). Five fields, published straight to the viewer's
  * personal space with no review step.
  *
  * Saving closes it. The write is slow — p50 ~10s, p95 ~48s — and the status bar
@@ -62,7 +66,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
   /**
    * Which sheet is open, if any. A sheet replaces the modal's body rather than
-   * stacking over it — the four fields underneath have nothing to do with the
+   * stacking over it — the fields underneath have nothing to do with the
    * position being added, and two scroll areas fighting is worse than one.
    *
    * `editing` is the row the sheet was opened on, where it was opened on one.
@@ -100,6 +104,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   };
 
   const [name, setName] = React.useState('');
+  const [tagline, setTagline] = React.useState('');
   const [description, setDescription] = React.useState('');
   const [banner, setBanner] = React.useState<ImageState>(EMPTY_IMAGE_STATE);
   const [avatar, setAvatar] = React.useState<ImageState>(EMPTY_IMAGE_STATE);
@@ -110,15 +115,12 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // form: the name arrives early from the warm profile query while the description
   // only exists on the entity, so a single flag let someone type a name during
   // hydration and silently delete a description they never saw.
-  const pristineRef = React.useRef({ name: true, description: true });
+  const pristineRef = React.useRef({ name: true, tagline: true, description: true });
 
   const isPublishing = status === 'publishing';
 
-  /** Where the current press began; see the backdrop handler below. */
-  const pressStartedOnBackdrop = React.useRef(false);
-
   const resetForm = React.useCallback(() => {
-    pristineRef.current = { name: true, description: true };
+    pristineRef.current = { name: true, tagline: true, description: true };
     setBanner(previous => {
       if (previous.previewUrl) URL.revokeObjectURL(previous.previewUrl);
       return EMPTY_IMAGE_STATE;
@@ -153,8 +155,12 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   React.useEffect(() => {
     if (!open) return;
     if (pristineRef.current.name) setName(current.name);
+    // Seeded as stored, not cut. A tagline over the limit is somebody's real headline, and
+    // showing it short would be the modal lying about what it is about to leave alone —
+    // `taglineLengthHint` says what editing it would do instead.
+    if (pristineRef.current.tagline) setTagline(current.tagline);
     if (pristineRef.current.description) setDescription(current.description);
-  }, [open, current.name, current.description]);
+  }, [open, current.name, current.tagline, current.description]);
 
   // A finished publish is the one case where the modal closes itself.
   //
@@ -223,6 +229,11 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
   // an untrimmed original marked the form dirty the moment it opened, and let an
   // image-only edit quietly rewrite the name in trimmed form.
   const publishName = pristineRef.current.name ? current.name : name.trim();
+  // Same rule as the name above, and for the same reason. Cutting a pristine tagline here
+  // would make `hasChanges` true the moment the modal opened on a stored one over the limit —
+  // Save live against an edit nobody made, and one click away from silently republishing
+  // somebody's headline 40 characters shorter. It is cut when they edit it, not before.
+  const publishTagline = pristineRef.current.tagline ? current.tagline : normalizeTagline(tagline.trim());
   const publishDescription = pristineRef.current.description ? current.description : description.trim();
 
   // Compared the way they are published — trimmed, and with a removal of an image
@@ -233,11 +244,12 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
 
   const hasChanges =
     publishName !== current.name ||
+    publishTagline !== current.tagline ||
     publishDescription !== current.description ||
     changesImage(banner, current.bannerUrl) ||
     changesImage(avatar, current.avatarUrl) ||
     // Work and education write nothing until this Save, so a position added with
-    // the four fields left alone is the whole of the edit.
+    // the other fields left alone is the whole of the edit.
     history.hasPendingChanges;
 
   // A failed save has already written its rows to the local store, so the entity
@@ -262,8 +274,17 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     onOpenChange(false);
   };
 
+  /**
+   * Whether closing now would throw work away. A failed publish counts even when
+   * `hasChanges` has gone false: its rows are already in the local store, and
+   * closing is what abandons them.
+   */
+  const hasUnsavedEdits = !isPublishing && (hasChanges || hasFailed);
+
+  const unavailableNote = 'We couldn’t find your profile to edit. Try reloading the page.';
+
   const footerNote = isUnavailable
-    ? 'We couldn’t find your profile to edit. Try reloading the page.'
+    ? unavailableNote
     : isPublishing
       ? 'Publishing to your space. This usually takes about 10 seconds.'
       : hasFailed
@@ -279,6 +300,10 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     // back directly; there is no submit here to reach for.
     if (sheet) return;
 
+    save();
+  };
+
+  const save = () => {
     if (!canSave) return;
 
     // Save hands straight off to the status bar rather than holding the screen.
@@ -290,33 +315,49 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
     // No `resetForm()` here: the draft has to survive in case the publish fails
     // and the modal is reopened on it.
     void publish(
-      { name: publishName, description: publishDescription, banner: banner.edit, avatar: avatar.edit },
+      {
+        name: publishName,
+        tagline: publishTagline,
+        description: publishDescription,
+        banner: banner.edit,
+        avatar: avatar.edit,
+      },
       history.stagePending()
     );
     onOpenChange(false);
   };
 
+  // Every way `canSave` can be false while there is still something to lose.
+  const saveBlockedReason = isNameMissing
+    ? 'Add a name to save your profile.'
+    : isUnavailable
+      ? unavailableNote
+      : isLoading
+        ? 'Your profile is still loading. Try again in a moment.'
+        : null;
+
+  const discardGuard = useDiscardEditsGuard({ hasUnsavedEdits, canSave, saveBlockedReason, discard: close, save });
+
+  /**
+   * Escape and the backdrop. On a sheet they step back to the modal, the same as
+   * its Back button, rather than taking the whole modal down from two levels in —
+   * and rather than offering a Save that would publish without the sheet's draft.
+   */
+  const dismiss = () => {
+    if (sheet) setSheet(null);
+    else discardGuard.requestClose();
+  };
+
+  const backdropDismiss = useBackdropDismiss(dismiss);
+
   return (
-    <Root open={open} onOpenChange={next => (next ? onOpenChange(true) : close())}>
+    <Root open={open} onOpenChange={next => (next ? onOpenChange(true) : dismiss())}>
       <Portal>
         <Overlay className="fixed inset-0 z-100 bg-text/20" />
-        {/* This container spans the viewport and sits above the overlay, so a click
-            on the backdrop lands here rather than "outside" the Radix content —
-            `onPointerDownOutside` never fires. Closing on a click that reached the
-            container itself restores the dismissal the design asks for.
-            
-            The press has to have *started* on the backdrop too. A click's target is
-            the common ancestor of its pointerdown and pointerup, so drag-selecting
-            text in a field and releasing past the card edge produces a click
-            targeting this container — which would have thrown away everything typed
-            with no confirmation. */}
+        {/* Spans the viewport above the overlay, so the backdrop is this container
+            itself — see `useBackdropDismiss`. */}
         <Content
-          onPointerDown={event => {
-            pressStartedOnBackdrop.current = event.target === event.currentTarget;
-          }}
-          onClick={event => {
-            if (event.target === event.currentTarget && pressStartedOnBackdrop.current) close();
-          }}
+          {...backdropDismiss}
           // `px-4` so the card clears the screen edges on a phone, where
           // `max-w-[560px]` is wider than the viewport and the dialog would
           // otherwise run edge to edge.
@@ -324,6 +365,8 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
         >
           <form
             data-geo-analytics-label="Edit profile"
+            data-geo-analytics-type="profile"
+            data-geo-analytics-intent="edit_profile"
             onSubmit={onSubmit}
             className="my-10 flex w-full max-w-[560px] flex-col rounded-lg border border-grey-02 bg-white shadow-dropdown"
           >
@@ -369,7 +412,7 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
               <>
                 <header className="flex items-center justify-between px-5 py-4">
                   <Title className="text-smallTitle text-text">Edit profile</Title>
-                  <SquareButton type="button" onClick={close} icon={<Close />} aria-label="Close" />
+                  <SquareButton type="button" onClick={discardGuard.requestClose} icon={<Close />} aria-label="Close" />
                 </header>
 
                 <Description className="sr-only">
@@ -442,6 +485,32 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   </label>
 
                   <label className="flex flex-col gap-1.5">
+                    <span className="text-metadataMedium text-grey-04">Tagline</span>
+                    <Input
+                      value={tagline}
+                      onChange={event => {
+                        pristineRef.current.tagline = false;
+                        // Cut here rather than relying on `maxLength` alone, which some browsers
+                        // let a paste past and which says nothing about a value seeded from the
+                        // entity that is already too long.
+                        setTagline(normalizeTagline(event.currentTarget.value));
+                      }}
+                      disabled={isPublishing}
+                      maxLength={TAGLINE_MAX_LENGTH}
+                      placeholder="Your role, or what you’re working on now."
+                    />
+                    {/* What it is on the left, how much room is left on the right. There is no
+                    error state to reach — the field cannot hold more than it allows — so the
+                    count is guidance rather than validation. */}
+                    <span className="flex flex-wrap items-baseline justify-between gap-x-3 text-footnote text-grey-04">
+                      <span>One line under your name. The first thing people should know about you.</span>
+                      {/* Wraps to a line of its own when it is the over-limit sentence rather
+                      than a count, which is the only time it is long. */}
+                      <span className="tabular-nums">{taglineLengthHint(tagline)}</span>
+                    </span>
+                  </label>
+
+                  <label className="flex flex-col gap-1.5">
                     <span className="text-metadataMedium text-grey-04">Description</span>
                     <textarea
                       value={description}
@@ -451,10 +520,14 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                       }}
                       disabled={isPublishing}
                       rows={3}
-                      placeholder="A sentence about who you are and what you work on."
+                      placeholder="A few sentences on your background, what you work on, and what you’re interested in."
                       className={cx(inputStyles(), 'resize-none')}
                     />
-                    <span className="text-footnote text-grey-04">Shown under your name across Geo.</span>
+                    {/* Named against the tagline above it — "the longer version" is the whole
+                    distinction, and it is the one thing somebody looking at both fields needs. */}
+                    <span className="text-footnote text-grey-04">
+                      The longer version, shown in the About section of your profile.
+                    </span>
                   </label>
 
                   <HistorySection
@@ -489,17 +562,23 @@ export function EditProfileDialog({ open, onOpenChange }: Props) {
                   why Save is dead, how long the wait is, or what a failure cost. */}
                   <p className={cx('text-footnote', isUnavailable ? 'text-red-01' : 'text-grey-04')}>{footerNote}</p>
                   <div className="flex items-center gap-2">
-                    <Button type="button" variant="secondary" onClick={close}>
+                    <button
+                      type="button"
+                      onClick={discardGuard.requestClose}
+                      className={profilePillClassName('secondary')}
+                    >
                       {isPublishing ? 'Close' : 'Cancel'}
-                    </Button>
-                    <Button type="submit" disabled={!canSave}>
+                    </button>
+                    <button type="submit" disabled={!canSave} className={profilePillClassName('primary')}>
                       {isPublishing ? 'Publishing' : hasFailed ? 'Retry' : 'Save profile'}
-                    </Button>
+                    </button>
                   </div>
                 </footer>
               </>
             )}
           </form>
+
+          <DiscardEditsDialog {...discardGuard.dialogProps} />
         </Content>
       </Portal>
     </Root>

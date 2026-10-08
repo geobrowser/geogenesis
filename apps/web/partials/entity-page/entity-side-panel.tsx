@@ -8,7 +8,10 @@ import { useAtom, useAtomValue, useSetAtom, useStore } from 'jotai';
 import { usePathname } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { ActionContextProvider } from '~/core/action-context-provider';
+import { entityActionScope } from '~/core/action-entity-context';
 import { bountiesEnabledForNetwork, isBountyEntity } from '~/core/bounties/config';
+import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
@@ -32,6 +35,7 @@ import {
   shouldSuppressSidePanelPathnameAutoClose,
 } from '~/core/state/personal-profile/create-post-flow';
 import type { Entity } from '~/core/types';
+import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 import { NavUtils } from '~/core/utils/utils';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
@@ -46,7 +50,9 @@ import { Text } from '~/design-system/text';
 
 import { BountyDetailHeader, BountyDetailSections } from '~/partials/bounties';
 import { EntityPageBody } from '~/partials/entity-page/entity-page-body';
+import { EntitySidePanelNavigation } from '~/partials/entity-page/entity-side-panel-navigation';
 import { useEntityPageSurfaceData } from '~/partials/entity-page/hooks/use-entity-page-surface-data';
+import { useScrollToCommentsOnOpen } from '~/partials/entity-page/hooks/use-scroll-to-comments-on-open';
 import { NavbarBreadcrumb } from '~/partials/navbar/navbar-breadcrumb';
 
 import {
@@ -154,6 +160,7 @@ function EntitySidePanelHeader({
 }) {
   const panelCtx = React.useContext(EntitySidePanelEditContext);
 
+  const inRematch = useRematchPanelContext() !== null;
   const entityPageHref = NavUtils.toEntity(entitySpaceId, entityId, panelCtx?.panelWantsEdit ?? false);
 
   return (
@@ -178,9 +185,11 @@ function EntitySidePanelHeader({
         entityId={entityId}
         spaceId={entitySpaceId}
         className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded border border-grey-02 bg-white px-2 text-metadata font-medium text-text shadow-light transition duration-200 ease-in-out hover:border-text hover:bg-bg hover:text-text"
-        aria-label="Open entity full page"
+        target={inRematch ? '_blank' : undefined}
+        rel={inRematch ? 'noopener noreferrer' : undefined}
+        aria-label={inRematch ? 'Open entity in new tab' : 'Open entity full page'}
       >
-        Open
+        {inRematch ? 'Open in new tab' : 'Open'}
         <Fullscreen />
       </Link>
     </div>
@@ -264,66 +273,96 @@ function EntitySidePanelBody({
   );
 }
 
+/** Inside the tab provider, because the scroll first returns the panel to its overview tab. */
+function ScrollToCommentsOnOpen({ container, request }: { container: HTMLElement | null; request: object | null }) {
+  useScrollToCommentsOnOpen(container, request);
+  return null;
+}
+
 export function EntitySidePanelSurface({
   entityId,
   requestedSpaceId,
   openedWithMainViewEditing,
   openedFromReviewEdits,
+  forceRequestedSpace = false,
   showHeader = true,
   previewImageUrl,
   previewName,
   previewDescription,
+  scrollToCommentsRequest = null,
+  initialTab,
   onClose,
 }: {
   entityId: string;
   requestedSpaceId: string;
   openedWithMainViewEditing: boolean;
   openedFromReviewEdits?: boolean;
+  /** Keep the panel in `requestedSpaceId`, even when the entity also lives in a higher-ranked space. */
+  forceRequestedSpace?: boolean;
   /** When false, hides the default side-panel chrome (close, space link, edit toggle, open). */
   showHeader?: boolean;
   previewImageUrl?: string | null;
   previewName?: string | null;
   previewDescription?: string | null;
+  /**
+   * Set to scroll to the entity's comments once they render. Compared by identity, so each new object
+   * is a new request — the panel passes its target, which a second click on the same card replaces.
+   */
+  scrollToCommentsRequest?: object | null;
+  initialTab?: EntitySidePanelTabSelection;
   onClose: () => void;
 }) {
+  const [scrollElement, setScrollElement] = React.useState<HTMLDivElement | null>(null);
   const preferRequestedSpace = openedWithMainViewEditing || Boolean(openedFromReviewEdits);
-  const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(
-    entityId,
-    requestedSpaceId,
-    preferRequestedSpace
-  );
+  const { entity, effectiveSpaceId, isLoading } = useSidePanelEntityScope(entityId, requestedSpaceId, {
+    preferRequestedSpace,
+    forceRequestedSpace,
+  });
   const editorContentVersion = useAtomValue(editorContentVersionAtom);
+  const entityContext = entityActionScope(entity);
 
   return (
-    <EntitySidePanelEditModeProvider
-      entitySpaceId={effectiveSpaceId}
-      openedWithMainViewEditing={openedWithMainViewEditing}
-      openedFromReviewEdits={openedFromReviewEdits}
+    <ActionContextProvider
+      value={{
+        ...entityContext,
+        component: undefined,
+        overlay: 'entity_side_panel',
+        overlay_entity_id: entityId,
+        overlay_entity_type: entityContext.target_type ?? 'entity',
+      }}
     >
-      <div className="flex min-h-0 flex-1 flex-col">
-        {showHeader ? (
-          <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
-        ) : null}
-        <div
-          className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
-          data-entity-side-panel-scroll
-          data-mobile-sheet-scroll
-        >
-          <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId}>
-            <EntitySidePanelBody
-              key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
-              entityId={entityId}
-              entitySpaceId={effectiveSpaceId}
-              entity={entity}
-              isLoadingEntity={isLoading}
-              previewImageUrl={previewImageUrl}
-              previewName={previewName}
-              previewDescription={previewDescription}
-            />
-          </EntitySidePanelActiveTabProvider>
-        </div>
-      </div>
-    </EntitySidePanelEditModeProvider>
+      <EntitySidePanelEditModeProvider
+        entitySpaceId={effectiveSpaceId}
+        openedWithMainViewEditing={openedWithMainViewEditing}
+        openedFromReviewEdits={openedFromReviewEdits}
+      >
+        <EntitySidePanelActiveTabProvider entityId={entityId} spaceId={effectiveSpaceId} initialTab={initialTab}>
+          <EntitySidePanelNavigation entityId={entityId} spaceId={effectiveSpaceId}>
+            {showHeader ? (
+              <EntitySidePanelHeader entityId={entityId} entitySpaceId={effectiveSpaceId} onClose={onClose} />
+            ) : null}
+            <div
+              ref={setScrollElement}
+              className="min-h-0 flex-1 overflow-y-auto overscroll-contain"
+              data-entity-side-panel-scroll
+              data-mobile-sheet-scroll
+            >
+              <ScrollToCommentsOnOpen container={scrollElement} request={scrollToCommentsRequest} />
+              <EntitySidePanelBody
+                key={`${effectiveSpaceId}:${entityId}:${editorContentVersion}`}
+                entityId={entityId}
+                entitySpaceId={effectiveSpaceId}
+                entity={entity}
+                isLoadingEntity={isLoading}
+                previewImageUrl={previewImageUrl}
+                previewName={previewName}
+                previewDescription={previewDescription}
+              />
+            </div>
+          </EntitySidePanelNavigation>
+        </EntitySidePanelActiveTabProvider>
+      </EntitySidePanelEditModeProvider>
+    </ActionContextProvider>
   );
 }
 
@@ -492,18 +531,23 @@ export function EntitySidePanel() {
     return null;
   }
 
-  const { entityId, spaceId, openedWithMainViewEditing, openedFromReviewEdits } = sidePanelTarget;
+  const { entityId, spaceId, openedWithMainViewEditing, openedFromReviewEdits, forceRequestedSpace } = sidePanelTarget;
 
   const panelBody = (
-    <EntitySidePanelPopoverPortalProvider>
-      <EntitySidePanelSurface
-        entityId={entityId}
-        requestedSpaceId={spaceId}
-        openedWithMainViewEditing={openedWithMainViewEditing}
-        openedFromReviewEdits={openedFromReviewEdits}
-        onClose={handleCloseSidePanel}
-      />
-    </EntitySidePanelPopoverPortalProvider>
+    <ActionContextProvider value={sidePanelTarget.analyticsContext ?? {}}>
+      <EntitySidePanelPopoverPortalProvider>
+        <EntitySidePanelSurface
+          entityId={entityId}
+          requestedSpaceId={spaceId}
+          openedWithMainViewEditing={openedWithMainViewEditing}
+          openedFromReviewEdits={openedFromReviewEdits}
+          forceRequestedSpace={forceRequestedSpace}
+          scrollToCommentsRequest={sidePanelTarget.scrollToComments ? sidePanelTarget : null}
+          initialTab={sidePanelTarget.initialTab}
+          onClose={handleCloseSidePanel}
+        />
+      </EntitySidePanelPopoverPortalProvider>
+    </ActionContextProvider>
   );
 
   if (isMobile) {

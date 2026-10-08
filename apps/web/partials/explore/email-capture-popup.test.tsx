@@ -6,9 +6,13 @@ import * as React from 'react';
 import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
+import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
+import { toggleLocalVote } from '~/core/state/local-votes';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
+import { useIsEmailCaptureShowing } from './email-capture-presence';
 import { entitySidePanelAtom } from '~/atoms';
 
 const store = getDefaultStore();
@@ -26,7 +30,17 @@ const mocks = vi.hoisted(() => ({
   prepareOnboarding: vi.fn(),
   useGeoLoginWithEmail: vi.fn(),
   usePrivySignIn: vi.fn(),
+  usePrivySignInOptions: undefined as Parameters<typeof usePrivySignIn>[1],
   useLoginWithEmailArgs: undefined as unknown,
+  signupCompleted: vi.fn(),
+  trackPrivyAuth: vi.fn(),
+  capture: vi.fn(),
+}));
+
+vi.mock('~/core/analytics', () => ({
+  signupCompleted: mocks.signupCompleted,
+  trackPrivyAuth: mocks.trackPrivyAuth,
+  capture: mocks.capture,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
@@ -45,8 +59,9 @@ vi.mock('@geogenesis/auth', () => ({
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
-  usePrivySignIn: () => {
+  usePrivySignIn: (_onComplete?: () => void, options?: Parameters<typeof usePrivySignIn>[1]) => {
     mocks.usePrivySignIn();
+    mocks.usePrivySignInOptions = options;
     return mocks.openPrivyModal;
   },
 }));
@@ -74,6 +89,7 @@ function scrollPastTrigger() {
 }
 
 beforeEach(() => {
+  resetAuthAttempt();
   window.localStorage.clear();
   // A pending account attempt is session-scoped; left behind it resumes into the next test.
   window.sessionStorage.clear();
@@ -89,6 +105,9 @@ beforeEach(() => {
   mocks.prepareOnboarding.mockReset();
   mocks.useGeoLoginWithEmail.mockReset();
   mocks.usePrivySignIn.mockReset();
+  mocks.usePrivySignInOptions = undefined;
+  mocks.signupCompleted.mockReset();
+  mocks.trackPrivyAuth.mockReset();
   mocks.useLoginWithEmailArgs = undefined;
   mocks.otpState = { status: 'initial' };
   mocks.fetch.mockReset();
@@ -121,6 +140,8 @@ describe('ExploreEmailCapturePopup', () => {
     scrollPastTrigger();
 
     expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-label', 'Explore newsletter signup');
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-type', 'newsletter');
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-intent', 'signup');
 
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'reader@example.com' } });
     await act(async () => {
@@ -129,6 +150,17 @@ describe('ExploreEmailCapturePopup', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
 
     expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-label', 'Explore account verification');
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-type', 'account');
+    expect(popup()?.querySelector('form')).toHaveAttribute('data-geo-analytics-intent', 'signup');
+  });
+
+  it('records a completed newsletter signup only after the subscription succeeds', async () => {
+    await subscribeSuccessfully();
+
+    expect(mocks.signupCompleted).toHaveBeenCalledWith('newsletter', {
+      signup_surface: 'explore_email_capture',
+      newsletter_source: 'explore',
+    });
   });
 
   it('stays away until the reader has scrolled', () => {
@@ -146,6 +178,37 @@ describe('ExploreEmailCapturePopup', () => {
   // at `z-100` the assistant's button drew over the "Remind me" button and took the click. A
   // stacking bug is invisible to every other test here, so this reads the number rather than
   // trusting the comment beside it.
+  // GEO-3214: a visitor with votes on this device gets the save sheet, which asks for the same email.
+  // GEO-3214: the save sheet waits behind this card, so the card has to say when it is up.
+  it('tells the save sheet it holds the corner while it is on screen', () => {
+    const Probe = () => <p>{useIsEmailCaptureShowing() ? 'corner taken' : 'corner free'}</p>;
+    render(
+      <>
+        <ExploreEmailCapturePopup />
+        <Probe />
+      </>
+    );
+    expect(screen.getByText('corner free')).toBeInTheDocument();
+
+    scrollPastTrigger();
+    expect(popup()).toBeInTheDocument();
+    expect(screen.getByText('corner taken')).toBeInTheDocument();
+  });
+
+  it('yields to the save sheet for a visitor with votes on this device', () => {
+    toggleLocalVote({
+      responseKind: 'stance',
+      entityId: 'claim',
+      spaceId: 'space',
+      direction: 'positive',
+      title: 'A claim',
+    });
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(popup()).not.toBeInTheDocument();
+  });
+
   it('stacks above the chat launcher, which shares its corner', () => {
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();
@@ -440,8 +503,8 @@ describe('ExploreEmailCapturePopup', () => {
     expect(screen.getByRole('status').textContent).toContain('You are on the list.');
   });
 
-  // The general case, and the reason this guard stopped being a list of names. The sign-in prompt
-  // (`partials/sign-in-prompt/sign-in-prompt.tsx`) and global search (`partials/search/dialog.tsx`)
+  // The general case, and the reason this guard stopped being a list of names. The onboarding
+  // dialog (`partials/onboarding/dialog.tsx`) and global search (`partials/search/dialog.tsx`)
   // are both Radix underneath, which renders `role="dialog"` with `data-state` and no `aria-modal`
   // — so neither is reachable by naming it here, and both are covered by asking the document.
   it('waits while any modal dialog is open, including ones it does not know about', async () => {
@@ -502,6 +565,27 @@ describe('ExploreEmailCapturePopup', () => {
   });
 
   describe('creating an account from the confirmation', () => {
+    it('captures the visitor before sending the code and clears it on dismissal', async () => {
+      window.lytics = { getContext: () => ({ anonymous_id: 'email-visitor', session_id: 'email-session' }) };
+      try {
+        await subscribeSuccessfully();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+        });
+        expect(JSON.parse(window.localStorage.getItem('geo:signup-visitor:v1')!)).toMatchObject({
+          anonymousId: 'email-visitor',
+          sessionId: 'email-session',
+        });
+        expect(mocks.sendCode).toHaveBeenCalledOnce();
+        await act(async () => {
+          fireEvent.click(screen.getByRole('button', { name: 'Dismiss newsletter signup' }));
+        });
+        expect(window.localStorage.getItem('geo:signup-visitor:v1')).toBeNull();
+      } finally {
+        delete window.lytics;
+      }
+    });
+
     it('offers the account and a skip, rather than ending at the confirmation', async () => {
       await subscribeSuccessfully();
 
@@ -844,18 +928,64 @@ describe('ExploreEmailCapturePopup', () => {
       expect(screen.getByRole('button', { name: 'Continue' }).className).toContain('mobile:h-11');
     });
 
-    // Reports its own sign-in. Leaving it to the navbar looked tidy and was not: that button is
-    // replaced by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session
-    // on a tab refocus — so a completion landing in that window was recorded by nobody. The navbar
-    // arms its tracker now, so this one cannot double-count.
-    it('reports the sign-in it started, attributed to this flow', async () => {
+    it('starts exactly one attributed attempt for the create-account press', async () => {
       await subscribeSuccessfully();
+      mocks.capture.mockClear();
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      const starts = mocks.capture.mock.calls.filter(([event]) => event === 'auth_attempt_started');
+      expect(starts).toHaveLength(1);
+      expect(starts[0]?.[1]).toMatchObject({ component: 'explore_email_capture', auth_control: 'create_account' });
+    });
+
+    it('starts its own attributed email attempt when the document inherited another attempt', async () => {
+      await subscribeSuccessfully();
+      const inherited = beginAuthAttempt({ component: 'explore_email_capture', auth_control: 'create_account' });
+      // A fresh document has copied storage but no ownership of the earlier attempt.
+      resetAuthAttempt();
+      sessionStorage.setItem('geo:auth-attempt:active', inherited.id);
+      await act(async () => {
+        fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
+      });
+      expect(currentAuthAttempt()?.id).not.toBe(inherited.id);
+      expect(currentAuthAttempt()?.properties).toMatchObject({
+        component: 'explore_email_capture',
+        auth_control: 'create_account',
+        auth_trigger: 'control',
+      });
+      expect(readAuthAttempt(inherited.id)?.outcome).toBeUndefined();
+      expect(mocks.sendCode).toHaveBeenCalledOnce();
+    });
+
+    // The headless SDK calls the captured completion after its verification promise resolves,
+    // even when authentication has already unmounted this card.
+    it('reports completion after the card unmounts, attributed to this flow', async () => {
+      const view = await subscribeSuccessfully();
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
       });
 
       const args = mocks.useLoginWithEmailArgs as { onComplete?: (a: unknown) => void } | undefined;
       expect(typeof args?.onComplete).toBe('function');
+
+      view.unmount();
+      const completion = {
+        user: { id: 'did:privy:new-user', email: { address: 'reader@example.com' } },
+        isNewUser: true,
+        wasAlreadyAuthenticated: false,
+      };
+      args?.onComplete?.(completion);
+
+      expect(mocks.trackPrivyAuth).toHaveBeenCalledWith(
+        completion,
+        expect.objectContaining({
+          auth_flow: 'manual_login',
+          link_source: 'explore_email_capture',
+          form_type: 'account',
+          signup_surface: 'explore_email_capture',
+        })
+      );
     });
 
     // Both resend controls used to stay live while a verification was in flight, so pressing one
@@ -912,13 +1042,33 @@ describe('ExploreEmailCapturePopup', () => {
     // email is a convenience, and it must not become the reason nobody can sign up at all.
     it('falls back to the normal sign-in dialog when the shortcut cannot start', async () => {
       mocks.sendCode.mockRejectedValue(new Error('captcha required'));
-      await subscribeSuccessfully();
+      const view = await subscribeSuccessfully();
 
       await act(async () => {
         fireEvent.click(screen.getByRole('button', { name: 'Create account' }));
       });
 
       expect(mocks.openPrivyModal).toHaveBeenCalledTimes(1);
+      expect(mocks.usePrivySignInOptions?.resumeAuthAttempt).toBe(true);
+      expect(mocks.usePrivySignInOptions?.analytics).toEqual(
+        expect.objectContaining({
+          link_source: 'explore_email_capture',
+          form_type: 'account',
+          signup_surface: 'explore_email_capture',
+        })
+      );
+      // The modal replaces the popup visually, but this hook must remain mounted until Privy
+      // completes so its completion handler can attribute the signup to this surface.
+      expect(popup()).toBeInTheDocument();
+
+      mocks.isModalOpen = true;
+      // The popup hides behind Privy without unmounting its account step.
+      view.rerender(<ExploreEmailCapturePopup />);
+      expect(popup()).toBeNull();
+
+      act(() => mocks.usePrivySignInOptions?.onError?.());
+      mocks.isModalOpen = false;
+      view.rerender(<ExploreEmailCapturePopup />);
       expect(popup()).toBeNull();
     });
   });

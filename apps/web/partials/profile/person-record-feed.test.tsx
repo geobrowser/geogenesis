@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { useActionScope } from '~/core/action-context-provider';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 
 import { PersonRecordFeed } from './person-record-feed';
@@ -123,6 +124,24 @@ describe('PersonRecordFeed', () => {
     expect(screen.queryByText('Couldn’t load more positions.')).not.toBeInTheDocument();
   });
 
+  it('draws the shared card when the caller supplies none', () => {
+    renderFeed({ rows: [row('a'), row('b')] });
+
+    expect(screen.getAllByTestId('card').map(card => card.textContent)).toEqual(['a', 'b']);
+  });
+
+  it('lets a caller draw its own card, keyed for it', () => {
+    // The Topics tab's card carries counts this component cannot fetch; everything around the rows
+    // is the same, which is why it is a render function rather than a second copy of this file.
+    renderFeed({
+      rows: [row('a'), row('b')],
+      renderCard: item => <div data-testid="custom">{item.entityId}</div>,
+    });
+
+    expect(screen.getAllByTestId('custom').map(card => card.textContent)).toEqual(['a', 'b']);
+    expect(screen.queryByTestId('card')).toBeNull();
+  });
+
   it('offers no retry when nothing failed', () => {
     renderFeed({ rows: [row('claim-1')], fetchNextPage: () => {} });
 
@@ -134,4 +153,21 @@ describe('PersonRecordFeed', () => {
 
     expect(screen.getByText('Loading positions…')).toBeInTheDocument();
   });
+});
+
+it('supplies one-based row positions to any custom renderer without adding DOM wrappers', () => {
+  function CustomCard({ id }: { id: string }) {
+    const scope = useActionScope();
+    return (
+      <article data-testid="scoped-card" data-position={scope.item_position}>
+        {id}
+      </article>
+    );
+  }
+  const { unmount } = renderFeed({ rows: [row('a'), row('b')], renderCard: item => <CustomCard id={item.entityId} /> });
+  const cards = screen.getAllByTestId('scoped-card');
+  expect(cards.map(card => card.dataset.position)).toEqual(['1', '2']);
+  expect(cards[0].parentElement).toBe(cards[1].parentElement);
+  expect(cards[0].parentElement?.children).toHaveLength(2);
+  unmount();
 });

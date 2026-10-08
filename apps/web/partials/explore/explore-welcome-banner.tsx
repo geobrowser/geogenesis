@@ -1,6 +1,5 @@
 'use client';
 
-import { useDebatesHub } from '~/core/debates/matchmaking/use-debates-hub';
 import { useDismissedNotice } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -8,13 +7,13 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 
 // Persisted alongside the other one-time notices (see `dismissedNoticesAtom`). Once the
 // user dismisses the banner this id is appended to the list and it never renders again.
-// The id keeps its original `Curator` suffix even though the copy is now debate-focused —
+// The id keeps its original `Curator` suffix even though the copy has changed since —
 // changing it would re-show the banner to everyone who has already dismissed it.
 const WELCOME_BANNER_ID = 'exploreWelcomeCurator';
 
 /**
- * "Welcome to Geo - Find your first debate!" banner shown above the explore feed. Dismissible
- * via the close button in the top-right; the dismissed state persists in localStorage.
+ * "Welcome to Geo" banner shown above the explore feed. Dismissible via the close button in the
+ * top-right; the dismissed state persists in localStorage.
  *
  * Gated behind `ClientOnly` so we never SSR a banner the user has already dismissed
  * (the dismissed state only exists client-side), which would flash on load.
@@ -29,7 +28,6 @@ export function ExploreWelcomeBanner() {
 
 function WelcomeBanner() {
   const { dismissed, remember: handleDismiss } = useDismissedNotice(WELCOME_BANNER_ID);
-  const { isOpen: isDebatesHubOpen, open: openDebatesHub } = useDebatesHub();
 
   if (dismissed) return null;
 
@@ -49,41 +47,13 @@ function WelcomeBanner() {
           <span aria-hidden className="mr-1.5">
             👋
           </span>
-          Welcome to Geo - Find your first debate!
+          Welcome to Geo!
         </h2>
-        <p className="mt-2 max-w-[338px] text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
-          Take a position on claims you care about, then match with someone on the other side. Record the debate and
-          publish it. Open the{' '}
-          {/* The hub is a panel rather than a route, so this is a button and not a link — there is no
-              href to give it. `NavUtils.toDebatesPanel` is for links arriving from elsewhere; from a
-              page the hub is already mounted on, opening it directly beats navigating to do it.
-
-              Lobby named explicitly rather than leaning on the hook's default, matching "Join a
-              debate" in the debate feed: this is where the copy above sends the reader — "find your
-              first debate" is the question Lobby answers — and it shouldn't follow the default if
-              that default is ever retuned for the navbar badge.
-
-              Styled as the inline prose link in the onboarding dialog, in white for the dark ground.
-              `button` inherits font and letter-spacing from the base layer, so it reads as part of
-              the sentence rather than a control dropped into it.
-
-              `aria-expanded` because the desktop panel is a non-modal aside portaled to the end of
-              document.body: it takes no focus and sits nowhere near this sentence in reading order,
-              so without it activating this button announces nothing at all. (The mobile sheet traps
-              focus, so it announces itself either way.) Reports state rather than promising a
-              toggle — this button only ever opens, and the panel carries its own close affordances.
-              No `aria-controls` to go with it: the panel unmounts when closed, so the id it would
-              point at is absent exactly when the attribute would be read. Same call the navbar
-              opener makes. */}
-          <button
-            type="button"
-            aria-expanded={isDebatesHubOpen}
-            onClick={() => openDebatesHub('lobby')}
-            className="text-white underline decoration-white underline-offset-2"
-          >
-            debate hub
-          </button>{' '}
-          to get started!
+        {/* Written for readers, not debaters: both actions are on the feed right below, so there is
+            nothing to link to. Recording and matchmaking live in the debates hub for people who go
+            looking. */}
+        <p className="mt-2 text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
+          Watch a debate. Agree or disagree? Cast your vote.
         </p>
       </div>
 

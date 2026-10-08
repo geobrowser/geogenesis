@@ -9,6 +9,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateChallenge } from '../api';
 import { useAcceptDebateChallenge, useRejectDebateChallenge } from '../hooks';
+import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
 import { hubCardMotion } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { RequestParties } from './request-parties';
@@ -30,10 +31,13 @@ export function DebateChallengeCard({
   challenge,
   role,
   ref,
+  analyticsSurface = 'hub',
 }: {
   challenge: DebateChallenge;
   role: 'requester' | 'recipient';
   ref?: React.Ref<HTMLElement>;
+  /** Whose clicks these are; the calendar shows this card too. */
+  analyticsSurface?: DebateAnalyticsSurface;
 }) {
   const acceptChallenge = useAcceptDebateChallenge();
   const rejectChallenge = useRejectDebateChallenge();
@@ -75,6 +79,7 @@ export function DebateChallengeCard({
               type="button"
               onClick={() => rejectChallenge.mutate(challenge.id)}
               disabled={busy}
+              {...debateActionAnalyticsAttributes(analyticsSurface, 'Cancel request', 'cancel_debate_request')}
               className="shrink-0 text-text underline transition-colors hover:text-grey-04 disabled:opacity-50"
             >
               {rejectChallenge.isPending ? 'Cancelling…' : 'Cancel request'}

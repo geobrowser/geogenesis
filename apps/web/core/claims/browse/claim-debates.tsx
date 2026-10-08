@@ -20,7 +20,8 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useQueryEntities } from '~/core/sync/use-store';
-import type { Entity, Relation } from '~/core/types';
+import type { Entity } from '~/core/types';
+import { Entities } from '~/core/utils/entity';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -63,16 +64,7 @@ const VOTE_FETCH_CAP = 500;
  * Renders nothing when the claim has never been debated. The invitation to be the first belongs
  * next to the readiness toggle, which is the control that acts on it — not in an empty module here.
  */
-export function ClaimDebates({
-  claimId,
-  spaceId,
-  responseKind,
-}: {
-  claimId: string;
-  spaceId: string;
-  /** Labels each debater's side in the claim's own vocabulary — Agree/Disagree or Verify/Dispute. */
-  responseKind: 'stance' | 'veracity';
-}) {
+export function ClaimDebates({ claimId, spaceId }: { claimId: string; spaceId: string }) {
   // A page at a time rather than an accumulating list: appending pushes everything below the
   // section down the page as the reader loads more, where swapping keeps the layout where they
   // left it.
@@ -100,11 +92,11 @@ export function ClaimDebates({
     const map = new Map<string, DebateSide[]>();
     for (const debate of debates) {
       map.set(debate.id, [
-        ...relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(id => ({
+        ...Entities.relationTargets(debate.relations, DEBATE_SUPPORTED_BY_PROPERTY_ID).map(id => ({
           spaceId: id,
           position: true,
         })),
-        ...relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(id => ({
+        ...Entities.relationTargets(debate.relations, DEBATE_OPPOSED_BY_PROPERTY_ID).map(id => ({
           spaceId: id,
           position: false,
         })),
@@ -144,7 +136,6 @@ export function ClaimDebates({
               profilesBySpaceId={profilesBySpaceId}
               winnerShare={winnerShareByDebateId.get(debate.id) ?? null}
               keyframeUrl={keyframeByDebateId.get(debate.id) ?? null}
-              responseKind={responseKind}
             />
           </li>
         ))}
@@ -237,8 +228,8 @@ export function useWinnerSharesWithStatus(
     const spaceIdByHex = new Map<string, string>();
 
     for (const vote of votes) {
-      const debateId = relationTargets(vote.relations, VOTE_DEBATES_PROPERTY_ID)[0];
-      const winnerSpaceEntityId = relationTargets(vote.relations, VOTE_WINNER_PROPERTY_ID)[0];
+      const debateId = Entities.relationTargets(vote.relations, VOTE_DEBATES_PROPERTY_ID)[0];
+      const winnerSpaceEntityId = Entities.relationTargets(vote.relations, VOTE_WINNER_PROPERTY_ID)[0];
       // The space a Vote lives in is its voter, which is what one-vote-per-person is enforced on.
       const voterSpaceId = vote.spaces[0];
       if (!debateId || !winnerSpaceEntityId || !voterSpaceId) continue;
@@ -295,7 +286,6 @@ export function DebateRow({
   profilesBySpaceId,
   winnerShare,
   keyframeUrl,
-  responseKind,
 }: {
   debate: Entity;
   spaceId: string;
@@ -303,13 +293,13 @@ export function DebateRow({
   profilesBySpaceId: Map<string, { name?: string | null; avatarUrl?: string | null }>;
   winnerShare: WinnerShare | null;
   keyframeUrl: string | null;
-  responseKind: 'stance' | 'veracity';
 }) {
   const nameFor = (participantSpaceId: string) => profilesBySpaceId.get(participantSpaceId)?.name ?? 'Unnamed debater';
 
   return (
     <Link
       href={NavUtils.toEntity(spaceId, debate.id)}
+      data-entity-side-panel-full-page
       className="flex items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 transition-colors hover:border-grey-03"
     >
       {/* The still the debate was published with, in the shape the video actually is. The `Debate
@@ -344,7 +334,7 @@ export function DebateRow({
                       side.position ? 'bg-successTertiary text-text' : 'bg-errorTertiary text-text'
                     )}
                   >
-                    {responsePositionLabel(responseKind, side.position)}
+                    {responsePositionLabel(side.position)}
                   </span>
                 </span>
               </React.Fragment>
@@ -414,23 +404,32 @@ function DebateMeta({ debate, totalVotes }: { debate: Entity; totalVotes: number
 }
 
 /**
- * When the debate was published, as a date.
+ * When the debate was published, as a date to *show*.
  *
  * `createdAt` and `updatedAt` are typed as "unix seconds or ISO 8601, varies by backend", so both
  * shapes are handled rather than assumed. `createdAt` is the one that means "when this debate
  * happened" — `updatedAt` moves whenever anything touches the entity, including a backlink from
- * some unrelated edit.
+ * some unrelated edit. Falling back to it is acceptable for a label, where an approximate date beats
+ * none; it is not acceptable for a position — see {@link debateCreatedDate}.
  */
-function debateDate(debate: Entity): Date | null {
-  const raw = debate.createdAt ?? debate.updatedAt;
+export function debateDate(debate: Entity): Date | null {
+  return entityTimestamp(debate.createdAt ?? debate.updatedAt);
+}
+
+/**
+ * When the debate was published, and nothing else — for placing it among other rows.
+ *
+ * No `updatedAt` fallback, which is the whole difference from {@link debateDate}. Ordering by a
+ * timestamp that moves on any unrelated edit floats an old debate up among recent activity; a debate
+ * with no `createdAt` is better left undated, which the feed's ordering already sends to the tail.
+ */
+export function debateCreatedDate(debate: Entity): Date | null {
+  return entityTimestamp(debate.createdAt);
+}
+
+function entityTimestamp(raw: string | number | null | undefined): Date | null {
   if (raw === undefined || raw === null) return null;
 
   const date = typeof raw === 'number' ? new Date(raw * 1000) : new Date(/^\d+$/.test(raw) ? Number(raw) * 1000 : raw);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-export function relationTargets(relations: Relation[], propertyId: string): string[] {
-  return relations
-    .filter(relation => relation.isDeleted !== true && ID.equals(relation.type.id, propertyId))
-    .map(relation => relation.toEntity.id);
 }

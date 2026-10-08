@@ -1,5 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render as renderBare, screen } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -11,12 +12,54 @@ import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 
 import { ClaimPageView, resolveClaimTab } from './claim-page-view';
 
+/**
+ * The page inside the provider it actually runs inside.
+ *
+ * It reads the activity aggregate out of the query cache and writes a reader's own comment back into
+ * it, so a bare render throws "No QueryClient set" — the client is not optional context here. One
+ * client per render, kept across `rerender` so that a re-render with different props stays a
+ * re-render rather than becoming a fresh cache.
+ */
+function render(ui: React.ReactElement) {
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const view = renderBare(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return {
+    ...view,
+    rerender: (next: React.ReactElement) =>
+      view.rerender(<QueryClientProvider client={client}>{next}</QueryClientProvider>),
+  };
+}
+
 const mocks = vi.hoisted(() => ({
+  activityError: null as Error | null,
+  retryActivity: vi.fn(),
+  activityCountError: null as Error | null,
+  retryActivityCount: vi.fn(),
+  adjustActivityTotal: vi.fn(),
+  countsMountedFor: [] as string[],
+  claimCommentsError: null as Error | null,
+  refetchClaimComments: vi.fn(),
+  // The active tab comes from the route, so a test that needs another tab sets this.
+  pathname: '/space/space-1/claim-1',
   entity: null as Record<string, unknown> | null,
+  /** Non-comment rows the Overview orders into its activity thread — the debates on this claim. */
+  activityRows: [] as Array<{ id: string; createdAt: string; content: unknown }>,
+  /** What the shared activity count answers for this claim; null means it has not answered. */
+  activityTotal: null as number | null,
+  /** How many responses the claim has; zero means the hero draws no verdict column. */
+  responseTotal: 11,
+  /** Whether the response counts are still out, which is what the hero reserves its column for. */
+  summaryLoading: false,
+  /** Whether the counts actually answered. False after a terminal failure, not just while loading. */
+  hasCounts: true,
+  /** Drives the one strip that can occupy the hero's first grid row. */
+  isControversial: false,
   /** Props the description's clamp received, or null if it rendered no clamp at all. */
   clamp: null as Record<string, unknown> | null,
   /** Props the chip section received, or null if the page rendered none. */
   chipSection: null as Record<string, unknown> | null,
+  /** Props the Topics tab received, or null if the page rendered none. */
+  topicsTab: null as Record<string, unknown> | null,
   tabs: null as Record<string, unknown> | null,
   activity: null as Record<string, unknown> | null,
   recordTab: null as Record<string, unknown> | null,
@@ -46,6 +89,12 @@ const mocks = vi.hoisted(() => ({
   },
   /** Claim response context supplied to the otherwise generic comment thread. */
   commentPosition: null as Record<string, unknown> | null,
+  /** Whether the viewer's own response is still confirming, per the shared position control. */
+  isResponsePending: false,
+  /** Whether it has yet to reach the bundler — the narrower window the pills wait on (GEO-2889). */
+  isResponseSubmitting: false,
+  /** Props the position pills received. */
+  positionControl: null as Record<string, unknown> | null,
   /**
    * Deliberately not 3.
    *
@@ -58,7 +107,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('next/navigation', () => ({
-  usePathname: () => '/space/space-1/claim-1',
+  usePathname: () => mocks.pathname,
 }));
 vi.mock('~/core/state/editor/editor-provider', () => ({ useActiveTabIdForEditor: () => null }));
 
@@ -80,7 +129,8 @@ vi.mock('~/design-system/clamped-text', () => ({
   },
 }));
 
-// Its own suite covers the chips and the expander; here we only need to see what it was handed.
+// Only `META_CHIP_CLASS` is still read from here — the hero's switched-off topics row borrows the
+// chips' shape. The section itself no longer renders on this page at all.
 vi.mock('~/partials/entity-page/relation-chip-section', () => ({
   META_CHIP_CLASS: 'meta-chip',
   RelationChipSection: (props: Record<string, unknown>) => {
@@ -89,8 +139,52 @@ vi.mock('~/partials/entity-page/relation-chip-section', () => ({
   },
 }));
 
+// The Topics tab is a feed of its own, with its own counts and ordering covered in its own suite.
+// Here we only need to see which topics reached it.
+vi.mock('./claim-topics-tab', () => ({
+  ClaimTopicsTab: (props: Record<string, unknown>) => {
+    mocks.topicsTab = props;
+    return <div data-testid="topics-tab" />;
+  },
+}));
+
 vi.mock('~/core/sync/use-store', () => ({
   useQueryEntity: () => ({ entity: mocks.entity, isLoading: false }),
+}));
+
+// What the Overview puts in its activity thread besides comments. Its own fetching — debates,
+// profiles, keyframes — is covered by the rows' suites; this file is about page composition.
+vi.mock('./use-claim-activity-rows', () => ({
+  useClaimActivityRows: () => ({
+    rows: mocks.activityRows,
+    isLoading: false,
+    error: mocks.activityError,
+    retry: mocks.retryActivity,
+  }),
+}));
+
+// The heading's number, which is the same one the claim's Explore card shows. Its own query is
+// covered by `claim-activity-count.test.ts`; here it only needs to reach the heading.
+vi.mock('~/core/hooks/use-comments', () => ({
+  useComments: () => ({
+    comments: [],
+    totalCount: 0,
+    isLoading: false,
+    error: mocks.claimCommentsError,
+    refetch: mocks.refetchClaimComments,
+  }),
+}));
+
+vi.mock('./claim-activity-count', () => ({
+  useClaimActivityCounts: (ids: string[]) => {
+    mocks.countsMountedFor.push(...ids);
+    return {
+      counts: new Map(mocks.activityTotal == null ? [] : [['claim1', { total: mocks.activityTotal }]]),
+      error: mocks.activityCountError,
+      retry: mocks.retryActivityCount,
+    };
+  },
+  adjustClaimActivityTotal: mocks.adjustActivityTotal,
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -101,7 +195,10 @@ vi.mock('./use-claim-response-state', () => ({
   useClaimResponseState: () => ({
     responseKind: 'stance',
     summary: {
-      isControversial: false,
+      isLoading: mocks.summaryLoading,
+      hasCounts: mocks.hasCounts,
+      total: mocks.responseTotal,
+      isControversial: mocks.isControversial,
       viewerDirection: 'positive',
       viewerSpaceId: 'viewer-space',
       isViewerResponseLoading: true,
@@ -126,10 +223,15 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
     actionTitle: () => undefined,
     responseError: null,
     isConnected: false,
+    isResponsePending: mocks.isResponsePending,
+    isResponseSubmitting: mocks.isResponseSubmitting,
   }),
 }));
 vi.mock('./claim-position-comment', () => ({
-  ClaimPositionCommentControl: () => <div data-testid="position" />,
+  ClaimPositionCommentControl: (props: Record<string, unknown>) => {
+    mocks.positionControl = props;
+    return <div data-testid="position" />;
+  },
 }));
 vi.mock('./claim-comment-position', () => ({
   ClaimCommentPositionProvider: (props: Record<string, unknown>) => {
@@ -138,10 +240,21 @@ vi.mock('./claim-comment-position', () => ({
   },
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => () => {} }));
+// The prefetching link reaches for the sync engine; the topic chips only need to be links.
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ href, children, className }: { href: string; children: React.ReactNode; className?: string }) => (
+    <a href={href} className={className}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock('~/core/debates/backfill-readiness-for-held-position', () => ({
+  trustedIndexedPosition: () => null,
   useBackfillReadinessForHeldPosition: () => {},
 }));
-vi.mock('./claim-verdict', () => ({ ClaimVerdict: () => <div data-testid="verdict" /> }));
+vi.mock('~/partials/explore/claim-explore-feed-card', () => ({
+  ClaimVerdictColumn: () => <div data-testid="verdict" />,
+}));
 vi.mock('./claim-sources-tab', () => ({ ClaimSourcesTab: () => <div data-testid="sources" /> }));
 vi.mock('./claim-end-slot', () => ({ ClaimEndSlot: () => null }));
 vi.mock('./claim-record-tab', () => ({
@@ -171,7 +284,22 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
 }));
 vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
-  CommentSection: () => <div data-testid="comments" />,
+  CommentSection: ({
+    title,
+    activityRows,
+    totalOverride,
+  }: {
+    title?: string;
+    activityRows?: Array<{ id: string }>;
+    totalOverride?: number;
+  }) => (
+    <div
+      data-testid="comments"
+      data-title={title}
+      data-total={totalOverride == null ? '' : String(totalOverride)}
+      data-activity-rows={(activityRows ?? []).map(r => r.id).join(',')}
+    />
+  ),
 }));
 
 function claimEntity(description: string | null) {
@@ -185,9 +313,25 @@ function claimEntity(description: string | null) {
 }
 
 beforeEach(() => {
+  mocks.activityRows = [];
+  mocks.activityError = null;
+  mocks.retryActivity.mockClear();
+  mocks.activityCountError = null;
+  mocks.retryActivityCount.mockClear();
+  mocks.adjustActivityTotal.mockClear();
+  mocks.countsMountedFor.length = 0;
+  mocks.claimCommentsError = null;
+  mocks.refetchClaimComments.mockClear();
+  mocks.pathname = '/space/space-1/claim-1';
+  mocks.activityTotal = null;
+  mocks.responseTotal = 11;
+  mocks.summaryLoading = false;
+  mocks.hasCounts = true;
+  mocks.isControversial = false;
   mocks.entity = claimEntity('A description long enough that the page has something to collapse.');
   mocks.clamp = null;
   mocks.chipSection = null;
+  mocks.topicsTab = null;
   mocks.tabs = null;
   mocks.activity = null;
   mocks.recordTab = null;
@@ -207,9 +351,51 @@ beforeEach(() => {
   mocks.record.debatesHasNextPage = false;
   mocks.record.fetchNextDebatesPage = () => {};
   mocks.commentPosition = null;
+  mocks.isResponsePending = false;
+  mocks.isResponseSubmitting = false;
+  mocks.positionControl = null;
 });
 
 describe('ClaimPageView record', () => {
+  /*
+   * GEO-3021, reached by walking rather than by loading. The route renders
+   * `EntityPageBody` unkeyed, so following a related claim reuses this page — and
+   * the activity card keeps the reader's Debates/Claims selection in its own
+   * state, so without a key a claim that has debates would land on the Claims left
+   * over from one that had none.
+   *
+   * Asserted on the node rather than through the mock: a remount builds a new DOM
+   * element and a re-render keeps the old one, so element identity is the question
+   * itself rather than a proxy for it.
+   */
+  it('remounts the activity card when the page is pointed at another claim', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    const first = screen.getByTestId('activity');
+
+    // Re-rendered on the same claim: still the reader's own card, untouched.
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    expect(screen.getByTestId('activity')).toBe(first);
+
+    view.rerender(<ClaimPageView entityId="claim-2" spaceId="space-1" />);
+
+    expect(screen.getByTestId('activity')).not.toBe(first);
+  });
+
+  /*
+   * And the space, because a claim is not one record. It can live in several —
+   * `SpaceRedirect` only moves a reader on where the entity is absent from the
+   * space they asked for — and every row the card is given here is read through
+   * `spaceId`, so the same claim in two spaces is two different records.
+   */
+  it('remounts the activity card when the same claim is read in another space', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    const first = screen.getByTestId('activity');
+
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-2" />);
+
+    expect(screen.getByTestId('activity')).not.toBe(first);
+  });
+
   it('offers product tabs before authored claim tabs', () => {
     mocks.record.claimsTotal = 1;
 
@@ -261,16 +447,114 @@ describe('ClaimPageView record', () => {
     ]);
   });
 
-  it('orders Overview as response summary, position, activity, then comments', () => {
+  it('heads the page like an Explore claim card: the claim, the pills, then the verdict column', () => {
+    mocks.entity = {
+      ...mocks.entity,
+      types: [{ id: 'claim-type', name: 'Claim' }],
+      relations: [{ id: 'relation-1', type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-1', name: 'Ethics' } }],
+    };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
+    const heading = screen.getByRole('heading', { level: 1 });
     const position = screen.getByTestId('position');
     const verdict = screen.getByTestId('verdict');
+    const tabs = screen.getByTestId('tabs');
+
+    // Topics are on their own tab for now, not above the claim.
+    expect(screen.queryByRole('navigation', { name: 'Topics' })).toBeNull();
+    expect(heading.compareDocumentPosition(position) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(position.compareDocumentPosition(verdict) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(verdict.compareDocumentPosition(tabs) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    // No type chip: every claim on this page is a Claim.
+    expect(screen.queryByText('Claim')).toBeNull();
+  });
+
+  it('draws no verdict column on a claim nobody has answered, as Explore does', () => {
+    mocks.responseTotal = 0;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.queryByTestId('verdict')).toBeNull();
+    expect(screen.getByTestId('position')).toBeInTheDocument();
+  });
+
+  it('keeps both hero tracks while the counts are still out', () => {
+    // `hasVerdict` cannot be true until they answer, so a template derived from it alone painted
+    // one column and then re-wrapped the claim when the second appeared — a shift at the top of
+    // the page on every load.
+    mocks.summaryLoading = true;
+    const { container } = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const grid = container.querySelector('header > div');
+    expect(grid?.className).toContain('grid-cols-[minmax(0,1fr)_220px]');
+    // Reserved, not filled: nothing has said what the verdict is yet.
+    expect(screen.queryByTestId('verdict')).toBeNull();
+  });
+
+  it('keeps the track when the counts fail rather than reading the failure as a zero', () => {
+    // A counts query that exhausts its retries leaves `total` at zero with nothing loading any
+    // more — the shape of an unanswered claim, which is exactly what it is not. Keying the track
+    // off `isLoading` gave it back on that failure and re-wrapped the title anyway.
+    mocks.summaryLoading = false;
+    mocks.hasCounts = false;
+    mocks.responseTotal = 0;
+    const { container } = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(container.querySelector('header > div')?.className).toContain('grid-cols-[minmax(0,1fr)_220px]');
+    // Reserved, not filled: there is still no verdict to draw.
+    expect(screen.queryByTestId('verdict')).toBeNull();
+  });
+
+  it('gives the column back once the counts settle on nobody having answered', () => {
+    mocks.responseTotal = 0;
+    const { container } = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(container.querySelector('header > div')?.className).toContain('grid-cols-1');
+  });
+
+  it('leaves no empty row above the claim when nothing is drawn there', () => {
+    // The hero pins its parts to explicit rows so the verdict can start on the title's. With the
+    // chips row empty, row 1 is a `gap-y-4` above the claim belonging to a row nothing occupies —
+    // visible in the side panel and at phone widths, where that gap is set.
+    const { container } = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByRole('heading', { level: 1 }).closest('div')?.className).toContain('row-start-1');
+    expect(container.querySelector('[data-testid="position"]')?.closest('.col-start-1')?.className).toContain(
+      'row-start-2'
+    );
+  });
+
+  it('moves the rows down again when the claim is controversial', () => {
+    mocks.isControversial = true;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByRole('heading', { level: 1 }).closest('div')?.className).toContain('row-start-2');
+  });
+
+  it('announces no Topics landmark over a row that is only the Controversial chip', () => {
+    // `SHOW_HERO_TOPICS` is off, so being controversial is the only thing that puts this row on
+    // the page — and it holds one status chip and no links. A navigation landmark named "Topics"
+    // over that is both empty and misnamed to anyone moving through the page by landmark.
+    mocks.isControversial = true;
+    // With topics on the claim, so this is about the row having no *links* rather than the claim
+    // having no topics.
+    mocks.entity = {
+      ...claimEntity('Anything'),
+      relations: [{ id: 'relation-1', type: { id: TOPICS_PROPERTY_ID }, toEntity: { id: 'topic-1', name: 'Ethics' } }],
+    };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText('Controversial')).toBeInTheDocument();
+    expect(screen.queryByRole('navigation', { name: 'Topics' })).toBeNull();
+  });
+
+  it('orders Overview as activity, then comments', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const tabs = screen.getByTestId('tabs');
     const activity = screen.getByTestId('activity');
     const comments = screen.getByTestId('comments');
 
-    expect(verdict.compareDocumentPosition(position) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(position.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(tabs.compareDocumentPosition(activity) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(activity.compareDocumentPosition(comments) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
@@ -293,6 +577,45 @@ describe('ClaimPageView record', () => {
 
     expect(setActiveSystemTab).toHaveBeenNthCalledWith(1, 'debates');
     expect(setActiveSystemTab).toHaveBeenNthCalledWith(2, 'claims');
+  });
+
+  it('hands the debates on this claim to the thread, and names it Activity', () => {
+    mocks.activityRows = [
+      { id: 'debate-1', createdAt: '2026-09-20T10:00:00Z', content: null },
+      { id: 'debate-2', createdAt: '2026-09-21T10:00:00Z', content: null },
+    ];
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const comments = screen.getByTestId('comments');
+    expect(comments).toHaveAttribute('data-activity-rows', 'debate-1,debate-2');
+    // Not "Comments": the list holds more than comments now, and the count says how much has
+    // happened to this claim rather than how many people typed.
+    expect(comments).toHaveAttribute('data-title', 'Activity');
+  });
+
+  it('heads the thread with the same count the claim’s Explore card shows', () => {
+    mocks.activityTotal = 17;
+
+    render(<ClaimPageView entityId="claim1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('comments')).toHaveAttribute('data-total', '17');
+  });
+
+  it('lets the thread count for itself until that number answers', () => {
+    render(<ClaimPageView entityId="claim1" spaceId="space-1" />);
+
+    expect(screen.getByTestId('comments')).toHaveAttribute('data-total', '');
+  });
+
+  // GEO-3008: debates are in the activity thread *and* keep their gallery. The gallery is the way
+  // through to the Debates tab, which is the complete filterable index; the thread shows the recent
+  // ones in the order they happened. Two jobs rather than two copies.
+  it('keeps the debates gallery alongside the thread', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const kinds = mocks.activity?.kinds as Array<{ key: string }>;
+    expect(kinds.map(kind => kind.key)).toEqual(['debates', 'claims']);
   });
 
   it('marks only failed record counts unavailable in Activity', () => {
@@ -373,6 +696,35 @@ describe('ClaimPageView description', () => {
   });
 });
 
+describe('ClaimPageView position', () => {
+  // The claim page is where a confirming response was pressed again and published a retraction.
+  // The pills guard against that quietly: the side reads as taken at once, with no note or wait
+  // cursor, and only the presses that would undo it are dropped until it lands.
+  it('marks the pills pending until the response reaches the bundler, without announcing a wait', () => {
+    mocks.isResponsePending = true;
+    mocks.isResponseSubmitting = true;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(true);
+    expect(screen.queryByText(/waiting for confirmation/i)).toBeNull();
+  });
+
+  // GEO-2889: inclusion is the slow part (p90 ~30s), and the pills no longer wait on it.
+  it('releases the pills once the response is submitted, before it lands', () => {
+    mocks.isResponsePending = true;
+    mocks.isResponseSubmitting = false;
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(false);
+  });
+
+  it('releases the pills once it has landed', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.positionControl?.pending).toBe(false);
+  });
+});
+
 describe('ClaimPageView comments', () => {
   it('labels commenters using this claim’s response kind and optimistic viewer position', () => {
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
@@ -386,40 +738,159 @@ describe('ClaimPageView comments', () => {
       isViewerResponseLoading: true,
     });
   });
+
+  /**
+   * Which claim an Agree is about. By the time a reader reaches the thread the title is off screen,
+   * and a badge on a comment under an extracted claim answers for a different claim than the page —
+   * so each badge names its own in its hover title. The page-level provider left the name out while
+   * the prop was optional, which meant the badges on the claim's *own* comments, the common case and
+   * the one this was added for, explained nothing.
+   */
+  /**
+   * `useQueryEntities` hands back `error` precisely so a caller drawing an empty state can tell
+   * "nothing matched" from "the query never came back". This hook dropped it, so a cold-load failure
+   * made the feed omit every debate — and every claim extracted from one — in silence, while the
+   * heading, which is a separate query, went on counting them.
+   */
+  it('says the debates could not be read rather than drawing a feed without them', () => {
+    mocks.activityError = new Error('kg timeout');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the debates on this claim/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.retryActivity).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The heading's aggregate can fail on its own, and its failure was indistinguishable from "not
+   * answered yet": `totalOverride` came back undefined either way, so the heading fell back to this
+   * claim's own comments plus the rows it drew — a number that leaves out every extracted claim and
+   * every comment nested under a debate, presented as the Activity total and never corrected.
+   */
+  /**
+   * The claim page has two surfaces that publish an ordinary comment on the claim — the thread's own
+   * composers and the hero's position explanation — and only the first was wired to the heading's
+   * aggregate, which the heading prefers unconditionally. So explaining a position left the number one
+   * behind.
+   */
+  /**
+   * The adjustment corrects a cached answer, so it does nothing when that answer was never fetched. The
+   * hero renders on every tab; the heading — the only other caller of the aggregate — is inside the
+   * Overview. So an explanation published from the Debates tab moved nothing at all, and switching to
+   * Overview before the indexer caught up showed the pre-comment number.
+   */
+  it('keeps the activity aggregate mounted on a tab that does not display it', () => {
+    mocks.pathname = '/space/space-1/claim-1/debates';
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    // The Overview — and so the heading, the aggregate's only other caller — is not rendered here.
+    expect(screen.queryByText('Activity (34)')).not.toBeInTheDocument();
+    // The hero is, so the number it adjusts has to be on its way regardless.
+    expect(mocks.countsMountedFor).toContain('claim-1');
+  });
+
+  it('routes the hero explanation into the same activity count the thread uses', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    const report = mocks.positionControl?.onActivityPublish as ((delta: number) => void) | undefined;
+    report?.(1);
+
+    // The same cache the thread's composers move, keyed by this claim — not a second counter.
+    expect(mocks.adjustActivityTotal).toHaveBeenCalledWith(expect.anything(), 'claim-1', 1);
+  });
+
+  it('says when the activity total could not be read', () => {
+    mocks.activityCountError = new Error('aggregate unavailable');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load this claim’s activity total/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.retryActivityCount).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The claim's own comments are the third read, and `CommentSection` keeps its failure to itself —
+   * reasonable where the heading counts that same list, wrong here, where the heading is an independent
+   * aggregate that goes on counting the comments the list could not load.
+   */
+  it('says when the claim’s own comments could not be read', () => {
+    mocks.claimCommentsError = new Error('comments unavailable');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the comments on this claim/)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(mocks.refetchClaimComments).toHaveBeenCalledOnce();
+  });
+
+  // Each read speaks for itself: one failing says nothing about the other.
+  it('says only what failed when just the debates read did', () => {
+    mocks.activityError = new Error('kg timeout');
+
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.getByText(/Couldn’t load the debates on this claim/)).toBeInTheDocument();
+    expect(screen.queryByText(/Couldn’t load this claim’s activity total/)).not.toBeInTheDocument();
+  });
+
+  it('says nothing when the debates read simply found none', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(screen.queryByText(/Couldn’t load the debates/)).not.toBeInTheDocument();
+  });
+
+  it('names the claim its side badges are about', () => {
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect(mocks.commentPosition).toMatchObject({ claimName: 'Pineapple belongs on pizza' });
+  });
 });
 
-// GEO-2781. Topics used to be a run of chips crammed into the header's meta row, capped at three
-// and with a `+N` that only counted. It is now the topic view's Subtopics section, which is the
-// same question asked of the reader and so should not be a second thing that merely looks like it.
+// Topics live on their own tab for now; the hero's row is switched off (`SHOW_HERO_TOPICS`). The
+// Overview no longer repeats them either.
 describe('ClaimPageView topics', () => {
-  const topicRelation = {
-    id: 'relation-1',
+  const topic = (n: number) => ({
+    id: `relation-${n}`,
     type: { id: TOPICS_PROPERTY_ID },
-    toEntity: { id: 'topic-1', name: 'Ethics' },
-  };
+    toEntity: { id: `topic-${n}`, name: `Topic ${n}` },
+  });
+  const tagRelation = { id: 'relation-tag', type: { id: TAG_PROPERTY_ID }, toEntity: { id: 'tag-1', name: 'Draft' } };
 
-  it('draws them with the shared chip section, under the label Topics', () => {
-    mocks.entity = { ...claimEntity('Anything'), relations: [topicRelation] };
+  it('draws every topic, and only topics, on the Topics tab', () => {
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'topics', setActiveSystemTab: vi.fn() };
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1), topic(2), tagRelation] };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(screen.getByTestId('chip-section')).toHaveAttribute('data-label', 'Topics');
-    expect(screen.getByTestId('activity').nextElementSibling).toBe(screen.getByTestId('chip-section'));
+    expect(screen.getByTestId('topics-tab')).toBeInTheDocument();
+    expect(mocks.topicsTab?.topics).toEqual([topic(1), topic(2)]);
+    expect(mocks.topicsTab?.spaceId).toBe('space-1');
   });
 
-  it('hands the section the topic relations, scoped to the viewing space', () => {
-    mocks.entity = { ...claimEntity('Anything'), relations: [topicRelation] };
+  it('no longer draws them as chips anywhere on the page', () => {
+    mocks.sidePanel = { activeTabId: null, activeSystemTab: 'topics', setActiveSystemTab: vi.fn() };
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1)] };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(mocks.chipSection?.relations).toEqual([topicRelation]);
-    expect(mocks.chipSection?.spaceId).toBe('space-1');
+    expect(screen.queryByTestId('chip-section')).toBeNull();
   });
 
-  // Tags share the header row with the type and are a different relation; only Topics moved.
-  it('passes only topic relations, not the tags beside the type', () => {
-    const tagRelation = { id: 'relation-2', type: { id: TAG_PROPERTY_ID }, toEntity: { id: 'tag-1', name: 'Draft' } };
-    mocks.entity = { ...claimEntity('Anything'), relations: [topicRelation, tagRelation] };
+  it('no longer repeats them on the Overview', () => {
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1)] };
     render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
 
-    expect(mocks.chipSection?.relations).toEqual([topicRelation]);
+    expect(screen.queryByTestId('chip-section')).toBeNull();
+    expect(screen.queryByTestId('topics-tab')).toBeNull();
+  });
+
+  it('offers a Topics tab only when the claim has topics', () => {
+    mocks.entity = { ...claimEntity('Anything'), relations: [topic(1)] };
+    render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+
+    expect((mocks.tabs?.systemTabsBefore as Array<{ label: string }>).map(tab => tab.label)).toContain('Topics');
   });
 });

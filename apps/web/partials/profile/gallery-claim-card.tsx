@@ -8,7 +8,6 @@ import { useDebateClaims } from '~/core/debates/hooks';
 import { MatchmakingClaimCard } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
-import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import type { ClaimResponse } from '~/core/profile/person-position-order';
 import { useQueryEntity } from '~/core/sync/use-store';
 
@@ -53,28 +52,15 @@ export function GalleryClaimCard({
   const claimRow: DebateClaim | null =
     rowQuery.data?.claims.find(claim => claim.claim_entity_id === row.entityId) ?? null;
 
-  const {
-    isResponseKindResolved,
-    isViewerResponseResolved,
-    responseBlockedReason,
-    responseKind,
-    claim,
-    positions,
-    readiness,
-  } = useClaimResponseState({
-    claimId: row.entityId,
-    spaceId: row.spaceId,
-    row: claimRow,
-    entity,
-    title: row.title,
-    enabled: nearViewport,
-  });
-
-  // A signed-out visitor gets the sign-in prompt rather than two dead pills —
-  // the same hook the feed's card and the claim page use, which also keeps
-  // Privy's session restoration from being mistaken for a login somebody asked
-  // for.
-  const promptSignIn = usePrivySignIn();
+  const { isResponseKindResolved, isViewerResponseResolved, responseBlockedReason, claim, positions, readiness } =
+    useClaimResponseState({
+      claimId: row.entityId,
+      spaceId: row.spaceId,
+      row: claimRow,
+      entity,
+      title: row.title,
+      enabled: nearViewport,
+    });
 
   return (
     <div ref={setContainer}>
@@ -90,25 +76,18 @@ export function GalleryClaimCard({
           // clearing.
           answersReady={isResponseKindResolved && isViewerResponseResolved}
           responseBlockedReason={responseBlockedReason}
-          onRequireSignIn={promptSignIn}
+          allowsSignedOutVotes
           // Which side *this person* took — the thing you opened their profile
           // to find out, and not something the card says on its own, since its
           // pills speak for the viewer. Under the pill that matches, which is
           // where the feed's card puts it too, so one claim reads the same way
           // in both places.
-          // Held back until the kind is known: labelling a factual claim
-          // "agrees" and then correcting it to "verifies" is worse than a beat
-          // with no tag.
-          noteFor={position =>
-            isResponseKindResolved ? (
-              <ClaimResponseTag
-                response={response}
-                responseKind={responseKind}
-                personName={personName}
-                forPosition={position}
-              />
-            ) : null
-          }
+          // Not held back on the claim's metadata. It was, because labelling a
+          // factual claim "agrees" and then correcting it to "verifies" was
+          // worse than a beat with no tag — and there is one wording now. The
+          // answer is already in `response`; waiting on a lookup that cannot
+          // change the wording only hid it, permanently where both reads fail.
+          noteFor={position => <ClaimResponseTag response={response} personName={personName} forPosition={position} />}
         />
       ) : (
         // Held at the card's own height rather than collapsed, so the row does

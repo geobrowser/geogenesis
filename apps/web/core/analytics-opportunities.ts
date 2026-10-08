@@ -1,10 +1,14 @@
-import { capture } from './analytics';
+import { type AnalyticsEventName, capture } from './analytics';
 
 export type OpportunityEligibility = 'eligible' | 'authentication_required' | 'ineligible';
+/** The deploy a `feature_exposed` row came from, which the event requires. */
+export const ANALYTICS_BUILD_ID =
+  process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_BUILD_ID || 'unversioned';
+
 export const rankingFeature = {
   feature_id: 'ranking-submit',
   feature_version: 'ranking-compose-v1',
-  build_id: process.env.NEXT_PUBLIC_VERCEL_GIT_COMMIT_SHA || process.env.NEXT_PUBLIC_BUILD_ID || 'unversioned',
+  build_id: ANALYTICS_BUILD_ID,
   exposure_rule: 'foreground-control-50pct-1s-v1',
 };
 
@@ -14,7 +18,7 @@ export function createRankingOpportunity(rankingId: string) {
   let state = '';
   let visibleSince: number | null = null;
   let exposed = false;
-  const emit = (name: string, properties: Record<string, unknown>) => {
+  const emit = (name: AnalyticsEventName, properties: Record<string, unknown>) => {
     try {
       capture(name, { ...properties, ...context, measurement_version: 'growth-v2' });
     } catch {

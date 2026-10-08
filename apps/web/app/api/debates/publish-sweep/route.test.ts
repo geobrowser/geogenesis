@@ -6,6 +6,15 @@ const mocks = vi.hoisted(() => ({
   candidates: {} as Record<string, string[]>,
   editorSpaceIds: [] as string[],
   publish: vi.fn(),
+  lockRan: true,
+  lockOptions: [] as Array<{ ttlMs: number; waitMs?: number }>,
+}));
+
+vi.mock('~/core/debates/server/acceptor-lock', () => ({
+  withAcceptorLock: async (fn: () => Promise<unknown>, options: { ttlMs: number; waitMs?: number }) => {
+    mocks.lockOptions.push(options);
+    return mocks.lockRan ? { ran: true, value: await fn() } : { ran: false };
+  },
 }));
 
 vi.mock('~/core/debates/server/acceptor-config', () => ({
@@ -16,11 +25,11 @@ vi.mock('~/core/debates/server/editor-spaces', () => ({
   listEditorSpaceIds: async () => mocks.editorSpaceIds,
 }));
 
-// `DebateNotPublishableError` stays real: the route branches on `instanceof`, so a stubbed class
-// would send every outcome down the generic-failure path and the test would prove nothing.
-vi.mock('~/core/debates/server/debate-source', async importOriginal => ({
-  ...(await importOriginal<typeof import('~/core/debates/server/debate-source')>()),
-  listSweepCandidateDebateIds: async (spaceId: string) => mocks.candidates[spaceId] ?? [],
+// Candidate discovery is stubbed; its paging and fallback are covered in `publish-candidates.test.ts`.
+// `debate-source` is left unmocked so `DebateNotPublishableError` stays real: the route branches on
+// `instanceof`, so a stubbed class would send every outcome down the generic-failure path.
+vi.mock('~/core/debates/server/publish-candidates', () => ({
+  listPublishCandidateDebateIds: async (spaceId: string) => mocks.candidates[spaceId] ?? [],
 }));
 
 vi.mock('~/core/debates/server/publish-debate', () => ({
@@ -40,6 +49,8 @@ beforeEach(() => {
   mocks.editorSpaceIds = ['space-1'];
   mocks.candidates = {};
   mocks.publish.mockReset();
+  mocks.lockRan = true;
+  mocks.lockOptions = [];
 });
 
 afterEach(() => {
@@ -50,6 +61,17 @@ afterEach(() => {
 const publishedResult = { status: 'published', debateEntityId: 'e', spaceId: 'space-1', userOpHash: '0x1' };
 
 describe('publish sweep', () => {
+  it('waits for the early claims sweep to release the signing lock, then skips the tick if it does not', async () => {
+    mocks.lockRan = false;
+    mocks.candidates = { 'space-1': ['debate-1'] };
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+    expect(await sweep()).toEqual({ ok: true, skipped: 'acceptor_busy' });
+    expect(mocks.publish).not.toHaveBeenCalled();
+    expect(mocks.lockOptions[0]?.waitMs).toBeGreaterThan(0);
+    warn.mockRestore();
+  });
+
   it('refuses a request without the cron secret', async () => {
     const { GET } = await import('./route');
     const response = await GET(new Request('https://geo.test/api/debates/publish-sweep'));
@@ -104,6 +126,18 @@ describe('publish sweep', () => {
     mocks.candidates = { 'space-1': [] };
 
     await expect(sweep()).resolves.toMatchObject({ mediaFailed: [], pending: 0 });
+  });
+
+  // Indexer lag (2026-10-05): a debate submitted on an earlier tick is not in the graph yet. It is
+  // counted, not published again, and does not take a slot from the debates behind it.
+  it('counts a debate whose publish is waiting on the graph without spending the attempt budget', async () => {
+    const waiting = Array.from({ length: 8 }, (_, i) => `waiting-${i}`);
+    mocks.candidates = { 'space-1': [...waiting, 'publishable'] };
+    mocks.publish.mockImplementation(async (debateId: string) =>
+      debateId === 'publishable' ? publishedResult : { status: 'submission_pending', debateEntityId: 'e' }
+    );
+
+    await expect(sweep()).resolves.toMatchObject({ submissionPending: 8, published: ['publishable'] });
   });
 
   it('does not spend the attempt budget on debates the acceptor cannot edit', async () => {

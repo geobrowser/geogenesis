@@ -5,6 +5,7 @@ import * as React from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
 import { useFeatureFlag } from '~/core/state/feature-flags';
+import { validateSpaceId } from '~/core/utils/utils';
 
 import { Button } from '~/design-system/button';
 import { Upload } from '~/design-system/icons/upload';
@@ -12,14 +13,18 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import { activeDebate } from './activity-state';
-import { type DebateSharePrompt } from './api';
+import { type DebateSharePrompt, GeoChatRequestError } from './api';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
 import { clearEnteringDebate, useEnteringDebateId, useEnteringDebatePending } from './debate-entry-intent';
 import { type DebateGatewayPauseReason, useDebateGateway } from './debate-gateway';
 import { DebateReadyPrompt, DebateRejoinBar } from './debate-ready-prompt';
+import { useDebateRequestAlert } from './debate-request-alert';
+import { useDebateRequestReceipts } from './debate-request-receipts';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
+import { debateRematchPath } from './debate-routes';
+import { debateRoomClaimKey, useForeignDebateTabClaim } from './debate-tab-claims';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -28,9 +33,14 @@ import {
   useHandleDebateSharePrompt,
   useRejectDebateChallenge,
 } from './hooks';
+import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
+import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
+import { sameId } from './rooms/room-presence';
+import { debateRoomIdFromPath } from './rooms/room-routes';
 import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
@@ -38,6 +48,7 @@ import {
   usePreparedSocialVideo,
 } from './social-video-share';
 import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
+import { useDebateInteractionReporter } from './use-debate-interaction-reporter';
 import { useScrollLock } from './use-scroll-lock';
 
 /**
@@ -100,9 +111,32 @@ export function DebateCoordinator() {
   //
   // The polling gates in `hooks.ts` deliberately did NOT move with it — a hidden tab should stop
   // refetching even though it is still present. Splitting those two is GEO-2842.
-  const debatePresence = useDebatePresence();
+  const visiblePresence = useDebatePresence();
+  // The strict half of presence. Mounted beside the gateway because it answers the question the
+  // gateway's heartbeat cannot: that heartbeat proves a tab exists, this proves someone is in
+  // front of it. geo-chat ranks matchmaking by it and never gates on it.
+  useDebateInteractionReporter(
+    geoChatAuth.ready && geoChatAuth.authenticated,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
+  );
   // Exactly one tab: visible *and* focused. See the rematch routing effect below.
   const hasAttention = useDebateAttention();
+  const activityQuery = useDebateActivity();
+  const currentUserId = useCurrentGeoChatUserId();
+  const activity = activityQuery.data ?? null;
+  // Hiding the tab drops presence after a short grace (GEO-3119), but never at the cost of the
+  // viewer's own pending things: geo-chat refuses an accept from an offline requester, hides their
+  // request from its recipient, and ends a debate-again session whose people went offline. So while
+  // the viewer is waiting on a request they sent, or is in a debate or debate-again session, they stay
+  // online. They are still not *requestable* while hidden — geo-chat decides that separately.
+  const holdsPresence = Boolean(
+    activity?.outbound_request ||
+    (activity?.challenge?.status === 'pending' && activity.challenge.requester.user_id === currentUserId) ||
+    activity?.rematch ||
+    activity?.debate
+  );
+  const debatePresence = visiblePresence || holdsPresence;
   const gateway = useDebateGateway(
     geoChatAuth.ready && geoChatAuth.authenticated,
     geoChatAuth.getPrivyIdentityToken,
@@ -115,9 +149,6 @@ export function DebateCoordinator() {
     geoChatAuth.getPrivyIdentityToken,
     geoChatAuth.accountKey
   );
-  const activityQuery = useDebateActivity();
-  const currentUserId = useCurrentGeoChatUserId();
-  const activity = activityQuery.data ?? null;
   const debate = activeDebate(activity);
   const reportedChallenge = activity?.challenge?.status === 'pending' ? activity.challenge : null;
   // A challenge expires the way a request does, so the same filter owns both — otherwise the popup
@@ -152,7 +183,17 @@ export function DebateCoordinator() {
   //
   // Nothing app-wide belongs over that page: it owns its own routing, and whatever it is about to
   // do is more current than activity is.
-  const atRematchPage = pathname.includes('/debates/rematches/');
+  //
+  // A room (GEO-2941) is the same surface under a different route, and open for as long as the pair
+  // are in it, so nothing app-wide may sit over it either.
+  //
+  // A lobby (GEO-3131) shares the room's path but is where people wait between debates, so it is
+  // neither: requests and challenges accepted there must route out of it. Read from the room view
+  // the page already loaded; until it lands, the path counts as a room.
+  const roomIdAtPath = debateRoomIdFromPath(pathname);
+  const atLobby = useDebateRoom(roomIdAtPath ?? '', false).data?.kind === 'lobby';
+  const atRoom = roomIdAtPath !== null && !atLobby;
+  const atDebateFlowPage = pathname.includes('/debates/rematches/') || atRoom;
   const activeFlow = Boolean(debate || activity?.rematch || challenge);
   const sharePromptsQuery = useDebateSharePrompts(Boolean(activity) && !activeFlow);
   const queriedSharePrompt =
@@ -194,6 +235,96 @@ export function DebateCoordinator() {
     if (snoozedChallengeId && challenge?.id !== snoozedChallengeId) setSnoozedChallengeId(null);
   }, [challenge, snoozedChallengeId]);
 
+  // Everything waiting on this viewer's answer, for the tone and the tab title (GEO-3026). Snoozes
+  // are ignored on purpose: a snoozed request was already seen, and each id alerts only once.
+  const challengeForViewerId = challenge && challenge.recipient.user_id === currentUserId ? challenge.id : null;
+  const pendingIncomingIds = React.useMemo(
+    () => [
+      ...(challengeForViewerId ? [challengeForViewerId] : []),
+      ...incomingRequests.filter(request => request.status === 'pending').map(request => request.id),
+    ],
+    [challengeForViewerId, incomingRequests]
+  );
+  useDebateRequestAlert(pendingIncomingIds);
+  // Whether each of those reached this screen, and whether anyone was there (GEO-3119).
+  const pendingIncomingReceipts = React.useMemo(
+    () => [
+      ...(challengeForViewerId ? [{ kind: 'challenge' as const, id: challengeForViewerId }] : []),
+      ...incomingRequests
+        .filter(request => request.status === 'pending')
+        .map(request => ({ kind: 'claim_request' as const, id: request.id })),
+    ],
+    [challengeForViewerId, incomingRequests]
+  );
+  useDebateRequestReceipts(
+    geoChatAuth.ready && geoChatAuth.authenticated,
+    pendingIncomingReceipts,
+    geoChatAuth.getPrivyIdentityToken,
+    geoChatAuth.accountKey
+  );
+
+  // GEO-2941. Offered, never entered for them. `joinable` is the server's door check, so this
+  // cannot offer a room that would refuse the join.
+  const upcomingRoomsQuery = useUpcomingDebateRooms(!atRoom);
+  const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
+  const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
+  const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
+  // A room whose debate already happened is never offered again.
+  // Reminded lobbies ride the same list (GEO-3133), shown only with `lobbyJoining` on.
+  const lobbyJoining = useFeatureFlag('lobbyJoining');
+  const joinableRooms = React.useMemo(
+    () =>
+      upcomingRooms.filter(
+        room => room.joinable && !finishedRoomIds.has(room.room_id) && (lobbyJoining || room.kind !== 'lobby')
+      ),
+    [finishedRoomIds, lobbyJoining, upcomingRooms]
+  );
+  // The sessions rooms have handed out, per the server, so the rematch effect below can tell one
+  // from a challenge's on every device. A joinable room with none yet may be about to hand one out.
+  const roomSessionIds = React.useMemo(
+    () => new Set(upcomingRooms.flatMap(room => (room.rematch_session_id ? [room.rematch_session_id] : []))),
+    [upcomingRooms]
+  );
+  // A lobby never hands out a session.
+  const hasRoomAwaitingSession = joinableRooms.some(room => room.kind !== 'lobby' && room.rematch_session_id === null);
+  // `undefined` is a geo-chat that predates the field, where no room's session can be identified.
+  // Until it deploys, an open room suppresses the push as it did before: a redirect into a room's
+  // session is what the ticket bans, and a delayed challenge push is the lesser cost.
+  const roomSessionsReported = upcomingRooms.every(room => room.rematch_session_id !== undefined);
+  // Only loaded rooms prove a session is not room-owned: every guard below reads vacuously safe on
+  // `[]`, so routing on an unloaded list pushes a room's own session into the ordinary picker.
+  // A 404 is the exception -- no rooms endpoint means no room can own one.
+  const roomsQueryError = upcomingRoomsQuery.error;
+  const roomsKnown =
+    upcomingRoomsQuery.isSuccess || (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
+  const refetchUpcomingRooms = upcomingRoomsQuery.refetch;
+  // One refetch per session before routing on it, and a tick so the effect re-runs even when the
+  // refetch changes nothing.
+  const checkedSessionRef = React.useRef<string | null>(null);
+  const routingToRef = React.useRef<string | null>(null);
+  const [roomsChecked, setRoomsChecked] = React.useState(0);
+  // `activeFlow` for the same reason every other prompt here carries it: a debate that overruns
+  // into the next slot must not get a Join button floating over a recording, one click from
+  // leaving it. That is prompt 2's job, and prompt 2 is gated on recording state (GEO-2946).
+  const promptedRoom =
+    atRoom || activeFlow
+      ? null
+      : // A booked debate outranks a reminded lobby.
+        ([...joinableRooms]
+          .sort((a, b) => Number(a.kind === 'lobby') - Number(b.kind === 'lobby'))
+          // Not the lobby on screen: a reminded lobby stays listed after it opens.
+          .find(
+            room => !snoozedRoomIds.includes(room.room_id) && !(roomIdAtPath && sameId(room.room_id, roomIdAtPath))
+          ) ?? null);
+
+  React.useEffect(() => {
+    const liveIds = new Set(joinableRooms.map(room => room.room_id));
+    setSnoozedRoomIds(current => {
+      const next = current.filter(id => liveIds.has(id));
+      return next.length === current.length ? current : next;
+    });
+  }, [joinableRooms]);
+
   // How the person who *sent* the request learns it was accepted (GEO-2514): the debate exists
   // already, and this is the only thing that tells them. `atDebate` keeps it off the accepting
   // tab's screen, which is walking into the room and does not need telling.
@@ -215,8 +346,14 @@ export function DebateCoordinator() {
   // out. Everything past `ready` falls through to the rejoin bar, which offers the way in without
   // offering a way to destroy it.
   const describable = (debate?.participants?.length ?? 0) >= 2;
+  // GEO-3149. When another of the viewer's tabs already has the room, this tab has nothing to ask:
+  // a modal here — with a Decline that cancels the debate for both — would sit in front of whichever
+  // tab the viewer next looks at. The rejoin bar offers the same way in without blocking anything.
+  const debateOpenInAnotherTab = useForeignDebateTabClaim(debate ? debateRoomClaimKey(debate.id) : null);
   const promptedDebate =
-    debate && debate.status === 'ready' && describable && !atDebate && !atRematchPage ? debate : null;
+    debate && debate.status === 'ready' && describable && !atDebate && !atDebateFlowPage && !debateOpenInAnotherTab
+      ? debate
+      : null;
 
   // Held until a navigation commits, then released. Arriving at the room is the expected end, and
   // `atDebate` carries on from the pathname there. Going anywhere else abandons the walk — holding
@@ -272,16 +409,49 @@ export function DebateCoordinator() {
     // stay put, and because attention is a subscription this re-runs when one is focused, so
     // whichever tab they turn to still routes in rather than stranding them.
     if (!hasAttention) return;
+    // Never out of, or on behalf of, a room (GEO-2941). Keyed on the session itself, so a
+    // challenge's rematch still routes normally while a room is open.
+    if (atRoom || roomSessionIds.has(rematch.id)) return;
+    if (!roomsKnown) return;
+    if (!roomSessionsReported && joinableRooms.length > 0) return;
+    // A joinable room with no session yet may have just minted this one on a join this tab has
+    // not heard about. Ask the server once before moving anyone.
+    if (hasRoomAwaitingSession && checkedSessionRef.current !== rematch.id) {
+      checkedSessionRef.current = rematch.id;
+      void refetchUpcomingRooms().finally(() => setRoomsChecked(tick => tick + 1));
+      return;
+    }
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
-      const path = `/space/${rematch.source_space_id}/debates/rematches/${rematch.id}`;
-      if (pathname !== path) {
+      // A room's session carries geo-chat's `debates` sentinel rather than a space, and the
+      // rematch route 404s on it. It also proves the session is a room's when no room list can.
+      // A challenge's session carries its challenge's real space and still routes.
+      if (!validateSpaceId(rematch.source_space_id)) return;
+      const path = debateRematchPath(rematch);
+      if (pathname !== path && routingToRef.current !== path) {
         rememberDebateReturnDestination();
-        router.push(path);
+        routingToRef.current = path;
+        routeIntoDebate(() => {
+          routingToRef.current = null;
+          router.push(path);
+        });
       }
     }
     // `hasAttention` is in here on purpose: an unfocused tab returns early above, and this is what
     // re-runs the effect when the viewer turns to a tab, so it routes in then rather than never.
-  }, [activity, hasAttention, pathname, router]);
+  }, [
+    activity,
+    atRoom,
+    hasAttention,
+    hasRoomAwaitingSession,
+    joinableRooms,
+    pathname,
+    roomsKnown,
+    roomSessionsReported,
+    refetchUpcomingRooms,
+    roomSessionIds,
+    roomsChecked,
+    router,
+  ]);
 
   const visibleSharePrompt =
     retainedSharePrompt ?? (queriedSharePrompt?.id === closedSharePromptId ? null : queriedSharePrompt);
@@ -300,11 +470,18 @@ export function DebateCoordinator() {
           {pausedBannerText(gateway.pauseReason)}
         </div>
       )}
+      {promptedRoom && (
+        <DebateRoomJoinPrompt
+          key={promptedRoom.room_id}
+          room={promptedRoom}
+          onNotNow={() => setSnoozedRoomIds(current => [...current, promptedRoom.room_id])}
+        />
+      )}
       {promptedDebate && currentUserId && !activity?.rematch && (
         <DebateReadyPrompt key={promptedDebate.id} debate={promptedDebate} currentUserId={currentUserId} />
       )}
-      {debate && !atDebate && !atRematchPage && !promptedDebate && !activity?.rematch && (
-        <DebateRejoinBar debate={debate} />
+      {debate && !atDebate && !atDebateFlowPage && !promptedDebate && !activity?.rematch && (
+        <DebateRejoinBar debate={debate} openInAnotherTab={debateOpenInAnotherTab} />
       )}
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
           hub's Requests tab, and the rematch routing effect above walks them into the claim picker

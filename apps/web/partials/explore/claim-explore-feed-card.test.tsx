@@ -1,5 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -12,6 +13,16 @@ import type { Entity } from '~/core/types';
 
 import { ClaimExploreFeedCard } from './claim-explore-feed-card';
 
+// The readiness backfill refreshes readiness reads through the query client once it lands.
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient();
+  return rtlRender(ui, {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
+
 // Node's built-in localStorage shim can shadow jsdom with a partial object. The card only needs the
 // pending-account hook indirectly, so keep this layout suite independent of that persisted atom.
 vi.mock('~/core/state/pending-personal-space', () => ({
@@ -22,6 +33,7 @@ vi.mock('~/core/state/pending-personal-space', () => ({
 }));
 
 const mocks = vi.hoisted(() => ({
+  openSidePanel: vi.fn(),
   entity: null as Entity | null,
   /** Every `enabled` the entity hydration was called with, in render order. */
   entityEnabledCalls: [] as boolean[],
@@ -160,19 +172,6 @@ vi.mock('~/core/claims/browse/claim-position-comment', () => ({
   ),
 }));
 
-vi.mock('~/partials/comments/entity-comments-button', () => ({
-  EntityCommentsButton: ({ count, className }: { count: number; className?: string }) => (
-    <button
-      type="button"
-      aria-label={`Comments (${mocks.commentCount})`}
-      className={className}
-      data-server-count={count}
-    >
-      {mocks.commentCount}
-    </button>
-  ),
-}));
-
 vi.mock('~/core/claims/browse/claim-end-slot', () => ({
   ClaimEndSlot: ({ enabled }: { enabled?: boolean }) => (
     <div data-testid="end-slot" data-enabled={String(enabled !== false)} />
@@ -187,10 +186,24 @@ vi.mock('~/core/claims/browse/claim-side-responders', () => ({
   ClaimSideResponders: ({ label }: { label: string }) => <div data-testid={`responders-${label}`} />,
 }));
 
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({
+  useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel }),
+}));
+
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 
 vi.mock('~/design-system/prefetch-link', () => ({
-  PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
+  PrefetchLink: ({
+    children,
+    href,
+    entityId: _entityId,
+    spaceId: _spaceId,
+    ...rest
+  }: React.AnchorHTMLAttributes<HTMLAnchorElement> & { href: string; entityId?: string; spaceId?: string }) => (
+    <a href={href} {...rest}>
+      {children}
+    </a>
+  ),
 }));
 
 vi.mock('~/design-system/fallback-image', () => ({ FallbackImage: () => <div data-testid="image" /> }));
@@ -242,6 +255,7 @@ function factualClaim(): Entity {
 
 beforeEach(() => {
   observers = [];
+  mocks.openSidePanel.mockReset();
   mocks.entity = null;
   mocks.entityEnabledCalls = [];
   mocks.rowEnabledCalls = [];
@@ -312,17 +326,58 @@ describe('ClaimExploreFeedCard', () => {
   it('does not add a comment action or third position-row column for an empty thread', () => {
     render(<ClaimExploreFeedCard item={item} />);
 
-    expect(screen.queryByRole('button', { name: /^Comments/ })).toBeNull();
+    expect(screen.queryByRole('link', { name: /^(Comments|Activity) \(/ })).toBeNull();
   });
 
-  it('puts the live comment count button beside the position buttons once the thread has a comment', () => {
+  it('puts the live comment count beside the position buttons once the thread has a comment', () => {
     mocks.commentCount = 2;
     render(<ClaimExploreFeedCard item={item} />);
 
-    const comments = screen.getByRole('button', { name: 'Comments (2)' });
+    const comments = screen.getByRole('link', { name: 'Comments (2)' });
     expect(screen.getByTestId('pills')).toContainElement(comments);
-    expect(comments).toHaveAttribute('data-server-count', '0');
+    expect(comments).toHaveTextContent('2');
     expect(comments).toHaveClass('h-7', 'shrink-0', 'gap-2', 'rounded-full', 'border', 'border-grey-02');
+  });
+
+  it('opens the side panel at Activity where the title opens the side panel', () => {
+    mocks.commentCount = 2;
+    render(<ClaimExploreFeedCard item={item} titleOpensSidePanel />);
+
+    const activity = screen.getByRole('link', { name: 'Comments (2)' });
+    // Still a real link to the page, for cmd-click and "copy link".
+    expect(activity.getAttribute('href')).toContain(CLAIM_ID);
+    expect(activity.getAttribute('href')).toMatch(/#entity-comments$/);
+    expect(activity).toHaveAttribute('data-entity-side-panel-opener');
+
+    expect(fireEvent.click(activity)).toBe(false);
+    expect(mocks.openSidePanel).toHaveBeenCalledWith(CLAIM_ID, item.spaceId, false, { scrollToComments: true });
+  });
+
+  it('leaves a modified click to the browser', () => {
+    mocks.commentCount = 2;
+    render(<ClaimExploreFeedCard item={item} titleOpensSidePanel />);
+
+    fireEvent.click(screen.getByRole('link', { name: 'Comments (2)' }), { metaKey: true });
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
+
+  it('navigates to the claim page at Activity where the title navigates', () => {
+    mocks.commentCount = 2;
+    render(<ClaimExploreFeedCard item={item} />);
+
+    const activity = screen.getByRole('link', { name: 'Comments (2)' });
+    expect(activity.getAttribute('href')).toMatch(/#entity-comments$/);
+    expect(activity).not.toHaveAttribute('data-entity-side-panel-opener');
+
+    fireEvent.click(activity);
+    expect(mocks.openSidePanel).not.toHaveBeenCalled();
+  });
+
+  it("names the count Activity when it measures the claim's whole activity", () => {
+    mocks.commentCount = 5;
+    render(<ClaimExploreFeedCard item={{ ...item, activityCount: 5, activityCommentCount: 1 }} />);
+
+    expect(screen.getByRole('link', { name: 'Activity (5)' })).toBeInTheDocument();
   });
 
   it('asks for nothing about a claim the reader has not scrolled near', () => {
@@ -348,20 +403,21 @@ describe('ClaimExploreFeedCard', () => {
     expect(mocks.summaryEnabledCalls.at(-1)).toBe(false);
   });
 
-  it('waits for the vocabulary before reading the split, not just for the viewport', () => {
+  it('waits for the claim’s data before reading the split, not just for the viewport', () => {
     mocks.entity = factualClaim();
     const { rerender } = render(<ClaimExploreFeedCard item={item} />);
     scrollIntoRange();
     rerender(<ClaimExploreFeedCard item={item} />);
 
     expect(mocks.summaryEnabledCalls.at(-1)).toBe(true);
-    // And under the kind the entity supplied, never the fallback it would have used a beat earlier.
-    expect(mocks.summaryKindCalls.at(-1)).toBe('veracity');
+    // One kind for every claim now, the factual ones included — this fixture is a factual claim.
+    expect(mocks.summaryKindCalls.at(-1)).toBe('stance');
   });
 
-  it('will not let anyone answer before the claim’s vocabulary is known', () => {
-    // `stance` is the fallback while the lookups are out, and the kind selects `voteKind` on the
-    // write — so a click inside that window publishes the wrong vote on a factual claim.
+  it('will not let anyone answer before the claim’s responses are known', () => {
+    // The vocabulary is no longer what is being waited for — there is one. What is still being
+    // waited for is the claim's own data, without which a pill cannot say which side the viewer
+    // already holds, and a click would republish rather than clear it.
     mocks.entity = factualClaim();
     render(<ClaimExploreFeedCard item={item} />);
     // Off-screen nothing has been asked, so nothing has answered — including on a claim whose
@@ -376,7 +432,7 @@ describe('ClaimExploreFeedCard', () => {
 
     const pills = screen.getByTestId('pills');
     expect(pills.getAttribute('data-disabled')).toBe('false');
-    expect(pills.getAttribute('data-response-kind')).toBe('veracity');
+    expect(pills.getAttribute('data-response-kind')).toBe('stance');
   });
 
   it('draws no verdict, and no rule, on a claim nobody has answered', () => {

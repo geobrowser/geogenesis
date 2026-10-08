@@ -1,13 +1,22 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import type { ReactElement } from 'react';
 
+import { Provider as JotaiProvider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { ENTITY_RESPONSE_COPY } from '~/core/responses/entity-response';
+import {
+  ENTITY_RESPONSE_COPY,
+  RESPONSE_CONFIRMING_COPY,
+  type ResponseKind,
+  getResponseActionMethod,
+} from '~/core/responses/entity-response';
+import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
+import { pendingActionsAtom } from '~/core/state/pending-actions';
+import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -17,6 +26,18 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 // are lifted above every module-level declaration, so a mock that reads it can't use a plain const.
 const mocks = vi.hoisted(() => ({
   submitResponse: vi.fn(),
+  submitResponseAsync: vi.fn(),
+  isConnected: true,
+  /** The viewer's side as the index reports it when a replay reads it fresh. */
+  freshViewerDirection: null as 'positive' | 'negative' | null,
+  /** A fresh read held open, so a test can act while it is in flight. */
+  freshRead: null as Promise<'positive' | 'negative' | null> | null,
+  /** Privy's answer on whether anyone is signed in. */
+  authenticated: true,
+  /** Privy has finished restoring any session; `authenticated: false` before this means nothing. */
+  authReady: true,
+  /** A new account whose personal space is still being created in the background. */
+  accountSetupPending: false,
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -62,7 +83,7 @@ vi.mock('../hooks', () => ({
     matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
     rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   },
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'account-1' }),
+  useGeoChatAuth: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated, accountKey: 'account-1' }),
 }));
 
 // The end slot asks the hub whether there is a debate to be had. That is one shared query at
@@ -127,10 +148,11 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
     mocks.useEntityResponse(input);
     return {
       submitResponse: mocks.submitResponse,
+      submitResponseAsync: mocks.submitResponseAsync,
       optimisticResponse: undefined,
       isProcessingResponse: false,
       isResponseIndexingDelayed: false,
-      isConnected: true,
+      isConnected: mocks.isConnected,
       personalSpaceId: mocks.viewerSpaceId,
     };
   },
@@ -173,8 +195,12 @@ vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   }),
 }));
 
+vi.mock('~/core/responses/replay-viewer-response', () => ({
+  readViewerResponseForReplay: () => mocks.freshRead ?? Promise.resolve(mocks.freshViewerDirection),
+}));
+
 vi.mock('~/core/state/pending-personal-space', () => ({
-  usePendingPersonalSpace: () => ({ isPending: false }),
+  usePendingPersonalSpace: () => ({ isPending: mocks.accountSetupPending }),
 }));
 
 const SPACE_ID = mocks.spaceId;
@@ -227,9 +253,19 @@ function participant(id: string) {
   } as DebateClaimPositionSummary['participants'][number];
 }
 
-function renderCard(card: ReactElement) {
+/** The real pending-actions queue, so a test can see what a press left behind for the runner. */
+let queueStore = createStore();
+const queued = () => queueStore.get(pendingActionsAtom);
+
+function renderCard(card: ReactElement, { smartAccount }: { smartAccount?: object } = {}) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-  return render(<QueryClientProvider client={queryClient}>{card}</QueryClientProvider>);
+  // What the navbar's `useSmartAccount` leaves behind once someone is signed in.
+  if (smartAccount) queryClient.setQueryData(['smart-account', 'wallet'], smartAccount);
+  return render(
+    <JotaiProvider store={queueStore}>
+      <QueryClientProvider client={queryClient}>{card}</QueryClientProvider>
+    </JotaiProvider>
+  );
 }
 
 beforeEach(() => {
@@ -243,6 +279,14 @@ beforeEach(() => {
     }
   );
   mocks.submitResponse.mockReset();
+  mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
+  mocks.isConnected = true;
+  mocks.freshViewerDirection = null;
+  mocks.freshRead = null;
+  mocks.authenticated = true;
+  mocks.authReady = true;
+  mocks.accountSetupPending = false;
+  queueStore = createStore();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.spaceName = 'Crypto';
   // Nothing on offer and nobody having answered is the state most claims are actually in, so it is
@@ -534,40 +578,35 @@ describe('position avatar stack', () => {
     });
 
     /**
-     * And a remembered side belongs to the vocabulary it was read under.
+     * The write must never be handed geo-chat's word for the kind.
      *
-     * The summary query is keyed by response kind, so a claim that changes from stance to
-     * Verify/Dispute starts a fresh read — and a memory that ignored the kind would hand that read's
-     * question the previous one's answer while it was still out, treating an Agree as a Verify and
-     * enabling the controls over it.
+     * geo-chat still labels claims minted before the vocabularies merged `"veracity"`, and that
+     * value arrives typed as the narrowed kind it no longer matches, so nothing catches it. Handed
+     * to `getResponseActionMethod` it selects no SDK method at all, and the click throws on
+     * `undefined['positive']` rather than publishing — on every claim with existing verify or
+     * dispute activity.
      */
-    it('does not carry a side across a change of vocabulary', () => {
-      mocks.summaryIndexedViewerDirection = 'negative';
-      const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-      const card = (responseKind: 'stance' | 'veracity') => (
-        <QueryClientProvider client={queryClient}>
-          <MatchmakingClaimCard
-            claim={claim}
-            positions={twoSides()}
-            readiness={readiness({ viewer_response: null, response_kind: responseKind })}
-            answersReady={false}
-            answersMayComeFromIndex
-          />
-        </QueryClientProvider>
+    it('publishes under a real response kind even when the row still says veracity', () => {
+      renderCard(
+        <MatchmakingClaimCard
+          claim={claim}
+          positions={twoSides()}
+          readiness={readiness({ response_kind: 'veracity' })}
+        />
       );
-      const view = render(card('stance'));
-      expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
 
-      // The kind changes, so its read starts again — and is in flight.
-      mocks.summaryViewerResponseLoading = true;
-      view.rerender(card('veracity'));
+      const passed = mocks.useEntityResponse.mock.calls.at(-1)?.[0] as { responseKind: ResponseKind };
 
-      // The pills take their labels from the positions, so they read the same; what changes is that
-      // the card no longer claims to know the side.
-      const negative = screen.getByRole('button', { name: /^Disagree/ });
-      expect(negative).toBeDisabled();
-      expect(negative).toHaveAttribute('title', 'Loading this claim\u2019s responses\u2026');
+      expect(passed.responseKind).toBe('stance');
+      // The assertion that actually matters: whatever kind was passed, it names an SDK method.
+      expect(getResponseActionMethod(passed.responseKind, 'positive')).toBe('agree');
+      expect(getResponseActionMethod(passed.responseKind, 'negative')).toBe('disagree');
     });
+
+    // A case that used to sit here — "does not carry a side across a change of vocabulary" — is
+    // gone with the vocabularies. A claim had two possible kinds and could move between them, so a
+    // remembered side had to be dropped when it did. There is one kind now, so there is no change
+    // to carry a side across.
 
     // And it does hand back, once geo-chat says the same thing.
     it('retires it when geo-chat answers with the side the viewer took', () => {
@@ -879,6 +918,274 @@ describe('faces borrowed from the match', () => {
     expect(within(disagree).queryAllByTestId('avatar')).toHaveLength(0);
     // And no overflow either, which is the other half of what the merge would have added.
     expect(within(disagree).queryByText(/^\+/)).toBeNull();
+  });
+
+  it('borrows nobody where the host supplies its own offer', () => {
+    // The lobby's shape: its offer reaches only people in the room, so an account-level match's
+    // faces would name someone the offer cannot reach.
+    mocks.match = { id: 'match-1', viewer_position: true, positions: matchWithOpponent };
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={[
+          { ...positions[0], present_count: 0, participants: [] },
+          { ...positions[1], present_count: 0, participants: [] },
+        ]}
+        readiness={readiness()}
+        endSlot={<button type="button">Host offer</button>}
+      />
+    );
+
+    expect(within(screen.getByRole('button', { name: /^Disagree/ })).queryAllByTestId('avatar')).toHaveLength(0);
+  });
+});
+
+/**
+ * A visitor who presses a side while signed out goes through sign-in, then onboarding, then the
+ * personal space's own creation — and only then can a response be published. The press used to
+ * open sign-in and nothing else, so the side they picked never landed.
+ */
+describe('a side picked before the account can publish', () => {
+  const signedOut = readiness({ viewer_response: null });
+
+  beforeEach(() => {
+    clearLocalVotes();
+    closeSaveVotesPrompt();
+    window.sessionStorage.clear();
+  });
+
+  const signedOutCard = () => (
+    <MatchmakingClaimCard claim={claim} positions={positions} readiness={signedOut} allowsSignedOutVotes />
+  );
+
+  // GEO-3214: a signed-out press is kept on this device, with no sign-in in the way. The sheet asks
+  // to save once there are a few; nothing reaches the queue until a save prompt signs them in.
+  it('keeps a signed-out press on this device instead of opening sign-in', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    renderCard(signedOutCard());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+
+    expect(queued()).toHaveLength(0);
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+    expect(readLocalVotes().votes).toMatchObject([{ entityId: claim.claim_entity_id, direction: 'negative' }]);
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveTextContent('not counted yet');
+    expect(screen.getByText(/Not counted yet/)).toBeInTheDocument();
+    // One vote on a feed is not yet the ask.
+    expect(readSaveVotesPrompt()).toBeNull();
+  });
+
+  // What the feed does on a reload: draw a fresh card for the same claim.
+  it('still draws the device vote after the card remounts', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    const { unmount } = renderCard(signedOutCard());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    unmount();
+
+    renderCard(signedOutCard());
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('takes the device vote back when the held side is pressed again', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    renderCard(signedOutCard());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(readLocalVotes().votes).toHaveLength(0);
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText(/Not counted yet/)).not.toBeInTheDocument();
+  });
+
+  // Copilot on #2785: before Privy has restored a session, signed out is not known yet.
+  it('drops a press while a session is still being restored, rather than keeping it as a visitor’s', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    mocks.authReady = false;
+    renderCard(signedOutCard());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(readLocalVotes().votes).toHaveLength(0);
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('opens the save sheet on the second vote', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    toggleLocalVote({
+      responseKind: 'stance',
+      entityId: 'other-claim',
+      spaceId: claim.space_id,
+      direction: 'positive',
+      title: 'Another claim',
+    });
+    renderCard(signedOutCard());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(readSaveVotesPrompt()).toBe('threshold');
+  });
+
+  it('opens the save sheet from the note under the pill', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    renderCard(signedOutCard());
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(readSaveVotesPrompt()).toBe('inline_save');
+  });
+
+  // Signed in with no space and no setup under way: nothing would ever publish a queued side.
+  it('queues nothing for a signed-in account with no space being made', () => {
+    mocks.isConnected = false;
+    renderCard(signedOutCard(), { smartAccount: { account: { address: '0xviewer' } } });
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(queued()).toHaveLength(0);
+    // Nor kept on the device: this is an account, and only signed-out votes wait for a save.
+    expect(readLocalVotes().votes).toHaveLength(0);
+  });
+});
+
+/**
+ * Right after sign-up the account exists but its personal space is still being made — seconds, or
+ * minutes. The pills used to go dead for all of it. They stay live now and queue the press.
+ */
+describe('while a new account is still being set up', () => {
+  const settingUp = readiness({ viewer_response: null });
+
+  it('keeps the pills live, even before the claim’s lookups answer, and queues a press', () => {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={settingUp}
+        answersReady={false}
+        allowsSignedOutVotes
+      />
+    );
+
+    const agree = screen.getByRole('button', { name: /^Agree/ });
+    expect(agree).toBeEnabled();
+    fireEvent.click(agree);
+
+    expect(readLocalVotes().votes).toHaveLength(0);
+    expect(queued()).toEqual([expect.objectContaining({ intent: 'positive', requires: 'personalSpace' })]);
+    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('switches the queued side, and takes it back when the same side is pressed again', () => {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={settingUp} />);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+    expect(queued()).toEqual([expect.objectContaining({ intent: 'negative' })]);
+
+    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+    expect(queued()).toHaveLength(0);
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'false');
+  });
+});
+
+/**
+ * The replay decides whether the viewer already holds the side from the card's own answer, and right
+ * after sign-in that answer is still loading — its default reads "holds nothing". It waits.
+ */
+describe('replaying a queued side', () => {
+  it('waits until the viewer’s own side is known, then skips a side they already hold', async () => {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    const card = (answersReady: boolean, viewerHolds: boolean) => (
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness({
+          viewer_response: viewerHolds
+            ? ({ position: true, position_label: 'Agree' } as MatchmakingReadiness['viewer_response'])
+            : null,
+        })}
+        answersReady={answersReady}
+      />
+    );
+    const view = renderCard(card(false, false));
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    const running = Promise.resolve(queued()[0]!.run());
+    await Promise.resolve();
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+
+    view.rerender(
+      <JotaiProvider store={queueStore}>
+        <QueryClientProvider client={new QueryClient()}>{card(true, true)}</QueryClientProvider>
+      </JotaiProvider>
+    );
+    await act(() => running);
+
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * With no card for the claim on screen when the account is ready, the press's own closure replays
+ * it — and its view of the viewer is from before they signed in. It asks the index instead.
+ */
+describe('replaying a queued side with no card on screen', () => {
+  function queueThenUnmount() {
+    mocks.isConnected = false;
+    mocks.accountSetupPending = true;
+    const view = renderCard(
+      <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness({ viewer_response: null })} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    view.unmount();
+    return queued()[0]!;
+  }
+
+  it('skips a side the index says the viewer already holds', async () => {
+    const action = queueThenUnmount();
+    mocks.freshViewerDirection = 'positive';
+
+    await action.run();
+
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+
+  // A sign-out clears the queue; it can land while the fresh read is still out.
+  it('does not publish if the press is cleared while the fresh read is in flight', async () => {
+    const action = queueThenUnmount();
+    let answer: (direction: null) => void = () => {};
+    mocks.freshRead = new Promise(resolve => (answer = resolve));
+
+    const running = Promise.resolve(action.run());
+    await Promise.resolve();
+    act(() => queueStore.set(pendingActionsAtom, []));
+    answer(null);
+    await running;
+
+    expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
+  });
+
+  it('publishes a side the viewer does not hold', async () => {
+    const action = queueThenUnmount();
+
+    await action.run();
+
+    expect(mocks.submitResponseAsync).toHaveBeenCalledWith('positive');
   });
 });
 
@@ -1282,15 +1589,87 @@ describe('MatchmakingClaimCard', () => {
     expect(within(disagree).queryAllByTestId('avatar')).toHaveLength(0);
   });
 
-  it('keeps the response pills live while the response is publishing', () => {
-    mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
-    renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+  /**
+   * Not dimmed, because dead pills for the length of an indexing round trip read as a stuck
+   * response — but not live either. Nothing serializes overlapping submissions, and pressing the
+   * held side means "remove": a double-click, or a press on an Agree still confirming, published a
+   * retraction behind a pill that still looked held, and Request debate then failed on it.
+   */
+  describe('while the viewer’s response is confirming', () => {
+    it('ignores presses on either pill until the bundler has the write', () => {
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
 
-    // Dimmed, dead pills for the length of an indexing round trip read as a stuck response.
-    expect(screen.getByRole('button', { name: /^Agree/ })).toBeEnabled();
-    expect(screen.getByRole('button', { name: /^Disagree/ })).toBeEnabled();
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      const disagree = screen.getByRole('button', { name: /^Disagree/ });
+      expect(agree).toBeEnabled();
+      expect(agree).toHaveAttribute('aria-disabled', 'true');
+      expect(disagree).toHaveAttribute('aria-disabled', 'true');
 
-    fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
-    expect(mocks.submitResponse).toHaveBeenCalled();
+      fireEvent.click(agree);
+      fireEvent.click(agree);
+      fireEvent.click(disagree);
+      expect(mocks.submitResponse).not.toHaveBeenCalled();
+    });
+
+    // GEO-2889. The double-click this guards against lands in the second or so before the bundler
+    // answers; inclusion behind it is p90 ~30s, which the pills used to wait out as well.
+    it('sends a double-click once', () => {
+      // `readiness()` has the viewer on Agree, so the first press switches sides.
+      const view = renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+      expect(mocks.submitResponse).toHaveBeenCalledTimes(1);
+      expect(mocks.submitResponse).toHaveBeenLastCalledWith('negative', expect.anything());
+
+      // What the press did to the snapshot (`onMutate`), before the bundler has answered. The second
+      // click now lands on the held side, where it would be a retraction nobody meant.
+      mocks.indexing = { status: 'reconciling', pending: { expectedResponse: 'negative' }, runId: 'run-1' };
+      view.rerender(
+        <QueryClientProvider client={new QueryClient()}>
+          <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />
+        </QueryClientProvider>
+      );
+      fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
+      expect(mocks.submitResponse).toHaveBeenCalledTimes(1);
+    });
+
+    it.each([
+      ['submitted', { status: 'reconciling', submitted: true }],
+      ['included and still indexing', { status: 'delayed' }],
+    ] as const)('treats the position as published once %s', (_label, state) => {
+      mocks.indexing = { ...state, pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      // Drawn held, live, and no longer saying it is waiting.
+      expect(agree).toHaveAttribute('aria-pressed', 'true');
+      expect(agree).not.toHaveAttribute('aria-disabled');
+      expect(agree).not.toHaveAttribute('title', RESPONSE_CONFIRMING_COPY);
+
+      // A press is now a deliberate new response, sent once: on the held side, a retraction.
+      fireEvent.click(agree);
+      expect(mocks.submitResponse).toHaveBeenCalledTimes(1);
+      expect(mocks.submitResponse).toHaveBeenCalledWith('clear', expect.anything());
+    });
+
+    it('removes the position once the chain has confirmed it', () => {
+      // `indexed` holds the snapshot until geo-chat agrees, but the side it draws is now a fact.
+      mocks.indexing = { status: 'indexed', pending: { expectedResponse: 'positive' }, runId: 'run-1' };
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      const agree = screen.getByRole('button', { name: /^Agree/ });
+      expect(agree).not.toHaveAttribute('aria-disabled');
+
+      fireEvent.click(agree);
+      expect(mocks.submitResponse).toHaveBeenCalledWith('clear', expect.anything());
+    });
+
+    it('removes a settled position when its pill is pressed', () => {
+      renderCard(<MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />);
+
+      fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+      expect(mocks.submitResponse).toHaveBeenCalledWith('clear', expect.anything());
+    });
   });
 });

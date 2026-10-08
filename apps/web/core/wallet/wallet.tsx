@@ -1,15 +1,18 @@
 'use client';
 
-import { WagmiProvider, useGeoLogin } from '@geogenesis/auth';
+import { WagmiProvider } from '@geogenesis/auth';
 import { createGeoWalletConfig, createMockConfig } from '@geogenesis/auth/wallet';
 
 import * as React from 'react';
 
-import { Button } from '~/design-system/button';
+import { Button, PILL_BUTTON_CLASS_NAME } from '~/design-system/button';
 
-import { trackPrivyAuth } from '../analytics';
 import { Environment } from '../environment';
 import { usePrepareOnboarding } from '../hooks/use-prepare-onboarding';
+import { useSaveVotesSignIn } from '../hooks/use-save-votes-sign-in';
+import { useTrackedLogin } from '../hooks/use-tracked-login';
+import { saveVotesNavLabel } from '../save-votes-copy';
+import { useLocalVoteCount } from '../state/local-votes';
 import { GEOGENESIS } from './geo-chain';
 
 const isTestEnv = Environment.variables.isTestEnv;
@@ -44,41 +47,24 @@ function PrivyConnectButton() {
   // they never were.
   const prepareOnboarding = usePrepareOnboarding();
 
-  // Reset is done on the explicit sign-in click below. Doing it here too
-  // would wipe the user's in-progress onboarding state if Privy fires
-  // onComplete on session restoration (e.g. when opening a new tab), which
-  // then syncs the cleared atoms back to the original tab via localStorage.
-  // Armed, the way `usePrivySignIn` arms its own. Privy fires `onComplete` on session restoration
-  // too — opening a second tab is enough — so tracking unconditionally reported every restore as a
-  // manual login. It also meant this button was the *only* thing recording logins started
-  // elsewhere, which hid a real gap: whenever `navbar-actions.tsx` is showing its loading skeleton
-  // instead of this button, nothing recorded them at all.
-  const requestedRef = React.useRef(false);
-
-  const { login } = useGeoLogin({
-    onComplete: args => {
-      if (!requestedRef.current) return;
-      requestedRef.current = false;
-      trackPrivyAuth(args, { auth_flow: 'manual_login' });
-    },
-    onError: () => {
-      requestedRef.current = false;
-    },
-  });
+  const { login } = useTrackedLogin({});
+  // With votes waiting on this device, this is a save prompt (GEO-3214): it names them, and the
+  // sign-in it starts saves them. Returns to this page, since the votes were cast here.
+  const localVoteCount = useLocalVoteCount();
+  const saveSignIn = useSaveVotesSignIn();
 
   const onLogin = () => {
+    if (localVoteCount > 0) {
+      void saveSignIn('navbar', localVoteCount);
+      return;
+    }
     prepareOnboarding({ returnTo: null });
-    requestedRef.current = true;
-    login();
+    login({ component: 'navbar', auth_control: 'sign_in', auth_intent: 'sign_in' });
   };
 
   return (
-    <Button
-      variant="primary"
-      className="h-7 shrink-0 !gap-0 !rounded-full !border-transparent !bg-[#151515] !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !text-white !shadow-none hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text"
-      onClick={onLogin}
-    >
-      Log in
+    <Button variant="primary" className={PILL_BUTTON_CLASS_NAME} onClick={onLogin}>
+      {localVoteCount === 0 ? 'Log in' : saveVotesNavLabel(localVoteCount)}
     </Button>
   );
 }

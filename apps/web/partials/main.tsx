@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import { motion } from 'framer-motion';
 import { useAtomValue } from 'jotai';
 import { usePathname } from 'next/navigation';
@@ -26,7 +27,10 @@ export const Main = ({ children }: MainProps) => {
   const isFullWidth =
     debateFullscreenActive ||
     /^\/space\/[^/]+\/community\/call\/[^/]+$/.test(pathname) ||
-    /^\/space\/[^/]+\/debates(\/|$)/.test(pathname);
+    // Debates and claims are both full-bleed browse surfaces — see `SpaceChromeGate`, which strips
+    // the space header and tabs from the same two routes. The patterns are separate because that
+    // file also runs on `/root`, which never reaches here.
+    /^\/space\/[^/]+\/(debates|claims)(\/|$)/.test(pathname);
 
   return (
     <motion.main
@@ -34,7 +38,11 @@ export const Main = ({ children }: MainProps) => {
       animate="animate"
       transition={transition}
       custom={isHidden}
-      className={isFullWidth ? 'min-w-0 flex-1' : 'mx-auto max-w-[1200px] min-w-0 flex-1 pt-8 pb-16'}
+      className={
+        isFullWidth
+          ? 'min-w-0 flex-1'
+          : cx('mx-auto max-w-[1200px] min-w-0 flex-1 pb-16', pathname === '/explore' ? 'pt-0' : 'pt-8')
+      }
     >
       {children}
     </motion.main>

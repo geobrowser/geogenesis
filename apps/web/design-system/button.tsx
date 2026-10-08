@@ -16,7 +16,41 @@ type ButtonProps = React.ComponentPropsWithoutRef<'button'> & {
   small?: boolean;
 };
 
-const buttonClassNames = (className = '') =>
+/** The pill's shape and type, shared by both of its colourings below. */
+const PILL_BUTTON_SHAPE =
+  'h-7 shrink-0 !gap-0 !rounded-full !px-2.5 !py-0 !text-[16px] !leading-[13px] font-normal tracking-[-0.35px] whitespace-nowrap !shadow-none';
+
+/**
+ * The black pill: the navbar's Log in button.
+ * Layered over the `primary` variant, whose colours it overrides.
+ */
+export const PILL_BUTTON_CLASS_NAME = `${PILL_BUTTON_SHAPE} !border-transparent !bg-[#151515] !text-white hover:!bg-[#151515] focus-visible:!border-text focus-visible:!shadow-inner-text`;
+
+/**
+ * The same pill in the `secondary` variant's colours — white, a grey outline that
+ * darkens on hover. Layered over `secondary`, which supplies those colours.
+ */
+export const PILL_BUTTON_SECONDARY_CLASS_NAME = PILL_BUTTON_SHAPE;
+
+/**
+ * A modal's full-width action: the debate request modal's Accept, and every step of onboarding.
+ * Plain `<button>` classes rather than a `Button` variant, whose base shape (square corners, padding,
+ * shadow) these would have to fight.
+ *
+ * 28px on desktop, 44px on phones (`md:` is max-width here), the smallest comfortable touch target.
+ */
+export const DIALOG_ACTION_BUTTON_CLASS_NAME =
+  'flex h-7 md:h-11 w-full items-center justify-center rounded-full bg-text px-4 text-metadata text-white transition-colors hover:bg-text/90 disabled:opacity-50';
+
+/** The outlined counterpart to `DIALOG_ACTION_BUTTON_CLASS_NAME`: Decline, Not now, Skip. */
+export const DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME =
+  'flex h-7 md:h-11 w-full items-center justify-center rounded-full border border-grey-02 bg-white px-4 text-metadata text-text transition-colors hover:bg-grey-01 disabled:opacity-50';
+
+/**
+ * The button's classes on their own, for a link that should look like one. A
+ * `<Button>` inside a `<Link>` nests two interactive elements.
+ */
+export const buttonClassNames = (className = '') =>
   cva(
     `relative inline-flex items-center justify-center rounded border font-medium tracking-[-0.17px] shadow-light transition duration-200 ease-in-out focus:outline-hidden ${className}`,
     {

@@ -1,12 +1,52 @@
 'use client';
 
+import { type QueryClient, useQueryClient } from '@tanstack/react-query';
+
 import * as React from 'react';
 
+import type { ClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
+import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
+
 import { type MatchmakingReadiness, notifyClaimResponseIndexed } from './api';
+import { readinessQueryPrefixes } from './claim-response-indexed-notifier';
 import { useGeoChatAuth } from './hooks';
+
+/**
+ * The viewer's side as the indexed read has it, or null where that read cannot be trusted yet.
+ *
+ * Null while the read is out, and while the viewer's own response is still confirming. The second
+ * is the one that matters: the in-flight write has already told geo-chat (GEO-2784), so a withdrawal
+ * marks the row withdrawn before the indexed read has seen it — and reporting that read then would
+ * stand the viewer back up on the side they just left.
+ */
+export function trustedIndexedPosition(
+  summary: Pick<ClaimResponseSummary, 'indexedViewerDirection' | 'isViewerResponseLoading'>,
+  isResponsePending: boolean
+): boolean | null {
+  if (isResponsePending || summary.isViewerResponseLoading || summary.indexedViewerDirection === null) return null;
+  return summary.indexedViewerDirection === 'positive';
+}
 
 /** Keeps a session from re-sending for the same claim, and from growing without bound. */
 const MAX_TRACKED = 256;
+
+/** Backfills settling together in one space refresh its readiness reads once. */
+const REFRESH_COALESCE_MS = 250;
+const pendingRefreshes = new WeakMap<QueryClient, Set<string>>();
+
+function scheduleReadinessRefresh(queryClient: QueryClient, accountKey: string, spaceId: string) {
+  const key = `${accountKey}:${spaceId}`;
+  let pending = pendingRefreshes.get(queryClient);
+  if (!pending) pendingRefreshes.set(queryClient, (pending = new Set()));
+  if (pending.has(key)) return;
+  pending.add(key);
+  setTimeout(() => {
+    pending.delete(key);
+    for (const queryKey of readinessQueryPrefixes(accountKey, spaceId)) {
+      void queryClient.invalidateQueries({ queryKey });
+    }
+  }, REFRESH_COALESCE_MS);
+}
 
 /**
  * Tells geo-chat about a position the viewer already holds, so readiness catches up.
@@ -30,8 +70,15 @@ const MAX_TRACKED = 256;
  *     underneath the stored position, which the reconcile sweep owns — standing someone up from a
  *     stale side would publish a claim they may not hold.
  *
- * Once per claim per session, and it stops firing as soon as the write lands, because the next
- * read reports `viewer_debate_ready`. The endpoint is rate limited per user/space/claim besides.
+ * One exception to the last: `claim_response_withdrawn` where the chain holds a side again. The row
+ * records a retraction the viewer has since taken back, so it is the row that is stale, not the side
+ * — and geo-chat's `viewer_response` follows the row, so it cannot say so itself. The indexed read
+ * can. Without this a viewer who withdrew and re-answered, and whose re-answer's notification never
+ * landed, holds a position every surface draws and cannot send a request on it (`intent_missing`).
+ *
+ * Once per claim per session unless it fails, and it stops firing as soon as the write lands,
+ * because the readiness reads it then refetches report `viewer_debate_ready`. The endpoint is rate
+ * limited per user/space/claim besides.
  *
  * No user intent is overridden: `user_disabled` rows were flipped by migration 0038, and with the
  * toggle gone there is no way to be deliberately not-ready on a claim you hold a position on.
@@ -47,6 +94,7 @@ export function useBackfillReadinessForHeldPosition({
   readiness,
   entityId,
   spaceId,
+  indexedPosition = null,
 }: {
   /**
    * geo-chat's own answer for this claim, or null where it has none.
@@ -60,22 +108,37 @@ export function useBackfillReadinessForHeldPosition({
   readiness: MatchmakingReadiness | null;
   entityId: string;
   spaceId: string;
+  /**
+   * The viewer's side as the chain's indexed read reports it, or null where it holds none or the
+   * read is still out. Consulted only for a withdrawn row — see above — so a host that cannot
+   * supply it loses that repair and nothing else.
+   */
+  indexedPosition?: boolean | null;
 }) {
   const { ready, authenticated, accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const queryClient = useQueryClient();
   const sent = React.useRef(new Set<string>());
   const sentOrder = React.useRef<string[]>([]);
 
   const viewerResponse = readiness?.viewer_response ?? null;
-  const responseKind = readiness?.response_kind ?? null;
+  // `readiness.response_kind` is deliberately not read. It can still say "veracity" for a claim
+  // minted before the vocabularies merged, and this forwards the kind back to geo-chat — so the
+  // backfill would record the retired kind against a response published as a stance. The field was
+  // also doing duty as a "readiness has arrived" guard, which is said directly below instead: the
+  // type makes it non-null, so it was only ever null when the readiness itself was.
+  const hasReadiness = readiness != null;
   const alreadyReady = readiness?.viewer_debate_ready ?? false;
   const disabledReason = readiness?.readiness_disabled_reason ?? null;
+  const retaken = disabledReason === 'claim_response_withdrawn' && indexedPosition != null;
+  // The side to report: the chain's where it overrides a withdrawal, geo-chat's own otherwise.
+  const position = retaken ? indexedPosition : disabledReason ? null : (viewerResponse?.position ?? null);
 
   React.useEffect(() => {
     if (!ready || !authenticated || !accountKey) return;
-    if (!viewerResponse || !responseKind) return;
-    if (alreadyReady || disabledReason) return;
+    if (position === null || !hasReadiness || alreadyReady) return;
 
-    const key = `${accountKey}:${spaceId}:${entityId}`;
+    // Its own key, so an earlier backfill of this claim in the session cannot suppress this one.
+    const key = `${accountKey}:${spaceId}:${entityId}${retaken ? `:retaken:${position}` : ''}`;
     if (sent.current.has(key)) return;
     sent.current.add(key);
     sentOrder.current.push(key);
@@ -85,30 +148,35 @@ export function useBackfillReadinessForHeldPosition({
     }
 
     const controller = new AbortController();
-    // Nothing on screen depends on the outcome: the row already renders the position, and readiness
-    // is not drawn any more. A failure means the next visit tries again, which is the right amount
-    // of effort for a backfill.
+    // Readiness gates requests, so the reads that draw it refetch once the write lands. A failure
+    // frees the key: the next change to this claim's readiness tries again.
     void notifyClaimResponseIndexed(
       spaceId,
       entityId,
-      responseKind,
-      viewerResponse.position,
+      CLAIM_RESPONSE_KIND,
+      position,
       getPrivyIdentityToken,
       accountKey,
       controller.signal
-    ).catch(() => {});
+    ).then(
+      () => scheduleReadinessRefresh(queryClient, accountKey, spaceId),
+      () => {
+        sent.current.delete(key);
+      }
+    );
 
     return () => controller.abort();
   }, [
     accountKey,
     alreadyReady,
     authenticated,
-    disabledReason,
     entityId,
     getPrivyIdentityToken,
+    hasReadiness,
+    position,
+    queryClient,
     ready,
-    responseKind,
+    retaken,
     spaceId,
-    viewerResponse,
   ]);
 }

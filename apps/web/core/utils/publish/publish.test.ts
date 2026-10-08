@@ -583,6 +583,14 @@ describe('toRfc3339Date', () => {
   it('should extract date from a time-only string (epoch date)', () => {
     expect(toRfc3339Date('14:30:00Z')).toBe('1970-01-01');
   });
+
+  it("should convert the profile sheets' YYYY-MM-01Z form", () => {
+    expect(toRfc3339Date('2010-09-01Z')).toBe('2010-09-01');
+  });
+
+  it('should refuse an unreadable value instead of publishing NaN-NaN-NaN', () => {
+    expect(() => toRfc3339Date('not a date')).toThrow('unreadable date value');
+  });
 });
 
 describe('toRfc3339Time', () => {
@@ -769,5 +777,57 @@ describe('parseDecimalString', () => {
     const result = parseDecimalString('1.10');
     expect(result.exponent).toBe(-1);
     expect(result.mantissa).toEqual({ type: 'i64', value: 11n });
+  });
+});
+
+describe('findUnattachedChanges (GEO-2966)', () => {
+  it("finds values stored against '' that prepareOps would silently drop", () => {
+    const orphan = createMockValue({ entity: { id: '', name: null } });
+    const attached = createMockValue();
+
+    expect(prepareLocalDataForPublishing([orphan], [], 'test-space')).toEqual([]);
+
+    const result = Publish.findUnattachedChanges([orphan, attached], [], 'test-space');
+
+    expect(result.values).toEqual([orphan]);
+    expect(result.relations).toEqual([]);
+  });
+
+  it("finds relations whose from-entity is ''", () => {
+    const orphan = createMockRelation({ fromEntity: { id: '', name: null } });
+
+    const result = Publish.findUnattachedChanges([], [orphan, createMockRelation()], 'test-space');
+
+    expect(result.relations).toEqual([orphan]);
+  });
+
+  it('ignores rows the publish would skip anyway', () => {
+    const values = [
+      createMockValue({ entity: { id: '', name: null }, spaceId: 'other-space' }),
+      createMockValue({ entity: { id: '', name: null }, hasBeenPublished: true }),
+      createMockValue({ entity: { id: '', name: null }, isLocal: false }),
+    ];
+    const relations = [createMockRelation({ fromEntity: { id: '', name: null }, isDeleted: true })];
+
+    const result = Publish.findUnattachedChanges(values, relations, 'test-space');
+
+    expect(result.values).toEqual([]);
+    expect(result.relations).toEqual([]);
+  });
+
+  it('names what would be lost instead of calling it an empty edit', () => {
+    const message = Publish.describeUnattachedChanges({
+      values: [
+        createMockValue({ entity: { id: '', name: null }, property: { id: 'a', name: 'Name', dataType: 'TEXT' } }),
+        createMockValue({
+          entity: { id: '', name: null },
+          property: { id: 'b', name: 'Description', dataType: 'TEXT' },
+        }),
+      ],
+      relations: [],
+    });
+
+    expect(message).toContain('2 changes are not attached to any entity (Name, Description)');
+    expect(message).not.toContain('empty edit');
   });
 });

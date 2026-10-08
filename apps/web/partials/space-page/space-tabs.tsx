@@ -4,6 +4,9 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as React from 'react';
 
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { ID } from '~/core/id';
+import { profileDebateNavigationCount } from '~/core/profile/profile-debate-visibility';
 import { hasRecordToShow } from '~/core/profile/profile-proposer';
 import { useEditable } from '~/core/state/editable-store';
 import { useDebugDebatesPageEnabled } from '~/core/state/feature-flags';
@@ -26,6 +29,8 @@ type SpaceTabsProps = {
   isProfile: boolean;
   /** How much this person's record holds, for hiding empty tabs — see `buildSpaceTabs`. */
   personRecordCounts?: PersonRecordCounts;
+  /** Whether the space's home entity is a Topic — see `buildSpaceTabs`. */
+  isTopicSpace?: boolean;
 };
 
 type BuiltSpaceTab = {
@@ -85,10 +90,40 @@ type BuildSpaceTabsParams = {
    * empty record and hide a tab holding hundreds of rows.
    */
   personRecordCounts?: PersonRecordCounts;
+  /** Whether the profile owner may need the route to manage hidden debates. */
+  isOwner?: boolean;
+  /**
+   * Whether the space's home entity is a Topic, so it opens on the topic Explore feed.
+   *
+   * Explore takes the bare URL and leads the row, as it does on a topic page, and the space's
+   * authored page moves to Overview at `/overview` beside it.
+   */
+  isTopicSpace?: boolean;
 };
+
+/**
+ * The leading system tabs every space opens with: Overview, or Explore then Overview.
+ *
+ * On a topic space Explore stands alone before a rule, the way it does on a topic page: it is the
+ * topic's feed, and everything after the rule is the space's.
+ */
+function leadingSpaceTabs(spaceId: string, overviewHref: string, isTopicSpace: boolean) {
+  return isTopicSpace
+    ? [
+        { label: 'Explore', href: overviewHref },
+        { label: 'Overview', href: spaceOverviewPageHref(spaceId, overviewHref, isTopicSpace), dividerBefore: true },
+      ]
+    : [{ label: 'Overview', href: overviewHref }];
+}
+
+/** The space's authored page: the bare URL, except on a topic space, where Explore has it. */
+function spaceOverviewPageHref(spaceId: string, overviewHref: string, isTopicSpace: boolean) {
+  return isTopicSpace ? `/space/${spaceId}/overview` : overviewHref;
+}
 
 export type PersonRecordCounts = {
   debates: number;
+  totalDebates: number;
   positions: number;
   proposals: number;
 };
@@ -101,20 +136,26 @@ export function buildSpaceTabs({
   isDebugDebatesPageEnabled,
   isProfile,
   personRecordCounts,
+  isOwner = false,
+  isTopicSpace = false,
 }: BuildSpaceTabsParams): BuiltSpaceTab[] {
   const tabs: BuiltSpaceTab[] = [];
 
-  const ALL_SPACES_TABS: BuiltSpaceTab[] = [
-    {
-      label: 'Overview',
-      href: overviewHref,
-      priority: 1,
-    },
-  ];
+  const ALL_SPACES_TABS: BuiltSpaceTab[] = leadingSpaceTabs(spaceId, overviewHref, isTopicSpace).map(tab => ({
+    ...tab,
+    priority: 1 as const,
+  }));
 
   const DEBUG_DEBATES_TAB: BuiltSpaceTab = {
     label: 'Debug debates',
     href: `/space/${spaceId}/debug-debates`,
+    priority: 3,
+  };
+
+  /** Answering a scheduled debate, which has no other surface yet (GEO-2940). */
+  const DEBUG_ROOMS_TAB: BuiltSpaceTab = {
+    label: 'Debug rooms',
+    href: `/space/${spaceId}/debug-debate-rooms`,
     priority: 3,
   };
 
@@ -146,7 +187,7 @@ export function buildSpaceTabs({
   // Overview is not in here and is never hidden: it is the profile itself, and a
   // person with an empty record still has a name, a bio and a rail.
   const countFor: Record<string, number | undefined> = {
-    Debates: personRecordCounts?.debates,
+    Debates: profileDebateNavigationCount(personRecordCounts?.debates, personRecordCounts?.totalDebates, isOwner),
     Positions: personRecordCounts?.positions,
     Proposals: personRecordCounts?.proposals,
   };
@@ -172,7 +213,7 @@ export function buildSpaceTabs({
       // is the only path to the rail's facts below 1024px, where the rail drops
       // itself. Shadowing one does not replace it; it makes it unreachable.
       const reservedLabels = new Set([
-        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label] : []),
+        ...(isDebugDebatesPageEnabled ? [DEBUG_DEBATES_TAB.label, DEBUG_ROOMS_TAB.label] : []),
         ...(isPerson ? PERSON_TAB_LABELS : []),
       ]);
       const visibleDynamicTabs =
@@ -192,7 +233,7 @@ export function buildSpaceTabs({
     }
   }
 
-  if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB);
+  if (isDebugDebatesPageEnabled) tabs.push(DEBUG_DEBATES_TAB, DEBUG_ROOMS_TAB);
 
   if (typeIds.includes(SystemIds.SPACE_TYPE) && !isPerson) {
     tabs.push(...SOME_SPACES_TABS);
@@ -230,9 +271,12 @@ export function SpaceTabs({
   typeIds,
   isProfile,
   personRecordCounts,
+  isTopicSpace = false,
 }: SpaceTabsProps) {
   const { editable } = useEditable();
   const isDebugDebatesPageEnabled = useDebugDebatesPageEnabled();
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
   // Merge local tab relation changes with server data
   const mergedTabRelations = useRelations({
@@ -273,13 +317,17 @@ export function SpaceTabs({
   const showCommunity = typeIds.includes(SystemIds.SPACE_TYPE) && !isPersonSpace;
   // System tabs bracket the custom (dynamic) tabs: Overview + our Community lead,
   // Governance + Activity trail.
-  const systemTabsBefore: SystemTab[] = [{ label: 'Overview', href: overviewHref }];
+  const leadingTabs = leadingSpaceTabs(spaceId, overviewHref, isTopicSpace);
+  const systemTabsBefore: SystemTab[] = [...leadingTabs];
   if (showCommunity) systemTabsBefore.push({ label: 'Community', href: `/space/${spaceId}/community` });
 
   const systemTabsAfter: SystemTab[] = [];
 
   if (isDebugDebatesPageEnabled) {
-    systemTabsAfter.push({ label: 'Debug debates', href: `/space/${spaceId}/debug-debates` });
+    systemTabsAfter.push(
+      { label: 'Debug debates', href: `/space/${spaceId}/debug-debates` },
+      { label: 'Debug rooms', href: `/space/${spaceId}/debug-debate-rooms` }
+    );
   }
 
   if (showCommunity) systemTabsAfter.push({ label: 'Governance', href: `/space/${spaceId}/governance` });
@@ -335,6 +383,7 @@ export function SpaceTabs({
         systemTabsBefore={systemTabsBefore}
         systemTabsAfter={systemTabsAfter}
         overviewHref={overviewHref}
+        closedTabHref={spaceOverviewPageHref(spaceId, overviewHref, isTopicSpace)}
       />
     );
   }
@@ -353,14 +402,16 @@ export function SpaceTabs({
     typeIds,
     isDebugDebatesPageEnabled,
     isProfile,
+    isOwner,
+    isTopicSpace,
   });
 
-  // Overview, then our Community tab, then everything else.
+  // Overview (or Explore and Overview), then our Community tab, then everything else.
   const tabs = showCommunity
     ? [
-        baseTabs[0],
+        ...baseTabs.slice(0, leadingTabs.length),
         { label: 'Community', href: `/space/${spaceId}/community`, priority: 1 as const },
-        ...baseTabs.slice(1),
+        ...baseTabs.slice(leadingTabs.length),
       ]
     : baseTabs;
 

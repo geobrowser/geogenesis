@@ -2,30 +2,34 @@
 
 import * as React from 'react';
 
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
+import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
-import { NavUtils } from '~/core/utils/utils';
-
-import { FallbackImage } from '~/design-system/fallback-image';
-import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { PublishedRecordingPlayer } from '~/partials/community-calls/published-recording-player';
-import { EntityRowActions } from '~/partials/entity-page/entity-row-actions';
 
 import { type ClaimCardVariant, ClaimExploreFeedCard } from './claim-explore-feed-card';
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
 import { DebateExploreMetaRow } from './debate-explore-meta-row';
+import {
+  EXPLORE_CARD_CLASS,
+  ExploreCardActions,
+  ExploreCardDefaultBody,
+  ExploreCardSurface,
+} from './explore-card-chrome';
 import { ExploreCardTitle } from './explore-card-title';
-import { ExploreCommentsIcon } from './explore-comments-icon';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
+import { TopicExploreFeedCardArticle } from './topic-explore-feed-card';
 
 type ExploreFeedCardProps = {
+  itemPosition?: number;
+  listId?: string;
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row. Useful when the card is rendered inside the space it references (e.g. the activity tab). */
   hideSpaceLink?: boolean;
@@ -39,73 +43,31 @@ type ExploreFeedCardProps = {
   /** Presentation used for Claim rows; other entity types ignore it. */
   claimCardVariant?: ClaimCardVariant;
   /** See `ClaimExploreFeedCard`. Only a claim can carry one. */
-  responseNote?: (responseKind: 'stance' | 'veracity', position: boolean) => React.ReactNode;
+  responseNote?: (position: boolean) => React.ReactNode;
   /** Compact title and metadata treatment for a debate in profile Activity. */
   compactDebateChrome?: boolean;
+  /** Let a debate fill the column rather than its viewport-fitted cap. See `DebateExploreFeedCard`. */
+  fullWidthDebate?: boolean;
   /** Transfer playback ownership when this debate's player is clicked. Ignored by other row types. */
   onDebatePlaybackRequest?: (debateId: string) => void;
   /** Register whether this debate currently has a mounted player. Ignored by other row types. */
   onDebatePlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
+  /** Profile-only owner action shown beside the debate's full-screen control. */
+  debateEndSlot?: React.ReactNode;
 };
-
-function ExploreFeedCommentLink({ href, count }: { href: string; count: number }) {
-  return (
-    <Link href={href} className="inline-flex items-center gap-1.5 transition-colors hover:text-grey-04">
-      <ExploreCommentsIcon className="text-grey-03" />
-      <span className="tabular-nums">{count}</span>
-    </Link>
-  );
-}
 
 const COMMUNITY_CALL_EVENT_TYPE = normId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
+const TOPIC_TYPE = normId(TOPIC_TYPE_ID);
 const RANKING_BLOCK_TYPE = normId(RANKING_BLOCK_TYPE_ID);
 
 type CardBodyProps = {
   item: ExploreFeedItem;
   /** The vote / comment row, owned by the shell so bodies render it identically. Not every body takes it. */
   actions: React.ReactNode;
-  /** Threaded to the title only. The thumbnail beside it still navigates — see `BaseExploreFeedCard`. */
+  /** Threaded to the title only. The thumbnail beside it still navigates — see `ExploreCardDefaultBody`. */
   titleOpensSidePanel: boolean;
 };
-
-/** The default body: thumbnail on the left, title and description beside it. */
-function DefaultCardBody({
-  item,
-  actions,
-  titleOpensSidePanel,
-  compactTitle = false,
-}: CardBodyProps & { compactTitle?: boolean }) {
-  return (
-    <div className="flex items-start gap-4">
-      {item.imageUrl ? (
-        <Link
-          href={NavUtils.toEntity(item.spaceId, item.entityId)}
-          className="relative h-[60px] w-[60px] shrink-0 overflow-hidden rounded-lg bg-grey-01"
-        >
-          <FallbackImage value={item.imageUrl} sizes="120px" className="object-cover" />
-        </Link>
-      ) : null}
-      <div className="flex min-w-0 flex-1 flex-col gap-2">
-        <div className="min-w-0">
-          <ExploreCardTitle
-            item={item}
-            opensSidePanel={titleOpensSidePanel}
-            clamped={compactTitle}
-            showFullTextOnHover={compactTitle}
-          />
-          {item.description ? (
-            <p className="mt-1 line-clamp-2 text-[16px]! leading-[20px]! font-normal! tracking-[-0.03em] text-grey-04">
-              {item.description}
-            </p>
-          ) : null}
-        </div>
-
-        {actions}
-      </div>
-    </div>
-  );
-}
 
 /** A Community call event's body */
 function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyProps) {
@@ -140,6 +102,19 @@ function CommunityCallCardBody({ item, actions, titleOpensSidePanel }: CardBodyP
  * the debate can't actually be watched. Everything else renders one of the bodies below.
  */
 export function ExploreFeedCard(props: ExploreFeedCardProps) {
+  return (
+    <ExploreCardSurface
+      item={props.item}
+      itemPosition={props.itemPosition}
+      listId={props.listId}
+      variant={props.claimCardVariant}
+    >
+      <ExploreFeedCardBody {...props} />
+    </ExploreCardSurface>
+  );
+}
+
+function ExploreFeedCardBody(props: ExploreFeedCardProps) {
   const isDebate = isDebateEntity(props.item.types);
   if (isDebate) {
     return (
@@ -149,8 +124,10 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
         hideJoinButton={props.hideJoinButton}
         titleOpensSidePanel={props.titleOpensSidePanel}
         compactChrome={props.compactDebateChrome}
+        fullWidth={props.fullWidthDebate}
         onPlaybackRequest={props.onDebatePlaybackRequest}
         onPlaybackAvailabilityChange={props.onDebatePlaybackAvailabilityChange}
+        endSlot={props.debateEndSlot}
         fallback={<BaseExploreFeedCard {...props} />}
       />
     );
@@ -173,6 +150,21 @@ export function ExploreFeedCard(props: ExploreFeedCardProps) {
     );
   }
 
+  // Topics trade the votes for Follow (GEO-3191), and lead their metadata with the follower count.
+  // No connection counts here: see `TopicExploreFeedCard` for why the main feed doesn't ask.
+  const isTopic = props.item.types.some(type => normId(type.id) === TOPIC_TYPE);
+  if (isTopic) {
+    return (
+      <TopicExploreFeedCardArticle
+        item={props.item}
+        counts={null}
+        hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
+        titleOpensSidePanel={props.titleOpensSidePanel}
+      />
+    );
+  }
+
   return <BaseExploreFeedCard {...props} />;
 }
 
@@ -182,27 +174,29 @@ function BaseExploreFeedCard({
   hideJoinButton = false,
   titleOpensSidePanel = false,
   compactDebateChrome = false,
+  debateEndSlot,
 }: ExploreFeedCardProps) {
   const isCommunityCall = item.types.some(type => normId(type.id) === COMMUNITY_CALL_EVENT_TYPE);
   const isRanking = item.types.some(type => normId(type.id) === RANKING_BLOCK_TYPE);
-  const entityHref = `${NavUtils.toEntity(item.spaceId, item.entityId)}#entity-comments`;
-  const cardActions = (
-    <EntityRowActions entityId={item.entityId} spaceId={item.spaceId} className="mt-1">
-      <ExploreFeedCommentLink href={entityHref} count={item.commentCount} />
-    </EntityRowActions>
-  );
+  const cardActions = <ExploreCardActions item={item} />;
 
   return (
-    <article className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
+    <ActionSurfaceArticle className={EXPLORE_CARD_CLASS}>
       {compactDebateChrome ? (
         <DebateExploreMetaRow
           item={item}
           hideSpaceLink={hideSpaceLink}
           hideJoinButton={hideJoinButton}
           compact
+          endSlot={debateEndSlot}
         />
       ) : (
-        <ExploreMetaRow item={item} hideSpaceLink={hideSpaceLink} hideJoinButton={hideJoinButton} />
+        <ExploreMetaRow
+          item={item}
+          hideSpaceLink={hideSpaceLink}
+          hideJoinButton={hideJoinButton}
+          endSlot={isDebateEntity(item.types) ? debateEndSlot : undefined}
+        />
       )}
 
       {isCommunityCall ? (
@@ -210,13 +204,13 @@ function BaseExploreFeedCard({
       ) : isRanking ? (
         <RankingCardBody item={item} actions={cardActions} titleOpensSidePanel={titleOpensSidePanel} />
       ) : (
-        <DefaultCardBody
+        <ExploreCardDefaultBody
           item={item}
           actions={cardActions}
           titleOpensSidePanel={titleOpensSidePanel}
           compactTitle={compactDebateChrome}
         />
       )}
-    </article>
+    </ActionSurfaceArticle>
   );
 }

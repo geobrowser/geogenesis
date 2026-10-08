@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { EditProfileStatus } from '~/core/hooks/use-edit-profile';
+import { TAGLINE_MAX_LENGTH } from '~/core/profile/profile-ontology';
 
 import { EditProfileDialog } from './edit-profile-dialog';
 
@@ -19,6 +20,7 @@ const mocks = vi.hoisted(() => ({
   errorMessage: null as string | null,
   current: {
     name: 'Preston Mantel',
+    tagline: 'Engineer at Geo',
     description: 'Working on debates.',
     bannerUrl: undefined as string | undefined,
     avatarUrl: undefined as string | undefined,
@@ -61,13 +63,31 @@ vi.mock('~/core/hooks/use-edit-profile', () => ({
   }),
 }));
 
+// The sheets search the graph and have their own tests; here only the swap in
+// and out of the modal body matters.
+vi.mock('./add-position-sheet', () => ({ AddPositionSheet: () => <p>Position sheet</p> }));
+vi.mock('./add-education-sheet', () => ({ AddEducationSheet: () => <p>Education sheet</p> }));
+
+const FOCUS_RING = ['focus-visible:outline-2', 'focus-visible:outline-text'];
+
+/**
+ * A press from `down` released on `up`. The click lands on their common ancestor,
+ * which for any press touching the backdrop is the backdrop itself.
+ */
+function press(down: Element, up: Element, backdrop: Element) {
+  fireEvent.pointerDown(down);
+  fireEvent.pointerUp(up);
+  fireEvent.click(backdrop);
+}
+
 function renderDialog(onOpenChange = vi.fn()) {
   const { rerender } = render(<EditProfileDialog open onOpenChange={onOpenChange} />);
   return { onOpenChange, rerender };
 }
 
 const nameField = () => screen.getByPlaceholderText('Your name');
-const descriptionField = () => screen.getByPlaceholderText(/A sentence about who you are/);
+const taglineField = () => screen.getByPlaceholderText('Your role, or what you’re working on now.');
+const descriptionField = () => screen.getByPlaceholderText(/A few sentences on your background/);
 const saveButton = () => screen.getByRole('button', { name: /Save profile|Publishing|Retry/ });
 
 beforeEach(() => {
@@ -83,6 +103,7 @@ beforeEach(() => {
   mocks.stagedHistory = { values: [], relations: [] };
   mocks.current = {
     name: 'Preston Mantel',
+    tagline: 'Engineer at Geo',
     description: 'Working on debates.',
     bannerUrl: undefined,
     avatarUrl: undefined,
@@ -96,7 +117,58 @@ describe('EditProfileDialog', () => {
     renderDialog();
 
     expect(nameField()).toHaveValue('Preston Mantel');
+    expect(taglineField()).toHaveValue('Engineer at Geo');
     expect(descriptionField()).toHaveValue('Working on debates.');
+  });
+
+  it('publishes an edited tagline, capped at the limit', async () => {
+    const { onOpenChange } = renderDialog();
+
+    await userEvent.clear(taglineField());
+    await userEvent.type(taglineField(), 'Building debates');
+    await userEvent.click(saveButton());
+
+    expect(taglineField()).toHaveAttribute('maxlength', String(TAGLINE_MAX_LENGTH));
+    expect(screen.getByText(`${TAGLINE_MAX_LENGTH - 'Building debates'.length} characters left`)).toBeInTheDocument();
+    expect(mocks.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ tagline: 'Building debates' }),
+      expect.anything()
+    );
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  // A tagline already over the limit — written before this field existed, or by another client —
+  // is somebody's real headline. Cutting it on open would make Save live against an edit nobody
+  // made and republish it 40 characters shorter on one click. Same rule as the name field.
+  it('leaves an over-long tagline alone until it is edited', async () => {
+    const stored = 'y'.repeat(TAGLINE_MAX_LENGTH + 40);
+    mocks.current = { ...mocks.current, tagline: stored };
+    renderDialog();
+
+    expect(taglineField()).toHaveValue(stored);
+    expect(saveButton()).toBeDisabled();
+    expect(screen.getByText(/Over the 220-character limit/)).toBeInTheDocument();
+
+    await userEvent.type(nameField(), '!');
+    await userEvent.click(saveButton());
+
+    expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ tagline: stored }), expect.anything());
+  });
+
+  it('cuts the tagline once the field is actually edited', async () => {
+    mocks.current = { ...mocks.current, tagline: 'y'.repeat(TAGLINE_MAX_LENGTH + 40) };
+    renderDialog();
+
+    // A deletion, because `maxLength` is what an over-long field allows: typing into one is
+    // refused outright, so the first edit anybody can make is taking a character out — and that
+    // is the keystroke that snaps the whole value down to the limit.
+    await userEvent.type(taglineField(), '{backspace}');
+    await userEvent.click(saveButton());
+
+    expect(mocks.publish).toHaveBeenCalledWith(
+      expect.objectContaining({ tagline: 'y'.repeat(TAGLINE_MAX_LENGTH) }),
+      expect.anything()
+    );
   });
 
   it('keeps save disabled until something actually changes', async () => {
@@ -178,6 +250,7 @@ describe('EditProfileDialog', () => {
     expect(mocks.publish).toHaveBeenCalledWith(
       {
         name: 'Preston',
+        tagline: 'Engineer at Geo',
         description: 'Working on debates.',
         banner: { kind: 'unchanged' },
         avatar: { kind: 'unchanged' },
@@ -262,12 +335,251 @@ describe('EditProfileDialog', () => {
       expect(retry).toBeEnabled();
     });
 
-    it('discards the abandoned edit when the user cancels instead', async () => {
+    // The rows are already in the local store, so `hasChanges` reads false — but
+    // closing is what abandons them, and that still deserves the question.
+    it('asks before discarding the abandoned edit, then discards it', async () => {
+      renderDialog();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      expect(mocks.reset).not.toHaveBeenCalled();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Discard edits' }));
+
+      expect(mocks.reset).toHaveBeenCalled();
+    });
+  });
+
+  describe('closing with unsaved edits', () => {
+    const confirmation = () => screen.queryByText('Exiting without saving will discard edits');
+
+    it.each(['Cancel', 'Close'])('asks before %s throws them away', async name => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name }));
+
+      expect(confirmation()).toBeInTheDocument();
+      expect(mocks.reset).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('asks on a backdrop click', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      const backdrop = screen.getByRole('dialog');
+      press(backdrop, backdrop, backdrop);
+
+      expect(confirmation()).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('asks on Escape', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.keyboard('{Escape}');
+
+      expect(confirmation()).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('asks when the only edit is a staged position', async () => {
+      mocks.hasPendingHistory = true;
       renderDialog();
 
       await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
 
+      expect(confirmation()).toBeInTheDocument();
+    });
+
+    it('throws the draft away on Discard edits', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Discard edits' }));
+
       expect(mocks.reset).toHaveBeenCalled();
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('publishes the draft on Save changes', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+
+      expect(mocks.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'Preston Mantel!' }),
+        expect.anything()
+      );
+      expect(mocks.reset).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('goes back to editing, draft intact, when the question is dismissed', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.keyboard('{Escape}');
+
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(nameField()).toHaveValue('Preston Mantel!');
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    // Save changes cannot publish a profile with no name, so it is not offered as
+    // though it could; Discard edits or going back are the ways out.
+    it('holds Save changes when the draft cannot be saved', async () => {
+      renderDialog();
+
+      await userEvent.clear(nameField());
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.getByRole('button', { name: 'Save changes' })).toBeDisabled();
+    });
+
+    // One level at a time: from a sheet, Escape is the Back button, not a way to
+    // take the whole modal down.
+    it('steps back out of a sheet on Escape rather than closing', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.click(screen.getByRole('button', { name: /Add experience/ }));
+      expect(screen.getByText('Position sheet')).toBeInTheDocument();
+
+      await userEvent.keyboard('{Escape}');
+
+      expect(screen.queryByText('Position sheet')).not.toBeInTheDocument();
+      expect(nameField()).toBeInTheDocument();
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    // Asking here would offer a Save that publishes without the sheet's draft.
+    it('steps back out of a sheet on a backdrop click too', async () => {
+      mocks.hasPendingHistory = true;
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.click(screen.getByRole('button', { name: /Add experience/ }));
+      const backdrop = screen.getByRole('dialog');
+      press(backdrop, backdrop, backdrop);
+
+      expect(screen.queryByText('Position sheet')).not.toBeInTheDocument();
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    it('goes back to editing on Keep editing', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      await userEvent.click(screen.getByRole('button', { name: 'Keep editing' }));
+
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(nameField()).toHaveValue('Preston Mantel!');
+      expect(mocks.reset).not.toHaveBeenCalled();
+      expect(onOpenChange).not.toHaveBeenCalled();
+    });
+
+    // Radix focuses the first button otherwise — Discard edits, one Enter from
+    // throwing the draft away.
+    it('starts focus on Keep editing, not on Discard', async () => {
+      renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(screen.getByRole('button', { name: 'Keep editing' })).toHaveFocus();
+    });
+
+    describe('says why Save changes is held', () => {
+      const prompt = () => within(screen.getByRole('dialog', { name: /Exiting without saving/ }));
+
+      it('for a blank name', async () => {
+        renderDialog();
+
+        await userEvent.clear(nameField());
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(prompt().getByText('Add a name to save your profile.')).toBeInTheDocument();
+      });
+
+      it('while the profile is still loading', async () => {
+        mocks.isLoading = true;
+        mocks.hasPendingHistory = true;
+        renderDialog();
+
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(prompt().getByText('Your profile is still loading. Try again in a moment.')).toBeInTheDocument();
+      });
+
+      it('when the profile cannot be edited', async () => {
+        mocks.canEdit = false;
+        mocks.hasPendingHistory = true;
+        renderDialog();
+
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(
+          prompt().getByText('We couldn’t find your profile to edit. Try reloading the page.')
+        ).toBeInTheDocument();
+      });
+
+      // Focus starts on Keep editing, so a reason left off the dialog's
+      // description is never announced.
+      it('as part of the question, for assistive technology', async () => {
+        renderDialog();
+
+        await userEvent.clear(nameField());
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(screen.getByRole('dialog', { name: /Exiting without saving/ })).toHaveAccessibleDescription(
+          'Add a name to save your profile.'
+        );
+      });
+
+      it('and says nothing when Save is available', async () => {
+        renderDialog();
+
+        await userEvent.type(nameField(), '!');
+        await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+        expect(screen.getByRole('button', { name: 'Save changes' })).toBeEnabled();
+        expect(prompt().queryByText(/Try again|Add a name|Try reloading/)).not.toBeInTheDocument();
+        expect(screen.getByRole('dialog', { name: /Exiting without saving/ })).not.toHaveAttribute('aria-describedby');
+      });
+    });
+
+    // The pills have no focus style of their own and the base styles drop the
+    // browser outline, so these would otherwise show no keyboard focus at all.
+    it('gives every pill a keyboard focus ring', async () => {
+      renderDialog();
+
+      await userEvent.type(nameField(), '!');
+      for (const name of ['Cancel', 'Save profile']) {
+        expect(screen.getByRole('button', { name })).toHaveClass(...FOCUS_RING);
+      }
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+      for (const name of ['Discard edits', 'Save changes']) {
+        expect(screen.getByRole('button', { name })).toHaveClass(...FOCUS_RING);
+      }
+    });
+
+    it('closes without asking when nothing was changed', async () => {
+      const { onOpenChange } = renderDialog();
+
+      await userEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      expect(confirmation()).not.toBeInTheDocument();
+      expect(onOpenChange).toHaveBeenCalledWith(false);
     });
   });
 
@@ -350,8 +662,7 @@ describe('EditProfileDialog', () => {
     // The dialog content spans the viewport, so Radix's own outside-click never
     // fires and the backdrop is this container itself.
     const backdrop = screen.getByRole('dialog');
-    fireEvent.pointerDown(backdrop);
-    fireEvent.click(backdrop);
+    press(backdrop, backdrop, backdrop);
 
     expect(onOpenChange).toHaveBeenCalledWith(false);
   });
@@ -391,13 +702,26 @@ describe('EditProfileDialog', () => {
     await userEvent.clear(nameField());
     await userEvent.paste('Half-typed name');
 
-    // The press begins in the field; only the click lands on the backdrop.
-    fireEvent.pointerDown(nameField());
-    fireEvent.click(backdrop);
+    // The press begins in the field; only the release lands on the backdrop.
+    press(nameField(), backdrop, backdrop);
 
+    // Not even the question: with the discard prompt in place a stray dismissal
+    // no longer loses the draft, but it is still not one anybody chose.
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(mocks.reset).not.toHaveBeenCalled();
     expect(nameField()).toHaveValue('Half-typed name');
+  });
+
+  // The same, the other way: pressing on the backdrop and releasing over the card.
+  it('does not dismiss when a drag started on the backdrop and ended inside the card', async () => {
+    const { onOpenChange } = renderDialog();
+
+    await userEvent.type(nameField(), '!');
+    press(screen.getByRole('dialog'), nameField(), screen.getByRole('dialog'));
+
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(screen.queryByText('Exiting without saving will discard edits')).not.toBeInTheDocument();
   });
 
   it('names which image each control acts on', () => {
@@ -452,7 +776,7 @@ describe('EditProfileDialog', () => {
     await userEvent.paste('Half-typed name');
 
     mocks.entityId = 'entity-b';
-    mocks.current = { name: 'Someone Else', description: '', bannerUrl: undefined, avatarUrl: undefined };
+    mocks.current = { name: 'Someone Else', tagline: '', description: '', bannerUrl: undefined, avatarUrl: undefined };
     rerender(<EditProfileDialog open onOpenChange={vi.fn()} />);
 
     // Re-seeded from the new profile rather than holding the old draft.

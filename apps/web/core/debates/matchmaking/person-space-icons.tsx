@@ -11,6 +11,8 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { AvatarGroup } from '~/design-system/avatar-group';
 import { ThumbGeoImage } from '~/design-system/geo-image';
+import { Megaphone } from '~/design-system/icons/megaphone';
+import { Warning } from '~/design-system/icons/warning';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 /** The same three-face cap used by the app's other compact avatar stacks. */
@@ -50,12 +52,15 @@ export function PersonSpaceIcons({
   labelsById,
   claimsBySpace,
   debatesBySpace,
+  matchesBySpace,
   popoverPortal,
 }: {
   spaceIds: string[];
   labelsById: Map<string, SpaceLabel>;
   claimsBySpace?: ReadonlyMap<string, number>;
   debatesBySpace?: ReadonlyMap<string, number>;
+  /** Viewer-relative opposing claims. Absent when there is no signed-in comparison to make. */
+  matchesBySpace?: ReadonlyMap<string, number>;
   popoverPortal: HTMLElement | null;
 }) {
   const orderedSpaceIds = React.useMemo(() => orderPersonSpaces(spaceIds, debatesBySpace), [spaceIds, debatesBySpace]);
@@ -79,7 +84,7 @@ export function PersonSpaceIcons({
             <AvatarGroup>
               {shown.map(spaceId => (
                 <AvatarGroup.Item key={spaceId} size={12}>
-                  <SpaceIcon spaceId={spaceId} labelsById={labelsById} size={12} />
+                  <PersonSpaceIcon spaceId={spaceId} labelsById={labelsById} size={12} />
                 </AvatarGroup.Item>
               ))}
               <AvatarGroup.Overflow count={overflow} size={12} data-testid="person-space-overflow" />
@@ -99,7 +104,7 @@ export function PersonSpaceIcons({
                 event.preventDefault();
                 firstSpaceLinkRef.current?.focus();
               }}
-              className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+              className="z-100 w-[240px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
             >
               <p className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">Active in</p>
               <ul
@@ -111,6 +116,7 @@ export function PersonSpaceIcons({
                   const name = label?.name?.trim() || 'Space';
                   const claimCount = countForSpace(claimsBySpace, spaceId);
                   const debateCount = countForSpace(debatesBySpace, spaceId);
+                  const matchCount = countForSpace(matchesBySpace, spaceId);
                   // A missing map means that side of the graph response was truncated. Omit both
                   // numbers rather than presenting the missing half as a confident zero.
                   const hasCounts = claimCount !== null && debateCount !== null;
@@ -123,12 +129,27 @@ export function PersonSpaceIcons({
                         className="flex min-w-0 items-center gap-2 px-3 py-1.5 transition-colors duration-75 hover:bg-grey-01"
                         data-testid="person-space-option"
                       >
-                        <SpaceIcon spaceId={spaceId} labelsById={labelsById} size={20} />
+                        <PersonSpaceIcon spaceId={spaceId} labelsById={labelsById} size={20} />
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-metadataMedium text-text">{name}</span>
-                          {hasCounts ? (
-                            <span className="block truncate text-footnote text-grey-04 tabular-nums">
-                              {formatCount(claimCount ?? 0, 'claim')} · {formatCount(debateCount ?? 0, 'debate')}
+                          {hasCounts || matchCount !== null ? (
+                            <span className="flex items-center gap-1.5 text-footnote whitespace-nowrap text-grey-04 tabular-nums">
+                              {hasCounts ? (
+                                <>
+                                  <SpaceStat
+                                    icon={<Megaphone size={13} />}
+                                    count={debateCount ?? 0}
+                                    singular="debate"
+                                  />
+                                  <SpaceStat icon={<Warning size={13} />} count={claimCount ?? 0} singular="claim" />
+                                </>
+                              ) : null}
+                              {matchCount !== null ? (
+                                <>
+                                  {hasCounts ? <span aria-hidden>·</span> : null}
+                                  <span>{formatCount(matchCount, 'match', 'matches')}</span>
+                                </>
+                              ) : null}
                             </span>
                           ) : null}
                         </span>
@@ -145,16 +166,27 @@ export function PersonSpaceIcons({
   );
 }
 
+function SpaceStat({ icon, count, singular }: { icon: React.ReactNode; count: number; singular: string }) {
+  const label = formatCount(count, singular);
+  return (
+    <span className="inline-flex items-center gap-1" title={label}>
+      <span aria-hidden>{icon}</span>
+      <span aria-hidden>{count}</span>
+      <span className="sr-only">{label}</span>
+    </span>
+  );
+}
+
 function countForSpace(counts: ReadonlyMap<string, number> | undefined, spaceId: string): number | null {
   if (!counts) return null;
   return counts.get(normId(spaceId)) ?? counts.get(spaceId) ?? 0;
 }
 
-function formatCount(count: number, singular: string): string {
-  return `${count} ${count === 1 ? singular : `${singular}s`}`;
+function formatCount(count: number, singular: string, plural = `${singular}s`): string {
+  return `${count} ${count === 1 ? singular : plural}`;
 }
 
-function SpaceIcon({
+export function PersonSpaceIcon({
   spaceId,
   labelsById,
   size,

@@ -1,6 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const analyticsScriptSrc = 'http://localhost:3000/geo-analytics-8f8dba53d466.js';
+import manifest from '../public/geo-analytics-manifest.json';
+
+const analyticsScriptSrc = `http://localhost:3000/geo-analytics-${manifest.shortHash}.js`;
 
 describe('analytics', () => {
   beforeEach(() => {
@@ -16,6 +18,58 @@ describe('analytics', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+  });
+
+  it('does not fill a deferred Explore action with the entity on the completion page', async () => {
+    const send = vi.fn();
+    window.lytics = { capture: send };
+    const { snapshotActionContext } = await import('./action-context');
+    const { capture } = await import('./analytics');
+    window.history.replaceState({}, '', '/explore');
+    const original = snapshotActionContext('entity_vote_buttons', 'claim', 'claim');
+    window.history.replaceState({}, '', '/space/11111111111111111111111111111111/22222222222222222222222222222222');
+    capture('action_completed', original);
+    expect(send).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({
+        page_path: '/explore',
+        page_type: 'explore',
+        page_entity_id: null,
+        page_entity_type: null,
+      })
+    );
+    window.history.replaceState({}, '', '/');
+  });
+
+  // A blocked runtime script never drains the queue, so it must not grow for the life of the tab
+  // (GEO-3067); identity calls still get through when it does load.
+  it('bounds the queue while the runtime is missing but keeps identity calls', async () => {
+    const { capture, loggedIn } = await import('./analytics');
+    for (let i = 0; i < 1500; i++) capture('action_completed', { index: i });
+    loggedIn({ id: 'user-1' } as never);
+
+    const runtime = { capture: vi.fn(), loggedIn: vi.fn() };
+    window.lytics = runtime as never;
+    document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
+
+    // The identity call took the oldest event's place, so the queue never exceeded the bound.
+    expect(runtime.capture).toHaveBeenCalledTimes(999);
+    expect(runtime.capture).toHaveBeenNthCalledWith(1, 'action_completed', expect.objectContaining({ index: 1 }));
+    expect(runtime.capture).toHaveBeenLastCalledWith('action_completed', expect.objectContaining({ index: 999 }));
+    expect(runtime.loggedIn).toHaveBeenCalledTimes(1);
+  });
+
+  it('stays bounded when the full queue holds only identity calls', async () => {
+    const { loggedIn } = await import('./analytics');
+    for (let i = 0; i < 1001; i++) loggedIn({ id: `user-${i}` } as never);
+
+    const runtime = { capture: vi.fn(), loggedIn: vi.fn() };
+    window.lytics = runtime as never;
+    document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')?.onload?.(new Event('load'));
+
+    // Only the oldest identity call gives way; the newest identity state always arrives.
+    expect(runtime.loggedIn).toHaveBeenCalledTimes(1000);
+    expect(runtime.loggedIn).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'user-1000' }), expect.anything());
   });
 
   it('loads the current Genesis analytics runtime with collector-safe defaults', async () => {
@@ -34,7 +88,7 @@ describe('analytics', () => {
     const script = document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader="true"]');
 
     expect(script?.src).toBe(analyticsScriptSrc);
-    expect(script?.integrity).toBe('sha256-j426U9Rmd38aqJcds0bqAaOlribZukZWDJFfY8cZTbY=');
+    expect(script?.integrity).toBe(manifest.integrity);
     expect(script?.crossOrigin).toBe('anonymous');
   });
 
@@ -172,7 +226,7 @@ describe('analytics', () => {
     });
   });
 
-  it('tracks explicit login completions as logins even when Privy reports an existing session', async () => {
+  it('does not let manual-login attribution override a restored session', async () => {
     const loggedIn = vi.fn();
     const sessionRestored = vi.fn();
     window.lytics = {
@@ -196,10 +250,10 @@ describe('analytics', () => {
       { auth_flow: 'manual_login' }
     );
 
-    expect(loggedIn).toHaveBeenCalledTimes(1);
-    expect(sessionRestored).not.toHaveBeenCalled();
-    expect(loggedIn.mock.calls[0][1]).toMatchObject({
-      auth_flow: 'manual_login',
+    expect(loggedIn).not.toHaveBeenCalled();
+    expect(sessionRestored).toHaveBeenCalledTimes(1);
+    expect(sessionRestored.mock.calls[0][1]).toMatchObject({
+      auth_flow: 'session_restore',
       was_already_authenticated: true,
     });
   });
@@ -223,10 +277,14 @@ describe('analytics', () => {
     const {
       browseModeToggled: browse,
       commentCreated,
+      commentEdited,
       editModeToggled: edit,
+      personProfileOpened,
       personalSpaceViewed,
+      profileUpdated,
       publishedEdit,
       reviewChangesOpened,
+      signupCompleted,
       upvoted: up,
       voteCast: vote,
     } = await import('./analytics');
@@ -236,9 +294,13 @@ describe('analytics', () => {
     edit({ space_id: 'space-1' });
     browse({ space_id: 'space-1' });
     personalSpaceViewed('personal-space-1');
+    personProfileOpened('profile-space-1', 'person-1', { interaction_surface: 'claim_vote_list' });
     reviewChangesOpened({ space_id: 'space-1' });
     publishedEdit({ space_id: 'space-1' });
+    profileUpdated('person-1', 'profile-space-1');
     commentCreated('comment-1', 'claim-1', { space_id: 'space-1' });
+    commentEdited('comment-1', 'claim-1', { space_id: 'space-1' });
+    signupCompleted('newsletter', { signup_surface: 'explore_email_capture' });
 
     expect(upvoted).toHaveBeenCalledWith({ entity_id: 'entity-1' });
     expect(voteCast).toHaveBeenCalledWith('none', { entity_id: 'entity-1' });
@@ -250,23 +312,204 @@ describe('analytics', () => {
       space_id: 'personal-space-1',
       entity_id: 'personal-space-1',
     });
-    expect(capture).toHaveBeenCalledWith('review_changes_opened', {
-      app: 'genesis',
-      source: 'review_changes',
-      space_id: 'space-1',
+    expect(capture).toHaveBeenCalledWith(
+      'review_changes_opened',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'review_changes',
+        space_id: 'space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'published_edit',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'publishing',
+        space_id: 'space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'graph_relationship_followed',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'person_profile',
+        entity_id: 'person-1',
+        graph_entity_type: 'person',
+        profile_space_id: 'profile-space-1',
+        interaction_surface: 'claim_vote_list',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'published_edit',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'profile_editor',
+        content_id: 'person-1',
+        content_type: 'profile',
+        space_id: 'profile-space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'comment_created',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'commenting',
+        comment_id: 'comment-1',
+        target_type: 'entity',
+        target_id: 'claim-1',
+        space_id: 'space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'content_edited',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'commenting',
+        content_id: 'comment-1',
+        content_type: 'comment',
+        target_type: 'entity',
+        target_id: 'claim-1',
+        space_id: 'space-1',
+      })
+    );
+    expect(capture).toHaveBeenCalledWith(
+      'signup_completed',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'signup_form',
+        form_type: 'newsletter',
+        signup_surface: 'explore_email_capture',
+      })
+    );
+  });
+
+  it('tracks completed searches with result, latency, and privacy-safe query fields', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { searchSubmitted } = await import('./analytics');
+
+    searchSubmitted({
+      queryText: '  reach Jane@example.com using 4242 4242 4242 4242  ',
+      resultCount: 12,
+      latencyMs: 370,
+      surface: 'global',
     });
-    expect(capture).toHaveBeenCalledWith('published_edit', {
-      app: 'genesis',
-      source: 'publishing',
-      space_id: 'space-1',
+
+    expect(capture).toHaveBeenCalledWith(
+      'search_submitted',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'global_search',
+        query_id: expect.stringMatching(/^genesis_search_[a-z0-9]+$/),
+        query_type: 'global_entities',
+        query_text: 'reach ***** using *****',
+        result_count: 12,
+        no_results: false,
+        latency_bucket: '250_500ms',
+      })
+    );
+  });
+
+  it('uses stable search query ids without storing unmasked sensitive text', async () => {
+    const { searchQueryId } = await import('./analytics');
+
+    expect(searchQueryId('Graph Search')).toBe(searchQueryId('  graph search  '));
+    expect(searchQueryId('Graph Search')).not.toBe(searchQueryId('Another Search'));
+  });
+
+  it('marks a completed zero-result search without emitting for an empty query', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { searchSubmitted } = await import('./analytics');
+
+    searchSubmitted({
+      queryText: 'missing entity',
+      resultCount: 0,
+      latencyMs: 100,
+      surface: 'entity',
     });
-    expect(capture).toHaveBeenCalledWith('comment_created', {
-      app: 'genesis',
-      source: 'commenting',
-      comment_id: 'comment-1',
-      target_type: 'entity',
-      target_id: 'claim-1',
-      space_id: 'space-1',
-    });
+    searchSubmitted({ queryText: '   ', resultCount: 0, latencyMs: 100, surface: 'entity' });
+
+    expect(capture).toHaveBeenCalledOnce();
+    expect(capture).toHaveBeenCalledWith(
+      'search_submitted',
+      expect.objectContaining({ result_count: 0, no_results: true })
+    );
+  });
+
+  it('assigns stable latency buckets at their boundaries', async () => {
+    const { searchLatencyBucket } = await import('./analytics');
+
+    expect(searchLatencyBucket(249)).toBe('0_250ms');
+    expect(searchLatencyBucket(250)).toBe('250_500ms');
+    expect(searchLatencyBucket(500)).toBe('500_1000ms');
+    expect(searchLatencyBucket(1000)).toBe('1000_2000ms');
+    expect(searchLatencyBucket(2000)).toBe('2000ms_plus');
+  });
+
+  it('keeps product actions best-effort when the analytics runtime throws', async () => {
+    window.lytics = {
+      capture: vi.fn(() => {
+        throw new Error('collector unavailable');
+      }),
+    };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    expect(() => personProfileOpened('profile-space-1', 'person-1')).not.toThrow();
+  });
+
+  it('attributes a profile entity fallback as its personal space', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('profile-space-1', 'profile-space-1', { interaction_surface: 'claim_vote_list' });
+
+    expect(capture).toHaveBeenCalledWith(
+      'graph_relationship_followed',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'person_profile',
+        entity_id: 'profile-space-1',
+        graph_entity_type: 'personal_space',
+        profile_space_id: 'profile-space-1',
+        interaction_surface: 'claim_vote_list',
+      })
+    );
+  });
+
+  it('recognizes dashed and differently cased forms of the same personal-space id', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('4C81561D-1F95-4131-9CDD-DD20AB831BA2', '4c81561d1f9541319cdddd20ab831ba2');
+
+    expect(capture).toHaveBeenCalledWith(
+      'graph_relationship_followed',
+      expect.objectContaining({
+        app: 'genesis',
+        source: 'person_profile',
+        entity_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
+        graph_entity_type: 'personal_space',
+        profile_space_id: '4C81561D-1F95-4131-9CDD-DD20AB831BA2',
+      })
+    );
+  });
+
+  it('does not attribute a profile open to a pending personal-space sentinel', async () => {
+    const capture = vi.fn();
+    window.lytics = { capture };
+
+    const { personProfileOpened } = await import('./analytics');
+
+    personProfileOpened('pending:0x123', null, { interaction_surface: 'comment_author' });
+
+    expect(capture).not.toHaveBeenCalled();
   });
 });

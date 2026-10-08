@@ -9,8 +9,15 @@ import { ZERO_WIDTH_SPACE } from '~/core/constants';
 
 import { Spacer } from '~/design-system/spacer';
 
+import { entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
+
 /** Entity-title token (`text-entityTitle`), including the narrow-viewport steps in `styles.css`. */
 const titleTypographyClassName = 'text-entityTitle';
+
+/** The gap under the title, by mode — exported for a row that draws it itself. */
+export function titleBottomSpacing(isEditing: boolean) {
+  return isEditing ? 3.5 : 12;
+}
 
 type EntityPageTitleProps = {
   value: string;
@@ -20,6 +27,17 @@ type EntityPageTitleProps = {
   className?: string;
   /** Rendered inline directly after the title in browse mode, e.g. a verification badge. */
   accessory?: React.ReactNode;
+  /**
+   * The entity this title names, marked in the DOM for the sticky header — see
+   * `entity-page-anchors`, which says why it is an attribute rather than a ref.
+   */
+  entityId?: string;
+  /**
+   * The gap under the title, drawn inside it. Off when the title sits in a row
+   * that centres other controls against it: counted as part of the title, the
+   * gap pulls their centre below the name's. Such a row draws the gap itself.
+   */
+  withBottomSpacing?: boolean;
 };
 
 /**
@@ -42,10 +60,12 @@ export function EntityPageTitle({
   placeholder = 'Entity name...',
   className,
   accessory,
+  entityId,
+  withBottomSpacing = true,
 }: EntityPageTitleProps) {
   if (isEditing) {
     return (
-      <div className={cx('text-text', className)}>
+      <div className={cx('text-text', className)} {...entityPageTitleAnchor(entityId)}>
         <Textarea
           value={value}
           onChange={event => onChange(event.currentTarget.value)}
@@ -55,13 +75,13 @@ export function EntityPageTitle({
             'm-0 -mb-px w-full resize-none overflow-hidden bg-transparent p-0 text-text placeholder:text-grey-03 focus:outline-hidden'
           )}
         />
-        <Spacer height={3.5} />
+        {withBottomSpacing && <Spacer height={titleBottomSpacing(true)} />}
       </div>
     );
   }
 
   return (
-    <div className={className}>
+    <div className={className} {...entityPageTitleAnchor(entityId)}>
       {accessory ? (
         <div className="flex min-w-0 items-center gap-2">
           <h1 className={cx(titleTypographyClassName, 'min-w-0 wrap-break-word text-text')}>
@@ -78,7 +98,7 @@ export function EntityPageTitle({
           {value || ZERO_WIDTH_SPACE}
         </h1>
       )}
-      <Spacer height={12} />
+      {withBottomSpacing && <Spacer height={titleBottomSpacing(false)} />}
     </div>
   );
 }

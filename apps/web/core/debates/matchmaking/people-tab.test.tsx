@@ -6,14 +6,26 @@ import type React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
-import type { DebateChallenge, DebatePerson } from '../api';
+import { MUTUAL_SLOT, PEER_ONLY_SLOT } from '~/partials/availability/peer-availability';
+
+import {
+  type DebateChallenge,
+  type DebatePerson,
+  GeoChatRequestError,
+  type SchedulablePeopleResponse,
+  type SchedulablePerson,
+} from '../api';
+import type { ClaimPickerEntity } from '../claim-picker-page';
+import type { ParticipantPositionsByClaim } from '../participant-positions';
 import type { PersonRecord } from './person-record';
 import { debatesHubPeopleSpaceIdsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
+  capture: vi.fn(),
   /** Privy's answer; the tab's signed-out paths hang off it. */
   authenticated: true,
   people: [] as DebatePerson[],
@@ -25,6 +37,15 @@ const mocks = vi.hoisted(() => ({
   outboundRequest: null as unknown,
   activeDebate: null as unknown,
   currentUserId: 'user-me' as string | null,
+  personalSpaceId: '019fedae-72b6-7ab2-927a-df044d57c500' as string | null,
+  positionsByClaim: new Map() as ParticipantPositionsByClaim,
+  positionParticipants: [] as Array<{ profile_space_id: string }>,
+  positionOptions: undefined as { onlyViewerClaims?: boolean } | undefined,
+  positionsFetching: false,
+  positionsPlaceholderData: false,
+  claimEntities: [] as ClaimPickerEntity[],
+  claimEntitiesLoading: false,
+  claimEntitiesError: null as Error | null,
   createChallenge: vi.fn(),
   onTabChange: vi.fn(),
   cancelChallenge: vi.fn(),
@@ -33,10 +54,23 @@ const mocks = vi.hoisted(() => ({
   records: new Map<string, PersonRecord>(),
   publishableSpaceIds: null as Set<string> | null,
   publishableSpacesLoading: false,
+  propose: {
+    mutate: vi.fn(),
+    reset: vi.fn(),
+    isPending: false,
+    error: null as Error | null,
+    data: undefined as unknown,
+  },
+  usePeerSchedule: vi.fn(),
+  schedulable: undefined as SchedulablePeopleResponse | undefined,
+  useSchedulablePeople: vi.fn(),
   spaceLabels: new Map<string, { name: string | null; image: string | null }>(),
   /** Every prop set handed to a link this render, so a stray handler is visible. */
   linkProps: [] as Record<string, unknown>[],
+  personProfileOpened: vi.fn(),
 }));
+
+vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened, capture: mocks.capture }));
 
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
 // below are about — a real href, and nothing intercepting the click.
@@ -65,6 +99,9 @@ vi.mock('../hooks', () => ({
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
   useSaveDebateSchedule: () => ({ mutate: vi.fn(), isPending: false }),
+  // Reached only once a row's "See times" opens the modal. A `vi.fn` rather than a bare arrow, so
+  // a case can assert which peer the row asked about.
+  usePeerSchedule: (peerUserId: string | null) => mocks.usePeerSchedule(peerUserId),
   useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: 'user-a' }),
   useDebateActivity: () => ({
     data: { challenge: mocks.challenge, outbound_request: mocks.outboundRequest, debate: mocks.activeDebate },
@@ -87,6 +124,7 @@ vi.mock('./hooks', () => ({
     refetch: mocks.peopleRefetch,
   }),
   useDebateRequests: () => ({ data: { incoming: [], outbound: null }, isLoading: false, error: null }),
+  useSchedulablePeople: (enabled: boolean) => mocks.useSchedulablePeople(enabled),
 }));
 
 // The record is fetched once for the whole list through react-query; these tests render the tab
@@ -112,8 +150,44 @@ vi.mock('~/core/hooks/use-space-labels', async importOriginal => {
   return { ...actual, useSpaceLabels: () => ({ labelsById: mocks.spaceLabels, isLoading: false }) };
 });
 
+// Reaches for a query client this suite does not stand up, and booking has its own coverage.
+vi.mock('../rooms/scheduling-hooks', () => ({
+  useCreateScheduledDebate: () => mocks.propose,
+  useRescheduleScheduledDebate: () => mocks.propose,
+}));
+
 vi.mock('../use-current-geo-chat-user-id', () => ({
   useCurrentGeoChatUserId: () => mocks.currentUserId,
+}));
+
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isLoading: false }),
+}));
+
+vi.mock('../participant-positions', () => ({
+  useParticipantPositions: (
+    participants: Array<{ profile_space_id: string }>,
+    _viewer: string | null,
+    options?: { onlyViewerClaims?: boolean }
+  ) => {
+    mocks.positionParticipants = participants;
+    mocks.positionOptions = options;
+    return {
+      byClaim: mocks.positionsByClaim,
+      isLoading: false,
+      isFetching: mocks.positionsFetching,
+      isPlaceholderData: mocks.positionsPlaceholderData,
+      error: null,
+    };
+  },
+}));
+
+vi.mock('../claim-picker-page', () => ({
+  useClaimEntitiesByIds: () => ({
+    entities: mocks.claimEntities,
+    isLoading: mocks.claimEntitiesLoading,
+    error: mocks.claimEntitiesError,
+  }),
 }));
 
 // `usePrivySignIn` reaches for Privy's context, which these suites do not stand up. The signed-out
@@ -145,13 +219,16 @@ function person(userId: string, name: string): DebatePerson {
   } as DebatePerson;
 }
 
+function claimEntity(id: string, name: string): ClaimPickerEntity {
+  return { id, name, description: null, spaces: [], values: [], relations: [] };
+}
+
 function record(over: Partial<PersonRecord> = {}): PersonRecord {
   const result: PersonRecord = {
     positions: null,
     debatesArgued: null,
     claimsBySpace: new Map(),
     debatesBySpace: new Map(),
-    winRate: null,
     joinedAt: null,
     activeSpaceIds: new Set(),
     ...over,
@@ -191,6 +268,23 @@ const card = () => screen.queryByRole('article');
 beforeEach(() => {
   // Not a mock fn, so `resetAllMocks` does not restore it.
   mocks.authenticated = true;
+  mocks.propose = { mutate: vi.fn(), reset: vi.fn(), isPending: false, error: null, data: undefined };
+  mocks.usePeerSchedule.mockReset();
+  // Enough of a schedule that the view renders its heading, so a case can see the peer's name.
+  mocks.usePeerSchedule.mockReturnValue({
+    enabled: true,
+    isPending: false,
+    isError: false,
+    schedule: {
+      userId: 'user-them',
+      viewerTimezone: 'UTC',
+      peerTimezone: 'UTC',
+      viewerHasSchedule: true,
+      peerHasSchedule: true,
+      theirWeekKnown: true,
+      slots: [],
+    },
+  });
   mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
   mocks.peopleDataAvailable = true;
   mocks.peopleLoading = false;
@@ -200,6 +294,14 @@ beforeEach(() => {
   mocks.outboundRequest = null;
   mocks.activeDebate = null;
   mocks.currentUserId = 'user-me';
+  mocks.personalSpaceId = '019fedae-72b6-7ab2-927a-df044d57c500';
+  mocks.positionsByClaim = new Map();
+  mocks.positionParticipants = [];
+  mocks.positionsFetching = false;
+  mocks.positionsPlaceholderData = false;
+  mocks.claimEntities = [];
+  mocks.claimEntitiesLoading = false;
+  mocks.claimEntitiesError = null;
   mocks.createChallenge.mockReset();
   mocks.onTabChange.mockReset();
   mocks.cancelChallenge.mockReset();
@@ -210,6 +312,16 @@ beforeEach(() => {
   mocks.publishableSpacesLoading = false;
   mocks.spaceLabels = new Map();
   mocks.linkProps = [];
+  mocks.personProfileOpened.mockReset();
+  // Offline people are listed by default, so the baseline is a settled answer with nobody in it.
+  mocks.schedulable = { viewer_timezone: 'UTC', viewer_has_schedule: true, truncated: false, people: [] };
+  mocks.useSchedulablePeople.mockReset();
+  mocks.useSchedulablePeople.mockImplementation(() => ({
+    data: mocks.schedulable,
+    isLoading: false,
+    error: null,
+    refetch: vi.fn(),
+  }));
 });
 
 /**
@@ -235,6 +347,17 @@ async function closeActiveSpacesPopover(trigger: HTMLElement) {
   await new Promise<void>(resolve => setTimeout(resolve, 0));
 }
 
+function expectSpaceMetrics(option: HTMLElement, expected: { debates: string; claims: string; matches: string }) {
+  const debate = within(option).getByText(expected.debates);
+  const claims = within(option).getByText(expected.claims);
+  const matches = within(option).getByText(expected.matches);
+
+  expect(option.querySelectorAll('svg')).toHaveLength(2);
+  expect(matches.parentElement).toHaveClass('gap-1.5');
+  expect(debate.compareDocumentPosition(claims) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(claims.compareDocumentPosition(matches) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+}
+
 // Radix's menu measures its content; jsdom has no observer to measure with.
 class ResizeObserverStub {
   observe() {}
@@ -246,6 +369,203 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 afterEach(cleanup);
 
 describe('PeopleTab', () => {
+  it('keeps malformed roster IDs out of the shared position query', () => {
+    mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(mocks.positionParticipants).toEqual([
+      { profile_space_id: mocks.personalSpaceId },
+      { profile_space_id: PROFILE_SPACE_IDS['user-them'] },
+    ]);
+  });
+
+  // Match counts only compare people with the viewer, so the tab reads others' positions on the
+  // viewer's claims alone rather than everything everyone listed has ever answered.
+  it('reads positions scoped to the claims the viewer has answered', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(mocks.positionOptions).toEqual({ onlyViewerClaims: true });
+  });
+
+  it('shows the number of distinct claims where the viewer and a person hold opposite positions', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const vytautas = PROFILE_SPACE_IDS['user-other'];
+    const context = {
+      spaceId: '019fedae-72b6-7ab2-927a-df044d57c600',
+      responseKind: 'stance' as const,
+    };
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: vytautas, claimId: 'claim-1', position: true, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: false, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-2', position: true, ...context },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' })).toHaveTextContent('2 matches');
+    expect(screen.queryByRole('button', { name: /View 0 matching claims/ })).not.toBeInTheDocument();
+  });
+
+  it('uses singular copy for one matching claim', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', spaceId, responseKind: 'stance', position: true },
+          { profileSpaceId: arturas, claimId: 'claim-1', spaceId, responseKind: 'stance', position: false },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: 'View 1 matching claim with Arturas' })).toHaveTextContent('1 match');
+  });
+
+  it("does not show a match count on the viewer's own row", () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    mocks.currentUserId = 'user-them';
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', spaceId, responseKind: 'stance', position: true },
+          { profileSpaceId: arturas, claimId: 'claim-1', spaceId, responseKind: 'stance', position: false },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByText(/matches?/)).not.toBeInTheDocument();
+  });
+
+  it('sorts the people with the most matches first and preserves roster order for ties', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const vytautas = PROFILE_SPACE_IDS['user-other'];
+    const context = {
+      spaceId: '019fedae-72b6-7ab2-927a-df044d57c600',
+      responseKind: 'stance' as const,
+    };
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: vytautas, claimId: 'claim-1', position: false, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: true, ...context },
+          { profileSpaceId: vytautas, claimId: 'claim-2', position: false, ...context },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const arturasRow = screen.getByText('Arturas').closest('li')!;
+    const vytautasRow = screen.getByText('Vytautas').closest('li')!;
+    expect(vytautasRow.compareDocumentPosition(arturasRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
+  it('opens the opposing claims from the matches count', async () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', spaceId, responseKind: 'stance', position: true },
+          { profileSpaceId: arturas, claimId: 'claim-1', spaceId, responseKind: 'stance', position: false },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', spaceId, responseKind: 'stance', position: false },
+          { profileSpaceId: arturas, claimId: 'claim-2', spaceId, responseKind: 'stance', position: true },
+        ],
+      ],
+    ]);
+    mocks.claimEntities = [claimEntity('claim-1', 'Should we build this?'), claimEntity('claim-2', 'Is this true?')];
+    mocks.spaceLabels = new Map([[normId(spaceId), { name: 'US Politics', image: null }]]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' }));
+
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(list.closest('[role="dialog"]')).toHaveTextContent('2 matches with Arturas');
+    const firstMatch = within(list).getByText('Should we build this?').closest('a')!;
+    expect(firstMatch).toHaveAttribute('href', NavUtils.toEntity(spaceId, 'claim-1'));
+    expect(within(firstMatch).getByText('US Politics')).toBeInTheDocument();
+    expect(within(firstMatch).getByText('You:')).toBeInTheDocument();
+    expect(within(firstMatch).getByText('Agree')).toBeInTheDocument();
+    expect(within(firstMatch).getByText('Arturas:')).toBeInTheDocument();
+    expect(within(firstMatch).getByText('Disagree')).toBeInTheDocument();
+    expect(firstMatch.querySelectorAll('svg')).toHaveLength(2);
+
+    // The second claim used to be a veracity match and read Dispute/Verify here. Every claim asks
+    // the same question now, so the sides are named the same way on both rows — the two matches
+    // still differ by side, which is what the row is for.
+    const secondMatch = within(list).getByText('Is this true?').closest('a')!;
+    expect(within(secondMatch).getByText('You:')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Disagree')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Arturas:')).toBeInTheDocument();
+    expect(within(secondMatch).getByText('Agree')).toBeInTheDocument();
+  });
+
+  it('distinguishes an untitled claim from unavailable claim metadata', async () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const spaceId = '019fedae-72b6-7ab2-927a-df044d57c600';
+    const matchingClaim = (claimId: string) => [
+      { profileSpaceId: viewer, claimId, spaceId, responseKind: 'stance' as const, position: true },
+      { profileSpaceId: arturas, claimId, spaceId, responseKind: 'stance' as const, position: false },
+    ];
+    mocks.positionsByClaim = new Map([
+      ['claim-untitled', matchingClaim('claim-untitled')],
+      ['claim-unavailable', matchingClaim('claim-unavailable')],
+    ]);
+    mocks.claimEntities = [{ ...claimEntity('claim-untitled', ''), name: null }];
+    mocks.claimEntitiesError = new Error('Claim metadata unavailable');
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' }));
+
+    const list = await screen.findByRole('list', { name: 'Matching claims with Arturas' });
+    expect(within(list).getByText('Untitled claim')).toBeInTheDocument();
+    expect(within(list).getByText('Claim unavailable')).toBeInTheDocument();
+  });
+
   // Filtered client-side: the endpoint has no search parameter and returns everyone available in
   // one unpaginated list, so there is nothing to page back for.
   it('narrows the list to people matching the search', () => {
@@ -281,7 +601,7 @@ describe('PeopleTab', () => {
     mocks.people = [];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
 
     cleanup();
@@ -324,7 +644,7 @@ describe('PeopleTab', () => {
 
     fireEvent.change(screen.getByLabelText('Search people'), { target: { value: 'artur' } });
 
-    expect(await screen.findByText('Nobody is available to debate right now.')).toBeInTheDocument();
+    expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
     expect(screen.getByText(/Debate hours are every day between|Stay here —/)).toBeInTheDocument();
     // Clearing a search that excluded nobody would put the same empty list back.
     expect(screen.queryByRole('button', { name: 'Clear search' })).not.toBeInTheDocument();
@@ -381,7 +701,27 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(card()).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
+  });
+
+  // The analytics label used to come from the button text; the copy change must not split the series.
+  it('keeps the Request debate analytics label on the Debate now button', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const button = screen.getAllByRole('button', { name: 'Debate now' })[0];
+    expect(button).toHaveAttribute('data-geo-analytics-label', 'Debate hub Request debate');
+    expect(button).toHaveClass('bg-text');
+  });
+
+  // "In a debate" is a status, not the offer, so it keeps the outlined pill and its own label.
+  it('leaves the In a debate pill outlined and labelled as itself', () => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const button = screen.getByRole('button', { name: 'In a debate' });
+    expect(button).not.toHaveClass('bg-text');
+    expect(button).toHaveClass('border');
+    expect(button).toHaveAttribute('data-geo-analytics-label', 'Debate hub In a debate');
   });
 
   // Matches the Matches tab: a request you're waiting on gets a card rather than a sentence, and
@@ -407,11 +747,11 @@ describe('PeopleTab', () => {
     expect(within(request).getByText('VS')).toBeInTheDocument();
   });
 
-  it('still greys out every Request debate button while the request is open', () => {
+  it('still greys out every Debate now button while the request is open', () => {
     mocks.challenge = challenge('requester');
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    for (const button of screen.getAllByRole('button', { name: 'Request debate' })) {
+    for (const button of screen.getAllByRole('button', { name: 'Debate now' })) {
       expect(button).toBeDisabled();
     }
   });
@@ -453,7 +793,7 @@ describe('PeopleTab', () => {
 
   // The activity payload keeps reporting a challenge as pending until the server says otherwise,
   // so expiry has to be applied here — the same filter every other request surface uses. Without
-  // it the tab sat on an "Expired" card with every Request debate button still dead underneath it.
+  // it the tab sat on an "Expired" card with every Debate now button still dead underneath it.
   it('drops an expired challenge instead of waiting for the server to say so', () => {
     mocks.challenge = challenge('requester', -1_000);
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -462,11 +802,11 @@ describe('PeopleTab', () => {
     expect(screen.queryByText('Expired')).not.toBeInTheDocument();
   });
 
-  it('re-enables the Request debate buttons once the request has expired', () => {
+  it('re-enables the Debate now buttons once the request has expired', () => {
     mocks.challenge = challenge('requester', -1_000);
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
   });
 
   it('drops an expired incoming challenge too, sentence and all', () => {
@@ -474,7 +814,7 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.queryByText(awaitingText)).not.toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
   });
 
   // The same action the Requests tab offers on this challenge, reachable without leaving People.
@@ -519,13 +859,13 @@ describe('PeopleTab', () => {
     mocks.authenticated = false;
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    fireEvent.click(screen.getAllByRole('button', { name: 'Request debate' })[0]);
+    fireEvent.click(screen.getAllByRole('button', { name: 'Debate now' })[0]);
 
     expect(mocks.promptSignIn).toHaveBeenCalled();
     expect(mocks.createChallenge).not.toHaveBeenCalled();
   });
 
-  // Every field in the record is public graph data — positions, debates, wins and join date need no
+  // Every displayed field in the record is public graph data — positions, debates and join date need no
   // viewer identity — so a signed-out visitor gets the full context before being asked to sign in.
   // Only the button is gated.
   it('shows the record signed out, gating only the button', () => {
@@ -536,7 +876,6 @@ describe('PeopleTab', () => {
         record({
           positions: 119,
           debatesArgued: 11,
-          winRate: { percent: 73, wins: 8, of: 11, judged: 11 },
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
         }),
       ],
@@ -544,9 +883,11 @@ describe('PeopleTab', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     expect(screen.getByText('119 positions')).toBeInTheDocument();
-    expect(screen.getByText('Won 8 of 11 debates')).toBeInTheDocument();
+    expect(screen.getByText('11 debates')).toBeInTheDocument();
+    expect(screen.queryByText(/^Won /)).not.toBeInTheDocument();
+    expect(screen.queryByText('73%')).not.toBeInTheDocument();
     expect(screen.getByText('On Geo since Jan 2026')).toBeInTheDocument();
-    expect(screen.getAllByRole('button', { name: 'Request debate' })[0]).toBeEnabled();
+    expect(screen.getAllByRole('button', { name: 'Debate now' })[0]).toBeEnabled();
   });
 
   // The row's availability flags describe a pairing with somebody, and signed out there is nobody
@@ -556,7 +897,7 @@ describe('PeopleTab', () => {
     mocks.people = [{ ...person('user-them', 'Arturas'), can_challenge: false }];
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getByRole('button', { name: 'Request debate' })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Debate now' })).not.toBeDisabled();
   });
 
   // `in_debate` is true of the person, not of any viewer, so signing in would not make them
@@ -570,8 +911,141 @@ describe('PeopleTab', () => {
   });
 });
 
+// GEO-2938. The row is the first way into someone else's availability; until this, the view was
+// only reachable from its debug route.
+describe('See times', () => {
+  it('opens that person availability, named and by user id', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    const dialog = within(screen.getByRole('dialog'));
+    // The id the row asked about, and the name it handed down, rather than the static title.
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+    expect(dialog.getByRole('heading', { name: /Arturas/ })).toBeInTheDocument();
+  });
+
+  // Handed down from the row, so the week says the same number the row's "N matches" does.
+  it('tells the week how many claims the row disagrees on', async () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const context = { spaceId: '019fedae-72b6-7ab2-927a-df044d57c600', responseKind: 'stance' as const };
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-1', position: false, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: false, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-2', position: true, ...context },
+        ],
+      ],
+    ]);
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(within(screen.getByRole('dialog')).getByText(/You and Arturas disagree on 2 claims\./)).toBeInTheDocument();
+  });
+
+  it('mounts nothing until it is asked for', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  // Being unable to debate someone now is when their next free slot matters most.
+  it('stays live while the pill is blocked', () => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), in_debate: true }];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: 'In a debate' })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'See times for Arturas' })).toBeEnabled();
+  });
+
+  // The list is everyone online *now*, so the viewed person can drop off it at any moment. The
+  // dialog is mounted at tab level precisely so their row unmounting cannot take it away.
+  it('stays open when the person goes offline and leaves the list', async () => {
+    mocks.people = [person('user-them', 'Arturas'), person('user-other', 'Vytautas')];
+    const store = createStore();
+    const { rerender } = render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    mocks.people = [person('user-other', 'Vytautas')];
+    // Re-wrapped, because RTL's rerender takes the bare element and dropping the Provider would
+    // remount the tab and lose the state this case is about.
+    rerender(
+      <Provider store={store}>
+        <PeopleTab onTabChange={mocks.onTabChange} />
+      </Provider>
+    );
+
+    expect(screen.queryByRole('button', { name: 'See times for Arturas' })).not.toBeInTheDocument();
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
+  it('gives focus back to the row it was opened from', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const opener = screen.getByRole('button', { name: 'See times for Arturas' });
+    fireEvent.click(opener);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(opener).toHaveFocus());
+  });
+
+  it('proposes against the person whose week is open', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    // The modal owns the week; what this asserts is the wiring it was handed.
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
+  it('clears a finished proposal so the next week does not open showing it', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Close' }));
+
+    await waitFor(() => expect(mocks.propose.reset).toHaveBeenCalled());
+  });
+
+  it('sends a signed-out viewer to sign in, since the read behind it is viewer-scoped', () => {
+    mocks.authenticated = false;
+    mocks.people = [person('user-them', 'Arturas')];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'See times for Arturas' }));
+
+    expect(mocks.promptSignIn).toHaveBeenCalled();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+});
+
 // GEO-2788 / GEO-2611. The name goes to the person's personal space, and the hub stays open on the
-// way — which is why this needs no click handler and so keeps cmd-click and middle click working.
+// way. Its click handler only observes analytics, so Next still owns cmd-click and middle click.
 describe('the person link', () => {
   it("points the name at the person's space", () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
@@ -582,20 +1056,21 @@ describe('the person link', () => {
     );
   });
 
-  // The guarantee is that *we* add no handler of our own. `next/link` underneath does intercept a
-  // plain left click — that is how client-side routing works, and it already honours cmd-click and
-  // middle click. A second handler layered on top is what would break them, which is what GEO-2701
-  // restored, so the absence of one is the thing worth pinning.
-  //
-  // Asserted on the props rather than by dispatching a click: the mock here is a bare anchor, so a
-  // `defaultPrevented` check would only describe the mock and would pass whether or not the real
-  // component ever received a handler.
-  it('adds no click handler of its own to the name', () => {
+  // Analytics observes the click without replacing navigation, so Next still owns cmd-click,
+  // middle-click and the eventual route change.
+  it('attributes a profile click without intercepting navigation', () => {
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
     const nameLink = mocks.linkProps.find(props => props.href === NavUtils.toSpace(PROFILE_SPACE_IDS['user-them']));
     expect(nameLink).toBeDefined();
-    expect(nameLink).not.toHaveProperty('onClick');
+    const onClick = nameLink?.onClick as (() => void) | undefined;
+    expect(onClick).toBeTypeOf('function');
+
+    onClick?.();
+
+    expect(mocks.personProfileOpened).toHaveBeenCalledWith(PROFILE_SPACE_IDS['user-them'], null, {
+      interaction_surface: 'debates_hub_people',
+    });
   });
 
   // An anchor to `/space/undefined` looks identical until it is clicked.
@@ -626,7 +1101,6 @@ describe('PeopleTab filters', () => {
           debatesArgued: null,
           claimsBySpace: new Map([['spacea', 1]]),
           debatesBySpace: new Map(),
-          winRate: null,
           joinedAt: null,
         }),
       ],
@@ -637,7 +1111,6 @@ describe('PeopleTab filters', () => {
           debatesArgued: null,
           claimsBySpace: new Map([['spaceb', 1]]),
           debatesBySpace: new Map(),
-          winRate: null,
           joinedAt: null,
         }),
       ],
@@ -666,7 +1139,6 @@ describe('PeopleTab filters', () => {
         debatesArgued: null,
         claimsBySpace: new Map(),
         debatesBySpace: new Map(),
-        winRate: null,
         joinedAt: null,
       })
     );
@@ -692,7 +1164,6 @@ describe('PeopleTab filters', () => {
           ['spacec', 0],
         ]),
         debatesBySpace: new Map([['spacec', 0]]),
-        winRate: null,
         joinedAt: null,
       })
     );
@@ -820,7 +1291,6 @@ describe('PeopleTab filters', () => {
             ['spacea', 'spaceb', 'spacec', 'spaced', 'spacee'].map(spaceId => [spaceId, 1] as const)
           ),
           debatesBySpace: new Map(),
-          winRate: null,
           joinedAt: null,
         }),
       ],
@@ -847,7 +1317,6 @@ describe('PeopleTab filters', () => {
             ['spaceb', 1],
           ]),
           debatesBySpace: new Map(),
-          winRate: null,
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
         }),
       ],
@@ -872,6 +1341,50 @@ describe('PeopleTab filters', () => {
     await closeActiveSpacesPopover(trigger);
   });
 
+  it('does not present an unknown per-space match count as zero while roster data is retained', async () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.positionsPlaceholderData = true;
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Arturas').closest('li') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'View 1 active space' }));
+
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(within(list).getByText('1 claim')).toBeInTheDocument();
+    expect(within(list).queryByText('0 matches')).not.toBeInTheDocument();
+  });
+
+  it('keeps settled match counts visible during a same-key background poll', async () => {
+    const viewer = mocks.personalSpaceId!;
+    const spaceId = 'spacea';
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.positionsFetching = true;
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', spaceId, responseKind: 'stance', position: true },
+          {
+            profileSpaceId: PROFILE_THEM,
+            claimId: 'claim-1',
+            spaceId,
+            responseKind: 'stance',
+            position: false,
+          },
+        ],
+      ],
+    ]);
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByText('Arturas').closest('li') as HTMLElement;
+    fireEvent.click(within(row).getByRole('button', { name: 'View 1 active space' }));
+
+    const list = await screen.findByRole('list', { name: 'Active spaces' });
+    expect(within(list).getByText('1 match')).toBeInTheDocument();
+  });
+
   it('shows only spaces with activity and orders them by debates, then canonical rank', async () => {
     const root = 'a19c345ab9866679b001d7d2138d88a1';
     const crypto = 'c9f267dcb0d270718c2a3c45a64afd32';
@@ -886,6 +1399,16 @@ describe('PeopleTab filters', () => {
       [ai, { name: 'AI', image: null }],
       [unranked, { name: 'Unranked', image: null }],
       [inactive, { name: 'Inactive', image: null }],
+    ]);
+    const viewer = mocks.personalSpaceId!;
+    const matchingClaim = (claimId: string, spaceId: string) => [
+      { profileSpaceId: viewer, claimId, spaceId, responseKind: 'stance' as const, position: true },
+      { profileSpaceId: PROFILE_THEM, claimId, spaceId, responseKind: 'stance' as const, position: false },
+    ];
+    mocks.positionsByClaim = new Map([
+      ['claim-ai-1', matchingClaim('claim-ai-1', ai)],
+      ['claim-ai-2', matchingClaim('claim-ai-2', ai)],
+      ['claim-unranked-1', matchingClaim('claim-unranked-1', unranked)],
     ]);
     mocks.records = new Map([
       [
@@ -905,7 +1428,6 @@ describe('PeopleTab filters', () => {
             [unranked, 1],
             [inactive, 0],
           ]),
-          winRate: null,
           joinedAt: new Date(Date.UTC(2026, 0, 29)),
         }),
       ],
@@ -921,10 +1443,10 @@ describe('PeopleTab filters', () => {
     expect(options.map(option => option.getAttribute('href'))).toEqual(
       [ai, unranked, root, crypto].map(NavUtils.toSpace)
     );
-    expect(within(options[0]).getByText('12 claims · 3 debates')).toBeInTheDocument();
-    expect(within(options[1]).getByText('0 claims · 1 debate')).toBeInTheDocument();
-    expect(within(options[2]).getByText('2 claims · 0 debates')).toBeInTheDocument();
-    expect(within(options[3]).getByText('1 claim · 0 debates')).toBeInTheDocument();
+    expectSpaceMetrics(options[0], { debates: '3 debates', claims: '12 claims', matches: '2 matches' });
+    expectSpaceMetrics(options[1], { debates: '1 debate', claims: '0 claims', matches: '1 match' });
+    expectSpaceMetrics(options[2], { debates: '0 debates', claims: '2 claims', matches: '0 matches' });
+    expectSpaceMetrics(options[3], { debates: '0 debates', claims: '1 claim', matches: '0 matches' });
     expect(within(list).queryByText('Inactive')).not.toBeInTheDocument();
 
     await closeActiveSpacesPopover(trigger);
@@ -995,5 +1517,613 @@ describe('PeopleTab filters', () => {
     fireEvent.click(screen.getByRole('button', { name: /Any space/ }));
     expect(await screen.findByRole('button', { name: /Crypto/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Health/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Online only', () => {
+  /** An instant spelled as chrono does: no milliseconds. */
+  const wire = (at: Date) => at.toISOString().replace('.000Z', 'Z');
+
+  /** A 30-minute slot `hours` from now, on the half hour. */
+  function slotIn(hours: number) {
+    const start = new Date(Date.now() + hours * 3_600_000);
+    start.setUTCMinutes(start.getUTCMinutes() < 30 ? 0 : 30, 0, 0);
+    return { start: wire(start), end: wire(new Date(start.getTime() + 30 * 60_000)) };
+  }
+
+  function schedulable(
+    userId: string,
+    name: string,
+    slots: Array<{ start: string; end: string }>,
+    truncated = false
+  ): SchedulablePerson {
+    return {
+      user: { user_id: userId, profile_space_id: `profile-${userId}`, display_name: name, avatar_cid: null },
+      online: false,
+      slots,
+      truncated,
+    };
+  }
+
+  /** Whether a chip wears every class of a look, as the booking week's own legend test checks. */
+  const wears = (element: Element, look: string) => look.split(' ').every(name => element.classList.contains(name));
+
+  /** One of their free stretches, `hours` from now and `length` half hours long (geo-chat#204). */
+  function windowIn(hours: number, length: number, viewerFree = false) {
+    const first = slotIn(hours);
+    const end = wire(new Date(Date.parse(first.start) + length * 30 * 60_000));
+    return { start: first.start, end, viewer_free: viewerFree };
+  }
+
+  it('is off by default, so offline people are listed alongside online ones', () => {
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('switch', { name: 'Online only' })).toHaveAttribute('aria-checked', 'false');
+    expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(true);
+  });
+
+  it('asks for nobody offline once turned on', () => {
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [slotIn(26)])],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    expect(screen.getByText('Ona')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Online only' }));
+
+    expect(screen.getByRole('switch', { name: 'Online only' })).toHaveAttribute('aria-checked', 'true');
+    expect(mocks.useSchedulablePeople).toHaveBeenLastCalledWith(false);
+    expect(screen.queryByText('Ona')).not.toBeInTheDocument();
+  });
+
+  it('puts offline people after online ones at equal matches, with a Schedule button instead of a request', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [slotIn(26)])],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const rows = screen.getAllByRole('listitem');
+    expect(within(rows[0]).getByText('Arturas')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Ona')).toBeInTheDocument();
+    expect(within(rows[1]).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
+    expect(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
+  });
+
+  // GEO-3119: online but away (a hidden tab, or nobody at it lately). Listed, so the sender knows they
+  // exist, but a live request would go unseen, so the row says Away and offers Schedule.
+  it('draws an away person as Away, with Schedule instead of Debate now', async () => {
+    mocks.people = [
+      { ...person('user-them', 'Arturas'), away: true, can_challenge: false },
+      person('user-other', 'Vytautas'),
+    ];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const rows = screen.getAllByRole('listitem');
+    expect(within(rows[0]).getByText('Vytautas')).toBeInTheDocument();
+    expect(within(rows[0]).getByRole('button', { name: 'Debate now' })).toBeEnabled();
+    expect(within(rows[1]).getByText('Arturas')).toBeInTheDocument();
+    expect(within(rows[1]).getByText('Away')).toBeInTheDocument();
+    expect(within(rows[1]).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
+
+    fireEvent.click(within(rows[1]).getByRole('button', { name: 'Schedule a debate with Arturas' }));
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+  });
+
+  // Schedule on an away row has to lead somewhere: with no free time of theirs, geo-chat leaves
+  // them off the schedulable list and the week would open empty.
+  it.each([
+    ['they have no free time this week', { viewer_has_schedule: true }],
+    ['the viewer has no hours set and they have no free time', { viewer_has_schedule: false }],
+  ])('draws an away person with a disabled Away pill when %s', (_, overrides) => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
+    mocks.schedulable = { viewer_timezone: 'UTC', truncated: false, people: [], ...overrides };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const row = screen.getByRole('listitem');
+    expect(within(row).queryByRole('button', { name: 'Schedule a debate with Arturas' })).not.toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Debate now' })).not.toBeInTheDocument();
+    // The pill says it, so the status line under the name does not repeat it.
+    expect(within(row).getAllByText('Away')).toHaveLength(1);
+    expect(within(row).getByRole('button', { name: 'Away' })).toBeDisabled();
+    expect(within(row).getByRole('button', { name: 'See times for Arturas' })).toBeEnabled();
+  });
+
+  // They went away between the list loading and the press. Their week opens only when it has times.
+  it.each([
+    [
+      'opens their week when they have times to book',
+      [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
+      true,
+    ],
+    ['leaves the week closed when they have none', [], false],
+  ])('on a refused press because they went away, %s', async (_, people, opens) => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.schedulable = { viewer_timezone: 'UTC', viewer_has_schedule: true, truncated: false, people };
+    mocks.createChallenge.mockImplementation((_request, options) =>
+      options.onError(new GeoChatRequestError('away', 'recipient_away', 409))
+    );
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Debate now' }));
+
+    expect(mocks.createChallenge).toHaveBeenCalledTimes(1);
+    if (opens) await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    else expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+  });
+
+  it('offers an away person no Schedule with Online only on', () => {
+    mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+    fireEvent.click(screen.getByRole('switch', { name: 'Online only' }));
+
+    const row = screen.getByRole('listitem');
+    expect(within(row).queryByRole('button', { name: 'Schedule a debate with Arturas' })).not.toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Away' })).toBeDisabled();
+  });
+
+  it('leaves hidden accounts off the list, online or offline', () => {
+    // Dashed on purpose: geo-chat can spell a space id either way.
+    mocks.people = [
+      person('user-them', 'Arturas'),
+      { ...person('user-hidden', 'Bryan 0811'), profile_space_id: '879dc356-d44f-41ff-befa-e156d1db31c2' },
+    ];
+    const hidden = schedulable('user-juan', 'Juan1', [slotIn(26)]);
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [
+        schedulable('user-away', 'Ona', [slotIn(26)]),
+        { ...hidden, user: { ...hidden.user, profile_space_id: '0c6b9f616d53429b8f61f1a1edd72bd2' } },
+      ],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+    expect(screen.getByText('Ona')).toBeInTheDocument();
+    expect(screen.queryByText('Bryan 0811')).not.toBeInTheDocument();
+    expect(screen.queryByText('Juan1')).not.toBeInTheDocument();
+  });
+
+  it('ranks everyone by matches, so an offline person with more matches sits above an online one', () => {
+    const viewer = mocks.personalSpaceId!;
+    const arturas = PROFILE_SPACE_IDS['user-them'];
+    const ona = '019fedae-72b6-7ab2-927a-df044d57c577';
+    const context = { spaceId: '019fedae-72b6-7ab2-927a-df044d57c600', responseKind: 'stance' as const };
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: arturas, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: ona, claimId: 'claim-1', position: false, ...context },
+        ],
+      ],
+      [
+        'claim-2',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-2', position: true, ...context },
+          { profileSpaceId: ona, claimId: 'claim-2', position: false, ...context },
+        ],
+      ],
+    ]);
+    mocks.people = [person('user-them', 'Arturas')];
+    const offline = schedulable('user-away', 'Ona', [slotIn(26)]);
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [{ ...offline, user: { ...offline.user, profile_space_id: ona } }],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const onaRow = screen.getByText('Ona').closest('li')!;
+    const arturasRow = screen.getByText('Arturas').closest('li')!;
+    expect(onaRow.compareDocumentPosition(arturasRow) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(onaRow).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeEnabled();
+    expect(within(arturasRow).getByRole('button', { name: 'Debate now' })).toBeInTheDocument();
+  });
+
+  it('keeps someone on the live roster in their online row rather than listing them twice', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [{ ...schedulable('user-them', 'Arturas', [slotIn(26)]), online: true }],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getAllByText('Arturas')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Debate now' })).toBeInTheDocument();
+  });
+
+  it('shows upcoming shared times only, capped, with the rest behind More times', () => {
+    const past = slotIn(-2);
+    const upcoming = [slotIn(25), slotIn(26), slotIn(27), slotIn(28)];
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [past, ...upcoming])],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })).toHaveLength(3);
+    expect(screen.getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
+  });
+
+  it('opens their week on the time that was picked', async () => {
+    const picked = slotIn(26);
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [picked])],
+    };
+    mocks.usePeerSchedule.mockReturnValue({
+      enabled: true,
+      isPending: false,
+      isError: false,
+      schedule: {
+        userId: 'user-away',
+        viewerTimezone: 'UTC',
+        peerTimezone: 'UTC',
+        viewerHasSchedule: true,
+        peerHasSchedule: true,
+        theirWeekKnown: true,
+        slots: [{ ...picked, viewerIsFree: true }],
+      },
+    });
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    fireEvent.click(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })[0]);
+
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+    expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-away');
+    expect(within(screen.getByRole('dialog')).getByRole('button', { pressed: true })).toBeInTheDocument();
+  });
+
+  // The week and the request it ends in both name the chip that started them, so a booking can be
+  // traced back to the People tab row.
+  it('tells analytics the week was opened from a time chip, through to the request', async () => {
+    const picked = slotIn(26);
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-away', 'Ona', [picked])],
+    };
+    mocks.usePeerSchedule.mockReturnValue({
+      enabled: true,
+      isPending: false,
+      isError: false,
+      schedule: {
+        userId: 'user-away',
+        viewerTimezone: 'UTC',
+        peerTimezone: 'UTC',
+        viewerHasSchedule: true,
+        peerHasSchedule: true,
+        theirWeekKnown: true,
+        slots: [{ ...picked, viewerIsFree: true }],
+      },
+    });
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const chip = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })[0];
+    expect(chip).toHaveAttribute('data-geo-analytics-intent', 'open_peer_availability');
+    fireEvent.click(chip);
+    await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_availability_viewed',
+      expect.objectContaining({ entry: 'people_time', bookable: true, mutual_free_minutes: 30 })
+    );
+
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Send request' }));
+    expect(mocks.propose.mutate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        opponentUserId: 'user-away',
+        analytics: { entry: 'people_time', viewerIsFree: true },
+      }),
+      expect.anything()
+    );
+  });
+
+  it('asks the viewer to set availability rather than implying nobody matches', () => {
+    mocks.people = [];
+    mocks.schedulable = { viewer_timezone: '', viewer_has_schedule: false, truncated: false, people: [] };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
+    // Offline people are listed without hours now (GEO-3154), so it no longer promises them.
+    expect(screen.queryByText(/to see offline people/)).not.toBeInTheDocument();
+    expect(screen.getByText(/so others can schedule a debate with you/)).toBeInTheDocument();
+    expect(screen.queryByText(/at the same times as you/)).not.toBeInTheDocument();
+  });
+
+  it('does not tell a viewer with no hours that their times failed to load', () => {
+    mocks.people = [];
+    mocks.useSchedulablePeople.mockImplementation(() => ({
+      data: undefined,
+      isLoading: false,
+      error: new Error('down'),
+      refetch: vi.fn(),
+    }));
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText(/Couldn.t load who.s free this week/)).toBeInTheDocument();
+    expect(screen.queryByText(/your times/)).not.toBeInTheDocument();
+  });
+
+  describe('a viewer with no hours set (GEO-3154)', () => {
+    it('lists offline people with their own next free times, one per stretch, and Schedule', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        people: [
+          {
+            ...schedulable('user-away', 'Ona', []),
+            their_windows: [windowIn(25, 4), windowIn(30, 2), windowIn(50, 2), windowIn(70, 2)],
+          },
+        ],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const row = screen.getByRole('listitem');
+      expect(within(row).getByRole('button', { name: 'Schedule a debate with Ona' })).toBeInTheDocument();
+      const chips = within(row).getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chips).toHaveLength(3);
+      // Nothing is shared without hours, so no chip claims it is.
+      chips.forEach(chip => {
+        expect(chip).not.toHaveAttribute('data-viewer-free');
+        expect(chip.getAttribute('aria-label')).not.toMatch(/both free/);
+        // Plain: neither the week's green nor its dashed look, which would claim a comparison.
+        expect(chip).toHaveClass('border-grey-02');
+        expect(wears(chip, MUTUAL_SLOT) || wears(chip, PEER_ONLY_SLOT)).toBe(false);
+      });
+      expect(within(row).getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Set availability' })).toBeInTheDocument();
+    });
+
+    it('opens their week on a picked free time', async () => {
+      const stretch = windowIn(26, 2);
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [stretch] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const [chip] = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      fireEvent.click(chip);
+
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+      expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-away');
+    });
+
+    it('offers the next half hour of a stretch that has already begun, never one gone', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        // Began an hour ago and runs two more: the chip is the coming half hour.
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(-1, 6)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const began = Date.parse(windowIn(-1, 6).start);
+      const next = began + (Math.floor((Date.now() - began) / 1_800_000) + 1) * 1_800_000;
+      const time = (at: number) => new Date(at).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+      const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chips).toHaveLength(1);
+      expect(chips[0].textContent).toContain(time(next));
+      expect(chips[0].textContent).not.toContain(time(next - 1_800_000));
+    });
+
+    it('keeps the next half hour of a long stretch that began more than a day ago', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        // A list loaded long ago in a background tab: free since 25 hours back, for 30 hours. The
+        // first 48 half hours are all past, and the stretch is still open.
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(-25, 60)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      expect(screen.getAllByRole('button', { name: /^Schedule a debate with Ona / })).toHaveLength(1);
+      expect(screen.getByRole('button', { name: 'More times for Ona' })).toBeInTheDocument();
+    });
+
+    it('does not count their own free times as shared in analytics', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(26, 2)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const [chip] = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chip).toHaveAttribute('data-geo-analytics-label', 'Debate hub Free time');
+    });
+
+    it('lets an away person be scheduled', async () => {
+      mocks.people = [{ ...person('user-them', 'Arturas'), away: true, can_challenge: false }];
+      mocks.schedulable = {
+        viewer_timezone: '',
+        viewer_has_schedule: false,
+        truncated: false,
+        people: [{ ...schedulable('user-them', 'Arturas', []), online: true, their_windows: [windowIn(26, 2)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const row = screen.getByRole('listitem');
+      fireEvent.click(within(row).getByRole('button', { name: 'Schedule a debate with Arturas' }));
+      await waitFor(() => expect(screen.getByRole('dialog')).toBeInTheDocument());
+      expect(mocks.usePeerSchedule).toHaveBeenCalledWith('user-them');
+    });
+  });
+
+  describe('a viewer with hours set', () => {
+    it('keeps shared times first and marks them shared', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: 'UTC',
+        viewer_has_schedule: true,
+        truncated: false,
+        people: [
+          {
+            ...schedulable('user-away', 'Ona', [slotIn(30)]),
+            // An earlier stretch of theirs alone does not push the shared time off the row.
+            their_windows: [windowIn(25, 2), windowIn(30, 1, true)],
+          },
+        ],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chips).toHaveLength(1);
+      expect(chips[0]).toHaveAttribute('data-viewer-free', 'true');
+      expect(chips[0]).toHaveAttribute('data-geo-analytics-label', 'Debate hub Shared time');
+      expect(wears(chips[0], MUTUAL_SLOT) && !wears(chips[0], PEER_ONLY_SLOT)).toBe(true);
+      expect(chips[0].getAttribute('aria-label')).toMatch(/you're both free$/);
+    });
+
+    it('falls back to their own free times, unmarked as shared, when they share none', () => {
+      mocks.people = [];
+      mocks.schedulable = {
+        viewer_timezone: 'UTC',
+        viewer_has_schedule: true,
+        truncated: false,
+        people: [{ ...schedulable('user-away', 'Ona', []), their_windows: [windowIn(25, 1), windowIn(28, 1)] }],
+      };
+      render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+      const chips = screen.getAllByRole('button', { name: /^Schedule a debate with Ona / });
+      expect(chips).toHaveLength(2);
+      chips.forEach(chip => {
+        expect(chip).not.toHaveAttribute('data-viewer-free');
+        expect(chip.getAttribute('aria-label')).not.toMatch(/both free/);
+        expect(chip).toHaveAttribute('data-geo-analytics-label', 'Debate hub Free time');
+        expect(wears(chip, PEER_ONLY_SLOT) && !wears(chip, MUTUAL_SLOT)).toBe(true);
+      });
+      expect(screen.queryByRole('button', { name: 'More times for Ona' })).not.toBeInTheDocument();
+    });
+  });
+
+  it('keeps someone with no upcoming shared times, schedulable but with no times drawn', () => {
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      people: [schedulable('user-past', 'Ona', [slotIn(-3), slotIn(-2)]), schedulable('user-none', 'Idris', [])],
+    };
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText('Ona')).toBeInTheDocument();
+    expect(screen.getByText('Idris')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Schedule a debate with Idris' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Schedule a debate with Ona / })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'More times for Idris' })).not.toBeInTheDocument();
+  });
+
+  it('ranks someone who shares no time by matches too, below a sharer only when matches tie', () => {
+    const viewer = mocks.personalSpaceId!;
+    const mei = '019fedae-72b6-7ab2-927a-df044d57c5aa';
+    const context = { spaceId: '019fedae-72b6-7ab2-927a-df044d57c600', responseKind: 'stance' as const };
+    const withProfile = (entry: ReturnType<typeof schedulable>, profileSpaceId: string) => ({
+      ...entry,
+      user: { ...entry.user, profile_space_id: profileSpaceId },
+    });
+    mocks.people = [];
+    mocks.schedulable = {
+      viewer_timezone: 'UTC',
+      viewer_has_schedule: true,
+      truncated: false,
+      // The server's order: shared times first, soonest first.
+      people: [
+        withProfile(schedulable('user-other', 'Vytautas', [slotIn(26)]), PROFILE_SPACE_IDS['user-other']),
+        withProfile(schedulable('user-mei', 'Mei', [slotIn(30)]), mei),
+        withProfile(schedulable('user-them', 'Arturas', []), PROFILE_SPACE_IDS['user-them']),
+      ],
+    };
+    // Arturas and Mei each disagree with the viewer once; Vytautas never.
+    mocks.positionsByClaim = new Map([
+      [
+        'claim-1',
+        [
+          { profileSpaceId: viewer, claimId: 'claim-1', position: true, ...context },
+          { profileSpaceId: PROFILE_SPACE_IDS['user-them'], claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: mei, claimId: 'claim-1', position: false, ...context },
+          { profileSpaceId: PROFILE_SPACE_IDS['user-other'], claimId: 'claim-1', position: true, ...context },
+        ],
+      ],
+    ]);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    // Matches come first (#2614), so sharing no time does not sink Arturas below Vytautas. Among
+    // equal matches the server's shared-times-first order decides, so Mei leads Arturas.
+    expect(screen.getAllByText(/^(Mei|Vytautas|Arturas)$/).map(name => name.textContent)).toEqual([
+      'Mei',
+      'Arturas',
+      'Vytautas',
+    ]);
+  });
+
+  it('keeps the online list up while offline people load', () => {
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.useSchedulablePeople.mockImplementation(() => ({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      refetch: vi.fn(),
+    }));
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getByText('Arturas')).toBeInTheDocument();
+  });
+
+  it('keeps a remembered space while offline people are still loading', () => {
+    const offlineSpace = 'a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6';
+    mocks.people = [person('user-them', 'Arturas')];
+    mocks.records = new Map([[person('user-them', 'Arturas').profile_space_id, record()]]);
+    mocks.useSchedulablePeople.mockImplementation(() => ({
+      data: undefined,
+      isLoading: true,
+      error: null,
+      refetch: vi.fn(),
+    }));
+    const store = createStore();
+    store.set(debatesHubPeopleSpaceIdsAtom, [offlineSpace]);
+    render(<PeopleTab onTabChange={mocks.onTabChange} />, store);
+
+    expect(store.get(debatesHubPeopleSpaceIdsAtom)).toEqual([offlineSpace]);
   });
 });

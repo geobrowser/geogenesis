@@ -1,8 +1,8 @@
 'use client';
 
-import { useGeoLogin } from '@geogenesis/auth';
+import { usePrivy } from '@geogenesis/auth';
 import * as Popover from '@radix-ui/react-popover';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -10,9 +10,12 @@ import cx from 'classnames';
 import { Effect } from 'effect';
 import { useStore } from 'jotai';
 
-import { trackPrivyAuth } from '~/core/analytics';
+import { withActionContext } from '~/core/action-context';
+import { useActionContext } from '~/core/action-context-provider';
+import { personProfileOpened } from '~/core/analytics';
 import { useEntityResponse } from '~/core/hooks/use-entity-vote';
-import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
+import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import {
   type EntityResponder,
@@ -24,6 +27,8 @@ import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import {
   type ActiveResponseDirection,
   ENTITY_RESPONSE_COPY,
+  RESPONSE_CONFIRMING_COPY,
+  RESPONSE_LOCAL_ONLY_COPY,
   type ResponseKind,
   entityResponderProfilesQueryKey,
   entityRespondersQueryKey,
@@ -32,29 +37,31 @@ import {
   resolveEntityResponseKind,
   userEntityResponseQueryKey,
 } from '~/core/responses/entity-response';
+import { readViewerResponseForReplay } from '~/core/responses/replay-viewer-response';
 import { useClaimResponseBatchState } from '~/core/responses/use-claim-response-summaries';
-import { useEnqueuePendingAction } from '~/core/state/pending-actions';
+import { castLocalVote } from '~/core/state/cast-local-vote';
+import { removeLocalVote, useLocalVote } from '~/core/state/local-votes';
+import { useQueuedAction } from '~/core/state/pending-actions';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { FollowTopicButton } from '~/core/topics/follow-topic-button';
 import { Profile } from '~/core/types';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { resolveEntitySpaceId } from '~/core/utils/space/entity-home-space';
 
 import { Avatar } from '~/design-system/avatar';
-import { ChevronDown } from '~/design-system/icons/chevron-down';
-import { ChevronUp } from '~/design-system/icons/chevron-up';
-import { ThumbDown } from '~/design-system/icons/thumb-down';
-import { ThumbUp } from '~/design-system/icons/thumb-up';
+import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { VoteArrow } from '~/design-system/icons/vote-arrow';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Skeleton } from '~/design-system/skeleton';
 
 import { ClaimResponderAvatars } from '~/partials/entity-page/claim-voter-avatars';
-import { VOTE_BUTTON_CLASS, VOTE_CHEVRON_SELECTED_CLASS } from '~/partials/entity-page/vote-button-styles';
+import { VOTE_BUTTON_CLASS, VOTE_BUTTON_CONFIRMING_CLASS } from '~/partials/entity-page/vote-button-styles';
 
 import { slideUpPopoverContainerAtom } from '~/atoms';
 
 const ENTITY_RESPONSE_OBJECT_TYPE = 0;
-
-type ResponseVariant = 'default' | 'thumbs' | 'chevrons';
 
 type EntityVoteButtonsProps = {
   entityId: string;
@@ -62,22 +69,67 @@ type EntityVoteButtonsProps = {
   responseKind?: ResponseKind | null;
   claimResponderAvatarsPosition?: 'leading' | 'trailing';
   presentation?: 'inline' | 'debate-vertical' | 'debate-horizontal';
+  /**
+   * A surface with no room for prose: the sticky entity header's 48px row.
+   *
+   * Three of this control's states are sentences rather than controls — the indexing notice beside
+   * the buttons, and the two that stand in for the control entirely. Each is wider than a phone can
+   * spare next to a name and a set of thumbs: measured at 390px, the indexing notice alone pushed
+   * the row 94px past its own width and gave the document a horizontal scrollbar.
+   *
+   * Dropped rather than truncated, because a sentence cut to "Response s…" tells nobody anything,
+   * and dropped rather than wrapped, because the bar is one fixed-height line by design.
+   *
+   * Two of the three are dropped outright. They describe *state* — that an unpublished type edit is
+   * blocking responses, or that there is no response kind — and the page explains that state too, so
+   * a reader who finds nothing in the bar has somewhere else to find it.
+   *
+   * **The indexing notice is not dropped.** It is the only `aria-live` a vote gets, it announces an
+   * event the reader just caused, and the vote can be cast from the bar itself. It goes `sr-only`
+   * instead: absolutely positioned and clipped, so it takes no width and cannot overflow the row,
+   * which is the whole of what `compact` needs from it. Do not "finish the job" by removing it — an
+   * earlier version of this comment claimed the page's own copy announced instead, and that is false
+   * where it matters most. `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which
+   * puts this same sentence in a `title`: read on focus, never announced.
+   *
+   * Known and accepted: on surfaces whose page control *is* an `EntityVoteButtons` — generic, topic,
+   * profile — both live regions are inserted at once and the confirmation can be announced twice.
+   * Deduplicating needs the two surfaces to know about each other, and this component renders once
+   * per claim on a list, where a subscription is a cost its own comments already weigh. A duplicate
+   * announcement is the better failure than none.
+   */
+  compact?: boolean;
 };
 
-export function EntityVoteButtons({
+/**
+ * An entity's response control, wherever an entity is drawn with one: votes for an ordinary entity,
+ * agree / disagree for a claim, and Follow for a topic (GEO-3191), which is followed, not voted on.
+ *
+ * The topic case is decided here rather than by each caller, so a table row, a gallery tile, a
+ * ranking entry and the sticky header all agree with the topic's own page. Read off the same types
+ * the entity routes on (a claim typed as a topic too stays a claim), and only when the caller hasn't
+ * named a response kind: a caller that has is asking for that kind on purpose. While the entity is
+ * loading, `EntityResponseButtons` draws its skeleton, so a topic never shows votes first.
+ */
+export function EntityVoteButtons(props: EntityVoteButtonsProps) {
+  const inferKind = props.responseKind === undefined;
+  const { entity } = useQueryEntity({ id: props.entityId, includeDeleted: true, enabled: inferKind });
+
+  if (inferKind && entity?.types && entityBrowseViewFromTypes(entity.types) === 'topic') {
+    return <FollowTopicButton topic={{ id: props.entityId, name: entity.name }} />;
+  }
+  return <EntityResponseButtons {...props} />;
+}
+
+function EntityResponseButtons({
   entityId,
   spaceId: requestedSpaceId,
   responseKind: responseKindOverride,
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
+  compact = false,
 }: EntityVoteButtonsProps) {
-  const prepareOnboarding = usePrepareOnboarding();
-  // Read rather than subscribed: this component renders once per claim on a list, and a subscription
-  // would re-render every one of them whenever a sheet opens or closes — which the batching tests
-  // rightly count as work. `Popover.Portal` only mounts when the popover opens, and opening renders
-  // anyway, so reading the store at that moment is current enough.
-  const store = useStore();
-  const slideUpPopoverContainer = store.get(slideUpPopoverContainerAtom);
+  const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
   const responseBatch = useClaimResponseBatchState();
   // Deliberately unscoped by space. `store.getEntity` filters `relations` to the space asked for
   // but derives `types` from all of them, so a claim collected into another space — a data block
@@ -112,62 +164,38 @@ export function EntityVoteButtons({
   // by design — so that vote is no longer the one displayed. It is still recorded in that space.
   // Auto-join doesn't widen with it: `useEntityVote` excludes curation from `ensureSpaceMembership`.
   const spaceId = resolveEntitySpaceId(entity, requestedSpaceId);
-  const inferredResponseKind = resolveEntityResponseKind(entity, spaceId);
+  const inferredResponseKind = resolveEntityResponseKind(entity);
   const responseKind = responseKindOverride === undefined ? inferredResponseKind : responseKindOverride;
   const hasUnpublishedResponseKindEdit =
     responseKindOverride === undefined && hasUnpublishedClaimResponseKindEdit(entity, spaceId);
   const queryResponseKind = responseKind ?? 'stance';
   const isResponseKindLoading = responseKindOverride === undefined && isLoadingEntity;
-  const variant: ResponseVariant =
-    queryResponseKind === 'curation' ? 'default' : queryResponseKind === 'veracity' ? 'chevrons' : 'thumbs';
   const responseCopy = ENTITY_RESPONSE_COPY[queryResponseKind];
 
   const {
     submitResponse,
     submitResponseAsync,
     optimisticResponse,
+    isProcessingResponse,
     isResponseIndexingDelayed,
     isConnected,
     personalSpaceId,
   } = useEntityResponse({ entityId, entityName: entity?.name, spaceId, responseKind });
   const { smartAccount } = useSmartAccount();
-  const enqueuePendingAction = useEnqueuePendingAction();
+  const { ready: authReady, authenticated } = usePrivy();
+  // Known to be signed out — not still restoring a session, when `authenticated` reads false too.
+  const signedOut = authReady && !authenticated;
+  const queryClient = useQueryClient();
+  // Signed in without a usable space, a vote is held only when one is on its way: being created for
+  // a new account, or still loading for a returning one. With neither, nothing would ever publish it,
+  // and drawing it as cast would be a vote that silently never lands.
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
+  const { isLoading: isPersonalSpaceLoading } = usePersonalSpaceId();
+  const spaceOnTheWay = isAccountSetupPending || isPersonalSpaceLoading;
 
-  // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
-  // once the space exists (see pending-actions). Keep the optimistic mark on screen until the
-  // queued write is replayed, then hand off to the mutation's own optimistic state.
-  const voteActionId = `entity-vote:${entityId}:${spaceId}`;
-  const [queuedResponse, setQueuedResponse] = React.useState<ActiveResponseDirection | undefined>(undefined);
-  React.useEffect(() => {
-    if (queuedResponse !== undefined && optimisticResponse !== undefined) setQueuedResponse(undefined);
-  }, [queuedResponse, optimisticResponse]);
-
-  // Direction a signed-out user picked before sign-in opened.
-  const pendingSignInDirectionRef = React.useRef<ActiveResponseDirection | undefined>(undefined);
-
-  function queueVoteWrite(direction: ActiveResponseDirection) {
-    setQueuedResponse(direction);
-    enqueuePendingAction({
-      id: voteActionId,
-      label: 'your vote',
-      requires: 'personalSpace',
-      run: () => submitResponseAsync(direction).then(() => {}),
-    });
-  }
-
-  const { login } = useGeoLogin({
-    onComplete: args => {
-      trackPrivyAuth(args, { auth_flow: 'manual_login' });
-
-      const direction = pendingSignInDirectionRef.current;
-      if (direction !== undefined) {
-        pendingSignInDirectionRef.current = undefined;
-        queueVoteWrite(direction);
-      }
-    },
-  });
-
-  const [respondersOpen, setRespondersOpen] = React.useState(false);
+  // Queued at the press (below), not on completion: the completion callback belongs to this
+  // control, which can unmount mid-sign-up and take the vote with it.
+  const promptSignIn = usePrivySignIn();
 
   const { data: responseCounts } = useQuery<{ positive: number; negative: number } | null>({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
@@ -177,7 +205,7 @@ export function EntityVoteButtons({
     staleTime: 30_000,
   });
 
-  const { data: serverResponseDirection } = useQuery({
+  const { data: serverResponseDirection, isSuccess: hasServerResponseAnswered } = useQuery({
     queryKey: userEntityResponseQueryKey(
       personalSpaceId,
       entityId,
@@ -195,10 +223,52 @@ export function EntityVoteButtons({
     staleTime: 30_000,
   });
 
+  // A vote cast before the personal space is ready is queued and replayed by PendingActionsRunner
+  // once the space exists (see pending-actions). The queued side is drawn from the queue, not held
+  // here, so it survives this control remounting while the viewer signs up; once the write starts
+  // the mutation's own optimistic state takes over.
+  //
+  // Replayed through whichever control is mounted now (`useQueuedAction`): its response hook knows
+  // the personal space, and keys the in-flight state this control draws by it.
+  const queuedVote = useQueuedAction({
+    id: `entity-vote:${entityId}:${spaceId}`,
+    component: 'entity_vote_buttons',
+    label: 'your vote',
+    // Held until the viewer's own side is known: right after sign-in it is still loading, and its
+    // empty default would read as "holds nothing" — publishing a side they already hold.
+    ready: Boolean(personalSpaceId) && (responseBatch.managed ? responseBatch.ready : hasServerResponseAnswered),
+    run: async (intent, { live, isCurrent }) => {
+      const direction = intent === 'negative' ? 'negative' : 'positive';
+      // The side the viewer holds: this control's answer when it is the one on screen; read fresh
+      // when the replay is the press's own closure, whose answer is from before they signed in.
+      const held = live
+        ? serverResponseDirection
+        : await readViewerResponseForReplay(queryClient, {
+            entityId,
+            spaceId,
+            responseKind: queryResponseKind,
+            objectType: ENTITY_RESPONSE_OBJECT_TYPE,
+          });
+      // Cleared (a sign-out) or replaced (a newer press) during that read: the write must not follow.
+      if (!isCurrent()) return;
+      // A returning viewer who already held this side: nothing to publish.
+      if (held === direction) return;
+      await submitResponseAsync(direction);
+    },
+  });
+  const queuedResponse: ActiveResponseDirection | undefined =
+    queuedVote.intent === 'positive' || queuedVote.intent === 'negative' ? queuedVote.intent : undefined;
+  const queueVoteWrite = (direction: ActiveResponseDirection) => queuedVote.queue(direction);
+
   // A queued (pre-personal-space) vote overrides the mutation's own optimistic state until it is
   // replayed and cleared from the queue, at which point the mutation's state takes over.
   const effectiveOptimistic = queuedResponse !== undefined ? queuedResponse : optimisticResponse;
   const activeResponse = effectiveOptimistic === undefined ? serverResponseDirection : effectiveOptimistic;
+  // A vote cast signed out and kept on this device until a save publishes it (GEO-3214). Drawn as the
+  // viewer's — the arrow fills — but left out of the score and the split: it doesn't count until it
+  // is saved, and the counts say so by not moving. `activeResponse` stays the counted side.
+  const localDirection = useLocalVote(entityId, spaceId, responseKind);
+  const drawnResponse = effectiveOptimistic === undefined && localDirection !== null ? localDirection : activeResponse;
 
   const positiveResponses = BigInt(responseCounts?.positive ?? 0);
   const negativeResponses = BigInt(responseCounts?.negative ?? 0);
@@ -207,19 +277,48 @@ export function EntityVoteButtons({
     direction === 'positive' ? 1n : direction === 'negative' ? -1n : 0n;
   const displayScore = netScore + responseScore(activeResponse) - responseScore(serverResponseDirection);
 
-  function openPrivySignIn() {
-    // Stay on this page after onboarding instead of bouncing to the explore page.
-    prepareOnboarding();
-    login();
+  function openPrivySignIn(direction: ActiveResponseDirection) {
+    const context = getContext();
+    const attempt = promptSignIn(
+      {
+        ...context,
+        auth_control: `${responseKind}_${direction}`,
+        auth_intent: 'vote',
+        auth_continuation: 'queued',
+      },
+      // A dismissed sign-in withdraws the vote, so walking away never publishes it later.
+      { onCancel: queuedVote.cancel }
+    );
+    withActionContext({ ...context, auth_attempt_id: attempt?.id }, () => queueVoteWrite(direction));
   }
 
   function queueResponse(direction: ActiveResponseDirection) {
     if (!smartAccount) {
-      pendingSignInDirectionRef.current = direction;
-      openPrivySignIn();
+      // Signed out: vote on this device, with no sign-in in the way. The save sheet asks for an
+      // account once there are a few. Signed in with the account still loading, the old prompt stays.
+      // Still restoring a session, the press is dropped: kept as a visitor's, a returning account's
+      // vote would be cleared as somebody else's the moment the session came back.
+      if (!authReady) return;
+      if (signedOut && responseKind !== null) {
+        castLocalVote({
+          entityId,
+          spaceId,
+          responseKind,
+          direction,
+          title: entity?.name ?? '',
+          attribution: getContext(),
+        });
+        return;
+      }
+      openPrivySignIn(direction);
       return;
     }
-    queueVoteWrite(direction);
+    if (spaceOnTheWay) queueVoteWrite(direction);
+  }
+
+  /** A press signed in replaces this entity's device vote rather than being saved over by it. */
+  function dropLocalVote() {
+    if (localDirection !== null && responseKind !== null) removeLocalVote({ entityId, spaceId, responseKind });
   }
 
   function handlePositiveResponse() {
@@ -227,6 +326,7 @@ export function EntityVoteButtons({
       queueResponse('positive');
       return;
     }
+    dropLocalVote();
     submitResponse(activeResponse === 'positive' ? 'clear' : 'positive');
   }
 
@@ -235,76 +335,69 @@ export function EntityVoteButtons({
       queueResponse('negative');
       return;
     }
+    dropLocalVote();
     submitResponse(activeResponse === 'negative' ? 'clear' : 'negative');
   }
 
   const scoreLabel = formatScore(displayScore);
 
-  const positiveActive = activeResponse === 'positive';
-  const negativeActive = activeResponse === 'negative';
+  const positiveActive = drawnResponse === 'positive';
+  const negativeActive = drawnResponse === 'negative';
   // Never block the buttons: when the personal space isn't ready the click queues the vote
   // instead of writing it, so the user is never stopped from acting while it's being created.
   const responseDisabled = false;
-  const positiveTitle = !isConnected
-    ? smartAccount
-      ? 'Vote now — saved until your account is ready'
-      : responseCopy.signIn
-    : positiveActive
-      ? responseCopy.removePositive
-      : responseCopy.positiveAction;
-  const negativeTitle = !isConnected
-    ? smartAccount
-      ? 'Vote now — saved until your account is ready'
-      : responseCopy.signIn
-    : negativeActive
-      ? responseCopy.removeNegative
-      : responseCopy.negativeAction;
+  const signedInTitle = spaceOnTheWay
+    ? 'Vote now — saved until your account is ready'
+    : 'Finish setting up your account to vote';
+  const voteTitle = (direction: ActiveResponseDirection) => {
+    const active = direction === 'positive' ? positiveActive : negativeActive;
+    if (isConnected) {
+      if (!active) return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
+      return direction === 'positive' ? responseCopy.removePositive : responseCopy.removeNegative;
+    }
+    if (smartAccount) return signedInTitle;
+    // Signed out, a press votes on this device: the arrow does what it says (GEO-3214).
+    if (signedOut) {
+      if (localDirection === direction) return RESPONSE_LOCAL_ONLY_COPY;
+      return direction === 'positive' ? responseCopy.positiveAction : responseCopy.negativeAction;
+    }
+    return responseCopy.signIn;
+  };
+  const positiveTitle = voteTitle('positive');
+  const negativeTitle = voteTitle('negative');
 
   const totalResponders = (responseCounts?.positive ?? 0) + (responseCounts?.negative ?? 0);
 
   const optimisticPositiveDelta =
-    effectiveOptimistic !== undefined ? (positiveActive ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined
+      ? (activeResponse === 'positive' ? 1 : 0) - (serverResponseDirection === 'positive' ? 1 : 0)
+      : 0;
   const optimisticNegativeDelta =
-    effectiveOptimistic !== undefined ? (negativeActive ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0) : 0;
+    effectiveOptimistic !== undefined
+      ? (activeResponse === 'negative' ? 1 : 0) - (serverResponseDirection === 'negative' ? 1 : 0)
+      : 0;
   const effectivePositive = Math.max(0, (responseCounts?.positive ?? 0) + optimisticPositiveDelta);
   const effectiveNegative = Math.max(0, (responseCounts?.negative ?? 0) + optimisticNegativeDelta);
   const effectiveTotal = effectivePositive + effectiveNegative;
   const percentLabel = effectiveTotal > 0 ? `${Math.round((100 * effectivePositive) / effectiveTotal)}%` : '0%';
 
-  const isClaimVariant = variant !== 'default';
-  const displayLabel = isClaimVariant ? percentLabel : scoreLabel;
+  // A claim shows how the room split; everything else shows a score. This used to ask a `variant`
+  // that was itself computed from nothing but the response kind — a second vocabulary parallel to
+  // `ResponseKind`, which had to be kept in step by hand. Asking the kind directly removes the
+  // thing that could fall out of step.
+  const isClaimResponse = queryResponseKind !== 'curation';
+  const displayLabel = isClaimResponse ? percentLabel : scoreLabel;
 
-  const renderResponseIcon = (direction: 'up' | 'down', active: boolean) => {
-    if (variant === 'chevrons') {
-      return direction === 'up' ? <ChevronUp /> : <ChevronDown />;
-    }
-
-    if (variant === 'thumbs') {
-      return direction === 'up' ? <ThumbUp filled={active} /> : <ThumbDown filled={active} />;
-    }
-
-    // No `color`: the arrow takes `currentColor` from the button, which is where the grey now lives
-    // for every variant. Pinning it here meant this one icon answered for its own colour while the
-    // other two read the button's, which is how the three drifted apart.
-    return <VoteArrow direction={direction} filled={active} />;
-  };
-
-  // Grey either way; the filled icon says which one you picked. The thumbs used to rest lighter
-  // and darken when picked, and curation got no class at all, pinning its arrows' colour on the
-  // icon instead — three spellings of a control that should look the same everywhere. See
+  // Grey whichever side is held; the filled icon says which one you picked. The thumbs used to rest
+  // lighter and darken when picked, and curation got no class at all, pinning its arrows' colour on
+  // the icon instead — three spellings of a control that should look the same everywhere. See
   // `vote-button-styles` for why the shade is `grey-04` rather than the lighter `grey-03`.
   //
-  // Chevrons are the exception, unchanged: a chevron has no filled form to switch to, so colour is
-  // the only signal it has.
-  //
-  // One class or the other, never both. `cx` is `classnames`, which concatenates — it does not
-  // resolve conflicting Tailwind utilities the way `tailwind-merge` would, and this repo does not
-  // use that. Emitting `text-grey-03` alongside `text-[#2A2B2E]` leaves the winner to whichever
-  // rule Tailwind happens to emit second, which is not something this file gets to decide.
-  const responseButtonColor = (active: boolean) =>
-    variant === 'chevrons' && active ? VOTE_CHEVRON_SELECTED_CLASS : VOTE_BUTTON_CLASS;
+  // Every response kind takes the same class now, held or not. The exception was the veracity
+  // chevron, which had no filled form and so needed colour to say it was held; there are no
+  // chevrons here any more, so this is no longer a choice and `VOTE_BUTTON_CLASS` is used directly.
 
-  const claimResponderAvatars = isClaimVariant ? (
+  const claimResponderAvatars = isClaimResponse ? (
     <ClaimResponderAvatars
       entityId={entityId}
       spaceId={spaceId}
@@ -318,11 +411,52 @@ export function EntityVoteButtons({
 
   const claimResponderAvatarsClassName = 'inline-flex h-5 shrink-0 items-center';
 
+  /**
+   * The faces, wrapped in their own trigger for the responder list.
+   *
+   * Gated on `totalResponders` — the served counts — rather than on `effectiveTotal`, which carries
+   * the viewer's own unconfirmed vote. The list this opens reads the served responders, so on the
+   * optimistic count a viewer's first vote made their own face open a popover reporting that nobody
+   * has responded. It is the same gate the tally beside it is disabled by, which is the point: the
+   * two open one list and have no business disagreeing about whether there is one.
+   *
+   * `ClaimResponderAvatars` also draws nothing until the responder rows arrive, and a trigger around
+   * nothing is an invisible tab stop with a tooltip; `empty:hidden` covers that gap.
+   */
+  const claimResponderAvatarsTrigger = (position: 'leading' | 'trailing') => {
+    if (!claimResponderAvatars) return null;
+
+    const spacing = position === 'leading' ? 'mr-1' : 'ml-1';
+
+    if (totalResponders === 0) {
+      return <span className={cx(claimResponderAvatarsClassName, spacing)}>{claimResponderAvatars}</span>;
+    }
+
+    return (
+      <RespondersPopover
+        entityId={entityId}
+        spaceId={spaceId}
+        responseKind={queryResponseKind}
+        align={position === 'leading' ? 'start' : 'end'}
+      >
+        <button
+          type="button"
+          title={responseCopy.viewResponders}
+          aria-label={responseCopy.viewResponders}
+          className={cx(claimResponderAvatarsClassName, spacing, 'cursor-pointer rounded empty:hidden')}
+        >
+          {claimResponderAvatars}
+        </button>
+      </RespondersPopover>
+    );
+  };
+
   if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading) {
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
   }
 
   if (hasUnpublishedResponseKindEdit) {
+    if (compact) return null;
     return (
       <span className="text-metadata text-grey-04" title="Publish the claim type change before responding">
         Publish changes before responding
@@ -331,6 +465,7 @@ export function EntityVoteButtons({
   }
 
   if (responseKind === null) {
+    if (compact) return null;
     return (
       <span className="text-metadata text-grey-04" title="The response type is unavailable">
         Response unavailable
@@ -354,82 +489,146 @@ export function EntityVoteButtons({
     );
   }
 
+  /*
+   * Everything the two thumbs share, so the two cannot drift — and so this control matches the claim
+   * pills while a response confirms, which is how they came apart in the first place: #2587 and #2598
+   * taught the pills how to behave in that window and nothing tied the thumbs to them.
+   *
+   * For the tens of seconds a response spends confirming (`isProcessingResponse`, the hook's own
+   * account of that window), the pills and now the thumbs:
+   *
+   * - **ignore presses.** The held thumb is this client's guess until the write lands, and pressing a
+   *   held thumb means "remove" — so a second press, or a double-click, published a retraction nobody
+   *   asked for mid-confirmation;
+   * - say so to assistive technology with `aria-disabled`, and to the pointer with `cursor-progress`;
+   * - drop the hover step, since nothing under the pointer is going to happen;
+   * - put `RESPONSE_CONFIRMING_COPY` in the tooltip, as the pills' `actionTitle` does;
+   * - stay at full strength: `aria-disabled` rather than `disabled`, so the side still reads as taken.
+   *
+   * Inline only. `DebateVotePill` draws this control in the debate overlay and shares its handlers,
+   * so the guard sits on these buttons rather than in `handlePositiveResponse` — widening it to the
+   * overlay belongs with unifying the pills and the thumbs into one control.
+   */
+  const voteButtonProps = (onPress: () => void, title: string) => ({
+    onClick: () => {
+      if (!isProcessingResponse) onPress();
+    },
+    disabled: responseDisabled,
+    'aria-disabled': isProcessingResponse || undefined,
+    title: isProcessingResponse ? RESPONSE_CONFIRMING_COPY : title,
+    className: cx(
+      'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
+      isProcessingResponse ? VOTE_BUTTON_CONFIRMING_CLASS : VOTE_BUTTON_CLASS,
+      responseDisabled && 'cursor-default opacity-50',
+      isProcessingResponse && 'cursor-progress'
+    ),
+  });
+
   return (
     <div className="flex items-center gap-1 text-metadataMedium text-text">
-      {claimResponderAvatarsPosition === 'leading' && claimResponderAvatars ? (
-        <span className={cx(claimResponderAvatarsClassName, 'mr-1')}>{claimResponderAvatars}</span>
-      ) : null}
-      <button
-        onClick={handlePositiveResponse}
-        disabled={responseDisabled}
-        title={positiveTitle}
-        className={cx(
-          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          responseButtonColor(positiveActive),
-          responseDisabled && 'cursor-default opacity-50'
-        )}
-      >
-        {renderResponseIcon('up', positiveActive)}
+      {claimResponderAvatarsPosition === 'leading' ? claimResponderAvatarsTrigger('leading') : null}
+      <button {...voteButtonProps(handlePositiveResponse, positiveTitle)}>
+        <ResponsePositionIcon responseKind={queryResponseKind} position selected={positiveActive} />
       </button>
-      <Popover.Root open={respondersOpen} onOpenChange={setRespondersOpen}>
-        <Popover.Trigger asChild>
-          <button
-            className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
-            title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
-            disabled={totalResponders === 0}
-          >
-            {displayLabel}
-          </button>
-        </Popover.Trigger>
-        {/* Into the sheet's own container when one is open, so this list is exempt from the sheet's
-            scroll lock; the body otherwise, unchanged. */}
-        <Popover.Portal container={slideUpPopoverContainer ?? undefined}>
-          <Popover.Content
-            align="center"
-            side="bottom"
-            sideOffset={8}
-            // Kept clear of the fixed navbar, and gone once its trigger is.
-            //
-            // This list hangs off a row inside a scrolling panel — the debates hub — and it is
-            // portalled to a container above everything, so nothing clips it. Scroll the panel and
-            // the popover tracked its trigger up over the 44px app header and sat there.
-            // `collisionPadding.top` reserves that strip; `hideWhenDetached` retires the popover
-            // once the trigger is scrolled out of its own container, rather than leaving it
-            // floating over a row it no longer belongs to.
-            collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-            hideWhenDetached
-            className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
-          >
-            <RespondersPopoverContent
-              entityId={entityId}
-              spaceId={spaceId}
-              objectType={ENTITY_RESPONSE_OBJECT_TYPE}
-              responseKind={responseKind}
-            />
-          </Popover.Content>
-        </Popover.Portal>
-      </Popover.Root>
-      <button
-        onClick={handleNegativeResponse}
-        disabled={responseDisabled}
-        title={negativeTitle}
-        className={cx(
-          'group/vote flex h-5 w-5 items-center justify-center rounded transition-colors',
-          responseButtonColor(negativeActive),
-          responseDisabled && 'cursor-default opacity-50'
-        )}
-      >
-        {renderResponseIcon('down', negativeActive)}
+      <RespondersPopover entityId={entityId} spaceId={spaceId} responseKind={queryResponseKind}>
+        <button
+          className="min-w-[2ch] cursor-pointer text-center text-[16px]! leading-5 tabular-nums hover:text-grey-04"
+          title={totalResponders > 0 ? responseCopy.viewResponders : undefined}
+          disabled={totalResponders === 0}
+        >
+          {displayLabel}
+        </button>
+      </RespondersPopover>
+      <button {...voteButtonProps(handleNegativeResponse, negativeTitle)}>
+        <ResponsePositionIcon responseKind={queryResponseKind} position={false} selected={negativeActive} />
       </button>
-      {claimResponderAvatarsPosition === 'trailing' && claimResponderAvatars ? (
-        <span className={cx(claimResponderAvatarsClassName, 'ml-1')}>{claimResponderAvatars}</span>
-      ) : null}
+      {claimResponderAvatarsPosition === 'trailing' ? claimResponderAvatarsTrigger('trailing') : null}
       {isResponseIndexingDelayed ? (
-        <span aria-live="polite" className="ml-1 text-metadata text-grey-04">
-          Response submitted. Waiting for confirmation.
+        // Hidden from layout in the bar, not removed from the page. This is the only `aria-live`
+        // confirmation a vote gets, and a vote can be cast from the bar — so dropping the node
+        // dropped the announcement with it. `sr-only` is absolutely positioned and clipped, so it
+        // takes no width and cannot overflow the row, which is all `compact` ever needed from it.
+        //
+        // I had claimed the page's own copy still announced. It does not on the surface that matters
+        // most: `ClaimPageView` answers a claim with `ClaimPositionCommentControl`, which puts this
+        // same sentence in a `title` attribute — read on focus, never announced as a live update.
+        <span aria-live="polite" className={cx(compact ? 'sr-only' : 'ml-1 text-metadata text-grey-04')}>
+          {RESPONSE_CONFIRMING_COPY}
         </span>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Who responded, hanging off whichever part of the row was clicked.
+ *
+ * Both the faces and the tally open it. The faces are the more obvious handle — they are pictures of
+ * the people the list names, and readers reach for them first — but only the tally was ever wired
+ * up, so the cluster looked like a control and did nothing. `ClaimSideResponders` already opens the
+ * same list from the same faces on the claim hero; this brings the row in line with it.
+ *
+ * A `Popover.Root` per trigger rather than one root with two, which Radix does not support: a second
+ * trigger would re-anchor the content and leave the first one's `aria-expanded` lying. Two roots
+ * also behave correctly when one is already open — the open list dismisses on the outside
+ * pointerdown, and the trigger that was clicked opens its own.
+ */
+function RespondersPopover({
+  entityId,
+  spaceId,
+  responseKind,
+  align = 'center',
+  children,
+}: {
+  entityId: string;
+  spaceId: string;
+  responseKind: ResponseKind;
+  align?: 'start' | 'center' | 'end';
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = React.useState(false);
+
+  // Read rather than subscribed: this renders twice per claim on a list, and a subscription would
+  // re-render every one of them whenever a sheet opens or closes — which the batching tests rightly
+  // count as work. What keeps a bare read current is that `Popover.Portal` only mounts when the
+  // popover opens and opening re-renders whatever holds `open` — so the read has to live *with*
+  // that state. It used to sit in `EntityVoteButtons`, which was correct while the open state did
+  // too; splitting the tally and the faces into a root each moved the render down here and left the
+  // read behind, capturing whatever the container was when the row first drew. A sheet registers its
+  // host after the rows inside it mount, so that capture was `null` and the list portalled to
+  // `body` — outside the sheet's `RemoveScroll` shard, visible but unscrollable.
+  const store = useStore();
+  const container = store.get(slideUpPopoverContainerAtom);
+
+  return (
+    <Popover.Root open={open} onOpenChange={setOpen}>
+      <Popover.Trigger asChild>{children}</Popover.Trigger>
+      <Popover.Portal container={container ?? undefined}>
+        <Popover.Content
+          align={align}
+          side="bottom"
+          sideOffset={8}
+          // Kept clear of the fixed navbar, and gone once its trigger is.
+          //
+          // This list hangs off a row inside a scrolling panel — the debates hub — and it is
+          // portalled to a container above everything, so nothing clips it. Scroll the panel and
+          // the popover tracked its trigger up over the 44px app header and sat there.
+          // `collisionPadding.top` reserves that strip; `hideWhenDetached` retires the popover
+          // once the trigger is scrolled out of its own container, rather than leaving it
+          // floating over a row it no longer belongs to.
+          collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
+          hideWhenDetached
+          className="z-100 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
+        >
+          <RespondersPopoverContent
+            entityId={entityId}
+            spaceId={spaceId}
+            objectType={ENTITY_RESPONSE_OBJECT_TYPE}
+            responseKind={responseKind}
+          />
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
   );
 }
 
@@ -516,6 +715,7 @@ export function RespondersPopoverContent({
   responseKind: ResponseKind;
 }) {
   const copy = ENTITY_RESPONSE_COPY[responseKind];
+  const interactionSurface = responseKind === 'curation' ? 'entity_vote_list' : 'claim_vote_list';
   const respondersQueryKey = entityRespondersQueryKey(entityId, spaceId, objectType, responseKind);
 
   // These two ask for themselves, batch or no batch.
@@ -578,27 +778,49 @@ export function RespondersPopoverContent({
           heads its sections "Agreements" and "Disagreements" makes the reader translate on arrival
           — and "Verifications"/"Disputes" reads stranger still beside a button marked Verify. */}
       {positiveResponders.length > 0 && (
-        <ResponderSection label={copy.positiveAction} responders={positiveResponders} />
+        <ResponderSection
+          label={copy.positiveAction}
+          responders={positiveResponders}
+          interactionSurface={interactionSurface}
+        />
       )}
       {negativeResponders.length > 0 && (
-        <ResponderSection label={copy.negativeAction} responders={negativeResponders} />
+        <ResponderSection
+          label={copy.negativeAction}
+          responders={negativeResponders}
+          interactionSurface={interactionSurface}
+        />
       )}
     </div>
   );
 }
 
-function ResponderSection({ label, responders }: { label: string; responders: ResponderWithProfile[] }) {
+function ResponderSection({
+  label,
+  responders,
+  interactionSurface,
+}: {
+  label: string;
+  responders: ResponderWithProfile[];
+  interactionSurface: 'claim_vote_list' | 'entity_vote_list';
+}) {
   return (
     <div>
       <div className="px-3 pt-2.5 pb-1.5 text-footnoteMedium text-grey-04">{label}</div>
       {responders.map(v => (
-        <VoterRow key={v.userId} profile={v.profile} />
+        <VoterRow key={v.userId} profile={v.profile} interactionSurface={interactionSurface} />
       ))}
     </div>
   );
 }
 
-function VoterRow({ profile }: { profile: Profile }) {
+function VoterRow({
+  profile,
+  interactionSurface,
+}: {
+  profile: Profile;
+  interactionSurface: 'claim_vote_list' | 'entity_vote_list';
+}) {
   const content = (
     <div className="flex items-center gap-2 px-3 py-1.5 transition-colors duration-75 hover:bg-grey-01">
       <div className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full">
@@ -609,7 +831,16 @@ function VoterRow({ profile }: { profile: Profile }) {
   );
 
   if (profile.profileLink) {
-    return <Link href={profile.profileLink}>{content}</Link>;
+    return (
+      <Link
+        href={profile.profileLink}
+        {...observePanelNavigation(() =>
+          personProfileOpened(profile.spaceId, profile.id, { interaction_surface: interactionSurface })
+        )}
+      >
+        {content}
+      </Link>
+    );
   }
 
   return content;

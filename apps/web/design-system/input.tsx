@@ -31,10 +31,18 @@ interface Props
     React.DetailedHTMLProps<React.InputHTMLAttributes<HTMLInputElement>, HTMLInputElement>,
     VariantProps<typeof inputStyles> {
   value?: string;
+  /**
+   * The inner `<input>`, for callers that need to focus or measure the field rather than its box.
+   *
+   * A second ref rather than a redirect of the first: `ref` has always landed on the wrapper, which
+   * is what the search icon is positioned against, and moving it would change that under every
+   * existing caller.
+   */
+  inputRef?: React.Ref<HTMLInputElement>;
 }
 
 export const Input = React.forwardRef(function Input(
-  { withSearchIcon = false, withExternalSearchIcon = false, withFilterIcon = false, ...props }: Props,
+  { withSearchIcon = false, withExternalSearchIcon = false, withFilterIcon = false, inputRef, ...props }: Props,
   ref: ForwardedRef<HTMLInputElement>
 ) {
   return (
@@ -44,7 +52,11 @@ export const Input = React.forwardRef(function Input(
           <Search />
         </div>
       )}
-      <input className={inputStyles({ withSearchIcon, withExternalSearchIcon, withFilterIcon })} {...props} />
+      <input
+        ref={inputRef}
+        className={inputStyles({ withSearchIcon, withExternalSearchIcon, withFilterIcon })}
+        {...props}
+      />
     </div>
   );
 });

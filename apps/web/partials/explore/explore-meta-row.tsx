@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { formatExploreRelativeTime } from '~/core/explore/explore-relative-time';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
@@ -13,15 +12,23 @@ import { NavUtils } from '~/core/utils/utils';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 
 import { ExploreJoinSpaceButton } from './explore-join-space-button';
+import { ExploreTypeTag } from './explore-type-tag';
 import { MetaDot } from './meta-dot';
 import { SpaceThumb } from './space-thumb';
 
 const RANKING_BLOCK_TYPE = normId(RANKING_BLOCK_TYPE_ID);
 
-const SEGMENT_CLASS = 'text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04';
+/**
+ * The type of one metadata segment.
+ *
+ * Exported because the topic card draws a second line of metadata under the description and it has
+ * to be the same type as this row. Spelling it out there instead is precisely how the claim card's
+ * copy of this row lost `font-normal` on three segments without any diff showing it.
+ */
+export const META_SEGMENT_CLASS = 'text-[14px] leading-[13px] font-normal tracking-[-0.35px] text-grey-04';
 
 /**
- * The line above every explore card: the space, what the thing is, and when it appeared.
+ * The line above every explore card: the space and what the thing is.
  *
  * One component because two card types draw it and a third could. It was copied rather than shared
  * when the claim card was written, and the copy did not survive contact: the segments ended up a
@@ -30,7 +37,7 @@ const SEGMENT_CLASS = 'text-[14px] leading-[13px] font-normal tracking-[-0.35px]
  * None of that is visible in a diff of the two files — it took reading them class by class, twice.
  *
  * The dots live between segments rather than as a `gap`, because a segment that is absent must not
- * leave a separator behind: a claim with no timestamp ends after its type, not after a dot.
+ * leave a separator behind: a claim that is not Controversial ends after its type, not after a dot.
  */
 export function ExploreMetaRow({
   item,
@@ -45,7 +52,7 @@ export function ExploreMetaRow({
   hideSpaceLink?: boolean;
   hideJoinButton?: boolean;
   /**
-   * Segments this card adds, placed after the types and before the timestamp.
+   * Segments this card adds, placed after the types.
    *
    * Where a claim card puts Controversial — beside what kind of thing this is, which is the same
    * question, rather than down in the verdict where it would read as part of the number.
@@ -77,15 +84,13 @@ export function ExploreMetaRow({
     return out;
   }, [item.types]);
 
-  const timeAgo = formatExploreRelativeTime(item.createdAtSec);
-
   const segments: { key: string; content: React.ReactNode; showOnCompactMobile: boolean }[] = [];
 
   if (!hideJoinButton && !item.isMemberOrEditor) {
     segments.push({
       key: 'join',
       // Joining is behaviour, not metadata. Compacting the row must never remove an action the
-      // ordinary Explore card offers; only the Claim type and age disappear on mobile.
+      // ordinary Explore card offers; only the Claim type disappears on mobile.
       showOnCompactMobile: true,
       content: (
         <ExploreJoinSpaceButton
@@ -103,12 +108,11 @@ export function ExploreMetaRow({
       key: 'types',
       showOnCompactMobile: false,
       content: (
-        <span className={`inline-flex min-w-0 flex-wrap items-center ${SEGMENT_CLASS}`}>
-          {types.map((type, index) => (
-            <React.Fragment key={type.id}>
-              {index > 0 ? <MetaDot /> : null}
-              <span className="truncate">{type.name}</span>
-            </React.Fragment>
+        <span className="inline-flex min-w-0 flex-wrap items-center gap-1">
+          {types.map(type => (
+            <ExploreTypeTag key={type.id} className="truncate">
+              {type.name}
+            </ExploreTypeTag>
           ))}
         </span>
       ),
@@ -118,14 +122,6 @@ export function ExploreMetaRow({
   extraSegments?.forEach((content, index) => {
     segments.push({ key: `extra-${index}`, content, showOnCompactMobile: true });
   });
-
-  if (timeAgo) {
-    segments.push({
-      key: 'time',
-      showOnCompactMobile: false,
-      content: <span className={`shrink-0 ${SEGMENT_CLASS}`}>{timeAgo}</span>,
-    });
-  }
 
   const showSpace = !hideSpaceLink;
   if (!showSpace && segments.length === 0 && !endSlot) return null;

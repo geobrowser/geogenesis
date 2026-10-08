@@ -11,6 +11,7 @@ import type { ParticipantPosition, PendingParticipantPosition } from './particip
 import {
   applyPendingPositions,
   fetchParticipantPositions,
+  fetchPositionsOnViewerClaims,
   groupParticipantPositions,
   isParticipantPositionsQueryKey,
   participantPositionsQueryKey,
@@ -44,11 +45,16 @@ const REMOTE: DebateRematchParticipant = {
   participant_slot: 2,
 };
 
+/** The last (or only) page of the positions connection, as the decoder returns it. */
+function lastPage<T>(items: T[]) {
+  return { items, endCursor: null, hasNextPage: false };
+}
+
 describe('fetchParticipantPositions', () => {
   // Positions are on-chain claim responses, which the graph indexes as `userVotes` keyed on the
-  // responder's personal space. One filter for both people, active responses only, both kinds.
-  it('asks for both participants’ active stance and veracity responses in one filter', async () => {
-    const fetchPage = vi.fn().mockResolvedValue([]);
+  // responder's personal space. One filter for both people, active responses only.
+  it('asks for both participants’ active stance responses in one filter', async () => {
+    const fetchPage = vi.fn().mockResolvedValue(lastPage([]));
 
     await fetchParticipantPositions([LOCAL.profile_space_id, REMOTE.profile_space_id], undefined, fetchPage);
 
@@ -57,7 +63,8 @@ describe('fetchParticipantPositions', () => {
       userId: { in: [LOCAL.profile_space_id, REMOTE.profile_space_id] },
       objectType: { is: 0 },
       voteType: { in: [0, 1] },
-      voteKind: { in: [1, 2] },
+      // Kind 2 — the retired veracity responses — is deliberately not asked for.
+      voteKind: { in: [1] },
     });
   });
 
@@ -67,15 +74,18 @@ describe('fetchParticipantPositions', () => {
     expect(fetchPage).not.toHaveBeenCalled();
   });
 
-  it('decodes rows into sides, dropping anything that is not an active stance or veracity response', async () => {
-    const fetchPage = vi.fn().mockResolvedValue([
-      { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 0, voteKind: 1 },
-      { userId: REMOTE.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 1, voteKind: 2 },
-      // A curation vote is not a position.
-      { userId: REMOTE.profile_space_id, objectId: 'claim-2', spaceId: 'space-1', voteType: 0, voteKind: 0 },
-      // Nor is a withdrawn response.
-      { userId: REMOTE.profile_space_id, objectId: 'claim-3', spaceId: 'space-1', voteType: 2, voteKind: 1 },
-    ]);
+  it('decodes rows into sides, dropping anything that is not an active stance response', async () => {
+    const fetchPage = vi.fn().mockResolvedValue(
+      lastPage([
+        { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 0, voteKind: 1 },
+        // A retired veracity response. It is no longer a position this app reports.
+        { userId: REMOTE.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 1, voteKind: 2 },
+        // A curation vote is not a position.
+        { userId: REMOTE.profile_space_id, objectId: 'claim-2', spaceId: 'space-1', voteType: 0, voteKind: 0 },
+        // Nor is a withdrawn response.
+        { userId: REMOTE.profile_space_id, objectId: 'claim-3', spaceId: 'space-1', voteType: 2, voteKind: 1 },
+      ])
+    );
 
     await expect(
       fetchParticipantPositions([LOCAL.profile_space_id, REMOTE.profile_space_id], undefined, fetchPage)
@@ -87,30 +97,131 @@ describe('fetchParticipantPositions', () => {
         responseKind: 'stance',
         position: true,
       },
+    ]);
+  });
+
+  /**
+   * One person, one claim, both kinds — and they disagree.
+   *
+   * Somebody could Verify a claim (kind 2, position true) and separately Disagree with it (kind 1,
+   * position false): two answers to two different questions, which is what the old vocabulary made
+   * possible. There is one question now, and the stance is the one that answers it — so the side
+   * reported is Disagree, not the Verify sitting beside it.
+   *
+   * Pinned because "ignore kind 2" and "prefer kind 1" only look the same while nobody holds both.
+   */
+  it('reports the stance when a person holds both kinds on one claim, even opposite ones', async () => {
+    const fetchPage = vi.fn().mockResolvedValue(
+      lastPage([
+        { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 0, voteKind: 2 },
+        { userId: LOCAL.profile_space_id, objectId: 'claim-1', spaceId: 'space-1', voteType: 1, voteKind: 1 },
+      ])
+    );
+
+    await expect(fetchParticipantPositions([LOCAL.profile_space_id], undefined, fetchPage)).resolves.toEqual([
       {
-        profileSpaceId: REMOTE.profile_space_id,
+        profileSpaceId: LOCAL.profile_space_id,
         claimId: 'claim-1',
         spaceId: 'space-1',
-        responseKind: 'veracity',
+        responseKind: 'stance',
+        // `false` — the stance. Not the `true` the verify row carries.
         position: false,
       },
     ]);
   });
 
-  it('pages until a short page comes back', async () => {
-    const full = Array.from({ length: 500 }, (_, index) => ({
-      userId: LOCAL.profile_space_id,
-      objectId: `claim-${index}`,
-      spaceId: 'space-1',
-      voteType: 0,
-      voteKind: 1,
-    }));
-    const fetchPage = vi.fn().mockResolvedValueOnce(full).mockResolvedValueOnce(full.slice(0, 3));
+  // The graph rejects an offset past 1000, so offset paging threw on the fourth 500-row page and
+  // took every match count with it. Four full pages is the case that used to fail.
+  it('follows cursors past the offset cap until the connection says it is done', async () => {
+    const full = (pageIndex: number) =>
+      Array.from({ length: 500 }, (_, index) => ({
+        userId: LOCAL.profile_space_id,
+        objectId: `claim-${pageIndex}-${index}`,
+        spaceId: 'space-1',
+        voteType: 0,
+        voteKind: 1,
+      }));
+    const fetchPage = vi
+      .fn()
+      .mockResolvedValueOnce({ items: full(0), endCursor: 'cursor-1', hasNextPage: true })
+      .mockResolvedValueOnce({ items: full(1), endCursor: 'cursor-2', hasNextPage: true })
+      .mockResolvedValueOnce({ items: full(2), endCursor: 'cursor-3', hasNextPage: true })
+      .mockResolvedValueOnce({ items: full(3), endCursor: 'cursor-4', hasNextPage: true })
+      .mockResolvedValueOnce(lastPage(full(4).slice(0, 3)));
 
     const positions = await fetchParticipantPositions([LOCAL.profile_space_id], undefined, fetchPage);
 
-    expect(positions).toHaveLength(503);
-    expect(fetchPage.mock.calls.map(call => call[2])).toEqual([0, 500]);
+    expect(positions).toHaveLength(2003);
+    expect(fetchPage.mock.calls.map(call => call[2])).toEqual([
+      undefined,
+      'cursor-1',
+      'cursor-2',
+      'cursor-3',
+      'cursor-4',
+    ]);
+  });
+});
+
+describe('fetchPositionsOnViewerClaims', () => {
+  const THIRD = '019fedae72b67ab2927adf044d57c568';
+  const stance = (userId: string, objectId: string, voteType = 0) => ({
+    userId,
+    objectId,
+    spaceId: 'space-1',
+    voteType,
+    voteKind: 1,
+  });
+
+  // A claim the viewer never answered cannot be a match, so it is never asked for.
+  it('reads the viewer first, then only others on the claims the viewer answered', async () => {
+    const fetchPage = vi
+      .fn()
+      .mockResolvedValueOnce(
+        lastPage([stance(LOCAL.profile_space_id, 'claim-1'), stance(LOCAL.profile_space_id, 'claim-2', 1)])
+      )
+      .mockResolvedValueOnce(lastPage([stance(REMOTE.profile_space_id, 'claim-1', 1)]));
+
+    const positions = await fetchPositionsOnViewerClaims(
+      LOCAL.profile_space_id,
+      [LOCAL.profile_space_id, REMOTE.profile_space_id, THIRD],
+      undefined,
+      fetchPage
+    );
+
+    expect(fetchPage.mock.calls.map(call => call[0])).toEqual([
+      {
+        userId: { in: [LOCAL.profile_space_id] },
+        objectType: { is: 0 },
+        voteType: { in: [0, 1] },
+        voteKind: { in: [1] },
+      },
+      {
+        userId: { in: [REMOTE.profile_space_id, THIRD] },
+        objectId: { in: ['claim-1', 'claim-2'] },
+        objectType: { is: 0 },
+        voteType: { in: [0, 1] },
+        voteKind: { in: [1] },
+      },
+    ]);
+    expect(positions.map(position => [position.profileSpaceId, position.claimId, position.position])).toEqual([
+      [LOCAL.profile_space_id, 'claim-1', true],
+      [LOCAL.profile_space_id, 'claim-2', false],
+      [REMOTE.profile_space_id, 'claim-1', false],
+    ]);
+  });
+
+  it('asks nothing more when the viewer has answered nothing', async () => {
+    const fetchPage = vi.fn().mockResolvedValueOnce(lastPage([]));
+
+    await expect(
+      fetchPositionsOnViewerClaims(
+        LOCAL.profile_space_id,
+        [LOCAL.profile_space_id, REMOTE.profile_space_id],
+        undefined,
+        fetchPage
+      )
+    ).resolves.toEqual([]);
+    expect(fetchPage).toHaveBeenCalledOnce();
   });
 });
 
@@ -195,10 +306,11 @@ describe('useParticipantPositions holding its list', () => {
     // One page, short, so `fetchParticipantPositions` stops after it.
     // `graphql()` returns an Effect of the *decoded* rows — the real one applies the decoder
     // internally, so succeeding with the decoded shape is the honest stub.
-    mocks.graphql.mockImplementation(() => Effect.succeed([row(LOCAL.profile_space_id, 'claim-1')]));
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage([row(LOCAL.profile_space_id, 'claim-1')])));
 
     const { result, rerender } = renderPositions([LOCAL, REMOTE]);
     await waitFor(() => expect(result.current.byClaim.size).toBe(1));
+    expect(result.current.isPlaceholderData).toBe(false);
 
     // A different participant set is a different query key, so the cache has nothing for it. The
     // list must not blank in the meantime — that is the reported bug.
@@ -207,6 +319,32 @@ describe('useParticipantPositions holding its list', () => {
     rerender({ participants: [LOCAL] });
 
     expect(result.current.byClaim.size).toBe(1);
+    expect(result.current.isPlaceholderData).toBe(true);
+  });
+
+  it('scopes the read to the viewer’s claims only when asked, under its own key', async () => {
+    mocks.attention = true;
+    const filters: unknown[] = [];
+    mocks.graphql.mockImplementation(({ variables }: { variables: { filter: unknown } }) => {
+      filters.push(variables.filter);
+      return Effect.succeed(lastPage([row(LOCAL.profile_space_id, 'claim-1')]));
+    });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const { result } = renderHook(
+      () => useParticipantPositions([LOCAL, REMOTE], LOCAL.profile_space_id, { onlyViewerClaims: true }),
+      { wrapper: ({ children }) => React.createElement(QueryClientProvider, { client }, children) }
+    );
+
+    await waitFor(() => expect(filters).toHaveLength(2));
+    expect(filters[1]).toMatchObject({
+      userId: { in: [REMOTE.profile_space_id] },
+      objectId: { in: ['claim-1'] },
+    });
+    await waitFor(() => expect(result.current.byClaim.size).toBe(1));
+    // The unscoped key stays free for callers that need every claim, like the rematch page.
+    expect(
+      client.getQueryData(participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]))
+    ).toBeUndefined();
   });
 });
 
@@ -242,7 +380,7 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
   it('keeps the position on screen between the write confirming and the refetch landing', async () => {
     mocks.attention = true;
     // The graph has not returned the new position yet.
-    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage([])));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderPositions(client);
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -275,7 +413,7 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
         });
       });
 
-    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(0)));
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage(graphRow(0))));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderPositions(client);
     await waitFor(() => expect(sideOf(result)).toBe(true));
@@ -286,13 +424,13 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
     expect(sideOf(result)).toBe(false);
 
     // The graph catches up, which is what the overlay was waiting for.
-    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(1)));
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage(graphRow(1))));
     await refetch();
     expect(sideOf(result)).toBe(false);
 
     // Handing back is only observable afterwards: a row still held would keep asserting the side it
     // was retired with, whatever the graph goes on to say.
-    mocks.graphql.mockImplementation(() => Effect.succeed(graphRow(0)));
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage(graphRow(0))));
     await refetch();
     await waitFor(() => expect(sideOf(result)).toBe(true));
   });
@@ -305,14 +443,16 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
   it('is not released by a fetch that still holds the pre-write rows', async () => {
     mocks.attention = true;
     mocks.graphql.mockImplementation(() =>
-      Effect.succeed([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
+      Effect.succeed(
+        lastPage([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
+      )
     );
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderPositions(client);
     await waitFor(() => expect(sideOf(result)).toBe(true));
 
     // A fetch that will answer with the pre-write rows, held open across the confirmation.
-    let answer: (rows: unknown[]) => void = () => {};
+    let answer: (page: unknown) => void = () => {};
     mocks.graphql.mockImplementation(() => Effect.promise(() => new Promise(resolve => (answer = resolve))));
     void client.refetchQueries({
       queryKey: participantPositionsQueryKey([LOCAL.profile_space_id, REMOTE.profile_space_id]),
@@ -329,7 +469,7 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
     expect(sideOf(result)).toBe(false);
 
     await act(async () => {
-      answer([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }]);
+      answer(lastPage([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }]));
       await Promise.resolve();
     });
 
@@ -340,7 +480,9 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
   it('keeps a removal hidden until the refetch confirms it', async () => {
     mocks.attention = true;
     mocks.graphql.mockImplementation(() =>
-      Effect.succeed([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
+      Effect.succeed(
+        lastPage([{ userId: LOCAL.profile_space_id, objectId: CLAIM, spaceId: SPACE, voteType: 0, voteKind: 1 }])
+      )
     );
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderPositions(client);
@@ -356,7 +498,7 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
   // A retained row carries the profile space it was written for, so it cannot outlive that viewer.
   it('drops retained rows when the viewer goes away', async () => {
     mocks.attention = true;
-    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage([])));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result, rerender } = renderHook(
       ({ profileSpaceId }: { profileSpaceId: string | null }) =>
@@ -384,7 +526,7 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
    */
   it('drops a position whose snapshot is garbage collected', async () => {
     mocks.attention = true;
-    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage([])));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderPositions(client);
     await waitFor(() => expect(result.current.isLoading).toBe(false));
@@ -399,7 +541,7 @@ describe('useParticipantPositions holding a settled write (GEO-2807)', () => {
   // A response that returns to idle without reaching indexed was rolled back.
   it('drops a rolled-back write immediately', async () => {
     mocks.attention = true;
-    mocks.graphql.mockImplementation(() => Effect.succeed([]));
+    mocks.graphql.mockImplementation(() => Effect.succeed(lastPage([])));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const { result } = renderPositions(client);
     await waitFor(() => expect(result.current.isLoading).toBe(false));

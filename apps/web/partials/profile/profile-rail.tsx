@@ -1,9 +1,11 @@
 'use client';
 
+import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as Popover from '@radix-ui/react-popover';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
@@ -12,21 +14,28 @@ import { useEditProfile } from '~/core/hooks/use-edit-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
 import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { type ProfileLinkField, changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
-import { heldPositionsCount, usePersonResponses } from '~/core/profile/use-person-positions';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
+import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
+import { useFollowTopics } from '~/core/topics/use-follow-topics';
+import { useFollowedTopics } from '~/core/topics/use-followed-topics';
+import { useTopicMetadata } from '~/core/topics/use-topic-metadata';
 import { NavUtils } from '~/core/utils/utils';
 
-import { SmallButton, SquareButton } from '~/design-system/button';
-import { LinkableChip } from '~/design-system/chip';
+import { AvatarGroup } from '~/design-system/avatar-group';
+import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton, SquareButton } from '~/design-system/button';
+import { ClampedText } from '~/design-system/clamped-text';
+import { PageStringField } from '~/design-system/editable-fields/editable-fields';
 import { FallbackImage } from '~/design-system/fallback-image';
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { EditSmall } from '~/design-system/icons/edit-small';
-import { RightArrowLongSmall } from '~/design-system/icons/right-arrow-long-small';
 
 import { RankingAggregatedSubmitterAvatars } from '~/partials/blocks/table/ranking-period-metadata';
 import { StickySideRail } from '~/partials/entity-page/sticky-side-rail';
@@ -46,16 +55,15 @@ export type ProfileRailProps = ProfileRailFacts & {
 /**
  * The facts a profile states about an account (GEO-2859).
  *
- * Three sections, in the order a reader wants them: where this person works in
- * the graph, how to reach them, then the facts — ending in the space's own
- * record, folded away.
+ * Three sections: who this person is — ending in the space's own record,
+ * folded away — then how to reach them, then where they work in the graph.
  *
  * Rule-separated sections rather than bordered cards, which is how every other
  * rail in the app composes.
  */
 export function ProfileRail(props: ProfileRailProps) {
   return (
-    <StickySideRail>
+    <StickySideRail flushTop divider>
       <ProfileRailSections {...props} />
     </StickySideRail>
   );
@@ -72,22 +80,30 @@ export function ProfileRail(props: ProfileRailProps) {
 export function ProfileRailSections({
   spaceId,
   personEntityId,
-  types,
   links,
   systemEntityId,
   address,
   spaceType,
+  description,
 }: ProfileRailProps) {
   const { facts, isLoading, isError } = useProfileFacts({ spaceId, personEntityId });
 
-  // Shares its query key with the Positions tab and the Activity gallery, so
-  // this is the same request they make rather than a third one.
-  const responses = usePersonResponses({ spaceId });
-  const positionsCount = isLoading && responses.total === null ? null : heldPositionsCount(responses, facts.positions);
-
   return (
-    <div className="flex flex-col gap-4">
-      {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
+    // A rule between sections, 24px either side — the same divider the Explore
+    // and space rails draw (`SideRailSections`). Spacing lives on the sections
+    // rather than the rules, because any of them can be absent.
+    <div className="flex flex-col divide-y divide-divider [&>*]:py-6 [&>*:first-child]:pt-0 [&>*:last-child]:pb-0">
+      <AboutSection
+        facts={facts}
+        isLoading={isLoading}
+        isError={isError}
+        spaceId={spaceId}
+        personEntityId={personEntityId}
+        systemEntityId={systemEntityId}
+        address={address}
+        spaceType={spaceType}
+        serverDescription={description}
+      />
       {personEntityId ? (
         <LinksSection links={links} spaceId={spaceId} personEntityId={personEntityId} />
       ) : (
@@ -95,31 +111,14 @@ export function ProfileRailSections({
         // nowhere to put a link even for its owner.
         links.length > 0 && <LinksSection links={links} spaceId={spaceId} personEntityId={''} />
       )}
-      <AboutSection
-        facts={facts}
-        isLoading={isLoading}
-        isError={isError}
-        positionsCount={positionsCount}
-        types={types}
-        spaceId={spaceId}
-        systemEntityId={systemEntityId}
-        address={address}
-        spaceType={spaceType}
-      />
+      {facts.spaces.length > 0 && <SpacesSection spaces={facts.spaces} />}
     </div>
   );
 }
 
 /**
- * One card in the rail.
- *
- * Bordered cards rather than rule-separated sections: this rail holds three
- * kinds of thing that have nothing to do with each other — a list of spaces, a
- * set of handles, and a table of facts — and a rule between them says they are
- * one document with three parts.
- *
- * `overflow-hidden` is what lets the system-data strip sit flush inside the
- * bottom corners of the About card.
+ * One section in the rail: a titled header over its body, with no border and
+ * no inset — the title and content sit flush with the rail's edges.
  */
 function RailCard({
   title,
@@ -135,12 +134,12 @@ function RailCard({
   footer?: React.ReactNode;
 }) {
   return (
-    <section className="overflow-hidden rounded-lg border border-grey-02 bg-white">
-      <header className="flex items-center justify-between gap-2.5 border-b border-divider px-4 py-3">
-        <h3 className="text-metadataMedium text-text">{title}</h3>
+    <section className="bg-white">
+      <header className="flex items-center justify-between gap-2.5">
+        <h3 className="text-mediumTitle text-text">{title}</h3>
         {action}
       </header>
-      <div className="px-4 py-3">{children}</div>
+      <div className="pt-3">{children}</div>
       {footer}
     </section>
   );
@@ -150,38 +149,59 @@ function SpacesSection({ spaces }: { spaces: ReturnType<typeof useProfileFacts>[
   const [showAll, setShowAll] = React.useState(false);
   const shown = showAll ? spaces : spaces.slice(0, 6);
 
+  // Only the rows on screen, so the collapsed list asks for six images rather than all of them.
+  const { spacesById } = useSpacesByIds(shown.map(space => space.id));
+  const activeSpaceId = useSpaceId();
+
   return (
-    <RailCard
-      title="Spaces"
-      action={
-        spaces.length > 6 ? (
-          <button
-            type="button"
-            onClick={() => setShowAll(value => !value)}
-            className="text-smallButton text-ctaPrimary hover:underline"
-          >
-            {showAll ? 'Show fewer' : `See all ${spaces.length}`}
-          </button>
-        ) : null
-      }
-    >
-      <ul className="flex flex-col gap-1">
-        {shown.map(space => (
-          <li key={space.id}>
-            <Link
-              href={NavUtils.toSpace(space.id)}
-              className="flex items-center gap-2 rounded py-1 transition-colors hover:bg-grey-01"
-            >
-              {/* Nine of the reference account's 33 have no name. A blank row in
-                  a list of 33 reads as a loading failure. */}
-              <span className="min-w-0 flex-1 truncate text-metadata text-text">{space.name ?? 'Untitled space'}</span>
-              {space.isEditor && (
-                <span className="shrink-0 rounded-full border border-grey-02 px-2 text-tag text-grey-04">Editor</span>
-              )}
-            </Link>
-          </li>
-        ))}
+    <RailCard title="Spaces">
+      {/* Rows styled as the browse sidebar draws its spaces (`SpaceRowLink`), so
+          a space looks and responds the same wherever it is listed. Pulled 10px
+          left — the row's own padding — so the icons line up under the title and
+          only the hover background reaches past it. */}
+      <ul className="-ml-2.5 space-y-0.5">
+        {shown.map(space => {
+          // Nine of the reference account's 33 have no name. A blank row in a
+          // list of 33 reads as a loading failure.
+          const name = space.name ?? 'Untitled space';
+          const image = spacesById.get(space.id)?.entity.image;
+
+          return (
+            <li key={space.id}>
+              <Link
+                href={NavUtils.toSpace(space.id)}
+                className={cx(
+                  'flex items-center gap-3 rounded-lg p-2.5 text-browseMenu font-normal not-italic',
+                  activeSpaceId === space.id ? 'bg-divider text-text' : 'text-text hover:bg-grey-01'
+                )}
+              >
+                {image && image !== PLACEHOLDER_SPACE_IMAGE ? (
+                  <span className="relative h-4 w-4 shrink-0 overflow-hidden rounded-[4px] bg-grey-01">
+                    <FallbackImage value={image} sizes="32px" className="object-cover" />
+                  </span>
+                ) : (
+                  <span className="flex h-4 w-4 shrink-0 items-center justify-center rounded-[4px] bg-grey-01 text-[8px] font-medium text-grey-04 ring-1 ring-grey-02/40 ring-inset">
+                    {name.trim().slice(0, 1).toUpperCase() || '?'}
+                  </span>
+                )}
+                <span className="flex min-w-0 flex-1 flex-col justify-center overflow-hidden">
+                  <p className="-my-0.5 truncate leading-5">{name}</p>
+                </span>
+                {space.isEditor && <span className="shrink-0 leading-5 text-grey-03">Editor</span>}
+              </Link>
+            </li>
+          );
+        })}
       </ul>
+      {spaces.length > 6 && (
+        <Button
+          variant="secondary"
+          onClick={() => setShowAll(value => !value)}
+          className={`mt-2 ${PILL_BUTTON_SECONDARY_CLASS_NAME}`}
+        >
+          {showAll ? 'Show fewer' : `See all ${spaces.length}`}
+        </Button>
+      )}
     </RailCard>
   );
 }
@@ -292,7 +312,13 @@ export function LinksSection({
     // everything else on this page writes through — one status bar, one proposal
     // shape, and the name and description carried untouched.
     void publish(
-      { name: current.name, description: current.description, banner: UNCHANGED, avatar: UNCHANGED },
+      {
+        name: current.name,
+        tagline: current.tagline,
+        description: current.description,
+        banner: UNCHANGED,
+        avatar: UNCHANGED,
+      },
       {
         values: linkValueRows({
           fields: activeFields,
@@ -367,30 +393,51 @@ export function LinksSection({
   );
 }
 
-function AboutSection({
+/** Exported for its tests, as `LinksSection` above is; the rail is its only caller. */
+export function AboutSection({
   facts,
   isLoading,
   isError,
-  positionsCount,
-  types,
   spaceId,
+  personEntityId,
   systemEntityId,
   address,
   spaceType,
+  serverDescription,
 }: {
   facts: ReturnType<typeof useProfileFacts>['facts'];
   isLoading: boolean;
   /** The counts could not be read. Distinct from all three being zero. */
   isError: boolean;
-  /** Positions actually held, or null while the vote table is still out. */
-  positionsCount: number | null;
-  types: ProfileRailProps['types'];
   spaceId: string;
+  personEntityId: string | null;
   systemEntityId: string;
   address: string | null;
   spaceType: ProfileRailProps['spaceType'];
+  /** The bio the server already read, shown until the store has the entity. */
+  serverDescription: string | null;
 }) {
   const joined = formatJoined(facts.joinedAt);
+
+  /*
+   * The person's description, read *and written* here rather than under their name — this card
+   * is the only place a profile shows a bio, so it has to be the place one is typed.
+   *
+   * `serverDescription` is handed to the hook rather than resolved here; what an absent row
+   * means against a cleared one is the hook's to decide, and all three of its callers used to
+   * decide it separately.
+   */
+  const isEditing = useUserIsEditing(spaceId);
+  const { text: description, setValue: setDescription } = useEntityTextValue({
+    entityId: personEntityId,
+    spaceId,
+    propertyId: SystemIds.DESCRIPTION_PROPERTY,
+    propertyName: 'Description',
+    fallback: serverDescription,
+  });
+  // An editor with no person entity has nothing to write onto — a personal space whose topic
+  // never resolved. The card still shows the facts; it just offers no field.
+  const canEditDescription = isEditing && personEntityId !== null;
   const elapsed = timeOnGeo(facts.joinedAt);
 
   return (
@@ -406,32 +453,47 @@ function AboutSection({
        * and are the rows a returning reader scans for, so they sit last, next to
        * each other, where a set of numbers reads as a set.
        */}
+      {canEditDescription ? (
+        <div className="mb-2 text-metadata text-text">
+          <PageStringField
+            variant="metadata"
+            // Short on purpose. `react-textarea-autosize` sizes to the *value*, so an empty
+            // field is one row tall with its overflow hidden — a placeholder that wraps in a
+            // 280px rail would be cut off mid-sentence. The guidance goes below instead.
+            placeholder="Add a description…"
+            aria-label="Description"
+            value={description}
+            onChange={setDescription}
+          />
+          {/* Says what belongs here rather than what the field is, because the tagline under
+              their name is the other place a person writes about themselves and the only real
+              question is which one this is. */}
+          <p className="mt-1 text-footnote text-grey-04">A few sentences on your background and what you work on.</p>
+        </div>
+      ) : description ? (
+        <div className="mb-2">
+          <ClampedText
+            text={description}
+            maxLines={6}
+            variant="metadata"
+            textClassName="wrap-break-word text-text"
+            togglePlacement="below"
+          />
+        </div>
+      ) : null}
+
       <dl className="flex flex-col">
         {joined && <Fact label="Joined" value={elapsed ? `${joined} · ${elapsed}` : joined} />}
 
         <Fact label="Space type" value={spaceType === 'PERSONAL' ? 'Personal' : 'DAO'} />
-
-        {types.length > 0 && (
-          <Row label="Types">
-            {/* `LinkableChip` is the relation pill every other surface draws —
-                bordered, text-coloured, border-text on hover. The bespoke blue
-                pill this replaced read as a link, which is the one thing a
-                relation chip is not. */}
-            <span className="flex flex-wrap justify-end gap-1">
-              {types.map(type => (
-                <LinkableChip key={type.id} href={NavUtils.toEntity(spaceId, type.id)}>
-                  {type.name ?? 'Untitled'}
-                </LinkableChip>
-              ))}
-            </span>
-          </Row>
-        )}
 
         {facts.verifiedBy.length > 0 && (
           <Row label="Verified by">
             <VerifiedBy verifiers={facts.verifiedBy} />
           </Row>
         )}
+        {/* Only a personal space follows anything; a DAO's would always come back empty. */}
+        {spaceType === 'PERSONAL' && <FollowingTopics spaceId={spaceId} />}
 
         {/* Each count is the tab that lists what it counts, which is the only
             question a number like this raises. */}
@@ -441,13 +503,12 @@ function AboutSection({
           value={isLoading ? null : facts.debates.toLocaleString()}
           href={`/space/${spaceId}/debates`}
         />
-        {/* Not `facts.positions`: the server counts a retracted vote as a
-            position, and this number sits above the list that does not show
-            them. See `heldPositionsCount`. */}
+        {/* Held positions only — the server leaves a retracted one out
+            (`votedByTypes`), so this is the number the list below it shows. */}
         <Fact
           label="Positions"
-          isUnavailable={isError && positionsCount === null}
-          value={positionsCount === null ? null : positionsCount.toLocaleString()}
+          isUnavailable={isError}
+          value={isLoading ? null : facts.positions.toLocaleString()}
           href={`/space/${spaceId}/positions`}
         />
         <Fact
@@ -468,7 +529,7 @@ function AboutSection({
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-baseline justify-between gap-3 border-b border-divider py-2 last:border-b-0">
+    <div className="flex items-baseline justify-between gap-3 py-2">
       <dt className="shrink-0 text-metadata text-grey-04">{label}</dt>
       <dd className="min-w-0 text-right">{children}</dd>
     </div>
@@ -550,20 +611,159 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
     return spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
   };
 
+  // The trigger is the same face pile a claim card draws over its agree and disagree counts:
+  // overlapped avatars, then a +N badge in the same ring. It resolves its own images from the space
+  // ids, which is why the stack is the whole control rather than a stack plus a count.
   return (
-    // A popover rather than a boolean and a positioned div: outside-click,
-    // Escape, focus return and the aria wiring are the behaviours people expect
-    // of a thing that opened, and hand-rolling them got only the toggle right.
+    <RailPopover
+      label={`Verified by ${verifiers.length} ${verifiers.length === 1 ? 'space or person' : 'spaces and people'}`}
+      trigger={<RankingAggregatedSubmitterAvatars submitterSpaceIds={verifierSpaceIds} size={20} maxVisible={3} />}
+    >
+      {verifiers.map(verifier => (
+        <li key={verifier.spaceId}>
+          <Link
+            href={NavUtils.toSpace(verifier.spaceId)}
+            className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
+          >
+            {/* Resolved here rather than read off the verifier: the facts
+                      query never fetches these, so `avatarUrl` is null for
+                      everyone and the whole list drew placeholders under a stack
+                      of real faces. `RankingAggregatedSubmitterAvatars` above
+                      already primed these caches from the same space ids. */}
+            <RailListThumb image={avatarFor(verifier.spaceId)} />
+            <span className="min-w-0 flex-1 truncate text-metadata text-text">
+              {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
+            </span>
+            <span className="shrink-0 text-tag text-grey-04">{verifier.isPerson ? 'Person' : 'Space'}</span>
+          </Link>
+        </li>
+      ))}
+    </RailPopover>
+  );
+}
+
+/**
+ * The topics this space follows (GEO-3191): how many, a few of their pictures, and the whole list on
+ * a click — the same shape as Verified by above it. Hidden for a space that follows nothing.
+ *
+ * Read from the followed topic ids rather than the `Following` rows, because with the Interested
+ * flag on there are no rows: a follow is an Interested vote. The ids are right under either.
+ *
+ * The owner can unfollow from the list. It writes through the same hook as every Follow button,
+ * so the topic leaves the list, the count and any card on screen at once. Built on the row from
+ * #2685 (GEO-3081), which read the rows and so stayed empty with the flag on.
+ */
+export function FollowingTopics({ spaceId }: { spaceId: string }) {
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
+
+  const { topicIds, isLoading } = useFollowedTopics(spaceId);
+  const ids = React.useMemo(() => [...topicIds], [topicIds]);
+  const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(ids);
+  const { unfollow, isPending } = useFollowTopics();
+
+  // By name, so a long list reads like an index rather than in the order the votes were cast.
+  const topics = React.useMemo(
+    () =>
+      ids
+        .map(id => ({ id, meta: metadata.get(id) }))
+        .sort((a, b) => (a.meta?.name ?? '').localeCompare(b.meta?.name ?? '')),
+    [ids, metadata]
+  );
+
+  if (!isLoading && topics.length === 0) return null;
+  if (isLoading || isLoadingMetadata) return <FollowingSkeleton />;
+
+  const visible = topics.slice(0, 3);
+
+  return (
+    <Row label="Following">
+      <RailPopover
+        label={`Following ${topics.length} ${topics.length === 1 ? 'topic' : 'topics'}`}
+        trigger={
+          <>
+            <span className="tabular-nums">{topics.length.toLocaleString('en-US')}</span>
+            <AvatarGroup>
+              {visible.map(topic => (
+                <AvatarGroup.Item key={topic.id} size={20}>
+                  <FallbackImage
+                    value={topic.meta?.image ?? PLACEHOLDER_SPACE_IMAGE}
+                    sizes="20px"
+                    className="object-cover"
+                  />
+                </AvatarGroup.Item>
+              ))}
+              <AvatarGroup.Overflow count={topics.length - visible.length} size={20} />
+            </AvatarGroup>
+          </>
+        }
+      >
+        {topics.map(({ id, meta }) => {
+          const name = meta?.name ?? 'Untitled topic';
+          // The topic's own space. A follow carries none of its own: the space it was cast in is
+          // the follower's.
+          const homeSpaceId = meta?.homeSpaceId;
+          const label = (
+            <>
+              <RailListThumb image={meta?.image} />
+              <span className="min-w-0 flex-1 truncate text-metadata text-text">{name}</span>
+            </>
+          );
+
+          return (
+            <li key={id} className="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-grey-01">
+              {homeSpaceId ? (
+                <Link
+                  href={NavUtils.toEntity(homeSpaceId, id)}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  {label}
+                </Link>
+              ) : (
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">{label}</span>
+              )}
+              {isOwner ? (
+                <button
+                  type="button"
+                  aria-label={`Unfollow ${name}`}
+                  onClick={() => void unfollow([id])}
+                  disabled={isPending(id)}
+                  className="shrink-0 text-tag text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+                >
+                  Unfollow
+                </button>
+              ) : (
+                <span className="shrink-0 text-tag text-grey-04">Topic</span>
+              )}
+            </li>
+          );
+        })}
+      </RailPopover>
+    </Row>
+  );
+}
+
+/**
+ * A rail row's value that opens a list: Verified by and Following. A popover rather than a boolean
+ * and a positioned div: outside-click, Escape, focus return and the aria wiring are the behaviours
+ * people expect of a thing that opened, and hand-rolling them got only the toggle right.
+ */
+function RailPopover({
+  label,
+  trigger,
+  children,
+}: {
+  label: string;
+  trigger: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
     <Popover.Root>
       <Popover.Trigger
-        aria-label={`Verified by ${verifiers.length} ${verifiers.length === 1 ? 'space or person' : 'spaces and people'}`}
+        aria-label={label}
         className="inline-flex items-center gap-2 text-metadata text-text hover:underline"
       >
-        {/* The same face pile a claim card draws over its agree and disagree
-            counts: overlapped avatars, then a +N badge in the same ring. It
-            resolves its own images from the space ids, which is why the stack
-            is the whole control rather than a stack plus a count. */}
-        <RankingAggregatedSubmitterAvatars submitterSpaceIds={verifierSpaceIds} size={20} maxVisible={3} />
+        {trigger}
       </Popover.Trigger>
 
       <Popover.Portal>
@@ -572,36 +772,34 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
           sideOffset={4}
           className="z-100 max-h-64 w-64 overflow-y-auto rounded-lg border border-grey-02 bg-white py-1 shadow-dropdown"
         >
-          <ul>
-            {verifiers.map(verifier => (
-              <li key={verifier.spaceId}>
-                <Link
-                  href={NavUtils.toSpace(verifier.spaceId)}
-                  className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
-                >
-                  {/* Resolved here rather than read off the verifier: the facts
-                      query never fetches these, so `avatarUrl` is null for
-                      everyone and the whole list drew placeholders under a stack
-                      of real faces. `RankingAggregatedSubmitterAvatars` above
-                      already primed these caches from the same space ids. */}
-                  <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
-                    <FallbackImage
-                      value={avatarFor(verifier.spaceId) ?? PLACEHOLDER_SPACE_IMAGE}
-                      sizes="20px"
-                      className="object-cover"
-                    />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-metadata text-text">
-                    {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
-                  </span>
-                  <span className="shrink-0 text-tag text-grey-04">{verifier.isPerson ? 'Person' : 'Space'}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <ul>{children}</ul>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** The 20px picture that leads each row of a rail list, with the placeholder for none. */
+function RailListThumb({ image }: { image: string | null | undefined }) {
+  return (
+    <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
+      <FallbackImage value={image ?? PLACEHOLDER_SPACE_IMAGE} sizes="20px" className="object-cover" />
+    </span>
+  );
+}
+
+function FollowingSkeleton() {
+  return (
+    <Row label="Following">
+      <span className="inline-flex items-center gap-2" aria-hidden>
+        <span className="inline-block h-4 w-4 animate-pulse rounded bg-grey-01" />
+        <span className="inline-flex">
+          <span className="inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+        </span>
+      </span>
+    </Row>
   );
 }
 
@@ -624,18 +822,17 @@ function SystemRecord({
   spaceType: ProfileRailProps['spaceType'];
 }) {
   return (
-    // A grey strip flush to the card's bottom edge, with an arrow that turns as
-    // it opens. Grey because it is a different register from the rows above it:
-    // those are facts about a person, these are ids for whoever is debugging
-    // the page.
-    <details className="group border-t border-dashed border-grey-02 bg-grey-01 [&_summary::-webkit-details-marker]:hidden">
-      <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-4 py-3 text-smallButton text-grey-04 hover:text-text">
+    // An accordion, closed by default, in the rows' own type: the label reads like
+    // "Positions" above it, and opening it lays the ids out as more rows of the
+    // same kind. The standard chevron, flipped when open.
+    <details className="group [&_summary::-webkit-details-marker]:hidden">
+      <summary className="flex cursor-pointer list-none items-center justify-between gap-3 py-2 text-metadata text-grey-04 hover:text-text">
         <span>Space system data</span>
-        <span className="text-grey-04 transition-transform duration-150 group-open:rotate-90">
-          <RightArrowLongSmall />
+        <span className="flex transition-transform duration-150 group-open:rotate-180">
+          <ChevronDownSmall color="grey-04" />
         </span>
       </summary>
-      <dl className="flex flex-col px-4 pb-3">
+      <dl className="flex flex-col">
         <SystemRow label="Space id" value={spaceId} />
         <SystemRow label="Entity id" value={systemEntityId} />
         <SystemRow label="Type" value={spaceType} />
@@ -647,9 +844,8 @@ function SystemRecord({
 
 function SystemRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="grid grid-cols-[92px_minmax(0,1fr)] gap-2 border-b border-grey-02 py-1 last:border-b-0">
-      <dt className="text-smallButton text-grey-04">{label}</dt>
-      <dd className="font-mono text-tag break-all text-text">{value}</dd>
-    </div>
+    <Row label={label}>
+      <span className="text-metadata break-all text-text">{value}</span>
+    </Row>
   );
 }

@@ -6,11 +6,16 @@ import * as React from 'react';
 
 import { GEOGENESIS } from './geo-chain';
 
-const config: PrivyClientConfig = {
+/** Exported for the test that pins `loginMethods` to sign-ins that stay in the page. */
+export const privyConfig: PrivyClientConfig = {
   // Session refresh calls auth.privy.io; TimeoutError usually means the host cannot reach Privy
   // (firewall/VPN/DNS). Not configurable here—fix network or use Privy dashboard allowed origins.
   defaultChain: GEOGENESIS,
   supportedChains: [GEOGENESIS],
+  // Every method here has to complete in the same document. Actions a visitor takes before signing
+  // up are queued in memory (`core/state/pending-actions.ts`) and replayed once their account exists;
+  // a method that redirects away — any OAuth provider — reloads the page and silently drops them.
+  // Adding one means persisting that queue across the redirect first. `privy.test.ts` holds this.
   loginMethods: ['email'],
   embeddedWallets: {
     ethereum: {
@@ -32,7 +37,7 @@ const config: PrivyClientConfig = {
 
 export function PrivyProvider({ children }: { children: React.ReactNode }) {
   return (
-    <Privy appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!} config={config}>
+    <Privy appId={process.env.NEXT_PUBLIC_PRIVY_APP_ID!} config={privyConfig}>
       {children}
     </Privy>
   );

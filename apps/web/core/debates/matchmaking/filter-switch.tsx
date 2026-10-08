@@ -2,6 +2,8 @@
 
 import { Toggle } from '~/design-system/toggle';
 
+import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
+
 /**
  * A single on/off setting on a filter row, as a switch rather than a pill (GEO-2861).
  *
@@ -18,10 +20,12 @@ export function FilterSwitch({
   label,
   checked,
   onChange,
+  analyticsSurface,
 }: {
   label: string;
   checked: boolean;
   onChange: (next: boolean) => void;
+  analyticsSurface: DebateAnalyticsSurface;
 }) {
   return (
     <button
@@ -29,6 +33,7 @@ export function FilterSwitch({
       role="switch"
       aria-checked={checked}
       aria-label={label}
+      {...debateSurfaceAnalyticsAttributes(analyticsSurface, label, 'filter')}
       onClick={() => onChange(!checked)}
       className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 text-metadata text-grey-04"
     >

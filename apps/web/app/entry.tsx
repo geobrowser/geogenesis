@@ -26,6 +26,7 @@ import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-draw
 import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
 import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
 import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
+import { EntityStickyHeaderHost } from '~/partials/entity-page/entity-sticky-header-host';
 import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
 import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
@@ -34,6 +35,8 @@ import { Navbar } from '~/partials/navbar/navbar';
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { StatusBar } from '~/partials/review/status-bar';
+import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
+import { SaveVotesSheet } from '~/partials/save-votes/save-votes-sheet';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
@@ -65,11 +68,6 @@ const PendingCreatedSpaceStatus = dynamic(
     import('~/partials/create-space/pending-created-space-status').then(m => ({
       default: m.PendingCreatedSpaceStatus,
     })),
-  { ssr: false }
-);
-
-const SignInPrompt = dynamic(
-  () => import('~/partials/sign-in-prompt/sign-in-prompt').then(m => ({ default: m.SignInPrompt })),
   { ssr: false }
 );
 
@@ -156,6 +154,11 @@ export function App({ children }: { children: React.ReactNode }) {
             triggerRef={mobileBrowseButtonRef}
           />
           <SearchDialog open={open} onDone={() => setOpen(false)} />
+          {/* Directly under the navbar and above the page: a zero-height dock the entity route
+              portals its sticky header into. See `EntityStickyHeaderHost`. The collapsed sidebar
+              leaves a vertical rail across this column with nothing holding the space — the same
+              condition that draws it below. */}
+          <EntityStickyHeaderHost railInset={!sidebarOpen && !fullscreenActive} />
           <div className="min-w-0 flex-1 2xl:px-[2ch]">
             <Main>{children}</Main>
           </div>
@@ -169,10 +172,14 @@ export function App({ children }: { children: React.ReactNode }) {
           <OnboardingDialog />
           <PendingPersonalSpaceRunner />
           <PendingActionsRunner />
+          <LocalVotesSaver />
+          {/* Suspense: onboarding preparation reads `useSearchParams`. */}
+          <React.Suspense fallback={null}>
+            <SaveVotesSheet />
+          </React.Suspense>
           <CreateSpaceDialog />
           <PendingCreatedSpaceRunner />
           <PendingCreatedSpaceStatus />
-          <SignInPrompt />
           <PostAuthRedirect />
           <React.Suspense fallback={null}>
             <DeepLinkHandler />

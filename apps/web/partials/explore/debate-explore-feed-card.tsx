@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
 import { DebateFeedPlayer } from '~/core/debates/browse/debate-feed-player';
@@ -10,6 +11,7 @@ import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
 import { useDebate, useDebateMedia } from '~/core/debates/hooks';
+import { openRebuttalRoundCount } from '~/core/debates/open-rounds';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
@@ -65,6 +67,22 @@ const DEBATE_CARD_COLUMN_STYLE = {
   '--debate-card-column-width': 'clamp(320px, calc(83dvh - 178px), 560px)',
 } as React.CSSProperties;
 
+/**
+ * The same budget with the column, rather than 560px, as its ceiling.
+ *
+ * `fullWidth` means "this column is already the reading width, don't cap it at the card's 560px" —
+ * it does not mean "stop fitting the viewport". Dropping the budget outright made a debate on the
+ * claim page's 840px column about 1140px tall (two `aspect-480/289` tiles at ~800px), so on a
+ * 900px viewport the second debater and the interaction bar could not be seen together — which is
+ * the single thing the budget above exists to guarantee.
+ *
+ * `min` with `100%` rather than a larger constant: the ceiling is whatever column the card was
+ * given, so this is right at 840px and at any other width a host passes.
+ */
+const DEBATE_CARD_FULL_WIDTH_STYLE = {
+  '--debate-card-column-width': 'max(320px, min(calc(83dvh - 178px), 100%))',
+} as React.CSSProperties;
+
 type DebateExploreFeedCardProps = {
   item: ExploreFeedItem;
   /** Hide the space thumbnail + space-name link in the meta row (same semantics as ExploreFeedCard). */
@@ -76,6 +94,15 @@ type DebateExploreFeedCardProps = {
   /** Compact title and metadata treatment used by the narrow profile Activity rail. */
   compactChrome?: boolean;
   /**
+   * Raise the column's ceiling from the card's 560px to the container's own width. For a surface
+   * whose column is already the reading width, where the capped card sat narrower than everything
+   * around it — the claim page's Debates tab.
+   *
+   * Not "uncapped": the viewport-height budget still applies, so the whole card still fits the
+   * screen it is watched on. See {@link DEBATE_CARD_FULL_WIDTH_STYLE}.
+   */
+  fullWidth?: boolean;
+  /**
    * Called when a coordinated surface's player is clicked. An allowed active player transfers
    * before the click reaches it. A visible non-owner consumes that first click while ownership
    * commits, and an inactive player is centered before requesting ownership when it becomes active.
@@ -83,6 +110,8 @@ type DebateExploreFeedCardProps = {
   onPlaybackRequest?: (debateId: string) => void;
   /** Tell a coordinated surface whether this card currently owns a mounted, playable player. */
   onPlaybackAvailabilityChange?: (debateId: string, available: boolean) => void;
+  /** Additional action placed beside the full-screen link. */
+  endSlot?: React.ReactNode;
   /**
    * Rendered instead of the debate card when the debate can't be shown as a video — feature flag
    * off, the geo-chat record is missing or unwatchable, or its final video isn't processed yet.
@@ -108,8 +137,10 @@ export function DebateExploreFeedCard({
   hideJoinButton = false,
   titleOpensSidePanel = false,
   compactChrome = false,
+  fullWidth = false,
   onPlaybackRequest,
   onPlaybackAvailabilityChange,
+  endSlot,
   fallback,
 }: DebateExploreFeedCardProps) {
   // A Debate entity's id is its geo-chat debate id (see useDebateVotes), modulo hyphenation.
@@ -211,6 +242,16 @@ export function DebateExploreFeedCard({
 
   const requestPlayback = (event: React.MouseEvent<HTMLDivElement>) => {
     if (!onPlaybackRequest) return;
+    // Clicks that are not asks to play pass straight through. A finished debate's end card is drawn
+    // inside this wrapper, and its vote, its voter list and its way into the claims panel are not
+    // media controls — capturing them swallowed the vote and handed playback to a debate that had
+    // ended. Only its replay asks to play. The voter list is portalled out of this DOM but its
+    // clicks still bubble through React's tree, so a target outside the wrapper is let go too.
+    const target = event.target;
+    if (target instanceof Node && !event.currentTarget.contains(target)) return;
+    const onEndCard = target instanceof Element && target.closest('[data-debate-end-card]') !== null;
+    const isReplay = target instanceof Element && target.closest('[data-end-card-replay]') !== null;
+    if (onEndCard && !isReplay) return;
     if (active && playbackAllowed) {
       pendingPlaybackRequestRef.current = false;
       onPlaybackRequest(debateId);
@@ -220,8 +261,14 @@ export function DebateExploreFeedCard({
     // This first click either activates the card or transfers the gate. It must not also reach the
     // player's full-tile toggle (or another media control) before the player is both active and
     // allowed, or React's batched ownership update can briefly run it alongside the old owner.
-    event.preventDefault();
-    event.stopPropagation();
+    //
+    // The end card's replay is the exception: it is let through. The player holds a replay until it
+    // is handed playback, so it cannot run alongside the old owner — and swallowing it here left an
+    // ended debate with nothing to resume, so Replay took a second tap.
+    if (!isReplay) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
 
     if (active) {
       pendingPlaybackRequestRef.current = false;
@@ -246,6 +293,8 @@ export function DebateExploreFeedCard({
   // share dialog, the app's comments panel — is the card's to own and to render once. Same
   // arrangement, same reason, as `DebateFeedItem` on the full-screen feed.
   const [claimsOpen, setClaimsOpen] = React.useState(false);
+  // Stable, because `DebateCardVideos` is memoized and a fresh function each render would undo it.
+  const openClaims = React.useCallback(() => setClaimsOpen(true), []);
   const share = useDebateShareAction();
   const { commentsTarget, openComments } = useEntityCommentsPanel();
   // Nulls read as "not enabled", which is how the count stands down with the media above. Shares a
@@ -282,18 +331,24 @@ export function DebateExploreFeedCard({
     spaceId: item.spaceId,
     commentCount,
     commentsPanelOpen: commentsTarget?.entityId === item.entityId,
-    onComment: () => openComments(item.entityId, item.spaceId),
+    onComment: () => openComments(item.entityId, item.spaceId, 'debate'),
     claimsCount: claims.totalCount,
     // See the prop's own note: an explore card can be a data block row listing a debate from
     // another space, and only the lookup finds that space's votes.
     responseKind: 'infer' as const,
-    onClaims: mediaMounted ? () => setClaimsOpen(true) : undefined,
+    onClaims: mediaMounted ? () => openClaims() : undefined,
     onShare: mediaMounted ? share.onOpen : undefined,
     shareOpen: share.open,
+    // From the debate lookup, so it arrives with Claims and Share; drawn last in the row so landing
+    // late shifts none of the controls before it.
+    rebuttalRounds: debate ? openRebuttalRoundCount(debate) : null,
   };
 
   return (
-    <article ref={setContainer} className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0">
+    <ActionSurfaceArticle
+      ref={setContainer}
+      className="flex flex-col gap-2 border-b border-divider py-4 last:border-b-0"
+    >
       {/* Meta, title, media and the interaction bar share one column, capped so the whole card
           fits the viewport it is watched in — see {@link DEBATE_CARD_COLUMN_STYLE}. A cap rather
           than the full column width because feed columns, especially data blocks, can be much
@@ -302,7 +357,7 @@ export function DebateExploreFeedCard({
           and what keeps the bar beneath the videos the same width as them. */}
       <div
         className="flex w-full max-w-[var(--debate-card-column-width)] min-w-0 flex-col gap-2"
-        style={DEBATE_CARD_COLUMN_STYLE}
+        style={fullWidth ? DEBATE_CARD_FULL_WIDTH_STYLE : DEBATE_CARD_COLUMN_STYLE}
       >
         {/* The way out of the card and into the debate at full size. This corner used to hold
             "View all", a link to the space's whole debates list. Since GEO-2879 headed the card
@@ -314,12 +369,16 @@ export function DebateExploreFeedCard({
           hideJoinButton={hideJoinButton}
           compact={compactChrome}
           endSlot={
-            <FullscreenLink
-              href={NavUtils.toEntity(item.spaceId, item.entityId)}
-              entityId={item.entityId}
-              spaceId={item.spaceId}
-              ariaLabel="Watch this debate full screen"
-            />
+            <div className="ml-auto flex shrink-0 items-center gap-1">
+              {endSlot}
+              <FullscreenLink
+                requiresFullPage
+                href={NavUtils.toEntity(item.spaceId, item.entityId)}
+                entityId={item.entityId}
+                spaceId={item.spaceId}
+                ariaLabel="Watch this debate full screen"
+              />
+            </div>
           }
         />
 
@@ -338,7 +397,12 @@ export function DebateExploreFeedCard({
           {mediaMounted ? (
             // The recordings resolve while the card is still approaching. Crossing back out of
             // that same window unmounts this subtree instead of retaining two paused videos forever.
-            <DebateCardVideos debate={readyDebate} active={active && playbackAllowed} reducedOverlays={compactChrome} />
+            <DebateCardVideos
+              debate={readyDebate}
+              active={active && playbackAllowed}
+              reducedOverlays={compactChrome}
+              onOpenClaims={openClaims}
+            />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -381,7 +445,7 @@ export function DebateExploreFeedCard({
           ) : null}
         </>
       ) : null}
-    </article>
+    </ActionSurfaceArticle>
   );
 }
 
@@ -395,12 +459,22 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
   active,
   reducedOverlays,
+  onOpenClaims,
 }: {
   debate: Debate;
   active: boolean;
   reducedOverlays: boolean;
+  onOpenClaims: () => void;
 }) {
-  return <DebateFeedPlayer debate={debate} active={active} preload reducedOverlays={reducedOverlays} />;
+  return (
+    <DebateFeedPlayer
+      debate={debate}
+      active={active}
+      preload
+      reducedOverlays={reducedOverlays}
+      onOpenClaims={onOpenClaims}
+    />
+  );
 });
 
 function DebateVideoSkeleton() {

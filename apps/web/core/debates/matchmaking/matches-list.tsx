@@ -10,11 +10,12 @@ import type { MatchmakingMatch } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity } from '../hooks';
 import { claimRowKey } from './claim-row-key';
-import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
+import { type ClaimsLayout, HubListColumns, HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { DebateHoursNote } from './debate-hours-note';
 import { useDebateRequests, useMatchmakingMatches } from './hooks';
+import { HubFacetRail } from './hub-facet-rail';
 import { HubCardList } from './hub-motion';
-import { HubQueryState } from './hub-states';
+import { HubQueryState, exploreClaimsAction } from './hub-states';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import {
@@ -52,11 +53,19 @@ import {
 export function MatchesList({
   onTabChange,
   trailing,
+  scopePicker,
+  layout = 'panel',
 }: {
-  onTabChange: (tab: DebatesHubTab) => void;
+  /** Only reached from the empty state's action, so the rail need not pass one. */
+  onTabChange?: (tab: DebatesHubTab) => void;
   /** Lobby's "Matches only" switch, at the end of the filter row. */
   trailing?: React.ReactNode;
+  /** Leading the filter row, as on `ClaimsTab` — Lobby's two lists share the control. */
+  scopePicker?: React.ReactNode;
+  /** As on `ClaimsTab`: the workspace draws an open facet rail beside this list. */
+  layout?: ClaimsLayout;
 }) {
+  const workspace = layout === 'workspace';
   // Lobby's one selection, shared with its toggled-off state (GEO-2861) — the toggle narrows the
   // list, and would be a strange place to also change which spaces the viewer had picked.
   //
@@ -226,11 +235,25 @@ export function MatchesList({
   const filteredByViewer = filtered.length === 0 && serverMatches.length > 0;
 
   return (
-    <div className="flex flex-col">
+    <HubListColumns
+      workspace={workspace}
+      rail={
+        <HubFacetRail
+          facetSpaces={facetSpaces}
+          spaceIds={spaceIds}
+          onSpaceToggle={onSpaceToggle}
+          onSpacesClear={onSpacesClear}
+          facetTopics={facetTopics}
+          topicIds={topicIds}
+          onTopicToggle={id => setTopicIds(current => toggleId(current, id))}
+          onTopicsClear={() => setTopicIds([])}
+        />
+      }
+    >
       {/* One pinned header rather than a pinned card above scrolling filters: two stickies would
           both claim `top-0` and overlap, and the outbound card is conditional so the filters
           couldn't be offset by a known height. */}
-      <HubStickyControls>
+      <HubStickyControls workspaceStickyOffset={workspace}>
         {outbound ? <OutboundRequestCard request={outbound} /> : null}
         <Input
           withSearchIcon
@@ -241,6 +264,9 @@ export function MatchesList({
         />
 
         <SpaceTopicFilters
+          analyticsSurface="hub"
+          leading={scopePicker}
+          menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
           onSpaceToggle={onSpaceToggle}
           onSpacesClear={onSpacesClear}
@@ -255,6 +281,7 @@ export function MatchesList({
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
+          analyticsSurface="hub"
           // `activity` is a second query, and an empty list cannot be described without it: both
           // the message and the note below say something different depending on whether the viewer
           // has marked themselves unavailable. Whichever request lands second decides what this
@@ -296,8 +323,6 @@ export function MatchesList({
           // `live` unconditionally: `SIGNED_OUT_TABS` in the panel keeps Lobby off the signed-out
           // hub entirely, so every viewer here holds the gateway scope.
           emptyNote={serverMatches.length === 0 ? <DebateHoursNote live /> : undefined}
-          // Same label as People's, because it is the same action out of the same dead end. Two
-          // names for one button in one panel is a difference that implies something.
           // Clearing the filter is the whole answer when the filter is the cause, and browsing claims
           // cannot be — there are matches, just not in the spaces on screen.
           emptyAction={
@@ -312,7 +337,7 @@ export function MatchesList({
                     setTopicIds([]);
                   },
                 }
-              : { label: 'Explore claims', onClick: () => onTabChange('explore') }
+              : exploreClaimsAction(onTabChange)
           }
         >
           <HubCardList>
@@ -322,7 +347,7 @@ export function MatchesList({
           </HubCardList>
         </HubQueryState>
       </div>
-    </div>
+    </HubListColumns>
   );
 }
 

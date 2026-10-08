@@ -1,5 +1,6 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
+import { TOPIC_TYPE_ID } from '~/core/constants';
 import type { Space } from '~/core/io/dto/spaces';
 import { Entity } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
@@ -42,6 +43,20 @@ export const hasExternalTopic = (
 export function isPersonProfileSpace(space: Pick<Space, 'type' | 'entity'> | null | undefined): boolean {
   if (space?.type !== 'PERSONAL') return false;
   return (space.entity?.types ?? []).some(type => normId(type.id) === normId(SystemIds.PERSON_TYPE));
+}
+
+/**
+ * Whether this space's home entity is a Topic, so its homepage opens on the topic Explore feed.
+ *
+ * A profile is never one, whatever else its person is typed as: the profile owns that page, and
+ * two views competing for one URL is the failure `isPersonProfileSpace` exists to prevent.
+ *
+ * Asked of `space.entity`, like the profile check, and for the same reason — it is `topic ?? page`,
+ * which is the entity the homepage actually renders.
+ */
+export function isTopicHomeSpace<T extends Pick<Space, 'type' | 'entity'>>(space: T | null | undefined): space is T {
+  if (!space || isPersonProfileSpace(space)) return false;
+  return (space.entity?.types ?? []).some(type => normId(type.id) === normId(TOPIC_TYPE_ID));
 }
 
 /** Entity at the root of a space's subtopic tree (homepage, or external topic). */

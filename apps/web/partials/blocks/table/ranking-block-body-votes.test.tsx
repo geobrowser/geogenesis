@@ -88,6 +88,13 @@ function state(activeTab: 'global' | 'my'): RankingBlockState {
     hasEmbeddedMyNextPage: false,
     setEmbeddedMyPage: vi.fn(),
     myRankingEntryByEntityId: new Map([[entityId, entry]]),
+    // Inert: these tests are about vote actions, not the shared-ranking viewer tab.
+    showViewerOwnTab: false,
+    viewerOwnDisplayEntityIds: [],
+    totalViewerOwnEntityCount: 0,
+    viewerOwnEntryByEntityId: new Map(),
+    shareViewerOwnRanking: vi.fn(),
+    canShareViewerOwnRanking: false,
     draftHydrated: true,
     hasMySubmission: false,
     isSharedRankingView: false,

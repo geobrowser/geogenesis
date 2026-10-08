@@ -8,11 +8,9 @@ import { notFound } from 'next/navigation';
 
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
-import { firstLine } from '~/core/opengraph';
 import { RouteEditorProvider, type Tabs } from '~/core/state/editor/editor-provider';
 import { EntityStoreProvider } from '~/core/state/entity-page-store/entity-store-provider';
 import { TrackedErrorBoundary } from '~/core/telemetry/tracked-error-boundary';
-import { Entities } from '~/core/utils/entity';
 import { firstSearchParamValue } from '~/core/utils/search-params';
 import { Spaces } from '~/core/utils/space';
 import { sortRelations } from '~/core/utils/utils';
@@ -24,16 +22,14 @@ import { Spacer } from '~/design-system/spacer';
 import { Editor } from '~/partials/editor/editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
-import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';
-import { RootExploreSidePanelContainer } from '~/partials/explore/root-explore-side-panel-container';
 import { PersonalSpaceProfile } from '~/partials/profile/personal-space-profile';
-import { SpaceOverviewSidePanelContainer } from '~/partials/space-page/space-overview-side-panel-container';
 import { SubtopicGalleryServerContainer } from '~/partials/space-page/subtopic-gallery-server-container';
 
 import { cachedFetchEntitiesBatch, cachedFetchEntityPage } from '../../(entity)/[id]/[entityId]/cached-fetch-entity';
 import { cachedFetchSpace } from '../cached-fetch-space';
-import { resolveSpaceSidebar } from './space-sidebar';
+import { generateSpaceMetadata } from './space-metadata';
+import { SpaceOverviewBody, SpaceTopicExploreBody } from './space-overview-body';
 
 interface Props {
   params: Promise<{ id: string }>;
@@ -41,30 +37,7 @@ interface Props {
 }
 
 export async function generateMetadata(props: Props): Promise<Metadata> {
-  const params = await props.params;
-  const spaceId = params.id;
-
-  if (!IdUtils.isValid(spaceId)) {
-    return { title: 'Not Found' };
-  }
-
-  const space = await cachedFetchSpace(spaceId);
-  const entity = space?.entity;
-
-  if (!entity) {
-    return {
-      title: `Space ${spaceId}`,
-      description: 'No entity found for this space.',
-    };
-  }
-
-  const entityName = entity.name ?? null;
-  const description = firstLine(Entities.description(entity.values ?? []));
-
-  return {
-    title: entityName ?? spaceId,
-    description,
-  };
+  return generateSpaceMetadata((await props.params).id);
 }
 
 export default async function SpacePage(props0: Props) {
@@ -101,55 +74,13 @@ export default async function SpacePage(props0: Props) {
     return <TopicEntityBody spaceId={spaceId} topicEntityId={space.topicId} />;
   }
 
-  const [props, { isRootSpace, communityCalls }] = await Promise.all([
-    getSpaceFrontPage(space),
-    resolveSpaceSidebar(spaceId),
-  ]);
-
-  // Overview only, which is what `!tabId` means here — a tab gets no rail, and so no subspaces
-  // (GEO-2875). Both branches are containers under Suspense so the rail's query never delays the
-  // page's own JSX; the gallery this replaces streamed the same way.
-  let sidebar: React.ReactNode = null;
-  if (!tabId) {
-    sidebar = (
-      <React.Suspense fallback={null}>
-        {isRootSpace ? (
-          <RootExploreSidePanelContainer spaceId={spaceId} includeSubspaces />
-        ) : (
-          <SpaceOverviewSidePanelContainer spaceId={spaceId} communityCalls={communityCalls} />
-        )}
-      </React.Suspense>
-    );
+  // A Topic-typed home opens on the topic's Explore feed, as a topic page does; the authored page
+  // it would otherwise open on moves to its own Overview route. An authored tab is still the tab.
+  if (!tabId && Spaces.isTopicHomeSpace(space)) {
+    return <SpaceTopicExploreBody spaceId={spaceId} spaceTopicId={space.entity.id} />;
   }
 
-  return (
-    <EntityPageSidebarLayout sidebar={sidebar}>
-      <React.Suspense fallback={null}>
-        <Editor spaceId={spaceId} shouldHandleOwnSpacing />
-      </React.Suspense>
-      <Spacer height={24} />
-      <ToggleEntityPage id={props.id} spaceId={spaceId} />
-      <Spacer height={40} />
-      {/*
-        Some SEO parsers fail to parse meta tags if there's no fallback in a suspense
-        boundary. We don't want to show any referenced by loading states but do want to
-        stream it in
-      */}
-      {/*
-        Skipped entirely when the space has no home entity, where `props.id` is `''`.
-        `getEntityBacklinks` now answers an invalid id without a request, so this is not
-        what stops the 400 — it stops a boundary, a Suspense and a render existing to
-        produce nothing.
-      */}
-      {props.id !== '' && (
-        <TrackedErrorBoundary fallback={<EmptyErrorComponent />}>
-          <React.Suspense fallback={<div />}>
-            <BacklinksServerContainer entityId={props.id} />
-          </React.Suspense>
-        </TrackedErrorBoundary>
-      )}
-    </EntityPageSidebarLayout>
-  );
+  return <SpaceOverviewBody space={space} spaceId={spaceId} tabId={tabId} />;
 }
 
 /**
@@ -320,50 +251,6 @@ const SubtopicGallerySkeleton = () => {
       <Spacer height={40} />
     </>
   );
-};
-
-const getSpaceFrontPage = async (space: Awaited<ReturnType<typeof cachedFetchSpace>>) => {
-  const entity = space?.entity;
-
-  if (!entity) {
-    // A space with no home entity. `id` stays `''` rather than a generated one because
-    // consumers here render it, and inventing an id makes them render a page for an
-    // entity that does not exist — the layout's variant generates one only because it
-    // needs a stable key. Anything that treats this as a real id is the caller's bug to
-    // avoid; see the `props.id` guard where backlinks are rendered.
-    return {
-      id: '',
-      name: null,
-      values: [],
-      relations: [],
-      spaceTypes: [],
-    };
-  }
-
-  // See layout.tsx getSpaceFrontPage for the rationale (incl. why this is gated
-  // to the test env). When the indexer's space record has no home entity id,
-  // treat spaceId as the synthetic home-entity id AND fetch the entity at that
-  // id so published values surface here (not just space.entity which is empty
-  // in that case).
-  if (!entity.id && space?.id && process.env.NEXT_PUBLIC_IS_TEST_ENV === 'true') {
-    const synthetic = await cachedFetchEntityPage(space.id, space.id);
-    const syntheticEntity = synthetic?.entity ?? null;
-    return {
-      id: space.id,
-      name: syntheticEntity?.name ?? null,
-      values: syntheticEntity?.values ?? [],
-      spaceTypes: syntheticEntity?.types ?? [],
-      relationsOut: syntheticEntity?.relations ?? [],
-    };
-  }
-
-  return {
-    name: entity?.name ?? null,
-    values: entity?.values ?? [],
-    id: entity.id,
-    spaceTypes: space?.entity?.types ?? [],
-    relationsOut: entity?.relations ?? [],
-  };
 };
 
 export type SpacePageType = 'person' | 'company' | 'nonprofit';

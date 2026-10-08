@@ -11,22 +11,35 @@ import { Publish } from '~/core/utils/publish';
 
 import {
   type DebatePublishInput,
+  buildDebateClaimsDraft,
   buildDebatePublishDraft,
+  debatePublishId,
   mergeTranscriptSegmentsIntoTurns,
+  stableClaimRelationIds,
 } from './debate-publish-draft';
 import {
   AUTHORS_PROPERTY_ID,
+  CLAIM_ADDRESSES_PROPERTY_ID,
+  CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
+  CLAIM_OPPOSES_PROPERTY_ID,
+  CLAIM_START_OFFSET_PROPERTY_ID,
+  CLAIM_SUPPORTS_PROPERTY_ID,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
   DEBATE_SUPPORTED_BY_PROPERTY_ID,
+  DEBATE_TRANSCRIPTS_PROPERTY_ID,
   DEBATE_TYPE_ID,
+  DEBATE_VIDEOS_PROPERTY_ID,
   IMAGE_TYPE_ID,
   IMAGE_URL_PROPERTY_ID,
   KEY_FRAME_IMAGE_PROPERTY_ID,
   NAME_PROPERTY_ID,
   OG_IMAGE_PROPERTY_ID,
+  SELECTOR_TYPE_ID,
   SOURCES_PROPERTY_ID,
+  TARGET_PROPERTY_ID,
   TRANSCRIPT_TYPE_ID,
   TYPES_PROPERTY_ID,
   VIDEO_TYPE_ID,
@@ -74,10 +87,42 @@ function baseInput(overrides: Partial<DebatePublishInput> = {}): DebatePublishIn
 }
 
 describe('buildDebatePublishDraft', () => {
-  it('derives a deterministic dashless entity id and a "A vs. B on claim" name', () => {
+  it('derives a deterministic dashless entity id and a "claim | A vs. B" name', () => {
     const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
     expect(draft.debateEntityId).toBe('11112222333344445555666677778888');
-    expect(draft.debateName).toBe('Arturas vs. Preston on The US should have attacked Iran');
+    expect(draft.debateName).toBe('The US should have attacked Iran | Arturas vs. Preston');
+  });
+
+  it("mirrors the debated claim's topics onto the Debate, one relation per topic", () => {
+    const TOPIC_A = 'dddddddddddddddddddddddddddddddd';
+    const TOPIC_B = 'eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee';
+    const draft = buildDebatePublishDraft(
+      baseInput({
+        claimTopics: [
+          { id: TOPIC_A, name: 'Foreign policy' },
+          { id: TOPIC_B, name: 'Iran' },
+          // Same entity as TOPIC_B, dashless: one topic, one relation.
+          { id: 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee', name: 'Iran' },
+        ],
+      }),
+      { createEntityId: idFactory() }
+    );
+
+    const debateTopics = draft.relations.filter(
+      r => r.type.id === TOPICS_PROPERTY_ID && r.fromEntity.id === draft.debateEntityId
+    );
+    expect(debateTopics.map(r => [r.toEntity.id, r.toEntity.name])).toEqual([
+      [TOPIC_A, 'Foreign policy'],
+      [TOPIC_B, 'Iran'],
+    ]);
+    expect(debateTopics.every(r => r.spaceId === SPACE)).toBe(true);
+  });
+
+  it('writes no Topics on the Debate when the debated claim has none', () => {
+    const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory() });
+    expect(
+      draft.relations.filter(r => r.type.id === TOPICS_PROPERTY_ID && r.fromEntity.id === draft.debateEntityId)
+    ).toEqual([]);
   });
 
   it('names participants in slot order regardless of input order', () => {
@@ -90,7 +135,29 @@ describe('buildDebatePublishDraft', () => {
       }),
       { createEntityId: idFactory(), createPosition: () => 'a0' }
     );
-    expect(draft.debateName).toBe('Arturas vs. Preston on The US should have attacked Iran');
+    expect(draft.debateName).toBe('The US should have attacked Iran | Arturas vs. Preston');
+  });
+
+  // The Video, keyframe, share card and Transcript hang their names off the debate's, and every one
+  // of them is a `Name` value someone reads in the graph. They went unasserted while the suffix was
+  // a bare space, which is how "… vs. Preston video" survived — the qualifier ran straight onto a
+  // person's name. Pinned here so the separator cannot silently go missing from one of the four.
+  it('qualifies each derived entity name with the same separator', () => {
+    const draft = buildDebatePublishDraft(baseInput({ ogImageUrl: 'ipfs://QmShareCard' }), {
+      createEntityId: idFactory(),
+      createPosition: () => 'a0',
+    });
+
+    const namesOf = (entityIds: string[]) =>
+      entityIds.map(id => draft.values.find(v => v.entity.id === id && v.property.id === NAME_PROPERTY_ID)?.value);
+
+    const debate = 'The US should have attacked Iran | Arturas vs. Preston';
+    const named = (propertyId: string) => draft.relations.filter(r => r.type.id === propertyId).map(r => r.toEntity.id);
+
+    expect(namesOf(named(OG_IMAGE_PROPERTY_ID))).toEqual([`${debate} | share card`]);
+    expect(namesOf(named(DEBATE_VIDEOS_PROPERTY_ID))).toEqual([`${debate} | video`]);
+    expect(namesOf(named(KEY_FRAME_IMAGE_PROPERTY_ID))).toEqual([`${debate} | keyframe`]);
+    expect(namesOf(named(DEBATE_TRANSCRIPTS_PROPERTY_ID))).toEqual([`${debate} | transcript`]);
   });
 
   // Preston: "Can we also add a participants relation to both participants. This will be useful for
@@ -534,6 +601,230 @@ describe('buildDebatePublishDraft', () => {
     expect(otherOps(reusedOps)).toBeLessThan(otherOps(mintedOps));
   });
 
+  describe("geo-chat's stable claim ids (GEO-2870 D1)", () => {
+    const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';
+    const OTHER_STABLE = '6a2b3c4d5e6f40718293a4b5c6d7e8f9';
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+
+    it("mints an unmatched claim under geo-chat's id instead of a fresh one", () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'A novel point.', isFactual: true, turnIndex: 0, stableEntityId: STABLE, isContestable: true },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(claimIdByName(draft, 'A novel point.')).toBe(STABLE);
+      expect(
+        draft.relations.some(
+          r => r.fromEntity.id === STABLE && r.type.id === TYPES_PROPERTY_ID && r.toEntity.id === CLAIM_TYPE_ID
+        )
+      ).toBe(true);
+      expect(
+        draft.values.find(v => v.entity.id === STABLE && v.property.id === CLAIM_IS_FACTUAL_PROPERTY_ID)?.value
+      ).toBe('true');
+      expect(blockAuthoringClaim(draft, STABLE)).toBe(YES_SPACE);
+      expect(draft.relations.some(r => r.fromEntity.id === STABLE && r.type.id === TAG_PROPERTY_ID)).toBe(true);
+    });
+
+    it('lets an existing entity win over the stable id, which then goes unused', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'Matched after all.',
+              isFactual: true,
+              turnIndex: 0,
+              existingClaimEntityId: EXISTING,
+              stableEntityId: STABLE,
+            },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(blockAuthoringClaim(draft, EXISTING)).toBe(YES_SPACE);
+      expect(draft.values.some(v => v.entity.id === EXISTING)).toBe(false);
+      expect(draft.values.some(v => v.entity.id === STABLE)).toBe(false);
+      expect(draft.relations.some(r => r.fromEntity.id === STABLE || r.toEntity.id === STABLE)).toBe(false);
+    });
+
+    it('mints a claim stated in two turns once, and links both statements to it', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'Same point.', isFactual: true, turnIndex: 0, stableEntityId: STABLE, isContestable: true },
+            { text: 'same point', isFactual: false, turnIndex: 1, stableEntityId: STABLE, isContestable: true },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const on = (propertyId: string) =>
+        draft.values.filter(v => v.entity.id === STABLE && v.property.id === propertyId);
+      expect(on(NAME_PROPERTY_ID).map(v => v.value)).toEqual(['Same point.']);
+      expect(on(CLAIM_IS_FACTUAL_PROPERTY_ID)).toHaveLength(1);
+      const from = (propertyId: string) =>
+        draft.relations.filter(r => r.fromEntity.id === STABLE && r.type.id === propertyId);
+      expect(from(TYPES_PROPERTY_ID)).toHaveLength(1);
+      expect(from(TAG_PROPERTY_ID)).toHaveLength(1);
+      expect(from(SOURCES_PROPERTY_ID)).toHaveLength(1);
+      const statements = draft.relations.filter(
+        r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === STABLE
+      );
+      expect(statements).toHaveLength(2);
+    });
+
+    it('keeps two different stable ids as two claims, and mints a fresh id where there is none', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'First.', isFactual: null, turnIndex: 0, stableEntityId: STABLE },
+            { text: 'Second.', isFactual: null, turnIndex: 1, stableEntityId: OTHER_STABLE },
+            { text: 'Older payload.', isFactual: null, turnIndex: 1, stableEntityId: null },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(claimIdByName(draft, 'First.')).toBe(STABLE);
+      expect(claimIdByName(draft, 'Second.')).toBe(OTHER_STABLE);
+      const fresh = claimIdByName(draft, 'Older payload.');
+      expect(fresh).toBeTruthy();
+      expect([STABLE, OTHER_STABLE]).not.toContain(fresh);
+    });
+
+    it('publishes the claim under the same id however many times the draft is rebuilt', async () => {
+      // The sweep only publishes a debate whose Debate entity is absent, and a rebuilt draft (a
+      // retried sweep) now names the claim exactly as the first one did — and as geo-chat did.
+      const input = baseInput({ claims: [{ text: 'Stable.', isFactual: true, turnIndex: 0, stableEntityId: STABLE }] });
+      const first = buildDebatePublishDraft(input, { createEntityId: ID.createEntityId });
+      const second = buildDebatePublishDraft(input, { createEntityId: ID.createEntityId });
+      expect(claimIdByName(first, 'Stable.')).toBe(STABLE);
+      expect(claimIdByName(second, 'Stable.')).toBe(STABLE);
+      const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(first.values, first.relations, SPACE));
+      expect(ops.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe('early claims publish (GEO-2870 option A)', () => {
+    const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';
+    const OTHER_STABLE = '6a2b3c4d5e6f40718293a4b5c6d7e8f9';
+    const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+    const TOPIC = 'dddddddddddddddddddddddddddddddd';
+
+    const claims = [
+      {
+        text: 'Same point.',
+        isFactual: true,
+        turnIndex: 0,
+        stableEntityId: STABLE,
+        isContestable: true,
+        topics: [{ id: TOPIC, name: 'Foreign policy' }],
+      },
+      { text: 'same point', isFactual: false, turnIndex: 1, stableEntityId: STABLE, isContestable: true },
+      { text: 'Another point.', isFactual: null, turnIndex: 1, stableEntityId: OTHER_STABLE },
+      { text: 'Matched.', isFactual: true, turnIndex: 0, existingClaimEntityId: EXISTING, stableEntityId: null },
+      { text: 'Older payload.', isFactual: null, turnIndex: 0, stableEntityId: null },
+    ];
+    const input = baseInput({ claims });
+    const early = () =>
+      buildDebateClaimsDraft(
+        { spaceId: SPACE, transcriptTurns: input.transcriptTurns, claims },
+        {
+          createPosition: () => 'a0',
+        }
+      );
+
+    it('derives relation ids from their endpoints, the same every time and different per edge', () => {
+      const a = stableClaimRelationIds(STABLE, TYPES_PROPERTY_ID, CLAIM_TYPE_ID);
+      expect(stableClaimRelationIds(STABLE, TYPES_PROPERTY_ID, CLAIM_TYPE_ID)).toEqual(a);
+      // Dashed or dashless, the same edge.
+      expect(stableClaimRelationIds(ID.hexToUuid(STABLE), TYPES_PROPERTY_ID, CLAIM_TYPE_ID)).toEqual(a);
+      expect(a.id).toMatch(/^[0-9a-f]{32}$/);
+      expect(a.entityId).toMatch(/^[0-9a-f]{32}$/);
+      expect(a.id).not.toBe(a.entityId);
+      expect(stableClaimRelationIds(STABLE, TAG_PROPERTY_ID, DEBATE_TAG_ID).id).not.toBe(a.id);
+      expect(stableClaimRelationIds(OTHER_STABLE, TYPES_PROPERTY_ID, CLAIM_TYPE_ID).id).not.toBe(a.id);
+    });
+
+    it('writes only the claims minted under a stable id, each once, under its first statement', () => {
+      const draft = early();
+      expect(draft.claimIds).toEqual([STABLE, OTHER_STABLE]);
+      expect(draft.firstClaimText).toBe('Same point.');
+      const names = draft.values.filter(v => v.property.id === NAME_PROPERTY_ID).map(v => [v.entity.id, v.value]);
+      expect(names).toEqual([
+        [STABLE, 'Same point.'],
+        [OTHER_STABLE, 'Another point.'],
+      ]);
+      expect(draft.values.some(v => v.entity.id === EXISTING)).toBe(false);
+      expect(draft.values.some(v => v.value === 'Older payload.')).toBe(false);
+      const from = (id: string, propertyId: string) =>
+        draft.relations.filter(r => r.fromEntity.id === id && r.type.id === propertyId);
+      expect(from(STABLE, TYPES_PROPERTY_ID)).toHaveLength(1);
+      expect(from(STABLE, TAG_PROPERTY_ID)).toHaveLength(1);
+      expect(from(STABLE, TOPICS_PROPERTY_ID).map(r => r.toEntity.id)).toEqual([TOPIC]);
+      expect(from(OTHER_STABLE, TAG_PROPERTY_ID)).toHaveLength(0);
+    });
+
+    it('writes nothing that names the debate, so the full publish still sees it unpublished', () => {
+      const draft = early();
+      const debateEntityId = ID.uuidToHex(input.debateId);
+      expect(draft.relations.some(r => r.toEntity.id === debateEntityId || r.fromEntity.id === debateEntityId)).toBe(
+        false
+      );
+      expect(draft.values.some(v => v.entity.id === debateEntityId)).toBe(false);
+      expect(draft.relations.some(r => r.type.id === SOURCES_PROPERTY_ID)).toBe(false);
+      expect(draft.relations.some(r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID)).toBe(false);
+    });
+
+    it('is a subset of the full publish — same relation ids, same values — so publishing both duplicates nothing', () => {
+      const draft = early();
+      // Two full drafts with independent random ids: the claim-describing relations still agree.
+      for (const full of [
+        buildDebatePublishDraft(input, { createEntityId: ID.createEntityId }),
+        buildDebatePublishDraft(input, { createEntityId: ID.createEntityId }),
+      ]) {
+        const fullRelations = new Map(full.relations.map(r => [r.id, r]));
+        for (const relation of draft.relations) {
+          const match = fullRelations.get(relation.id);
+          expect(match, `${relation.type.id} from ${relation.fromEntity.id}`).toBeDefined();
+          expect(match?.entityId).toBe(relation.entityId);
+          expect(match?.fromEntity.id).toBe(relation.fromEntity.id);
+          expect(match?.toEntity.id).toBe(relation.toEntity.id);
+        }
+        const fullValues = new Map(full.values.map(v => [v.id, v.value]));
+        for (const value of draft.values) expect(fullValues.get(value.id)).toBe(value.value);
+      }
+    });
+
+    it('gives the full publish the same Sources edge on every rebuild, so a rerun cannot add a second', () => {
+      const sources = (draft: ReturnType<typeof buildDebatePublishDraft>) =>
+        draft.relations.filter(r => r.fromEntity.id === STABLE && r.type.id === SOURCES_PROPERTY_ID).map(r => r.id);
+      const first = sources(buildDebatePublishDraft(input, { createEntityId: ID.createEntityId }));
+      expect(first).toHaveLength(1);
+      expect(sources(buildDebatePublishDraft(input, { createEntityId: ID.createEntityId }))).toEqual(first);
+    });
+
+    it('skips a claim whose turn is blank or missing, as the full publish does', () => {
+      const draft = buildDebateClaimsDraft({
+        spaceId: SPACE,
+        transcriptTurns: [{ turnIndex: 0, speakerSpaceEntityId: YES_SPACE, speakerName: 'A', text: '   ' }],
+        claims: [
+          { text: 'On a blank turn.', isFactual: null, turnIndex: 0, stableEntityId: STABLE },
+          { text: 'On no turn.', isFactual: null, turnIndex: 7, stableEntityId: OTHER_STABLE },
+        ],
+      });
+      expect(draft.claimIds).toEqual([]);
+      expect(draft.values).toEqual([]);
+      expect(draft.relations).toEqual([]);
+    });
+
+    it('prepares into ops', async () => {
+      const draft = early();
+      const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
+      expect(ops.length).toBeGreaterThan(0);
+    });
+  });
+
   it('mints no Claim entities when no claims are provided (backwards compatible)', () => {
     const draft = buildDebatePublishDraft(baseInput(), { createEntityId: idFactory(), createPosition: () => 'a0' });
     expect(draft.relations.some(r => r.type.id === TYPES_PROPERTY_ID && r.toEntity.id === CLAIM_TYPE_ID)).toBe(false);
@@ -550,6 +841,344 @@ describe('buildDebatePublishDraft', () => {
     expect(draft.values.some(v => v.value === 'Ghost claim')).toBe(false);
   });
 
+  describe('claim timecodes (GEO-2958)', () => {
+    const statementOf = (draft: ReturnType<typeof buildDebatePublishDraft>, claimText: string) => {
+      const claimId = claimIdByName(draft, claimText);
+      const statements = draft.relations.filter(
+        r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === claimId
+      );
+      expect(statements).toHaveLength(1);
+      return statements[0].entityId;
+    };
+    const offsetsOn = (draft: ReturnType<typeof buildDebatePublishDraft>, entityId: string) =>
+      draft.values
+        .filter(v => v.entity.id === entityId)
+        .map(v => ({ property: v.property.id, dataType: v.property.dataType, value: v.value }));
+    const relationsFrom = (draft: ReturnType<typeof buildDebatePublishDraft>, entityId: string) =>
+      draft.relations.filter(r => r.fromEntity.id === entityId).map(r => [r.type.id, r.toEntity.id]);
+
+    it('writes a measured span onto the block → claim relation entity, typed as a Selector on the video', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [{ text: 'Timed claim', isFactual: false, turnIndex: 0, timing: { startMs: 16_680, endMs: 21_900 } }],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Timed claim');
+
+      // The hand-published shape: two Integer values and two relations on the relation's entity —
+      // not on the claim, which can be said in two turns, and not on the block.
+      expect(offsetsOn(draft, statement)).toEqual([
+        { property: CLAIM_START_OFFSET_PROPERTY_ID, dataType: 'INTEGER', value: '16680' },
+        { property: CLAIM_END_OFFSET_PROPERTY_ID, dataType: 'INTEGER', value: '21900' },
+      ]);
+      expect(relationsFrom(draft, statement)).toEqual([
+        [TYPES_PROPERTY_ID, SELECTOR_TYPE_ID],
+        [TARGET_PROPERTY_ID, DEBATE_VIDEOS_PROPERTY_ID],
+      ]);
+      const claimId = claimIdByName(draft, 'Timed claim');
+      expect(
+        draft.values.some(
+          v =>
+            v.entity.id === claimId &&
+            (v.property.id === CLAIM_START_OFFSET_PROPERTY_ID || v.property.id === CLAIM_END_OFFSET_PROPERTY_ID)
+        )
+      ).toBe(false);
+    });
+
+    it('writes the highlight score onto the same relation entity as a Float, beside the offsets', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'Scored claim',
+              isFactual: false,
+              turnIndex: 0,
+              timing: { startMs: 16_680, endMs: 21_900 },
+              highlightScore: 0.62,
+            },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Scored claim');
+      expect(offsetsOn(draft, statement)).toEqual([
+        { property: CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, dataType: 'FLOAT', value: '0.62' },
+        { property: CLAIM_START_OFFSET_PROPERTY_ID, dataType: 'INTEGER', value: '16680' },
+        { property: CLAIM_END_OFFSET_PROPERTY_ID, dataType: 'INTEGER', value: '21900' },
+      ]);
+      // Not on the claim: a claim reused across debates carries a different score in each.
+      const claimId = claimIdByName(draft, 'Scored claim');
+      expect(
+        draft.values.some(v => v.entity.id === claimId && v.property.id === CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID)
+      ).toBe(false);
+    });
+
+    it('writes a score without a timing: the two are independent facts about the statement', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'Scored, untimed', isFactual: false, turnIndex: 0, highlightScore: 0 }] }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Scored, untimed');
+      expect(offsetsOn(draft, statement)).toEqual([
+        { property: CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, dataType: 'FLOAT', value: '0' },
+      ]);
+      expect(relationsFrom(draft, statement)).toEqual([]);
+    });
+
+    it('carries the score through the real publish op pipeline as a float, exactly', async () => {
+      const scores = [0.62, 1e-7, 0, 1, 0.1 + 0.2, 0.9999999999999999];
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: scores.map((highlightScore, i) => ({
+            text: `Scored claim ${i}`,
+            isFactual: false,
+            turnIndex: 0,
+            highlightScore,
+          })),
+        }),
+        { createEntityId: ID.createEntityId }
+      );
+      const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
+      // Ids travel as 16-byte arrays in the ops; compare the property as hex.
+      const hex = (bytes: unknown) =>
+        Array.from(Object.values(bytes as Record<string, number>), byte => byte.toString(16).padStart(2, '0')).join('');
+      const published = ops
+        .flatMap(op => (op.type === 'updateEntity' && Array.isArray(op.set) ? op.set : []))
+        .filter(set => hex(set.property) === CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID)
+        .map(set => set.value);
+      // One float per scored claim, the same double in and out: a change to how FLOAT values are
+      // converted (a string, an integer, `|| 0` eating a value) would show up here.
+      expect(published).toEqual(scores.map(value => ({ type: 'float', value })));
+    });
+
+    // The player ranks by this, so a stand-in would rank.
+    it.each([
+      ['no score', undefined],
+      ['a null score', null],
+      ['a score over 1', 1.2],
+      ['a negative score', -0.1],
+      ['a non-finite score', Number.NaN],
+    ])('writes no score for %s', (_label, highlightScore) => {
+      const draft = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'Unscored claim', isFactual: false, turnIndex: 0, highlightScore }] }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(offsetsOn(draft, statementOf(draft, 'Unscored claim'))).toEqual([]);
+    });
+
+    // Each of these would be published as a to-the-second certainty the app cannot demote.
+    it.each([
+      ['no timing', undefined],
+      ['a null timing', null],
+      ['an end at the start', { startMs: 5_000, endMs: 5_000 }],
+      ['an end before the start', { startMs: 5_000, endMs: 4_000 }],
+      ['a negative start', { startMs: -1, endMs: 4_000 }],
+      ['a fractional value', { startMs: 1_000.5, endMs: 4_000 }],
+      ['a non-finite value', { startMs: 1_000, endMs: Number.POSITIVE_INFINITY }],
+    ])('writes nothing on the relation entity for %s', (_label, timing) => {
+      const draft = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'Untimed claim', isFactual: false, turnIndex: 0, timing }] }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statement = statementOf(draft, 'Untimed claim');
+      expect(offsetsOn(draft, statement)).toEqual([]);
+      expect(relationsFrom(draft, statement)).toEqual([]);
+    });
+
+    it('times each statement of a reused claim on its own block', () => {
+      const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'Said by both',
+              isFactual: false,
+              turnIndex: 0,
+              existingClaimEntityId: EXISTING,
+              timing: { startMs: 1_000, endMs: 9_000 },
+            },
+            {
+              text: 'Said by both',
+              isFactual: false,
+              turnIndex: 1,
+              existingClaimEntityId: EXISTING,
+              timing: { startMs: 61_000, endMs: 70_000 },
+            },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const statements = draft.relations.filter(
+        r => r.type.id === DEBATE_CLAIMS_PROPERTY_ID && r.toEntity.id === EXISTING
+      );
+      expect(statements).toHaveLength(2);
+      expect(statements.map(r => offsetsOn(draft, r.entityId).map(v => v.value))).toEqual([
+        ['1000', '9000'],
+        ['61000', '70000'],
+      ]);
+      // Still nothing written onto the entity we did not create.
+      expect(draft.values.some(v => v.entity.id === EXISTING)).toBe(false);
+    });
+
+    it('survives the real publish pipeline as integer values on the relation entity', async () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'Timed claim', isFactual: true, turnIndex: 0, timing: { startMs: 134_600, endMs: 143_140 } },
+          ],
+        }),
+        { createEntityId: ID.createEntityId }
+      );
+      const statement = statementOf(draft, 'Timed claim');
+      const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
+      const serialized = JSON.stringify(ops, (_key, value) => (typeof value === 'bigint' ? value.toString() : value));
+      expect(serialized).toContain('134600');
+      expect(serialized).toContain('143140');
+      expect(ops.length).toBeGreaterThan(0);
+      expect(statement).toBeTruthy();
+    });
+  });
+
+  describe('claim stance toward the motion (GEO-3142)', () => {
+    const STANCE_PROPERTY_IDS = [CLAIM_SUPPORTS_PROPERTY_ID, CLAIM_OPPOSES_PROPERTY_ID, CLAIM_ADDRESSES_PROPERTY_ID];
+    const stanceRelations = (draft: ReturnType<typeof buildDebatePublishDraft>) =>
+      draft.relations.filter(r => STANCE_PROPERTY_IDS.includes(r.type.id));
+
+    it('writes exactly one Supports / Opposes / Addresses relation per claim, to the motion, in the space', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'Iran was months from a weapon.', isFactual: false, turnIndex: 0, stance: 'supports' },
+            // A concession by the "yes" speaker: the verdict is the claim's, not the speaker's side.
+            { text: 'Strikes rarely end a nuclear programme.', isFactual: false, turnIndex: 0, stance: 'opposes' },
+            { text: 'Congress has not declared war since 1942.', isFactual: true, turnIndex: 1, stance: 'addresses' },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const relations = stanceRelations(draft);
+      expect(relations).toHaveLength(3);
+      for (const relation of relations) {
+        expect(relation.toEntity.id).toBe(CLAIM_ENTITY);
+        expect(relation.spaceId).toBe(SPACE);
+      }
+      const typeFrom = (name: string) => relations.find(r => r.fromEntity.id === claimIdByName(draft, name))?.type.id;
+      expect(typeFrom('Iran was months from a weapon.')).toBe(CLAIM_SUPPORTS_PROPERTY_ID);
+      expect(typeFrom('Strikes rarely end a nuclear programme.')).toBe(CLAIM_OPPOSES_PROPERTY_ID);
+      expect(blockAuthoringClaim(draft, claimIdByName(draft, 'Strikes rarely end a nuclear programme.'))).toBe(
+        YES_SPACE
+      );
+      expect(typeFrom('Congress has not declared war since 1942.')).toBe(CLAIM_ADDRESSES_PROPERTY_ID);
+    });
+
+    it('writes no stance relation for a claim without a verdict', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            { text: 'Unjudged.', isFactual: false, turnIndex: 0, stance: null },
+            { text: 'From an older payload.', isFactual: false, turnIndex: 1 },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(stanceRelations(draft)).toHaveLength(0);
+      expect(claimIdByName(draft, 'Unjudged.')).toBeDefined();
+    });
+
+    it('writes one relation when several statements resolve to the same claim entity', () => {
+      const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+      const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'Reused once.',
+              isFactual: false,
+              turnIndex: 0,
+              existingClaimEntityId: EXISTING,
+              stance: 'supports',
+            },
+            {
+              text: 'Reused twice.',
+              isFactual: false,
+              turnIndex: 1,
+              existingClaimEntityId: EXISTING,
+              stance: 'opposes',
+            },
+            { text: 'Stable.', isFactual: false, turnIndex: 0, stableEntityId: STABLE, stance: 'addresses' },
+            { text: 'Stable again.', isFactual: false, turnIndex: 1, stableEntityId: STABLE, stance: 'addresses' },
+            { text: 'Verbatim.', isFactual: false, turnIndex: 0, stance: 'opposes' },
+            { text: 'Verbatim.', isFactual: false, turnIndex: 1, stance: 'opposes' },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      const relations = stanceRelations(draft);
+      expect(relations.filter(r => r.fromEntity.id === EXISTING)).toHaveLength(1);
+      // The first statement in transcript order decides.
+      expect(relations.find(r => r.fromEntity.id === EXISTING)?.type.id).toBe(CLAIM_SUPPORTS_PROPERTY_ID);
+      expect(relations.filter(r => r.fromEntity.id === STABLE)).toHaveLength(1);
+      expect(relations).toHaveLength(3);
+    });
+
+    it('never relates the motion to itself', () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({
+          claims: [
+            {
+              text: 'The motion, restated.',
+              isFactual: false,
+              turnIndex: 0,
+              stableEntityId: CLAIM_ENTITY,
+              stance: 'supports',
+            },
+          ],
+        }),
+        { createEntityId: idFactory(), createPosition: () => 'a0' }
+      );
+      expect(stanceRelations(draft)).toHaveLength(0);
+    });
+
+    it('writes no stance relation in a question debate, but keeps every other claim link', () => {
+      const input = baseInput({
+        subjectKind: 'question',
+        claims: [
+          { text: 'Open models speed up research.', isFactual: false, turnIndex: 0, stance: 'supports' },
+          { text: 'Labs publish model cards.', isFactual: true, turnIndex: 1, stance: 'addresses' },
+        ],
+      });
+      const draft = buildDebatePublishDraft(input, { createEntityId: idFactory(), createPosition: () => 'a0' });
+      expect(stanceRelations(draft)).toHaveLength(0);
+      const claimId = claimIdByName(draft, 'Open models speed up research.');
+      expect(blockAuthoringClaim(draft, claimId)).toBe(YES_SPACE);
+      expect(
+        draft.relations.some(
+          r =>
+            r.type.id === SOURCES_PROPERTY_ID && r.fromEntity.id === claimId && r.toEntity.id === draft.debateEntityId
+        )
+      ).toBe(true);
+    });
+
+    it('stance relations survive the real publish pipeline', async () => {
+      const draft = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'A reason against.', isFactual: false, turnIndex: 1, stance: 'opposes' }] }),
+        { createEntityId: ID.createEntityId }
+      );
+      expect(stanceRelations(draft)).toHaveLength(1);
+      const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
+      const without = buildDebatePublishDraft(
+        baseInput({ claims: [{ text: 'A reason against.', isFactual: false, turnIndex: 1 }] }),
+        { createEntityId: ID.createEntityId }
+      );
+      const opsWithout = await Effect.runPromise(
+        Publish.prepareLocalDataForPublishing(without.values, without.relations, SPACE)
+      );
+      // The relation becomes exactly one more op.
+      expect(ops.length).toBe(opsWithout.length + 1);
+    });
+  });
+
   it('claim ops (incl. the boolean) survive the real publish pipeline', async () => {
     const draft = buildDebatePublishDraft(
       baseInput({ claims: [{ text: 'Verifiable thing', isFactual: true, turnIndex: 0 }] }),
@@ -557,6 +1186,85 @@ describe('buildDebatePublishDraft', () => {
     );
     const ops = await Effect.runPromise(Publish.prepareLocalDataForPublishing(draft.values, draft.relations, SPACE));
     expect(ops.length).toBeGreaterThan(0);
+  });
+});
+
+// The sweep's "already published" check reads the indexer, so while the indexer lags the same debate
+// is published again. On 2026-10-05 that wrote 11 to 16 copies of three debates. Every id the draft
+// mints is derived from the debate, so a second publish rewrites the first instead of copying it.
+describe('buildDebatePublishDraft ids across republishes', () => {
+  const STABLE = '5e1f0c3a9b2d4e6f8a7b6c5d4e3f2a1b';
+  const EXISTING = '4f12f5ea073442cbaa0fb10f70a9a876';
+  const republishable = (overrides: Partial<DebatePublishInput> = {}) =>
+    baseInput({
+      ogImageUrl: 'ipfs://bafyogcard',
+      claimTopics: [{ id: 'dddddddddddddddddddddddddddddddd', name: 'Foreign policy' }],
+      claims: [
+        { text: 'Iran was close to a weapon.', isFactual: true, turnIndex: 0, isContestable: true },
+        // Verbatim twins in one turn: an older payload's fresh-id claims stay two entities.
+        { text: 'Iran was close to a weapon.', isFactual: true, turnIndex: 0 },
+        { text: 'Stable claim.', isFactual: null, turnIndex: 1, stableEntityId: STABLE, isContestable: true },
+        { text: 'Matched claim.', isFactual: false, turnIndex: 1, existingClaimEntityId: EXISTING },
+      ],
+      ...overrides,
+    });
+  const idsOf = (draft: ReturnType<typeof buildDebatePublishDraft>) => ({
+    values: draft.values.map(v => [v.id, v.entity.id, v.property.id]),
+    relations: draft.relations.map(r => [r.id, r.entityId, r.fromEntity.id, r.type.id, r.toEntity.id]),
+  });
+
+  it('writes the same entity, relation and value ids when the same debate is published again', () => {
+    const first = buildDebatePublishDraft(republishable());
+    const second = buildDebatePublishDraft(republishable());
+
+    expect(idsOf(second)).toEqual(idsOf(first));
+    expect(first.relations.length).toBeGreaterThan(20);
+  });
+
+  it('keeps every id unique within one edit, even when the input repeats itself', () => {
+    const draft = buildDebatePublishDraft(
+      republishable({
+        // The same person on both sides: two Participants edges from the Debate to one entity.
+        participants: [
+          { spaceEntityId: YES_SPACE, displayName: 'Arturas', position: true, participantSlot: 1 },
+          { spaceEntityId: YES_SPACE, displayName: 'Arturas', position: false, participantSlot: 2 },
+        ],
+      })
+    );
+    const relationIds = draft.relations.flatMap(r => [r.id, r.entityId]);
+    expect(new Set(relationIds).size).toBe(relationIds.length);
+    const valueIds = draft.values.map(v => v.id);
+    expect(new Set(valueIds).size).toBe(valueIds.length);
+    const minted = draft.values
+      .filter(v => v.property.id === SystemIds.NAME_PROPERTY && v.value === 'Iran was close to a weapon.')
+      .map(v => v.entity.id);
+    expect(new Set(minted).size).toBe(2);
+  });
+
+  it('derives the ids from the debate, so two debates share none of their own', () => {
+    const a = buildDebatePublishDraft(republishable());
+    const b = buildDebatePublishDraft(republishable({ debateId: '99992222-3333-4444-5555-666677778888' }));
+    const ids = (draft: typeof a) => new Set(draft.relations.map(r => r.id));
+    const shared = [...ids(a)].filter(id => ids(b).has(id));
+    // Only a stable claim's own relations, which are keyed on the claim rather than the debate (its
+    // Sources edge points at each debate, so even that one differs).
+    const stableIds = new Set(a.relations.filter(r => r.fromEntity.id === STABLE).map(r => r.id));
+    expect(shared.length).toBeGreaterThan(0);
+    expect(shared.every(id => stableIds.has(id))).toBe(true);
+    expect(a.relations.find(r => r.type.id === TYPES_PROPERTY_ID && r.fromEntity.id === a.debateEntityId)?.id).toBe(
+      debatePublishId(a.debateEntityId, `relation:${a.debateEntityId}:${TYPES_PROPERTY_ID}:${DEBATE_TYPE_ID}`)
+    );
+  });
+
+  it("leaves a stable claim's relations on the ids the early claims publish uses", () => {
+    const draft = buildDebatePublishDraft(republishable());
+    const types = draft.relations.find(r => r.fromEntity.id === STABLE && r.type.id === TYPES_PROPERTY_ID);
+    expect(types?.id).toBe(stableClaimRelationIds(STABLE, TYPES_PROPERTY_ID, CLAIM_TYPE_ID).id);
+  });
+
+  it('still takes ids from an injected factory', () => {
+    const draft = buildDebatePublishDraft(republishable(), { createEntityId: idFactory() });
+    expect(draft.relations.every(r => r.fromEntity.id === STABLE || r.id.startsWith('id'))).toBe(true);
   });
 });
 

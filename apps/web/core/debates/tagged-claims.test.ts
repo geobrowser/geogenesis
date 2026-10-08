@@ -7,7 +7,7 @@ import * as Effect from 'effect/Effect';
 import { type Mock, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { graphql } from '~/core/io/graphql-client';
-import { getResultsPage } from '~/core/io/queries';
+import { getEntityNames, getResultsPage } from '~/core/io/queries';
 
 import {
   NO_TAGGED_CLAIM_FILTERS,
@@ -29,8 +29,9 @@ const graphqlMock = graphql as unknown as Mock;
 
 // Search is answered by the REST endpoint now (GEO-2898), so it is a dependency of this module
 // rather than part of the filter it builds.
-vi.mock('~/core/io/queries', () => ({ getResultsPage: vi.fn() }));
+vi.mock('~/core/io/queries', () => ({ getResultsPage: vi.fn(), getEntityNames: vi.fn() }));
 const searchMock = getResultsPage as unknown as Mock;
+const entityNamesMock = getEntityNames as unknown as Mock;
 
 /**
  * Pages of `/search` results, as ids, answered by the offset they were asked for.
@@ -66,6 +67,7 @@ function sentSearchArgs(call = 0) {
 beforeEach(() => {
   graphqlMock.mockReset();
   searchMock.mockReset();
+  entityNamesMock.mockReset();
 });
 
 function Wrapper({ children }: { children: React.ReactNode }) {
@@ -158,59 +160,6 @@ function sentQuery(call = 0) {
   const { query } = graphqlMock.mock.calls[call][0];
   return JSON.stringify(query);
 }
-
-/**
- * What the server returned, as against what survived decoding.
- *
- * `useBoundedPaging` counts this to know a page *landed*, so it has to mean exactly that — a page
- * whose nodes all lack a name decodes to nothing and must still be charged, and a page that is not
- * this filter's must not be charged at all.
- */
-describe('the count of what was fetched', () => {
-  it('counts nodes the decoder dropped, which a page of them would otherwise hide', async () => {
-    respondWithPages([[node('a', 'Kept'), node('b', null), node('c', 'No tag space', { tagSpaces: [] })]]);
-
-    const { result } = renderClaims();
-
-    await waitFor(() => expect(result.current.claims).toHaveLength(1));
-    expect(result.current.fetched).toBe(3);
-  });
-
-  /**
-   * And reports nothing while the previous filter's pages are being held.
-   *
-   * `keepPreviousData` is right for the list — narrowing should narrow rather than blank and refill
-   * — but a count is not a list. The caller has already reset its paging budget for the new filter,
-   * so handing it the old one's total charges a page belonging to a different question, and the
-   * real first page then arrives at an equal or smaller count and is never evaluated.
-   */
-  it('reports nothing while the previous filter’s pages are still what it holds', async () => {
-    respondWithPages([[node('a', 'First filter'), node('b', 'Also first')]]);
-    const { result, rerender } = renderHook(
-      ({ filters }: { filters: TaggedClaimFilters }) => useTaggedClaims(TAG, filters, true),
-      {
-        wrapper: Wrapper,
-        initialProps: { filters: NO_TAGGED_CLAIM_FILTERS },
-      }
-    );
-    await waitFor(() => expect(result.current.fetched).toBe(2));
-
-    // A different filter, whose own page has not arrived: the list is held, the count is not.
-    let release: (() => void) | undefined;
-    graphqlMock.mockImplementation(
-      ({ decoder }) =>
-        new Promise(resolve => {
-          release = () =>
-            resolve(decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes: [] } }));
-        })
-    );
-    rerender({ filters: { ...NO_TAGGED_CLAIM_FILTERS, search: 'nuclear' } });
-
-    await waitFor(() => expect(result.current.claims).toHaveLength(2));
-    expect(result.current.fetched).toBe(0);
-    release?.();
-  });
-});
 
 describe('the page it asks for', () => {
   it('orders by ranking score on the server', async () => {
@@ -318,6 +267,32 @@ function tagClause(variables: any) {
 }
 
 describe('the filter it builds', () => {
+  /**
+   * "Hide my positions" is answered by the server (GEO-2894): an anti-join through the vote table,
+   * negated, so a page is fifty claims the viewer has not answered. Held positions only — kind 1,
+   * types 0 and 1 — so a claim somebody took their side back on counts as unanswered.
+   */
+  it('leaves out what the viewer has answered when asked to', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({
+      ...NO_TAGGED_CLAIM_FILTERS,
+      excludeAnsweredBy: '019fedae-72b6-7ab2-927a-df044d57c500',
+    });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and).toContainEqual({
+      not: { votedBy: { userId: '019fedae72b67ab2927adf044d57c500', kinds: [1], types: [0, 1] } },
+    });
+  });
+
+  it('leaves nothing out when not asked to', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, excludeAnsweredBy: null });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(sentVariables().filter.and.some((clause: any) => clause.not !== undefined)).toBe(false);
+  });
+
   it('always asks for the tag', async () => {
     respondWithPages([[node('a1', 'One')]]);
     const { result } = renderClaims();
@@ -794,21 +769,16 @@ describe('the filter it builds', () => {
 
 describe('the facet menus', () => {
   function respondWithGroups(groups: Array<{ id: string; count: number }>) {
-    graphqlMock.mockImplementation(({ decoder, variables }) => {
-      // The names query answers separately; it is the only one taking `ids`.
-      if ((variables as any).ids) {
-        // Answers dashless, as the connection does, whatever spelling it was asked with.
-        return Effect.succeed(
-          decoder({
-            entitiesConnection: {
-              nodes: (variables as any).ids.map((id: string) => {
-                const dashless = id.replace(/-/g, '');
-                return { id: dashless, name: `Topic ${dashless}` };
-              }),
-            },
-          })
-        );
-      }
+    // The names answer separately, dashless as `entities` answers, whatever spelling they were asked with.
+    entityNamesMock.mockImplementation((ids: string[]) =>
+      Effect.succeed(
+        ids.map(id => {
+          const dashless = id.replace(/-/g, '');
+          return { id: dashless, name: `Topic ${dashless}` };
+        })
+      )
+    );
+    graphqlMock.mockImplementation(({ decoder }) => {
       return Effect.succeed(
         decoder({
           relationsConnection: {
@@ -1004,5 +974,173 @@ describe('the facet menus', () => {
     // An error leaves the menu empty while it stops loading. Read as settled, that empty menu says
     // the viewer's picked space no longer exists, and the reconciliation spends their selection.
     expect(result.current.settled).toBe(false);
+  });
+});
+
+/**
+ * GEO-3223. A search also matches claims through their topics' names: the picker hands over the
+ * topics the text named, and a claim carrying one answers the search as well as a text match does.
+ */
+describe('claims a search reaches through a topic', () => {
+  const NAMED_TOPIC = '9a1f3c0b2d4e4f5a8b6c7d8e9f0a1b2c';
+
+  /** Answers the search's own row pages by id, and the topic request with `topicRows`. */
+  function respondWithSearchAndTopicRows(textRows: unknown[], topicRows: unknown[]) {
+    graphqlMock.mockImplementation(({ decoder, variables }) => {
+      const and = ((variables as any)?.filter?.and ?? []) as any[];
+      const viaTopic = and.some(clause => clause.relations?.some?.toEntityId?.in);
+      const asked = and.find(clause => clause.id?.in)?.id?.in as string[] | undefined;
+      const nodes = viaTopic
+        ? topicRows
+        : asked
+          ? textRows.filter(row => asked.includes((row as { id: string }).id))
+          : textRows;
+      return Effect.succeed(
+        decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } })
+      );
+    });
+  }
+
+  const searching: TaggedClaimFilters = {
+    ...NO_TAGGED_CLAIM_FILTERS,
+    search: 'nuclear',
+    searchTopicIds: [NAMED_TOPIC],
+  };
+
+  it('lists the topic matches after the text matches, once each', async () => {
+    respondWithSearch([['a1']]);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('a1', 'Text match'), node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+
+    await waitFor(() => expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1', 't1']));
+  });
+
+  it('asks for the topic matches by topic, and keeps them out of the search pages', async () => {
+    respondWithSearch([['a1']]);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    const filters = graphqlMock.mock.calls.map(call => JSON.stringify(call[0].variables.filter));
+    const topicRequest = filters.find(filter => filter.includes(NAMED_TOPIC));
+    expect(topicRequest).toBeDefined();
+    // A search page names its ids only; with the topic in there it would return the topic matches
+    // again on every page.
+    const pageRequest = filters.find(filter => filter.includes('"in":["a1"]'));
+    expect(pageRequest).not.toContain(NAMED_TOPIC);
+  });
+
+  it('holds the topic matches back while the text search has pages left', async () => {
+    // Two text matches, one page of them in hand.
+    respondWithSearch([['a1']], 2);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+
+    await waitFor(() => expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1']));
+    expect(result.current.hasNextPage).toBe(true);
+  });
+
+  it('counts the topic matches in the facets, beside the text matches', async () => {
+    respondWithSearch([['a1']]);
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(decoder({ relationsConnection: { groupedAggregates: [] } }))
+    );
+    renderHook(() => useTaggedSpaceFacet(TAG, searching, true), { wrapper: Wrapper });
+
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+    const and = sentVariables().fromEntity.and as any[];
+    expect(and).toContainEqual({
+      or: [
+        { id: { in: ['a1'] } },
+        { relations: { some: { typeId: { is: expect.any(String) }, toEntityId: { in: [NAMED_TOPIC] } } } },
+      ],
+    });
+  });
+
+  it('adds nothing when no search is running', async () => {
+    respondWithPages([[node('b1', 'Browsed')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, searchTopicIds: [NAMED_TOPIC] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(JSON.stringify(sentVariables().filter)).not.toContain(NAMED_TOPIC);
+  });
+});
+
+/**
+ * GEO-3223. The debate again picker puts spaces and topics in one row of pills that narrow together,
+ * so picked spaces are AND there: a claim tagged in every one of them, and a space facet counted as
+ * co-occurrence over the narrowed list.
+ */
+describe('spaces matched all at once', () => {
+  const allSpaces: TaggedClaimFilters = {
+    ...NO_TAGGED_CLAIM_FILTERS,
+    spaceIds: [SPACE, OTHER_SPACE],
+    spaceMatch: 'all',
+  };
+
+  const tagIn = (spaceId: string) => ({
+    relations: { some: { typeId: { is: expect.any(String) }, toEntityId: { is: TAG }, spaceId: { is: spaceId } } },
+  });
+
+  it('asks for claims tagged in every picked space', async () => {
+    respondWithPages([[node('a1', 'One', { tagSpaces: [SPACE, OTHER_SPACE] })]]);
+    const { result } = renderClaims(allSpaces);
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const and = sentVariables().filter.and as any[];
+    expect(and).toContainEqual(tagIn(SPACE));
+    expect(and).toContainEqual(tagIn(OTHER_SPACE));
+    // And the tag clause itself is not narrowed to "any of them", which would undo the AND.
+    expect(JSON.stringify(and[0])).not.toContain(OTHER_SPACE);
+  });
+
+  it('counts the space facet over the narrowed list, picked spaces included', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(decoder({ relationsConnection: { groupedAggregates: [] } }))
+    );
+    renderHook(() => useTaggedSpaceFacet(TAG, allSpaces, true), { wrapper: Wrapper });
+
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+    const and = sentVariables().fromEntity.and as any[];
+    expect(and).toContainEqual(tagIn(SPACE));
+    expect(and).toContainEqual(tagIn(OTHER_SPACE));
+  });
+
+  it('leaves the hub’s "any of them" alone', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...allSpaces, spaceMatch: undefined });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const and = sentVariables().filter.and as any[];
+    expect(and[0].relations.some.spaceId).toEqual({ in: [SPACE, OTHER_SPACE] });
+    expect(and).not.toContainEqual(tagIn(SPACE));
+  });
+});
+
+/** GEO-3223. The picker needs a distinct claim count, which the space buckets cannot give. */
+describe('the total it reports', () => {
+  function respondWithTotal(nodes: unknown[], totalCount: number) {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(
+        decoder({ entitiesConnection: { totalCount, pageInfo: { hasNextPage: false, endCursor: null }, nodes } })
+      )
+    );
+  }
+
+  it('reports the server’s distinct total while browsing', async () => {
+    respondWithTotal([node('a1', 'One', { tagSpaces: [SPACE, OTHER_SPACE] })], 1);
+    const { result } = renderClaims();
+
+    await waitFor(() => expect(result.current.totalCount).toBe(1));
+    expect(sentQuery()).toContain('totalCount');
+  });
+
+  it('reports no total while a search runs', async () => {
+    respondWithSearch([['a1']]);
+    respondWithTotal([node('a1', 'One')], 1);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'one' });
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(result.current.totalCount).toBeNull();
   });
 });

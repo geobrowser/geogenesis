@@ -3,10 +3,12 @@
 import * as React from 'react';
 
 import { availableBountyCta } from '~/core/bounties/community-adapter';
+import { useQueuedBountyInterest } from '~/core/bounties/use-queued-bounty-interest';
 import type { BountyContributor, SpaceBounty } from '~/core/community/bounty-types';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 
 import { Avatar } from '~/design-system/avatar';
 
@@ -239,25 +241,57 @@ const INTEREST_BUTTON_CLASS =
  * the viewer to this bounty:
  */
 function InterestButton({
+  bountyId,
   isInterested,
   isPending,
   isInterestLoading,
+  isInterestKnown,
   canRegisterInterest,
+  canApply,
   onClick,
 }: {
   isInterested: boolean;
   isPending: boolean;
   /** Interest state is still unknown; every bounty reads as un-registered until it settles. */
   isInterestLoading: boolean;
+  /** The viewer's interest was read successfully — not merely finished loading. */
+  isInterestKnown: boolean;
   canRegisterInterest: boolean;
-  onClick: () => void;
+  /** Whether the bounty still takes interest (it may have ended or filled since the press). */
+  canApply: boolean;
+  /** Registers interest; resolves whether it was recorded. */
+  onClick: () => Promise<boolean>;
+  bountyId: string;
 }) {
   const { smartAccount } = useSmartAccount();
-  const openPrivySignIn = usePrivySignIn();
+  const openPrivySignIn = usePrivySignIn(undefined, {
+    analytics: {
+      component: 'bounty_interest',
+      target_id: bountyId,
+      target_type: 'bounty',
+      auth_control: 'express_interest',
+      auth_intent: 'bounty_interest',
+      auth_continuation: 'queued',
+    },
+  });
+  // Pressed before the account could publish it — signed out, or the personal space still being
+  // made — queued, and drawn as registered, until it can.
+  const queuedInterest = useQueuedBountyInterest(bountyId, {
+    // The interest query only runs once the space is known, so both have to have answered — and
+    // answered successfully: a failed read is not loading either, and reads as "not interested",
+    // which would publish a duplicate for a viewer who had applied.
+    ready: canRegisterInterest && isInterestKnown,
+    alreadyInterested: isInterested,
+    eligible: canApply,
+    register: onClick,
+  });
 
   const isLoggedIn = Boolean(smartAccount?.account.address);
+  // Without a space, queued only while one is being made — with no setup under way, nothing would
+  // publish it, so the button stays disabled and says why.
+  const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
 
-  if (isInterested) {
+  if (isInterested || queuedInterest.queued) {
     return <span className={`${INTEREST_BUTTON_CLASS} bg-grey-01 text-grey-04`}>Awaiting allocation</span>;
   }
 
@@ -268,15 +302,23 @@ function InterestButton({
         event.stopPropagation();
 
         if (!isLoggedIn) {
-          openPrivySignIn();
+          queuedInterest.queue();
+          // A dismissed sign-in withdraws it, so walking away never registers interest later.
+          openPrivySignIn(undefined, { onCancel: queuedInterest.cancel });
+          return;
+        }
+        if (!canRegisterInterest) {
+          if (isAccountSetupPending) queuedInterest.queue();
           return;
         }
 
-        onClick();
+        void onClick();
       }}
-      disabled={isPending || (isLoggedIn && (isInterestLoading || !canRegisterInterest))}
+      disabled={isPending || (isLoggedIn && (isInterestLoading || (!canRegisterInterest && !isAccountSetupPending)))}
       title={
-        !isLoggedIn || canRegisterInterest ? undefined : 'You need a registered personal space to register interest'
+        !isLoggedIn || canRegisterInterest || isAccountSetupPending
+          ? undefined
+          : 'You need a registered personal space to register interest'
       }
       className={`${INTEREST_BUTTON_CLASS} bg-[#151515] text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50`}
     >
@@ -293,6 +335,7 @@ export function AvailableBountyCard({
   isInterested,
   isPending,
   isInterestLoading,
+  isInterestKnown,
   canRegisterInterest,
   onRegisterInterest,
   height = AVAILABLE_CARD_HEIGHT_PX,
@@ -301,8 +344,10 @@ export function AvailableBountyCard({
   isInterested: boolean;
   isPending: boolean;
   isInterestLoading: boolean;
+  /** The viewer's interest was read successfully — not merely finished loading. */
+  isInterestKnown: boolean;
   canRegisterInterest: boolean;
-  onRegisterInterest: (bounty: SpaceBounty) => void;
+  onRegisterInterest: (bounty: SpaceBounty) => Promise<boolean>;
 } & CardSize) {
   return (
     <BountyCardShell bounty={bounty} height={height}>
@@ -310,10 +355,13 @@ export function AvailableBountyCard({
         <BudgetBadge budget={bounty.budget} />
         {availableBountyCta(bounty) === 'apply' || isInterested ? (
           <InterestButton
+            bountyId={bounty.id}
             isInterested={isInterested}
             isPending={isPending}
             isInterestLoading={isInterestLoading}
+            isInterestKnown={isInterestKnown}
             canRegisterInterest={canRegisterInterest}
+            canApply={availableBountyCta(bounty) === 'apply'}
             onClick={() => onRegisterInterest(bounty)}
           />
         ) : (

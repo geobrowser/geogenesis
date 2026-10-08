@@ -43,6 +43,25 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
+    id: 'forYouFeed',
+    label: 'For you feed',
+    description:
+      'Add a For you sort to Explore, built from the topics you follow, and open on it (GEO-3083). Needs the topic-ranked feed from gaia#983, which is on testnet only.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'lobbyJoining',
+    label: 'Debate lobbies: joining',
+    description: 'See and join live debate lobbies from the debates panel.',
+    enabledByDefault: false,
+  },
+  {
+    id: 'lobbyHosting',
+    label: 'Debate lobbies: hosting',
+    description: 'Open a lobby or schedule one for later. Needs joining on too.',
+    enabledByDefault: false,
+  },
+  {
     id: 'bountiesTab',
     label: 'Bounties',
     description: 'Bounty board, space bounty tabs, and bounty detail surfaces. On by default; testnet only.',
@@ -53,9 +72,10 @@ export const featureFlagDefinitions = [
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
-// renamed from) are no longer flags. Both are still sitting in browsers' stored flag objects;
-// normalizing drops them on the next write rather than reading them back.
-type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'questionsTab' | 'debatesTab', boolean>>;
+// renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too. All three
+// are still sitting in browsers' stored flag objects; normalizing drops them on the next write
+// rather than reading them back.
+type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability', boolean>>;
 
 /**
  * Both of these are derived from the definitions above rather than written out beside them.

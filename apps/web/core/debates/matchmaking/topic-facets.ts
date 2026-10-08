@@ -326,12 +326,86 @@ export function keepSelectedVisible<T extends { id: string; name: string | null;
  * Intersection, not union: two topics narrow the list rather than widening it, because drilling
  * into a subject is what the filter is for, and the union of two topics is a bigger pile than
  * either alone. geo-chat's `topic_ids` means the same thing (GEO-2696), and this is how claims it
- * has never seen — the picker's pinned rows, and the hub's featured list — are held to the same
- * rule. Two halves of one menu disagreeing about what a second topic does would be worse than
+ * has never seen — the picker's pinned rows, and the hub's graph-sourced list — are held to the
+ * same rule. Two halves of one menu disagreeing about what a second topic does would be worse than
  * either answer.
  */
 export function carriesEveryTopic(topics: { id: string }[] | undefined, selected: string[]): boolean {
   if (selected.length === 0) return true;
   const carried = new Set((topics ?? []).map(topic => topic.id));
   return selected.every(id => carried.has(id));
+}
+
+/** Letters and digits in any script: what separates words in a topic name is everything else. */
+const WORD_START = /[\p{L}\p{N}]/u;
+
+/**
+ * Whether a topic answers a search: a word in its name starts with what was typed.
+ *
+ * Word starts rather than any substring, because topic names are short and a substring match on two
+ * letters reaches across most of them — "ai" is inside "Ukraine" and "Spain", and a search box that
+ * offered both for "ai" would bury the AI topic it was asked for. Several typed words match as one
+ * phrase starting at a word, so "nuclear po" still finds "Nuclear power".
+ */
+export function topicNameMatches(name: string | null | undefined, query: string): boolean {
+  return topicNameMatchIndex(name, query) !== -1;
+}
+
+/** Where {@link topicNameMatches} found the text in `name`, or -1 — for drawing the match in bold. */
+export function topicNameMatchIndex(name: string | null | undefined, query: string): number {
+  const needle = query.trim().toLowerCase();
+  if (!name || !needle) return -1;
+  const haystack = name.toLowerCase();
+  for (let index = haystack.indexOf(needle); index !== -1; index = haystack.indexOf(needle, index + 1)) {
+    if (index === 0 || !WORD_START.test(haystack[index - 1]!)) return index;
+  }
+  return -1;
+}
+
+/**
+ * The spaces or topics a row of pills should offer: those that can still narrow the list.
+ *
+ * One every listed claim carries changes nothing when picked, so it is left out — on a list of one
+ * space's AI claims, "Artificial intelligence" is every row and offering it is noise, and the space
+ * itself is too. A picked one always stays, because the row is also how it gets un-picked. `total`
+ * of zero is "not known yet", which drops nothing rather than everything.
+ */
+export function narrowingOptions<T extends { id: string; count: number }>(
+  topics: T[],
+  total: number,
+  picked: string[]
+): T[] {
+  if (total <= 0) return topics;
+  const pickedKeys = new Set(picked.map(normId));
+  return topics.filter(topic => pickedKeys.has(normId(topic.id)) || topic.count < total);
+}
+
+/** How many topics the search box suggests at once. */
+export const TOPIC_SUGGESTION_LIMIT = 5;
+
+/**
+ * The topics to suggest under the search box for what was typed, most claims first.
+ *
+ * Leaves out what is already picked, since suggesting it would add nothing, and, where `total` is
+ * known, anything carried by every listed claim, for the reason {@link narrowingOptions} gives.
+ */
+export function topicSuggestions<T extends { id: string; name: string | null; count: number }>(
+  topics: T[],
+  query: string,
+  picked: string[],
+  total = 0,
+  limit = TOPIC_SUGGESTION_LIMIT
+): T[] {
+  if (!query.trim()) return [];
+  const pickedKeys = new Set(picked.map(normId));
+  return orderFacetOptions(
+    topics.filter(
+      topic =>
+        !pickedKeys.has(normId(topic.id)) &&
+        topic.count > 0 &&
+        (total <= 0 || topic.count < total) &&
+        topicNameMatches(topic.name, query)
+    ),
+    []
+  ).slice(0, limit);
 }

@@ -186,13 +186,7 @@ describe('ClaimRecordTab', () => {
     );
 
     view.rerender(
-      <ClaimRecordTab
-        {...common}
-        kind="claims"
-        claimId="claim-2"
-        spaceId="space-2"
-        availableSpaceIds={['space-2']}
-      />
+      <ClaimRecordTab {...common} kind="claims" claimId="claim-2" spaceId="space-2" availableSpaceIds={['space-2']} />
     );
 
     expect(mocks.hookCalls.at(-1)).toMatchObject({
@@ -201,6 +195,19 @@ describe('ClaimRecordTab', () => {
       spaceIds: ['space-2'],
       filterTopicIds: [],
     });
+  });
+
+  it('lets a debate fill the claim page column, on both tabs that can draw one', () => {
+    // The claim page's column is already the reading width, so a debate capped at the card's 560px
+    // sat narrower than everything around it. The flag has to reach the feed for that to happen —
+    // `DebateExploreFeedCard`'s own suite covers what it then does with it.
+    render(<ClaimRecordTab {...common} kind="debates" />);
+    expect(mocks.feedProps?.fullWidthDebates).toBe(true);
+
+    cleanup();
+
+    render(<ClaimRecordTab {...common} kind="claims" />);
+    expect(mocks.feedProps?.fullWidthDebates).toBe(true);
   });
 
   it('gives Debates the same sort order and only its Spaces filter', () => {

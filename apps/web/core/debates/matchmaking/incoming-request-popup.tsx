@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import type { DebateRequest, DebateRequestParty } from '../api';
 import { DebateRequestDialog, type DebateRequestDialogParticipant } from '../debate-request-dialog';
+import { requestOpenRounds } from '../format-details';
 import { speakerLabel } from '../playback-utils';
 import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
 import { SpaceChip } from './matchmaking-claim-card';
@@ -51,6 +52,7 @@ export function IncomingRequestPopup({
       participants={participants}
       currentUserId={currentUserId}
       formatId={request.turn_format_id}
+      openRounds={requestOpenRounds(request.max_rebuttal_rounds)}
       busy={busy}
       error={error?.message ?? null}
       actionsLayout="split"
@@ -71,6 +73,7 @@ export function IncomingRequestPopup({
       }}
       overflowMenu={
         <RequestOverflowMenu
+          analyticsSurface="request-popup"
           actions={[
             {
               // Deliberately outside the answer guard. Blocking writes the viewer's block list
@@ -78,6 +81,7 @@ export function IncomingRequestPopup({
               // cannot collide with one — and gating it would let an answer already taken swallow
               // a safety action, which is the worse failure by far.
               label: `Block ${speakerLabel(request.requester)}`,
+              analyticsLabel: 'Block requester',
               destructive: true,
               onClick: () => blockUser.mutate(request.requester.user_id),
             },

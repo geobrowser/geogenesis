@@ -230,8 +230,15 @@ export function useUserVotedEntityIds(direction: EntityVoteDirectionFilter, enab
     }
 
     for (const page of fetchedPages) {
-      Object.assign(votedAtById, page.votedAtByObjectId);
+      // The earlier page wins, for the same reason the earlier row does inside one (see
+      // `getUserEntityVotesByType`): pages arrive newest-first, so an entity carrying vote rows
+      // that straddle a page boundary would otherwise be described by its oldest.
+      for (const [id, votedAt] of Object.entries(page.votedAtByObjectId)) {
+        if (id in votedAtById) continue;
+        votedAtById[id] = votedAt;
+      }
       for (const [id, voteKind] of Object.entries(page.voteKindByObjectId)) {
+        if (voteKinds.has(id)) continue;
         voteKinds.set(id, voteKind);
       }
       const pageIds: string[] = [];

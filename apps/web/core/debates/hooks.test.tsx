@@ -17,9 +17,11 @@ import {
 } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, useEnteringDebateId } from './debate-entry-intent';
-import { useDebateGatewayScope} from './debate-gateway';
+import { useDebateGatewayScope } from './debate-gateway';
 import {
+  EXTRACTED_CLAIMS_POLL_MS,
   debateQueryKeys,
+  extractedClaimsRefetchInterval,
   useAcceptDebateRematchRequest,
   useClearDebateActivity,
   useClearTimedOutDebateActivity,
@@ -28,12 +30,15 @@ import {
   useDebateActivity,
   useDebateClaims,
   useDebateClaimsBySpaces,
+  useDebateExtractedClaims,
+  useDebateProfile,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
   useEndDebateTurn,
   useGeoChatAuth,
   useLeaveDebateRematch,
   useMarkDebateReady,
+  useSaveOpenRoundPick,
   useSpaceDebates,
   useUpdateDebateAvailability,
 } from './hooks';
@@ -48,9 +53,13 @@ const mocks = vi.hoisted(() => ({
   endDebateTurn: vi.fn(),
   leaveDebateRematch: vi.fn(),
   listDebateClaims: vi.fn(),
+  getDebateProfile: vi.fn(),
+  getDebateExtractedClaims: vi.fn(),
+  getDebateMedia: vi.fn(),
   listDebateRematchClaims: vi.fn(),
   listDebateSharePrompts: vi.fn(),
   markDebateReady: vi.fn(),
+  saveOpenRoundPick: vi.fn(),
   pathname: '/space/space-1/debates/debate-1',
   push: vi.fn(),
   back: vi.fn(),
@@ -105,11 +114,71 @@ vi.mock('./api', async importOriginal => {
     endDebateTurn: mocks.endDebateTurn,
     leaveDebateRematch: mocks.leaveDebateRematch,
     listDebateClaims: mocks.listDebateClaims,
+    getDebateProfile: mocks.getDebateProfile,
+    getDebateExtractedClaims: mocks.getDebateExtractedClaims,
+    getDebateMedia: mocks.getDebateMedia,
     listDebateRematchClaims: mocks.listDebateRematchClaims,
     listDebateSharePrompts: mocks.listDebateSharePrompts,
     markDebateReady: mocks.markDebateReady,
+    saveOpenRoundPick: mocks.saveOpenRoundPick,
     updateDebateAvailability: mocks.updateDebateAvailability,
   };
+});
+
+/**
+ * GEO-2870 phase 2. The "From this debate" source polls geo-chat's extracted claims until the media
+ * job has made its last write, and a media read that fails costs only that stop signal.
+ */
+describe('useDebateExtractedClaims', () => {
+  const payload = { turns: [], claims: [] };
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      {children}
+    </QueryClientProvider>
+  );
+
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    setCachedIdentityToken(null);
+    mocks.getDebateExtractedClaims.mockReset().mockResolvedValue(payload);
+    mocks.getDebateMedia.mockReset();
+  });
+
+  it.each([
+    ['running', false],
+    ['queued', false],
+    ['succeeded', true],
+    ['failed', true],
+  ] as const)('reads a %s media job as final: %s', async (status, final) => {
+    mocks.getDebateMedia.mockResolvedValue({ job: { status }, artifacts: [] });
+
+    const { result } = renderHook(() => useDebateExtractedClaims('debate-1', true), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ payload, final }));
+    expect(mocks.getDebateExtractedClaims.mock.calls[0]?.[0]).toBe('debate-1');
+  });
+
+  it('keeps the claims when the media read fails, and keeps polling', async () => {
+    mocks.getDebateMedia.mockRejectedValue(new Error('media down'));
+
+    const { result } = renderHook(() => useDebateExtractedClaims('debate-1', true), { wrapper });
+
+    await waitFor(() => expect(result.current.data).toEqual({ payload, final: false }));
+    expect(extractedClaimsRefetchInterval(result.current.data)).toBe(EXTRACTED_CLAIMS_POLL_MS);
+  });
+
+  it('stops polling once the payload is final, and polls until there is an answer', () => {
+    expect(extractedClaimsRefetchInterval(undefined)).toBe(EXTRACTED_CLAIMS_POLL_MS);
+    expect(extractedClaimsRefetchInterval({ final: false })).toBe(EXTRACTED_CLAIMS_POLL_MS);
+    expect(extractedClaimsRefetchInterval({ final: true })).toBe(false);
+  });
+
+  it('asks nothing without a source debate', () => {
+    renderHook(() => useDebateExtractedClaims('', false), { wrapper });
+    expect(mocks.getDebateExtractedClaims).not.toHaveBeenCalled();
+  });
 });
 
 describe('useDebateRematchClaimsForIds', () => {
@@ -638,13 +707,13 @@ describe('useGeoChatAuth', () => {
     invalidateQueries.mockClear();
 
     act(() => {
-      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'stance'), {
         status: 'indexed',
         pending: {
           entityId: 'claim-1',
           expectedResponse: 'negative',
           personalSpaceId: 'profile-1',
-          responseKind: 'veracity',
+          responseKind: 'stance',
           spaceId: 'space-1',
         },
         runId: 'run-1',
@@ -693,13 +762,13 @@ describe('useGeoChatAuth', () => {
     await waitFor(() => expect(mocks.listDebateRematchClaims).toHaveBeenCalledTimes(1));
 
     act(() => {
-      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'veracity'), {
+      queryClient.setQueryData(entityResponseIndexingQueryKey('profile-1', 'claim-1', 'space-1', 'stance'), {
         status: 'indexed',
         pending: {
           entityId: 'claim-1',
           expectedResponse: 'negative',
           personalSpaceId: 'profile-1',
-          responseKind: 'veracity',
+          responseKind: 'stance',
           spaceId: 'space-1',
         },
         runId: 'run-1',
@@ -1167,6 +1236,84 @@ describe('authoritative mutation reconciliation', () => {
     ).rejects.toMatchObject({ code: 'turn_yield_stale', status: 400 });
     expect(mocks.endDebateTurn).toHaveBeenCalledOnce();
   });
+
+  // GEO-3178.
+  describe('useSaveOpenRoundPick', () => {
+    const renderSavePick = () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { mutations: { retryDelay: 0 }, queries: { retry: false } },
+      });
+      const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+      const { result } = renderHook(() => useSaveOpenRoundPick('debate-1'), { wrapper });
+      return { queryClient, invalidateQueries, result };
+    };
+
+    beforeEach(() => {
+      mocks.saveOpenRoundPick.mockReset();
+    });
+
+    it('saves the pick for its round and applies the debate it answers with', async () => {
+      const debate = { id: 'debate-1', status: 'in_progress' } as unknown as Debate;
+      mocks.saveOpenRoundPick.mockResolvedValue(debate);
+      const { queryClient, invalidateQueries, result } = renderSavePick();
+
+      await act(() => result.current.mutateAsync({ roundIndex: 2, pick: 'extend' }));
+
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledWith('debate-1', 2, 'extend', expect.any(Function), 'user-a');
+      expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(debate);
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
+    });
+
+    it('treats a round that resolved mid-save as done, and re-reads the debate for its outcome', async () => {
+      mocks.saveOpenRoundPick.mockRejectedValue(
+        new GeoChatRequestError('Round already resolved', 'round_already_resolved', 409)
+      );
+      const { invalidateQueries, result } = renderSavePick();
+
+      await expect(act(() => result.current.mutateAsync({ roundIndex: 0, pick: 'end' }))).resolves.toBeNull();
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
+    });
+
+    it('sends a later pick only once the earlier one has answered, so the last tap is saved last', async () => {
+      const extendDebate = { id: 'debate-1', open_rounds: { my_pick: 'extend' } } as unknown as Debate;
+      const endDebate = { id: 'debate-1', open_rounds: { my_pick: 'end' } } as unknown as Debate;
+      let answerFirst!: (debate: Debate) => void;
+      mocks.saveOpenRoundPick
+        .mockReturnValueOnce(new Promise<Debate>(resolve => (answerFirst = resolve)))
+        .mockResolvedValueOnce(endDebate);
+      const { queryClient, result } = renderSavePick();
+
+      let saves!: Promise<unknown>;
+      act(() => {
+        saves = Promise.all([
+          result.current.mutateAsync({ roundIndex: 0, pick: 'extend' }),
+          result.current.mutateAsync({ roundIndex: 0, pick: 'end' }),
+        ]);
+      });
+      await act(async () => undefined);
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledOnce();
+
+      await act(async () => {
+        answerFirst(extendDebate);
+        await saves;
+      });
+      expect(mocks.saveOpenRoundPick.mock.calls.map(call => call[2])).toEqual(['extend', 'end']);
+      expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(endDebate);
+    });
+
+    it('rejects any other failure once, without retrying', async () => {
+      mocks.saveOpenRoundPick.mockRejectedValue(new GeoChatRequestError('Unavailable', 'service_unavailable', 503));
+      const { result } = renderSavePick();
+
+      await expect(act(() => result.current.mutateAsync({ roundIndex: 0, pick: 'end' }))).rejects.toMatchObject({
+        status: 503,
+      });
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledOnce();
+    });
+  });
 });
 
 describe('useClearTimedOutDebateActivity', () => {
@@ -1489,5 +1636,39 @@ describe('debateQueryKeys.claims', () => {
       'space-1',
       'all',
     ]);
+  });
+});
+
+describe('useDebateProfile signed out', () => {
+  beforeEach(() => {
+    mocks.authenticated = false;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    mocks.getDebateProfile.mockReset();
+    mocks.getDebateProfile.mockResolvedValue({ user: { user_id: 'chat-user-1' }, is_self: false });
+  });
+
+  const wrapper = ({ children }: { children: ReactNode }) => (
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      {children}
+    </QueryClientProvider>
+  );
+
+  // The profile's Debate button has nothing to show a signed-out viewer, so it keeps not asking.
+  it('asks nothing by default', async () => {
+    const { result } = renderHook(() => useDebateProfile('space-1'), { wrapper });
+
+    await waitFor(() => expect(result.current.fetchStatus).toBe('idle'));
+    expect(mocks.getDebateProfile).not.toHaveBeenCalled();
+  });
+
+  // An availability link has to learn whether the person can be booked before asking anyone to sign
+  // in, and geo-chat answers that anonymously.
+  it('asks anonymously when the caller opts in', async () => {
+    const { result } = renderHook(() => useDebateProfile('space-1', true, { signedOut: true }), { wrapper });
+
+    await waitFor(() => expect(result.current.isSuccess).toBe(true));
+    expect(mocks.getDebateProfile).toHaveBeenCalledOnce();
+    expect(mocks.getDebateProfile.mock.calls[0][0]).toBe('space-1');
   });
 });

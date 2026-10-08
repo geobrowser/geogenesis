@@ -1,16 +1,26 @@
 import Dexie, { Table } from 'dexie';
 
-import type { DebateRecordingUpload } from '../debates/recording-upload-queue';
+import type { DebateRecordingChunk, DebateRecordingStream } from '../debates/recording-stream';
+import type { DebateRecordingUpload, DebateRecordingUploadChunk } from '../debates/recording-upload-queue';
 import { Relation, Value } from '../types';
 
 const OLD_DB_NAME = 'geogenesis';
 const DB_NAME = 'geogenesis-local';
-const VERSION = 2;
 
 class Geo extends Dexie {
   values!: Table<Value>;
   relations!: Table<Relation>;
   debateRecordingUploads!: Table<DebateRecordingUpload, string>;
+  /** A recording still being made, one row per recorder run (GEO-2955). */
+  debateRecordingStreams!: Table<DebateRecordingStream, string>;
+  /** Its `MediaRecorder` timeslices, written as they arrive so a crash loses at most one. */
+  debateRecordingChunks!: Table<DebateRecordingChunk, [string, number]>;
+  /**
+   * A queued recording's bytes, as fixed-size `ArrayBuffer`s rather than one `Blob` (GEO-3116).
+   * Kept apart from `debateRecordingUploads` so that updating a row's retry state never rewrites
+   * the recording: IndexedDB has no partial update, and Dexie's `update` puts the whole row back.
+   */
+  debateRecordingUploadChunks!: Table<DebateRecordingUploadChunk, [string, number]>;
 
   constructor() {
     super(DB_NAME);
@@ -20,10 +30,27 @@ class Geo extends Dexie {
       relations: 'id, spaceId',
     });
 
-    this.version(VERSION).stores({
+    this.version(2).stores({
       values: 'id, spaceId',
       relations: 'id, spaceId',
       debateRecordingUploads: 'id, userId, debateId, stage, nextAttemptAt, createdAt',
+    });
+
+    this.version(3).stores({
+      values: 'id, spaceId',
+      relations: 'id, spaceId',
+      debateRecordingUploads: 'id, userId, debateId, stage, nextAttemptAt, createdAt',
+      debateRecordingStreams: 'id, userId, debateId',
+      debateRecordingChunks: '[streamId+seq], streamId',
+    });
+
+    this.version(4).stores({
+      values: 'id, spaceId',
+      relations: 'id, spaceId',
+      debateRecordingUploads: 'id, userId, debateId, stage, nextAttemptAt, createdAt',
+      debateRecordingStreams: 'id, userId, debateId',
+      debateRecordingChunks: '[streamId+seq], streamId',
+      debateRecordingUploadChunks: '[uploadId+seq], uploadId',
     });
   }
 }

@@ -2,6 +2,7 @@ import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import {
   CLAIM_END_OFFSET_PROPERTY_ID,
+  CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
   NAME_PROPERTY_ID,
 } from '~/core/debates/ontology';
@@ -31,13 +32,29 @@ export type TranscriptClaim = {
   blockId: string;
   /**
    * The claim's timecodes as published on the block → claim relation entity, in milliseconds from
-   * the start of the debate timeline. Null for every debate published before timecodes existed,
-   * which is nearly all of them — the resolver recovers those from the transcript instead.
+   * the start of the debate timeline. Present for most of the corpus since the backfill ran — 921
+   * of 1,072 statements as of 2026-09-23, and 23 of 25 debates timed all the way through. The
+   * resolver recovers the rest from the transcript, and `useClaimTimings` skips that fetch entirely
+   * for a debate whose claims are all published.
    */
   publishedTiming: { startMs: number; endMs: number } | null;
   /**
-   * The id of the block → claim relation's own entity, which is where {@link publishedTiming} is
-   * read from and where a backfill writes it.
+   * How much this claim carries the debate, as published on the same relation entity: the
+   * probability (0–1) that the debate's claim list would misrepresent the debate without it,
+   * judged by extraction-api's `claims.score_highlights`. Compare within one debate; the live
+   * layer uses it to show the few claims that matter. Null for debates published before scoring
+   * shipped (2026-10) and for a claim geo-chat could not score.
+   *
+   * For a {@link restated} claim this is the highest score among its statements. Each statement
+   * has its own score on its own relation entity, and the row is deduped to one — the first in
+   * block order, which is a random publish position — so taking that one would make "does this
+   * claim matter" a coin toss between the statements. The highest answers the question the
+   * consumer asks; the other per-statement fields on this row stay the first statement's.
+   */
+  highlightScore: number | null;
+  /**
+   * The id of the block → claim relation's own entity, which is where {@link publishedTiming} and
+   * {@link highlightScore} are read from and where a backfill writes them.
    *
    * From the same relation as {@link blockId} — the turn the claim was first seen on — so the two
    * always describe the same statement. Null only if the API omits it.
@@ -49,8 +66,9 @@ export type TranscriptClaim = {
    * `find-or-create` links an existing claim rather than minting a second, so one entity really can
    * be two statements by two speakers — see the grouping tests. This row is deduped, though, and
    * carries only the *first* relation's block, offsets and relation entity. Rather than let that
-   * silently stand in for both statements, the flag says the row cannot answer "when" or "who", and
-   * the surfaces that assert either decline it: {@link resolveClaimTimings} gives it no timing, so
+   * silently stand in for both statements, the flag says the row cannot answer "when" or "who"
+   * ({@link highlightScore} is the exception: it takes the highest of the statements), and the
+   * surfaces that assert either decline it: {@link resolveClaimTimings} gives it no timing, so
    * no card is drawn over a face and no timecode is printed beside a row, and the backfill scripts
    * skip it rather than writing one occurrence and leaving the other unplaced.
    *
@@ -184,6 +202,25 @@ function publishedTiming(
   return { startMs, endMs };
 }
 
+/**
+ * The highlight score published on a block → claim relation entity, or null when it carries none.
+ *
+ * Float values arrive as numbers. Anything outside [0, 1] is discarded: the live layer ranks by
+ * this, and a value the publisher would never write is drift, not a very strong opinion.
+ */
+function publishedHighlightScore(
+  values: Array<{ propertyId: string; float?: number | null } | null> | null | undefined
+): number | null {
+  for (const value of values ?? []) {
+    if (!value || uuidToHex(value.propertyId) !== uuidToHex(CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID)) continue;
+    const score = value.float;
+    if (typeof score !== 'number' || !Number.isFinite(score)) continue;
+    if (score < 0 || score > 1) continue;
+    return score;
+  }
+  return null;
+}
+
 type ClaimEntityNaming = {
   name?: string | null;
   spaceIds?: Array<string | null> | null;
@@ -289,6 +326,7 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
             spaceId: resolved.spaceId,
             blockId: blockEntity.id,
             publishedTiming: publishedTiming(claim.entity?.valuesList),
+            highlightScore: publishedHighlightScore(claim.entity?.valuesList),
             relationEntityId: claim.entityId ?? null,
             restated: false,
           };
@@ -298,6 +336,11 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
           // A second turn for a claim already seen. The same relation repeated inside one block is
           // just noise and does not count — see `restated`.
           row.restated = true;
+          // The strongest statement's score stands for the claim — see `highlightScore`.
+          const score = publishedHighlightScore(claim.entity?.valuesList);
+          if (score !== null && (row.highlightScore === null || score > row.highlightScore)) {
+            row.highlightScore = score;
+          }
         }
 
         const authorKey = authorSpaceId ? uuidToHex(authorSpaceId) : '';

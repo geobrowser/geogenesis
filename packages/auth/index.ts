@@ -1,5 +1,8 @@
+import './src/ensure-web-storage.js';
 export {
   usePrivy,
+  // App-wide observers should not wait for wallet activation before handling auth.
+  useLogin as usePrivyLogin,
   useLogout,
   // Privy's headless email login — `sendCode`/`loginWithCode` against an address already in hand,
   // so someone who has just typed their email into another form is not asked for it twice

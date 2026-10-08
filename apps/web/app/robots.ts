@@ -27,6 +27,7 @@ export default function robots(): MetadataRoute.Robots {
         '/space/*/import',
         '/space/*/debug-availability',
         '/space/*/debug-debates',
+        '/space/*/debug-peer-availability',
         '/space/*/ranking-compose',
         '/space/*/power-tools',
       ],

@@ -6,13 +6,29 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { trackPrivyAuth } from '~/core/analytics';
+import { currentAuthAttempt, openAuthAttempt } from '~/core/auth-attempt';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import { beginPrivyAuth, completePrivyAuth } from '~/core/privy-auth-events';
 
-import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
+import { ERROR_CLASS, FORM_STACK_CLASS, PRIMARY_BUTTON_CLASS, SUBTEXT_CLASS, fieldClass } from './email-capture-styles';
 
 /** Privy's OTP is six digits. */
 const CODE_LENGTH = 6;
+
+// The headless attempt and its modal fallback belong to the same signup surface.
+export const ACCOUNT_ANALYTICS = {
+  component: 'explore_email_capture',
+  auth_control: 'create_account',
+  auth_trigger: 'control',
+  target_type: 'application',
+  target_id: 'genesis',
+  link_source: 'explore_email_capture',
+  form_type: 'account',
+  signup_surface: 'explore_email_capture',
+} as const;
+
+/** The attribution a code step reports under: the surface it sits in, and its own sign-in properties. */
+export type AccountStepAnalytics = { readonly component: string } & Readonly<Record<string, string | number>>;
 
 /**
  * The code step, driven by Privy's own flow state rather than a second copy of it kept here.
@@ -21,38 +37,44 @@ const CODE_LENGTH = 6;
  * labelled control instead of six unlabelled ones, and the code arrives by mail, so pasting is what
  * most people actually do.
  */
-export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () => void }) {
-  // Mounted only while someone is signing up, which is the point of it living here: Privy's login
-  // hooks register on a shared emitter, and one of these sitting on every Explore visit would be
-  // registering callbacks beside the navbar's own login for every reader who never presses the
-  // button that leads here — which is what broke that button.
-  //
-  // The embedded wallet this login needs is not created here. It cannot be: this component is
-  // unmounted by the card's own visibility rule the instant `authenticated` turns true, which is
-  // the exact render in which the wallet becomes creatable. `useEnsureEmbeddedWallet`, mounted for
-  // the life of the app in `core/providers.tsx`, does it instead.
-  // Reports its own sign-in, which is safe now that the navbar arms its tracker rather than firing
-  // on every completion. Leaving it to the navbar looked tidy and was not: that button is replaced
-  // by a loading skeleton whenever `isUserLoading` is true — which flips back mid-session on a tab
-  // refocus or a Privy re-init — so a completion landing in that window was recorded by nobody at
-  // all. Silent under-counting of exactly the signups this flow exists to produce.
+export function AccountStep({
+  email,
+  onGiveUp,
+  analytics = ACCOUNT_ANALYTICS,
+  analyticsLabel = 'Explore account verification',
+}: {
+  email: string;
+  onGiveUp: () => void;
+  /** Whose sign-in this is. Defaults to Explore's email capture, the step's first host. */
+  analytics?: AccountStepAnalytics;
+  analyticsLabel?: string;
+}) {
+  // Headless email completion runs directly after verification, even if authentication has
+  // already unmounted this card. Modal completions go through the app-wide PrivyAuthTracker.
+  // EmbeddedWalletSync separately creates and activates the wallet for a headless login.
   const {
     sendCode,
     loginWithCode,
     state: otpState,
   } = useLoginWithEmail({
-    onComplete: args => trackPrivyAuth(args, { auth_flow: 'manual_login', link_source: 'explore_email_capture' }),
+    onComplete: args => completePrivyAuth(args, analytics),
   });
-  // Here for the same reason as the hook above, and it is the one that matters more: this registers
-  // a second `useLogin` beside the navbar's own, and the navbar's is the login button people
-  // actually press. Mounted in the parent it would do that on every Explore visit.
-  const openPrivyModal = usePrivySignIn();
-  const [code, setCode] = React.useState('');
-
   // Held in a ref so the effect below does not re-run and re-send when the callback identity
   // changes, which would mail a second code on an unrelated re-render.
   const giveUpRef = React.useRef(onGiveUp);
   giveUpRef.current = onGiveUp;
+  // The same, for the attribution: a host can build it per render, and it must not re-send the code.
+  const analyticsRef = React.useRef(analytics);
+  analyticsRef.current = analytics;
+  // Keep the modal fallback's UI error handler with the card; its analytics attribution is
+  // snapshotted by usePrivySignIn and survives the card disappearing after authentication.
+  const openPrivyModal = usePrivySignIn(undefined, {
+    analytics,
+    resumeAuthAttempt: true,
+    onError: () => giveUpRef.current(),
+  });
+  const [code, setCode] = React.useState('');
+
   const openPrivyModalRef = React.useRef(openPrivyModal);
   openPrivyModalRef.current = openPrivyModal;
   // Behind a ref because a hook's returned callbacks are new objects on every render. Naming
@@ -88,14 +110,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
       if (!mountedRef.current) return;
       // Captcha, a Privy outage, an address it will not take. Hand them the dialog that does work
       // rather than a dead end.
-      // Closing this card unmounts the `usePrivySignIn` instance that registered the modal's
-      // completion callback, so this flow's own `link_source` attribution is lost for the fallback.
-      // The sign-in itself is still recorded: the navbar's `GeoConnectButton` is mounted for every
-      // logged-out reader (`navbar-actions.tsx` renders it whenever there is no address) and its
-      // `onComplete` tracks unconditionally. Keeping this mounted behind the modal to reclaim one
-      // attribution field would mean a small state machine in auth code, watching the modal open
-      // and close again, for a branch that only runs when `sendCode` has already failed.
-      giveUpRef.current();
+      // Keep the step mounted while hidden so the modal's error callback can close the card.
       openPrivyModalRef.current();
     } finally {
       if (mountedRef.current) setSending(false);
@@ -113,6 +128,11 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   React.useEffect(() => {
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
+    const attempt = currentAuthAttempt();
+    const attribution = analyticsRef.current;
+    if (!attempt || attempt.endedAt || attempt.properties.component !== attribution.component)
+      beginPrivyAuth(attribution, { resume: true });
+    openAuthAttempt(attribution);
     void requestCode();
   }, [requestCode]);
 
@@ -146,7 +166,13 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   }, [busy]);
 
   return (
-    <form data-geo-analytics-label="Explore account verification" onSubmit={submitCode} noValidate>
+    <form
+      data-geo-analytics-label={analyticsLabel}
+      data-geo-analytics-type="account"
+      data-geo-analytics-intent="signup"
+      onSubmit={submitCode}
+      noValidate
+    >
       {/* The card's own subtext style, shared from the popup so the two states are one design
           rather than two that drifted. */}
       <p className={SUBTEXT_CLASS}>
@@ -156,7 +182,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
 
       {/* The subscribe row's layout after the restyle: a column, same spacing and width, so the
           card does not change shape when it swaps to this step. */}
-      <div className="mt-[19px] flex flex-col gap-[6px] mobile:mx-auto mobile:mt-5 mobile:max-w-[394px]">
+      <div className={FORM_STACK_CLASS}>
         <input
           // `text` with a numeric `inputMode`, not `type="number"`: a number input drops leading
           // zeros, accepts `e` and `-`, and puts a spinner on a field that is not a quantity.
@@ -180,21 +206,17 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
           aria-invalid={failed}
           disabled={busy}
           className={cx(
-            `${CONTROL_HEIGHT_CLASS} w-full min-w-0 rounded-full border bg-white px-3 text-center text-[17px] leading-[19px] tracking-[0.2em] text-text outline-hidden transition-colors placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6] disabled:text-grey-03`,
-            failed ? 'border-red-01' : 'border-grey-02 focus:border-text'
+            fieldClass(failed),
+            'text-center tracking-[0.2em] placeholder:tracking-[0.2em] placeholder:text-[#b6b6b6]'
           )}
         />
-        <button
-          type="submit"
-          disabled={busy || code.length !== CODE_LENGTH}
-          className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60`}
-        >
+        <button type="submit" disabled={busy || code.length !== CODE_LENGTH} className={PRIMARY_BUTTON_CLASS}>
           {verifying ? 'Verifying…' : 'Continue'}
         </button>
       </div>
 
       {failed ? (
-        <p role="alert" className="mt-2 text-[14px] tracking-[-0.35px] text-red-01">
+        <p role="alert" className={ERROR_CLASS}>
           That code did not work.{' '}
           <button
             type="button"

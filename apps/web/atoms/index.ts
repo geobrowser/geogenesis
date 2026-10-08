@@ -1,20 +1,44 @@
 import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
+import type { ActionContext } from '~/core/action-context';
+import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
+
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
 export const editingPropertiesAtom = atom<boolean>(false);
 
 export type EntitySidePanelTarget = {
+  analyticsContext?: ActionContext;
+  /** A linked entity tab to select when the panel opens. */
+  initialTab?: EntitySidePanelTabSelection;
   entityId: string;
   spaceId: string;
   openedWithMainViewEditing: boolean;
   openedFromReviewEdits?: boolean;
+  /** Keep this exact space scope instead of choosing the entity's usual top-ranked home space. */
+  forceRequestedSpace?: boolean;
+  /**
+   * Open scrolled to the entity's comments — a claim's Activity — rather than at the top. The panel's
+   * stand-in for the full page's `#entity-comments`; see `useScrollToCommentsOnOpen`.
+   */
+  scrollToComments?: boolean;
 };
 
 export const entitySidePanelAtom = atom<EntitySidePanelTarget | null>(null);
 
 export const entitySidePanelHostElementAtom = atom<HTMLElement | null>(null);
+
+/**
+ * Where the sticky entity header draws itself: a zero-height element docked under the navbar by the
+ * app shell.
+ *
+ * The bar has to span the content column and sit under the navbar, and the entity route that knows
+ * *which* entity is on screen renders deep inside a width-capped, transform-animated `<main>` —
+ * neither a full-bleed `sticky` nor a `fixed` element behaves there. Registering a host once in the
+ * shell and portalling into it keeps the positioning in the one place that can express it.
+ */
+export const entityStickyHeaderHostElementAtom = atom<HTMLElement | null>(null);
 
 /**
  * The comments panel's own element, for the same reason the side panel registers one: a slide-up
@@ -82,7 +106,12 @@ export const spaceSidebarHasContentAtom = atom<boolean | null>(null);
  * page they should open the comments beside what you're reading rather than
  * navigate away from it.
  */
-export const entityCommentsPanelAtom = atom<{ entityId: string; spaceId: string } | null>(null);
+export const entityCommentsPanelAtom = atom<{
+  entityId: string;
+  spaceId: string;
+  /** Logical graph type retained so comments created from the global panel are attributed correctly. */
+  targetEntityType?: string;
+} | null>(null);
 
 export type DebatesHubTab = 'requests' | 'lobby' | 'explore' | 'positions' | 'people';
 
@@ -169,6 +198,13 @@ export const debatesHubPositionsSearchAtom = atom('');
 export const debatesHubPeopleSpaceIdsAtom = atom<string[]>([]);
 
 /**
+ * The People tab's "Online only" switch (GEO-2937). Off, the default, lists offline people with free
+ * time this week alongside online ones. Outside the tab for the same reason as the
+ * spaces filter above.
+ */
+export const debatesHubPeopleOnlineOnlyAtom = atom(false);
+
+/**
  * Whether each claim-browse surface's membership default has been applied or forfeited this session.
  *
  * `useMemberSpaceDefault` spends its seed once per *mount*, which was the right lifetime while the
@@ -181,7 +217,11 @@ export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
 export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
 
 /**
- * Whether the hub has already moved the viewer off an empty Lobby this session (GEO-2863).
+ * Whether the hub's move off an empty Lobby is spent for this session (GEO-2863).
+ *
+ * Spent by the move itself, and by the viewer answering the question it guesses at — pressing
+ * "Matches only" either way, or leaving for Explore from the empty state's button. A viewer who has
+ * chosen what to look at on Lobby is not moved off it later in the same session.
  *
  * Held out here because `LobbyTab` cannot hold it: `HubSwap` unmounts the tab when the viewer
  * leaves it, so a ref or state inside would be gone by the time they came back. With "Matches only"
@@ -192,7 +232,7 @@ export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
  * The move is a courtesy on first arrival, not a policy. Once it has been made, the viewer gets the
  * empty state and can read it.
  */
-export const debatesHubLeftLobbyForExploreAtom = atom(false);
+export const debatesHubLobbyMoveSpentAtom = atom(false);
 
 /**
  * Which account the filter state above belongs to, so it is never handed to a different viewer.
@@ -231,8 +271,9 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
+  set(debatesHubPeopleOnlineOnlyAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.
-  set(debatesHubLeftLobbyForExploreAtom, false);
+  set(debatesHubLobbyMoveSpentAtom, false);
   // `debatesHubMatchesOnlyAtom` is deliberately absent: it is a standing preference rather than
   // working state, which is the whole reason it is stored rather than session-scoped. Handing a new
   // account the previous one's *filters* is a leak; handing them a browsing preference held on this
@@ -259,17 +300,6 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
 export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly', true);
 
 /**
- * The same standing preference for the debate-again flow (GEO-2861), under its own key.
- *
- * Two keys rather than one: the hub asks "who can I debate right now, out of everyone", the rematch
- * picker asks "which of this opponent's claims can we go again on". Wanting the strict answer to one
- * is not a statement about the other, and sharing a key would make it one.
- *
- * On by default, and stepped back the same way when this pair has nothing to go again on.
- */
-export const rematchMatchesOnlyAtom = atomWithStorage('rematchMatchesOnly', true);
-
-/**
  * "Hide my positions" on the debates hub's Explore tab (GEO-2863).
  *
  * On by default, which is the collapse the tab shipped with — browsing is about finding something
@@ -290,14 +320,26 @@ export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPo
  * chronic rather than momentary: a reader with a long backlog of positions is hunting for new
  * claims across visits, not for one afternoon.
  *
- * On because it gives the page's two tabs one job each. The claims it hides are the ones this page
- * can act on — `debateRequestGate` refuses a request from someone holding no position — but those
- * are also what the *opponent's* tab is made of, and with "Matches only" on beside it that tab is
- * exactly "what we can go again on right now". Explore is then the other half of the flow: finding
- * a claim to take a side on. Nothing becomes unreachable, because a claim only the viewer has
- * answered cannot be requested from either tab — the gate needs both sides.
+ * On because it gives the page's tabs one job each. The claims it hides are the ones this page can
+ * act on — `debateRequestGate` refuses a request from someone holding no position — but those are
+ * also what the Matches tab is made of (GEO-3148), which is exactly "what we can go again on right
+ * now". Explore is then the other half of the flow: finding a claim to take a side on. Nothing
+ * becomes unreachable, because a claim only the viewer has answered cannot be requested from either
+ * tab — the gate needs both sides.
  */
 export const rematchHideMyPositionsAtom = atomWithStorage('rematchHideMyPositions', true);
+
+/**
+ * "Hide agreed" on the debate-again flow's "Their positions" tab.
+ *
+ * The opponent has a side on every claim there, so each row is one of three things to the viewer:
+ * the other side (a match, requestable now), no side yet (one press from a match), or the same side.
+ * Only the last is a dead end — there is nothing to debate — and this is what takes it out.
+ *
+ * Not "Hide my positions", which on this tab would also hide the matches: the rows the viewer can act
+ * on soonest. Stored and on by default for the same reasons as {@link rematchHideMyPositionsAtom}.
+ */
+export const rematchHideAgreedAtom = atomWithStorage('rematchHideAgreed', true);
 
 export const rankingComposeRemoveScrollShardAtom = atom<HTMLElement | null>(null);
 

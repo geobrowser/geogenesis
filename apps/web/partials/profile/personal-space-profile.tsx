@@ -11,10 +11,13 @@ import { ID } from '~/core/id';
 import { collectSkills, currentRoles } from '~/core/profile/profile-summary';
 import { DEFAULT_DEBATE_SORT, sortRows } from '~/core/profile/record-client-filter';
 import { useEntityScores } from '~/core/profile/use-entity-scores';
-import { heldPositionsCount, usePersonPositions, usePersonResponses } from '~/core/profile/use-person-positions';
+import { usePersonPositions } from '~/core/profile/use-person-positions';
+import { useProfileDebateVisibility } from '~/core/profile/use-profile-debate-visibility';
+import { normId } from '~/core/utils/norm-id';
 
 import { EditRecordDialog } from './edit-record-dialog';
 import { type ActivityKind, ProfileActivitySection } from './profile-activity-section';
+import { ProfileDebateVisibilityButton } from './profile-debate-visibility-button';
 import { ProfileHeadline } from './profile-headline';
 import { ProfileRecordSection, ProfileSkillsSection } from './profile-record-sections';
 
@@ -65,7 +68,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
        * stale. It is one card tall either way, so leading with it costs the
        * history nothing.
        */}
-      <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} />
+      <ProfileActivity spaceId={spaceId} personEntityId={personEntityId} isOwner={isOwner} />
 
       {/* A failed history read is not an empty account. Keep its own sections
           unavailable so the owner cannot accidentally duplicate a hidden edge,
@@ -82,6 +85,7 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
             isOwner={isOwner}
             onEdit={() => openEditor('employment')}
             spaceId={spaceId}
+            isLoading={history.isLoading}
           />
           <ProfileRecordSection
             kind="education"
@@ -89,7 +93,12 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
             isOwner={isOwner}
             onEdit={() => openEditor('education')}
             spaceId={spaceId}
+            isLoading={history.isLoading}
           />
+          {/* No reserve for Skills, unlike the two sections above. It is derived
+              from them and hidden when empty even for the owner, so a
+              placeholder here would as often as not be held for a section that
+              never arrives. */}
           <ProfileSkillsSection skills={skills} spaceId={spaceId} />
 
           <EditRecordDialog
@@ -111,8 +120,17 @@ export function PersonalSpaceProfile({ spaceId, personEntityId }: Props) {
  * costs no request — and both counts come from the rail's own facts rather than
  * from the page in hand, which is one page of twenty against a real 192.
  */
-function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personEntityId: string }) {
+function ProfileActivity({
+  spaceId,
+  personEntityId,
+  isOwner,
+}: {
+  spaceId: string;
+  personEntityId: string;
+  isOwner: boolean;
+}) {
   const debates = usePersonDebates(spaceId, true);
+  const visibility = useProfileDebateVisibility(spaceId);
 
   /*
    * Ranked the way the Debates tab opens, so "See all debates" leads to the same
@@ -129,12 +147,6 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
   );
   const positions = usePersonPositions({ spaceId });
   const { facts, isLoading: isLoadingFacts, isError: isFactsError } = useProfileFacts({ spaceId, personEntityId });
-
-  // The rail's own source, so the card and the number beside it cannot disagree
-  // — and neither counts a position that has been taken back. Same query key as
-  // `positions` above, so no extra request.
-  const responses = usePersonResponses({ spaceId });
-  const positionsCount = heldPositionsCount(responses, facts.positions);
 
   // A personal space is named by its Person entity, which is where the response
   // tags get "Susan agreed" from. The same lookup the gallery already makes for
@@ -161,7 +173,19 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       isCountUnavailable: isFactsError,
       isError: debates.isError,
       href: `/space/${spaceId}/debates`,
-      seeAllLabel: 'See all debates',
+      seeAllLabel: 'View all debates',
+      debateEndSlot: isOwner
+        ? item => {
+            const id = normId(item.entityId);
+            return (
+              <ProfileDebateVisibilityButton
+                hidden={false}
+                pending={visibility.pendingIds.has(id)}
+                onClick={() => void visibility.setHidden(item, debates.hiddenRelationsByDebateId.get(id) ?? [], true)}
+              />
+            );
+          }
+        : undefined,
     },
     {
       key: 'claims',
@@ -169,14 +193,13 @@ function ProfileActivity({ spaceId, personEntityId }: { spaceId: string; personE
       rows: positions.rows,
       responseByClaimId: positions.responseByClaimId,
       personName,
-      total: positionsCount ?? 0,
-      isLoading: positions.isLoading || isLoadingFacts || positionsCount === null,
-      // Both sources have to fail before the count is gone: the vote table can
-      // answer it on its own, and does.
-      isCountUnavailable: isFactsError && responses.isError,
+      // Held positions only, like the rows beside it — see `POSITION_VOTE_TYPES`.
+      total: facts.positions,
+      isLoading: positions.isLoading || isLoadingFacts,
+      isCountUnavailable: isFactsError,
       isError: positions.isError,
       href: `/space/${spaceId}/positions`,
-      seeAllLabel: 'See all claims',
+      seeAllLabel: 'View all claims',
     },
   ];
 

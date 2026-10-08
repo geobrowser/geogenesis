@@ -10,7 +10,10 @@ import { useAtom, useAtomValue, useSetAtom } from 'jotai';
 import { useParams, usePathname, useRouter } from 'next/navigation';
 import { createPortal } from 'react-dom';
 
+import { snapshotActionContext } from '~/core/action-context';
 import { capture } from '~/core/analytics';
+import { recordAction } from '~/core/analytics-operations';
+import { BOTTOM_INSET_OFFSET_CLASS } from '~/core/app-bottom-inset';
 import { applyInjectOpsToStore } from '~/core/chat/apply-inject-ops';
 import { hasPendingClientToolCall, shouldResubmitAfterClientExecution } from '~/core/chat/client-tools';
 import { useEditDispatcher } from '~/core/chat/edit-dispatcher';
@@ -29,6 +32,7 @@ import { useSearchImagesDispatcher } from '~/core/chat/search-images-dispatcher'
 import { useWebFetchDispatcher } from '~/core/chat/web-fetch-dispatcher';
 import { ROOT_SPACE } from '~/core/constants';
 import { useInjectJob } from '~/core/hooks/use-inject-job';
+import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { useSpace } from '~/core/hooks/use-space';
 import { completeDailyUploadActivity } from '~/core/space/use-space-daily-activities';
 import {
@@ -51,6 +55,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { AssistantSparkle } from '~/design-system/icons/assistant-sparkle';
 
 import { ChatPanel } from './chat-panel';
+import { debateFullscreenActiveAtom } from '~/atoms';
 
 type AssistantSuggestionSource = 'welcome' | 'follow_up';
 type AssistantPanelAction = 'opened' | 'closed';
@@ -211,7 +216,10 @@ export function ChatWidget() {
   const currentChatIdRef = React.useRef<string | null>(persistedCurrent?.id ?? null);
 
   const pathname = usePathname() ?? '';
-  const hideAssistantOnRoute = isFullscreenChildRoute(pathname);
+  const debateFullscreenActive = useAtomValue(debateFullscreenActiveAtom);
+  // Match the debate feed's `md:` fullscreen overlay breakpoint.
+  const isMobile = useMediaQuery('(max-width: 767px)');
+  const hideAssistant = isFullscreenChildRoute(pathname) || (isMobile && debateFullscreenActive);
   const params = useParams();
 
   React.useLayoutEffect(() => {
@@ -563,13 +571,17 @@ export function ChatWidget() {
   );
 
   React.useEffect(() => {
-    if (hideAssistantOnRoute && isOpen) {
+    if (hideAssistant && isOpen) {
       closeAssistant('fullscreen_route');
     }
-  }, [hideAssistantOnRoute, isOpen, closeAssistant]);
+  }, [hideAssistant, isOpen, closeAssistant]);
 
   const trackAssistantMessage = React.useCallback(
     (text: string, source: AssistantMessageSource, suggestionSource?: AssistantSuggestionSource) => {
+      recordAction(
+        source === 'option_click' ? 'assistant_option' : 'assistant_message',
+        snapshotActionContext('ai_assistant', 'conversation', conversationIdRef.current)
+      );
       capture('ai_assistant_message_sent', {
         ...assistantContextProperties(),
         message_id: createTrackingId('message'),
@@ -1092,7 +1104,7 @@ export function ChatWidget() {
       }
       if ((event.metaKey || event.ctrlKey) && event.key === 'k') {
         // Don't hijack the shortcut mid-IME composition.
-        if (event.isComposing || hideAssistantOnRoute) return;
+        if (event.isComposing || hideAssistant) return;
         event.preventDefault();
         if (isOpen) {
           closeAssistant('keyboard_shortcut');
@@ -1103,7 +1115,7 @@ export function ChatWidget() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [closeAssistant, hideAssistantOnRoute, isBusy, isOpen, openAssistant, stopAndScrub]);
+  }, [closeAssistant, hideAssistant, isBusy, isOpen, openAssistant, stopAndScrub]);
 
   const handleSend = () => {
     const text = input.trim();
@@ -1125,7 +1137,7 @@ export function ChatWidget() {
     return null;
   }
 
-  const ui = hideAssistantOnRoute ? null : (
+  const ui = hideAssistant ? null : (
     <AnimatePresence mode="wait">
       {isOpen ? (
         <ChatPanel
@@ -1157,7 +1169,7 @@ export function ChatWidget() {
           transition={{ duration: 0.15 }}
           onClick={() => openAssistant('fab')}
           aria-label="Open assistant"
-          className="fixed right-4 bottom-[max(1rem,env(safe-area-inset-bottom))] z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text"
+          className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} z-1100 flex size-10 items-center justify-center rounded-full border border-grey-02 bg-white text-text shadow-lg transition-colors hover:border-text`}
         >
           <AssistantSparkle size={20} />
         </motion.button>

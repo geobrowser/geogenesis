@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +29,7 @@ const mocks = vi.hoisted(() => ({
   viewerPosition: null as boolean | null,
   /** The crowd's share of positive responses, or null on a claim nobody has answered. */
   percent: null as number | null,
-  responseKind: 'stance' as 'stance' | 'veracity',
+  responseKind: 'stance' as const,
   respond: vi.fn(),
 }));
 
@@ -69,6 +69,8 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn()
 // The card's header names its speaker and links to them, which reaches for the side panel and for
 // the space behind the profile. Neither is what these tests are about.
 const openSidePanel = vi.fn();
+const analyticsMocks = vi.hoisted(() => ({ personProfileOpened: vi.fn() }));
+vi.mock('~/core/analytics', () => ({ personProfileOpened: analyticsMocks.personProfileOpened }));
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel, closeSidePanel: vi.fn(), sidePanelTarget: null }),
 }));
@@ -107,6 +109,7 @@ function claim(overrides: Partial<TimedClaim> = {}): TimedClaim {
     spaceId: CLAIM_SPACE,
     blockId: 'block-1',
     publishedTiming: null,
+    highlightScore: null,
     relationEntityId: 'relation-1',
     restated: false,
     timing: { startMs: 134_600, endMs: 143_140, confidence: 1, source: 'published' },
@@ -159,11 +162,22 @@ describe('DebateClaimTickerCard', () => {
   // The same link as the name in the corner of the tile, and the same person.
   it('opens the speaker from the card, the way the tile corner does', () => {
     openSidePanel.mockClear();
+    analyticsMocks.personProfileOpened.mockClear();
     renderCard();
 
     fireEvent.click(screen.getByRole('button', { name: 'Peter Feldip' }));
 
-    expect(openSidePanel).toHaveBeenCalledWith(`page-${SPEAKER.profile_space_id}`, SPEAKER.profile_space_id, false);
+    expect(openSidePanel).toHaveBeenCalledWith(`page-${SPEAKER.profile_space_id}`, SPEAKER.profile_space_id, false, {
+      forceRequestedSpace: true,
+    });
+    expect(analyticsMocks.personProfileOpened).toHaveBeenCalledWith(
+      SPEAKER.profile_space_id,
+      `page-${SPEAKER.profile_space_id}`,
+      {
+        interaction_surface: 'debate_media',
+        navigation_mode: 'entity_side_panel',
+      }
+    );
   });
 
   // The video behind is one big play/pause button.
@@ -202,16 +216,11 @@ describe('DebateClaimTickerCard', () => {
     expect(screen.getByText('65% agree')).toBeInTheDocument();
   });
 
-  // "65% agree" on "the SEC sued Coinbase" is the wrong sentence; the share takes the same verb
-  // the rest of the app uses for the claim's own vocabulary.
-  it("reads the share with the claim's own vocabulary verb", () => {
-    mocks.percent = 65;
-    mocks.responseKind = 'veracity';
-
-    renderCard();
-
-    expect(screen.getByText('65% verify')).toBeInTheDocument();
-  });
+  // A case that used to sit here — "reads the share with agree even on a claim geo-chat still calls
+  // factual" — is gone, and the type is why. The share verb comes from the kind this hook returns,
+  // which is `DebateResponseKind` and so can only be `stance`; geo-chat's own word for it never
+  // reaches here. Setting `mocks.responseKind = 'veracity'` no longer compiles, and with the input
+  // unrepresentable the case is the one directly above it.
 
   // A genuine 0% and "nobody has answered" are different statements, and the great majority of
   // claims are the second one.
@@ -492,7 +501,8 @@ describe('DebateClaimTickerStack', () => {
 
   /** jsdom lays nothing out, so the list's geometry is stated outright. */
   function layOut(list: HTMLElement) {
-    const cards = [...list.children] as HTMLElement[];
+    // Only real card boxes have geometry; display:contents wrappers keep jsdom's zeros.
+    const cards = [...list.querySelectorAll<HTMLElement>('[class*="backdrop-blur-"]')];
     cards.forEach((card, index) => {
       Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 });
       Object.defineProperty(card, 'offsetHeight', { configurable: true, value: 90 });
@@ -633,6 +643,47 @@ describe('DebateClaimTickerStack', () => {
     expect(screen.getByText(/And one more thing/)).toBeInTheDocument();
   });
 
+  it('observes the real card box and follows its growth only while pinned to the bottom', () => {
+    const observers: { elements: Set<Element>; callback: ResizeObserverCallback }[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        elements = new Set<Element>();
+        constructor(callback: ResizeObserverCallback) {
+          observers.push({ elements: this.elements, callback });
+        }
+        observe = (element: Element) => this.elements.add(element);
+        unobserve = (element: Element) => this.elements.delete(element);
+        disconnect = () => this.elements.clear();
+      }
+    );
+    try {
+      const { container } = renderStack({ open: true });
+      const list = listOf(container);
+      const card = list.querySelector<HTMLElement>('[class*="backdrop-blur-"]')!;
+      let height = 400;
+      Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => height });
+      Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+      fireEvent.scroll(list, { target: { scrollTop: 200 } });
+      const resize = () =>
+        act(() => {
+          for (const observer of observers)
+            if (observer.elements.has(card))
+              observer.callback([{ target: card } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+        });
+      height = 500;
+      resize();
+      expect(list.scrollTop).toBe(500);
+      expect(card.parentElement).toBe(list);
+      fireEvent.scroll(list, { target: { scrollTop: 50 } });
+      height = 600;
+      resize();
+      expect(list.scrollTop).toBe(50);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
   // The other half of the same bargain: someone watching the newest claim keeps watching it.
   it('follows the newest claim for a reader already at the bottom', () => {
     const { container, rerender } = renderStack({ open: true });
@@ -753,6 +804,162 @@ describe('DebateClaimTickerStack', () => {
  * can be drawn for it. The card layer has always enforced that; the scrubber and the chip did not,
  * so both pointed at claims that could never appear. These assert the three agree.
  */
+/**
+ * GEO-3114. On a phone the 80px card climbed across the speaker's face, and two clamped lines could
+ * not be read in full. Under `@max-md` — 448px of *player*, a container query, so the compact
+ * gallery on a desktop gets it too — the live card docks to one line and a tap opens the list as a
+ * sheet with every claim printed whole.
+ *
+ * jsdom evaluates no stylesheet, let alone a container query, so what is pinned here is the class
+ * contract: the small-panel layout exists only behind `@max-md:`, every wide-panel class is still
+ * there unchanged beside it, and the behaviour hanging off it (the read-in-full tap) is wired to the
+ * same toggle the chip uses. What it looks like was checked in a browser at 390px and at desktop.
+ */
+describe('the small-panel layout', () => {
+  const resting = [{ window: window(), opacity: 1 }];
+  const history = [
+    { window: window({ id: 'older', text: 'Congress has ceded its war powers over decades' }), opacity: 1 },
+    { window: window(), opacity: 1 },
+  ];
+
+  function renderStack(props: Partial<React.ComponentProps<typeof DebateClaimTickerStack>> = {}) {
+    return render(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={history}
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+        {...props}
+      />
+    );
+  }
+
+  const claimText = (pattern: RegExp) => screen.getByText(pattern);
+  const cardOf = (element: HTMLElement) => element.closest('.rounded-lg') as HTMLElement;
+
+  afterEach(() => {
+    // @ts-expect-error — dropping the stubs restores jsdom's own zero-height getters.
+    delete HTMLElement.prototype.scrollHeight;
+    // @ts-expect-error — as above.
+    delete HTMLElement.prototype.clientHeight;
+  });
+
+  it('docks the live card to one line on a small panel, and keeps the wide card beside it', () => {
+    renderStack({ onTogglePinned: vi.fn() });
+
+    const text = claimText(/Supreme Court/);
+    // Wide: the card as it always was.
+    expect(text).toHaveClass('line-clamp-2');
+    expect(cardOf(text)).toHaveClass('flex-col', 'p-3');
+    // Small: one row, one line.
+    expect(text).toHaveClass('@max-md:line-clamp-1');
+    expect(cardOf(text)).toHaveClass('@max-md:flex-row', '@max-md:py-1.5', '@max-md:min-h-9');
+  });
+
+  // The name and the share are a tap away in the sheet; on a 337px line they would leave the claim
+  // a handful of characters. The avatar stays, so the line still says whose claim it is.
+  it('steps the name and the share aside on the line, but keeps them in the DOM for wide panels', () => {
+    mocks.percent = 65;
+    renderStack({ onTogglePinned: vi.fn() });
+
+    expect(screen.getByText('Peter Feldip')).toHaveClass('@max-md:hidden');
+    expect(screen.getByText('65% agree')).toHaveClass('@max-md:hidden');
+    expect(screen.getByTestId('avatar')).toBeInTheDocument();
+  });
+
+  it('opens the sheet from the line through the same toggle the chip uses, without pausing', () => {
+    const onTogglePinned = vi.fn();
+    const onToggle = vi.fn();
+    render(
+      <div onClick={onToggle}>
+        <DebateClaimTickerStack
+          cards={resting}
+          history={history}
+          participantByClaimId={new Map([['claim-1', SPEAKER]])}
+          rowsByClaimId={new Map()}
+          entitiesByClaimId={new Map()}
+          onAnswered={vi.fn()}
+          onTogglePinned={onTogglePinned}
+        />
+      </div>
+    );
+
+    const read = screen.getByRole('button', { name: 'Read the whole claim' });
+    // Drawn only under the container query, which also takes it out of the tab order when wide.
+    expect(read).toHaveClass('hidden', '@max-md:block');
+
+    fireEvent.click(read);
+
+    expect(onTogglePinned).toHaveBeenCalledOnce();
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  // Hover-only callers have no sheet to open, and a tap that goes nowhere is worse than none.
+  it('offers no read-in-full tap where there is no toggle to open the list with', () => {
+    renderStack();
+
+    expect(screen.queryByRole('button', { name: 'Read the whole claim' })).not.toBeInTheDocument();
+  });
+
+  it('prints every claim whole in the opened list, which is allowed the height to show them', () => {
+    const { container } = renderStack({ open: true, pinned: true, onTogglePinned: vi.fn() });
+
+    for (const text of [claimText(/Congress has ceded/), claimText(/Supreme Court/)]) {
+      expect(text).toHaveClass('line-clamp-2', '@max-md:line-clamp-none');
+      // No edge dissolve over a claim the reader opened the sheet to read.
+      expect(cardOf(text)).toHaveClass('@max-md:[mask-image:none]');
+      // A card in the list is a card, not a line.
+      expect(cardOf(text)).not.toHaveClass('@max-md:flex-row');
+    }
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+    expect(list).toHaveClass('max-h-[9.75rem]', '@max-md:max-h-none');
+    expect(screen.queryByRole('button', { name: 'Read the whole claim' })).not.toBeInTheDocument();
+    // The way back out.
+    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
+  });
+
+  /**
+   * On the line the tap opens the sheet, so the wide layout's expand-in-place toggle must not also
+   * be reachable there. It wraps the claim, so it cannot be `hidden` without hiding the claim too:
+   * `invisible` takes it out of the tab order and the accessibility tree, and the text sets itself
+   * visible again.
+   */
+  it('keeps the wide expand toggle out of reach on the line without hiding the claim', () => {
+    forceClampedOverflow();
+    renderStack({ onTogglePinned: vi.fn() });
+
+    expect(screen.getByTitle('Show the whole claim')).toHaveClass('@max-md:invisible');
+    expect(claimText(/Supreme Court/)).toHaveClass('@max-md:visible');
+  });
+
+  /**
+   * The wrapper the read-in-full tap needs must not change the wide card. In a plain block box the
+   * expand toggle is an inline-level `<button>` on a line box of its own, and every truncated claim
+   * in the desktop backlog came out 87px rather than 80px. Measured on the preview; jsdom has no
+   * layout, so what is pinned is the flex column that blockifies it.
+   */
+  it('keeps the expand toggle a flex item, so the wide card keeps its height', () => {
+    forceClampedOverflow();
+    renderStack({ open: true, onTogglePinned: vi.fn() });
+
+    for (const toggle of screen.getAllByTitle('Show the whole claim')) {
+      expect(toggle.parentElement).toHaveClass('flex', 'flex-col');
+    }
+  });
+
+  // The end card's carousel draws the same card on white, inside the same `@container`, with its
+  // own small-panel layout. It must not inherit this one.
+  it('leaves the card untouched where no small-panel layout is asked for', () => {
+    forceClampedOverflow();
+    const { container } = renderCard({ tone: 'light' });
+
+    expect(container.innerHTML).not.toContain('@max-md');
+    expect(screen.queryByRole('button', { name: 'Read the whole claim' })).not.toBeInTheDocument();
+  });
+});
+
 describe('useDebateClaimTicker', () => {
   const DEBATE_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
   const SPEAKER_SPACE = '4582fbbee28a16589154f7e36f1ee3c5';
@@ -909,6 +1116,29 @@ describe('markerHitWidth', () => {
 });
 
 describe('ClaimScrubberMarkers', () => {
+  // The hover preview is a Radix tooltip, and Radix measures its arrow with a ResizeObserver that
+  // jsdom does not implement. Nothing here asserts on size, so an inert one is enough.
+  beforeEach(() => {
+    globalThis.ResizeObserver ??= class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    } as unknown as typeof ResizeObserver;
+  });
+
+  // Radix opens on a `setTimeout` of the delay it was given, so how long that wait is is the only
+  // thing separating this preview from the one it replaced. Under a real clock nothing here could
+  // tell them apart: `findBy*` polls for a second, which is long enough to swallow the 300ms
+  // default and call it instant.
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  /** Hover `target` and let exactly `ms` pass — no more, so a longer wait stays unsatisfied. */
+  const hoverFor = (target: HTMLElement, ms: number) => {
+    fireEvent.pointerMove(target, { pointerType: 'mouse' });
+    act(() => void vi.advanceTimersByTime(ms));
+  };
+
   const marker = (id: string, fraction: number): ClaimMarker => ({
     id,
     text: `Claim ${id}`,
@@ -933,5 +1163,37 @@ describe('ClaimScrubberMarkers', () => {
     const { container } = render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
 
     expect(container.querySelector('button')?.children).toHaveLength(0);
+  });
+
+  /**
+   * The preview used to be a `title`, and a native tooltip waits a second or more before it
+   * appears — long enough on a scrubber that viewers read the preview as missing rather than slow.
+   * That wait is the browser's and cannot be shortened, so the fix was to stop using `title` at
+   * all. Both halves of that are held here: the attribute gone, since one left behind would bring
+   * the slow preview back alongside the fast one, and the replacement opening on the hover itself.
+   *
+   * Zero elapsed milliseconds is the whole point. Radix schedules the open on a timer even at a
+   * delay of zero, so the hover alone leaves nothing on screen and draining the queue is what
+   * stands in for the browser's next tick. A tooltip that wanted 300ms would still be waiting.
+   */
+  it('previews a claim on the hover itself, with no native title left to lag behind it', () => {
+    render(<ClaimScrubberMarkers markers={[marker('a', 0.5)]} onSeek={vi.fn()} />);
+
+    const target = screen.getByLabelText('Jump to: Claim a');
+    expect(target).not.toHaveAttribute('title');
+
+    hoverFor(target, 0);
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Claim a');
+  });
+
+  // A hash stands for whatever ended in its segment, and the card only ever shows one of them.
+  // The preview says how many are behind it so a click on a crowded hash is not a surprise.
+  it('says how many claims share a hash', () => {
+    render(<ClaimScrubberMarkers markers={[{ ...marker('a', 0.5), count: 3 }]} onSeek={vi.fn()} />);
+
+    hoverFor(screen.getByLabelText('Jump to 3 claims, showing: Claim a'), 0);
+
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Claim a (+2 more)');
   });
 });

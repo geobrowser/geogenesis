@@ -20,9 +20,9 @@ import { ExploreCardEntityLink } from './explore-card-entity-link';
  * mid-scroll, which is the thing reading the claim off the graph exists to avoid.
  *
  * A Debate is headed by the claim it argued rather than by its own name, which
- * `debate-publish-draft` generates as "<debater> vs. <debater> on <claim>" — the matchup first and
- * the motion buried at the end of a long line. The full-screen `/debates` feed has always headed a
- * debate with its claim; this is the same header, and it points at the same entity.
+ * `debate-publish-draft` generates as "<claim> | <debater> vs. <debater>" — the motion and the
+ * matchup, where the card wants the motion alone. The full-screen `/debates` feed has always headed
+ * a debate with its claim; this is the same header, and it points at the same entity.
  *
  * Every other card is headed by its own name, unchanged: `debateClaim` is null on everything that
  * is not a debate.

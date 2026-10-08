@@ -13,9 +13,14 @@ import {
 
 import * as React from 'react';
 
+import { useActionContext } from '~/core/action-context-provider';
+import { snapshotAnalyticsRevision } from '~/core/analytics-operations';
 import { getCachedIdentityToken, useIdentityTokenSync } from '~/core/auth/identity-token';
 import type { AvailabilityBlock } from '~/core/availability/blocks';
 import { fromPayload, localTimezone, toPayload } from '~/core/availability/blocks';
+import { PEER_SCHEDULE_DAYS, toPeerSchedule } from '~/core/availability/peer-schedule';
+import { type ScheduleEditorSurface, debateScheduleSaved } from '~/core/availability/schedule-analytics';
+import { useObservedMutation } from '~/core/hooks/use-observed-mutation';
 
 import {
   type Debate,
@@ -28,11 +33,14 @@ import {
   type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
   type DebateRematchParticipant,
+  type DebateScheduleResponse,
   GEO_CHAT_CLAIM_IDS_PER_REQUEST,
   GeoChatRequestError,
   type LocalRecordingCompleteRequest,
   type LocalRecordingUploadRequest,
   type MatchmakingClaimsQuery,
+  type OpenRoundPick,
+  RECIPIENT_AWAY_CODE,
   type TranscriptFormat,
   abortDebate,
   acceptDebateChallenge,
@@ -43,9 +51,11 @@ import {
   createDebateChallenge,
   createDebateRematchRequest,
   createLocalRecordingUpload,
+  dashlessId,
   endDebateTurn,
   getDebate,
   getDebateActivity,
+  getDebateExtractedClaims,
   getDebateMedia,
   getDebateMediaArtifactUrl,
   getDebateProfile,
@@ -55,12 +65,14 @@ import {
   getLiveKitToken,
   getRecordingUrl,
   getRematchLiveKitToken,
+  getScheduleOverlaps,
   handleDebateSharePrompt,
   isAccountWarmingUp,
   leaveDebateRematch,
   listDebateClaims,
   listDebateRematchClaims,
   listDebateSharePrompts,
+  listNotInterestedClaims,
   listSpaceDebates,
   markDebateCapturing,
   markDebateJoined,
@@ -70,12 +82,14 @@ import {
   replaceDebateSchedule,
   requestDebateMediaProcessing,
   retryDebatePhaseBoundaryRequest,
+  saveOpenRoundPick,
   updateDebateAvailability,
 } from './api';
 import { claimResponseIndexedEvent } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebateVisibility } from './debate-attention';
 import { markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { useDebateGatewayScope, useDebateGatewaySnapshot, useDebateGatewaySpaceScopes } from './debate-gateway';
+import type { RecordingPlaybackVariant } from './mobile-rendition';
 import {
   type ParticipantAvatarMapper,
   type ParticipantAvatarSource,
@@ -120,9 +134,55 @@ export const debateQueryKeys = {
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
   debate: (debateId: string) => ['debates', 'detail', debateId] as const,
   media: (debateId: string) => ['debates', 'media', debateId] as const,
+  /** GEO-2870. geo-chat's extracted claims for one debate, with whether its media job has finished. */
+  extractedClaims: (debateId: string) => ['debates', 'extracted-claims', debateId] as const,
+  /** Viewer-specific: whether a recording can be read at all is decided per identity. */
+  recordingUrl: (
+    debateId: string,
+    filename: string,
+    accountKey: string | null,
+    variant: RecordingPlaybackVariant | 'original' = 'original'
+  ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
   transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
+  /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
+  schedulablePeopleRoot: (accountKey: string | null) =>
+    ['debates', 'account', accountKey, 'schedulable-people'] as const,
+  schedulablePeople: (
+    accountKey: string | null,
+    days: number,
+    limit: number,
+    calendar = false,
+    spaces: string[] = []
+  ) =>
+    calendar
+      ? (['debates', 'account', accountKey, 'schedulable-people', days, limit, 'calendar', spaces.join(',')] as const)
+      : (['debates', 'account', accountKey, 'schedulable-people', days, limit] as const),
+  /** Keyed on the viewer as well as the peer: the answer is the pair, not the person. */
+  peerSchedule: (accountKey: string | null, peerUserId: string, days: number) =>
+    ['debates', 'account', accountKey, 'peer-schedule', peerUserId, days] as const,
+  /** Viewer-specific: presence is answered from the viewer's own side of the access list. */
+  room: (accountKey: string | null, roomId: string) => ['debates', 'account', accountKey, 'room', roomId] as const,
+  upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
+  /** GEO-3133. Patched or refetched on `debate.lobbies_changed`. */
+  lobbies: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobbies'] as const,
+  /** Refetched on a card-less `debate.lobbies_changed`. */
+  myLobby: (accountKey: string | null) => ['debates', 'account', accountKey, 'my-lobby'] as const,
+  /** Dashless, as `debate.lobby_changed` spells it. */
+  lobby: (accountKey: string | null, lobbyId: string) =>
+    ['debates', 'account', accountKey, 'lobby', dashlessId(lobbyId)] as const,
+  /** Dashless. Refetched on `debate.lobby_changed`, and after the viewer's own vote is reported. */
+  lobbyClaims: (accountKey: string | null, lobbyId: string) =>
+    ['debates', 'account', accountKey, 'lobby-claims', dashlessId(lobbyId)] as const,
+  /** Dashless. Replaced by `debate.lobby_highlights_changed`; fetched on mount and reconnect only. */
+  lobbyHighlights: (accountKey: string | null, lobbyId: string) =>
+    ['debates', 'account', accountKey, 'lobby-highlights', dashlessId(lobbyId)] as const,
+  scheduledDebates: (accountKey: string | null) => ['debates', 'account', accountKey, 'scheduled-debates'] as const,
+  /** Every admin list of scheduled debates, whatever week it was read from: what New match refreshes. */
+  adminScheduledDebatesRoot: ['debates', 'admin-scheduled-debates'] as const,
+  adminScheduledDebates: (accountKey: string | null, from: string) =>
+    [...debateQueryKeys.adminScheduledDebatesRoot, from, accountKey] as const,
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
@@ -145,6 +205,8 @@ export const debateQueryKeys = {
   matches: (accountKey: string | null) => ['debates', 'account', accountKey, 'matches'] as const,
   requests: (accountKey: string | null) => ['debates', 'account', accountKey, 'requests'] as const,
   blocks: (accountKey: string | null) => ['debates', 'account', accountKey, 'blocks'] as const,
+  /** GEO-2862. The viewer's private "Not interested" list. */
+  notInterested: (accountKey: string | null) => ['debates', 'account', accountKey, 'not-interested'] as const,
 };
 
 export function useGeoChatAuth() {
@@ -606,7 +668,7 @@ export function useDebateSchedule() {
  * The timezone is read at save time rather than stored with the editor's state: a schedule means
  * "18:00 where I am", and the zone that matters is the one they were in when they said so.
  */
-export function useSaveDebateSchedule() {
+export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurface }) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const scheduleKey = debateQueryKeys.schedule(accountKey);
@@ -614,10 +676,61 @@ export function useSaveDebateSchedule() {
   return useMutation({
     mutationFn: (blocks: AvailabilityBlock[]) =>
       replaceDebateSchedule(toPayload(blocks, localTimezone()), getPrivyIdentityToken, accountKey),
+    // Taken at Save: the answer can arrive after a sign-out or account switch, and it is not the
+    // next account's schedule.
+    onMutate: snapshotAnalyticsRevision,
     // The server answers with the stored form, so take it rather than re-deriving: anything it
     // normalised on the way in is then what the calendar draws.
-    onSuccess: saved => queryClient.setQueryData(scheduleKey, saved),
+    onSuccess: (saved, _blocks, isCurrent) => {
+      // Read before the write below replaces it. Here rather than at the call site: the editor
+      // closes on Save, and a caller that unmounts with it would never hear the answer.
+      const before = queryClient.getQueryData<DebateScheduleResponse>(scheduleKey);
+      if (isCurrent()) {
+        debateScheduleSaved(fromPayload(saved.schedule), { surface, isFirstSchedule: before?.is_set !== true });
+      }
+      queryClient.setQueryData(scheduleKey, saved);
+      // Who shares a slot with the viewer is computed from this schedule.
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+    },
   });
+}
+
+/**
+ * Another person's availability, ready to draw (GEO-2938).
+ *
+ * The only data access behind that view. One request: the response carries their week, the
+ * viewer's own flag per slot, and `viewer_has_schedule`, so nothing else has to be read.
+ */
+export function usePeerSchedule(peerUserId: string | null) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  // Viewer-scoped and authenticated, so nothing to ask signed out or without a peer. A closed
+  // dialog that stays mounted passes an empty id, not null.
+  const enabled = authenticated && Boolean(peerUserId);
+
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.peerSchedule(accountKey, peerUserId ?? '', PEER_SCHEDULE_DAYS),
+    queryFn: ({ signal }) =>
+      getScheduleOverlaps(
+        peerUserId as string,
+        { days: PEER_SCHEDULE_DAYS },
+        getPrivyIdentityToken,
+        accountKey,
+        signal
+      ),
+    enabled,
+  });
+
+  return {
+    ...query,
+    schedule: query.data ? toPeerSchedule(query.data) : undefined,
+    /**
+     * Whether this is a question that can be asked at all. A disabled query sits at `pending`
+     * forever, which a caller would otherwise draw as a spinner that never resolves.
+     */
+    enabled,
+    isPending: enabled && query.isPending,
+  };
 }
 
 export function useUpdateDebateAvailability() {
@@ -838,6 +951,40 @@ export function useEndDebateTurn(debateId: string) {
     onSuccess: debate => {
       queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debate.id) });
+    },
+  });
+}
+
+/**
+ * Saves an Open rounds pick (GEO-3178). Not retried: the pick card puts the selection back and asks
+ * the debater to tap again, which is the retry, and a silent one would hold up any pick queued
+ * behind it while the decision window runs out.
+ *
+ * `round_already_resolved` is not a failure: the round ended while the save was in flight, the room
+ * is about to show the result, and the debate is re-read for it. It resolves `null`.
+ *
+ * Saves for one debate run one after another (`scope`), so a quick switch is sent only once the
+ * previous pick has answered. Without that, the two PUTs would run concurrently and could reach the
+ * server, or answer, in either order — so the pick switched away from could be what the server
+ * keeps, or what the cache shows last.
+ */
+export function useSaveOpenRoundPick(debateId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useMutation({
+    scope: { id: `open-round-pick:${debateId}` },
+    mutationFn: async ({ roundIndex, pick }: { roundIndex: number; pick: OpenRoundPick }) => {
+      try {
+        return await saveOpenRoundPick(debateId, roundIndex, pick, getPrivyIdentityToken, accountKey);
+      } catch (error) {
+        if (error instanceof GeoChatRequestError && error.code === 'round_already_resolved') return null;
+        throw error;
+      }
+    },
+    onSuccess: debate => {
+      if (debate) queryClient.setQueryData(debateQueryKeys.debate(debate.id), debate);
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.debate(debateId) });
     },
   });
 }
@@ -1074,10 +1221,11 @@ export function useDebateRematchClaims(sessionId: string, claimIds: string[] = N
 }
 
 export function useCreateDebateRematchRequest(sessionId: string) {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (request: { source_space_id: string; claim_id: string; format_id: string }) =>
       createDebateRematchRequest(sessionId, request, getPrivyIdentityToken, accountKey),
     onSuccess: result => {
@@ -1086,13 +1234,17 @@ export function useCreateDebateRematchRequest(sessionId: string) {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
+  return useObservedMutation(mutation, 'start_debate', request =>
+    getContext({ target_type: 'claim', target_id: request.claim_id })
+  );
 }
 
 export function useAcceptDebateRematchRequest() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (requestId: string) => acceptDebateRematchRequest(requestId, getPrivyIdentityToken, accountKey),
     // Same window as the hub's accept: the debate is created inside this round trip and announced to
     // this tab over its own socket, so the id-keyed intent below is taken too late to stop the
@@ -1113,6 +1265,9 @@ export function useAcceptDebateRematchRequest() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
+  return useObservedMutation(mutation, 'join_debate', requestId =>
+    getContext({ target_type: 'debate_request', target_id: requestId })
+  );
 }
 
 export function useRejectDebateRematchRequest() {
@@ -1136,10 +1291,23 @@ export function useRejectDebateRematchRequest() {
   });
 }
 
-export function useDebateProfile(profileSpaceId: string, enabled = true) {
+export function useDebateProfile(
+  profileSpaceId: string,
+  enabled = true,
+  {
+    signedOut = false,
+  }: {
+    /**
+     * Ask signed out too. geo-chat answers anonymously (`auth: 'optional'`), with the viewer fields
+     * false, which is enough to learn whether this person can be booked at all. Off by default: the
+     * profile's Debate button has nothing to show a signed-out viewer.
+     */
+    signedOut?: boolean;
+  } = {}
+) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   const foreground = useDebateAttention();
-  const queryEnabled = enabled && authenticated && Boolean(profileSpaceId);
+  const queryEnabled = enabled && (authenticated || signedOut) && Boolean(profileSpaceId);
   const wasForeground = React.useRef(foreground);
 
   const query = useQuery({
@@ -1163,10 +1331,11 @@ export function useDebateProfile(profileSpaceId: string, enabled = true) {
 }
 
 export function useCreateDebateChallenge() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (request: { recipient_profile_space_id: string }) =>
       createDebateChallenge(request, getPrivyIdentityToken, accountKey),
     onSuccess: challenge => {
@@ -1176,19 +1345,28 @@ export function useCreateDebateChallenge() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
     onError: (error, request) => {
-      if (!(error instanceof GeoChatRequestError) || error.code !== 'challenge_unavailable') return;
+      if (!(error instanceof GeoChatRequestError)) return;
+      if (error.code !== 'challenge_unavailable' && error.code !== RECIPIENT_AWAY_CODE) return;
       void queryClient.invalidateQueries({
         queryKey: debateQueryKeys.profile(accountKey, request.recipient_profile_space_id),
       });
+      // They went away between the list loading and the press (GEO-3119): redraw them as Away.
+      if (error.code === RECIPIENT_AWAY_CODE) {
+        void queryClient.invalidateQueries({ queryKey: debateQueryKeys.people(accountKey) });
+      }
     },
   });
+  return useObservedMutation(mutation, 'start_debate', request =>
+    getContext({ target_type: 'space', target_id: request.recipient_profile_space_id })
+  );
 }
 
 export function useAcceptDebateChallenge() {
+  const getContext = useActionContext('debate_matchmaking', 'entity', '');
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
     onSuccess: result => {
       if (result.session) {
@@ -1197,6 +1375,9 @@ export function useAcceptDebateChallenge() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
+  return useObservedMutation(mutation, 'join_debate', challengeId =>
+    getContext({ target_type: 'debate_challenge', target_id: challengeId })
+  );
 }
 
 export function useRejectDebateChallenge() {
@@ -1260,13 +1441,51 @@ export function useCompleteLocalRecordingUpload(debateId: string) {
   });
 }
 
-export function useRecordingUrl() {
+/**
+ * How long a signed recording URL is handed out again from cache (GEO-2965).
+ *
+ * geo-chat signs these with its default presign lifetime, `PRESIGN_EXPIRES_DEFAULT` = 15 minutes
+ * (`crates/attachments/src/storage.rs`). A cached URL must outlive the playback that starts from
+ * it — the element keeps making range requests with it for the whole debate — so it is reused
+ * only for the first third of that, which leaves every URL served at least ten minutes of life.
+ * A playback that still outlasts it is what `refreshSlotUrl` is for.
+ */
+export const RECORDING_URL_STALE_MS = 5 * 60 * 1000;
+
+/** `variant: 'mobile'` signs the recording's mobile rendition (GEO-3118) instead of the file itself. */
+type RecordingUrlRequest = { debateId: string; filename: string; variant?: RecordingPlaybackVariant };
+
+/**
+ * The signed playback URL for one debate recording, cached.
+ *
+ * This used to be a mutation, so nothing de-duplicated it: every card that mounted, and every
+ * return to one the feed had unmounted, was two real round trips before either video could even
+ * start opening. As a query it is fetched once per recording per five minutes, and the feed's
+ * look-ahead fills the same cache the active card reads.
+ *
+ * `lookup` reads through the cache. `refresh` always signs anew, for the one caller that has
+ * evidence the URL it holds has stopped working, and replaces the cached one so no other card is
+ * handed the dead URL afterwards.
+ */
+export function useRecordingPlaybackUrl() {
+  const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
-  return useMutation({
-    mutationFn: ({ debateId, filename }: { debateId: string; filename: string }) =>
-      getRecordingUrl(debateId, filename, getPrivyIdentityToken, accountKey),
-  });
+  return React.useMemo(() => {
+    const options = ({ debateId, filename, variant }: RecordingUrlRequest, staleTime: number) => ({
+      queryKey: debateQueryKeys.recordingUrl(debateId, filename, accountKey, variant),
+      queryFn: () => getRecordingUrl(debateId, filename, getPrivyIdentityToken, accountKey, variant),
+      staleTime,
+      // Dropped once it could no longer be served anyway.
+      gcTime: RECORDING_URL_STALE_MS,
+      // A failed signature is the caller's to report; a silent retry only delays the error.
+      retry: false,
+    });
+    return {
+      lookup: (request: RecordingUrlRequest) => queryClient.fetchQuery(options(request, RECORDING_URL_STALE_MS)),
+      refresh: (request: RecordingUrlRequest) => queryClient.fetchQuery(options(request, 0)),
+    };
+  }, [accountKey, getPrivyIdentityToken, queryClient]);
 }
 
 export function useDebateMedia(debateId: string, enabled: boolean) {
@@ -1285,6 +1504,69 @@ export function useDebateMedia(debateId: string, enabled: boolean) {
       ),
     enabled,
   });
+}
+
+/** How often the "From this debate" source asks again while extraction may still be writing. */
+export const EXTRACTED_CLAIMS_POLL_MS = 10_000;
+
+/**
+ * GEO-2870 phase 2. The claims geo-chat extracted from one debate, read from its fast path, and
+ * whether that payload can still change.
+ *
+ * Polled until it cannot. geo-chat commits the payload when extraction finishes — minutes after the
+ * debate, well before the video — and may write it again before the media job ends (D4's final
+ * pass). A finished job, either way, is the last write, so the poll stops there; until then an
+ * empty payload is "not yet", never "none".
+ *
+ * The media read is folded into the same query rather than read off `useDebateMedia`, because that
+ * one does not poll: its status would sit at `running` for the whole visit and the poll would never
+ * stop. A failed media read only costs the stop signal, so it is not allowed to fail the claims.
+ */
+export function useDebateExtractedClaims(debateId: string, enabled: boolean) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.extractedClaims(debateId),
+    queryFn: async ({ signal }) => {
+      const token = authenticated ? getPrivyIdentityToken : undefined;
+      const account = authenticated ? accountKey : null;
+      const [payload, media] = await Promise.all([
+        getDebateExtractedClaims(debateId, token, account, signal),
+        getDebateMedia(debateId, token, account, signal).catch(() => null),
+      ]);
+      const status = media?.job?.status;
+      return { payload, final: status === 'succeeded' || status === 'failed' };
+    },
+    enabled: enabled && Boolean(debateId),
+    refetchInterval: query => extractedClaimsRefetchInterval(query.state.data),
+  });
+}
+
+/** Polls until the payload is known to be final; a failed or pending first read keeps polling. */
+export function extractedClaimsRefetchInterval(data: { final: boolean } | undefined): number | false {
+  return data?.final ? false : EXTRACTED_CLAIMS_POLL_MS;
+}
+
+const NO_NOT_INTERESTED_IDS: string[] = [];
+
+/**
+ * The claims the viewer marked "Not interested" (GEO-2862), as ids. Private to the viewer, so
+ * signed out there is nothing to ask and nothing hidden.
+ */
+export function useNotInterestedClaimIds(enabled = true) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const query = useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.notInterested(accountKey),
+    queryFn: ({ signal }) => listNotInterestedClaims(getPrivyIdentityToken, accountKey, signal),
+    enabled: enabled && authenticated,
+  });
+  const ids = React.useMemo(
+    () => query.data?.claims.map(claim => claim.claim_entity_id) ?? NO_NOT_INTERESTED_IDS,
+    [query.data]
+  );
+  return { ids, isLoading: query.isLoading };
 }
 
 /**

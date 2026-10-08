@@ -33,12 +33,17 @@ export function DebatesHubButton() {
 
   // Guarded rather than relying on the lookups being empty: a stale cache from a session that has
   // since signed out would otherwise badge the button for nobody.
-  const requestCount = !authenticated ? 0 : requests ? incoming.length : (activity?.incoming_request_count ?? 0);
+  const requestCount = !authenticated
+    ? 0
+    : (requests ? incoming.length : (activity?.incoming_request_count ?? 0)) +
+      (activity?.scheduled_awaiting_answer_count ?? 0);
 
   return (
     <button
       type="button"
       data-debates-hub-opener
+      data-geo-analytics-label="Navbar debate hub toggle"
+      data-geo-analytics-intent="toggle_debates_hub"
       // The pending count is the whole point of the button, and an aria-label would otherwise
       // override the visible number. It says "Debate" to match the label below: a control should
       // answer to the word it shows, so the two move together.

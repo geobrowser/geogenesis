@@ -10,23 +10,34 @@ import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-side
 
 import { spaceSidebarHasContentAtom } from '~/atoms';
 
-const FULL_BLEED_ROUTE = /^(\/space\/[^/]+|\/root)\/debates(\/|$)/;
+const FULL_BLEED_ROUTE = /^(\/space\/[^/]+|\/root)\/(debates|claims)(\/|$)/;
 
 /**
- * The debates *index*, and nothing under it.
+ * A full-bleed *index*, and nothing under it.
  *
  * `keepChrome` exists for a profile's Debates tab, which is a list read beside
  * the rest of a profile. Everything nested below it — a debate room, a
  * recording, a rematch — is still the full-screen surface the gate was written
  * for, and handing those the profile header and rail would frame a
  * viewport-filling player inside a page about a person.
+ *
+ * Claims is named here too, though a personal space has no Claims tab — it
+ * keeps its claims at `/positions`. Defensive rather than load-bearing: the two
+ * patterns are one rule expressed twice, and a profile that ever did reach
+ * `/claims` should keep its header for the same reason its Debates tab does.
  */
-const DEBATES_INDEX_ROUTE = /^(\/space\/[^/]+|\/root)\/debates\/?$/;
+const FULL_BLEED_INDEX_ROUTE = /^(\/space\/[^/]+|\/root)\/(debates|claims)\/?$/;
 
 /**
- * The debates surface is full-screen and edge-to-edge (TikTok-style feed): no
- * space header, metadata, or tabs. This gate hides that chrome on any
- * `/space/<id>/debates...` (or `/root/debates...`) route while keeping it everywhere else.
+ * The debates and claims surfaces are full-screen and edge-to-edge: no space
+ * header, metadata, or tabs. This gate hides that chrome on any
+ * `/space/<id>/debates...` or `/space/<id>/claims` route (and the `/root`
+ * equivalents) while keeping it everywhere else.
+ *
+ * Both are browse surfaces reached from Overview's Activity card rather than
+ * tabs of the space — debates as the TikTok-style player, claims as their own
+ * ranked feed — and framing either inside the space's tab bar makes it read as
+ * a section of the space page rather than the thing you navigated to.
  *
  * Except on a person's profile (GEO-2859), where Debates is a *tab* rather than
  * the whole surface. Stripping the chrome there removes the tab bar that got you
@@ -36,7 +47,7 @@ export function SpaceChromeGate({ children, keepChrome = false }: { children: Re
   const pathname = usePathname();
   const isFullBleedRoute = pathname != null && FULL_BLEED_ROUTE.test(pathname);
   // The exception is the tab, not everything beneath it.
-  const keepsChromeHere = keepChrome && pathname != null && DEBATES_INDEX_ROUTE.test(pathname);
+  const keepsChromeHere = keepChrome && pathname != null && FULL_BLEED_INDEX_ROUTE.test(pathname);
 
   if (isFullBleedRoute && !keepsChromeHere) return null;
 
@@ -51,7 +62,7 @@ export function SpaceChromeGate({ children, keepChrome = false }: { children: Re
 
 /**
  * Routes that render a space rail on the server today (Overview + Community, for a
- * space or `/root`). This is used ONLY to seed the header width before the rail has
+ * space or `/root`, and a topic space's `/overview`). This is used ONLY to seed the header width before the rail has
  * reported its content on the client — so a hard load of a rail route paints at the
  * right width instead of flashing narrow → wide, and a non-rail tab (which never
  * renders a rail on the server) is never seeded wide. Once the rail reports via the
@@ -61,7 +72,7 @@ function useIsSidebarSeedRoute() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   if (searchParams.get('tabId')) return false;
-  return pathname != null && /^(\/space\/[^/]+|\/root)(\/community)?\/?$/.test(pathname);
+  return pathname != null && /^(\/space\/[^/]+|\/root)(\/community|\/overview)?\/?$/.test(pathname);
 }
 
 type SpaceHeaderContentContainerProps = {
@@ -94,9 +105,9 @@ export function ProfileRailGate({
 }) {
   const pathname = usePathname();
   const isFullBleedRoute = pathname != null && FULL_BLEED_ROUTE.test(pathname);
-  const isDebatesIndex = pathname != null && DEBATES_INDEX_ROUTE.test(pathname);
+  const isFullBleedIndex = pathname != null && FULL_BLEED_INDEX_ROUTE.test(pathname);
 
-  if (!isProfile || (isFullBleedRoute && !isDebatesIndex)) return <>{children}</>;
+  if (!isProfile || (isFullBleedRoute && !isFullBleedIndex)) return <>{children}</>;
 
   return <EntityPageSidebarLayout sidebar={sidebar}>{children}</EntityPageSidebarLayout>;
 }

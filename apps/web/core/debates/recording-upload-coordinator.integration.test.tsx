@@ -4,11 +4,16 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError } from './api';
-import { DebateRecordingUploadCoordinator } from './recording-upload-coordinator';
+import {
+  DebateRecordingUploadCoordinator,
+  MAX_RECORDING_UPLOAD_AGE_MS,
+  MAX_RECORDING_UPLOAD_ATTEMPTS,
+} from './recording-upload-coordinator';
 import type { DebateRecordingUpload } from './recording-upload-queue';
 
 const mocks = vi.hoisted(() => ({
   activityDebate: null as null | { id: string; status: string },
+  capture: vi.fn(),
   cancelRecording: vi.fn(),
   completeUpload: vi.fn(),
   createUpload: vi.fn(),
@@ -18,6 +23,10 @@ const mocks = vi.hoisted(() => ({
   invalidateQueries: vi.fn(),
   lockRequest: vi.fn(),
   markUploaded: vi.fn(),
+  markFailed: vi.fn(),
+  readRecording: vi.fn(),
+  retryFailed: vi.fn(),
+  retryNow: vi.fn(),
   observer: null as null | ((uploads: DebateRecordingUpload[]) => void),
   queue: [] as DebateRecordingUpload[],
   resolveUser: vi.fn(),
@@ -26,8 +35,8 @@ const mocks = vi.hoisted(() => ({
   thankingHasPendingLocalRecording: false,
   thankingHasUploadedRecording: false,
   thankingRecordingCancelled: false,
-  // The card only owns the publish control while it is on screen; these cases are about the
-  // banner, which is what is left when it isn't.
+  // Whether the thank-you card is on screen carrying the publish switch. It changes which opt-out
+  // control is drawn, not whether the banner reports the upload — it always does.
   thankingShowsPublishControl: false,
   publishOptOutOffer: null as { debateId: string | null; busy: boolean; cancelled: boolean } | null,
   publishOptOutRequest: null as string | null,
@@ -60,6 +69,8 @@ class FakeUploadRequest {
     void mocks.holdUpload.then(() => this.onload?.());
   }
 }
+
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture }));
 
 vi.mock('@tanstack/react-query', async importOriginal => ({
   ...(await importOriginal<typeof import('@tanstack/react-query')>()),
@@ -127,6 +138,33 @@ vi.mock('./recording-upload-queue', async importOriginal => ({
     mocks.observer?.(mocks.queue);
   },
   getDebateRecordingUpload: (id: string) => mocks.getUpload(id),
+  readDebateRecordingUploadBlob: (upload: DebateRecordingUpload) => mocks.readRecording(upload),
+  markDebateRecordingUploadFailed: async (id: string, reason: string, error: unknown) => {
+    await mocks.markFailed(id, reason, error);
+    mocks.queue = mocks.queue.map(upload =>
+      upload.id === id
+        ? {
+            ...upload,
+            failedAt: Date.now(),
+            failedReason: reason as DebateRecordingUpload['failedReason'],
+            lastError: error instanceof Error ? error.message : 'Recording upload failed.',
+          }
+        : upload
+    );
+    mocks.observer?.(mocks.queue);
+  },
+  retryFailedDebateRecordingUpload: async (id: string) => {
+    await mocks.retryFailed(id);
+    mocks.queue = mocks.queue.map(upload =>
+      upload.id === id
+        ? { ...upload, failedAt: null, failedReason: null, attemptCount: 0, nextAttemptAt: Date.now(), lastError: null }
+        : upload
+    );
+    mocks.observer?.(mocks.queue);
+  },
+  retryDebateRecordingUploadNow: async (id: string) => {
+    await mocks.retryNow(id);
+  },
   markDebateRecordingUploaded: async (id: string, filename: string) => {
     await mocks.markUploaded(id, filename);
     mocks.queue = mocks.queue.map(upload =>
@@ -194,6 +232,7 @@ function uploadId(debateId: string) {
 
 beforeEach(() => {
   idNonce += 1;
+  mocks.capture.mockClear();
   mocks.activityDebate = null;
   mocks.thankingDebateId = 'debate-1';
   mocks.cancelRecording.mockReset().mockResolvedValue(undefined);
@@ -213,6 +252,10 @@ beforeEach(() => {
   mocks.invalidateQueries.mockReset();
   mocks.lockRequest.mockReset().mockImplementation(async (_name, _options, callback) => callback({ name: 'lock' }));
   mocks.markUploaded.mockReset().mockResolvedValue(undefined);
+  mocks.markFailed.mockReset().mockResolvedValue(undefined);
+  mocks.readRecording.mockReset().mockImplementation(async (upload: DebateRecordingUpload) => upload.blob);
+  mocks.retryFailed.mockReset().mockResolvedValue(undefined);
+  mocks.retryNow.mockReset().mockResolvedValue(undefined);
   mocks.observer = null;
   mocks.queue = [];
   mocks.resolveUser.mockReset().mockResolvedValue('user-a');
@@ -237,6 +280,9 @@ afterEach(() => {
   cleanup();
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
+  // The banner claims `--app-bottom-inset` on the shared document root, so a case that leaves it
+  // set would bleed into the next one.
+  document.documentElement.style.removeProperty('--app-bottom-inset');
 });
 
 describe('DebateRecordingUploadCoordinator', () => {
@@ -309,6 +355,18 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
   });
 
+  it('still tries a due upload when the browser reports offline (GEO-3171)', async () => {
+    // Chrome can report offline on a connection that works. Held back on that alone, a recording
+    // that never streamed waited for ever and nothing reported it.
+    Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+    mocks.thankingDebateId = null;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+  });
+
   it('uploads queued recordings sequentially', async () => {
     const firstCompletion = deferred<void>();
     mocks.completeUpload.mockImplementation((debateId: string) =>
@@ -351,6 +409,17 @@ describe('DebateRecordingUploadCoordinator', () => {
       screen.getByText('Waiting to upload 1 debate — Finalization unavailable. Retrying automatically.')
     ).toBeInTheDocument();
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_retry_scheduled', {
+      debate_id: 'debate-1',
+      stage: 'uploaded',
+      attempt_count: 1,
+      online: true,
+      error_code: 'unknown',
+      http_status: null,
+      error_name: 'Error',
+      error_message: 'Finalization unavailable',
+    });
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_failed', expect.anything());
     expect(warning).toHaveBeenCalledWith(
       '[DebateRecordingUploadCoordinator] upload attempt failed:',
       expect.objectContaining({
@@ -416,6 +485,9 @@ describe('DebateRecordingUploadCoordinator', () => {
       await screen.findByText('Waiting to upload 1 debate — Temporary failure. Retrying automatically.')
     ).toBeInTheDocument();
 
+    // The backoff has run out: the tab's own record of it (GEO-3105) as well as the row's.
+    const later = Date.now() + 10 * 60_000;
+    vi.spyOn(Date, 'now').mockReturnValue(later);
     mocks.queue = mocks.queue.map(upload => ({ ...upload, nextAttemptAt: 0 }));
     mocks.observer?.(mocks.queue);
 
@@ -434,26 +506,369 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_failed', {
+      debate_id: 'debate-1',
+      stage: 'uploaded',
+      attempt_count: 1,
+      terminal_reason: 'rejected',
+      error_code: 'recording_not_ready',
+      http_status: 400,
+      error_name: 'GeoChatRequestError',
+      error_message: null,
+    });
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_retry_scheduled', expect.anything());
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
-  it('keeps retrying entries with very high attempt counts', async () => {
+  // GEO-3051. The opponent cancelling reaches this device as `recording_cancelled`. That ends the
+  // upload, but it is not this device failing, and a failure rate must be able to leave it out.
+  it('reports an opponent cancellation as its own terminal reason, not as a failure', async () => {
+    mocks.completeUpload.mockRejectedValue(
+      new GeoChatRequestError('this debate recording was cancelled', 'recording_cancelled', 400)
+    );
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
+    expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    const failures = mocks.capture.mock.calls.filter(([name]) => name === 'debate_recording_upload_failed');
+    expect(failures).toHaveLength(1);
+    expect(failures[0]?.[1]).toMatchObject({
+      debate_id: 'debate-1',
+      terminal_reason: 'opponent_cancelled',
+      error_code: 'recording_cancelled',
+    });
+    expect(failures[0]?.[1]).not.toMatchObject({ terminal_reason: 'rejected' });
+  });
+
+  it('keeps retrying while under the attempt bound', async () => {
     vi.spyOn(console, 'warn').mockImplementation(() => undefined);
-    mocks.completeUpload.mockRejectedValueOnce(new Error('Still unavailable'));
+    mocks.completeUpload.mockRejectedValueOnce(new TypeError('Load failed'));
     mocks.queue = [
       {
         ...queuedRecording('debate-1'),
         stage: 'uploaded',
         filename: 'recordings/debate-1.webm',
-        attemptCount: 1_000,
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS - 2,
       },
     ];
 
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
-    expect(mocks.queue[0]?.attemptCount).toBe(1_001);
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_retry_scheduled',
+      expect.objectContaining({
+        attempt_count: MAX_RECORDING_UPLOAD_ATTEMPTS - 1,
+        error_code: 'fetch_failed',
+        error_name: 'TypeError',
+      })
+    );
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_failed', expect.anything());
+  });
+
+  // GEO-3051. Three debates sent all 229 retry events in production and none ever became terminal:
+  // a failure the server does not name as permanent was retried every five minutes indefinitely.
+  it('gives up, counts the failure and stops retrying once the attempt bound is reached', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.completeUpload.mockRejectedValue(new TypeError('Load failed'));
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        stage: 'uploaded',
+        filename: 'recordings/debate-1.webm',
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS - 1,
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    // GEO-3116: kept, not deleted, and shown to the person.
+    await waitFor(() =>
+      expect(mocks.markFailed).toHaveBeenCalledWith(uploadId('debate-1'), 'retries_exhausted', expect.any(TypeError))
+    );
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_failed', {
+      debate_id: 'debate-1',
+      stage: 'uploaded',
+      attempt_count: MAX_RECORDING_UPLOAD_ATTEMPTS,
+      terminal_reason: 'retries_exhausted',
+      error_code: 'fetch_failed',
+      http_status: null,
+      error_name: 'TypeError',
+      error_message: 'Load failed',
+    });
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_retry_scheduled', expect.anything());
+    expect(await screen.findByText('1 debate didn’t upload')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByText('Keep browser open')).not.toBeInTheDocument();
+    // And it is not attempted again, even though the row's own backoff says "due".
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mocks.completeUpload).toHaveBeenCalledOnce();
+  });
+
+  it('does not give up on a failure the browser puts down to being offline', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.completeUpload.mockImplementationOnce(async () => {
+      Object.defineProperty(navigator, 'onLine', { configurable: true, value: false });
+      throw new TypeError('Failed to fetch');
+    });
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        stage: 'uploaded',
+        filename: 'recordings/debate-1.webm',
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS - 1,
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_retry_scheduled',
+      expect.objectContaining({ error_code: 'offline', online: false })
+    );
+  });
+
+  it('gives up on a recording older than the multipart lifetime after its attempt fails', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.createUpload.mockRejectedValue(new Error('Recording part upload failed (404)'));
+    mocks.queue = [{ ...queuedRecording('debate-1'), createdAt: Date.now() - MAX_RECORDING_UPLOAD_AGE_MS - 1 }];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.markFailed).toHaveBeenCalledWith(uploadId('debate-1'), 'retries_exhausted', expect.anything())
+    );
+    // Tried first: age alone never stops a recording.
+    expect(mocks.createUpload).toHaveBeenCalledOnce();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_failed',
+      expect.objectContaining({ attempt_count: 1, terminal_reason: 'retries_exhausted' })
+    );
+  });
+
+  // GEO-3116. A copy this browser cannot read is never going to upload. It used to fail as a
+  // network error ("Load failed") for 30 attempts; now it stops at the first and says so.
+  it('stops at once, and offers help, when this browser cannot read its copy of the recording', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { RecordingUploadError } = await import('./recording-upload-errors');
+    mocks.readRecording.mockRejectedValue(
+      new RecordingUploadError('This browser can no longer read its saved copy of the recording.', 'blob_unreadable')
+    );
+    mocks.thankingDebateId = null;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.markFailed).toHaveBeenCalledWith(uploadId('debate-1'), 'blob_unreadable', expect.anything())
+    );
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+    expect(mocks.scheduleRetry).not.toHaveBeenCalled();
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_failed',
+      expect.objectContaining({ attempt_count: 1, terminal_reason: 'blob_unreadable', error_code: 'blob_unreadable' })
+    );
+    expect(
+      await screen.findByText('1 debate didn’t upload — this browser lost its copy of the recording')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Get help' })).toBeInTheDocument();
+  });
+
+  it('shows the failure even when the queue cannot record it', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    const { RecordingUploadError } = await import('./recording-upload-errors');
+    mocks.readRecording.mockRejectedValue(new RecordingUploadError('gone', 'blob_unreadable'));
+    mocks.markFailed.mockImplementation(async () => {
+      throw new Error('Error modifying one or more objects');
+    });
+    mocks.thankingDebateId = null;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText(/1 debate didn’t upload/)).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mocks.readRecording).toHaveBeenCalledOnce();
+  });
+
+  it('puts a failed upload back in the queue from the banner', async () => {
+    mocks.thankingDebateId = null;
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS,
+        failedAt: Date.now() - 1_000,
+        failedReason: 'retries_exhausted',
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(mocks.retryFailed).toHaveBeenCalledWith(uploadId('debate-1')));
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+  });
+
+  it('does not attempt a failed upload on startup until asked', async () => {
+    mocks.thankingDebateId = null;
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        failedAt: Date.now() - 1_000,
+        failedReason: 'retries_exhausted',
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('1 debate didn’t upload')).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    // Dismissing hides the notice; it never discards the recording.
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+  });
+
+  it('offers to retry now after a few failed attempts, and skips the backoff when asked', async () => {
+    mocks.thankingDebateId = null;
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        attemptCount: 3,
+        nextAttemptAt: Date.now() + 5 * 60_000,
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(
+      await screen.findByText('Waiting to upload 1 debate — Load failed. Retrying automatically.')
+    ).toBeInTheDocument();
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Retry now' }));
+
+    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalledOnce());
+    expect(mocks.retryNow).toHaveBeenCalledWith(uploadId('debate-1'));
+  });
+
+  it('does not offer to retry now after a single failure', async () => {
+    mocks.thankingDebateId = null;
+    mocks.queue = [
+      { ...queuedRecording('debate-1'), attemptCount: 1, nextAttemptAt: Date.now() + 60_000, lastError: 'Load failed' },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText(/Retrying automatically/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Retry now' })).not.toBeInTheDocument();
+  });
+
+  it('never sends a filename, URL or signature in upload failure properties', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.completeUpload.mockRejectedValueOnce(
+      new Error(
+        'PUT https://geo-chat.r2.cloudflarestorage.com/debates/abc/1-slot.local.webm?X-Amz-Signature=0123456789abcdef0123456789abcdef failed for recordings/debate-1.webm (blob:https://geobrowser.io/9f0c)'
+      )
+    );
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    const [, properties] = mocks.capture.mock.calls.find(
+      ([name]) => name === 'debate_recording_upload_retry_scheduled'
+    )!;
+    const serialized = JSON.stringify(properties);
+    for (const leak of [
+      'https:',
+      'r2.',
+      'webm',
+      'X-Amz',
+      'Signature',
+      'recordings/',
+      'debates/',
+      'blob:',
+      '0123456789abcdef',
+    ]) {
+      expect(serialized).not.toContain(leak);
+    }
+    expect(properties).toMatchObject({ error_code: 'unknown', error_name: 'Error' });
+    expect(properties.error_message).toContain('failed for');
+  });
+
+  // GEO-3105. A Safari tab fired this event 180 times in three seconds, every one `attempt_count: 1`:
+  // the attempt failed, and so did writing the retry state back to IndexedDB, so the row still said
+  // "due now" and the coordinator started the next attempt as soon as the last one settled.
+  it('backs off even when the retry state cannot be written back to the queue', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.createUpload.mockRejectedValue(new Error('Recording part upload failed (403)'));
+    mocks.scheduleRetry.mockRejectedValue(new Error('Connection to Indexed Database server lost.'));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    // Long enough for a hot loop to run hundreds of attempts; the backoff allows none.
+    await new Promise(resolve => setTimeout(resolve, 250));
+    expect(mocks.createUpload).toHaveBeenCalledOnce();
+    const retries = mocks.capture.mock.calls.filter(([name]) => name === 'debate_recording_upload_retry_scheduled');
+    expect(retries).toHaveLength(1);
+    expect(retries[0]?.[1]).toMatchObject({
+      attempt_count: 1,
+      error_code: 'unknown',
+      error_name: 'Error',
+      error_message: 'Recording part upload failed (403)',
+    });
+  });
+
+  it('backs off even when the queue cannot be read at all', async () => {
+    vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mocks.getUpload.mockRejectedValue(new Error('Connection to Indexed Database server lost.'));
+    mocks.scheduleRetry.mockRejectedValue(new Error('Connection to Indexed Database server lost.'));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.scheduleRetry).toHaveBeenCalledOnce());
+    await new Promise(resolve => setTimeout(resolve, 250));
+    expect(mocks.getUpload).toHaveBeenCalledOnce();
+    expect(
+      mocks.capture.mock.calls.filter(([name]) => name === 'debate_recording_upload_retry_scheduled')
+    ).toHaveLength(1);
+  });
+
+  it('does not start an attempt the queue has already pushed back', async () => {
+    // The observer can lag the queue: the row it last reported says "due", the row in IndexedDB
+    // says "not for another minute". The fresh read decides.
+    mocks.queue = [queuedRecording('debate-1')];
+    mocks.getUpload.mockImplementation(async (id: string) => {
+      const upload = mocks.queue.find(candidate => candidate.id === id);
+      return upload ? { ...upload, attemptCount: 3, nextAttemptAt: Date.now() + 60_000 } : undefined;
+    });
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.getUpload).toHaveBeenCalled());
+    await new Promise(resolve => setTimeout(resolve, 100));
+    expect(mocks.createUpload).not.toHaveBeenCalled();
+    expect(mocks.getUpload).toHaveBeenCalledOnce();
   });
 
   it('cancels the upload and drops the local blob from the banner action', async () => {
@@ -470,6 +885,33 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
     await waitFor(() => expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1')));
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
+    expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_cancelled', {
+      debate_id: 'debate-1',
+      cancel_source: 'upload_banner',
+      upload_finished: false,
+      already_cancelled: false,
+    });
+  });
+
+  it('counts a cancellation prompt that is backed out of, without cancelling', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    await screen.findByRole('button', { name: 'Delete debate forever' });
+    // The banner's Cancel is hidden while the prompt is open, so this is the prompt's own.
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+    await waitFor(() =>
+      expect(mocks.capture).toHaveBeenCalledWith('debate_recording_upload_cancel_dismissed', {
+        debate_id: 'debate-1',
+        cancel_source: 'upload_banner',
+      })
+    );
+    expect(mocks.cancelRecording).not.toHaveBeenCalled();
+    expect(mocks.capture).not.toHaveBeenCalledWith('debate_recording_upload_cancelled', expect.anything());
   });
 
   it('drops a recording row that finishes persisting after publication was cancelled', async () => {
@@ -518,9 +960,40 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
-  // GEO-2773. The thank-you card carries the publish switch now, so the bar at the bottom of the
-  // screen would be a second voice on the same upload — and the bar is the thing being replaced.
-  it('stands down while the thank-you card is carrying the publish control', async () => {
+  // The banner covers the bottom edge of the viewport, so it has to claim that space for as long
+  // as it paints — otherwise the assistant launcher, which anchors to the same corner, sits
+  // underneath it.
+  it('claims the bottom of the viewport only while the banner is on screen', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.queue = [queuedRecording('debate-1')];
+
+    const { unmount } = render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByRole('status')).toBeInTheDocument();
+    // Written out, not read from the constant the claim itself uses — see the banner's height test.
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('40px');
+
+    unmount();
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('');
+  });
+
+  it('claims nothing while an unrelated live debate hides the banner', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = null;
+    mocks.activityDebate = { id: 'debate-9', status: 'in_progress' };
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.createUpload).toHaveBeenCalled());
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('');
+  });
+
+  // The card carries the publish switch (GEO-2773), but only the switch. What is still going out
+  // of this browser, and the warning not to close it, stay the banner's — and the thank-you debate
+  // is the bulk of what is still going out while its own card is up.
+  it('keeps reporting the upload while the thank-you card carries the publish control', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-1';
     mocks.thankingShowsPublishControl = true;
@@ -529,13 +1002,15 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.publishOptOutOffer?.debateId).toBe('debate-1'));
-    expect(screen.queryByText(/Uploading & publishing/)).not.toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
+    // The switch is the only opt-out on screen; the banner does not draw a second one.
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
   });
 
-  // Only for the debate the card is about. Another debate's upload has nothing on screen to
-  // report it, so the banner is still the only thing that can.
-  it('keeps reporting other debates while the card carries the control', async () => {
+  // Recording a second debate while the first is still going out: the thank-you screen for the new
+  // one has to account for both, not just its own.
+  it('counts the thank-you debate alongside an earlier upload still finishing', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-2';
     mocks.thankingShowsPublishControl = true;
@@ -543,9 +1018,42 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    // One, not two: the thank-you debate is the card's to speak for.
-    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).not.toBeInTheDocument();
+  });
+
+  // The thank-you debate's blob is written to IndexedDB after the debate ends, so for a moment
+  // there is no queue row for it. The banner still has to be up — the user is already on the
+  // thank-you screen — and still has to count the debate the row is coming for.
+  it('shows the banner from the start of the thank-you period, before the recording is queued', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-2';
+    mocks.thankingShowsPublishControl = true;
+    mocks.thankingHasPendingLocalRecording = true;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
+  });
+
+  // Switching publishing off is the one thing that takes a debate out of the count early.
+  it('drops the withdrawn debate from the count when the card switches publishing off', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-2';
+    mocks.thankingShowsPublishControl = true;
+    mocks.publishOptOutRequest = 'debate-2';
+    mocks.queue = [queuedRecording('debate-1'), queuedRecording('debate-2')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-2', expect.anything(), 'user-a'));
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
   });
 
   // The room learns of a cancellation from its own debate query, which is a refetch away and may
@@ -569,15 +1077,14 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.publishOptOutOffer?.debateId).toBeNull();
   });
 
-  // Everything the banner says has to come off the uploads it is actually speaking for. Counting
-  // one debate while reporting another debate's failure is the way that goes wrong, and the
-  // thank-you debate is the one it stops speaking for.
-  it('does not report the card debate failure against another debate count', async () => {
+  // The count and the failure quoted beside it come off the same set of uploads, so a failure on
+  // the thank-you debate is reported against a count that includes it.
+  it('reports the card debate failure against the full pending count', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-2';
     mocks.thankingShowsPublishControl = true;
     // Both are backing off, so nothing is uploading and the banner is in its waiting state — which
-    // is the only state that quotes a failure. Only the card's debate has actually failed.
+    // is the only state that quotes a failure.
     mocks.queue = [
       { ...queuedRecording('debate-1'), nextAttemptAt: Date.now() + 60_000 },
       {
@@ -590,20 +1097,20 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     render(<DebateRecordingUploadCoordinator />);
 
-    // The plain wait, not the failure: debate-1 has nothing wrong with it.
-    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
-    expect(screen.queryByText(/Upload failed spectacularly/)).not.toBeInTheDocument();
+    expect(
+      await screen.findByText('Waiting to upload 2 debates — Upload failed spectacularly. Retrying automatically.')
+    ).toBeInTheDocument();
+    // Still pending, however badly it is going — so the warning stands.
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
   });
 
-  // Activity has to be measured against the uploads the banner speaks for. The one in flight can be
-  // the thank-you debate's, which the card reports — counted as the banner's, it claimed to be
-  // uploading while every recording it does report was sitting in backoff.
-  it('does not call itself uploading while only the card debate is in flight', async () => {
+  // The upload in flight counts as movement for the whole banner, the thank-you debate's included.
+  it('calls itself uploading while the thank-you debate is the one in flight', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-2';
     mocks.thankingShowsPublishControl = true;
     mocks.queue = [
-      // Backing off, so it cannot be the upload in flight — the card's debate is.
+      // Backing off, so it cannot be the upload in flight — the thank-you debate is.
       { ...queuedRecording('debate-1'), nextAttemptAt: Date.now() + 60_000 },
       queuedRecording('debate-2'),
     ];
@@ -611,22 +1118,27 @@ describe('DebateRecordingUploadCoordinator', () => {
     render(<DebateRecordingUploadCoordinator />);
 
     await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalled());
-    expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 2 debates')).toBeInTheDocument();
   });
 
-  // The harder half of the same idea: the banner's own recording is past its next attempt, so its
-  // backoff says nothing is wrong — but uploads run one at a time and the card's debate has the
-  // slot, so it is queued rather than uploading. Ordered so the card's debate is picked first.
-  it('does not call itself uploading while its own recording is queued behind the card debate', async () => {
+  // A recording already withdrawn can still be the request in flight — the cancellation lands
+  // while its upload chain is running — and that is not movement the banner can claim.
+  it('does not call itself uploading while only a withdrawn recording is in flight', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingDebateId = 'debate-2';
     mocks.thankingShowsPublishControl = true;
-    mocks.queue = [queuedRecording('debate-2'), queuedRecording('debate-1')];
+    mocks.publishOptOutRequest = 'debate-2';
+    mocks.queue = [
+      // Backing off, so the thank-you debate is the one that takes the upload slot.
+      { ...queuedRecording('debate-1'), nextAttemptAt: Date.now() + 60_000 },
+      queuedRecording('debate-2'),
+    ];
 
     render(<DebateRecordingUploadCoordinator />);
 
-    await waitFor(() => expect(mocks.completeUpload).toHaveBeenCalled());
-    // Eligible, but behind the card's debate — so waiting, not uploading.
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-2', expect.anything(), 'user-a'));
     expect(await screen.findByText('Waiting to upload 1 debate')).toBeInTheDocument();
   });
 
@@ -646,6 +1158,10 @@ describe('DebateRecordingUploadCoordinator', () => {
 
     await waitFor(() => expect(mocks.cancelRecording).toHaveBeenCalledWith('debate-1', expect.anything(), 'user-a'));
     expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1'));
+    expect(mocks.capture).toHaveBeenCalledWith(
+      'debate_recording_upload_cancelled',
+      expect.objectContaining({ debate_id: 'debate-1', cancel_source: 'thanking_toggle' })
+    );
   });
 
   it('matches the thank-you debate even though the queue stores ids dashless', async () => {
@@ -702,14 +1218,19 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.createUpload).not.toHaveBeenCalled();
   });
 
-  it('keeps the uploaded thank-you message while an unrelated debate continues uploading', async () => {
+  // "Debate uploaded" is about the Cancel action beside it, and it is worth saying only while
+  // nothing else is going out. A queue that is still moving outranks it: that count is the one
+  // thing telling the user this tab still has work to finish. The opt-out stays on offer either
+  // way — the message changed, not what the button does.
+  it('reports the still-uploading debate over the uploaded thank-you message', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.thankingHasUploadedRecording = true;
     mocks.queue = [queuedRecording('debate-2')];
 
     render(<DebateRecordingUploadCoordinator />);
 
-    expect(await screen.findByText('Debate uploaded')).toBeInTheDocument();
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.getByText('Keep browser open')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
     await waitFor(() =>
       expect(mocks.createUpload).toHaveBeenCalledWith(

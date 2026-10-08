@@ -2,7 +2,8 @@
 
 import * as React from 'react';
 
-import { type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
+import { ActionContextProvider } from '~/core/action-context-provider';
+import { type ExploreFeedItem, type ExploreFeedRow, toExploreFeedItem } from '~/core/explore/explore-card-item';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import type { ClaimResponse } from '~/core/profile/person-position-order';
 import { useInfiniteSentinel } from '~/core/profile/use-infinite-sentinel';
@@ -41,6 +42,9 @@ export function PersonRecordFeed({
   noun,
   responseByClaimId,
   personName,
+  fullWidthDebates = false,
+  renderCard,
+  debateEndSlot,
 }: {
   rows: ExploreFeedRow[];
   isLoading: boolean;
@@ -82,6 +86,21 @@ export function PersonRecordFeed({
    * beside them says nothing about which of the two people it describes.
    */
   personName?: string | null;
+  /** Debates fill the column instead of their viewport-fitted cap. */
+  fullWidthDebates?: boolean;
+  /**
+   * Draws a row with something other than the shared `ExploreFeedCard`.
+   *
+   * The claim page's Topics tab passes one: a topic gets a card of its own, carrying counts this
+   * component has no way to fetch. Everything around the rows — the space lookup, the item
+   * projection, and the loading, empty, error and partial-failure states — is identical whichever
+   * card is drawn, and is the reason this takes a render function rather than being copied.
+   *
+   * The key and one-based attribution position stay here for both render paths.
+   */
+  renderCard?: (item: ExploreFeedItem) => React.ReactNode;
+  /** Profile-owner action placed in a debate card's metadata row. */
+  debateEndSlot?: (item: ExploreFeedItem) => React.ReactNode;
 }) {
   // Looked up once for the page. These are routinely spaces the viewer has never
   // opened, which the browse sidebar cannot name.
@@ -127,31 +146,35 @@ export function PersonRecordFeed({
        * card never matched and the list ended on a rule under nothing.
        */}
       <div>
-        {items.map(item => (
-          <ExploreFeedCard
-            key={`${item.entityId}-${item.spaceId}`}
-            item={item}
-            // The card resolves the claim's response kind and hands it back, so
-            // the tag is worded from the question actually asked.
-            responseNote={
-              responseByClaimId
-                ? (responseKind, position) => (
-                    <ClaimResponseTag
-                      response={responseByClaimId[normId(item.entityId)]}
-                      responseKind={responseKind}
-                      personName={personName}
-                      forPosition={position}
-                    />
-                  )
-                : undefined
-            }
-            hideJoinButton
-            // The claim opens in the side panel rather than navigating, as it
-            // does on Explore: this is a list somebody is reading down, and
-            // losing the page to read one row is a worse trade here than it is
-            // anywhere.
-            titleOpensSidePanel
-          />
+        {items.map((item, index) => (
+          <ActionContextProvider key={`${item.entityId}-${item.spaceId}`} value={{ item_position: index + 1 }}>
+            {renderCard?.(item) ?? (
+              <ExploreFeedCard
+                item={item}
+                fullWidthDebate={fullWidthDebates}
+                // One wording for every claim, so the card has no kind to hand back — it passes
+                // the side and the tag names it.
+                responseNote={
+                  responseByClaimId
+                    ? position => (
+                        <ClaimResponseTag
+                          response={responseByClaimId[normId(item.entityId)]}
+                          personName={personName}
+                          forPosition={position}
+                        />
+                      )
+                    : undefined
+                }
+                hideJoinButton
+                // The claim opens in the side panel rather than navigating, as it
+                // does on Explore: this is a list somebody is reading down, and
+                // losing the page to read one row is a worse trade here than it is
+                // anywhere.
+                titleOpensSidePanel
+                debateEndSlot={debateEndSlot?.(item)}
+              />
+            )}
+          </ActionContextProvider>
         ))}
       </div>
 
