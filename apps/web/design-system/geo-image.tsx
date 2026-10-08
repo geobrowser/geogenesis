@@ -181,7 +181,10 @@ export function GeoImage({
         style={{ ...style, opacity: loaded ? 1 : 0, transition: `opacity ${fadeMs}ms ease-in-out` }}
         unoptimized={effectiveUnoptimized}
         onError={advance}
-        onLoad={() => setLoadedSrc(src)}
+        onLoad={event => {
+          setLoadedSrc(src);
+          props.onLoad?.(event);
+        }}
       />
     </>
   );
