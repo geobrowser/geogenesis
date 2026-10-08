@@ -138,6 +138,9 @@ function LobbyRoomClaimCard({
           indexingDelayed: indexing.status === 'delayed',
         })
       : null;
+  const menu = renderMenu?.(entry);
+  const action =
+    offer ?? (entry.activeDebate ? <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} /> : null);
 
   return (
     <MatchmakingClaimCard
@@ -149,14 +152,16 @@ function LobbyRoomClaimCard({
       answersMayComeFromIndex
       header={renderHeader?.(entry)}
       // Never the card's default slot: its request would not be lobby-scoped. The spacer keeps the
-      // meta row's height.
+      // meta row's height when there is neither an action nor a host menu.
       endSlot={
-        offer ??
-        (entry.activeDebate ? (
-          <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
+        menu ? (
+          <span className="flex shrink-0 items-center gap-1">
+            {action}
+            {menu}
+          </span>
         ) : (
-          <span className="h-5 shrink-0" aria-hidden />
-        ))
+          (action ?? <span className="h-5 shrink-0" aria-hidden />)
+        )
       }
       footer={
         opposing && opposing.participants.length > 0 ? <DisagreeingInRoom people={opposing.participants} /> : undefined
