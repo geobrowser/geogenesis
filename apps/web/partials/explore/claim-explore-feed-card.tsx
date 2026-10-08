@@ -333,6 +333,7 @@ export function ClaimExploreFeedCard({
             pending={control.isResponseSubmitting}
             titleFor={control.actionTitle}
             noteFor={responseNote ? noteFor : undefined}
+            localSide={control.localVoteSide}
             positionRowClassName="max-w-[360px]"
             positionRowEndSlot={
               liveCommentCount > 0 ? (

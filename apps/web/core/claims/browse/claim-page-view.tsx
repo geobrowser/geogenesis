@@ -680,6 +680,8 @@ function ClaimPositionSection({
     answersReady: isResponseKindResolved && isViewerResponseResolved,
     responseBlockedReason,
     onRequireSignIn: promptSignIn,
+    // One claim on the page, so the save sheet asks after the first vote rather than the second.
+    savePromptSurface: 'single',
   });
   const indexedPosition = trustedIndexedPosition(state.summary, control.isResponsePending);
   useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId, indexedPosition });
@@ -704,6 +706,7 @@ function ClaimPositionSection({
         disabled={!control.canRespond}
         pending={control.isResponseSubmitting}
         titleFor={control.actionTitle}
+        localSide={control.localVoteSide}
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"
       />

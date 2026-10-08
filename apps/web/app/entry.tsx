@@ -35,6 +35,8 @@ import { Navbar } from '~/partials/navbar/navbar';
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
 import { FlowBar } from '~/partials/review/flow-bar';
 import { StatusBar } from '~/partials/review/status-bar';
+import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
+import { SaveVotesSheet } from '~/partials/save-votes/save-votes-sheet';
 import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
@@ -170,6 +172,11 @@ export function App({ children }: { children: React.ReactNode }) {
           <OnboardingDialog />
           <PendingPersonalSpaceRunner />
           <PendingActionsRunner />
+          <LocalVotesSaver />
+          {/* Suspense: onboarding preparation reads `useSearchParams`. */}
+          <React.Suspense fallback={null}>
+            <SaveVotesSheet />
+          </React.Suspense>
           <CreateSpaceDialog />
           <PendingCreatedSpaceRunner />
           <PendingCreatedSpaceStatus />

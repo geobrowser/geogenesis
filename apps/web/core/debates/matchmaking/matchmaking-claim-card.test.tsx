@@ -14,7 +14,9 @@ import {
   type ResponseKind,
   getResponseActionMethod,
 } from '~/core/responses/entity-response';
+import { clearLocalVotes, readLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
 import { pendingActionsAtom } from '~/core/state/pending-actions';
+import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
 import { MatchmakingClaimCard, type RequireSignIn } from './matchmaking-claim-card';
@@ -924,13 +926,19 @@ describe('faces borrowed from the match', () => {
 describe('a side picked before the account can publish', () => {
   const signedOut = readiness({ viewer_response: null });
 
+  beforeEach(() => {
+    clearLocalVotes();
+    closeSaveVotesPrompt();
+    window.sessionStorage.clear();
+  });
+
   const signedOutCard = (onRequireSignIn: RequireSignIn) => (
     <MatchmakingClaimCard claim={claim} positions={positions} readiness={signedOut} onRequireSignIn={onRequireSignIn} />
   );
 
-  // Queued at the press, not on the sign-in's completion: that callback lives in this card, and the
-  // feed can remount the card mid-sign-up, taking the vote with it.
-  it('queues the side at the press, for the new personal space', async () => {
+  // GEO-3214: a signed-out press is kept on this device, with no sign-in in the way. The sheet asks
+  // to save once there are a few; nothing reaches the queue until a save prompt signs them in.
+  it('keeps a signed-out press on this device instead of opening sign-in', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
     const onRequireSignIn = vi.fn();
@@ -938,50 +946,63 @@ describe('a side picked before the account can publish', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^Disagree/ }));
 
-    expect(onRequireSignIn).toHaveBeenCalledOnce();
-    expect(onRequireSignIn.mock.calls[0][0]).toMatchObject({ auth_control: 'disagree', auth_continuation: 'queued' });
-    expect(queued()).toHaveLength(1);
-    expect(queued()[0]).toMatchObject({ requires: 'personalSpace', intent: 'negative' });
+    expect(onRequireSignIn).not.toHaveBeenCalled();
+    expect(queued()).toHaveLength(0);
     expect(mocks.submitResponseAsync).not.toHaveBeenCalled();
-
-    await queued()[0].run();
-    expect(mocks.submitResponseAsync).toHaveBeenCalledWith('negative');
+    expect(readLocalVotes().votes).toMatchObject([{ claimId: claim.claim_entity_id, direction: 'negative' }]);
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^Disagree/ })).toHaveTextContent('not counted yet');
+    expect(screen.getByText(/Not counted yet/)).toBeInTheDocument();
+    // One vote on a feed is not yet the ask.
+    expect(readSaveVotesPrompt()).toBeNull();
   });
 
-  // What the feed does after onboarding: reload, and draw a fresh card for the same claim.
-  it('still draws the picked side after the card remounts', async () => {
+  // What the feed does on a reload: draw a fresh card for the same claim.
+  it('still draws the device vote after the card remounts', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
-    const onRequireSignIn = vi.fn();
-    const { unmount } = renderCard(signedOutCard(onRequireSignIn));
+    const { unmount } = renderCard(signedOutCard(vi.fn()));
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
-    expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
     unmount();
 
-    // The remounted card's response hook knows the new personal space; the press's does not.
-    const pressSubmit = mocks.submitResponseAsync;
-    mocks.submitResponseAsync = vi.fn().mockResolvedValue(undefined);
     renderCard(signedOutCard(vi.fn()));
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'true');
-
-    // Replays through the card on screen, so its in-flight state lands where that card reads it.
-    await queued()[0].run();
-    expect(mocks.submitResponseAsync).toHaveBeenCalledWith('positive');
-    expect(pressSubmit).not.toHaveBeenCalled();
   });
 
-  it('withdraws the side when the sign-in is abandoned', () => {
+  it('takes the device vote back when the held side is pressed again', () => {
     mocks.isConnected = false;
     mocks.authenticated = false;
-    const onRequireSignIn = vi.fn();
-    renderCard(signedOutCard(onRequireSignIn));
+    renderCard(signedOutCard(vi.fn()));
 
     fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
-    act(() => onRequireSignIn.mock.calls[0][1].onCancel());
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
 
-    expect(queued()).toHaveLength(0);
+    expect(readLocalVotes().votes).toHaveLength(0);
     expect(screen.getByRole('button', { name: /^Agree/ })).toHaveAttribute('aria-pressed', 'false');
+    expect(screen.queryByText(/Not counted yet/)).not.toBeInTheDocument();
+  });
+
+  it('opens the save sheet on the second vote', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    toggleLocalVote({ claimId: 'other-claim', spaceId: claim.space_id, direction: 'positive', title: 'Another claim' });
+    renderCard(signedOutCard(vi.fn()));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+
+    expect(readSaveVotesPrompt()).toBe('threshold');
+  });
+
+  it('opens the save sheet from the note under the pill', () => {
+    mocks.isConnected = false;
+    mocks.authenticated = false;
+    renderCard(signedOutCard(vi.fn()));
+
+    fireEvent.click(screen.getByRole('button', { name: /^Agree/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+
+    expect(readSaveVotesPrompt()).toBe('inline_save');
   });
 
   // Signed in with no space and no setup under way: nothing would ever publish a queued side.

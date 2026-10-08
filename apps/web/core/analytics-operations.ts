@@ -64,6 +64,7 @@ const CANONICAL_OUTCOME_FIELDS = new Set([
   'object_type',
   'user_operation_hash',
   'vote_id',
+  'local_vote_count',
   'winner_id',
   'previous_winner_id',
   'ranking_id',

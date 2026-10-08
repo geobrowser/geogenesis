@@ -8,6 +8,7 @@ export const ACTION_COMPONENTS = [
   'sign_in_deep_link',
   'invite_link',
   'explore_email_capture',
+  'save_votes_prompt',
   'entity_vote_buttons',
   'claim_position_control',
   'winner_vote_button',
@@ -32,6 +33,7 @@ export const ACTION_COMPONENTS = [
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
   | 'vote'
+  | 'local_vote'
   | 'ranking'
   | 'comment'
   | 'edit_comment'

@@ -27,6 +27,9 @@ export const ACCOUNT_ANALYTICS = {
   signup_surface: 'explore_email_capture',
 } as const;
 
+/** The attribution a code step reports under: the surface it sits in, and its own sign-in properties. */
+export type AccountStepAnalytics = { readonly component: string } & Readonly<Record<string, string | number>>;
+
 /**
  * The code step, driven by Privy's own flow state rather than a second copy of it kept here.
  *
@@ -34,7 +37,18 @@ export const ACCOUNT_ANALYTICS = {
  * labelled control instead of six unlabelled ones, and the code arrives by mail, so pasting is what
  * most people actually do.
  */
-export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () => void }) {
+export function AccountStep({
+  email,
+  onGiveUp,
+  analytics = ACCOUNT_ANALYTICS,
+  analyticsLabel = 'Explore account verification',
+}: {
+  email: string;
+  onGiveUp: () => void;
+  /** Whose sign-in this is. Defaults to Explore's email capture, the step's first host. */
+  analytics?: AccountStepAnalytics;
+  analyticsLabel?: string;
+}) {
   // Headless email completion runs directly after verification, even if authentication has
   // already unmounted this card. Modal completions go through the app-wide PrivyAuthTracker.
   // EmbeddedWalletSync separately creates and activates the wallet for a headless login.
@@ -43,7 +57,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     loginWithCode,
     state: otpState,
   } = useLoginWithEmail({
-    onComplete: args => completePrivyAuth(args, ACCOUNT_ANALYTICS),
+    onComplete: args => completePrivyAuth(args, analytics),
   });
   // Held in a ref so the effect below does not re-run and re-send when the callback identity
   // changes, which would mail a second code on an unrelated re-render.
@@ -52,7 +66,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
   // Keep the modal fallback's UI error handler with the card; its analytics attribution is
   // snapshotted by usePrivySignIn and survives the card disappearing after authentication.
   const openPrivyModal = usePrivySignIn(undefined, {
-    analytics: ACCOUNT_ANALYTICS,
+    analytics,
     resumeAuthAttempt: true,
     onError: () => giveUpRef.current(),
   });
@@ -112,10 +126,12 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
     if (hasRequestedRef.current) return;
     hasRequestedRef.current = true;
     const attempt = currentAuthAttempt();
-    if (!attempt || attempt.endedAt || attempt.properties.component !== 'explore_email_capture')
-      beginPrivyAuth(ACCOUNT_ANALYTICS, { resume: true });
-    openAuthAttempt(ACCOUNT_ANALYTICS);
+    if (!attempt || attempt.endedAt || attempt.properties.component !== analytics.component)
+      beginPrivyAuth(analytics, { resume: true });
+    openAuthAttempt(analytics);
     void requestCode();
+    // Mount-only, guarded above; `analytics` is a constant per host.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [requestCode]);
 
   const submitCode = React.useCallback(
@@ -149,7 +165,7 @@ export function AccountStep({ email, onGiveUp }: { email: string; onGiveUp: () =
 
   return (
     <form
-      data-geo-analytics-label="Explore account verification"
+      data-geo-analytics-label={analyticsLabel}
       data-geo-analytics-type="account"
       data-geo-analytics-intent="signup"
       onSubmit={submitCode}

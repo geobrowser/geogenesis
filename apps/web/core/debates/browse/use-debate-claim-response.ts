@@ -4,6 +4,7 @@ import { type ClaimResponseState, useClaimResponseState } from '~/core/claims/br
 import type { DebateClaim } from '~/core/debates/api';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
+import type { SavePromptSurface } from '~/core/state/save-votes-prompt';
 import type { Entity } from '~/core/types';
 
 /**
@@ -36,9 +37,12 @@ export function useDebateClaimResponse({
   spaceId,
   row,
   entity,
+  savePromptSurface,
 }: {
   claimId: string;
   spaceId: string;
+  /** Where the save sheet's first ask comes; see `SavePromptSurface`. */
+  savePromptSurface?: SavePromptSurface;
   /** geo-chat's row, where it has one. Null in the spaces it does not index, and before it answers. */
   row: DebateClaim | null;
   /** The claim on the graph, which carries the factual flag geo-chat's row would otherwise report. */
@@ -55,6 +59,7 @@ export function useDebateClaimResponse({
     responseBlockedReason: state.responseBlockedReason,
     onRequireSignIn: promptSignIn,
     offersDebate: false,
+    savePromptSurface,
   });
 
   return { ...state, control };

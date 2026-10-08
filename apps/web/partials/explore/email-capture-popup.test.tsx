@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { beginAuthAttempt, currentAuthAttempt, readAuthAttempt, resetAuthAttempt } from '~/core/auth-attempt';
 import type { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { isChatOpenAtom } from '~/core/state/chat-store';
+import { toggleLocalVote } from '~/core/state/local-votes';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
 import { entitySidePanelAtom } from '~/atoms';
@@ -176,6 +177,15 @@ describe('ExploreEmailCapturePopup', () => {
   // at `z-100` the assistant's button drew over the "Remind me" button and took the click. A
   // stacking bug is invisible to every other test here, so this reads the number rather than
   // trusting the comment beside it.
+  // GEO-3214: a visitor with votes on this device gets the save sheet, which asks for the same email.
+  it('yields to the save sheet for a visitor with votes on this device', () => {
+    toggleLocalVote({ claimId: 'claim', spaceId: 'space', direction: 'positive', title: 'A claim' });
+    render(<ExploreEmailCapturePopup />);
+    scrollPastTrigger();
+
+    expect(popup()).not.toBeInTheDocument();
+  });
+
   it('stacks above the chat launcher, which shares its corner', () => {
     render(<ExploreEmailCapturePopup />);
     scrollPastTrigger();

@@ -16,6 +16,7 @@ import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { isChatOpenAtom } from '~/core/state/chat-store';
+import { useLocalVoteCount } from '~/core/state/local-votes';
 import { timeoutSignal } from '~/core/timeout-signal';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -75,6 +76,9 @@ function EmailCapturePopup() {
   const { isOpen: isDebatesHubOpen } = useDebatesHub();
   const entitySidePanelTarget = useAtomValue(entitySidePanelAtom);
   const { dismissed, remember: rememberDismissed } = useDismissedNotice(EMAIL_CAPTURE_ID);
+  // A visitor with votes on this device gets the save sheet instead, which asks for the same
+  // email for a reason they already have (GEO-3214). The two never stack.
+  const hasLocalVotes = useLocalVoteCount() > 0;
   // Read once, at mount. An attempt left mid-flight by a navigation comes back into the code step
   // rather than vanishing: `dismissed` is already true by then, and the `status === 'done'`
   // exception that would otherwise keep the card up is component state a navigation destroyed.
@@ -233,6 +237,8 @@ function EmailCapturePopup() {
   if (authenticated) clearPendingSignup();
 
   if (closed || !ready || authenticated || !scrolledEnough) return null;
+  // Not mid-sign-up, though: a code already sent must not vanish because they voted meanwhile.
+  if (hasLocalVotes && !wantsAccount && status !== 'done') return null;
 
   // An overlay normally takes the card off the screen entirely. Not once a code has been sent:
   // returning `null` unmounts the step, and mounting is what sends a code — so opening search or
