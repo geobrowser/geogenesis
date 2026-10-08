@@ -21,6 +21,7 @@ import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../h
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
 import {
   type LobbyHighlightsState,
+  createRoomVoteHintSender,
   lobbyHighlightsFromResponse,
   roomVoteHintAction,
   settleFetchedLobbyHighlights,
@@ -107,7 +108,8 @@ export function useEndLobbyRoomVote(lobbyId: string) {
 /**
  * Counts the viewer's vote in the room tally while it indexes. Follows their write on the voted
  * claim from any surface: hints its side as it starts and withdraws the hint if it rolls back.
- * Only while they are in the room, which is all geo-chat accepts.
+ * Only while they are in the room, which is all geo-chat accepts. Hints go one at a time per vote,
+ * latest wins (see `createRoomVoteHintSender`).
  */
 export function useRoomVoteHint(lobbyId: string, vote: DebateLobbyRoomVote | null, inRoom: boolean) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -117,28 +119,49 @@ export function useRoomVoteHint(lobbyId: string, vote: DebateLobbyRoomVote | nul
     responseKind: CLAIM_RESPONSE_KIND,
   });
   const voteId = vote?.vote_id ?? null;
-  const tracking = React.useRef<{ voteId: string | null; hinted: string | null }>({ voteId: null, hinted: null });
+  const tracking = React.useRef<{
+    key: string | null;
+    hinted: string | null;
+    sender: ReturnType<typeof createRoomVoteHintSender> | null;
+  }>({ key: null, hinted: null, sender: null });
 
   React.useEffect(() => {
     if (!voteId || !inRoom) return;
-    if (tracking.current.voteId !== voteId) tracking.current = { voteId, hinted: null };
+    const key = `${dashlessId(lobbyId)}:${voteId}`;
+    if (tracking.current.key !== key) {
+      tracking.current.sender?.close(false);
+      tracking.current = {
+        key,
+        hinted: null,
+        sender: createRoomVoteHintSender(request =>
+          // A refused hint leaves the tally to the response-indexed report.
+          setDebateLobbyRoomVoteHint(dashlessId(lobbyId), voteId, request, getPrivyIdentityToken, accountKey)
+        ),
+      };
+    }
     const state = tracking.current;
     const action = roomVoteHintAction(snapshot, state.hinted);
     if (!action) return;
 
-    const send = (position: boolean | null | undefined) =>
-      setDebateLobbyRoomVoteHint(dashlessId(lobbyId), voteId, position, getPrivyIdentityToken, accountKey).catch(
-        // A refused hint leaves the tally to the response-indexed report.
-        () => undefined
-      );
     if (action.kind === 'hint') {
       state.hinted = action.runId;
-      void send(action.position);
+      state.sender?.request(action.position);
     } else if (action.kind === 'withdraw') {
       state.hinted = null;
-      void send(undefined);
+      state.sender?.request(undefined);
     } else {
       state.hinted = null;
+      state.sender?.forget();
     }
   }, [accountKey, getPrivyIdentityToken, inRoom, lobbyId, snapshot, voteId]);
+
+  // Unmounting drops queued hints but still sends a queued withdrawal. The ref is cleared so a
+  // remount (Strict Mode runs one) builds a fresh sender.
+  React.useEffect(
+    () => () => {
+      tracking.current.sender?.close(true);
+      tracking.current = { key: null, hinted: null, sender: null };
+    },
+    []
+  );
 }

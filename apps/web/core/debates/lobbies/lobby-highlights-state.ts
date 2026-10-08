@@ -134,6 +134,56 @@ export function roomVoteHintAction(
   return { kind: 'withdraw' };
 }
 
+/** A hint request: a side to PUT (`null` for a removed one), or `undefined` to DELETE. */
+export type RoomVoteHintRequest = boolean | null | undefined;
+
+/**
+ * Sends one vote's hints one at a time, latest wins. geo-chat upserts each hint, so two in flight
+ * could land out of order and leave the older side counted. While one is in flight only the latest
+ * wanted request is kept, and it goes when that one settles, unless it repeats what was sent.
+ */
+export function createRoomVoteHintSender(send: (request: RoomVoteHintRequest) => Promise<unknown>) {
+  let inFlight = false;
+  // What the server last accepted, as far as this page knows; unknown after a failure.
+  let sent: { request: RoomVoteHintRequest } | null = null;
+  let wanted: { request: RoomVoteHintRequest } | null = null;
+  let closed = false;
+
+  const pump = () => {
+    if (inFlight || !wanted) return;
+    const next = wanted;
+    wanted = null;
+    if (sent && sent.request === next.request) return;
+    inFlight = true;
+    sent = next;
+    send(next.request)
+      .catch(() => {
+        sent = null;
+      })
+      .finally(() => {
+        inFlight = false;
+        pump();
+      });
+  };
+
+  return {
+    request(request: RoomVoteHintRequest) {
+      if (closed) return;
+      wanted = { request };
+      pump();
+    },
+    /** geo-chat cleared the hint itself (its response-indexed report), so nothing sent still stands. */
+    forget() {
+      sent = null;
+    },
+    /** Drops what is queued. `keepWithdraw` still sends a queued DELETE, for a page going away. */
+    close(keepWithdraw: boolean) {
+      closed = true;
+      if (!keepWithdraw || wanted?.request !== undefined) wanted = null;
+    },
+  };
+}
+
 /**
  * True when `next` is later than `previous`. Compared to the microsecond geo-chat stamps, which
  * `Date.parse` would round to the millisecond. A missing `previous` is older than anything.

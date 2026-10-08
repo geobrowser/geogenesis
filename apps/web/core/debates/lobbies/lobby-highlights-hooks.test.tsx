@@ -12,7 +12,7 @@ import { useLobbyHighlights, useRoomVoteHint, useSetLobbyHighlight } from './lob
 
 const mocks = vi.hoisted(() => ({
   snapshot: { status: 'idle', pending: null, runId: null } as EntityResponseIndexingState,
-  hint: vi.fn(async () => undefined),
+  hint: vi.fn(async (..._args: unknown[]) => undefined),
   getHighlights: vi.fn(),
   setHighlight: vi.fn(),
 }));
@@ -68,33 +68,62 @@ beforeEach(() => {
 });
 
 describe('useRoomVoteHint', () => {
-  it('hints a vote as its write starts and withdraws it when the write rolls back', () => {
+  /** Rerenders, then lets the hint in flight settle so a queued one can go. */
+  const step = async (rerender: () => void) => {
+    rerender();
+    await act(async () => undefined);
+  };
+
+  it('hints a vote as its write starts and withdraws it when the write rolls back', async () => {
     const { rerender } = renderHook(() => useRoomVoteHint('LOBBY-1', vote, true));
     expect(mocks.hint).not.toHaveBeenCalled();
 
     mocks.snapshot = run('r1', 'reconciling', 'negative');
-    rerender();
+    await step(rerender);
     expect(mocks.hint).toHaveBeenLastCalledWith('lobby1', 'VOTE-1', false, getToken, 'user-a');
 
     mocks.snapshot = idle;
-    rerender();
+    await step(rerender);
     expect(mocks.hint).toHaveBeenLastCalledWith('lobby1', 'VOTE-1', undefined, getToken, 'user-a');
     expect(mocks.hint).toHaveBeenCalledTimes(2);
   });
 
-  it('hints the earlier side again when a newer write fails and restores it', () => {
+  it('hints the earlier side again when a newer write fails and restores it', async () => {
     const { rerender } = renderHook(() => useRoomVoteHint('lobby1', vote, true));
     mocks.snapshot = run('r1', 'reconciling', 'negative');
-    rerender();
+    await step(rerender);
     mocks.snapshot = run('r2', 'reconciling', 'positive');
-    rerender();
+    await step(rerender);
     expect(mocks.hint).toHaveBeenLastCalledWith('lobby1', 'VOTE-1', true, getToken, 'user-a');
 
     mocks.snapshot = run('r1', 'reconciling', 'negative');
-    rerender();
+    await step(rerender);
     expect(mocks.hint).toHaveBeenLastCalledWith('lobby1', 'VOTE-1', false, getToken, 'user-a');
-    rerender();
+    await step(rerender);
     expect(mocks.hint).toHaveBeenCalledTimes(3);
+  });
+
+  it('sends one hint at a time, and drops what is queued when the vote changes', async () => {
+    let land = () => undefined as void;
+    mocks.hint.mockImplementationOnce(() => new Promise<undefined>(resolve => (land = () => resolve(undefined))));
+    const { rerender } = renderHook(({ current }) => useRoomVoteHint('lobby1', current, true), {
+      initialProps: { current: vote },
+    });
+    mocks.snapshot = run('r1', 'reconciling', 'positive');
+    rerender({ current: vote });
+    mocks.snapshot = run('r2', 'reconciling', 'negative');
+    rerender({ current: vote });
+    expect(mocks.hint.mock.calls.map(call => [call[1], call[2]])).toEqual([['VOTE-1', true]]);
+
+    const next = { ...vote, vote_id: 'VOTE-2' };
+    rerender({ current: next });
+    await act(async () => {
+      land();
+    });
+    expect(mocks.hint.mock.calls.map(call => [call[1], call[2]])).toEqual([
+      ['VOTE-1', true],
+      ['VOTE-2', false],
+    ]);
   });
 
   it('leaves an indexed vote to the response-indexed report', () => {

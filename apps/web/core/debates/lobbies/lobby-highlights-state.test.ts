@@ -5,6 +5,8 @@ import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 import type { DebateClaimSummary, DebateLobbyHighlights } from '../api';
 import {
   type LobbyHighlightsState,
+  type RoomVoteHintRequest,
+  createRoomVoteHintSender,
   highlightedClaimIds,
   isNewerInstant,
   listedHighlights,
@@ -187,5 +189,109 @@ describe('roomVoteHintAction', () => {
       runId: 'r1',
       position: false,
     });
+  });
+});
+
+describe('createRoomVoteHintSender', () => {
+  /** A send whose requests settle when the test says. */
+  function controlledSend() {
+    const calls: { request: RoomVoteHintRequest; settle: (ok: boolean) => void }[] = [];
+    const send = (request: RoomVoteHintRequest) =>
+      new Promise<void>((resolve, reject) =>
+        calls.push({ request, settle: ok => (ok ? resolve() : reject(new Error('refused'))) })
+      );
+    const flush = () => new Promise(resolve => setTimeout(resolve, 0));
+    return { calls, send, flush, sent: () => calls.map(call => call.request) };
+  }
+
+  it('holds a newer side until the one in flight lands, then sends it', async () => {
+    const { calls, send, flush, sent } = controlledSend();
+    const sender = createRoomVoteHintSender(send);
+    sender.request(true);
+    sender.request(false);
+    expect(sent()).toEqual([true]);
+
+    calls[0]!.settle(true);
+    await flush();
+    expect(sent()).toEqual([true, false]);
+  });
+
+  it('collapses quick changes to the first and the latest', async () => {
+    const { calls, send, flush, sent } = controlledSend();
+    const sender = createRoomVoteHintSender(send);
+    sender.request(true);
+    sender.request(false);
+    sender.request(undefined);
+    sender.request(null);
+    calls[0]!.settle(true);
+    await flush();
+    expect(sent()).toEqual([true, null]);
+  });
+
+  it('still sends the latest when the one in flight fails', async () => {
+    const { calls, send, flush, sent } = controlledSend();
+    const sender = createRoomVoteHintSender(send);
+    sender.request(true);
+    sender.request(false);
+    calls[0]!.settle(false);
+    await flush();
+    expect(sent()).toEqual([true, false]);
+  });
+
+  it('skips a request that repeats the last one landed, but not one that failed', async () => {
+    const { calls, send, flush, sent } = controlledSend();
+    const sender = createRoomVoteHintSender(send);
+    sender.request(true);
+    calls[0]!.settle(true);
+    await flush();
+    sender.request(true);
+    expect(sent()).toEqual([true]);
+
+    sender.request(false);
+    calls[1]!.settle(false);
+    await flush();
+    sender.request(false);
+    expect(sent()).toEqual([true, false, false]);
+  });
+
+  it('sends a side again once geo-chat has cleared the hint itself', async () => {
+    const { calls, send, flush, sent } = controlledSend();
+    const sender = createRoomVoteHintSender(send);
+    sender.request(true);
+    calls[0]!.settle(true);
+    await flush();
+    sender.forget();
+    sender.request(true);
+    expect(sent()).toEqual([true, true]);
+  });
+
+  it('drops the queue on close, keeping only a withdrawal for a page going away', async () => {
+    const dropped = controlledSend();
+    const vote = createRoomVoteHintSender(dropped.send);
+    vote.request(true);
+    vote.request(undefined);
+    vote.close(false);
+    dropped.calls[0]!.settle(true);
+    await dropped.flush();
+    expect(dropped.sent()).toEqual([true]);
+
+    const leaving = controlledSend();
+    const page = createRoomVoteHintSender(leaving.send);
+    page.request(true);
+    page.request(undefined);
+    page.close(true);
+    page.request(false);
+    leaving.calls[0]!.settle(true);
+    await leaving.flush();
+    expect(leaving.sent()).toEqual([true, undefined]);
+
+    const queuedSide = controlledSend();
+    const other = createRoomVoteHintSender(queuedSide.send);
+    other.request(true);
+    other.request(false);
+    other.close(true);
+    queuedSide.calls[0]!.settle(true);
+    await queuedSide.flush();
+    expect(queuedSide.sent()).toEqual([true]);
   });
 });
