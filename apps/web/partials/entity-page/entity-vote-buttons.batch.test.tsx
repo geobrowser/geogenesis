@@ -17,6 +17,7 @@ import {
   useClaimResponseSummaryBatch,
 } from '~/core/responses/use-claim-response-summaries';
 
+import { EntitySidePanelNavigation } from './entity-side-panel-navigation';
 import { EntityVoteButtons, RespondersPopoverContent } from './entity-vote-buttons';
 
 const mocks = vi.hoisted(() => ({
@@ -32,6 +33,8 @@ const mocks = vi.hoisted(() => ({
   getProfiles: vi.fn(),
   personProfileOpened: vi.fn(),
 }));
+
+vi.mock('~/core/debates/rematch-panel-context', () => ({ useRematchPanelContext: () => ({}) }));
 
 vi.mock('@geogenesis/auth', () => ({
   // `usePrepareOnboarding` reads it to leave a signed-in user's onboarding alone.
@@ -122,7 +125,10 @@ beforeEach(() => {
   mocks.personProfileOpened.mockReset();
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe('EntityVoteButtons claims-page batching', () => {
   it('skips entity hydration and all individual response queries while the page batch is unresolved', async () => {
@@ -303,10 +309,16 @@ function renderButtons(ready: boolean, seedCaches = false, responseKind: 'stance
  * not part of the boundary's `ready`.
  */
 describe('RespondersPopoverContent under a batch', () => {
-  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance') =>
+  const renderPopover = (queryClient: QueryClient, responseKind: 'stance' | 'curation' = 'stance', inRoom = false) =>
     render(
       <ClaimResponseBatchBoundary ready>
-        <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+        {inRoom ? (
+          <EntitySidePanelNavigation entityId="claim-1" spaceId="space-1">
+            <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+          </EntitySidePanelNavigation>
+        ) : (
+          <RespondersPopoverContent entityId="claim-1" spaceId="space-1" objectType={0} responseKind={responseKind} />
+        )}
       </ClaimResponseBatchBoundary>,
       {
         wrapper: ({ children }: { children: ReactNode }) => (
@@ -380,11 +392,14 @@ describe('RespondersPopoverContent under a batch', () => {
       },
     ]);
 
-    const view = renderPopover(queryClient, responseKind);
+    const open = vi.spyOn(window, 'open').mockReturnValue(null);
+    const view = renderPopover(queryClient, responseKind, true);
     const profileLink = await view.findByRole('link', { name: 'Dovile' });
     fireEvent.click(profileLink);
+    expect(open).toHaveBeenCalledTimes(1);
+    open.mockRestore();
 
-    expect(mocks.personProfileOpened).toHaveBeenCalledWith('profile-9', 'person-9', {
+    expect(mocks.personProfileOpened).toHaveBeenCalledExactlyOnceWith('profile-9', 'person-9', {
       interaction_surface: interactionSurface,
     });
   });

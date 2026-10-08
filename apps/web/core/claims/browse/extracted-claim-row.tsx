@@ -164,6 +164,7 @@ export function ExtractedClaimRow({
           a 32px row. `self-start` keeps it on the name's line instead of centred against a row whose
           height includes everything nested under it. */}
       <ThreadAvatar
+        panelNavigation="custom"
         href={speaker ? NavUtils.toSpace(speaker.spaceId) : undefined}
         // The same name `SpeakerLink` prints below, including its fallback — a face is a link with
         // nothing readable in it otherwise.
@@ -385,6 +386,7 @@ function SpeakerLink({
   return (
     <a
       href={NavUtils.toSpace(speaker.spaceId)}
+      data-entity-side-panel-navigation="custom"
       onClick={onOpenProfile}
       className={cx('min-w-0 truncate no-underline hover:underline', className)}
     >

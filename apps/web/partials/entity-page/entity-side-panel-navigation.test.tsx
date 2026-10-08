@@ -11,6 +11,8 @@ import {
   useEntitySidePanelActiveTab,
 } from '~/core/state/entity-side-panel-active-tab';
 
+import { buildBlockLink } from '~/partials/editor/block-clipboard';
+
 const mocks = vi.hoisted(() => ({ inRematch: true, openSidePanel: vi.fn(), navigate: vi.fn() }));
 vi.mock('~/core/debates/rematch-panel-context', () => ({
   useRematchPanelContext: () => (mocks.inRematch ? {} : null),
@@ -77,6 +79,18 @@ describe('debate room side-panel navigation', () => {
     expect(mocks.navigate).not.toHaveBeenCalled();
     expect(window.open).not.toHaveBeenCalled();
   });
+
+  it.each([currentHref, relatedHref])(
+    'preserves copied block targets in %s by opening the complete URL separately',
+    href => {
+      const copiedHref = buildBlockLink(new URL(`${href}?tabId=${TAB}`, window.location.href).href, 'block-1');
+      render(<View href={copiedHref} />);
+      fireEvent.click(screen.getByText('Related claim'));
+      expect(window.open).toHaveBeenCalledWith(copiedHref, '_blank', 'noopener,noreferrer');
+      expect(mocks.openSidePanel).not.toHaveBeenCalled();
+      expect(mocks.navigate).not.toHaveBeenCalled();
+    }
+  );
 
   it('opens a debate video separately and preserves its timecode', () => {
     const href = `${relatedHref}?t=722`;

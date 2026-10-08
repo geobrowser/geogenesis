@@ -33,6 +33,9 @@ export function EntitySidePanelNavigation({
     if (!(link instanceof HTMLAnchorElement) || link.hasAttribute('download') || link.target === '_blank') return;
     // Disabled controls own their refusal in onClick; capture must not activate them first.
     if (link.getAttribute('aria-disabled') === 'true') return;
+    // Custom handlers resolve destinations (such as personal-space profiles) themselves.
+    const navigation = link.getAttribute('data-entity-side-panel-navigation');
+    if (navigation === 'custom') return;
     const href = link.getAttribute('href');
     if (!href || href.startsWith('#')) return;
     const url = new URL(link.href, window.location.href);
@@ -40,7 +43,8 @@ export function EntitySidePanelNavigation({
     if (url.protocol !== 'https:' && url.protocol !== 'http:') return;
 
     event.preventDefault();
-    event.stopPropagation();
+    // Opted-in observers still track the click, but honor defaultPrevented instead of navigating twice.
+    if (navigation !== 'observe') event.stopPropagation();
     const parts = url.pathname.split('/').filter(Boolean);
     const [, nextSpaceId, nextEntityId, systemTab] = parts;
     const tabId = entityTabIdFromHref(url.href);
@@ -52,8 +56,9 @@ export function EntitySidePanelNavigation({
       (parts.length === 3 || (parts.length === 4 && SYSTEM_TABS.has(systemTab!))) &&
       url.searchParams.get('edit') !== 'true';
 
-    if (!isEntity || link.hasAttribute('data-entity-side-panel-full-page')) {
-      // Debate videos, space homepages, external sources and full-screen tools need a full page.
+    const isBlockLink = url.searchParams.get('source') === 'copy_link' && url.hash.length > 1;
+    if (!isEntity || isBlockLink || link.hasAttribute('data-entity-side-panel-full-page')) {
+      // Block targets, debate videos, space homepages and full-screen tools need a full page.
       // They must never replace the live room in this tab.
       window.open(url.href, '_blank', 'noopener,noreferrer');
       return;

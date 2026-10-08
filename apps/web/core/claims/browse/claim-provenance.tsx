@@ -13,6 +13,7 @@ import { useProfilesBySpaceIds } from '~/core/hooks/use-profiles-by-space-ids';
 import { ID } from '~/core/id';
 import { useQueryEntities, useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
+import { observePanelNavigation } from '~/core/utils/entity-side-panel-link';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -137,11 +138,11 @@ export function ClaimProvenance({
                   {speaker.profile?.profileLink ? (
                     <Link
                       href={speaker.profile.profileLink}
-                      onClick={() =>
+                      {...observePanelNavigation(() =>
                         personProfileOpened(speaker.profile!.spaceId, speaker.profile!.id, {
                           interaction_surface: 'claim_provenance',
                         })
-                      }
+                      )}
                       className="whitespace-nowrap text-text hover:underline"
                     >
                       {speaker.profile.name}
