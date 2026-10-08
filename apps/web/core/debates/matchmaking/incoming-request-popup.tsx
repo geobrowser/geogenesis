@@ -5,6 +5,7 @@ import * as React from 'react';
 import type { DebateRequest, DebateRequestParty } from '../api';
 import { DebateRequestDialog, type DebateRequestDialogParticipant } from '../debate-request-dialog';
 import { requestOpenRounds } from '../format-details';
+import { debateMediaSessionKey, debateRequestMediaSessionKey, useOptionalDebateMediaSession } from '../media-session';
 import { speakerLabel } from '../playback-utils';
 import { useAcceptDebateRequest, useBlockDebateUser, useDismissDebateRequest } from './hooks';
 import { SpaceChip } from './matchmaking-claim-card';
@@ -45,10 +46,13 @@ export function IncomingRequestPopup({
     (candidate): candidate is Error => candidate instanceof Error
   );
   const { answerOnce, releaseAnswer } = useAnswerOnce();
+  const mediaSession = useOptionalDebateMediaSession();
 
   return (
     <DebateRequestDialog
       claim={request.claim.claim}
+      media={{ kind: 'choose', sessionKey: debateRequestMediaSessionKey(request.id) }}
+      formatSummaryOnly
       participants={participants}
       currentUserId={currentUserId}
       formatId={request.turn_format_id}
@@ -64,7 +68,24 @@ export function IncomingRequestPopup({
           <span className="shrink-0">Debate request</span>
         </span>
       }
-      onAccept={() => answerOnce(() => acceptRequest.mutate({ requestId: request.id }, releaseAnswer))}
+      onAccept={() =>
+        answerOnce(() =>
+          acceptRequest.mutate(
+            { requestId: request.id },
+            {
+              ...releaseAnswer,
+              onSuccess: response => {
+                const debate = response.debate;
+                if (debate)
+                  mediaSession?.promoteSession(
+                    debateRequestMediaSessionKey(request.id),
+                    debateMediaSessionKey(debate.id)
+                  );
+              },
+            }
+          )
+        )
+      }
       onReject={onNotNow}
       formatAction={{
         label: 'Dismiss forever',

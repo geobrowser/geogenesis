@@ -3022,6 +3022,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       {incomingRequest && session && currentUserId && (
         <DebateRequestDialog
           claim={incomingRequest.claim.claim}
+          media={{ kind: 'already-live' }}
           participants={incomingRequestParticipants}
           currentUserId={currentUserId}
           formatId={incomingRequest.turn_format_id}
