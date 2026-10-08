@@ -6,11 +6,9 @@ import { type Debate, dashlessId } from '../api';
 import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
 
-/**
- * Lobby analytics (GEO-3126). Events must be registered in `geobrowser/analytics`; never send
- * `measurement_version`, `source` or `duration*`. A session is one visit, in memory only, and is
- * touched only from effects and handlers.
- */
+// Lobby analytics (GEO-3126). Events must be registered in `geobrowser/analytics`; never send
+// `measurement_version`, `source` or `duration*`. Sessions live in memory, touched only from
+// effects and handlers.
 
 /** How the viewer got to the lobby, as of the join that starts the session. */
 export type LobbyEntry =
