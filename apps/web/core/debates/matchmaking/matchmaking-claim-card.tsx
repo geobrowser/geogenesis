@@ -899,8 +899,9 @@ function RespondableControls({
     viewerResponseUnknown,
     allowsSignedOutVotes,
     // The faces the match implies belong with the offer the match makes. Where the slot is hidden
-    // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`.
-    offersDebate: !hideEndSlot,
+    // there is no offer, so there is nothing for them to be coherent with — see `offersDebate`. A
+    // host's own `endSlot` is its own offer, so the account-level match's faces don't belong either.
+    offersDebate: !hideEndSlot && endSlot === undefined,
   });
 
   return (

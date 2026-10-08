@@ -543,9 +543,15 @@ export class DebateGatewayClient {
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
-      case 'debate.lobby_changed':
-        if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
+      // `sections: ["claims"]` means only the In this room list changed.
+      case 'debate.lobby_changed': {
+        if (!identifiers.lobby_id) break;
+        const lobbyId = dashlessId(identifiers.lobby_id);
+        const claimsOnly = identifiers.sections?.length === 1 && identifiers.sections[0] === 'claims';
+        if (!claimsOnly) this.queueAccountQuery('lobby', lobbyId);
+        this.queueAccountQuery('lobby-claims', lobbyId);
         break;
+      }
     }
   }
 
@@ -622,6 +628,7 @@ export class DebateGatewayClient {
       // `debate.lobbies_changed` rides this scope too.
       this.queueAccountQuery('lobbies');
       this.queueAccountQuery('lobby');
+      this.queueAccountQuery('lobby-claims');
       return;
     }
     this.queueQuery(['debates', 'detail', scope.debate_id]);
@@ -664,6 +671,7 @@ export class DebateGatewayClient {
       | 'room'
       | 'lobbies'
       | 'lobby'
+      | 'lobby-claims'
       | 'my-lobby',
     id?: string
   ) {

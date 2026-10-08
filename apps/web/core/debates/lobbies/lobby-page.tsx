@@ -26,6 +26,7 @@ import {
   useEndDebateLobby,
   useLobbyPresence,
 } from './hooks';
+import { LobbyClaimsArea } from './lobby-claims-area';
 import { LobbyDebateSubject } from './lobby-debate-subject';
 import {
   ROLE_LABEL,
@@ -458,6 +459,8 @@ function LobbyRoom({
       ) : (
         people
       )}
+
+      {state.status === 'joined' ? <LobbyClaimsArea lobby={lobby} /> : null}
 
       {isHost ? <LobbyHostLists lobby={lobby} /> : null}
     </LobbyShell>

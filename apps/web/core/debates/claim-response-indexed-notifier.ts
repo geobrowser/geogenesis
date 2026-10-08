@@ -24,10 +24,10 @@ const MAX_RATE_LIMITED_RETRIES = 3;
 /**
  * Every query whose answer a position write changes, as key prefixes (GEO-2814).
  *
- * These are the three sources the Request debate control reads geo-chat's copy of the position
- * from — Explore's per-space claims, the hub's Claims tab, and the hub's Matches tab. They ask the
- * same question of the same service and are keyed independently, so a refresh has to name all
- * three. Prefixes, because the full keys carry a claim-id batch and a filter set respectively,
+ * These are the sources the Request debate control reads geo-chat's copy of the position from —
+ * Explore's per-space claims, the hub's Claims tab, the hub's Matches tab and the lobby's In this
+ * room list. They ask the same question of the same service and are keyed independently, so a
+ * refresh has to name all of them. Prefixes, because the full keys carry a claim-id batch and a filter set respectively,
  * neither of which is reconstructable from a notification.
  *
  * `matches` is included because a new position can create or dissolve a match outright, not merely
@@ -41,6 +41,8 @@ export function readinessQueryPrefixes(accountKey: string, spaceId: string) {
     ['debates', 'account', accountKey, 'matchmaking-claims'],
     // Hub Matches tab: ['debates', 'account', accountKey, 'matches']
     ['debates', 'account', accountKey, 'matches'],
+    // Lobby "In this room": ['debates', 'account', accountKey, 'lobby-claims', lobbyId]
+    ['debates', 'account', accountKey, 'lobby-claims'],
   ] as const;
 }
 /** Fields shared by pending and indexed response notifications. */

@@ -1,0 +1,163 @@
+'use client';
+
+import * as React from 'react';
+
+import {
+  claimRequestBlockedReason,
+  debateRequestErrorMessage,
+  useMissingIntentRecovery,
+} from '~/core/claims/browse/use-claim-matchup';
+
+import { type DebateLobbyClaim, type DebateLobbyView, dashlessId } from '../api';
+import { useDebateActivity } from '../hooks';
+import { useCreateDebateRequest, useDebateRequests } from '../matchmaking/hooks';
+import { HubMessageNote, HubQueryState } from '../matchmaking/hub-states';
+import { RequestDebateControl } from '../request-debate-control';
+import { debateRequestGate } from '../request-gate';
+import {
+  lobbyClaimRequestErrorMessage,
+  readinessDisabledMessage,
+  useDebateLobbyClaims,
+  useRefreshLobbyClaimsOnRefusal,
+} from './lobby-room-claims-hooks';
+import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
+
+export const LOBBY_ROOM_CLAIMS_COPY = {
+  empty: 'Nobody here has taken a side on a claim yet.',
+  recent: 'Nobody here has taken a side yet. These claims were voted on recently.',
+} as const;
+
+/**
+ * The lobby's "In this room" claims (GEO-3132), in the server's order. `excludeClaimIds` drops rows
+ * by `DebateClaimSummary.id`, for a host that shows some of them elsewhere.
+ */
+export function LobbyRoomClaims({
+  lobby,
+  excludeClaimIds,
+  onExplore,
+}: {
+  lobby: DebateLobbyView;
+  excludeClaimIds?: ReadonlySet<string>;
+  /** Offered when the list is empty. */
+  onExplore?: () => void;
+}) {
+  const query = useDebateLobbyClaims(lobby.lobby_id);
+  const source = query.data?.source ?? 'room';
+  const claims = React.useMemo(
+    () =>
+      (query.data?.claims ?? []).filter(row => !excludeClaimIds?.has(row.claim.id)).map(row => lobbyRoomClaimFrom(row)),
+    [excludeClaimIds, query.data?.claims]
+  );
+
+  const renderOffer = React.useCallback(
+    (offer: LobbyRoomOffer) => <LobbyClaimRequest lobbyId={lobby.lobby_id} offer={offer} />,
+    [lobby.lobby_id]
+  );
+
+  return (
+    <HubQueryState
+      analyticsSurface="hub"
+      isLoading={query.isLoading}
+      error={query.error}
+      failureReason={query.failureReason}
+      onRetry={() => void query.refetch()}
+      isEmpty={claims.length === 0}
+      emptyMessage={LOBBY_ROOM_CLAIMS_COPY.empty}
+      emptyAction={onExplore ? { label: 'Explore claims', onClick: onExplore } : undefined}
+    >
+      {source === 'recent' ? (
+        <div className="pb-2">
+          <HubMessageNote>{LOBBY_ROOM_CLAIMS_COPY.recent}</HubMessageNote>
+        </div>
+      ) : null}
+      <LobbyRoomClaimsList claims={claims} renderOffer={renderOffer} />
+    </HubQueryState>
+  );
+}
+
+/**
+ * The row as the card reads it. geo-chat leaves the viewer out of `positions`; they are counted
+ * back on their own side so the card's optimistic move between sides keeps the totals right.
+ */
+export function lobbyRoomClaimFrom(row: DebateLobbyClaim): LobbyRoomClaim {
+  const viewerSide = row.viewer_response?.position ?? null;
+  return {
+    claim: row.claim,
+    readiness: {
+      response_kind: row.response_kind,
+      viewer_response: row.viewer_response,
+      viewer_debate_ready: row.viewer_debate_ready,
+      readiness_disabled_reason: row.readiness_disabled_reason,
+    },
+    activeDebate: row.active_debate,
+    positions: row.positions.map(side => {
+      const total = side.total_in_room + (side.position === viewerSide ? 1 : 0);
+      return {
+        position: side.position,
+        position_label: side.position_label,
+        total_count: total,
+        available_now_count: side.requestable_count,
+        present_count: total,
+        participants: side.participants,
+        requestable_count: side.requestable_count,
+      };
+    }),
+  };
+}
+
+/** Request debate, offered only to people in this lobby on the other side. */
+function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRoomOffer }) {
+  const { claim, readiness } = offer.entry;
+  const { data: activity } = useDebateActivity(true);
+  const { data: requests } = useDebateRequests(true);
+  const createRequest = useCreateDebateRequest();
+  const recoverFromMissingIntent = useMissingIntentRecovery({
+    claimId: claim.claim_entity_id,
+    spaceId: claim.space_id,
+    viewerPosition: offer.viewerPosition,
+    indexedViewerPosition: offer.indexedPosition,
+  });
+  const refreshOnRefusal = useRefreshLobbyClaimsOnRefusal(lobbyId);
+
+  // A request is checked against a ready readiness row, so only a ready side counts as geo-chat's.
+  const gate = debateRequestGate({
+    chatPosition: readiness.viewer_debate_ready ? (readiness.viewer_response?.position ?? null) : null,
+    localPosition: offer.viewerPosition,
+    opponentReady: true,
+    indexingDelayed: offer.indexingDelayed,
+  });
+  // Only while the side on screen is geo-chat's (a newer vote clears the reason once it lands), and
+  // not for a withdrawn row the chain holds a side on again, which the card's backfill repairs.
+  const reason = readiness.readiness_disabled_reason;
+  const repairing = reason === 'claim_response_withdrawn' && offer.indexedPosition !== null;
+  const readinessBlock =
+    readiness.viewer_response?.position === offer.viewerPosition && !repairing
+      ? readinessDisabledMessage(reason)
+      : null;
+  const blockedReason = claimRequestBlockedReason(activity, requests) ?? readinessBlock ?? undefined;
+
+  return (
+    <RequestDebateControl
+      onRequest={() =>
+        createRequest.mutate(
+          { space_id: claim.space_id, claim_entity_id: claim.claim_entity_id, lobby_id: dashlessId(lobbyId) },
+          {
+            onError: error => {
+              recoverFromMissingIntent(error);
+              refreshOnRefusal(error);
+            },
+          }
+        )
+      }
+      disabled={Boolean(blockedReason) || !gate.canRequest}
+      blockedReason={blockedReason}
+      isRequesting={createRequest.isPending}
+      pending={!readinessBlock && gate.pending}
+      pendingLabel={gate.pendingLabel}
+      requestError={
+        lobbyClaimRequestErrorMessage(createRequest.error) ??
+        debateRequestErrorMessage(createRequest.error, offer.viewerPosition)
+      }
+    />
+  );
+}

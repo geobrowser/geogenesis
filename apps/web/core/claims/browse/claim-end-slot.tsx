@@ -119,10 +119,6 @@ function MatchmakingClaimEndSlot({
     indexedViewerPosition,
   });
 
-  // The live-debate link below shares its shape with this offer, so both read the size from one
-  // place — see `claimSlotPillClass` for the metrics and for why it is not the debates pill.
-  const base = claimSlotPillClass(variant);
-
   // Whether the match is still about the side the viewer is on.
   //
   // Not a second position check — it never asks geo-chat anything. `/matchmaking/matches` is one
@@ -167,19 +163,7 @@ function MatchmakingClaimEndSlot({
   }
 
   if (activeDebate) {
-    // The room where it is happening, or the feed when all we were told is that it is happening.
-    //
-    // `debatePath` rather than this host's own `spaceId`: a debate room lives under the space its
-    // *claim* came from, and the two agree only for as long as every surface renders rows it
-    // fetched under the space it is showing. The panel already fetches its rows per claim space.
-    const href = typeof activeDebate === 'object' ? debatePath(activeDebate) : `/space/${spaceId}/debates`;
-
-    return (
-      <Link href={href} className={cx(base, 'border border-red-01 text-red-01 hover:bg-red-01/5', className)}>
-        <span className="size-1 shrink-0 animate-pulse rounded-full bg-red-01" aria-hidden />
-        Watch live
-      </Link>
-    );
+    return <WatchLiveLink activeDebate={activeDebate} spaceId={spaceId} variant={variant} className={className} />;
   }
 
   // An empty box of exactly the slot's height, rather than nothing.
@@ -199,4 +183,33 @@ function MatchmakingClaimEndSlot({
   if (variant === 'block') return null;
 
   return <span className={cx('h-5 shrink-0', className)} aria-hidden />;
+}
+
+/** "Watch live": the room where a debate on this claim is running, or the space's feed. */
+export function WatchLiveLink({
+  activeDebate,
+  spaceId,
+  variant = 'inline',
+  className,
+}: {
+  /** The debate, or `true` where geo-chat only says one is running. */
+  activeDebate: Debate | true;
+  spaceId: string;
+  variant?: 'inline' | 'block';
+  className?: string;
+}) {
+  // `debatePath` rather than this host's own `spaceId`: a debate room lives under the space its
+  // *claim* came from, and the two agree only for as long as every surface renders rows it
+  // fetched under the space it is showing. The panel already fetches its rows per claim space.
+  const href = typeof activeDebate === 'object' ? debatePath(activeDebate) : `/space/${spaceId}/debates`;
+
+  return (
+    <Link
+      href={href}
+      className={cx(claimSlotPillClass(variant), 'border border-red-01 text-red-01 hover:bg-red-01/5', className)}
+    >
+      <span className="size-1 shrink-0 animate-pulse rounded-full bg-red-01" aria-hidden />
+      Watch live
+    </Link>
+  );
 }

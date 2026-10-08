@@ -2,7 +2,13 @@
 
 import { useQueryClient } from '@tanstack/react-query';
 
-import { type DebateClaimPositionSummary, GeoChatRequestError, notifyClaimResponseIndexed } from '~/core/debates/api';
+import {
+  type DebateActivity,
+  type DebateClaimPositionSummary,
+  type DebateRequestsResponse,
+  GeoChatRequestError,
+  notifyClaimResponseIndexed,
+} from '~/core/debates/api';
 import { readinessQueryPrefixes } from '~/core/debates/claim-response-indexed-notifier';
 import { useDebateActivity, useGeoChatAuth } from '~/core/debates/hooks';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
@@ -26,6 +32,18 @@ export function debateRequestErrorMessage(error: unknown, viewerPosition: boolea
       : 'Choose Agree or Disagree first.';
   }
   return error.message;
+}
+
+/** Why a claim request can't be sent now, or undefined. */
+export function claimRequestBlockedReason(
+  activity: Pick<DebateActivity, 'available_to_debate' | 'outbound_request'> | undefined,
+  requests: Pick<DebateRequestsResponse, 'outbound'> | undefined
+) {
+  const outbound = requests?.outbound ?? activity?.outbound_request ?? null;
+  // Only when the server actually says so — a missing field must not block requesting.
+  if (activity?.available_to_debate === false) return 'Switch yourself to available to send a request.';
+  if (outbound) return 'Withdraw your open request to send another.';
+  return undefined;
 }
 
 /**
@@ -59,17 +77,60 @@ export function useClaimMatchup({
    */
   indexedViewerPosition?: boolean | null;
 }) {
-  const queryClient = useQueryClient();
-  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const matchesQuery = useMatchmakingMatches(enabled);
   const requestsQuery = useDebateRequests(enabled);
   const { data: activity } = useDebateActivity(enabled);
   const createRequest = useCreateDebateRequest();
+  const recoverFromMissingIntent = useMissingIntentRecovery({
+    claimId,
+    spaceId,
+    viewerPosition,
+    indexedViewerPosition,
+  });
 
-  // geo-chat holds no readiness for a side the chain does. The notification that should have made
-  // one either has not landed or never will — a readiness row marked withdrawn is not repaired by
-  // anything else — so send it again, then ask for readiness afresh whether or not it went through.
-  const recoverFromMissingIntent = () => {
+  // `enabled: false` only stops this query from *fetching*. React Query still hands back whatever
+  // another mounted caller has already put in the cache — and on the hub the Matches tab is one, so
+  // a claim disabled precisely because the graph cannot resolve it would find a cached match and
+  // offer a debate it cannot honour. Disabled has to mean no answer, not a stale one.
+  const match = !enabled
+    ? null
+    : ((matchesQuery.data?.matches ?? []).find(
+        candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
+      ) ?? null);
+
+  const blockedReason = claimRequestBlockedReason(activity, requestsQuery.data);
+
+  return {
+    match,
+    blockedReason,
+    isRequesting: createRequest.isPending,
+    requestError: debateRequestErrorMessage(createRequest.error, viewerPosition),
+    request: () =>
+      createRequest.mutate({ space_id: spaceId, claim_entity_id: claimId }, { onError: recoverFromMissingIntent }),
+  };
+}
+
+/**
+ * A claim request's `onError` for `intent_missing`: re-reports the indexed side when it matches the
+ * pills (nothing else repairs a missing readiness row), then refetches readiness either way.
+ */
+export function useMissingIntentRecovery({
+  claimId,
+  spaceId,
+  viewerPosition,
+  indexedViewerPosition = null,
+}: {
+  claimId: string;
+  spaceId: string;
+  viewerPosition?: boolean | null;
+  /** See `useClaimMatchup`. Null only refreshes readiness. */
+  indexedViewerPosition?: boolean | null;
+}) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return (error: unknown) => {
+    if (!(error instanceof GeoChatRequestError) || error.code !== 'intent_missing') return;
     const refresh = () => {
       if (!accountKey) return;
       for (const queryKey of readinessQueryPrefixes(accountKey, spaceId)) {
@@ -90,41 +151,6 @@ export function useClaimMatchup({
     )
       .catch(() => {})
       .finally(refresh);
-  };
-
-  // `enabled: false` only stops this query from *fetching*. React Query still hands back whatever
-  // another mounted caller has already put in the cache — and on the hub the Matches tab is one, so
-  // a claim disabled precisely because the graph cannot resolve it would find a cached match and
-  // offer a debate it cannot honour. Disabled has to mean no answer, not a stale one.
-  const match = !enabled
-    ? null
-    : ((matchesQuery.data?.matches ?? []).find(
-        candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
-      ) ?? null);
-
-  const outbound = requestsQuery.data?.outbound ?? activity?.outbound_request ?? null;
-  // Only when the server actually says so — a missing field must not block requesting.
-  const unavailable = activity?.available_to_debate === false;
-  const blockedReason = unavailable
-    ? 'Switch yourself to available to send a request.'
-    : outbound
-      ? 'Withdraw your open request to send another.'
-      : undefined;
-
-  return {
-    match,
-    blockedReason,
-    isRequesting: createRequest.isPending,
-    requestError: debateRequestErrorMessage(createRequest.error, viewerPosition),
-    request: () =>
-      createRequest.mutate(
-        { space_id: spaceId, claim_entity_id: claimId },
-        {
-          onError: error => {
-            if (error instanceof GeoChatRequestError && error.code === 'intent_missing') recoverFromMissingIntent();
-          },
-        }
-      ),
   };
 }
 

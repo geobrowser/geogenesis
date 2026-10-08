@@ -861,6 +861,8 @@ export type DebateRequest = {
   created_at: string;
   /** Fixed for the lifetime of the request, even as it advances between recipients. */
   expires_at: string;
+  /** The lobby a scoped request was made from; absent when unscoped. */
+  lobby_id?: string | null;
 };
 
 export type DebateRequestsResponse = {
@@ -879,6 +881,8 @@ export type CreateDebateRequestBody = {
   space_id: string;
   claim_entity_id: string;
   format_id?: string;
+  /** Dashless. Offers the request only to people requestable in that lobby (GEO-3130). */
+  lobby_id?: string;
 };
 
 export type DismissDebateRequestBody = {
@@ -2419,6 +2423,55 @@ export async function getDebateLobby(
   signal?: AbortSignal
 ) {
   return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** A lobby member on one side of an "In this room" claim. */
+export type DebateLobbyClaimParticipant = DebateParticipantSummary & { requestable: boolean };
+
+/** One side of an "In this room" claim. The viewer is never counted in it. */
+export type DebateLobbyClaimSide = {
+  position: boolean;
+  position_label: string;
+  /** Other people in the room on this side. */
+  total_in_room: number;
+  /** Of those, how many the viewer can send a lobby-scoped request to now. */
+  requestable_count: number;
+  /** At most 8, requestable first. */
+  participants: DebateLobbyClaimParticipant[];
+};
+
+export type DebateLobbyClaim = MatchmakingReadiness & {
+  claim: DebateClaimSummary;
+  /** Someone is debating this claim now, anywhere. */
+  active_debate: boolean;
+  /** Always two, `true` first. */
+  positions: DebateLobbyClaimSide[];
+};
+
+/** `recent` when nobody in the room holds a position: recently voted claims, with empty sides. */
+export type DebateLobbyClaims = {
+  lobby_id: string;
+  source: 'room' | 'recent';
+  /** Most disagreeing pairs first. */
+  claims: DebateLobbyClaim[];
+};
+
+/**
+ * Roster members only. `404 lobby_not_found`, `403 lobby_banned`, `409 lobby_closed`,
+ * `403 lobby_not_member`.
+ */
+export async function getDebateLobbyClaims(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbyClaims>(`/debate-lobbies/${lobbyId}/claims`, {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
