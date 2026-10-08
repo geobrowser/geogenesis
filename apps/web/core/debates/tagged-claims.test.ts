@@ -976,3 +976,171 @@ describe('the facet menus', () => {
     expect(result.current.settled).toBe(false);
   });
 });
+
+/**
+ * GEO-3223. A search also matches claims through their topics' names: the picker hands over the
+ * topics the text named, and a claim carrying one answers the search as well as a text match does.
+ */
+describe('claims a search reaches through a topic', () => {
+  const NAMED_TOPIC = '9a1f3c0b2d4e4f5a8b6c7d8e9f0a1b2c';
+
+  /** Answers the search's own row pages by id, and the topic request with `topicRows`. */
+  function respondWithSearchAndTopicRows(textRows: unknown[], topicRows: unknown[]) {
+    graphqlMock.mockImplementation(({ decoder, variables }) => {
+      const and = ((variables as any)?.filter?.and ?? []) as any[];
+      const viaTopic = and.some(clause => clause.relations?.some?.toEntityId?.in);
+      const asked = and.find(clause => clause.id?.in)?.id?.in as string[] | undefined;
+      const nodes = viaTopic
+        ? topicRows
+        : asked
+          ? textRows.filter(row => asked.includes((row as { id: string }).id))
+          : textRows;
+      return Effect.succeed(
+        decoder({ entitiesConnection: { pageInfo: { hasNextPage: false, endCursor: null }, nodes } })
+      );
+    });
+  }
+
+  const searching: TaggedClaimFilters = {
+    ...NO_TAGGED_CLAIM_FILTERS,
+    search: 'nuclear',
+    searchTopicIds: [NAMED_TOPIC],
+  };
+
+  it('lists the topic matches after the text matches, once each', async () => {
+    respondWithSearch([['a1']]);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('a1', 'Text match'), node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+
+    await waitFor(() => expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1', 't1']));
+  });
+
+  it('asks for the topic matches by topic, and keeps them out of the search pages', async () => {
+    respondWithSearch([['a1']]);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+    await waitFor(() => expect(result.current.claims).toHaveLength(2));
+
+    const filters = graphqlMock.mock.calls.map(call => JSON.stringify(call[0].variables.filter));
+    const topicRequest = filters.find(filter => filter.includes(NAMED_TOPIC));
+    expect(topicRequest).toBeDefined();
+    // A search page names its ids only; with the topic in there it would return the topic matches
+    // again on every page.
+    const pageRequest = filters.find(filter => filter.includes('"in":["a1"]'));
+    expect(pageRequest).not.toContain(NAMED_TOPIC);
+  });
+
+  it('holds the topic matches back while the text search has pages left', async () => {
+    // Two text matches, one page of them in hand.
+    respondWithSearch([['a1']], 2);
+    respondWithSearchAndTopicRows([node('a1', 'Text match')], [node('t1', 'Topic match')]);
+    const { result } = renderClaims(searching);
+
+    await waitFor(() => expect(result.current.claims.map(claim => claim.entity.id)).toEqual(['a1']));
+    expect(result.current.hasNextPage).toBe(true);
+  });
+
+  it('counts the topic matches in the facets, beside the text matches', async () => {
+    respondWithSearch([['a1']]);
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(decoder({ relationsConnection: { groupedAggregates: [] } }))
+    );
+    renderHook(() => useTaggedSpaceFacet(TAG, searching, true), { wrapper: Wrapper });
+
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+    const and = sentVariables().fromEntity.and as any[];
+    expect(and).toContainEqual({
+      or: [
+        { id: { in: ['a1'] } },
+        { relations: { some: { typeId: { is: expect.any(String) }, toEntityId: { in: [NAMED_TOPIC] } } } },
+      ],
+    });
+  });
+
+  it('adds nothing when no search is running', async () => {
+    respondWithPages([[node('b1', 'Browsed')]]);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, searchTopicIds: [NAMED_TOPIC] });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    expect(JSON.stringify(sentVariables().filter)).not.toContain(NAMED_TOPIC);
+  });
+});
+
+/**
+ * GEO-3223. The debate again picker puts spaces and topics in one row of pills that narrow together,
+ * so picked spaces are AND there: a claim tagged in every one of them, and a space facet counted as
+ * co-occurrence over the narrowed list.
+ */
+describe('spaces matched all at once', () => {
+  const allSpaces: TaggedClaimFilters = {
+    ...NO_TAGGED_CLAIM_FILTERS,
+    spaceIds: [SPACE, OTHER_SPACE],
+    spaceMatch: 'all',
+  };
+
+  const tagIn = (spaceId: string) => ({
+    relations: { some: { typeId: { is: expect.any(String) }, toEntityId: { is: TAG }, spaceId: { is: spaceId } } },
+  });
+
+  it('asks for claims tagged in every picked space', async () => {
+    respondWithPages([[node('a1', 'One', { tagSpaces: [SPACE, OTHER_SPACE] })]]);
+    const { result } = renderClaims(allSpaces);
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const and = sentVariables().filter.and as any[];
+    expect(and).toContainEqual(tagIn(SPACE));
+    expect(and).toContainEqual(tagIn(OTHER_SPACE));
+    // And the tag clause itself is not narrowed to "any of them", which would undo the AND.
+    expect(JSON.stringify(and[0])).not.toContain(OTHER_SPACE);
+  });
+
+  it('counts the space facet over the narrowed list, picked spaces included', async () => {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(decoder({ relationsConnection: { groupedAggregates: [] } }))
+    );
+    renderHook(() => useTaggedSpaceFacet(TAG, allSpaces, true), { wrapper: Wrapper });
+
+    await waitFor(() => expect(graphqlMock).toHaveBeenCalled());
+    const and = sentVariables().fromEntity.and as any[];
+    expect(and).toContainEqual(tagIn(SPACE));
+    expect(and).toContainEqual(tagIn(OTHER_SPACE));
+  });
+
+  it('leaves the hub’s "any of them" alone', async () => {
+    respondWithPages([[node('a1', 'One')]]);
+    const { result } = renderClaims({ ...allSpaces, spaceMatch: undefined });
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+
+    const and = sentVariables().filter.and as any[];
+    expect(and[0].relations.some.spaceId).toEqual({ in: [SPACE, OTHER_SPACE] });
+    expect(and).not.toContainEqual(tagIn(SPACE));
+  });
+});
+
+/** GEO-3223. The picker needs a distinct claim count, which the space buckets cannot give. */
+describe('the total it reports', () => {
+  function respondWithTotal(nodes: unknown[], totalCount: number) {
+    graphqlMock.mockImplementation(({ decoder }) =>
+      Effect.succeed(
+        decoder({ entitiesConnection: { totalCount, pageInfo: { hasNextPage: false, endCursor: null }, nodes } })
+      )
+    );
+  }
+
+  it('reports the server’s distinct total while browsing', async () => {
+    respondWithTotal([node('a1', 'One', { tagSpaces: [SPACE, OTHER_SPACE] })], 1);
+    const { result } = renderClaims();
+
+    await waitFor(() => expect(result.current.totalCount).toBe(1));
+    expect(sentQuery()).toContain('totalCount');
+  });
+
+  it('reports no total while a search runs', async () => {
+    respondWithSearch([['a1']]);
+    respondWithTotal([node('a1', 'One')], 1);
+    const { result } = renderClaims({ ...NO_TAGGED_CLAIM_FILTERS, search: 'one' });
+
+    await waitFor(() => expect(result.current.claims).toHaveLength(1));
+    expect(result.current.totalCount).toBeNull();
+  });
+});
