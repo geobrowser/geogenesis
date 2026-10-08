@@ -11,6 +11,8 @@ import Link from 'next/link';
 
 import type { Debate } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
+import { RematchClaimEndSlot } from '~/core/debates/rematch-claim-end-slot';
+import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { RequestDebateControl, claimSlotPillClass } from '~/core/debates/request-debate-control';
 
 import { useClaimMatchup } from './use-claim-matchup';
@@ -38,7 +40,14 @@ import { useClaimMatchup } from './use-claim-matchup';
  * Request outranks live because it is the only one that needs the viewer: a live debate is still
  * there a second later, whereas a match evaporates when either party is taken.
  */
-export function ClaimEndSlot({
+export function ClaimEndSlot(props: React.ComponentProps<typeof MatchmakingClaimEndSlot>) {
+  // Every claim opened beside the picker belongs to that pair, including related claims.
+  // An unavailable rematch must never fall back to requesting a different matchmaking opponent.
+  const context = useRematchPanelContext();
+  return context ? <RematchClaimEndSlot {...props} context={context} /> : <MatchmakingClaimEndSlot {...props} />;
+}
+
+function MatchmakingClaimEndSlot({
   claimId,
   spaceId,
   activeDebate,

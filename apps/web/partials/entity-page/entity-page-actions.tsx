@@ -28,10 +28,18 @@ interface EntityPageActionsProps {
   isVoteable?: boolean;
   /** Tighten the action spacing when the row shares a compact header. */
   compact?: boolean;
+  /** The entity's own primary action, ahead of the votes — a topic's Follow, which replaces them. */
+  leading?: React.ReactNode;
 }
 
 /** Votes, create, history, and menu — separate from type metadata */
-export function EntityPageActions({ entityId, spaceId, isVoteable = false, compact = false }: EntityPageActionsProps) {
+export function EntityPageActions({
+  entityId,
+  spaceId,
+  isVoteable = false,
+  compact = false,
+  leading,
+}: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
   const name = useName(entityId, spaceId);
@@ -49,6 +57,7 @@ export function EntityPageActions({ entityId, spaceId, isVoteable = false, compa
 
   return (
     <div className={cx('ml-auto flex shrink-0 items-center', compact ? 'gap-4' : 'gap-5')}>
+      {leading}
       {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
       {editable && (
         // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`

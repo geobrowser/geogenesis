@@ -178,6 +178,7 @@ export function DebateActivityRow({
             // 540 × 820, so a 16:9 tile would letterbox every still it ever showed.
             <Link
               href={debateHref}
+              data-entity-side-panel-full-page
               aria-label={`Watch ${debaterLine ?? headline}`}
               className="relative block w-full shrink-0 overflow-hidden rounded-md bg-grey-01"
               style={{ height: KEYFRAME_HEIGHT_PX }}
@@ -208,6 +209,7 @@ export function DebateActivityRow({
               // from a claim row does not expect the one below it to leave the page.
               <Link
                 href={debateHref}
+                data-entity-side-panel-full-page
                 aria-label={`Watch ${debaterLine}`}
                 className={cx(PAGE_DENSITY.nameClass, 'min-w-0 truncate text-text no-underline hover:underline')}
               >
@@ -270,6 +272,7 @@ export function DebateActivityRow({
             />
             <Link
               href={debateHref}
+              data-entity-side-panel-full-page
               className={cx(PAGE_DENSITY.metaClass, 'text-ctaPrimary no-underline hover:underline')}
             >
               Watch debate

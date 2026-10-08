@@ -35,6 +35,7 @@ import { EntityTabs } from '~/partials/entity-page/entity-tabs';
 import { META_CHIP_CLASS } from '~/partials/entity-page/relation-chip-section';
 import { SPACE_TABS_ANCHOR } from '~/partials/space-page/space-tabs-anchor';
 
+import { TopicFollowControl } from '../topic-follow-control';
 import { useTopicSpaceScope } from '../use-topic-space-scope';
 import { TopicComposition } from './topic-composition';
 import { TopicFeed } from './topic-feed';
@@ -353,7 +354,12 @@ export function TopicPageView({
               )}
               {isCurated && <span className={TOPIC_META_CHIP_CLASS}>Curated</span>}
             </div>
-            <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable />
+            {/* GEO-3191: following is a topic's one action, so it stands where the votes were. */}
+            <EntityPageActions
+              entityId={entityId}
+              spaceId={spaceId}
+              leading={<TopicFollowControl topic={{ id: entityId, name: entity.name }} />}
+            />
           </div>
 
           <TopicComposition topicId={entityId} spaceId={spaceId} spaceIds={topicSpaceIds} />

@@ -166,6 +166,7 @@ describe('ExtractedClaimRow', () => {
 
     const link = screen.getByRole('link', { name: 'Watch from 12:04' });
     expect(link).toHaveTextContent('12:04');
+    expect(link).toHaveAttribute('data-entity-side-panel-full-page');
     // 724s minus the two-second lead-in, so the sentence is not clipped by its own start.
     expect(link).toHaveAttribute('href', expect.stringContaining('t=722'));
     expect(link).toHaveAttribute('href', expect.stringContaining('debate-space'));
