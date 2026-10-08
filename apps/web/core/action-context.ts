@@ -28,6 +28,7 @@ export const ACTION_COMPONENTS = [
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',
+  'topic_follow_button',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
@@ -39,6 +40,8 @@ export type ActionKind =
   | 'edit'
   | 'share'
   | 'join_space'
+  | 'follow_topic'
+  | 'unfollow_topic'
   | 'bounty_interest'
   | 'start_debate'
   | 'join_debate'

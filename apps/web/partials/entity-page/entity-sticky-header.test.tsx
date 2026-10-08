@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   /** Stands in for the tracked title element the bar measures its column from. */
   title: null as Element | null,
   queriedName: null as string | null,
+  /** Types on the queried entity, or null for an entity the query returned without any. */
+  queriedTypes: null as { id: string }[] | null,
   avatarUrl: undefined as string | undefined,
   coverUrl: undefined as string | undefined,
   /** The (entityId, spaceId) the media hook was asked for. */
@@ -44,7 +46,13 @@ vi.mock('~/core/state/entity-page-store/entity-store', () => ({
   useName: () => mocks.storedName,
 }));
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntity: () => ({ entity: mocks.queriedName ? { name: mocks.queriedName } : null, isLoading: false }),
+  useQueryEntity: () => ({
+    entity:
+      mocks.queriedName || mocks.queriedTypes
+        ? { name: mocks.queriedName, ...(mocks.queriedTypes ? { types: mocks.queriedTypes } : {}) }
+        : null,
+    isLoading: false,
+  }),
 }));
 vi.mock('~/core/utils/use-entity-media', () => ({
   useEntityMedia: (...args: unknown[]) => {
@@ -54,6 +62,14 @@ vi.mock('~/core/utils/use-entity-media', () => ({
 }));
 // The real control reaches for the sync engine, wallet and response queries. What matters here is
 // that the bar hands it the entity, not what it draws.
+vi.mock('~/core/topics/follow-topic-button', () => ({
+  FollowTopicButton: (props: { topic: { id: string; name?: string | null } }) => (
+    <button type="button" data-testid="follow-button" data-topic={props.topic.id}>
+      Follow
+    </button>
+  ),
+}));
+
 vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   EntityVoteButtons: (props: Record<string, unknown>) => {
     mocks.voteProps = props;
@@ -80,6 +96,7 @@ function renderBar({ withHost = true }: { withHost?: boolean } = {}) {
 beforeEach(() => {
   mocks.storedName = 'Vitalik Buterin';
   mocks.queriedName = null;
+  mocks.queriedTypes = null;
   mocks.avatarUrl = undefined;
   mocks.coverUrl = undefined;
   mocks.mediaArgs = null;
@@ -97,6 +114,14 @@ afterEach(() => {
 });
 
 describe('EntityStickyHeader', () => {
+  it('offers Follow instead of the votes on a topic (GEO-3191)', () => {
+    mocks.queriedTypes = [{ id: '5ef5a586-0f27-4d8e-8f6c-59ae5b3e89e2' }];
+    renderBar();
+
+    expect(screen.getByTestId('follow-button')).toHaveAttribute('data-topic', 'entity-1');
+    expect(screen.queryByTestId('vote-buttons')).toBeNull();
+  });
+
   it('draws the name and the entity interaction once the title has scrolled away', () => {
     renderBar();
 

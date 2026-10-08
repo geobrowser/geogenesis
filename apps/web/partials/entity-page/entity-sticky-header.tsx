@@ -11,6 +11,8 @@ import { type ContentColumnBox, useMirroredContentColumn } from '~/core/hooks/us
 import { useScrolledPastElement } from '~/core/hooks/use-scrolled-past-element';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
+import { FollowTopicButton } from '~/core/topics/follow-topic-button';
+import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { useEntityMedia } from '~/core/utils/use-entity-media';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -33,7 +35,8 @@ import { entityStickyHeaderHostElementAtom } from '~/atoms';
  * Nameless entities get nothing. The bar exists to say which entity this is, and an id in that slot
  * says less than the empty bar it would replace.
  *
- * The interaction on the right is `EntityVoteButtons`, which resolves what it should offer from the
+ * The interaction on the right is Follow on a topic (GEO-3191), the topic header's one action.
+ * Anywhere else it is `EntityVoteButtons`, which resolves what it should offer from the
  * entity's own types: upvote/downvote for an ordinary entity, agree/disagree for a claim. Every
  * claim, since #2541 — `ResponseKind` is `curation | stance` and the factual flag no longer picks a
  * third. Reproducing that choice here would be a second place for it to be made, and a second place
@@ -58,6 +61,9 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
   const storedName = useName(entityId, spaceId);
   const { entity } = useQueryEntity({ id: entityId });
   const name = storedName ?? entity?.name ?? null;
+  // Read off the same types the page routes on, so a topic's bar offers what its header does:
+  // Follow, which replaces the votes on a topic (GEO-3191).
+  const isTopic = entity?.types ? entityBrowseViewFromTypes(entity.types) === 'topic' : false;
 
   /*
    * The keyed hook, not `useEntityMediaUrl`.
@@ -115,12 +121,16 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
                 lines would take back most of the room it exists to give. */}
             <span className="min-w-0 flex-1 truncate text-metadataMedium text-text">{name}</span>
             <span className="flex shrink-0 items-center">
-              <EntityVoteButtons
-                entityId={entityId}
-                spaceId={spaceId}
-                claimResponderAvatarsPosition="trailing"
-                compact
-              />
+              {isTopic ? (
+                <FollowTopicButton topic={{ id: entityId, name }} />
+              ) : (
+                <EntityVoteButtons
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  claimResponderAvatarsPosition="trailing"
+                  compact
+                />
+              )}
             </span>
           </div>
         </motion.div>

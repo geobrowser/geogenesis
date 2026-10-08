@@ -3,7 +3,7 @@
 import * as React from 'react';
 
 import { ActionSurfaceArticle } from '~/core/action-context-provider';
-import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
+import { CLAIM_TYPE_ID, TOPIC_TYPE_ID } from '~/core/claims/ontology';
 import { EVENT_SCHEMA } from '~/core/community-calls/constants';
 import { useRecordingSources } from '~/core/community-calls/use-recording-sources';
 import { isDebateEntity } from '~/core/debates/is-debate-entity';
@@ -25,6 +25,7 @@ import {
 import { ExploreCardTitle } from './explore-card-title';
 import { ExploreMetaRow } from './explore-meta-row';
 import { RankingCardBody } from './explore-ranking-card-body';
+import { TopicExploreFeedCardArticle } from './topic-explore-feed-card';
 
 type ExploreFeedCardProps = {
   itemPosition?: number;
@@ -57,6 +58,7 @@ type ExploreFeedCardProps = {
 
 const COMMUNITY_CALL_EVENT_TYPE = normId(EVENT_SCHEMA.COMMUNITY_CALL_EVENT_TYPE);
 const CLAIM_TYPE = normId(CLAIM_TYPE_ID);
+const TOPIC_TYPE = normId(TOPIC_TYPE_ID);
 const RANKING_BLOCK_TYPE = normId(RANKING_BLOCK_TYPE_ID);
 
 type CardBodyProps = {
@@ -144,6 +146,21 @@ function ExploreFeedCardBody(props: ExploreFeedCardProps) {
         hideJoinButton={props.hideJoinButton}
         titleOpensSidePanel={props.titleOpensSidePanel}
         variant={props.claimCardVariant}
+      />
+    );
+  }
+
+  // Topics trade the votes for Follow (GEO-3191), and lead their metadata with the follower count.
+  // No connection counts here: see `TopicExploreFeedCard` for why the main feed doesn't ask.
+  const isTopic = props.item.types.some(type => normId(type.id) === TOPIC_TYPE);
+  if (isTopic) {
+    return (
+      <TopicExploreFeedCardArticle
+        item={props.item}
+        counts={null}
+        hideSpaceLink={props.hideSpaceLink}
+        hideJoinButton={props.hideJoinButton}
+        titleOpensSidePanel={props.titleOpensSidePanel}
       />
     );
   }
