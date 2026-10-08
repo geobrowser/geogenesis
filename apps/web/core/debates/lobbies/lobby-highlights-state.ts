@@ -138,9 +138,8 @@ export function roomVoteHintAction(
 export type RoomVoteHintRequest = boolean | null | undefined;
 
 /**
- * Sends one vote's hints one at a time, latest wins. geo-chat upserts each hint, so two in flight
- * could land out of order and leave the older side counted. While one is in flight only the latest
- * wanted request is kept, and it goes when that one settles, unless it repeats what was sent.
+ * One vote's hints, one in flight at a time, latest wins: geo-chat upserts them, so concurrent
+ * requests could land out of order and leave the older side counted.
  */
 export function createRoomVoteHintSender(send: (request: RoomVoteHintRequest) => Promise<unknown>) {
   let inFlight = false;
