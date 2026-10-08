@@ -5398,18 +5398,15 @@ describe('DebateRoomPageClient', () => {
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
 
-    // geo-chat's `extend_count_in_ms`: the new round starts 5 s after the window closes.
+    // geo-chat's `extend_count_in_ms` (geo-chat #227): the new round starts 5 s after the window
+    // closes. `next_phase_starts_at` stays the end of the window, resolved + 3 s.
     const revealRebutWithCountIn = (): Debate => {
       const debate = openRoundsRevealRebut();
       return {
         ...debate,
         turn_started_at: '2026-10-06T20:02:12.200Z',
         turn_ends_at: '2026-10-06T20:02:57.200Z',
-        open_rounds: {
-          ...debate.open_rounds!,
-          extend_count_in_ms: 5_000,
-          next_phase_starts_at: '2026-10-06T20:02:12.200Z',
-        },
+        open_rounds: { ...debate.open_rounds!, extend_count_in_ms: 5_000 },
       };
     };
 
