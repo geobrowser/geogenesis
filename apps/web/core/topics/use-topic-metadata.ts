@@ -1,6 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useQuery } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -24,6 +24,9 @@ export function useTopicMetadata(topicIds: readonly string[]) {
     },
     enabled: ids.length > 0,
     staleTime: 60_000,
+    // A list that loses one id (an unfollow) keeps drawing the names it has while the new set loads,
+    // instead of dropping back to a loading state that would unmount whatever is showing them.
+    placeholderData: keepPreviousData,
   });
 
   const metadata = React.useMemo<Map<string, TopicMetadata>>(() => data ?? new Map(), [data]);

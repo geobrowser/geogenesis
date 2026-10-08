@@ -15,22 +15,29 @@ import { normId } from '~/core/utils/norm-id';
 import { isInterestedFollowEnabled } from './interested';
 import { useFollowedTopics } from './use-followed-topics';
 
-/** Aliases per request: a feed page of topics fits in one, and the query stays a sane size. */
+/** Topics per request: a feed page of them fits in one, and the query stays a sane size. */
 const BATCH_SIZE = 25;
 
 type Waiter = { resolve: (followers: TopicFollowers) => void; reject: (error: unknown) => void };
+type Batch = { interested: boolean; viewerId?: string; waiters: Map<string, Waiter[]> };
 
-const queued = new Map<string, Waiter[]>();
+/** Asks waiting for the next flush, one batch per (flag, viewer): those go out as separate queries. */
+const batches = new Map<string, Batch>();
 let flushScheduled = false;
 
 /**
  * Every topic card asks for its own count, and a feed mounts many at once. Asks made in the same
  * tick go out as one request rather than one each.
  */
-function loadTopicFollowers(topicId: string, interested: boolean): Promise<TopicFollowers> {
+function loadTopicFollowers(topicId: string, interested: boolean, viewerId?: string): Promise<TopicFollowers> {
   return new Promise((resolve, reject) => {
-    const key = `${interested ? 'i' : 'f'}:${normId(topicId)}`;
-    queued.set(key, [...(queued.get(key) ?? []), { resolve, reject }]);
+    const batchKey = `${interested}:${viewerId ? normId(viewerId) : ''}`;
+    const batch = batches.get(batchKey) ?? { interested, viewerId, waiters: new Map() };
+    batches.set(batchKey, batch);
+
+    const id = normId(topicId);
+    batch.waiters.set(id, [...(batch.waiters.get(id) ?? []), { resolve, reject }]);
+
     if (flushScheduled) return;
     flushScheduled = true;
     setTimeout(flush, 0);
@@ -39,23 +46,25 @@ function loadTopicFollowers(topicId: string, interested: boolean): Promise<Topic
 
 function flush() {
   flushScheduled = false;
-  const batch = [...queued.entries()];
-  queued.clear();
+  const pending = [...batches.values()];
+  batches.clear();
 
-  for (const interested of [true, false]) {
-    const prefix = interested ? 'i:' : 'f:';
-    const entries = batch.filter(([key]) => key.startsWith(prefix));
+  for (const { interested, viewerId, waiters } of pending) {
+    const entries = [...waiters.entries()];
     for (let start = 0; start < entries.length; start += BATCH_SIZE) {
       const chunk = entries.slice(start, start + BATCH_SIZE);
-      const topicIds = chunk.map(([key]) => key.slice(prefix.length));
-      fetchTopicFollowers(topicIds, interested).then(
+      fetchTopicFollowers(
+        chunk.map(([id]) => id),
+        interested,
+        viewerId
+      ).then(
         followers => {
-          for (const [key, waiters] of chunk) {
-            const result = followers.get(key.slice(prefix.length)) ?? { followerIds: [], count: 0 };
-            waiters.forEach(waiter => waiter.resolve(result));
+          for (const [id, topicWaiters] of chunk) {
+            const result = followers.get(id) ?? { count: 0, viewerIndexed: false };
+            topicWaiters.forEach(waiter => waiter.resolve(result));
           }
         },
-        error => chunk.forEach(([, waiters]) => waiters.forEach(waiter => waiter.reject(error)))
+        error => chunk.forEach(([, topicWaiters]) => topicWaiters.forEach(waiter => waiter.reject(error)))
       );
     }
   }
@@ -75,22 +84,22 @@ export function useTopicFollowerCount(topicId: string): number | null {
   const interested = isInterestedFollowEnabled();
   const { personalSpaceId } = usePersonalSpaceId();
   const { topicIds: followedTopicIds, isLoading: isLoadingFollows } = useFollowedTopics();
+  const viewerId = personalSpaceId ?? undefined;
 
   const { data } = useQuery({
-    queryKey: topicFollowersQueryKey(topicId, interested),
-    queryFn: () => loadTopicFollowers(topicId, interested),
+    queryKey: topicFollowersQueryKey(topicId, interested, viewerId),
+    queryFn: () => loadTopicFollowers(topicId, interested, viewerId),
     staleTime: 60_000,
   });
 
   return React.useMemo(() => {
     if (!data) return null;
-    if (!personalSpaceId || isLoadingFollows) return data.count;
-    return followerCountForViewer(data, personalSpaceId, followedTopicIds.has(normId(topicId)));
-  }, [data, personalSpaceId, isLoadingFollows, followedTopicIds, topicId]);
+    if (!viewerId || isLoadingFollows) return data.count;
+    return followerCountForViewer(data, followedTopicIds.has(normId(topicId)));
+  }, [data, viewerId, isLoadingFollows, followedTopicIds, topicId]);
 }
 
 /** The indexed count with the viewer's part swapped for what they hold now. */
-export function followerCountForViewer(followers: TopicFollowers, viewerSpaceId: string, followsNow: boolean): number {
-  const indexed = followers.followerIds.includes(normId(viewerSpaceId));
-  return Math.max(0, followers.count - (indexed ? 1 : 0) + (followsNow ? 1 : 0));
+export function followerCountForViewer(followers: TopicFollowers, followsNow: boolean): number {
+  return Math.max(0, followers.count - (followers.viewerIndexed ? 1 : 0) + (followsNow ? 1 : 0));
 }

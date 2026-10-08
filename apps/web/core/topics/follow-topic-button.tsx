@@ -20,6 +20,7 @@ import { useFollowedTopics } from './use-followed-topics';
 export type FollowTopicButtonVariant = 'compact' | 'page';
 
 const NO_PERSONAL_SPACE_HINT = 'You need a personal space to follow';
+const UNREGISTERED_SPACE_HINT = 'Your personal space needs to finish setting up before you can follow';
 
 const BASE_CLASS =
   'group/follow inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors duration-150 disabled:cursor-default';
@@ -113,7 +114,7 @@ export function FollowTopicButton({
   });
 
   const saving = isPending(topicId);
-  const shownFollowed = followed || (!followed && queuedFollow.isQueued);
+  const shownFollowed = followed || queuedFollow.isQueued;
   const signedIn = Boolean(smartAccount);
   const noPersonalSpace =
     signedIn && !personalSpaceId && !isLoadingPersonalSpace && !isAccountSetupPending && !queuedFollow.isQueued;
@@ -154,7 +155,7 @@ export function FollowTopicButton({
       type="button"
       aria-pressed={shownFollowed}
       aria-label={shownFollowed ? `Unfollow ${topic.name ?? 'this topic'}` : `Follow ${topic.name ?? 'this topic'}`}
-      title={noPersonalSpace ? NO_PERSONAL_SPACE_HINT : undefined}
+      title={noPersonalSpace ? (anyPersonalSpaceId ? UNREGISTERED_SPACE_HINT : NO_PERSONAL_SPACE_HINT) : undefined}
       disabled={disabled}
       aria-busy={saving || undefined}
       onClick={onPress}

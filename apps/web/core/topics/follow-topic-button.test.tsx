@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   isLoadingFollows: false,
   smartAccount: {} as object | null,
   personalSpaceId: 'personal-space' as string | null,
+  isRegistered: true,
   isLoadingPersonalSpace: false,
   isAccountSetupPending: false,
   promptSignIn: vi.fn(),
@@ -42,7 +43,7 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({
     personalSpaceId: mocks.personalSpaceId,
-    isRegistered: true,
+    isRegistered: mocks.isRegistered,
     isLoading: mocks.isLoadingPersonalSpace,
   }),
 }));
@@ -76,6 +77,7 @@ beforeEach(() => {
   mocks.isLoadingFollows = false;
   mocks.smartAccount = {};
   mocks.personalSpaceId = 'personal-space';
+  mocks.isRegistered = true;
   mocks.isLoadingPersonalSpace = false;
   mocks.isAccountSetupPending = false;
   mocks.promptSignIn.mockReset();
@@ -151,6 +153,17 @@ describe('FollowTopicButton', () => {
 
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('title', 'You need a personal space to follow');
+  });
+
+  it('says the space must finish registering when an Interested follow needs it on chain', () => {
+    vi.stubEnv('NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED', 'true');
+    mocks.isRegistered = false;
+    renderButton();
+    const button = screen.getByRole('button');
+
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('title', 'Your personal space needs to finish setting up before you can follow');
+    vi.unstubAllEnvs();
   });
 
   it('holds the press while a new personal space is on its way', () => {

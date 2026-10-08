@@ -13,8 +13,6 @@ const mocks = vi.hoisted(() => ({
   /** Stands in for the tracked title element the bar measures its column from. */
   title: null as Element | null,
   queriedName: null as string | null,
-  /** Types on the queried entity, or null for an entity the query returned without any. */
-  queriedTypes: null as { id: string }[] | null,
   avatarUrl: undefined as string | undefined,
   coverUrl: undefined as string | undefined,
   /** The (entityId, spaceId) the media hook was asked for. */
@@ -46,13 +44,7 @@ vi.mock('~/core/state/entity-page-store/entity-store', () => ({
   useName: () => mocks.storedName,
 }));
 vi.mock('~/core/sync/use-store', () => ({
-  useQueryEntity: () => ({
-    entity:
-      mocks.queriedName || mocks.queriedTypes
-        ? { name: mocks.queriedName, ...(mocks.queriedTypes ? { types: mocks.queriedTypes } : {}) }
-        : null,
-    isLoading: false,
-  }),
+  useQueryEntity: () => ({ entity: mocks.queriedName ? { name: mocks.queriedName } : null, isLoading: false }),
 }));
 vi.mock('~/core/utils/use-entity-media', () => ({
   useEntityMedia: (...args: unknown[]) => {
@@ -77,7 +69,7 @@ vi.mock('~/partials/entity-page/entity-vote-buttons', () => ({
   },
 }));
 
-function renderBar({ withHost = true }: { withHost?: boolean } = {}) {
+function renderBar({ withHost = true, isTopic = false }: { withHost?: boolean; isTopic?: boolean } = {}) {
   const store = createStore();
 
   if (withHost) {
@@ -88,7 +80,7 @@ function renderBar({ withHost = true }: { withHost?: boolean } = {}) {
 
   return render(
     <Provider store={store}>
-      <EntityStickyHeader entityId="entity-1" spaceId="space-1" />
+      <EntityStickyHeader entityId="entity-1" spaceId="space-1" isTopic={isTopic} />
     </Provider>
   );
 }
@@ -96,7 +88,6 @@ function renderBar({ withHost = true }: { withHost?: boolean } = {}) {
 beforeEach(() => {
   mocks.storedName = 'Vitalik Buterin';
   mocks.queriedName = null;
-  mocks.queriedTypes = null;
   mocks.avatarUrl = undefined;
   mocks.coverUrl = undefined;
   mocks.mediaArgs = null;
@@ -115,8 +106,7 @@ afterEach(() => {
 
 describe('EntityStickyHeader', () => {
   it('offers Follow instead of the votes on a topic (GEO-3191)', () => {
-    mocks.queriedTypes = [{ id: '5ef5a586-0f27-4d8e-8f6c-59ae5b3e89e2' }];
-    renderBar();
+    renderBar({ isTopic: true });
 
     expect(screen.getByTestId('follow-button')).toHaveAttribute('data-topic', 'entity-1');
     expect(screen.queryByTestId('vote-buttons')).toBeNull();

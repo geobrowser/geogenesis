@@ -35,7 +35,12 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-row-actions', () => ({
-  EntityRowActions: (props: { children?: React.ReactNode }) => <div data-testid="actions">{props.children}</div>,
+  EntityRowActions: (props: { children?: React.ReactNode; response?: React.ReactNode }) => (
+    <div data-testid="actions">
+      {props.response ?? <span data-testid="votes" />}
+      {props.children}
+    </div>
+  ),
 }));
 
 // Follow writes through the account and reads the viewer's follows; both have their own suites.
@@ -153,7 +158,7 @@ describe('TopicExploreFeedCard', () => {
 
     expect(screen.getByTestId('follow-button')).toHaveAttribute('data-topic', 'topic-1');
     expect(screen.getByText('4')).toBeInTheDocument();
-    expect(screen.queryByTestId('actions')).toBeNull();
+    expect(screen.queryByTestId('votes')).toBeNull();
   });
 
   it('leads the metadata line with the follower count', () => {

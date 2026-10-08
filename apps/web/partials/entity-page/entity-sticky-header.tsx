@@ -12,7 +12,6 @@ import { useScrolledPastElement } from '~/core/hooks/use-scrolled-past-element';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useQueryEntity } from '~/core/sync/use-store';
 import { FollowTopicButton } from '~/core/topics/follow-topic-button';
-import { entityBrowseViewFromTypes } from '~/core/utils/entity-browse-view';
 import { useEntityMedia } from '~/core/utils/use-entity-media';
 
 import { NativeGeoImage } from '~/design-system/geo-image';
@@ -53,7 +52,16 @@ import { entityStickyHeaderHostElementAtom } from '~/atoms';
  * number here would be one more opinion that drifts — as it would have when #2580 changed the topic
  * page's width out from under this. See `useMirroredContentColumn`.
  */
-export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; spaceId: string }) {
+export function EntityStickyHeader({
+  entityId,
+  spaceId,
+  isTopic = false,
+}: {
+  entityId: string;
+  spaceId: string;
+  /** From the route's server-read types: a topic's bar offers Follow, which replaces its votes. */
+  isTopic?: boolean;
+}) {
   const host = useAtomValue(entityStickyHeaderHostElementAtom);
 
   // The scoped store first, so a name being edited on this page is the name on the bar; the
@@ -61,9 +69,6 @@ export function EntityStickyHeader({ entityId, spaceId }: { entityId: string; sp
   const storedName = useName(entityId, spaceId);
   const { entity } = useQueryEntity({ id: entityId });
   const name = storedName ?? entity?.name ?? null;
-  // Read off the same types the page routes on, so a topic's bar offers what its header does:
-  // Follow, which replaces the votes on a topic (GEO-3191).
-  const isTopic = entity?.types ? entityBrowseViewFromTypes(entity.types) === 'topic' : false;
 
   /*
    * The keyed hook, not `useEntityMediaUrl`.

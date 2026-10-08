@@ -1,5 +1,7 @@
 'use client';
 
+import cx from 'classnames';
+
 import { FollowTopicButton } from './follow-topic-button';
 import { useTopicFollowerCount } from './use-topic-follower-count';
 
@@ -12,12 +14,29 @@ export function TopicFollowControl({ topic }: { topic: { id: string; name?: stri
 
   return (
     <div className="flex shrink-0 items-center gap-3">
-      {count ? (
-        <span className="text-metadata whitespace-nowrap text-grey-04">
-          <span className="text-text tabular-nums">{count.toLocaleString('en-US')}</span> following
-        </span>
-      ) : null}
+      <TopicFollowerCount count={count} className="text-metadata text-grey-04" numberClassName="text-text" />
       <FollowTopicButton topic={topic} variant="page" />
     </div>
+  );
+}
+
+/**
+ * "128 following": the one wording for a topic's follower count, wherever it is drawn. Nothing at
+ * zero or while loading, so a surface never shows "0 following" or a count that jumps in.
+ */
+export function TopicFollowerCount({
+  count,
+  className,
+  numberClassName,
+}: {
+  count: number | null;
+  className?: string;
+  numberClassName?: string;
+}) {
+  if (!count) return null;
+  return (
+    <span className={cx('shrink-0 whitespace-nowrap', className)}>
+      <span className={cx('tabular-nums', numberClassName)}>{count.toLocaleString('en-US')}</span> following
+    </span>
   );
 }

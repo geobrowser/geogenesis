@@ -8,13 +8,15 @@ import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
 import type { TopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
 import { FollowTopicButton } from '~/core/topics/follow-topic-button';
+import { TopicFollowerCount } from '~/core/topics/topic-follow-control';
 import { useTopicFollowerCount } from '~/core/topics/use-topic-follower-count';
-import { NavUtils } from '~/core/utils/utils';
 
-import { ENTITY_COMMENTS_ANCHOR_ID } from '~/partials/comments/entity-comments-anchor';
-
-import { EXPLORE_CARD_CLASS, ExploreCardDefaultBody, ExploreCardSurface } from './explore-card-chrome';
-import { ExploreFeedCommentLink } from './explore-feed-comment-link';
+import {
+  EXPLORE_CARD_CLASS,
+  ExploreCardActions,
+  ExploreCardDefaultBody,
+  ExploreCardSurface,
+} from './explore-card-chrome';
 import { ExploreMetaRow, META_SEGMENT_CLASS } from './explore-meta-row';
 import { MetaDot } from './meta-dot';
 
@@ -42,7 +44,7 @@ type TopicCardProps = {
  * with the counts passed into the body's `meta` slot. Reproducing the body here instead would have
  * been the third copy of that layout in this directory, and the first two drifted.
  *
- * The action row is its own (GEO-3191): Follow in place of the votes, then the comment count.
+ * The shared action row, with Follow in place of the votes (GEO-3191), then the comment count.
  * Following is a topic's one action; an upvote said nothing about wanting to see more of it.
  *
  * The connection counts are a second request, which the claim page's Topics tab pays for. The main
@@ -74,22 +76,14 @@ export function TopicExploreFeedCardArticle({
         item={item}
         titleOpensSidePanel={titleOpensSidePanel}
         meta={<TopicConnectionMeta counts={counts} followerCount={followerCount} />}
-        actions={<TopicCardActions item={item} />}
+        actions={
+          <ExploreCardActions
+            item={item}
+            response={<FollowTopicButton topic={{ id: item.entityId, name: item.title }} />}
+          />
+        }
       />
     </ActionSurfaceArticle>
-  );
-}
-
-/** Follow, then the comment count: the vote row every other card ends on, without the votes. */
-function TopicCardActions({ item }: { item: ExploreFeedItem }) {
-  return (
-    <div className="mt-1 flex items-center gap-4">
-      <FollowTopicButton topic={{ id: item.entityId, name: item.title }} />
-      <ExploreFeedCommentLink
-        href={`${NavUtils.toEntity(item.spaceId, item.entityId)}#${ENTITY_COMMENTS_ANCHOR_ID}`}
-        count={item.commentCount}
-      />
-    </div>
   );
 }
 
@@ -108,11 +102,7 @@ export function TopicConnectionMeta({
   followerCount?: number | null;
   className?: string;
 }) {
-  const followers = followerCount ? (
-    <span className="shrink-0">
-      <span className="tabular-nums">{followerCount.toLocaleString('en-US')}</span> following
-    </span>
-  ) : null;
+  const followers = followerCount ? <TopicFollowerCount count={followerCount} /> : null;
 
   if (!counts) {
     return followers ? (

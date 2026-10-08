@@ -11,13 +11,15 @@ type Props = {
   spaceId: string;
   children?: React.ReactNode;
   className?: string;
+  /** The entity's response in place of the votes — a topic's Follow (GEO-3191). */
+  response?: React.ReactNode;
 };
 
 /** Entity-row actions in the claim design order: response, then supporting actions. */
-export function EntityRowActions({ entityId, spaceId, children, className }: Props) {
+export function EntityRowActions({ entityId, spaceId, children, className, response }: Props) {
   return (
     <div className={cx('flex items-center gap-4', className)}>
-      <EntityVoteButtons entityId={entityId} spaceId={spaceId} claimResponderAvatarsPosition="trailing" />
+      {response ?? <EntityVoteButtons entityId={entityId} spaceId={spaceId} claimResponderAvatarsPosition="trailing" />}
       {children}
     </div>
   );
