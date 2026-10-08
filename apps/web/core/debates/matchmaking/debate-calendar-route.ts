@@ -1,6 +1,17 @@
 import { normId } from '~/core/utils/norm-id';
 
 import { type CalendarPicks, claimPickKey, splitClaimPickKey } from './calendar-narrowing';
+import { isPersonId } from './person-records-document';
+
+/**
+ * An id from the URL that is worth keeping: a UUID, hyphenated or bare. Everything downstream hands
+ * these to the graph as `UUID!`, where one malformed value fails a whole batch — every claim's name
+ * with it — so a hand-edited or truncated link drops the bad value here instead. `isPersonId` is
+ * that shape check; nothing about it is specific to people.
+ */
+function canonicalId(id: string): string | null {
+  return isPersonId(id) ? normId(id) : null;
+}
 
 /** Where the calendar was opened from, read for `debate_calendar_opened`'s `opened_from`. */
 export const CALENDAR_FROM_PARAM = 'from';
@@ -46,10 +57,12 @@ function idList(raw: string | null, canonical: (id: string) => string | null): s
 export function readCalendarPicks(params: Pick<URLSearchParams, 'get'> | null | undefined): CalendarPicks {
   if (!params) return { people: [], claims: [], matchesOnly: false };
   return {
-    people: idList(params.get(CALENDAR_PEOPLE_PARAM), normId),
+    people: idList(params.get(CALENDAR_PEOPLE_PARAM), canonicalId),
     claims: idList(params.get(CALENDAR_CLAIMS_PARAM), key => {
       const ids = splitClaimPickKey(key);
-      return ids ? claimPickKey(ids.spaceId, ids.claimId) : null;
+      return ids && canonicalId(ids.spaceId) && canonicalId(ids.claimId)
+        ? claimPickKey(ids.spaceId, ids.claimId)
+        : null;
     }),
     matchesOnly: params.get(CALENDAR_MATCHES_PARAM) === '1',
   };

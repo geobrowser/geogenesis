@@ -77,6 +77,7 @@ export function usePersonFacts(
     isLoading: positionsLoading,
     isPlaceholderData: positionsArePlaceholderData,
     error: positionsError,
+    hasFetchedData: positionsHaveFetchedData,
   } = useParticipantPositions(positionParticipants, viewerProfileSpaceId, { onlyViewerClaims: true });
   const matchAnalysis = React.useMemo(
     () => analyzeMatchingClaims(positionsByClaim, viewerProfileSpaceId),
@@ -99,7 +100,7 @@ export function usePersonFacts(
    * own poll keeps retrying.
    */
   const matchesUnavailable =
-    viewerProfileSpaceId !== null && !positionsLoading && positionsError !== null && positionsByClaim.size === 0;
+    viewerProfileSpaceId !== null && !positionsLoading && positionsError !== null && !positionsHaveFetchedData;
   // Whether the viewer holds any position at all: without one, Matches only can never match (GEO-3220).
   // The scoped read always carries the viewer's own rows. `null` while that is not known.
   const viewerHasPositions = React.useMemo(() => {

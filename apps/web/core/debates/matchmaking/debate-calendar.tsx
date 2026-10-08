@@ -6,6 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
@@ -252,6 +253,17 @@ function DebateCalendarBody({
   // with nothing picked needs only the viewer's own claims. A link that arrives with a claim picked
   // needs them from the start.
   const [panelOpened, setPanelOpened] = React.useState(false);
+  // On a phone the panel is a modal sheet above everything, the entity side panel included. A name
+  // in it opens a profile there, so the sheet steps aside once the side panel has opened — after,
+  // not before: the name's lookup is lazy and finishes the open itself, so unmounting it at the
+  // press would drop the open entirely.
+  const { sidePanelTarget } = useEntitySidePanel();
+  const shownSidePanelTarget = React.useRef(sidePanelTarget);
+  React.useEffect(() => {
+    if (sidePanelTarget === shownSidePanelTarget.current) return;
+    shownSidePanelTarget.current = sidePanelTarget;
+    if (sidePanelTarget && isPhone) setPanelTab(null);
+  }, [isPhone, sidePanelTarget]);
   const wantAllPositions = panelOpened || picks.claims.length > 0;
 
   // The full list caps how many people it considers. Past the cap a space selection is sent to
@@ -372,7 +384,7 @@ function DebateCalendarBody({
           : 'ready'
         : allPositions.isLoading
           ? 'pending'
-          : allPositions.error !== null && allPositions.byClaim.size === 0
+          : allPositions.error !== null && !allPositions.hasFetchedData
             ? 'failed'
             : 'ready';
   const allPositionsReady = allPositionsState === 'ready';

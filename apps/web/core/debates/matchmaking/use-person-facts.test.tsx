@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({
     isLoading: false,
     isPlaceholderData: false,
     error: null as Error | null,
+    hasFetchedData: true,
   },
 }));
 
@@ -32,7 +33,13 @@ const facts = () =>
 
 beforeEach(() => {
   mocks.personalSpace = { personalSpaceId: VIEWER, isLoading: false };
-  mocks.positions = { byClaim: new Map(), isLoading: false, isPlaceholderData: false, error: null };
+  mocks.positions = {
+    byClaim: new Map(),
+    isLoading: false,
+    isPlaceholderData: false,
+    error: null,
+    hasFetchedData: true,
+  };
 });
 
 describe('usePersonFacts, for surfaces that narrow on matches (GEO-3220)', () => {
@@ -50,11 +57,29 @@ describe('usePersonFacts, for surfaces that narrow on matches (GEO-3220)', () =>
   });
 
   it('tells a failed read apart from an answer of no matches', () => {
-    mocks.positions = { ...mocks.positions, error: new Error('graph down') };
+    mocks.positions = { ...mocks.positions, error: new Error('graph down'), hasFetchedData: false };
     expect(facts().matchesUnavailable).toBe(true);
 
     mocks.positions = { ...mocks.positions, error: null };
     expect(facts().matchesUnavailable).toBe(false);
+  });
+
+  it("is not fooled by the viewer's own in-flight vote into calling a failed read usable", () => {
+    const pending: ParticipantPosition = {
+      profileSpaceId: VIEWER,
+      claimId: 'c1',
+      spaceId: 's1',
+      responseKind: 'stance',
+      position: true,
+    };
+    // Rows on screen, but only the overlay's: the graph never answered.
+    mocks.positions = {
+      ...mocks.positions,
+      byClaim: new Map([['c1', [pending]]]),
+      error: new Error('graph down'),
+      hasFetchedData: false,
+    };
+    expect(facts().matchesUnavailable).toBe(true);
   });
 
   it('keeps using rows it already holds when a later read fails', () => {

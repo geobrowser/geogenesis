@@ -258,6 +258,17 @@ describe('picks in the URL', () => {
     expect(picks.claims).toEqual([PHONES_KEY]);
   });
 
+  it('drops ids from the URL that are not UUIDs, before they reach the graph', () => {
+    const picks = readCalendarPicks(
+      new URLSearchParams({
+        people: `nope,${MAYA}`,
+        claims: `bad:${PHONES},${AI}:bad,${AI}:${PHONES}`,
+      })
+    );
+    expect(picks.people).toEqual([MAYA]);
+    expect(picks.claims).toEqual([PHONES_KEY]);
+  });
+
   it('links to a narrowed calendar', () => {
     expect(calendarHref(null)).toBe('/matchmaking/calendar');
     expect(calendarHref('/space/x', { ...NO_PICKS, claims: [PHONES_KEY], matchesOnly: true })).toBe(

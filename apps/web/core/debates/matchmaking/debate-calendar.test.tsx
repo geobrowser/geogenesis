@@ -58,9 +58,18 @@ const mocks = vi.hoisted(() => ({
   routerQueue: [] as string[],
   positionsLoading: false,
   matchesLoading: false,
+  // The viewer's own in-flight responses, overlaid on whatever the read returned — even nothing.
+  positionsOverlay: [] as ParticipantPosition[],
+  sidePanelTarget: null as { entityId: string } | null,
+  sidePanelListeners: new Set<() => void>(),
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
+function openSidePanel(target: { entityId: string } | null) {
+  mocks.sidePanelTarget = target;
+  for (const listener of mocks.sidePanelListeners) listener();
+}
+
 function setUrl(href: string) {
   mocks.searchParams = new URLSearchParams(href.split('?')[1] ?? '');
   for (const listener of mocks.paramListeners) listener();
@@ -86,10 +95,25 @@ vi.mock('next/navigation', async () => {
     }),
   };
 });
+vi.mock('~/core/hooks/use-entity-side-panel', async () => {
+  const { useSyncExternalStore } = await import('react');
+  const subscribe = (listener: () => void) => {
+    mocks.sidePanelListeners.add(listener);
+    return () => mocks.sidePanelListeners.delete(listener);
+  };
+  return {
+    useEntitySidePanel: () => ({
+      sidePanelTarget: useSyncExternalStore(subscribe, () => mocks.sidePanelTarget),
+      openSidePanel: vi.fn(),
+      closeSidePanel: vi.fn(),
+    }),
+  };
+});
 vi.mock('../participant-positions', () => ({
   useParticipantPositions: (participants: unknown[]) => {
     mocks.positionReads.push(participants);
     const byClaim = new Map<string, ParticipantPosition[]>();
+    for (const row of mocks.positionsOverlay) byClaim.set(row.claimId, [...(byClaim.get(row.claimId) ?? []), row]);
     // A failed read with nothing held: no rows, and the error.
     if (participants.length > 0 && !mocks.positionsError) {
       for (const row of mocks.positions) byClaim.set(row.claimId, [...(byClaim.get(row.claimId) ?? []), row]);
@@ -100,6 +124,7 @@ vi.mock('../participant-positions', () => ({
       isPlaceholderData: mocks.positionsPlaceholder,
       isFetching: mocks.positionsPlaceholder,
       error: mocks.positionsError,
+      hasFetchedData: participants.length > 0 && !mocks.positionsError && !mocks.positionsLoading,
     };
   },
 }));
@@ -144,6 +169,8 @@ vi.mock('../browse/use-open-debater-profile', () => ({
     return (event: { preventDefault: () => void }) => {
       event.preventDefault();
       mocks.openProfile(profileSpaceId);
+      // What the real opener ends in: the entity side panel showing their profile.
+      openSidePanel({ entityId: profileSpaceId });
     };
   },
 }));
@@ -417,12 +444,15 @@ beforeEach(() => {
     routerQueue: [],
     positionsLoading: false,
     matchesLoading: false,
+    positionsOverlay: [],
+    sidePanelTarget: null,
     claimNames: new Map(),
     claimTopics: new Map(),
   });
   mocks.openProfile.mockReset();
   mocks.respond.mockReset();
   mocks.paramListeners.clear();
+  mocks.sidePanelListeners.clear();
   mocks.routerReplace.mockReset();
   mocks.capture.mockReset();
   mocks.promptSignIn.mockReset();
@@ -1188,6 +1218,8 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 
     expect(mocks.openProfile).toHaveBeenCalledWith(summary('11', '').profile_space_id);
     expect(mocks.searchParams.get('people')).toBeNull();
+    // Beside the docked panel on a desktop, so the panel stays.
+    expect(panel()).toBeInTheDocument();
   });
 
   it('narrows the Claims list by topic, and People to those holding a claim in it', async () => {
@@ -1355,6 +1387,31 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 
     expect(within(sheet).getByRole('button', { name: 'Show people' })).toBeInTheDocument();
     expect(within(sheet).queryByRole('button', { name: /Show 0 people/ })).not.toBeInTheDocument();
+  });
+
+  it("leaves a claim pick unjudged when the read failed, even with the viewer's own vote in flight", () => {
+    mocks.positionsError = new Error('graph down');
+    // The overlay is all there is: the viewer's pending response, not anything the graph answered.
+    mocks.positionsOverlay = [position(VIEWER, CLAIM_ONE, true)];
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}` });
+    render(<DebateCalendar />);
+
+    expect(cell(/Friday.*free: Ana/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Couldn’t load everyone’s positions, so claims can’t narrow the week yet\./)
+    ).toBeInTheDocument();
+  });
+
+  it('steps the phone sheet aside once a name has opened the profile beside it', () => {
+    mocks.isPhone = true;
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+    const sheet = screen.getByRole('dialog', { name: 'Narrow the calendar' });
+
+    fireEvent.click(within(sheet).getByRole('link', { name: 'Elena' }));
+
+    expect(mocks.openProfile).toHaveBeenCalledWith(summary('11', '').profile_space_id);
+    expect(screen.queryByRole('dialog', { name: 'Narrow the calendar' })).not.toBeInTheDocument();
   });
 
   it('keeps picks from the URL on a reload', () => {

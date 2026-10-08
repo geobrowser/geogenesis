@@ -537,5 +537,12 @@ export function useParticipantPositions(
      */
     isFetching: query.isFetching,
     error: query.error,
+    /**
+     * Whether `byClaim` holds anything the graph actually answered: this key's rows, or the previous
+     * key's held over. Not `byClaim.size`, which also counts the viewer's own in-flight responses
+     * overlaid on top — present even when every fetch has failed, so a surface deciding "did the read
+     * fail with nothing in hand" must ask this instead (GEO-3220).
+     */
+    hasFetchedData: query.data !== undefined,
   };
 }
