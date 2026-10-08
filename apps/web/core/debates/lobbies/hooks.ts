@@ -394,8 +394,12 @@ export function useLobbyPresence(
           void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobby(accountKey, lobbyId) });
           return;
         default:
-          // `lapsed`.
-          void join(false);
+          // `lapsed`. Off the roster, the page missed the lobby's events; reread what they keep current.
+          void join(false).then(() => {
+            if (!joinedRef.current) return;
+            void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbyHighlights(accountKey, lobbyId) });
+            void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbyClaims(accountKey, lobbyId) });
+          });
       }
     },
     [accountKey, join, lobbyId, queryClient, stopWithout]

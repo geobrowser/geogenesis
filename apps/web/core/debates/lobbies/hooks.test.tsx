@@ -193,6 +193,50 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(joins()).toHaveLength(2));
   });
 
+  it('rereads the highlights and In this room after rejoining a lapsed lease, not after a refused one', async () => {
+    const lapse = async (client: QueryClient) => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+        connection_alive: false,
+        voice_away_at: null,
+        reason: 'lapsed',
+        current_lobby_id: null,
+      });
+      const hook = renderHook(() => useLobbyPresence('lobby1', true), {
+        wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+      });
+      await waitFor(() => expect(hook.result.current.state.status).toBe('joined'));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+      });
+      await waitFor(() => expect(joins()).toHaveLength(2));
+      return hook;
+    };
+    const rereads = (invalidate: { mock: { calls: unknown[][] } }) =>
+      invalidate.mock.calls.map(([filters]) => (filters as { queryKey: unknown[] }).queryKey[3]);
+
+    const rejoined = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidate = vi.spyOn(rejoined, 'invalidateQueries');
+    const { unmount } = await lapse(rejoined);
+    await waitFor(() =>
+      expect(rereads(invalidate)).toEqual(expect.arrayContaining(['lobby-highlights', 'lobby-claims']))
+    );
+    expect(invalidate).toHaveBeenCalledWith({ queryKey: ['debates', 'account', 'acct', 'lobby-highlights', 'lobby1'] });
+    unmount();
+    await new Promise(resolve => setTimeout(resolve, 0));
+    api.setDebateLobbyPresence.mockClear();
+
+    const refused = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const refusedInvalidate = vi.spyOn(refused, 'invalidateQueries');
+    api.setDebateLobbyPresence
+      .mockImplementationOnce(async () => view(true))
+      .mockRejectedValueOnce(new GeoChatRequestError('raw', 'lobby_removed', 409));
+    const hook = await lapse(refused);
+    await waitFor(() => expect(hook.result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+    expect(rereads(refusedInvalidate)).not.toContain('lobby-highlights');
+    expect(rereads(refusedInvalidate)).not.toContain('lobby-claims');
+  });
+
   // Otherwise the unmount's leave takes the viewer off the roster before the server steps them out.
   it('steps out before routing into a debate, and does not leave on unmount', async () => {
     const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
