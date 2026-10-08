@@ -37,6 +37,12 @@ export type ExitedFlowAccount = { createdAt?: Date | string | null } | null;
  * How an exited sign-in ended (GEO-3243). Exiting Privy's flow after the email code has been accepted
  * still leaves an account behind — a new one, if this attempt created it — so it is not a sign-in the
  * visitor gave up on, and recording it as `closed` hid every such account from the funnel.
+ *
+ * Only a lower bound on creation time, unlike `signupVisitorProperties`. A cap at "now plus skew" would
+ * misread a device whose clock runs slow: an account it just created carries the server's later
+ * timestamp, so every sign-up there would be counted as a sign-in. Without the cap, the miss is an
+ * account created within the skew window *before* this attempt — rarer, and still an account the
+ * visitor had only just made.
  */
 function exitOutcome(account: ExitedFlowAccount): AuthAttemptOutcome {
   if (!account) return 'closed';
