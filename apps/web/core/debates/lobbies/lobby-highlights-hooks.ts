@@ -114,17 +114,13 @@ export function useRoomVoteHint(lobbyId: string, vote: DebateLobbyRoomVote | nul
     responseKind: CLAIM_RESPONSE_KIND,
   });
   const voteId = vote?.vote_id ?? null;
-  const tracking = React.useRef<{ voteId: string | null; hinted: string | null; seen: Set<string> }>({
-    voteId: null,
-    hinted: null,
-    seen: new Set(),
-  });
+  const tracking = React.useRef<{ voteId: string | null; hinted: string | null }>({ voteId: null, hinted: null });
 
   React.useEffect(() => {
     if (!voteId || !inRoom) return;
-    if (tracking.current.voteId !== voteId) tracking.current = { voteId, hinted: null, seen: new Set() };
+    if (tracking.current.voteId !== voteId) tracking.current = { voteId, hinted: null };
     const state = tracking.current;
-    const action = roomVoteHintAction(snapshot, state.hinted, state.seen);
+    const action = roomVoteHintAction(snapshot, state.hinted);
     if (!action) return;
 
     const send = (position: boolean | null | undefined) =>
@@ -133,7 +129,6 @@ export function useRoomVoteHint(lobbyId: string, vote: DebateLobbyRoomVote | nul
         () => undefined
       );
     if (action.kind === 'hint') {
-      state.seen.add(action.runId);
       state.hinted = action.runId;
       void send(action.position);
     } else if (action.kind === 'withdraw') {

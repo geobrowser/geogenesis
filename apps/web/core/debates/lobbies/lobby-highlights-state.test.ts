@@ -154,12 +154,12 @@ describe('roomVoteHintAction', () => {
     }) as EntityResponseIndexingState;
 
   it('hints a new write’s side as it starts, a removal as null', () => {
-    expect(roomVoteHintAction(run('r1', 'reconciling', 'positive'), null, new Set())).toEqual({
+    expect(roomVoteHintAction(run('r1', 'reconciling', 'positive'), null)).toEqual({
       kind: 'hint',
       runId: 'r1',
       position: true,
     });
-    expect(roomVoteHintAction(run('r2', 'reconciling', null), 'r1', new Set(['r1']))).toEqual({
+    expect(roomVoteHintAction(run('r2', 'reconciling', null), 'r1')).toEqual({
       kind: 'hint',
       runId: 'r2',
       position: null,
@@ -167,19 +167,25 @@ describe('roomVoteHintAction', () => {
   });
 
   it('does nothing more while the hinted write is on its way', () => {
-    expect(roomVoteHintAction(run('r1', 'delayed', 'negative'), 'r1', new Set(['r1']))).toBeNull();
-    expect(roomVoteHintAction(idle, null, new Set())).toBeNull();
+    expect(roomVoteHintAction(run('r1', 'delayed', 'negative'), 'r1')).toBeNull();
+    expect(roomVoteHintAction(idle, null)).toBeNull();
   });
 
   it('hands over once indexed, and never hints a write that was already indexed', () => {
-    expect(roomVoteHintAction(run('r1', 'indexed', 'negative'), 'r1', new Set(['r1']))).toEqual({ kind: 'settled' });
-    expect(roomVoteHintAction(run('r9', 'indexed', 'negative'), null, new Set())).toBeNull();
+    expect(roomVoteHintAction(run('r1', 'indexed', 'negative'), 'r1')).toEqual({ kind: 'settled' });
+    expect(roomVoteHintAction(run('r9', 'indexed', 'negative'), null)).toBeNull();
   });
 
-  it('withdraws a hint whose write rolled back to idle or to an earlier run', () => {
-    expect(roomVoteHintAction(idle, 'r2', new Set(['r1', 'r2']))).toEqual({ kind: 'withdraw' });
-    expect(roomVoteHintAction(run('r1', 'reconciling', 'positive'), 'r2', new Set(['r1', 'r2']))).toEqual({
-      kind: 'withdraw',
+  it('withdraws the hint once no write is pending', () => {
+    expect(roomVoteHintAction(idle, 'r2')).toEqual({ kind: 'withdraw' });
+    expect(roomVoteHintAction(run('r1', 'indexed', 'positive'), 'r2')).toEqual({ kind: 'withdraw' });
+  });
+
+  it('hints an earlier pending run restored when a newer one fails', () => {
+    expect(roomVoteHintAction(run('r1', 'reconciling', 'negative'), 'r2')).toEqual({
+      kind: 'hint',
+      runId: 'r1',
+      position: false,
     });
   });
 });

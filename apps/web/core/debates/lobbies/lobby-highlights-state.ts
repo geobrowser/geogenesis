@@ -97,21 +97,22 @@ export type RoomVoteHintAction =
   { kind: 'hint'; runId: string; position: boolean | null } | { kind: 'withdraw' } | { kind: 'settled' } | null;
 
 /**
- * What the viewer's write on the voted claim means for their hint. A new run hints its side as it
- * starts; reaching `indexed` hands over to the response-indexed report; any other end of the hinted
- * run (rolled back to idle or to an earlier run) withdraws it.
+ * What the viewer's write on the voted claim means for their hint. Whichever run is pending is the
+ * side they hold, so a run other than the hinted one is hinted, including an earlier run restored
+ * when a newer one fails; a hint replaces the last. Reaching `indexed` hands over to the
+ * response-indexed report; no pending run at all withdraws the hint.
  */
 export function roomVoteHintAction(
   snapshot: EntityResponseIndexingState,
-  hintedRunId: string | null,
-  seenRunIds: ReadonlySet<string>
+  hintedRunId: string | null
 ): RoomVoteHintAction {
-  if (snapshot.runId !== null && !seenRunIds.has(snapshot.runId) && snapshot.status !== 'indexed' && snapshot.pending) {
+  if (snapshot.runId !== null && snapshot.status !== 'indexed' && snapshot.pending) {
+    if (snapshot.runId === hintedRunId) return null;
     const expected = snapshot.pending.expectedResponse;
     return { kind: 'hint', runId: snapshot.runId, position: expected === null ? null : expected === 'positive' };
   }
   if (hintedRunId === null) return null;
-  if (snapshot.runId === hintedRunId) return snapshot.status === 'indexed' ? { kind: 'settled' } : null;
+  if (snapshot.runId === hintedRunId) return { kind: 'settled' };
   return { kind: 'withdraw' };
 }
 

@@ -65,6 +65,21 @@ describe('useRoomVoteHint', () => {
     expect(mocks.hint).toHaveBeenCalledTimes(2);
   });
 
+  it('hints the earlier side again when a newer write fails and restores it', () => {
+    const { rerender } = renderHook(() => useRoomVoteHint('lobby1', vote, true));
+    mocks.snapshot = run('r1', 'reconciling', 'negative');
+    rerender();
+    mocks.snapshot = run('r2', 'reconciling', 'positive');
+    rerender();
+    expect(mocks.hint).toHaveBeenLastCalledWith('lobby1', 'VOTE-1', true, getToken, 'user-a');
+
+    mocks.snapshot = run('r1', 'reconciling', 'negative');
+    rerender();
+    expect(mocks.hint).toHaveBeenLastCalledWith('lobby1', 'VOTE-1', false, getToken, 'user-a');
+    rerender();
+    expect(mocks.hint).toHaveBeenCalledTimes(3);
+  });
+
   it('leaves an indexed vote to the response-indexed report', () => {
     const { rerender } = renderHook(() => useRoomVoteHint('lobby1', vote, true));
     mocks.snapshot = run('r1', 'reconciling', 'positive');
