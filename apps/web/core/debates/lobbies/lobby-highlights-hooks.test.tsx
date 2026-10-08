@@ -62,6 +62,8 @@ const run = (runId: string, status: 'reconciling' | 'indexed', expected: 'positi
 
 beforeEach(() => {
   mocks.snapshot = idle;
+  mocks.getHighlights.mockReset();
+  mocks.setHighlight.mockReset();
   mocks.hint.mockClear();
 });
 
@@ -114,9 +116,44 @@ describe('useRoomVoteHint', () => {
   });
 });
 
+describe('useLobbyHighlights', () => {
+  it('retries a failed first GET rather than leaving the highlights hidden', async () => {
+    const state: DebateLobbyHighlights = {
+      lobby_id: 'lobby1',
+      as_of: '2026-10-07T12:00:01Z',
+      highlights: [{ claim: vote.claim, highlighted_by: null, highlighted_at: '2026-10-07T12:00:01Z' }],
+      room_vote: null,
+    };
+    mocks.getHighlights
+      .mockRejectedValueOnce(new GeoChatRequestError('busy', 'unavailable', 503))
+      .mockResolvedValueOnce({ ...state, viewer: { room_vote_position: null } });
+    const client = new QueryClient();
+    const { result } = renderHook(() => useLobbyHighlights('lobby1'), {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+
+    await waitFor(() => expect(result.current.data?.highlights.map(row => row.claim.id)).toEqual(['c']), {
+      timeout: 5000,
+    });
+    expect(mocks.getHighlights).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not retry a refusal', async () => {
+    mocks.getHighlights.mockRejectedValue(new GeoChatRequestError('not here', 'lobby_not_member', 403));
+    const client = new QueryClient();
+    const { result } = renderHook(() => useLobbyHighlights('lobby1'), {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+
+    await waitFor(() => expect(result.current.isError).toBe(true));
+    expect(mocks.getHighlights).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('host actions', () => {
   it('show their state after the first GET failed', async () => {
-    mocks.getHighlights.mockRejectedValueOnce(new GeoChatRequestError('busy', 'unavailable', 503));
+    // A refusal, so the read fails at once rather than after its transient retries.
+    mocks.getHighlights.mockRejectedValueOnce(new GeoChatRequestError('bad', 'bad_request', 400));
     const highlighted: DebateLobbyHighlights = {
       lobby_id: 'lobby1',
       as_of: '2026-10-07T12:00:01Z',

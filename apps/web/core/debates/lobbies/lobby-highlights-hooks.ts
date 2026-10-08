@@ -18,6 +18,7 @@ import {
   startDebateLobbyRoomVote,
 } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { viewerReadRetryOptions } from '../matchmaking/hooks';
 import {
   type LobbyHighlightsState,
   lobbyHighlightsFromResponse,
@@ -28,7 +29,8 @@ import {
 
 /**
  * The lobby's highlights and room vote (GEO-3135). Fetched on mount and on gateway reconnect;
- * `debate.lobby_highlights_changed` replaces it in between.
+ * `debate.lobby_highlights_changed` replaces it in between. A failed GET retries: with no running
+ * vote, nothing else would bring the highlights back.
  */
 export function useLobbyHighlights(lobbyId: string, enabled = true) {
   const queryClient = useQueryClient();
@@ -37,6 +39,7 @@ export function useLobbyHighlights(lobbyId: string, enabled = true) {
 
   return useQuery({
     ...debateQueryNetworkOptions,
+    ...viewerReadRetryOptions(accountKey),
     queryKey,
     queryFn: async ({ signal }) => {
       const response = await getDebateLobbyHighlights(dashlessId(lobbyId), getPrivyIdentityToken, accountKey, signal);
