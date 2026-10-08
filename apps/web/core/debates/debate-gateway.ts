@@ -560,12 +560,18 @@ export class DebateGatewayClient {
         break;
       }
       // GEO-3135. Full state to the roster: replaces the cached copy when newer, never refetches.
+      // While the first GET is in flight it seeds the cache, and the GET keeps whichever is newer.
       case 'debate.lobby_highlights_changed': {
         const highlights = parseLobbyHighlights(identifiers.lobby_highlights);
         if (!highlights || !this.accountKey) break;
-        this.queryClient.setQueryData<LobbyHighlightsState>(
-          ['debates', 'account', this.accountKey, 'lobby-highlights', dashlessId(highlights.lobby_id)],
-          current => (current ? mergeLobbyHighlights(current, highlights) : current)
+        const key = ['debates', 'account', this.accountKey, 'lobby-highlights', dashlessId(highlights.lobby_id)];
+        const loading = this.queryClient.getQueryState(key)?.fetchStatus === 'fetching';
+        this.queryClient.setQueryData<LobbyHighlightsState>(key, current =>
+          current
+            ? mergeLobbyHighlights(current, highlights)
+            : loading
+              ? { ...highlights, viewer: { room_vote_position: null, vote_id: null } }
+              : current
         );
         break;
       }

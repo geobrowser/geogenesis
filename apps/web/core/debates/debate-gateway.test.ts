@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { GeoChatRequestError, getStoredGeoChatAccessToken, resetGeoChatSession } from './api';
 import { DebateGatewayClient, type DebateGatewaySession } from './debate-gateway';
+import { type LobbyHighlightsState, settleFetchedLobbyHighlights } from './lobbies/lobby-highlights-state';
 
 vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
@@ -579,6 +580,36 @@ describe('DebateGatewayClient', () => {
       await highlightsChanged(payload);
 
       expect(cachedAgree()).toBe(1);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it('seeds the cache while the first GET is in flight, and an older GET keeps it', async () => {
+      await started();
+      let respond!: (value: LobbyHighlightsState) => void;
+      const fetched = new Promise<LobbyHighlightsState>(resolve => (respond = resolve));
+      // As `useLobbyHighlights` does: the GET settles against whatever the cache holds by then.
+      const fetching = queryClient.fetchQuery({
+        queryKey: highlightsKey,
+        queryFn: async () => {
+          const response = await fetched;
+          return settleFetchedLobbyHighlights(queryClient.getQueryData<LobbyHighlightsState>(highlightsKey), response);
+        },
+      });
+
+      await highlightsChanged(state('2026-10-07T12:00:02Z', 3));
+      expect(cachedAgree()).toBe(3);
+      expect(queryClient.getQueryData<{ viewer: unknown }>(highlightsKey)?.viewer).toEqual({
+        room_vote_position: null,
+        vote_id: null,
+      });
+
+      respond({ ...state('2026-10-07T12:00:01Z', 1), viewer: { room_vote_position: true, vote_id: 'v1' } });
+      await fetching;
+      expect(cachedAgree()).toBe(3);
+      expect(queryClient.getQueryData<{ viewer: unknown }>(highlightsKey)?.viewer).toEqual({
+        room_vote_position: true,
+        vote_id: 'v1',
+      });
       expect(invalidateQueries).not.toHaveBeenCalled();
     });
 
