@@ -322,9 +322,33 @@ export function narrowingSentence({
  * which, is the way forward, where "isn't free this week" alone reads as "not available" — which,
  * late in a week, is most people (GEO-3220 review).
  */
-/** A picked person the week is not showing. `absent`: not on the calendar at all — offline with no
- * open times, or past a capped list. */
-export type HiddenPick = { name: string; freeThisWeek: boolean; freeOtherWeek?: boolean; absent?: boolean };
+/**
+ * Why the week is not showing a picked person, checked in this order:
+ *
+ * - `absent`: not on the calendar at all — offline with no open times, or past a capped list.
+ * - `filtered`: on it, but the other filters (spaces, claims, Matches only) leave them out. Checked
+ *   before the weeks, because a person the filters exclude is hidden in every week: saying "free next
+ *   week" of them, and offering that week, sends the viewer to another empty one.
+ * - `other-week`: passes every filter, and free only in the calendar's other week.
+ * - `not-free`: passes every filter, and free in neither week.
+ */
+export type HiddenPickReason = 'absent' | 'filtered' | 'other-week' | 'not-free';
+
+export function hiddenPickReason({
+  onRoster,
+  passesFilters,
+  freeOtherWeek,
+}: {
+  onRoster: boolean;
+  passesFilters: boolean;
+  freeOtherWeek: boolean;
+}): HiddenPickReason {
+  if (!onRoster) return 'absent';
+  if (!passesFilters) return 'filtered';
+  return freeOtherWeek ? 'other-week' : 'not-free';
+}
+
+export type HiddenPick = { name: string; reason: HiddenPickReason };
 
 export function hiddenPicksSentence({
   hiddenPeople,
@@ -339,25 +363,25 @@ export function hiddenPicksSentence({
   otherWeekLabel?: string;
 }): string | null {
   const parts: string[] = [];
-  const names = (filter: (person: (typeof hiddenPeople)[number]) => boolean) =>
-    hiddenPeople.filter(filter).map(person => person.name);
-  const absent = names(person => Boolean(person.absent));
-  const elsewhere = names(person => !person.absent && !person.freeThisWeek && Boolean(person.freeOtherWeek));
-  const notFree = names(person => !person.absent && !person.freeThisWeek && !person.freeOtherWeek);
+  const names = (reason: HiddenPickReason) =>
+    hiddenPeople.filter(person => person.reason === reason).map(person => person.name);
+  const absent = names('absent');
   if (absent.length > 0) {
     parts.push(
       `${listNames(absent)} ${absent.length === 1 ? "isn't" : "aren't"} on the calendar in the next two weeks.`
     );
   }
-  const filtered = names(person => person.freeThisWeek);
+  const elsewhere = names('other-week');
   if (elsewhere.length > 0) {
     parts.push(
       `${listNames(elsewhere)} ${elsewhere.length === 1 ? 'is' : 'are'} free ${otherWeekLabel}, not ${weekLabel}.`
     );
   }
+  const notFree = names('not-free');
   if (notFree.length > 0) {
     parts.push(`${listNames(notFree)} ${notFree.length === 1 ? "isn't" : "aren't"} free in the next two weeks.`);
   }
+  const filtered = names('filtered');
   if (filtered.length > 0) {
     parts.push(`${listNames(filtered)} ${filtered.length === 1 ? "doesn't" : "don't"} match your other filters.`);
   }
@@ -392,7 +416,8 @@ export function panelEmptyMessage({
     return claims ? 'No claims match that search and topic.' : 'Nobody matches that search and topic.';
   if (searched) return claims ? 'No claims match that search.' : 'Nobody matches that search.';
   if (topicCount > 0) return claims ? `No claims in ${topics}.` : `Nobody holds a claim in ${topics}.`;
-  if (matchesOnly) return 'Nobody free this week disagrees with you on a claim yet.';
+  // The lists are the whole two weeks' roster, so "this week" would wrongly suggest the other week.
+  if (matchesOnly) return 'Nobody on the calendar disagrees with you on a claim yet.';
   return claims
     ? 'Nobody on the calendar holds a position on a claim yet.'
     : 'Nobody on the calendar matches these filters.';

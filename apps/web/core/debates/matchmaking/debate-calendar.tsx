@@ -37,12 +37,12 @@ import {
 } from './calendar-narrow-panel';
 import {
   type CalendarPicks,
-  type HiddenPick,
   NO_PICKS,
   type PanelTopic,
   calendarPicksKey,
   claimListRows,
   hasPicks,
+  hiddenPickReason,
   hiddenPicksSentence,
   narrowingSentence,
   passesPicks,
@@ -592,9 +592,12 @@ function DebateCalendarBody({
           ...spaceIds,
           ...matchingSpaceIds,
           ...absentPickIds.filter(profileKey => !seenPicked.has(profileKey)),
+          // Every claim row's own space, a claim pinned from a link included.
+          ...[...claimSummaries.byKey.values()].map(summary => summary.spaceId),
+          ...picks.claims.flatMap(key => splitClaimPickKey(key)?.spaceId ?? []),
         ]),
       ],
-      [absentPickIds, facetSpaces, matchingSpaceIds, seenPicked, spaceIds]
+      [absentPickIds, claimSummaries, facetSpaces, matchingSpaceIds, picks.claims, seenPicked, spaceIds]
     )
   );
 
@@ -781,10 +784,13 @@ function DebateCalendarBody({
   );
   const panelRows = React.useMemo(() => panelRowsFor(picks), [panelRowsFor, picks]);
   /** An absent pick's name: as last seen on the roster, else their personal space's. */
-  const absentName = (profileKey: string) => {
-    const seen = seenPicked.get(profileKey);
-    return seen ? speakerLabel(seen) : spaceLabel(labelsById, profileKey)?.name?.trim() || 'Someone you picked';
-  };
+  const absentName = React.useCallback(
+    (profileKey: string) => {
+      const seen = seenPicked.get(profileKey);
+      return seen ? speakerLabel(seen) : spaceLabel(labelsById, profileKey)?.name?.trim() || 'Someone you picked';
+    },
+    [labelsById, seenPicked]
+  );
   const absentPeople = absentPickIds.map(profileKey => ({
     profileKey,
     name: absentName(profileKey),
@@ -816,10 +822,6 @@ function DebateCalendarBody({
       return (slotsByUser.get(userKey) ?? []).some(slot => slot.start >= start && slot.start < end);
     },
     [slotsByUser, weekRanges]
-  );
-  const freeThisWeek = React.useCallback(
-    (userKey: string) => freeInWeek(userKey, weekOffset),
-    [freeInWeek, weekOffset]
   );
   const drawnInWeek = React.useCallback(
     (offset: number, passes: (userKey: string) => boolean) => {
@@ -856,39 +858,44 @@ function DebateCalendarBody({
   }, [drawnInOtherWeek, drawnUsers.size, effectivePicks, otherWeekOffset, picksKey, picksSettled]);
 
   // The line above the week: what is narrowing it, and any pick it is hiding. Only with something
-  // picked, so the calendar with nothing picked reads exactly as it did.
-  const narrowNote = narrowingSentence({
-    picks: judgedPicks,
-    shownCount: drawnUsers.size,
-    spaceNames: spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
-  });
-  const hiddenNote = hiddenPicksSentence({
-    hiddenPeople: picks.people.flatMap((profileKey): HiddenPick[] => {
-      const known = profileToUser.get(profileKey);
-      if (known && drawnUsers.has(known.userKey)) return [];
-      if (!known) return [{ name: absentName(profileKey), freeThisWeek: false, absent: true }];
-      return [
-        {
-          name: speakerLabel(known.person),
-          freeThisWeek: freeThisWeek(known.userKey),
-          freeOtherWeek: freeInWeek(known.userKey, otherWeekOffset),
-        },
-      ];
-    }),
-    hiddenClaimCount: allPositionsReady ? panelRows.claims.filter(row => row.hidden).length : 0,
-    weekLabel: weekLabel(weekOffset),
-    otherWeekLabel: weekLabel(otherWeekOffset),
-  });
-  // A picked person free only in the other week: the line offers that week, not just Clear filters.
-  const pickFreeOtherWeek = picks.people.some(profileKey => {
-    const known = profileToUser.get(profileKey);
-    return Boolean(
-      known &&
-      !drawnUsers.has(known.userKey) &&
-      !freeThisWeek(known.userKey) &&
-      freeInWeek(known.userKey, otherWeekOffset)
-    );
-  });
+  // picked, so the calendar with nothing picked reads exactly as it did; and not while the picks
+  // still wait on their data, when the empty week under the skeleton is no result to report.
+  const narrowNote = picksPending
+    ? null
+    : narrowingSentence({
+        picks: judgedPicks,
+        shownCount: drawnUsers.size,
+        spaceNames: spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
+      });
+  // Each picked person the week is not showing, and why: one classification, read by both the line
+  // and its "Show next week" link, so the link is offered exactly when the line says that week has them.
+  const hiddenPicks = React.useMemo(
+    () =>
+      picks.people.flatMap(profileKey => {
+        const known = profileToUser.get(profileKey);
+        if (known && drawnUsers.has(known.userKey)) return [];
+        return [
+          {
+            name: known ? speakerLabel(known.person) : absentName(profileKey),
+            reason: hiddenPickReason({
+              onRoster: Boolean(known),
+              passesFilters: known ? include(known.userKey) : false,
+              freeOtherWeek: known ? freeInWeek(known.userKey, otherWeekOffset) : false,
+            }),
+          },
+        ];
+      }),
+    [absentName, drawnUsers, freeInWeek, include, otherWeekOffset, picks.people, profileToUser]
+  );
+  const hiddenNote = picksPending
+    ? null
+    : hiddenPicksSentence({
+        hiddenPeople: hiddenPicks,
+        hiddenClaimCount: allPositionsReady ? panelRows.claims.filter(row => row.hidden).length : 0,
+        weekLabel: weekLabel(weekOffset),
+        otherWeekLabel: weekLabel(otherWeekOffset),
+      });
+  const pickFreeOtherWeek = hiddenNote !== null && hiddenPicks.some(pick => pick.reason === 'other-week');
   const goToOtherWeek = () => goToWeek(otherWeekOffset, otherWeekOffset > weekOffset ? 'next' : 'previous');
 
   const loading = schedulableQuery.isLoading || (peopleQuery.isLoading && !schedulableQuery.data);

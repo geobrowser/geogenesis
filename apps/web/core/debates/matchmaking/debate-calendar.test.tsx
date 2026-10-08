@@ -1449,6 +1449,41 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(within(panel()).getByRole('checkbox', { name: 'Zed (hidden by your other filters)' })).toBeInTheDocument();
   });
 
+  it("asks for every claim row's space name, a link's pinned claim included", () => {
+    const elsewhere = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    mocks.searchParams = new URLSearchParams({ claims: `${elsewhere}:${CLAIM_TWO}` });
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims, 1 picked' }));
+
+    const asked = mocks.labelRequests.at(-1) ?? [];
+    expect(asked).toContain(SPACE);
+    expect(asked).toContain(elsewhere);
+  });
+
+  it('says nothing about the picks while they still wait on their data', () => {
+    mocks.positionsLoading = true;
+    // Elena is free this week; the claim pick cannot be judged yet.
+    mocks.searchParams = new URLSearchParams({ people: PROFILE('11'), claims: `${SPACE}:${CLAIM_TWO}` });
+    render(<DebateCalendar />);
+
+    expect(screen.queryByText(/^Showing/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/match your other filters/)).not.toBeInTheDocument();
+  });
+
+  it('says a pick fails the filters, and offers no other week, when only the filters hide them', () => {
+    mocks.schedulable = response([
+      free('11', 'Elena', [thursdaySix]),
+      // Lena is free only next Thursday, and holds no position on claim one.
+      free('14', 'Lena', [[at(15, 18), at(15, 19)]]),
+    ]);
+    mocks.searchParams = new URLSearchParams({ people: PROFILE('14'), claims: `${SPACE}:${CLAIM_ONE}` });
+    render(<DebateCalendar />);
+
+    expect(screen.getByText(/Lena doesn't match your other filters\./)).toBeInTheDocument();
+    expect(screen.queryByText(/Lena is free next week/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show next week' })).not.toBeInTheDocument();
+  });
+
   it('keeps picks from the URL on a reload', () => {
     mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}`, matches: '1' });
     render(<DebateCalendar />);

@@ -6,6 +6,7 @@ import {
   claimListRows,
   claimPickKey,
   coversTopics,
+  hiddenPickReason,
   hiddenPicksSentence,
   narrowingSentence,
   panelEmptyMessage,
@@ -208,9 +209,9 @@ describe('the line above the week', () => {
     expect(
       hiddenPicksSentence({
         hiddenPeople: [
-          { name: 'Maya', freeThisWeek: false, freeOtherWeek: true },
-          { name: 'Jonah', freeThisWeek: false },
-          { name: 'Ana', freeThisWeek: true },
+          { name: 'Maya', reason: 'other-week' },
+          { name: 'Jonah', reason: 'not-free' },
+          { name: 'Ana', reason: 'filtered' },
         ],
         hiddenClaimCount: 2,
       })
@@ -219,13 +220,23 @@ describe('the line above the week', () => {
     );
     expect(
       hiddenPicksSentence({
-        hiddenPeople: [{ name: 'Maya', freeThisWeek: false, freeOtherWeek: true }],
+        hiddenPeople: [{ name: 'Maya', reason: 'other-week' }],
         hiddenClaimCount: 0,
         weekLabel: 'next week',
         otherWeekLabel: 'this week',
       })
     ).toBe('Maya is free this week, not next week.');
     expect(hiddenPicksSentence({ hiddenPeople: [], hiddenClaimCount: 0 })).toBeNull();
+  });
+});
+
+describe('why a pick is hidden', () => {
+  it('puts the other filters before the weeks', () => {
+    // Free next week but failing a picked claim: hidden in every week, so not "free next week".
+    expect(hiddenPickReason({ onRoster: true, passesFilters: false, freeOtherWeek: true })).toBe('filtered');
+    expect(hiddenPickReason({ onRoster: true, passesFilters: true, freeOtherWeek: true })).toBe('other-week');
+    expect(hiddenPickReason({ onRoster: true, passesFilters: true, freeOtherWeek: false })).toBe('not-free');
+    expect(hiddenPickReason({ onRoster: false, passesFilters: false, freeOtherWeek: false })).toBe('absent');
   });
 });
 
@@ -238,7 +249,8 @@ describe('an empty panel list', () => {
     expect(message({ topicCount: 1 })).toBe('No claims in that topic.');
     expect(message({ tab: 'people', topicCount: 2 })).toBe('Nobody holds a claim in those topics.');
     expect(message({ searched: true, topicCount: 1 })).toBe('No claims match that search and topic.');
-    expect(message({ matchesOnly: true })).toBe('Nobody free this week disagrees with you on a claim yet.');
+    // The lists span both weeks, so the message does not send the viewer to the other one.
+    expect(message({ matchesOnly: true })).toBe('Nobody on the calendar disagrees with you on a claim yet.');
   });
 });
 
