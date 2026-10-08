@@ -87,7 +87,7 @@ import {
   debateMediaSessionKey,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
-import { OpenRoundPickCard } from '~/core/debates/open-round-pick-card';
+import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
 import { OpenRoundPickReveal, OpenRoundResultOverlay, useOpenRoundReveal } from '~/core/debates/open-round-reveal';
 import {
   type OpenRoundGap,
@@ -100,6 +100,11 @@ import {
   openRoundLastWord,
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
+import {
+  captureSafely,
+  openRoundPickSetProperties,
+  useOpenRoundsOutcomeAnalytics,
+} from '~/core/debates/open-rounds-analytics';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import {
   type LiveRecordingStream,
@@ -1982,9 +1987,31 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const savePickAsync = saveOpenRoundPick.mutateAsync;
   const pickOpenRound = React.useCallback(
-    (roundIndex: number, pick: OpenRoundPick) => savePickAsync({ roundIndex, pick }),
-    [savePickAsync]
+    async (roundIndex: number, pick: OpenRoundPick, context: OpenRoundPickAnalyticsContext) => {
+      const nowMs = serverClock.now();
+      const saved = await savePickAsync({ roundIndex, pick });
+      // `null` is a round that resolved before the pick landed, so the pick never counted.
+      if (saved && localSlot !== null) {
+        captureSafely(
+          'debate_round_pick_set',
+          openRoundPickSetProperties({
+            debateId,
+            roundIndex,
+            pick,
+            previousPick: context.previousPick,
+            msSinceCardOpened: context.msSinceCardOpened,
+            decisionDeadlineAtMs: context.decisionDeadlineAtMs,
+            decisionWindowMs: saved.open_rounds?.decision_window_ms ?? 0,
+            nowMs,
+            participantSlot: localSlot,
+          })
+        );
+      }
+      return saved;
+    },
+    [debateId, localSlot, savePickAsync, serverClock]
   );
+  useOpenRoundsOutcomeAnalytics(debate, localSlot);
 
   const endLocalTurn = React.useCallback(async () => {
     if (
@@ -2889,6 +2916,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
 }
 
+type OpenRoundPickAnalyticsContext = OpenRoundPickContext & { decisionDeadlineAtMs: number };
+
 function DebateRecordingModal({
   debate,
   roomState,
@@ -2948,7 +2977,11 @@ function DebateRecordingModal({
   rematchBusy: boolean;
   endTurnPending: boolean;
   onEndTurn: () => void;
-  onPickOpenRound: (roundIndex: number, pick: OpenRoundPick) => Promise<unknown>;
+  onPickOpenRound: (
+    roundIndex: number,
+    pick: OpenRoundPick,
+    context: OpenRoundPickAnalyticsContext
+  ) => Promise<unknown>;
   /** The other debater has dropped out of the call, which mid-debate means reconnecting. */
   remoteDisconnected: boolean;
   onRetryFinalization: () => void;
@@ -3249,7 +3282,12 @@ function DebateRecordingModal({
               rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
               remainingSeconds={countdown.remainingSeconds}
               progress={countdown.progress}
-              onPick={pick => onPickOpenRound(openRoundDeciding.roundIndex, pick)}
+              onPick={(pick, context) =>
+                onPickOpenRound(openRoundDeciding.roundIndex, pick, {
+                  ...context,
+                  decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
+                })
+              }
               localReconnecting={roomState === 'reconnecting'}
               reconnectingOpponentName={remoteDisconnected ? remoteName : null}
             />
