@@ -2479,6 +2479,128 @@ export async function getDebateLobbyClaims(
   });
 }
 
+/* Highlights and room votes (GEO-3135). Claims are named by `DebateClaimSummary.id`. */
+
+export type DebateLobbyHighlight = {
+  claim: DebateClaimSummary;
+  /** `null` once that account is deleted. */
+  highlighted_by: DebateLobbyPerson | null;
+  highlighted_at: string;
+};
+
+export type DebateLobbyRoomVote = {
+  vote_id: string;
+  claim: DebateClaimSummary;
+  started_by: DebateLobbyPerson | null;
+  started_at: string;
+  /** Over the people in the room now; `eligible` is how many that is. */
+  tally: { agree: number; disagree: number; eligible: number };
+};
+
+/** Full state, as the GET and `debate.lobby_highlights_changed` both carry it. */
+export type DebateLobbyHighlights = {
+  lobby_id: string;
+  /** Orders the GET and events. `null` until the lobby's first highlight. */
+  as_of: string | null;
+  /** Newest first, at most 10. The voted claim is always among them. */
+  highlights: DebateLobbyHighlight[];
+  room_vote: DebateLobbyRoomVote | null;
+};
+
+export type DebateLobbyHighlightsResponse = DebateLobbyHighlights & {
+  /** The viewer's side on the running vote's claim: their hint, else their position. */
+  viewer: { room_vote_position: boolean | null };
+};
+
+/** Roster members only, with the same refusals as `getDebateLobbyClaims`. */
+export async function getDebateLobbyHighlights(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  return geoChatRequest<DebateLobbyHighlightsResponse>(`/debate-lobbies/${lobbyId}/highlights`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/**
+ * Host only, inside the room. Highlighting is idempotent: `409 lobby_highlight_limit` past 10.
+ * Removing a highlight also ends a vote on that claim.
+ */
+export async function setDebateLobbyHighlight(
+  lobbyId: string,
+  debateClaimId: string,
+  highlighted: boolean,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyHighlights>(`/debate-lobbies/${lobbyId}/highlights/${debateClaimId}`, {
+    method: highlighted ? 'PUT' : 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Host only. Also highlights the claim. Another running vote is `409 lobby_room_vote_running` with
+ * `details: { vote_id, debate_claim_id }` unless `replace` ends it.
+ */
+export async function startDebateLobbyRoomVote(
+  lobbyId: string,
+  body: { debate_claim_id: string; replace?: boolean },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyHighlights>(`/debate-lobbies/${lobbyId}/room-vote`, {
+    method: 'POST',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    body,
+  });
+}
+
+/** Host only. The claim stays highlighted; an already ended vote answers with the current state. */
+export async function endDebateLobbyRoomVote(
+  lobbyId: string,
+  voteId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyHighlights>(`/debate-lobbies/${lobbyId}/room-vote/${voteId}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * Counts the viewer's side in the tally while their on-chain write indexes; `null` is a removed
+ * side. Withdrawn (`position: undefined`) when the write fails. The response-indexed report
+ * replaces it either way.
+ */
+export async function setDebateLobbyRoomVoteHint(
+  lobbyId: string,
+  voteId: string,
+  position: boolean | null | undefined,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<void>(`/debate-lobbies/${lobbyId}/room-vote/${voteId}/hint`, {
+    method: position === undefined ? 'DELETE' : 'PUT',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    body: position === undefined ? undefined : { position },
+  });
+}
+
 /**
  * The lobby the viewer is on the roster of. `current_lobby_id` survives a step-out and is null once
  * they leave, are removed, or the lobby ends; `stepped_out` is false whenever it is null.

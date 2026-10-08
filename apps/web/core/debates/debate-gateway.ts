@@ -25,6 +25,11 @@ import {
   resetGeoChatSession,
 } from './api';
 import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
+import {
+  type LobbyHighlightsState,
+  mergeLobbyHighlights,
+  parseLobbyHighlights,
+} from './lobbies/lobby-highlights-state';
 
 export type DebateGatewaySession = GeoChatSession;
 
@@ -71,6 +76,8 @@ type DebateEventPayload = {
   lobby_id?: string;
   /** On `debate.lobbies_changed`; see `parseLobbyCardPatch`. */
   lobby_card?: unknown;
+  /** On `debate.lobby_highlights_changed`: the full state; see `parseLobbyHighlights`. */
+  lobby_highlights?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -550,6 +557,16 @@ export class DebateGatewayClient {
         const claimsOnly = identifiers.sections?.length === 1 && identifiers.sections[0] === 'claims';
         if (!claimsOnly) this.queueAccountQuery('lobby', lobbyId);
         this.queueAccountQuery('lobby-claims', lobbyId);
+        break;
+      }
+      // GEO-3135. Full state to the roster: replaces the cached copy when newer, never refetches.
+      case 'debate.lobby_highlights_changed': {
+        const highlights = parseLobbyHighlights(identifiers.lobby_highlights);
+        if (!highlights || !this.accountKey) break;
+        this.queryClient.setQueryData<LobbyHighlightsState>(
+          ['debates', 'account', this.accountKey, 'lobby-highlights', dashlessId(highlights.lobby_id)],
+          current => (current ? mergeLobbyHighlights(current, highlights) : current)
+        );
         break;
       }
     }
