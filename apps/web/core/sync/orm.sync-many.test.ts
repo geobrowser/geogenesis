@@ -4,6 +4,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { EntitiesOrderBy } from '../gql/graphql';
 import { getAllEntities, getBatchEntities, getEntitiesOrderedByPropertyConnection } from '../io/queries';
 import type { Entity, Value } from '../types';
 import { E } from './orm';
@@ -170,6 +171,36 @@ describe('E.syncMany pagination', () => {
     expect(vi.mocked(getBatchEntities).mock.calls[0][0]).toEqual(['a', 'b', 'c']);
     expect(first.merged.map(e => e.id)).toEqual(['c', 'a', 'b']);
     expect(second.merged.map(e => e.id)).toEqual(['b', 'c', 'a', 'a']);
+  });
+
+  it('orders collection id queries on the server when a built-in orderBy is set', async () => {
+    const served = [makeEntity('entity-b', 'Entity B'), makeEntity('entity-a', 'Entity A')];
+    vi.mocked(getAllEntities).mockReturnValue(
+      Effect.succeed({ entities: served, endCursor: 'cursor-a', hasNextPage: true })
+    );
+
+    const result = await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', 'entity-b'] } },
+      first: 9,
+      orderBy: [EntitiesOrderBy.RankingScoreDesc, EntitiesOrderBy.IdAsc],
+    });
+
+    expect(vi.mocked(getBatchEntities)).not.toHaveBeenCalled();
+    expect(vi.mocked(getEntitiesOrderedByPropertyConnection)).not.toHaveBeenCalled();
+    const [options, signal] = vi.mocked(getAllEntities).mock.calls[0] ?? [];
+    expect(signal).toBeUndefined();
+    expect(options).toEqual(
+      expect.objectContaining({ limit: 9, orderBy: [EntitiesOrderBy.RankingScoreDesc, EntitiesOrderBy.IdAsc] })
+    );
+    // The id list rides along inside the filter rather than as a batch fetch.
+    expect(JSON.stringify(options?.filter)).toContain('entity-a');
+    expect(JSON.stringify(options?.filter)).toContain('entity-b');
+    // Server order wins over the caller's id order.
+    expect(result.merged.map(e => e.id)).toEqual(['entity-b', 'entity-a']);
+    expect(result.endCursor).toBe('cursor-a');
+    expect(result.hasNextPage).toBe(true);
   });
 
   it.each([

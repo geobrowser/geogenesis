@@ -401,7 +401,10 @@ export class E {
     includeEmptyNames?: boolean;
     signal?: AbortController['signal'];
   }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
-    if (where?.id?.in) {
+    // An id list with a built-in `orderBy` (Best, Created) is a regular ordered
+    // page: the ids ride along as an `id.in` filter on the entities connection
+    // below, which keeps cursor paging and the remote-id dedupe in one place.
+    if (where?.id?.in && !orderBy) {
       const entityIds = where.id.in.filter(id => id !== '');
 
       if (sort) {

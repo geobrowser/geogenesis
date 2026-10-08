@@ -7,35 +7,8 @@ import { useValues } from '~/core/sync/use-store';
 import { SORT_PROPERTY } from '~/core/system-ids';
 import { ColumnSortState } from '~/core/utils/column-sort';
 
+import { parsePersistedSort, serializeSort } from './persisted-sort';
 import { useDataBlockInstance } from './use-data-block';
-
-type PersistedSort = {
-  sort_by: string;
-  sort_direction: 'ascending' | 'descending';
-};
-
-function parseSortValue(raw: string | null): ColumnSortState {
-  if (!raw) return null;
-  try {
-    const parsed: PersistedSort = JSON.parse(raw);
-    if (!parsed.sort_by || !parsed.sort_direction) return null;
-    return {
-      columnId: parsed.sort_by,
-      direction: parsed.sort_direction === 'ascending' ? 'asc' : 'desc',
-    };
-  } catch {
-    return null;
-  }
-}
-
-function toSortString(sort: ColumnSortState): string {
-  if (!sort) return '';
-  const persisted: PersistedSort = {
-    sort_by: sort.columnId,
-    sort_direction: sort.direction === 'asc' ? 'ascending' : 'descending',
-  };
-  return JSON.stringify(persisted);
-}
 
 export function useSort(canEdit?: boolean) {
   const { entityId, spaceId } = useDataBlockInstance();
@@ -60,7 +33,7 @@ export function useSort(canEdit?: boolean) {
     if (!sortTriple) return null;
     if (sortTriple.property.dataType === 'TEXT') {
       if (sortTriple.value === '') return null;
-      return parseSortValue(sortTriple.value);
+      return parsePersistedSort(sortTriple.value);
     }
     return null;
   }, [sortTriple]);
@@ -77,7 +50,7 @@ export function useSort(canEdit?: boolean) {
 
   const setSortState = React.useCallback(
     (sort: ColumnSortState) => {
-      const sortString = toSortString(sort);
+      const sortString = serializeSort(sort);
       const entityName = initialBlockEntity?.name ?? '';
 
       storage.values.set({
