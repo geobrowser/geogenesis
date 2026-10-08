@@ -20,8 +20,8 @@ import {
   bindSaveToAccount,
   clearLocalVotes,
   isLocalVoteCurrent,
+  readLocalVotes,
   removeLocalVote,
-  resetSaveRequest,
   useLocalVotes,
 } from '~/core/state/local-votes';
 import { useReportError } from '~/core/state/status-bar-store';
@@ -78,10 +78,15 @@ export function LocalVotesSaver() {
     clearLocalVotes();
   }, [accountId, bound, boundTo, ready, state, voteCount]);
 
-  // Signed out mid-save: what is left was bound to that account, not to the next one here, and a
-  // failure was that session's — the next save starts afresh rather than waiting on its Retry.
+  // Signed out mid-save: what is left was bound to that account, so it goes, rather than waiting on
+  // this device for whoever signs in next to save it as theirs. A failure was that session's too —
+  // the next save starts afresh rather than waiting on its Retry.
   useOnSignOut(() => {
-    resetSaveRequest();
+    const left = readLocalVotes();
+    if (left.save !== null) {
+      left.votes.forEach(vote => captureLocalVoteDropped('signed_out', vote, left.votes.length));
+      clearLocalVotes();
+    }
     totalRef.current = 0;
     setFailed(false);
   });

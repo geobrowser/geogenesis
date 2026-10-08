@@ -52,7 +52,7 @@ export function captureSaveVotesImpression(promptReason: string, localVoteCount:
 
 /** A local vote nobody will publish: already held by the account, or a sign-in that wasn't a save. */
 export function captureLocalVoteDropped(
-  reason: 'already_held' | 'other_sign_in',
+  reason: 'already_held' | 'other_sign_in' | 'signed_out',
   vote: { entityId: string; responseKind: string },
   count: number
 ) {

@@ -10,7 +10,6 @@ import {
   readLocalVotes,
   recordSavePromptShown,
   removeLocalVote,
-  resetSaveRequest,
   toggleLocalVote,
 } from './local-votes';
 
@@ -87,18 +86,30 @@ it('reads votes stored before up/downvotes joined as sides on claims', () => {
   expect(readLocalVotes().votes).toMatchObject([{ entityId: 'old', responseKind: 'stance', direction: 'negative' }]);
 });
 
+// Copilot on #2785 (round 3): an expired batch's asks must not count against the next one.
+it('starts the asks afresh once every stored vote has expired', () => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date('2026-10-01T00:00:00Z'));
+  toggleLocalVote(vote('old'));
+  recordSavePromptShown();
+  recordSavePromptShown();
+  vi.setSystemTime(Date.now() + LOCAL_VOTE_TTL_MS + 1);
+
+  expect(readLocalVotes().prompt.shownCount).toBe(0);
+  toggleLocalVote(vote('new'));
+  expect(readLocalVotes().prompt.shownCount).toBe(0);
+});
+
 it('reads corrupt storage as empty', () => {
   window.localStorage.setItem(LOCAL_VOTES_STORAGE_KEY, '{not json');
   expect(readLocalVotes().votes).toEqual([]);
 });
 
 describe('a save bound to an account', () => {
-  it('is bound, and a sign-out resets it', () => {
+  it('is bound to the account', () => {
     toggleLocalVote(vote('a'));
     bindSaveToAccount('did:privy:me');
     expect(readLocalVotes().save).toEqual({ accountId: 'did:privy:me' });
-    resetSaveRequest();
-    expect(readLocalVotes().save).toBeNull();
   });
 
   it('drops the first build’s timestamp marker, which bound to no account', () => {

@@ -306,7 +306,30 @@ describe('LocalVotesSaver', () => {
   });
 
   // Copilot on #2785 (round 2): a failure belongs to the session it happened in.
-  it('saves for the next account after a failed save and a sign-out, without its Retry', async () => {
+  // Copilot on #2785 (round 3): votes bound to an account are that account's, sign-out or not.
+  it('clears what a save left unsaved when its account signs out, so the next one cannot take it', async () => {
+    vote('a');
+    vote('b');
+    mocks.submit.mockRejectedValueOnce(new Error('bundler down'));
+    saveSignedIn();
+    signInWithSpace();
+    const { rerender } = render(<LocalVotesSaver />);
+    await waitFor(() => expect(mocks.reportError).toHaveBeenCalled());
+
+    mocks.authenticated = false;
+    rerender(<LocalVotesSaver />);
+    expect(readLocalVotes().votes).toEqual([]);
+    expect(mocks.capture).toHaveBeenCalledWith('signed_out', expect.objectContaining({ entityId: 'a' }), 2);
+
+    // The next account, through a save prompt: nothing of the last one's to publish.
+    mocks.accountId = 'did:privy:next';
+    saveSignedIn();
+    signInWithSpace();
+    rerender(<LocalVotesSaver />);
+    expect(mocks.submit).toHaveBeenCalledTimes(1);
+  });
+
+  it('starts the next save afresh after a failed one and a sign-out, without its Retry', async () => {
     vote('a');
     mocks.submit.mockRejectedValueOnce(new Error('bundler down'));
     saveSignedIn();
@@ -316,13 +339,14 @@ describe('LocalVotesSaver', () => {
 
     mocks.authenticated = false;
     rerender(<LocalVotesSaver />);
-    mocks.accountId = 'did:privy:next';
+    // Signed out, the visitor votes again on this device and saves through a prompt.
+    vote('c');
     saveSignedIn();
     signInWithSpace();
     rerender(<LocalVotesSaver />);
 
     await waitFor(() => expect(readLocalVotes().votes).toEqual([]));
-    expect(mocks.submit).toHaveBeenCalledTimes(2);
+    expect(mocks.submit.mock.calls.at(-1)).toEqual(['c', 'positive']);
   });
 
   it('leaves a sign-in from another tab to that tab, rather than clearing the votes it is saving', () => {

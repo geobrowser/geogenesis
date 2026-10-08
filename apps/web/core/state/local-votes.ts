@@ -86,6 +86,14 @@ function withoutLegacyShape(value: unknown): unknown {
   return { ...rest, entityId: claimId, responseKind: legacy.responseKind ?? 'stance' };
 }
 
+/**
+ * Nothing left to hold: no votes, and no save bound to an account. The prompt history goes with them,
+ * so a visitor whose votes were saved, cleared or expired is asked afresh about the next ones.
+ */
+function holdsNothing(state: LocalVotesState) {
+  return state.votes.length === 0 && state.save === null;
+}
+
 function parse(raw: string | null, now = Date.now()): LocalVotesState {
   if (!raw) return EMPTY;
   try {
@@ -95,7 +103,7 @@ function parse(raw: string | null, now = Date.now()): LocalVotesState {
       .filter(isVote)
       .map(vote => ({ ...vote, title: typeof vote.title === 'string' ? vote.title : '' }))
       .filter(vote => now - vote.votedAt < LOCAL_VOTE_TTL_MS);
-    return {
+    const state: LocalVotesState = {
       votes,
       prompt: {
         shownCount: Number(parsed.prompt?.shownCount) || 0,
@@ -103,6 +111,9 @@ function parse(raw: string | null, now = Date.now()): LocalVotesState {
       },
       save: parsed.save && typeof parsed.save.accountId === 'string' ? { accountId: parsed.save.accountId } : null,
     };
+    // Every vote expired: the same clean slate as removing the last one, or the old asks would be
+    // counted against new votes and the sheet would never ask about them.
+    return holdsNothing(state) ? EMPTY : state;
   } catch {
     return EMPTY;
   }
@@ -118,9 +129,7 @@ export function readLocalVotes(): LocalVotesState {
 }
 
 function write(next: LocalVotesState) {
-  const empty = next.votes.length === 0 && next.save === null;
-  // Nothing left to hold: forget the prompt history too, so a visitor who saved (or was cleared)
-  // and later votes signed out again is asked afresh.
+  const empty = holdsNothing(next);
   const stored = empty ? EMPTY : next;
   try {
     if (empty) window.localStorage.removeItem(LOCAL_VOTES_STORAGE_KEY);
@@ -238,9 +247,4 @@ export function recordSavePromptDismissed() {
 /** A save prompt's sign-in completed for `accountId`: these votes are that account's to publish. */
 export function bindSaveToAccount(accountId: string) {
   update(current => ({ ...current, save: { accountId } }));
-}
-
-/** Signed out mid-save: whatever was bound was for that account, not whoever signs in next. */
-export function resetSaveRequest() {
-  update(current => (current.save ? { ...current, save: null } : current));
 }
