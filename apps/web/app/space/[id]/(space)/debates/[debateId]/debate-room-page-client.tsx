@@ -100,11 +100,7 @@ import {
   openRoundLastWord,
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
-import {
-  captureSafely,
-  openRoundPickSetProperties,
-  useOpenRoundsOutcomeAnalytics,
-} from '~/core/debates/open-rounds-analytics';
+import { captureOpenRoundPickSet, useOpenRoundsOutcomeAnalytics } from '~/core/debates/open-rounds-analytics';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import {
   type LiveRecordingStream,
@@ -1992,20 +1988,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const saved = await savePickAsync({ roundIndex, pick });
       // `null` is a round that resolved before the pick landed, so the pick never counted.
       if (saved && localSlot !== null) {
-        captureSafely(
-          'debate_round_pick_set',
-          openRoundPickSetProperties({
-            debateId,
-            roundIndex,
-            pick,
-            previousPick: context.previousPick,
-            msSinceCardOpened: context.msSinceCardOpened,
-            decisionDeadlineAtMs: context.decisionDeadlineAtMs,
-            decisionWindowMs: saved.open_rounds?.decision_window_ms ?? 0,
-            nowMs,
-            participantSlot: localSlot,
-          })
-        );
+        captureOpenRoundPickSet({
+          ...context,
+          debateId,
+          roundIndex,
+          pick,
+          decisionWindowMs: saved.open_rounds?.decision_window_ms ?? 0,
+          nowMs,
+          participantSlot: localSlot,
+        });
       }
       return saved;
     },

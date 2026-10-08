@@ -1,6 +1,6 @@
 import { renderHook } from '@testing-library/react';
 
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate } from './api';
 import {
@@ -24,19 +24,9 @@ import {
 const analytics = vi.hoisted(() => ({ capture: vi.fn() }));
 vi.mock('~/core/analytics', () => analytics);
 
-const sessionStore = new Map<string, string>();
-
 beforeEach(() => {
   analytics.capture.mockReset();
-  sessionStore.clear();
-  vi.spyOn(window, 'sessionStorage', 'get').mockReturnValue({
-    getItem: (key: string) => sessionStore.get(key) ?? null,
-    setItem: (key: string, value: string) => void sessionStore.set(key, value),
-  } as Storage);
-});
-
-afterEach(() => {
-  vi.restoreAllMocks();
+  sessionStorage.clear();
 });
 
 function eventsNamed(name: string) {
@@ -65,6 +55,11 @@ describe('resolvedOpenRounds', () => {
     expect(resolvedOpenRounds(revealEnd())).toEqual([
       expect.objectContaining({ roundIndex: 0, outcome: 'end', resolution: 'both_picked' }),
     ]);
+  });
+
+  it('waits for the picks before counting a resolved round', () => {
+    const debate = revealEnd();
+    expect(resolvedOpenRounds({ open_rounds: { ...debate.open_rounds!, revealed_picks: null } })).toEqual([]);
   });
 
   it('has nothing for an unresolved round or a fixed format', () => {

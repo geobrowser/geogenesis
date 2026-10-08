@@ -3,7 +3,7 @@ import * as React from 'react';
 import { capture } from '~/core/analytics';
 
 import type { Debate, OpenRoundPick, OpenRoundResolution, OpenRoundRevealedPick, ParticipantSlot } from './api';
-import { isFinalOpenRound, isOpenRoundsDebate, openRebuttalRoundCount, openRoundIndexForTurn } from './open-rounds';
+import { isFinalOpenRound, isOpenRoundsDebate, openRebuttalRoundCount, openRoundRevealedPicks } from './open-rounds';
 
 /**
  * Open rounds analytics (GEO-3182), for checking the bet behind blind picks: how often debates
@@ -42,34 +42,34 @@ export function openRoundPickSplit(round: Pick<ResolvedOpenRound, 'resolution' |
 /**
  * Every resolved round the payload knows of: `rounds[]`, plus the round the block itself describes
  * in its result window, which a payload written in the same transaction as the resolution may carry
- * before `rounds[]` does.
+ * before `rounds[]` does. Picks come from `openRoundRevealedPicks`, the reveal's own reading.
  */
 export function resolvedOpenRounds(debate: Pick<Debate, 'open_rounds'>): ResolvedOpenRound[] {
   if (!isOpenRoundsDebate(debate)) return [];
   const openRounds = debate.open_rounds;
-  const resolved = new Map<number, ResolvedOpenRound>();
-  for (const round of openRounds.rounds ?? []) {
-    resolved.set(round.round_index, {
-      roundIndex: round.round_index,
-      outcome: round.outcome,
-      resolution: round.resolution,
-      picks: round.picks ?? [],
-    });
-  }
+  const resolved: Omit<ResolvedOpenRound, 'picks'>[] = (openRounds.rounds ?? []).map(round => ({
+    roundIndex: round.round_index,
+    outcome: round.outcome,
+    resolution: round.resolution,
+  }));
   if (
-    !resolved.has(openRounds.round_index) &&
     openRounds.outcome &&
     openRounds.resolution &&
-    openRounds.revealed_picks?.length
+    !resolved.some(round => round.roundIndex === openRounds.round_index)
   ) {
-    resolved.set(openRounds.round_index, {
+    resolved.push({
       roundIndex: openRounds.round_index,
       outcome: openRounds.outcome,
       resolution: openRounds.resolution,
-      picks: openRounds.revealed_picks,
     });
   }
-  return [...resolved.values()].sort((a, b) => a.roundIndex - b.roundIndex);
+  // A round without its picks waits for a payload that has them, rather than send as a timeout.
+  return resolved
+    .flatMap(round => {
+      const picks = openRoundRevealedPicks(openRounds, round.roundIndex);
+      return picks ? [{ ...round, picks }] : [];
+    })
+    .sort((a, b) => a.roundIndex - b.roundIndex);
 }
 
 export function openRoundResolvedProperties(
@@ -99,8 +99,9 @@ export function openRoundResolvedProperties(
  * appended round resolved End, and its picks say how.
  */
 export function openRoundsEndedBy(debate: Pick<Debate, 'open_rounds' | 'turn_durations_ms'>): OpenRoundsEndedBy | null {
-  if (!isOpenRoundsDebate(debate)) return null;
-  const lastRoundIndex = openRoundIndexForTurn(debate.turn_durations_ms.length - 1);
+  // Round 0 is the opening, so the rebuttal count is also the last appended round.
+  const lastRoundIndex = openRebuttalRoundCount(debate);
+  if (lastRoundIndex === null || !isOpenRoundsDebate(debate)) return null;
   if (isFinalOpenRound(debate.open_rounds, lastRoundIndex)) return 'cap';
   const lastRound = resolvedOpenRounds(debate).find(round => round.roundIndex === lastRoundIndex);
   if (!lastRound || lastRound.outcome !== 'end') return null;
@@ -122,6 +123,11 @@ export function openRoundsCompletedProperties(
     max_rebuttal_rounds: debate.open_rounds.max_rebuttal_rounds,
     participant_slot: participantSlot,
   };
+}
+
+/** Sends `debate_round_pick_set` for a pick the server saved. */
+export function captureOpenRoundPickSet(input: Parameters<typeof openRoundPickSetProperties>[0]) {
+  captureSafely('debate_round_pick_set', openRoundPickSetProperties(input));
 }
 
 export function openRoundPickSetProperties({
@@ -179,7 +185,7 @@ export function useOpenRoundsOutcomeAnalytics(debate: Debate | null, participant
     if (!sawLiveRef.current) return;
 
     const sendOnce = (key: string, send: () => void) => {
-      const storageKey = `geo-open-rounds-analytics:${debate.id}:${participantSlot}:${key}`;
+      const storageKey = `geo.debates.open-rounds-analytics:${debate.id}:${participantSlot}:${key}`;
       if (sentRef.current.has(storageKey) || readSessionFlag(storageKey)) return;
       sentRef.current.add(storageKey);
       writeSessionFlag(storageKey);
@@ -200,7 +206,7 @@ export function useOpenRoundsOutcomeAnalytics(debate: Debate | null, participant
 }
 
 /** Analytics never gets in the way of the debate. */
-export function captureSafely(...args: Parameters<typeof capture>) {
+function captureSafely(...args: Parameters<typeof capture>) {
   try {
     capture(...args);
   } catch {
