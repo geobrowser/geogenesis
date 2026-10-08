@@ -229,14 +229,19 @@ export function CalendarNarrowPanelBody({
   );
   const listCount = onClaims ? visibleClaims.length : visiblePeople.length + visibleAbsent.length;
   const tabTopics = topics[tab];
+  const topicNames = React.useMemo(() => {
+    const names = new Map<string, string | null>();
+    for (const list of claimTopics.values()) for (const topic of list) names.set(normId(topic.id), topic.name);
+    return names;
+  }, [claimTopics]);
   // Over the list as everything but the topics leaves it, so each count says what picking that topic
   // would leave.
   const facet = React.useMemo(
     () =>
       onClaims
-        ? topicFacet(searchedClaims.map(claimSets), topics.claims)
-        : topicFacet(searchedPeople.map(personSets), topics.people),
-    [claimSets, onClaims, personSets, searchedClaims, searchedPeople, topics]
+        ? topicFacet(searchedClaims.map(claimSets), topics.claims, id => topicNames.get(id) ?? null)
+        : topicFacet(searchedPeople.map(personSets), topics.people, id => topicNames.get(id) ?? null),
+    [claimSets, onClaims, personSets, searchedClaims, searchedPeople, topicNames, topics]
   );
   const topicLabel =
     tabTopics.length === 0

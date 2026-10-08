@@ -637,6 +637,10 @@ export function PersonRow({
   const openSchedule = (opener: HTMLElement | null) =>
     onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, entry ?? 'people_schedule');
   const chips = schedule ?? times;
+  // The row's two popups carry the calendar's own labels there (GEO-3220), so its clicks read apart
+  // from the hub's. The hub, and the lobby that borrows this row, keep the unlabelled triggers they had.
+  const popupAnalytics = (action: string) =>
+    analyticsSurface === 'calendar' ? debateActionAnalyticsAttributes(analyticsSurface, action) : undefined;
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
   const activeSpaces =
     spaceIds.length > 0 ? (
@@ -647,6 +651,7 @@ export function PersonRow({
         debatesBySpace={record?.debatesBySpace}
         matchesBySpace={matchesBySpace}
         popoverPortal={popoverPortal}
+        triggerAttributes={popupAnalytics('Person spaces')}
       />
     ) : null;
   const match =
@@ -658,6 +663,7 @@ export function PersonRow({
         claimNamesLoading={claimNamesLoading}
         labelsById={labelsById}
         popoverPortal={popoverPortal}
+        triggerAttributes={popupAnalytics('Person matches')}
       />
     ) : null;
 

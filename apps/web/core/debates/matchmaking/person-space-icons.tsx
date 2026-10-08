@@ -54,6 +54,7 @@ export function PersonSpaceIcons({
   debatesBySpace,
   matchesBySpace,
   popoverPortal,
+  triggerAttributes,
 }: {
   spaceIds: string[];
   labelsById: Map<string, SpaceLabel>;
@@ -62,6 +63,8 @@ export function PersonSpaceIcons({
   /** Viewer-relative opposing claims. Absent when there is no signed-in comparison to make. */
   matchesBySpace?: ReadonlyMap<string, number>;
   popoverPortal: HTMLElement | null;
+  /** Analytics attributes for the trigger, where its surface labels its own clicks (GEO-3220). */
+  triggerAttributes?: Readonly<Record<`data-${string}`, string>>;
 }) {
   const orderedSpaceIds = React.useMemo(() => orderPersonSpaces(spaceIds, debatesBySpace), [spaceIds, debatesBySpace]);
   const firstSpaceLinkRef = React.useRef<HTMLAnchorElement>(null);
@@ -79,6 +82,7 @@ export function PersonSpaceIcons({
           <button
             type="button"
             aria-label={`View ${orderedSpaceIds.length} active ${orderedSpaceIds.length === 1 ? 'space' : 'spaces'}`}
+            {...triggerAttributes}
             className="inline-flex shrink-0 items-center rounded transition-opacity hover:opacity-80 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ctaPrimary"
           >
             <AvatarGroup>

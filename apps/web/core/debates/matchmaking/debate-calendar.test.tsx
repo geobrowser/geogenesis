@@ -62,6 +62,7 @@ const mocks = vi.hoisted(() => ({
   positionsOverlay: [] as ParticipantPosition[],
   sidePanelTarget: null as { entityId: string } | null,
   spaceLabels: new Map<string, { name: string; image: string | null }>(),
+  debateSpaces: new Map<string, string[]>(),
   labelRequests: [] as string[][],
   sidePanelListeners: new Set<() => void>(),
 }));
@@ -283,7 +284,7 @@ vi.mock('./use-person-facts', () => ({
     personRecordsPending: false,
     publishableSpacesPending: false,
     spaceActivityUnavailable: false,
-    debateSpacesByPerson: new Map(),
+    debateSpacesByPerson: mocks.debateSpaces,
     activeSpaceIds: new Set(),
   }),
 }));
@@ -452,6 +453,7 @@ beforeEach(() => {
     positionsOverlay: [],
     sidePanelTarget: null,
     spaceLabels: new Map(),
+    debateSpaces: new Map(),
     labelRequests: [],
     claimNames: new Map(),
     claimTopics: new Map(),
@@ -1482,6 +1484,34 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(screen.getByText(/Lena doesn't match your other filters\./)).toBeInTheDocument();
     expect(screen.queryByText(/Lena is free next week/)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Show next week' })).not.toBeInTheDocument();
+  });
+
+  it("labels the People rows' two popups as the calendar's", () => {
+    mocks.debateSpaces = new Map([[summary('11', '').profile_space_id, [SPACE]]]);
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+    const people = within(panel()).getByRole('list', { name: 'People' });
+
+    expect(within(people).getByRole('button', { name: 'View 1 matching claim with Elena' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Person matches'
+    );
+    expect(within(people).getByRole('button', { name: 'View 1 active space' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Person spaces'
+    );
+  });
+
+  it('sets Matches only aside with a claim whose positions failed, rather than narrowing to any match', () => {
+    mocks.positionsError = new Error('graph down');
+    // Elena is the viewer's only match; Marco shares the week but matches nothing.
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}`, matches: '1' });
+    render(<DebateCalendar />);
+
+    expect(thursday()).toHaveAccessibleName(/Marco/);
+    expect(screen.getByText(/Couldn’t load everyone’s positions/)).toBeInTheDocument();
+    // The matches read is fine; it was the claim that could not be judged.
+    expect(screen.queryByText(/Couldn’t load your matches/)).not.toBeInTheDocument();
   });
 
   it('keeps picks from the URL on a reload', () => {

@@ -433,8 +433,12 @@ function DebateCalendarBody({
    */
   const judgeable = React.useCallback(
     (withPicks: CalendarPicks): CalendarPicks => {
-      const claims = allPositionsState === 'failed' ? [] : withPicks.claims;
-      const matchesOnly = withPicks.matchesOnly && !(matchesUnavailable && claims.length === 0);
+      // With a claim picked, Matches only means "on the other side of that claim": it rides on the
+      // claim's judgement, so a claim set aside takes it along rather than falling back to "anyone
+      // you have a match with", a different filter the viewer never asked for.
+      const claimsSetAside = allPositionsState === 'failed' && withPicks.claims.length > 0;
+      const claims = claimsSetAside ? [] : withPicks.claims;
+      const matchesOnly = withPicks.matchesOnly && !claimsSetAside && !(matchesUnavailable && claims.length === 0);
       return claims === withPicks.claims && matchesOnly === withPicks.matchesOnly
         ? withPicks
         : { ...withPicks, claims, matchesOnly };
@@ -1058,7 +1062,9 @@ function DebateCalendarBody({
               Couldn&rsquo;t load everyone&rsquo;s positions, so claims can&rsquo;t narrow the week yet.
             </Text>
           ) : null}
-          {effectivePicks.matchesOnly && judgedPicks.matchesOnly !== effectivePicks.matchesOnly ? (
+          {/* Only for Matches only on its own: with a claim picked it was set aside with the claim, and
+              the positions line above already says why. */}
+          {effectivePicks.matchesOnly && effectivePicks.claims.length === 0 && matchesUnavailable ? (
             <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
               Couldn&rsquo;t load your matches, so Matches only can&rsquo;t narrow the week yet.
             </Text>

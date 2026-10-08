@@ -328,6 +328,11 @@ describe('topics', () => {
       { ...ai, count: 2 },
       { ...jobs, count: 1 },
     ]);
+    // A pick nothing carries any more is still offered, named, so it can be unticked.
+    expect(topicFacet([[[ai]]], [health.id], id => (id === health.id ? 'Health' : null))).toContainEqual({
+      ...health,
+      count: 0,
+    });
     // AI on one claim and Health on another is not one claim in both, so Health counts nobody here.
     expect(topicFacet([[[ai], [health]]], [ai.id])).toEqual([{ ...ai, count: 1 }]);
   });

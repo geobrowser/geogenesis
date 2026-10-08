@@ -463,9 +463,14 @@ function coversNormalized(sets: ReadonlyArray<ReadonlySet<string>>, wanted: read
  */
 export function topicFacet(
   items: readonly TopicSets[],
-  picked: readonly string[]
+  picked: readonly string[],
+  /** A topic's name from beyond these items, for a pick none of them carries any more. */
+  nameOf: (topicId: string) => string | null = () => null
 ): Array<PanelTopic & { count: number }> {
   const topics = new Map<string, PanelTopic>();
+  // A pick stays offered even when the other filters have taken every item that carries it, or it
+  // could not be unticked from the menu it was ticked in.
+  for (const id of picked) topics.set(normId(id), { id: normId(id), name: nameOf(normId(id)) });
   for (const sets of items) {
     for (const set of sets) for (const topic of set) topics.set(normId(topic.id), { ...topic, id: normId(topic.id) });
   }

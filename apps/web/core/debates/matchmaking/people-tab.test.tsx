@@ -420,6 +420,10 @@ describe('PeopleTab', () => {
 
     expect(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' })).toHaveTextContent('2 matches');
     expect(screen.queryByRole('button', { name: /View 0 matching claims/ })).not.toBeInTheDocument();
+    // The hub's trigger keeps the unlabelled click it had; only the calendar labels its own (GEO-3220).
+    expect(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' })).not.toHaveAttribute(
+      'data-geo-analytics-label'
+    );
   });
 
   it('uses singular copy for one matching claim', () => {
@@ -1329,6 +1333,7 @@ describe('PeopleTab filters', () => {
     expect(row).not.toHaveTextContent('Active in…');
 
     const trigger = within(row).getByRole('button', { name: 'View 2 active spaces' });
+    expect(trigger).not.toHaveAttribute('data-geo-analytics-label');
     fireEvent.click(trigger);
 
     const list = await screen.findByRole('list', { name: 'Active spaces' });
