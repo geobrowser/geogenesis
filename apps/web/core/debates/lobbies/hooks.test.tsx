@@ -16,6 +16,12 @@ const api = vi.hoisted(() => ({
   listDebateLobbies: vi.fn(),
 }));
 
+const capture = vi.hoisted(() => vi.fn());
+vi.mock('~/core/analytics', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/analytics')>()),
+  capture,
+}));
+
 vi.mock('../api', async importOriginal => ({ ...(await importOriginal<typeof import('../api')>()), ...api }));
 
 vi.mock('../hooks', async importOriginal => ({
@@ -27,6 +33,10 @@ const { GeoChatRequestError } = await import('../api');
 const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useLobbyPresence } = await import('./hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
+const { lobbyDebateSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
+
+const lobbyEvents = (name: string) =>
+  capture.mock.calls.filter(([event]) => event === name).map(([, props]) => props as Record<string, unknown>);
 
 /** A presence call that resolves when the test says so. */
 function deferredJoin() {
@@ -97,6 +107,7 @@ afterEach(async () => {
   vi.useRealTimers();
   // Let the leave an unmount queues land before the mocks reset, not in the next test.
   await new Promise(resolve => setTimeout(resolve, 0));
+  resetLobbyAnalytics();
   vi.clearAllMocks();
 });
 
@@ -644,4 +655,93 @@ it('reloads the lobbies list on every mount', async () => {
 
   renderHook(() => useDebateLobbies(), { wrapper: shared });
   await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
+});
+
+describe('lobby analytics through useLobbyPresence', () => {
+  function strictWrapper({ children }: { children: React.ReactNode }) {
+    return <React.StrictMode>{wrapper({ children })}</React.StrictMode>;
+  }
+
+  it('sends one lobby_joined under StrictMode, with the marked entry and the newcomer flag', async () => {
+    api.setDebateLobbyPresence.mockImplementation(async (_id: string, body: { joined: boolean }) => {
+      const next = view(body.joined);
+      return { ...next, viewer: { ...next.viewer, newcomer: true } };
+    });
+    markLobbyEntry('lobby1', 'side_panel');
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper: strictWrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(lobbyEvents('lobby_joined')).toEqual([
+      { lobby_id: 'lobby1', lobby_session_id: expect.any(String), is_newcomer: true, entry: 'side_panel' },
+    ]);
+    expect(lobbyEvents('lobby_left')).toEqual([]);
+  });
+
+  it('keeps the session through a lapsed lease', async () => {
+    await goneAfterBeat('lapsed');
+    await waitFor(() => expect(joins()).toHaveLength(2));
+    expect(lobbyEvents('lobby_joined')).toHaveLength(1);
+  });
+
+  it('sends lobby_left once for Leave, and a Rejoin starts a new session', async () => {
+    const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    await act(() => result.current.leave());
+    await act(() => result.current.join(false));
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    unmount();
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+
+    expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['link', 'rejoin']);
+    expect(lobbyEvents('lobby_left').map(props => props.exit)).toEqual(['left', 'left']);
+  });
+
+  it('ends the session as lobby_ended when the host ends it', async () => {
+    await goneAfterBeat('ended');
+    await waitFor(() => expect(lobbyEvents('lobby_left').map(props => props.exit)).toEqual(['lobby_ended']));
+  });
+
+  it('attributes the debate after this tab steps out into it', async () => {
+    const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    const go = vi.fn();
+    act(() => routeIntoDebate(go));
+    await waitFor(() => expect(go).toHaveBeenCalled());
+    unmount();
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    expect(lobbyEvents('lobby_left')).toEqual([]);
+
+    lobbyDebateSeen({ id: 'debate-1', lobby_id: 'lobby1' });
+    lobbyDebateSeen({ id: 'debate-1', lobby_id: 'lobby1' });
+    expect(lobbyEvents('lobby_left').map(props => props.exit)).toEqual(['debate_started']);
+    expect(lobbyEvents('lobby_debate_started')).toEqual([expect.objectContaining({ debate_id: 'debate-1' })]);
+  });
+
+  it('attributes the debate when the server stepped the viewer out', async () => {
+    const { result, unmount } = await goneAfterBeat('stepped_out');
+    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+    unmount();
+    await act(async () => {});
+
+    lobbyDebateSeen({ id: 'debate-1', lobby_id: 'lobby1' });
+    expect(lobbyEvents('lobby_left').map(props => props.exit)).toEqual(['debate_started']);
+    expect(lobbyEvents('lobby_debate_started')).toHaveLength(1);
+  });
+
+  it('marks Back to the room after stepping out as back_after_debate', async () => {
+    const { result } = await goneAfterBeat('stepped_out');
+    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+    await act(() => result.current.join(false));
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['link', 'back_after_debate']);
+    expect(lobbyEvents('lobby_left').map(props => props.exit)).toEqual(['unknown']);
+  });
 });

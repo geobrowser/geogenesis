@@ -26,6 +26,7 @@ import {
   useEndDebateLobby,
   useLobbyPresence,
 } from './hooks';
+import { lobbyShareUrl, markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { LobbyDebateSubject } from './lobby-debate-subject';
 import {
@@ -224,7 +225,11 @@ function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: 
             Join this lobby
           </HubPillButton>
           {state.otherLobbyId ? (
-            <Link href={debateRoomPath(state.otherLobbyId)} className={hubPillClassName('secondary')}>
+            <Link
+              href={debateRoomPath(state.otherLobbyId)}
+              onClick={() => state.otherLobbyId && markLobbyEntry(state.otherLobbyId, 'other_lobby')}
+              className={hubPillClassName('secondary')}
+            >
               Back to my lobby
             </Link>
           ) : null}
@@ -286,7 +291,11 @@ function MovedToOtherLobby({
       </Text>
       <div className="flex flex-wrap gap-2">
         {otherLobbyId ? (
-          <Link href={debateRoomPath(otherLobbyId)} className={hubPillClassName('primary')}>
+          <Link
+            href={debateRoomPath(otherLobbyId)}
+            onClick={() => markLobbyEntry(otherLobbyId, 'other_lobby')}
+            className={hubPillClassName('primary')}
+          >
             Go to that lobby
           </Link>
         ) : null}
@@ -342,7 +351,7 @@ function LobbyRoom({
 
   const copyLink = async () => {
     try {
-      await navigator.clipboard.writeText(`${window.location.origin}${debateRoomPath(lobby.lobby_id)}`);
+      await navigator.clipboard.writeText(lobbyShareUrl(lobby.lobby_id));
       setCopied(true);
     } catch {
       setCopied(false);
@@ -540,7 +549,7 @@ function RosterRow({
           <MicrophoneIcon muted={!micOn} />
         </span>
       ) : null}
-      <LobbyRequestDebate member={member} />
+      <LobbyRequestDebate lobbyId={lobby.lobby_id} member={member} />
       <span
         className={cx(
           'rounded-full px-2 py-0.5 text-footnoteMedium',

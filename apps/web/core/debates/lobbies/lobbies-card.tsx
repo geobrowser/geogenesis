@@ -13,6 +13,7 @@ import { useGeoChatAuth } from '../hooks';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
+import { markLobbyEntry } from './lobby-analytics';
 import { hereLabel, hostsLabel, lobbyErrorMessage, lobbyScheduleLabel, remindedLabel } from './lobby-format';
 import { LobbyAvatarStack } from './lobby-people';
 import { OpenLobbyDialog } from './open-lobby-dialog';
@@ -87,7 +88,11 @@ function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
   return (
     <li className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0" data-testid="lobby-row">
       <div className="flex items-start justify-between gap-2">
-        <Link href={debateRoomPath(lobby.lobby_id)} className="min-w-0 hover:underline">
+        <Link
+          href={debateRoomPath(lobby.lobby_id)}
+          onClick={() => markLobbyEntry(lobby.lobby_id, 'side_panel')}
+          className="min-w-0 hover:underline"
+        >
           <Text as="p" variant="metadataMedium" className="truncate">
             {lobby.name}
           </Text>
@@ -95,6 +100,7 @@ function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
         {lobby.open ? (
           <Link
             href={debateRoomPath(lobby.lobby_id)}
+            onClick={() => markLobbyEntry(lobby.lobby_id, 'side_panel')}
             className={hubPillClassName(lobby.viewer_on_roster ? 'secondary' : 'primary')}
           >
             {lobby.viewer_on_roster ? 'Open' : 'Join'}

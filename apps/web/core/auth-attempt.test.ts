@@ -66,6 +66,18 @@ it('reports each onboarding step once per sign-in attempt', () => {
   ]);
 });
 
+// GEO-3126: a sign-up from a lobby's shared link is counted by these fields on the completed attempt.
+it('carries a lobby sign-in’s target and link source through to the completed attempt', () => {
+  const lobby = { link_source: 'lobby', auth_control: 'join_lobby', target_type: 'debate_lobby', target_id: 'lobby1' };
+  beginAuthAttempt(lobby);
+  openAuthAttempt();
+  finishAuthAttempt('signed_up');
+
+  for (const event of ['auth_attempt_started', 'auth_prompt_viewed', 'auth_attempt_completed']) {
+    expect(capture).toHaveBeenCalledWith(event, expect.objectContaining(lobby));
+  }
+});
+
 describe('durable sign-in attempts', () => {
   it('retains an immutable entry through navigation and a new tab', () => {
     const properties = { ...entry, origin_entity_ids: ['debate-1'], email: 'not-stored@example.com' };
