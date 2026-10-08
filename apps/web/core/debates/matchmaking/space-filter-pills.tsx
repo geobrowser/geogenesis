@@ -9,10 +9,10 @@ import { normId } from '~/core/utils/norm-id';
 
 import { Skeleton } from '~/design-system/skeleton';
 
+import { FacetPill } from './facet-pill';
 import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
-import { SpaceThumb } from './hub-facet-rail';
 import { HubPillButton } from './hub-pill-button';
-import { formatFacetCount, orderFacetOptions } from './topic-facets';
+import { orderFacetOptions } from './topic-facets';
 
 /**
  * Spaces drawn before the row folds the rest behind "N more". Enough for the handful of spaces that
@@ -114,26 +114,18 @@ export function SpaceFilterPills({
         const label = spaceLabel(labelsById, space.id);
         const on = isSelected(space.id);
         return (
-          <HubPillButton
+          <FacetPill
             key={space.id}
-            variant={on ? 'primary' : 'secondary'}
-            aria-pressed={on}
+            picked={on}
+            // The row draws skeletons until names land, so a name still missing here never will.
+            label={label?.name ?? 'Space'}
+            fallbackLabel="Space"
+            space={{ id: space.id, image: label?.image ?? null }}
+            count={space.count}
+            countsPending={countsPending}
             onClick={() => onSpaceToggle(space.id)}
-            className="gap-1.5 pl-1.5"
             {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'Space pill', 'filter')}
-          >
-            <SpaceThumb spaceId={space.id} image={label?.image ?? null} />
-            <span className="max-w-[160px] truncate">{label?.name ?? 'Space'}</span>
-            <span
-              className={cx(
-                'tabular-nums transition-opacity',
-                on ? 'text-white/70' : 'text-grey-04',
-                countsPending && 'opacity-50'
-              )}
-            >
-              {formatFacetCount(space.count)}
-            </span>
-          </HubPillButton>
+          />
         );
       })}
       {hiddenCount > 0 || (expanded && ordered.length > SPACE_PILLS_BEFORE_MORE) ? (

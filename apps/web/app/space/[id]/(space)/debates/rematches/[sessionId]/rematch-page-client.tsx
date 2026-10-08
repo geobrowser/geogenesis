@@ -68,7 +68,7 @@ import {
   claimTopicsById,
   countBy,
   keepSelectableTopics,
-  narrowingTopics,
+  narrowingOptions,
   orderFacetOptions,
   toggleId,
   topicNameMatches,
@@ -109,8 +109,8 @@ import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
-import { useMediaQuery } from '~/core/hooks/use-media-query';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
@@ -179,9 +179,6 @@ function listLandingState(pending: boolean, rows: number): LandingState {
 const SEARCH_TOPIC_LIMIT = 20;
 
 const NO_IDS: string[] = [];
-
-/** Below this a phone keeps the space and topic menus, the way the calendar does (GEO-3223). */
-const PHONE_QUERY = '(max-width: 767px)';
 
 export function resolveLandingTab(states: ReadonlyArray<readonly [PickerTab, LandingState]>): PickerTab | null {
   for (const [tab, state] of states) {
@@ -1159,6 +1156,24 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [topicIds, topicsByClaimId]
   );
 
+  /** A row's topics, as assigned in the space its card is drawn under. */
+  const topicsOfRow = React.useCallback(
+    (claim: DebateRematchClaim) => topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? [],
+    [topicsByClaimId]
+  );
+  /** The topics these rows carry, each counted once per row: a topic menu's options. */
+  const countRowTopics = React.useCallback(
+    (rows: DebateRematchClaim[]) =>
+      countBy(rows.flatMap(claim => topicsOfRow(claim).map(topic => ({ id: topic.id, name: topic.name })))),
+    [topicsOfRow]
+  );
+  /** The topics on a row whose names the search text matches — the search's other way in (GEO-3223). */
+  const searchTopicsOn = React.useCallback(
+    (claim: DebateRematchClaim) =>
+      debouncedSearch ? topicsOfRow(claim).filter(topic => topicNameMatches(topic.name, debouncedSearch)) : [],
+    [debouncedSearch, topicsOfRow]
+  );
+
   /**
    * Whether the pair have debated this claim against each other before, on any day (GEO-3120).
    *
@@ -1954,12 +1969,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // Explore's query answers a search.
   const passesSearch = React.useCallback(
     (claim: DebateRematchClaim) =>
-      !debouncedSearch ||
-      claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
-      (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).some(topic =>
-        topicNameMatches(topic.name, debouncedSearch)
-      ),
-    [debouncedSearch, topicsByClaimId]
+      !debouncedSearch || claimTextMatches(claim, debouncedSearch) || searchTopicsOn(claim).length > 0,
+    [debouncedSearch, searchTopicsOn]
   );
 
   // Both menus come from the server's own count over the tag, each narrowed by every dimension but
@@ -2033,18 +2044,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   // what appears alongside the selection and nothing on it can lead to an empty list.
   const facetTopics = React.useMemo(() => {
     if (graphFiltered) return orderFacetOptions(taggedTopicFacet.topics, topicIds);
-    const source = countBy(
-      facetClaims
-        .filter(claim => passesSpace(claim) && passesSearch(claim) && passesTopics(claim))
-        .flatMap(claim =>
-          (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).map(topic => ({
-            id: topic.id,
-            name: topic.name,
-          }))
-        )
+    const source = countRowTopics(
+      facetClaims.filter(claim => passesSpace(claim) && passesSearch(claim) && passesTopics(claim))
     );
     return orderFacetOptions(source, topicIds);
   }, [
+    countRowTopics,
     facetClaims,
     graphFiltered,
     passesSearch,
@@ -2052,7 +2057,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     passesTopics,
     taggedTopicFacet.topics,
     topicIds,
-    topicsByClaimId,
   ]);
 
   /**
@@ -2612,7 +2616,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * GEO-3223. A desktop draws the space and topic filters as pill rows; a phone keeps the menus, as
    * the calendar does, because two rows of pills would push the first claim off a phone's screen.
    */
-  const isPhone = useMediaQuery(PHONE_QUERY);
+  const isPhone = useIsPhoneLayout();
   const setTopicPicked = (topicId: string) => setTopicIds(current => toggleId(current, topicId));
 
   /**
@@ -2640,7 +2644,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    */
   const pillOptions = React.useMemo<FacetPillOption[]>(() => {
     const keep = <T extends { id: string; count: number }>(options: T[], picked: string[]) =>
-      typing ? options : narrowingTopics(options, listedCount, picked);
+      typing ? options : narrowingOptions(options, listedCount, picked);
     const spaces = keep(facetSpaces, spaceIds).map(space => {
       const label = spaceLabel(spaceLabelsById, space.id);
       return {
@@ -2675,18 +2679,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     [facetClaims, graphFiltered, passesSpace, passesTopics]
   );
   const suggestionSource = React.useMemo(
-    () =>
-      unsearchedFacetClaims === null
-        ? unsearchedTaggedTopics.topics
-        : countBy(
-            unsearchedFacetClaims.flatMap(claim =>
-              (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).map(topic => ({
-                id: topic.id,
-                name: topic.name,
-              }))
-            )
-          ),
-    [topicsByClaimId, unsearchedFacetClaims, unsearchedTaggedTopics.topics]
+    () => (unsearchedFacetClaims === null ? unsearchedTaggedTopics.topics : countRowTopics(unsearchedFacetClaims)),
+    [countRowTopics, unsearchedFacetClaims, unsearchedTaggedTopics.topics]
   );
   const suggestedTopics = searchOnly
     ? NO_TOPIC_SUGGESTIONS
@@ -2697,10 +2691,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * otherwise "nuclear" lists a claim that never says the word, and it reads as a mistake.
    */
   const topicMatchCaptionFor = (claim: DebateRematchClaim) => {
-    if (!debouncedSearch || claim.claim.claim.toLowerCase().includes(debouncedSearch.toLowerCase())) return null;
-    const matched = (topicsFor(topicsByClaimId, claim.claim.claim_entity_id, claim.claim.space_id) ?? []).filter(
-      topic => topicNameMatches(topic.name, debouncedSearch)
-    );
+    if (!debouncedSearch || claimTextMatches(claim, debouncedSearch)) return null;
+    const matched = searchTopicsOn(claim);
     return matched.length > 0 ? <TopicMatchCaption names={matched.map(topic => topic.name ?? 'Topic')} /> : null;
   };
 
@@ -2729,6 +2721,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ) : tab === 'opponent' ? (
       <HideAgreedSwitch analyticsSurface="rematch" checked={hideAgreed} onChange={setHideAgreed} />
     ) : null;
+
+  const desktopListSwitch = !isPhone && !searchOnly ? listSwitch : null;
 
   // Only where a curator has made a page for this pairing. Without one there is a single option, and
   // a menu of one is a control that cannot do anything.
@@ -2788,6 +2782,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         )
       : [];
   const visibleCount = tab === 'debate' ? visibleDebateItems.length : visibleClaims.length;
+  const opponentNoteShown = activeTab === 'opponent' && !tabIsLoading && visibleCount > 0;
 
   /**
    * GEO-3148. The strip, left to right in the order the pair land on them, so wherever they land the
@@ -3017,10 +3012,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 setSearch('');
               }}
             />
-            {/* Under the search box at the right on a desktop: it changes which rows the list
-                shows rather than narrowing by a space or topic, so it sits with the list, apart
-                from the pills. A phone keeps it at the end of its menu row. */}
-            {!isPhone && !searchOnly && listSwitch ? <div className="flex justify-end">{listSwitch}</div> : null}
           </div>
         </div>
 
@@ -3043,11 +3034,22 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         )}
 
         {/* GEO-3148. The one thing this list cannot show by itself: what turns a claim here into a
-            match. Only once there are claims to say it about. */}
-        {activeTab === 'opponent' && !tabIsLoading && visibleCount > 0 ? (
-          <Text as="p" variant="footnote" color="grey-04" className="mb-3">
-            Take the other side of one of {remoteFirstName}’s claims to make it a match you can debate.
-          </Text>
+            match. Only once there are claims to say it about.
+
+            On a desktop the list's switch shares its line, at the right (GEO-3223): it changes
+            which rows the list shows rather than narrowing by a space or topic, so it sits with
+            the list rather than with the pills. A phone keeps it at the end of its menu row. */}
+        {opponentNoteShown || desktopListSwitch ? (
+          <div className="mb-3 flex items-center gap-3">
+            <div className="min-w-0 flex-1">
+              {opponentNoteShown ? (
+                <Text as="p" variant="footnote" color="grey-04">
+                  Take the other side of one of {remoteFirstName}’s claims to make it a match you can debate.
+                </Text>
+              ) : null}
+            </div>
+            {desktopListSwitch}
+          </div>
         ) : null}
 
         <HubQueryState
@@ -3575,21 +3577,31 @@ const DEBATE_CLAIM_PUBLISH_POLL_MS = 15_000;
 /** Which turn of the debate a claim came from, by its speaker. */
 const NO_TOPIC_SUGGESTIONS: { id: string; name: string | null; count: number }[] = [];
 
-/** Which topics a search matched a claim through, when its own text did not match (GEO-3223). */
-function TopicMatchCaption({ names }: { names: string[] }) {
+/** Whether a claim's own text contains what was searched for. */
+function claimTextMatches(claim: DebateRematchClaim, search: string): boolean {
+  return claim.claim.claim.toLowerCase().includes(search.toLowerCase());
+}
+
+/** A line of context under a claim card's body. */
+function CardCaption({ children }: { children: React.ReactNode }) {
   return (
     <Text as="p" variant="footnote" color="grey-04" className="mt-2">
-      Tagged <span className="text-text">{names.join(', ')}</span>
+      {children}
     </Text>
   );
 }
 
-function DebateTurnCaption({ speaker }: { speaker: string | null }) {
+/** Which topics a search matched a claim through, when its own text did not match (GEO-3223). */
+function TopicMatchCaption({ names }: { names: string[] }) {
   return (
-    <Text as="p" variant="footnote" color="grey-04" className="mt-2">
-      {speaker ? `Said by ${speaker}` : 'Said in this debate'}
-    </Text>
+    <CardCaption>
+      Tagged <span className="text-text">{names.join(', ')}</span>
+    </CardCaption>
   );
+}
+
+function DebateTurnCaption({ speaker }: { speaker: string | null }) {
+  return <CardCaption>{speaker ? `Said by ${speaker}` : 'Said in this debate'}</CardCaption>;
 }
 
 /**

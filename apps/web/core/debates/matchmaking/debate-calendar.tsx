@@ -6,7 +6,7 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
-import { useMediaQuery } from '~/core/hooks/use-media-query';
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -71,9 +71,6 @@ const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
 const EMPTY_REQUESTS: ScheduledDebateRequest[] = [];
 
-/** Matches `md:` in styles.css: phones get the list by day instead of the grid. */
-const PHONE_QUERY = '(max-width: 767px)';
-
 /**
  * A row's chips: the given half-hours, and whether they have more beyond them. `viewerIsFree` only
  * for a viewer with hours, as on the People tab: without them every chip stays plain.
@@ -120,7 +117,8 @@ export function DebateCalendar() {
   const router = useRouter();
   const pathname = usePathname();
   const from = searchParams?.get(CALENDAR_FROM_PARAM);
-  const isPhone = useMediaQuery(PHONE_QUERY);
+  // Phones get the list by day instead of the grid.
+  const isPhone = useIsPhoneLayout();
 
   // Admins get a second view, of everyone's scheduled debates (GEO-2943). The admin list is also the
   // admin check, so it is read for every signed-in viewer and refused for all but the allowlist.

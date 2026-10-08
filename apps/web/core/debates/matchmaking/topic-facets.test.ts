@@ -13,7 +13,7 @@ import {
   keepSelectableTopic,
   keepSelectableTopics,
   keepSelectedVisible,
-  narrowingTopics,
+  narrowingOptions,
   orderFacetOptions,
   topicNameMatches,
   topicSuggestions,
@@ -447,22 +447,22 @@ describe('topicNameMatches (GEO-3223)', () => {
   });
 });
 
-describe('narrowingTopics (GEO-3223)', () => {
+describe('narrowingOptions (GEO-3223)', () => {
   const topics = [
     { id: 'topic-ai', count: 4 },
     { id: 'topic-jobs', count: 2 },
   ];
 
   it('leaves out a topic every listed claim carries', () => {
-    expect(narrowingTopics(topics, 4, []).map(topic => topic.id)).toEqual(['topic-jobs']);
+    expect(narrowingOptions(topics, 4, []).map(topic => topic.id)).toEqual(['topic-jobs']);
   });
 
   it('keeps a picked topic, so it can be un-picked', () => {
-    expect(narrowingTopics(topics, 4, ['topic-ai']).map(topic => topic.id)).toEqual(['topic-ai', 'topic-jobs']);
+    expect(narrowingOptions(topics, 4, ['topic-ai']).map(topic => topic.id)).toEqual(['topic-ai', 'topic-jobs']);
   });
 
   it('drops nothing while the total is unknown', () => {
-    expect(narrowingTopics(topics, 0, [])).toEqual(topics);
+    expect(narrowingOptions(topics, 0, [])).toEqual(topics);
   });
 });
 

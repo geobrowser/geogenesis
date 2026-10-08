@@ -6,18 +6,7 @@ import { Text } from '~/design-system/text';
 
 import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
 import { HubPillButton } from './hub-pill-button';
-import { formatFacetCount } from './topic-facets';
-
-/** Where the typed text starts a word in `name`, for the bold part of a suggestion. */
-function matchStart(name: string, query: string): number {
-  const haystack = name.toLowerCase();
-  const needle = query.trim().toLowerCase();
-  if (!needle) return -1;
-  for (let index = haystack.indexOf(needle); index !== -1; index = haystack.indexOf(needle, index + 1)) {
-    if (index === 0 || !/[\p{L}\p{N}]/u.test(haystack[index - 1]!)) return index;
-  }
-  return -1;
-}
+import { formatFacetCount, topicNameMatchIndex } from './topic-facets';
 
 /**
  * The topics matching what is typed in the search box, as pills under it.
@@ -48,7 +37,7 @@ export function TopicSearchSuggestions({
       </Text>
       {topics.map(topic => {
         const name = topic.name ?? 'Topic';
-        const start = matchStart(name, query);
+        const start = topicNameMatchIndex(name, query);
         const end = start + query.trim().length;
         return (
           <HubPillButton

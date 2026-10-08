@@ -348,24 +348,29 @@ const WORD_START = /[\p{L}\p{N}]/u;
  * phrase starting at a word, so "nuclear po" still finds "Nuclear power".
  */
 export function topicNameMatches(name: string | null | undefined, query: string): boolean {
+  return topicNameMatchIndex(name, query) !== -1;
+}
+
+/** Where {@link topicNameMatches} found the text in `name`, or -1 — for drawing the match in bold. */
+export function topicNameMatchIndex(name: string | null | undefined, query: string): number {
   const needle = query.trim().toLowerCase();
-  if (!name || !needle) return false;
+  if (!name || !needle) return -1;
   const haystack = name.toLowerCase();
   for (let index = haystack.indexOf(needle); index !== -1; index = haystack.indexOf(needle, index + 1)) {
-    if (index === 0 || !WORD_START.test(haystack[index - 1]!)) return true;
+    if (index === 0 || !WORD_START.test(haystack[index - 1]!)) return index;
   }
-  return false;
+  return -1;
 }
 
 /**
- * The topics a row of pills should offer: those that can still narrow the list.
+ * The spaces or topics a row of pills should offer: those that can still narrow the list.
  *
- * A topic every listed claim carries changes nothing when picked, so it is left out — on a list of
- * one space's AI claims, "Artificial intelligence" is every row and offering it is noise. A picked
- * topic always stays, because the row is also how it gets un-picked. `total` of zero is "not known
- * yet", which drops nothing rather than everything.
+ * One every listed claim carries changes nothing when picked, so it is left out — on a list of one
+ * space's AI claims, "Artificial intelligence" is every row and offering it is noise, and the space
+ * itself is too. A picked one always stays, because the row is also how it gets un-picked. `total`
+ * of zero is "not known yet", which drops nothing rather than everything.
  */
-export function narrowingTopics<T extends { id: string; count: number }>(
+export function narrowingOptions<T extends { id: string; count: number }>(
   topics: T[],
   total: number,
   picked: string[]
@@ -382,7 +387,7 @@ export const TOPIC_SUGGESTION_LIMIT = 5;
  * The topics to suggest under the search box for what was typed, most claims first.
  *
  * Leaves out what is already picked, since suggesting it would add nothing, and, where `total` is
- * known, anything carried by every listed claim, for the reason {@link narrowingTopics} gives.
+ * known, anything carried by every listed claim, for the reason {@link narrowingOptions} gives.
  */
 export function topicSuggestions<T extends { id: string; name: string | null; count: number }>(
   topics: T[],

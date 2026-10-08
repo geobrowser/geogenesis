@@ -6,13 +6,10 @@ import cx from 'classnames';
 
 import { normId } from '~/core/utils/norm-id';
 
-import { Skeleton } from '~/design-system/skeleton';
-
+import { FacetPill } from './facet-pill';
 import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from './hub-analytics';
-import { SpaceThumb } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubPillButton } from './hub-pill-button';
-import { formatFacetCount } from './topic-facets';
 
 /** How many lines of pills the row takes before the rest go behind "…", unless picks need more. */
 export const FACET_PILL_LINES = 2;
@@ -257,37 +254,24 @@ export function FacetFilterPills({
     </HubPillButton>
   );
 
-  const pill = (option: FacetPillOption, props: React.ComponentProps<typeof HubPillButton> = {}) => {
-    const on = isPicked(option.id);
-    const isSpace = option.kind === 'space';
-    return (
-      <HubPillButton
-        key={option.id}
-        variant={on ? 'primary' : 'secondary'}
-        aria-pressed={on}
-        onClick={() => onToggle(option)}
-        className={cx('gap-1.5', isSpace && 'pl-1.5')}
-        {...debateSurfaceAnalyticsAttributes(analyticsSurface, isSpace ? 'Space pill' : 'Topic pill', 'filter')}
-        {...props}
-      >
-        {isSpace ? <SpaceThumb spaceId={option.id} image={option.image ?? null} /> : null}
-        {option.name === null && isSpace ? (
-          <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
-        ) : (
-          <span className="max-w-[200px] truncate">{option.name ?? 'Topic'}</span>
-        )}
-        <span
-          className={cx(
-            'tabular-nums transition-opacity',
-            on ? 'text-white/70' : 'text-grey-04',
-            countsPending && 'opacity-50'
-          )}
-        >
-          {formatFacetCount(option.count)}
-        </span>
-      </HubPillButton>
-    );
-  };
+  const pill = (option: FacetPillOption, props: React.ComponentProps<typeof HubPillButton> = {}) => (
+    <FacetPill
+      key={option.id}
+      picked={isPicked(option.id)}
+      label={option.name}
+      fallbackLabel={option.kind === 'space' ? 'Space' : 'Topic'}
+      space={option.kind === 'space' ? { id: option.id, image: option.image ?? null } : undefined}
+      count={option.count}
+      countsPending={countsPending}
+      onClick={() => onToggle(option)}
+      {...debateSurfaceAnalyticsAttributes(
+        analyticsSurface,
+        option.kind === 'space' ? 'Space pill' : 'Topic pill',
+        'filter'
+      )}
+      {...props}
+    />
+  );
 
   const moreTrigger = (
     <HubPillButton

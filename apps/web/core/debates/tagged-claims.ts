@@ -447,6 +447,39 @@ const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<
   Record<string, unknown>
 >;
 
+/** One page of tagged claims under `filter` — the request behind the list, a search page and its topic matches. */
+function fetchTaggedClaimsPage({
+  tagId,
+  filter,
+  first,
+  after,
+  signal,
+}: {
+  tagId: string;
+  filter: ReturnType<typeof taggedEntityFilter>;
+  first: number;
+  after: string | null;
+  signal?: AbortSignal;
+}) {
+  return Effect.runPromise(
+    graphql({
+      query: taggedClaimsDocument,
+      decoder: decodeTaggedClaimsPage,
+      variables: {
+        tagPropertyId: TAG_PROPERTY_ID,
+        tagId,
+        claimTypeId: CLAIM_TYPE_ID,
+        topicsPropertyId: TOPICS_PROPERTY_ID,
+        propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
+        filter,
+        first,
+        after,
+      },
+      signal,
+    })
+  );
+}
+
 /**
  * Deliberately not under `'debates'`, for the same reason as the claim picker's key: that root is
  * what the gateway reconciles and refetches on every (re)connect, and these rows come from the
@@ -553,23 +586,13 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     queryKey: taggedClaimsQueryKey(tagId, filters, search.claimIds),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: taggedClaimsDocument,
-          decoder: decodeTaggedClaimsPage,
-          variables: {
-            tagPropertyId: TAG_PROPERTY_ID,
-            tagId,
-            claimTypeId: CLAIM_TYPE_ID,
-            topicsPropertyId: TOPICS_PROPERTY_ID,
-            propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
-            filter: taggedEntityFilter(tagId, filters, null),
-            first: TAGGED_CLAIMS_PAGE_SIZE,
-            after: pageParam,
-          },
-          signal,
-        })
-      ),
+      fetchTaggedClaimsPage({
+        tagId,
+        filter: taggedEntityFilter(tagId, filters, null),
+        first: TAGGED_CLAIMS_PAGE_SIZE,
+        after: pageParam,
+        signal,
+      }),
     getNextPageParam: page => (page.hasNextPage ? page.endCursor : undefined),
     // Narrowing a list should narrow it, not blank it and fill it in again. Every filter mints a
     // new key, so without this the rows vanish for a round trip on each pick.
@@ -594,27 +617,17 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
       // with `undefined` and the list came back empty while both requests had succeeded.
       queryKey: taggedSearchClaimsQueryKey(tagId, filters, ids),
       queryFn: ({ signal }: { signal?: AbortSignal }) =>
-        Effect.runPromise(
-          graphql({
-            query: taggedClaimsDocument,
-            decoder: decodeTaggedClaimsPage,
-            variables: {
-              tagPropertyId: TAG_PROPERTY_ID,
-              tagId,
-              claimTypeId: CLAIM_TYPE_ID,
-              topicsPropertyId: TOPICS_PROPERTY_ID,
-              propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
-              // The ids of this page only. The tag, the topics and the spaces still narrow here, so
-              // a claim the search matched but a topic filter excludes never reaches the list.
-              // Without the topics the text matched: those rows are their own request below, and
-              // here they would come back on every page.
-              filter: taggedEntityFilter(tagId, { ...filters, searchTopicIds: undefined }, ids),
-              first: ids.length,
-              after: null,
-            },
-            signal,
-          })
-        ),
+        // The ids of this page only. The tag, the topics and the spaces still narrow here, so
+        // a claim the search matched but a topic filter excludes never reaches the list.
+        // Without the topics the text matched: those rows are their own request below, and
+        // here they would come back on every page.
+        fetchTaggedClaimsPage({
+          tagId,
+          filter: taggedEntityFilter(tagId, { ...filters, searchTopicIds: undefined }, ids),
+          first: ids.length,
+          after: null,
+          signal,
+        }),
       staleTime: TAGGED_STALE_TIME,
       // No `placeholderData` here, unlike every other query in this module. It is the right tool
       // and it does not reach: `useQueries` rebuilds its observers from the array each render, so a
@@ -650,23 +663,13 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     ] as const,
     queryFn: ({ signal }) => {
       const { and } = taggedEntityFilter(tagId, { ...filters, search: '', searchTopicIds: undefined }, null);
-      return Effect.runPromise(
-        graphql({
-          query: taggedClaimsDocument,
-          decoder: decodeTaggedClaimsPage,
-          variables: {
-            tagPropertyId: TAG_PROPERTY_ID,
-            tagId,
-            claimTypeId: CLAIM_TYPE_ID,
-            topicsPropertyId: TOPICS_PROPERTY_ID,
-            propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
-            filter: { and: [...and, carriesAnyTopic(searchTopicIds ?? [])] },
-            first: TAGGED_CLAIMS_PAGE_SIZE,
-            after: null,
-          },
-          signal,
-        })
-      );
+      return fetchTaggedClaimsPage({
+        tagId,
+        filter: { and: [...and, carriesAnyTopic(searchTopicIds ?? [])] },
+        first: TAGGED_CLAIMS_PAGE_SIZE,
+        after: null,
+        signal,
+      });
     },
     staleTime: TAGGED_STALE_TIME,
     enabled: enabled && searching && searchTopicIds !== null,
