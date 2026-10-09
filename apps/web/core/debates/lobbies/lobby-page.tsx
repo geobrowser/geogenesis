@@ -13,7 +13,9 @@ import { Text } from '~/design-system/text';
 
 import { type DebateLobbyMember, type DebateLobbyView, dashlessId } from '../api';
 import { MicrophoneIcon } from '../debate-room-controls';
+import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
+import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
@@ -28,14 +30,19 @@ import {
 } from './hooks';
 import { lobbyShareUrl, markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
+import { LobbyDebatePairs } from './lobby-debate-pairs';
 import { LobbyDebateSubject } from './lobby-debate-subject';
 import {
   ROLE_LABEL,
+  STATUS_LABEL,
+  debatingCount,
+  debatingLabel,
   hereLabel,
   hostAfterChange,
   hostsLabel,
   isHosting,
   lobbyErrorMessage,
+  memberStatus,
   notYetOpenLabel,
   personName,
   remindedLabel,
@@ -322,6 +329,9 @@ function LobbyRoom({
   voice: { connectionId: string; setVoiceConnected: (connected: boolean) => void; awayAt: string | null };
 }) {
   const currentUserId = useCurrentGeoChatUserId();
+  const { authenticated } = useGeoChatAuth();
+  // The viewer's own toggle, as the availability pill and People tab read it, ahead of the roster's.
+  const ownAvailable = useDebateActivity(authenticated).data?.available_to_debate;
   const end = useEndDebateLobby(lobby.lobby_id);
   const [confirmingEnd, setConfirmingEnd] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -344,8 +354,21 @@ function LobbyRoom({
       </Text>
     ) : (
       <>
-        <RosterSection label="Speakers" lobby={lobby} members={speakers} isViewer={isViewer} />
-        <RosterSection label="Listeners" lobby={lobby} members={listeners} isViewer={isViewer} />
+        <LobbyDebatePairs pairs={lobby.debate_pairs ?? []} members={lobby.members} />
+        <RosterSection
+          label="Speakers"
+          lobby={lobby}
+          members={speakers}
+          isViewer={isViewer}
+          ownAvailable={ownAvailable}
+        />
+        <RosterSection
+          label="Listeners"
+          lobby={lobby}
+          members={listeners}
+          isViewer={isViewer}
+          ownAvailable={ownAvailable}
+        />
       </>
     );
 
@@ -366,9 +389,10 @@ function LobbyRoom({
           <span className="inline-flex items-center gap-1.5 rounded-full bg-green/10 px-2 py-0.5">
             <span aria-hidden className="size-2 rounded-full bg-green" />
             <Text as="span" variant="footnoteMedium" color="text">
-              Live · {hereLabel(lobby.members.length)}
+              Live · {hereLabel(lobby.members.length)} · {debatingLabel(debatingCount(lobby.members))}
             </Text>
           </span>
+          {/* The visitor count for people without an account goes here. */}
           <Text as="span" variant="footnote" color="grey-04">
             {[hosts.length ? `Hosted by ${hostsLabel(hosts)}` : 'No host here', 'Not recorded'].join(' · ')}
           </Text>
@@ -380,6 +404,7 @@ function LobbyRoom({
           <HubPillButton analyticsLabel="Lobby leave" onClick={onLeave}>
             Leave lobby
           </HubPillButton>
+          <HubHeaderControls analyticsSurface="lobby" />
           {isHost ? (
             confirmingEnd ? (
               <>
@@ -486,11 +511,13 @@ function RosterSection({
   lobby,
   members,
   isViewer,
+  ownAvailable,
 }: {
   label: string;
   lobby: DebateLobbyView;
   members: DebateLobbyMember[];
   isViewer: (member: DebateLobbyMember) => boolean;
+  ownAvailable: boolean | undefined;
 }) {
   if (members.length === 0) return null;
   return (
@@ -500,7 +527,13 @@ function RosterSection({
       </Text>
       <ul className="flex flex-col divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white">
         {members.map(member => (
-          <RosterRow key={member.user_id} lobby={lobby} member={member} isViewer={isViewer(member)} />
+          <RosterRow
+            key={member.user_id}
+            lobby={lobby}
+            member={member}
+            isViewer={isViewer(member)}
+            ownAvailable={ownAvailable}
+          />
         ))}
       </ul>
     </section>
@@ -511,11 +544,21 @@ function RosterRow({
   lobby,
   member,
   isViewer,
+  ownAvailable,
 }: {
   lobby: DebateLobbyView;
   member: DebateLobbyMember;
   isViewer: boolean;
+  ownAvailable: boolean | undefined;
 }) {
+  const status = memberStatus(member, isViewer ? ownAvailable : undefined);
+  const statusLine = member.in_debate ? (
+    <LobbyDebateSubject subject={member.in_debate_subject} />
+  ) : member.stepped_out ? (
+    'Stepped out'
+  ) : status ? (
+    STATUS_LABEL[status]
+  ) : null;
   const voice = useLobbyVoiceStates();
   const voiceId = dashlessId(member.user_id).toLowerCase();
   const speaking = voice.speaking.has(voiceId);
@@ -532,15 +575,20 @@ function RosterRow({
         <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt={personName(member)} size={32} />
       </span>
       <div className="min-w-0 flex-1">
-        <LobbyPersonName person={member} interactionSurface="lobby_roster">
-          <Text as="span" variant="metadataMedium" className="truncate">
-            {personName(member)}
-            {isViewer ? ' (you)' : ''}
-          </Text>
-        </LobbyPersonName>
-        {member.in_debate || member.stepped_out ? (
+        <div className="flex min-w-0 items-center gap-1.5">
+          <LobbyPersonName person={member} interactionSurface="lobby_roster">
+            <Text as="span" variant="metadataMedium" className="truncate">
+              {personName(member)}
+              {isViewer ? ' (you)' : ''}
+            </Text>
+          </LobbyPersonName>
+          {member.newcomer ? (
+            <span className="shrink-0 rounded bg-ctaTertiary px-1 text-footnoteMedium text-ctaPrimary">New</span>
+          ) : null}
+        </div>
+        {statusLine ? (
           <Text as="p" variant="footnote" color="grey-04" ellipsize>
-            {member.in_debate ? <LobbyDebateSubject subject={member.in_debate_subject} /> : 'Stepped out'}
+            {statusLine}
           </Text>
         ) : null}
       </div>

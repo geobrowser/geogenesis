@@ -3,6 +3,7 @@ import {
   type DebateLobbyMemberAction,
   type DebateLobbyModerationAction,
   type DebateLobbyModerationEntry,
+  type DebateLobbyPair,
   type DebateLobbyPerson,
   type DebateLobbyRole,
   type DebateLobbyView,
@@ -70,6 +71,51 @@ export function notYetOpenLabel(lobby: { starts_at: string; opens_at: string }, 
 
 export function hereLabel(headcount: number) {
   return `${headcount} here`;
+}
+
+export function debatingLabel(count: number) {
+  return `${count} debating`;
+}
+
+/** Members in a debate. People, not pairs: the lobby card's `debating_count` counts the same way. */
+export function debatingCount(members: Pick<DebateLobbyMember, 'in_debate'>[]) {
+  return members.filter(member => member.in_debate).length;
+}
+
+export type LobbyMemberStatus = 'in_debate' | 'looking' | 'chatting';
+
+export const STATUS_LABEL: Record<LobbyMemberStatus, string> = {
+  in_debate: 'In a debate',
+  looking: 'Looking to debate',
+  chatting: 'Just chatting',
+};
+
+/**
+ * In a debate, else Looking to debate by the availability toggle, else Just chatting. `available`
+ * stands in for the roster's flag; `null` when there is neither, from a geo-chat that predates it.
+ */
+export function memberStatus(
+  member: Pick<DebateLobbyMember, 'in_debate' | 'available_to_debate'>,
+  available: boolean | undefined = member.available_to_debate
+): LobbyMemberStatus | null {
+  if (member.in_debate) return 'in_debate';
+  if (available === undefined) return null;
+  return available ? 'looking' : 'chatting';
+}
+
+/** "Ana vs. Ben"; a pair whose partner is hidden reads as the one name. */
+export function pairLabel(pair: DebateLobbyPair) {
+  return pair.people.map(personName).join(' vs. ');
+}
+
+/** What the pair is debating, from its first lobby member's roster row. */
+export function pairSubject(pair: DebateLobbyPair, members: DebateLobbyMember[]) {
+  for (const person of pair.people) {
+    if (!person.in_lobby) continue;
+    const member = members.find(m => sameUser(m, person));
+    if (member?.in_debate_subject) return member.in_debate_subject;
+  }
+  return null;
 }
 
 export function remindedLabel(count: number) {
