@@ -104,42 +104,58 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
   const id = dashlessId(lobbyId);
   const [state, setState] = React.useState<LobbyGuestSessionState>({ status: 'idle' });
   const [released, setReleased] = React.useState(false);
-  // Bumped by unmount and release; an answer under an older one is dropped.
+  // Bumped by release and handover; an answer under an older one is left at once.
   const generationRef = React.useRef(0);
   const secretRef = React.useRef<string | null>(null);
+  const mountedRef = React.useRef(false);
+  // One start at a time: a remount (StrictMode's included) reuses it rather than taking a second place.
+  const inflightRef = React.useRef<Promise<void> | null>(null);
 
-  const start = React.useCallback(async () => {
-    const generation = generationRef.current;
+  const start = React.useCallback(() => {
     setState({ status: 'starting' });
-    const stored = readGuestSecret(id);
-    const request = async () => {
+    if (inflightRef.current) return inflightRef.current;
+    const task = run().finally(() => {
+      inflightRef.current = null;
+    });
+    inflightRef.current = task;
+    return task;
+
+    async function run() {
+      const generation = generationRef.current;
+      const stored = readGuestSecret(id);
+      const request = async () => {
+        try {
+          return await startDebateLobbyGuest(id, stored ? { guest_secret: stored } : {});
+        } catch (error) {
+          // A reconnect that lost a race: that session is over, so start a new one.
+          if (!stored || !(error instanceof GeoChatRequestError) || error.code !== 'guest_session_ended') throw error;
+          clearGuestSecret(id);
+          return startDebateLobbyGuest(id, {});
+        }
+      };
       try {
-        return await startDebateLobbyGuest(id, stored ? { guest_secret: stored } : {});
+        const session = await request();
+        if (generation !== generationRef.current || !mountedRef.current) {
+          // Nobody listens on this one: give the place back.
+          void leaveDebateLobbyGuest(id, { guest_secret: session.guest_secret }, true).catch(() => undefined);
+          return;
+        }
+        storeGuestSecret(id, session.guest_secret);
+        secretRef.current = session.guest_secret;
+        setState({ status: 'listening', session });
       } catch (error) {
-        // A reconnect that lost a race: that session is over, so start a new one.
-        if (!stored || !(error instanceof GeoChatRequestError) || error.code !== 'guest_session_ended') throw error;
-        clearGuestSecret(id);
-        return startDebateLobbyGuest(id, {});
+        if (generation !== generationRef.current || !mountedRef.current) return;
+        if (error instanceof GeoChatRequestError && error.code === 'lobby_guest_removed') {
+          setState({ status: 'removed' });
+          return;
+        }
+        const delay = error instanceof GeoChatRequestError ? (error.retryAfterMs ?? null) : null;
+        setState({
+          status: 'refused',
+          message: lobbyErrorMessage(error, 'Couldn’t start listening. Try again.'),
+          retryAt: delay === null ? null : Date.now() + delay,
+        });
       }
-    };
-    try {
-      const session = await request();
-      if (generation !== generationRef.current) return;
-      storeGuestSecret(id, session.guest_secret);
-      secretRef.current = session.guest_secret;
-      setState({ status: 'listening', session });
-    } catch (error) {
-      if (generation !== generationRef.current) return;
-      if (error instanceof GeoChatRequestError && error.code === 'lobby_guest_removed') {
-        setState({ status: 'removed' });
-        return;
-      }
-      const delay = error instanceof GeoChatRequestError ? (error.retryAfterMs ?? null) : null;
-      setState({
-        status: 'refused',
-        message: lobbyErrorMessage(error, 'Couldn’t start listening. Try again.'),
-        retryAt: delay === null ? null : Date.now() + delay,
-      });
     }
   }, [id]);
 
@@ -194,6 +210,7 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
   const listeningRef = React.useRef(false);
   listeningRef.current = state.status === 'listening';
   React.useEffect(() => {
+    mountedRef.current = true;
     const leave = () => {
       const secret = secretRef.current;
       if (!secret || releasedRef.current) return;
@@ -207,7 +224,7 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
     return () => {
       window.removeEventListener('pagehide', leave);
       window.removeEventListener('pageshow', restore);
-      generationRef.current += 1;
+      mountedRef.current = false;
       leave();
       secretRef.current = null;
       // After StrictMode's test unmount, lets the remount start again.
@@ -217,7 +234,6 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
 
   /** A fresh token for a full reconnect, on the same guest. */
   const reconnect = React.useCallback(() => {
-    generationRef.current += 1;
     void start();
   }, [start]);
 

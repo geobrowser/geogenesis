@@ -1,5 +1,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
 
+import * as React from 'react';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyGuestSession } from '../api';
@@ -61,6 +63,24 @@ describe('useLobbyGuestSession', () => {
     await waitFor(() => expect(result.current.state.status).toBe('listening'));
     expect(mocks.start).toHaveBeenCalledWith('lobby1', {});
     expect(readGuestSecret('lobby1')).toBe('secret-1');
+  });
+
+  // A second start would take a second place, and its answer would be dropped with the place held.
+  it('takes one place through StrictMode’s remount', async () => {
+    const { result } = renderHook(() => useLobbyGuestSession('lobby1', true), { wrapper: React.StrictMode });
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+    expect(mocks.leave).not.toHaveBeenCalled();
+  });
+
+  it('gives back a place answered after the page went', async () => {
+    let answer!: (value: DebateLobbyGuestSession) => void;
+    mocks.start.mockReturnValue(new Promise(resolve => (answer = resolve)));
+    const { unmount } = renderHook(() => useLobbyGuestSession('lobby1', true));
+    unmount();
+    await act(async () => answer(session('late')));
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late' }, true);
+    expect(readGuestSecret('lobby1')).toBeNull();
   });
 
   it('resumes with the stored secret', async () => {
