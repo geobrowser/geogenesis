@@ -172,6 +172,22 @@ describe('useLobbyGuestSession', () => {
     expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late', admission: 1 }, true);
   });
 
+  // The other tab was removed meanwhile: Listen here asks with the shared secret and gets the removal.
+  it('Listen here after a removal lands on removed, not back in', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'superseded', lease_expires_at: null });
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    await waitFor(() => expect(result.current.state.status).toBe('superseded'));
+
+    mocks.start.mockRejectedValueOnce(new GeoChatRequestError('no', 'lobby_guest_removed', 403));
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.state.status).toBe('removed'));
+    expect(mocks.start).toHaveBeenLastCalledWith('lobby1', { guest_secret: 'secret-1' });
+    expect(readGuestSecret('lobby1')).toBe('secret-1');
+  });
+
   it('resumes with the stored secret', async () => {
     storeGuestSecret('lobby1', 'kept');
     const { result } = renderSession();
