@@ -174,16 +174,40 @@ describe('useLobbyGuestSession', () => {
     expect((result.current.state as { message: string }).message).toMatch(/Lots of people are joining/);
   });
 
-  it('starts afresh when the stored session already ended', async () => {
-    storeGuestSecret('lobby1', 'old');
-    mocks.start
-      .mockRejectedValueOnce(new GeoChatRequestError('ended', 'guest_session_ended', 409))
-      .mockResolvedValueOnce(session('secret-2'));
+  // A reconnect is decided again from the session's state: re-admitted on the same secret, or refused.
+  it('resumes a lapsed session on the same secret, and stays removed when it was removed', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const { result } = renderSession();
     await waitFor(() => expect(result.current.state.status).toBe('listening'));
-    expect(mocks.start).toHaveBeenNthCalledWith(1, 'lobby1', { guest_secret: 'old' });
-    expect(mocks.start).toHaveBeenNthCalledWith(2, 'lobby1', {});
-    expect(readGuestSecret('lobby1')).toBe('secret-2');
+
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'lapsed', lease_expires_at: null });
+    mocks.start.mockResolvedValueOnce(session('secret-1', 'token-2'));
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    await waitFor(() => expect(mocks.start).toHaveBeenNthCalledWith(2, 'lobby1', { guest_secret: 'secret-1' }));
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+
+    mocks.start.mockRejectedValueOnce(new GeoChatRequestError('no', 'lobby_guest_removed', 403));
+    act(() => result.current.reconnect());
+    await waitFor(() => expect(result.current.state.status).toBe('removed'));
+    expect(mocks.start).toHaveBeenLastCalledWith('lobby1', { guest_secret: 'secret-1' });
+    expect(mocks.start).toHaveBeenCalledTimes(3);
+    expect(readGuestSecret('lobby1')).toBe('secret-1');
+  });
+
+  it('backs off a rate-limited heartbeat and keeps listening', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+
+    mocks.heartbeat.mockRejectedValueOnce(new GeoChatRequestError('slow', 'rate_limited', 429, 7_000));
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    expect(mocks.heartbeat).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTimeAsync(6_000));
+    expect(mocks.heartbeat).toHaveBeenCalledTimes(1);
+    await act(async () => vi.advanceTimersByTimeAsync(1_500));
+    expect(mocks.heartbeat).toHaveBeenCalledTimes(2);
+    expect(result.current.state.status).toBe('listening');
+    expect(mocks.start).toHaveBeenCalledTimes(1);
   });
 
   it('stays removed after a removed secret is refused', async () => {

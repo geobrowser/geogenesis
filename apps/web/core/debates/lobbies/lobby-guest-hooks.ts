@@ -73,16 +73,10 @@ const HEARTBEAT_FALLBACK_MS = 20_000;
 /** Where the signed-in path stands: a failed one means this tab stops being a guest. */
 export type LobbyMemberPath = 'pending' | 'joined' | 'failed';
 
-async function requestStart(lobbyId: string) {
+/** Resumes on the stored secret: geo-chat re-admits a lapsed or left session and refuses a removed one. */
+function requestStart(lobbyId: string) {
   const stored = readGuestSecret(lobbyId);
-  try {
-    return await startDebateLobbyGuest(lobbyId, stored ? { guest_secret: stored } : {});
-  } catch (error) {
-    // A reconnect that lost a race: that session is over, so start a new one.
-    if (!stored || !(error instanceof GeoChatRequestError) || error.code !== 'guest_session_ended') throw error;
-    clearGuestSecret(lobbyId);
-    return startDebateLobbyGuest(lobbyId, {});
-  }
+  return startDebateLobbyGuest(lobbyId, stored ? { guest_secret: stored } : {});
 }
 
 /**
