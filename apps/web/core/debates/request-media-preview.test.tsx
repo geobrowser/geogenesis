@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   releaseSession: vi.fn(),
   stopMedia: vi.fn(),
   previewState: 'idle' as string,
+  previewStream: null as unknown,
   previewError: null as string | null,
   /** What `ensurePreview` hands back — the per-device truth the card reads. */
   tracks: [] as { mediaStreamTrack: { kind: string } }[],
@@ -33,7 +34,7 @@ vi.mock('./media-session', async importOriginal => ({
   useOptionalDebateMediaSession: () => ({
     previewState: mocks.previewState,
     previewError: mocks.previewError,
-    previewStream: null,
+    previewStream: mocks.previewStream,
     localTracksRef: { current: mocks.tracks },
     ensurePreview: mocks.ensurePreview,
     beginSession: mocks.beginSession,
@@ -58,6 +59,7 @@ beforeEach(() => {
   mocks.cameraPermission = null;
   mocks.micPermission = null;
   mocks.previewState = 'idle';
+  mocks.previewStream = null;
   mocks.previewError = null;
   mocks.tracks = [{ mediaStreamTrack: { kind: 'audio' } }, { mediaStreamTrack: { kind: 'video' } }];
   mocks.ensurePreview.mockReset().mockImplementation(async (options: { audio?: boolean; video?: boolean } = {}) => {
@@ -181,6 +183,28 @@ describe('DebateRequestMediaPreview', () => {
     );
     expect(await screen.findByText('Joining with mic on, camera off')).toBeInTheDocument();
     expect(screen.queryByText('Joining with mic and camera on')).toBeNull();
+  });
+});
+
+describe('the picture survives the camera being switched off and on', () => {
+  it('attaches the stream to a preview element that was remounted', async () => {
+    const stream = { id: 'live-stream' };
+    mocks.previewStream = stream;
+    mocks.permission = 'granted';
+    mount();
+    await screen.findByText('Joining with mic and camera on');
+    expect(document.querySelector('video')).not.toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    await screen.findByText('Joining with mic on, camera off');
+    expect(document.querySelector('video')).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    await screen.findByText('Joining with mic and camera on');
+
+    const video = document.querySelector('video');
+    expect(video).not.toBeNull();
+    expect((video as HTMLVideoElement & { srcObject: unknown }).srcObject).toBe(stream);
   });
 });
 

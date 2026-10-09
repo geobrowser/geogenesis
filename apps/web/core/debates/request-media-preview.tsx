@@ -156,7 +156,7 @@ function MediaPreview({
     const video = videoRef.current;
     if (!video) return;
     video.srcObject = session.previewStream ?? null;
-  }, [session.previewStream]);
+  }, [session.previewStream, cameraOn]);
 
   const cameraBlocked = permission !== null && isMediaBlocked(permission.camera);
   const micBlocked = permission !== null && isMediaBlocked(permission.microphone);
@@ -173,16 +173,17 @@ function MediaPreview({
 
   return (
     <div className="flex flex-col gap-2">
-      <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
-        <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
-        {!cameraOn && (
-          <div className="absolute inset-0 grid place-items-center bg-grey-01">
-            <div className="size-16 overflow-hidden rounded-full">
-              <Avatar avatarUrl={avatarCid ?? undefined} value={avatarValue ?? undefined} alt="" size={64} />
-            </div>
-          </div>
-        )}
-      </DebateVideoTile>
+      {cameraOn ? (
+        <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
+          <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
+        </DebateVideoTile>
+      ) : (
+        <div className="grid place-items-center py-1">
+          <span className="h-5 w-5 overflow-hidden rounded-full">
+            <Avatar avatarUrl={avatarCid ?? undefined} value={avatarValue ?? undefined} alt="" size={20} />
+          </span>
+        </div>
+      )}
 
       {!blocked && (
         <div className="flex items-center justify-center gap-2">

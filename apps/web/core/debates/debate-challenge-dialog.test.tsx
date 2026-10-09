@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -64,7 +64,14 @@ function renderDialog(props: Partial<React.ComponentProps<typeof DebateChallenge
   );
 }
 
+let permission: PermissionState = 'prompt';
+
 beforeEach(() => {
+  permission = 'prompt';
+  Object.defineProperty(navigator, 'permissions', {
+    configurable: true,
+    value: { query: async () => ({ state: permission }) },
+  });
   media.releaseSession.mockReset();
   media.beginSession.mockReset();
   media.stopMedia.mockReset();
@@ -129,23 +136,51 @@ describe('DebateChallengeDialog', () => {
   });
 
   /*
-   * The switches sit under the tile, not on it. Two 40px circles over a tile this size covered the
-   * avatar they belong to — and while the camera is off that avatar is the only thing saying whose
-   * tile it is.
-   *
-   * Asserted against the real tile, which renders `tileControls` as an overlay inside itself: a
-   * test with the tile mocked passes wherever the buttons are, which is how the controls once
-   * ended up clipped out of sight while every behavioural test was green.
+   * Nothing is framed while there is no picture. A 5:3 tile around a round avatar leaves a grey
+   * band above and below it; the controls used to fill the lower one, and once they moved out it
+   * was empty grey under the face.
    */
-  it('puts the switches below the tile rather than over the avatar', async () => {
+  it('draws no frame while the camera is off', async () => {
     renderDialog();
 
-    const mic = await screen.findByRole('button', { name: /microphone/i });
-    const tile = document.querySelector('section[aria-label="You"]');
-    expect(tile).not.toBeNull();
+    await screen.findByRole('button', { name: /microphone/i });
+    expect(document.querySelector('section[aria-label="You"]')).toBeNull();
+  });
+
+  /*
+   * And once there is a picture, the frame is back and the switches are still under it rather than
+   * over the face.
+   */
+  it('puts the switches below the tile once the camera is on', async () => {
+    permission = 'granted';
+    media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' } }]);
+    renderDialog();
+
+    const tile = await waitFor(() => {
+      const found = document.querySelector('section[aria-label="You"]');
+      expect(found).not.toBeNull();
+      return found;
+    });
+    const mic = screen.getByRole('button', { name: /microphone/i });
+
     expect(tile?.contains(mic)).toBe(false);
-    // And after it in the document, so it reads as a caption to the tile.
     expect(tile?.compareDocumentPosition(mic)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+  });
+
+  /*
+   * Neither side the odd one out. Asserted as an equality rather than against a number, so the
+   * size can be changed in one place without this dictating which one wins.
+   */
+  it('shows the preview avatar at the same size as the summary opposite', async () => {
+    renderDialog();
+    await screen.findByRole('button', { name: /microphone/i });
+
+    const sizes = [...document.querySelectorAll('[class*="overflow-hidden"][class*="rounded-full"]')].map(
+      node => node.className
+    );
+
+    expect(sizes).toHaveLength(2);
+    expect(sizes[0]).toBe(sizes[1]);
   });
 
   // The card still offers the choice, which is what puts the permission prompt before the call
