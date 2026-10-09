@@ -507,7 +507,7 @@ export function LobbyGuestVoice({
    * and says whether it did. Kept by the page, since a fresh token remounts this room.
    */
   onAutoReconnect: () => boolean;
-  /** The server removed this room's identity; the page checks the session for why. */
+  /** Another tab took this room's identity, or the server removed it; the page checks the session for why. */
   onRemoved: () => void;
   /** The member room is taking over and draws its own bar. */
   quiet?: boolean;

@@ -489,7 +489,7 @@ describe('LobbyGuestVoice', () => {
   });
 });
 
-// A join dropped before it ever connected (a kicked identity) otherwise reads "Connecting…" for good.
+// A join dropped before it ever connected otherwise reads "Connecting…" for good.
 describe('a join that never connects', () => {
   const guestToken = token({ can_publish: false, token: 'guest-jwt' });
 
@@ -557,8 +557,8 @@ describe('a join that never connects', () => {
   });
 });
 
-// The backend removes an older admission's identity once a newer one connects; that page must
-// not fight back. Its heartbeat then says superseded.
+// A host's removal or the server's sweep disconnects the identity (PARTICIPANT_REMOVED). The page
+// must not reconnect by itself; its heartbeat says why.
 describe('a room the server removed', () => {
   const guestToken = token({ can_publish: false, token: 'guest-jwt' });
 
