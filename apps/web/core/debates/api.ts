@@ -2827,10 +2827,8 @@ export type DebateLobbyGuestHeartbeat = {
 };
 
 /**
- * Start listening, or resume with `guest_secret` after a reload or to reconnect. Refusals:
- * `429 rate_limited` (`details.scope: "lobby"` for the lobby's own rate), `409 guest_cap_reached`,
- * `409 lobby_voice_full`, `409 lobby_closed`, `503 voice_capacity_reached`, `503 voice_unavailable`,
- * `404 lobby_not_found`, `403 lobby_guest_removed`.
+ * Start listening, or resume with `guest_secret` after a reload or to reconnect. Refusal codes are
+ * mapped in `lobbyErrorMessage`; `403 lobby_guest_removed` means a host removed this secret.
  */
 export async function startDebateLobbyGuest(lobbyId: string, body: { guest_secret?: string }) {
   return geoChatRequest<DebateLobbyGuestSession>(`/debate-lobbies/${lobbyId}/guest`, { method: 'POST', body });

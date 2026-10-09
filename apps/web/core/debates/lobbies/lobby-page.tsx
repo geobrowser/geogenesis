@@ -94,9 +94,8 @@ export function LobbiesUnavailable() {
 const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_COPY.findDebate };
 
 /**
- * The lobby page (GEO-3131): header, roster, access states, presence. Signed out, the same page
- * from the guest view, listening only (GEO-3129). A guest who signs in stays a guest until the
- * member view loads, so the page and its audio never drop out in between.
+ * The lobby page (GEO-3131). Signed out, drawn from the guest view, listening only (GEO-3129).
+ * A guest who signs in stays a guest until the member view loads, so audio never drops.
  */
 export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const { ready, authenticated } = useGeoChatAuth();

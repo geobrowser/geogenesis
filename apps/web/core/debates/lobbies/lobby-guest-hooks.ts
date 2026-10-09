@@ -97,10 +97,8 @@ export type LobbyGuestSessionState =
 const HEARTBEAT_FALLBACK_MS = 20_000;
 
 /**
- * A visitor's guest session: starts listening once the lobby is open, heartbeats, starts again
- * only on `lapsed`, and leaves on unload. `release` hands over to a member join, which ended the
- * session server-side: no more heartbeats and no leave, while the voice plays on until the
- * member room is up.
+ * A visitor's guest session: starts once the lobby is open, heartbeats, restarts only on `lapsed`,
+ * leaves on unload. After `release` (the member join ended it) it sends nothing; its room plays on.
  */
 export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
   const id = dashlessId(lobbyId);

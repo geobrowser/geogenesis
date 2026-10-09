@@ -409,9 +409,8 @@ export const LOBBY_GUEST_VOICE_COPY = {
 } as const;
 
 /**
- * A visitor's listen-only room (GEO-3129). A sibling of the member room rather than a wrapper, so
- * the handover can drop it while the member room keeps playing; the roster's speaking state comes
- * up through `onStates`. No mic and no ownership lease: a guest identity is per tab.
+ * A visitor's listen-only room (GEO-3129). A sibling of the member room, so the handover can drop
+ * it while the member room plays; speaking state goes up through `onStates`.
  */
 export function LobbyGuestVoice({
   token,

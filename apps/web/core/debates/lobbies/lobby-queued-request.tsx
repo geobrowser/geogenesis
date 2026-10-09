@@ -94,9 +94,8 @@ export function useLobbyQueuedRequest() {
 }
 
 /**
- * A debate request tapped without an account (GEO-3131). Queued at the tap and sign-up opens; once
- * the account has a personal space and has joined the lobby, it is sent if the person can still be
- * asked, and the outcome is said either way. One per lobby: a newer tap replaces the older one.
+ * A debate request tapped without an account (GEO-3131), queued through sign-up and sent once the
+ * account has joined, if the person can still be asked. One per lobby; a newer tap replaces it.
  */
 export function LobbyQueuedRequestProvider({
   lobby,
