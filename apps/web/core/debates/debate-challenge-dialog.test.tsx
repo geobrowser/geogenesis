@@ -29,15 +29,6 @@ vi.mock('./media-session', () => ({
   debateChallengeMediaSessionKey: (id: string) => `debate-challenge:${id}`,
 }));
 
-vi.mock('./debate-video-tile', () => ({
-  DebateVideoTile: ({ children, tileControls }: { children: React.ReactNode; tileControls: React.ReactNode }) => (
-    <div data-testid="tile">
-      {tileControls}
-      {children}
-    </div>
-  ),
-}));
-
 const challenge: DebateChallenge = {
   id: 'challenge-1',
   status: 'pending',
@@ -135,6 +126,26 @@ describe('DebateChallengeDialog', () => {
     expect(row).not.toBeNull();
     expect(row?.className).toContain('min-h-24');
     expect(row?.className.split(/\s+/)).not.toContain('h-24');
+  });
+
+  /*
+   * The switches sit under the tile, not on it. Two 40px circles over a tile this size covered the
+   * avatar they belong to — and while the camera is off that avatar is the only thing saying whose
+   * tile it is.
+   *
+   * Asserted against the real tile, which renders `tileControls` as an overlay inside itself: a
+   * test with the tile mocked passes wherever the buttons are, which is how the controls once
+   * ended up clipped out of sight while every behavioural test was green.
+   */
+  it('puts the switches below the tile rather than over the avatar', async () => {
+    renderDialog();
+
+    const mic = await screen.findByRole('button', { name: /microphone/i });
+    const tile = document.querySelector('section[aria-label="You"]');
+    expect(tile).not.toBeNull();
+    expect(tile?.contains(mic)).toBe(false);
+    // And after it in the document, so it reads as a caption to the tile.
+    expect(tile?.compareDocumentPosition(mic)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   // The card still offers the choice, which is what puts the permission prompt before the call

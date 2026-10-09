@@ -173,36 +173,7 @@ function MediaPreview({
 
   return (
     <div className="flex flex-col gap-2">
-      <DebateVideoTile
-        participantPosition={null}
-        active={false}
-        tileLabel="You"
-        inactiveIndicatorId="local"
-        tileControls={
-          blocked ? null : (
-            <div className="flex items-center gap-2">
-              {!micBlocked && (
-                <DebateTileToggleButton
-                  ariaLabel={micOn ? 'Turn microphone off' : 'Turn microphone on'}
-                  enabled={micOn}
-                  onClick={() => toggle({ micOn: !micOn })}
-                >
-                  <MicrophoneIcon muted={!micOn} />
-                </DebateTileToggleButton>
-              )}
-              {!cameraBlocked && (
-                <DebateTileToggleButton
-                  ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
-                  enabled={cameraOn}
-                  onClick={() => toggle({ cameraOn: !cameraOn })}
-                >
-                  <CameraIcon disabled={!cameraOn} />
-                </DebateTileToggleButton>
-              )}
-            </div>
-          )
-        }
-      >
+      <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
         <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
         {!cameraOn && (
           <div className="absolute inset-0 grid place-items-center bg-grey-01">
@@ -212,6 +183,29 @@ function MediaPreview({
           </div>
         )}
       </DebateVideoTile>
+
+      {!blocked && (
+        <div className="flex items-center justify-center gap-2">
+          {!micBlocked && (
+            <DebateTileToggleButton
+              ariaLabel={micOn ? 'Turn microphone off' : 'Turn microphone on'}
+              enabled={micOn}
+              onClick={() => toggle({ micOn: !micOn })}
+            >
+              <MicrophoneIcon muted={!micOn} />
+            </DebateTileToggleButton>
+          )}
+          {!cameraBlocked && (
+            <DebateTileToggleButton
+              ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+              enabled={cameraOn}
+              onClick={() => toggle({ cameraOn: !cameraOn })}
+            >
+              <CameraIcon disabled={!cameraOn} />
+            </DebateTileToggleButton>
+          )}
+        </div>
+      )}
 
       {blocked ? (
         <Text variant="footnote" color="grey-04">
