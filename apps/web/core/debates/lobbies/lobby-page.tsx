@@ -48,11 +48,26 @@ import {
   remindedLabel,
   rosterOrder,
 } from './lobby-format';
+import { LobbyGuestBanner, LobbyGuestCount } from './lobby-guest';
+import {
+  LobbyGuestProvider,
+  lobbyViewForGuest,
+  useDebateLobbyGuestView,
+  useLobbyGuestSession,
+} from './lobby-guest-hooks';
 import { LobbyMemberMenu } from './lobby-member-actions';
 import { LobbyHandControl, LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
 import { LobbyPersonName } from './lobby-people';
+import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { LobbyRequestDebate } from './lobby-request-debate';
-import { LobbyVoice, useLobbyVoiceStates } from './lobby-voice';
+import {
+  LobbyGuestVoice,
+  LobbyVoice,
+  type LobbyVoiceStates,
+  LobbyVoiceStatesProvider,
+  NO_LOBBY_VOICE,
+  useLobbyVoiceStates,
+} from './lobby-voice';
 
 const HANDOFF_NOTICE_MS = 8_000;
 
@@ -67,6 +82,8 @@ export const LOBBY_COPY = {
   removed: 'You were removed from this lobby.',
   steppedOut: 'You stepped out to debate. You’re still on the roster.',
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
+  guestRemoved: 'A host removed you from this lobby.',
+  guestRemovedInvite: 'Create an account to come back and take part.',
 } as const;
 
 /** `/debate/{id}` when the room is a lobby and `lobbyJoining` is off. */
@@ -76,26 +93,73 @@ export function LobbiesUnavailable() {
 
 const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_COPY.findDebate };
 
-/** The lobby page (GEO-3131), minimal: header, roster, access states, presence. Signed in only. */
+/**
+ * The lobby page (GEO-3131): header, roster, access states, presence. Signed out, the same page
+ * from the guest view, listening only (GEO-3129). A guest who signs in stays a guest until the
+ * member view loads, so the page and its audio never drop out in between.
+ */
 export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
+  const { ready, authenticated } = useGeoChatAuth();
+  const signedOut = ready && !authenticated;
   const lobbyQuery = useDebateLobby(lobbyId);
-  const lobby = lobbyQuery.data ?? null;
+  const [wasGuest, setWasGuest] = React.useState(false);
+  if (signedOut && !wasGuest) setWasGuest(true);
+  const guest = signedOut || (wasGuest && lobbyQuery.data === undefined);
+  const guestQuery = useDebateLobbyGuestView(lobbyId, { enabled: guest, poll: true });
+  const guestLobbyData = guestQuery.data?.lobby;
+  const guestLobby = React.useMemo(() => (guestLobbyData ? lobbyViewForGuest(guestLobbyData) : null), [guestLobbyData]);
+  const lobby = guest ? guestLobby : (lobbyQuery.data ?? null);
   const admitted = lobby?.access.status === 'admitted';
   const presence = useLobbyPresence(
     lobbyId,
-    admitted,
+    admitted && !guest,
     lobby?.viewer.stepped_out ?? false,
     lobby?.viewer.connected ?? false,
     lobby?.viewer.removed ?? false
   );
+  const guestSession = useLobbyGuestSession(lobbyId, guest && admitted);
+  // The member join ended the guest session; its room plays on until the member room is up.
+  const { release } = guestSession;
+  const memberJoined = presence.state.status === 'joined';
+  React.useEffect(() => {
+    if (memberJoined) release();
+  }, [memberJoined, release]);
   // `debate.lobby_changed` only reaches people inside; until then this page hears opening,
-  // arrivals and end through the matchmaking scope's `debate.lobbies_changed`.
+  // arrivals and end through the matchmaking scope's `debate.lobbies_changed`. A guest polls.
   const waitingOutside =
-    lobby !== null && !lobby.viewer.connected && (admitted || lobby.access.status === 'not_yet_open');
+    !guest && lobby !== null && !lobby.viewer.connected && (admitted || lobby.access.status === 'not_yet_open');
   useMatchmakingScope(waitingOutside);
 
+  return (
+    <LobbyGuestProvider value={guest}>
+      <LobbyAccess
+        lobby={lobby}
+        failed={(guest ? guestQuery : lobbyQuery).isError}
+        guest={guest}
+        presence={presence}
+        guestSession={guestSession}
+      />
+    </LobbyGuestProvider>
+  );
+}
+
+type LobbyGuestSession = ReturnType<typeof useLobbyGuestSession>;
+
+function LobbyAccess({
+  lobby,
+  failed,
+  guest,
+  presence,
+  guestSession,
+}: {
+  lobby: DebateLobbyView | null;
+  failed: boolean;
+  guest: boolean;
+  presence: ReturnType<typeof useLobbyPresence>;
+  guestSession: LobbyGuestSession;
+}) {
   if (!lobby) {
-    return lobbyQuery.isError ? (
+    return failed ? (
       <LobbyNotice action={findDebateAction}>Could not open this lobby.</LobbyNotice>
     ) : (
       <LobbyNotice busy>Opening the lobby…</LobbyNotice>
@@ -127,13 +191,24 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
       );
     }
     case 'not_yet_open':
-      return <NotYetOpen lobby={lobby} />;
+      return <NotYetOpen lobby={lobby} guest={guest} />;
     case 'admitted':
-      return <AdmittedLobby lobby={lobby} presence={presence} />;
+      if (guest && guestSession.state.status === 'removed') {
+        return (
+          <LobbyShell>
+            <LobbyTitle lobby={lobby} />
+            <LobbyGuestBanner
+              lobbyId={lobby.lobby_id}
+              message={{ title: LOBBY_COPY.guestRemoved, detail: LOBBY_COPY.guestRemovedInvite }}
+            />
+          </LobbyShell>
+        );
+      }
+      return <AdmittedLobby lobby={lobby} presence={presence} guest={guest} guestSession={guestSession} />;
   }
 }
 
-function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
+function NotYetOpen({ lobby, guest }: { lobby: DebateLobbyView; guest: boolean }) {
   const reminder = useDebateLobbyReminder();
   const end = useEndDebateLobby(lobby.lobby_id);
   const [confirmingCancel, setConfirmingCancel] = React.useState(false);
@@ -150,16 +225,19 @@ function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
       <Text as="p" variant="footnote" color="grey-04">
         {remindedLabel(lobby.reminder_count)}
       </Text>
+      {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} /> : null}
       <div className="flex flex-wrap gap-2">
-        <HubPillButton
-          variant={reminded ? 'secondary' : 'primary'}
-          analyticsLabel={reminded ? 'Lobby reminded' : 'Lobby remind me'}
-          aria-pressed={reminded}
-          pending={reminder.isPending}
-          onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
-        >
-          {reminded ? 'Reminded' : 'Remind me'}
-        </HubPillButton>
+        {guest ? null : (
+          <HubPillButton
+            variant={reminded ? 'secondary' : 'primary'}
+            analyticsLabel={reminded ? 'Lobby reminded' : 'Lobby remind me'}
+            aria-pressed={reminded}
+            pending={reminder.isPending}
+            onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
+          >
+            {reminded ? 'Reminded' : 'Remind me'}
+          </HubPillButton>
+        )}
         <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
           {LOBBY_COPY.findDebate}
         </Link>
@@ -200,7 +278,17 @@ function NotYetOpen({ lobby }: { lobby: DebateLobbyView }) {
   );
 }
 
-function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: ReturnType<typeof useLobbyPresence> }) {
+function AdmittedLobby({
+  lobby,
+  presence,
+  guest,
+  guestSession,
+}: {
+  lobby: DebateLobbyView;
+  presence: ReturnType<typeof useLobbyPresence>;
+  guest: boolean;
+  guestSession: LobbyGuestSession;
+}) {
   const { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt } = presence;
 
   // Until the refetch moves the page to the lobby's new access.
@@ -268,13 +356,17 @@ function AdmittedLobby({ lobby, presence }: { lobby: DebateLobbyView; presence: 
   }
 
   return (
-    <LobbyRoom
-      lobby={lobby}
-      state={state}
-      onRetry={() => void join(false)}
-      onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
-      voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
-    />
+    <LobbyQueuedRequestProvider lobby={lobby} guest={guest} joined={state.status === 'joined'}>
+      <LobbyRoom
+        lobby={lobby}
+        state={state}
+        onRetry={() => void join(false)}
+        onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
+        voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
+        guest={guest}
+        guestSession={guestSession}
+      />
+    </LobbyQueuedRequestProvider>
   );
 }
 
@@ -321,12 +413,16 @@ function LobbyRoom({
   onRetry,
   onLeave,
   voice,
+  guest,
+  guestSession,
 }: {
   lobby: DebateLobbyView;
   state: LobbyPresenceState;
   onRetry: () => void;
   onLeave: () => void;
   voice: { connectionId: string; setVoiceConnected: (connected: boolean) => void; awayAt: string | null };
+  guest: boolean;
+  guestSession: LobbyGuestSession;
 }) {
   const currentUserId = useCurrentGeoChatUserId();
   const { authenticated } = useGeoChatAuth();
@@ -337,6 +433,10 @@ function LobbyRoom({
   const [copied, setCopied] = React.useState(false);
   const handoff = useHandoffNotice(lobby);
   const moderationNotice = useModerationNotice(lobby.viewer);
+  const queuedRequest = useLobbyQueuedRequest();
+  // The guest room, a sibling of the member room so the handover can drop it mid-call.
+  const [guestVoiceStates, setGuestVoiceStates] = React.useState<LobbyVoiceStates>(NO_LOBBY_VOICE);
+  const guestVoice = guestSession.state.status === 'listening' ? guestSession.state.session.voice : null;
 
   const hosts = lobby.members.filter(isHosting);
   const isHost = lobby.viewer.hosting;
@@ -369,6 +469,7 @@ function LobbyRoom({
           isViewer={isViewer}
           ownAvailable={ownAvailable}
         />
+        <LobbyGuestCount count={lobby.guest_count ?? 0} includesViewer={guest} />
       </>
     );
 
@@ -401,9 +502,15 @@ function LobbyRoom({
           <HubPillButton analyticsLabel="Lobby copy link" onClick={() => void copyLink()}>
             {copied ? 'Link copied' : 'Copy link'}
           </HubPillButton>
-          <HubPillButton analyticsLabel="Lobby leave" onClick={onLeave}>
-            Leave lobby
-          </HubPillButton>
+          {guest ? (
+            <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
+              Leave lobby
+            </Link>
+          ) : (
+            <HubPillButton analyticsLabel="Lobby leave" onClick={onLeave}>
+              Leave lobby
+            </HubPillButton>
+          )}
           <HubHeaderControls analyticsSurface="lobby" />
           {isHost ? (
             confirmingEnd ? (
@@ -443,6 +550,19 @@ function LobbyRoom({
         </div>
       ) : null}
 
+      {queuedRequest.outcome ? (
+        <div role="status" className="flex items-center gap-2 rounded-md bg-grey-01 px-3 py-2">
+          <Text as="p" variant="footnote" color="text" className="min-w-0 flex-1">
+            {queuedRequest.outcome}
+          </Text>
+          <HubPillButton analyticsLabel="Lobby queued request dismiss" onClick={queuedRequest.dismissOutcome}>
+            OK
+          </HubPillButton>
+        </div>
+      ) : null}
+
+      {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} /> : null}
+
       {moderationNotice ? (
         <div role="status" className="rounded-md bg-grey-01 px-3 py-2">
           <Text as="p" variant="footnote" color="text">
@@ -479,22 +599,51 @@ function LobbyRoom({
         </Text>
       ) : null}
 
-      {inVoice ? (
-        <LobbyVoice
-          lobby={lobby}
-          connectionId={voice.connectionId}
-          joined={state.status === 'joined'}
-          currentUserId={currentUserId}
-          onConnectedChange={voice.setVoiceConnected}
-        >
-          <VoiceAwayWarning awayAt={voice.awayAt} />
-          {people}
-        </LobbyVoice>
-      ) : (
-        people
-      )}
+      {guest && guestSession.state.status === 'refused' ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2">
+          <div role="status" className="min-w-0 flex-1">
+            <Text as="p" variant="footnote" color="grey-04">
+              {guestSession.state.message}
+            </Text>
+          </div>
+          <HubPillButton analyticsLabel="Lobby guest retry listen" onClick={() => void guestSession.retry()}>
+            Try again
+          </HubPillButton>
+        </div>
+      ) : guest && guestSession.state.status === 'starting' ? (
+        <Text as="p" variant="footnote" color="grey-04">
+          Connecting voice…
+        </Text>
+      ) : null}
 
-      {state.status === 'joined' ? <LobbyClaimsArea lobby={lobby} /> : null}
+      <LobbyVoiceStatesProvider value={guestVoiceStates}>
+        {guestVoice ? (
+          <LobbyGuestVoice
+            key={guestVoice.token}
+            token={guestVoice}
+            onStates={setGuestVoiceStates}
+            onReconnect={guestSession.reconnect}
+            quiet={inVoice}
+          />
+        ) : null}
+        {inVoice ? (
+          <LobbyVoice
+            lobby={lobby}
+            connectionId={voice.connectionId}
+            joined={state.status === 'joined'}
+            currentUserId={currentUserId}
+            onConnectedChange={voice.setVoiceConnected}
+            onAudible={guestVoice ? guestSession.handOver : undefined}
+          >
+            <VoiceAwayWarning awayAt={voice.awayAt} />
+            {people}
+          </LobbyVoice>
+        ) : (
+          people
+        )}
+      </LobbyVoiceStatesProvider>
+
+      {state.status === 'joined' || guest ? <LobbyClaimsArea lobby={lobby} /> : null}
 
       {isHost ? <LobbyHostLists lobby={lobby} /> : null}
     </LobbyShell>

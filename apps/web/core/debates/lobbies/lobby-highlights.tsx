@@ -19,6 +19,8 @@ import {
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { moderationErrorMessage, personName } from './lobby-format';
+import { LOBBY_GUEST_COPY } from './lobby-guest';
+import { useIsLobbyGuest } from './lobby-guest-hooks';
 import {
   useEndLobbyRoomVote,
   useLobbyHighlights,
@@ -142,6 +144,7 @@ function RoomVoteCard({
 }) {
   const roomClaims = useLobbyRoomClaimsById(lobby.lobby_id);
   const endVote = useEndLobbyRoomVote(lobby.lobby_id);
+  const guest = useIsLobbyGuest();
   const entry = lobbyClaimEntry(vote.claim, roomClaims.get(vote.claim.id), viewerRoomVotePosition(state));
   const renderOffer = React.useCallback(
     (offer: LobbyRoomOffer) => <LobbyClaimRequest lobbyId={lobby.lobby_id} offer={offer} />,
@@ -175,6 +178,11 @@ function RoomVoteCard({
       ) : null}
       <LobbyRoomClaimsList claims={[entry]} renderOffer={renderOffer} />
       <RoomVoteTally tally={vote.tally} />
+      {guest ? (
+        <Text as="p" variant="footnote" color="grey-04" className="px-1 pb-0.5">
+          {LOBBY_GUEST_COPY.voteNeedsAccount}
+        </Text>
+      ) : null}
     </section>
   );
 }
