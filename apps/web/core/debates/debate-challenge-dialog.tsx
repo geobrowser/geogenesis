@@ -74,7 +74,7 @@ export function DebateChallengeDialog({
           </h2>
         </header>
 
-        <div className="grid min-h-24 grid-cols-[1fr_auto_1fr] items-center rounded-lg border border-grey-02 bg-white">
+        <div className="grid min-h-24 grid-cols-[1fr_auto_1fr] items-center gap-2 rounded-lg border border-grey-02 bg-white p-3">
           <DebateRequestMediaPreview
             sessionKey={debateChallengeMediaSessionKey(challenge.id)}
             avatarCid={you.avatar_cid}

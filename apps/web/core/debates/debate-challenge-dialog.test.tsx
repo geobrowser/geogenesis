@@ -133,6 +133,7 @@ describe('DebateChallengeDialog', () => {
     expect(row).not.toBeNull();
     expect(row?.className).toContain('min-h-24');
     expect(row?.className.split(/\s+/)).not.toContain('h-24');
+    expect(row?.className).toContain('p-3');
   });
 
   /*
