@@ -6,7 +6,6 @@ import * as React from 'react';
 
 import {
   type DebateLobbyGuestLobby,
-  type DebateLobbyGuestSession,
   type DebateLobbyGuestView,
   type DebateLobbyView,
   GeoChatRequestError,
@@ -20,6 +19,13 @@ import { debateQueryNetworkOptions } from '../hooks';
 import { rateLimitDelayMs } from './hooks';
 import { lobbyErrorMessage } from './lobby-format';
 import { clearGuestSecret, readGuestSecret, storeGuestSecret } from './lobby-guest-secret';
+import {
+  type GuestSessionCommand,
+  type GuestSessionEvent,
+  type GuestSessionState,
+  orphanedAnswerLeaves,
+  transition,
+} from './lobby-guest-session';
 
 /** While visible; every 30s hidden, and at once on focus. The server caches each lobby for 2s. */
 export const GUEST_VIEW_POLL_MS = 5_000;
@@ -85,90 +91,118 @@ export function useIsLobbyGuest() {
   return React.useContext(LobbyGuestContext);
 }
 
-export type LobbyGuestSessionState =
-  | { status: 'idle' }
-  | { status: 'starting' }
-  | { status: 'listening'; session: DebateLobbyGuestSession }
-  /** Refused or failed; `retryAt` is when the server said a retry could work. */
-  | { status: 'refused'; message: string; retryAt: number | null }
-  | { status: 'removed' }
-  | { status: 'ended' };
-
 const HEARTBEAT_FALLBACK_MS = 20_000;
 
+/** Where the signed-in path stands: a failed one means this tab stops being a guest. */
+export type LobbyMemberPath = 'pending' | 'joined' | 'failed';
+
+async function requestStart(lobbyId: string) {
+  const stored = readGuestSecret(lobbyId);
+  try {
+    return await startDebateLobbyGuest(lobbyId, stored ? { guest_secret: stored } : {});
+  } catch (error) {
+    // A reconnect that lost a race: that session is over, so start a new one.
+    if (!stored || !(error instanceof GeoChatRequestError) || error.code !== 'guest_session_ended') throw error;
+    clearGuestSecret(lobbyId);
+    return startDebateLobbyGuest(lobbyId, {});
+  }
+}
+
 /**
- * A visitor's guest session: starts once the lobby is open, heartbeats, restarts only on `lapsed`,
- * leaves on unload. After `release` (the member join ended it) it sends nothing; its room plays on.
+ * Runs the guest session machine (`lobby-guest-session.ts`) for one lobby page: starts while
+ * `listen`, heartbeats while listening, and leaves on unload. A signed-in person never starts.
  */
-export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
+export function useLobbyGuestSession(
+  lobbyId: string,
+  { listen, signedIn, member }: { listen: boolean; signedIn: boolean; member: LobbyMemberPath }
+) {
   const id = dashlessId(lobbyId);
-  const [state, setState] = React.useState<LobbyGuestSessionState>({ status: 'idle' });
-  const [released, setReleased] = React.useState(false);
-  // Bumped by release and handover; an answer under an older one is left at once.
-  const generationRef = React.useRef(0);
-  const secretRef = React.useRef<string | null>(null);
+  const [state, setState] = React.useState<GuestSessionState>({ status: 'idle', attempt: 0 });
+  // Read by answers and events that land between renders.
+  const stateRef = React.useRef(state);
+  const signedInRef = React.useRef(signedIn);
+  React.useEffect(() => {
+    signedInRef.current = signedIn;
+  }, [signedIn]);
   const mountedRef = React.useRef(false);
-  // One start at a time: a remount (StrictMode's included) reuses it rather than taking a second place.
-  const inflightRef = React.useRef<Promise<void> | null>(null);
+  // The attempt whose start is in flight; a StrictMode re-run of the effect finds it and waits.
+  const inflightRef = React.useRef<number | null>(null);
 
-  const start = React.useCallback(() => {
-    setState({ status: 'starting' });
-    if (inflightRef.current) return inflightRef.current;
-    const task = run().finally(() => {
-      inflightRef.current = null;
-    });
-    inflightRef.current = task;
-    return task;
-
-    async function run() {
-      const generation = generationRef.current;
-      const stored = readGuestSecret(id);
-      const request = async () => {
-        try {
-          return await startDebateLobbyGuest(id, stored ? { guest_secret: stored } : {});
-        } catch (error) {
-          // A reconnect that lost a race: that session is over, so start a new one.
-          if (!stored || !(error instanceof GeoChatRequestError) || error.code !== 'guest_session_ended') throw error;
-          clearGuestSecret(id);
-          return startDebateLobbyGuest(id, {});
-        }
-      };
-      try {
-        const session = await request();
-        if (generation !== generationRef.current || !mountedRef.current) {
-          // Nobody listens on this one: give the place back.
-          void leaveDebateLobbyGuest(id, { guest_secret: session.guest_secret }, true).catch(() => undefined);
+  const runCommand = React.useCallback(
+    (command: GuestSessionCommand) => {
+      switch (command.type) {
+        case 'leave':
+          void leaveDebateLobbyGuest(id, { guest_secret: command.secret }, true).catch(() => undefined);
           return;
-        }
-        storeGuestSecret(id, session.guest_secret);
-        secretRef.current = session.guest_secret;
-        setState({ status: 'listening', session });
-      } catch (error) {
-        if (generation !== generationRef.current || !mountedRef.current) return;
-        if (error instanceof GeoChatRequestError && error.code === 'lobby_guest_removed') {
-          setState({ status: 'removed' });
-          return;
-        }
-        const delay = error instanceof GeoChatRequestError ? (error.retryAfterMs ?? null) : null;
-        setState({
-          status: 'refused',
-          message: lobbyErrorMessage(error, 'Couldn’t start listening. Try again.'),
-          retryAt: delay === null ? null : Date.now() + delay,
-        });
+        case 'storeSecret':
+          return storeGuestSecret(id, command.secret);
+        case 'clearSecret':
+          return clearGuestSecret(id);
       }
-    }
-  }, [id]);
+    },
+    [id]
+  );
+
+  const send = React.useCallback(
+    (event: GuestSessionEvent) => {
+      const { next, commands } = transition(stateRef.current, event, { signedIn: signedInRef.current });
+      commands.forEach(runCommand);
+      if (next === stateRef.current) return;
+      stateRef.current = next;
+      setState(next);
+    },
+    [runCommand]
+  );
 
   const status = state.status;
-  const active = enabled && !released;
   React.useEffect(() => {
-    if (active && status === 'idle') void start();
-  }, [active, start, status]);
+    if (listen && !signedIn && status === 'idle') send({ type: 'start' });
+  }, [listen, send, signedIn, status]);
+
+  React.useEffect(() => {
+    if (member === 'joined') send({ type: 'memberJoined' });
+    else if (member === 'failed' && signedIn) send({ type: 'abandon' });
+  }, [member, send, signedIn, status]);
+
+  // One request per `starting` attempt.
+  const startingAttempt = state.status === 'starting' ? state.attempt : null;
+  React.useEffect(() => {
+    if (startingAttempt === null || inflightRef.current === startingAttempt) return;
+    const attempt = startingAttempt;
+    inflightRef.current = attempt;
+    const current = () =>
+      mountedRef.current && stateRef.current.status === 'starting' && stateRef.current.attempt === attempt;
+    void requestStart(id)
+      .then(
+        session => {
+          if (current()) return send({ type: 'started', attempt, session });
+          if (orphanedAnswerLeaves(session.guest_secret, readGuestSecret(id))) {
+            runCommand({ type: 'leave', secret: session.guest_secret });
+          }
+        },
+        error => {
+          if (!current()) return;
+          if (error instanceof GeoChatRequestError && error.code === 'lobby_guest_removed') {
+            return send({ type: 'removed' });
+          }
+          const delay = error instanceof GeoChatRequestError ? (error.retryAfterMs ?? null) : null;
+          send({
+            type: 'refused',
+            attempt,
+            message: lobbyErrorMessage(error, 'Couldn’t start listening. Try again.'),
+            retryAt: delay === null ? null : Date.now() + delay,
+          });
+        }
+      )
+      .finally(() => {
+        if (inflightRef.current === attempt) inflightRef.current = null;
+      });
+  }, [id, runCommand, send, startingAttempt]);
 
   // Heartbeat while listening; only `lapsed` starts again.
   const session = state.status === 'listening' ? state.session : null;
   React.useEffect(() => {
-    if (!session || released) return;
+    if (!session) return;
     const secret = session.guest_secret;
     const every = Math.max(session.heartbeat_interval_seconds * 1_000, 5_000) || HEARTBEAT_FALLBACK_MS;
     let timer: ReturnType<typeof setTimeout> | null = null;
@@ -181,15 +215,14 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
           if (heartbeat.alive) return beat(every);
           switch (heartbeat.reason) {
             case 'removed':
-              return setState({ status: 'removed' });
+              return send({ type: 'removed' });
             case 'ended':
-              clearGuestSecret(id);
-              return setState({ status: 'ended' });
+              return send({ type: 'ended' });
             case 'left':
-              // This tab's own member join or leave; nothing to do.
+              // This tab's own member join or leave.
               return;
             default:
-              return void start();
+              return send({ type: 'restart' });
           }
         } catch (error) {
           if (stopped) return;
@@ -202,22 +235,17 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
       stopped = true;
       if (timer) clearTimeout(timer);
     };
-  }, [id, released, session, start]);
+  }, [id, send, session]);
 
-  // Leave on unload and unmount, unless a member join already ended the session.
-  const releasedRef = React.useRef(released);
-  releasedRef.current = released;
-  const listeningRef = React.useRef(false);
-  listeningRef.current = state.status === 'listening';
+  // Leave on unload and unmount while listening; a bfcache restore starts again on the same secret.
   React.useEffect(() => {
     mountedRef.current = true;
     const leave = () => {
-      const secret = secretRef.current;
-      if (!secret || releasedRef.current) return;
-      void leaveDebateLobbyGuest(id, { guest_secret: secret }, true).catch(() => undefined);
+      const current = stateRef.current;
+      if (current.status === 'listening') runCommand({ type: 'leave', secret: current.session.guest_secret });
     };
     const restore = (event: PageTransitionEvent) => {
-      if (event.persisted && secretRef.current && !releasedRef.current) setState({ status: 'idle' });
+      if (event.persisted) send({ type: 'restart' });
     };
     window.addEventListener('pagehide', leave);
     window.addEventListener('pageshow', restore);
@@ -226,32 +254,16 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
       window.removeEventListener('pageshow', restore);
       mountedRef.current = false;
       leave();
-      secretRef.current = null;
-      // After StrictMode's test unmount, lets the remount start again.
-      setState({ status: 'idle' });
     };
-  }, [id]);
+  }, [runCommand, send]);
 
-  /** A fresh token for a full reconnect, on the same guest. */
-  const reconnect = React.useCallback(() => {
-    void start();
-  }, [start]);
-
-  /** The member room is up, or there is no guest room to wait for: drop it and forget the secret. */
-  const handOver = React.useCallback(() => {
-    generationRef.current += 1;
-    setReleased(true);
-    clearGuestSecret(id);
-    secretRef.current = null;
-    setState({ status: 'idle' });
-  }, [id]);
-
-  /** The member join ended this session. A playing guest room waits for `handOver`. */
-  const release = React.useCallback(() => {
-    if (!listeningRef.current) return handOver();
-    generationRef.current += 1;
-    setReleased(true);
-  }, [handOver]);
-
-  return { state, released, reconnect, release, handOver, retry: start };
+  return {
+    state,
+    /** After a refusal. Not once signed in. */
+    retry: React.useCallback(() => send({ type: 'start' }), [send]),
+    /** A fresh token for a full reconnect, on the same guest. */
+    reconnect: React.useCallback(() => send({ type: 'restart' }), [send]),
+    /** The member room is up, or will not come up: drop the guest room. */
+    roomDone: React.useCallback(() => send({ type: 'roomDone' }), [send]),
+  };
 }

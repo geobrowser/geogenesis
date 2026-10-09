@@ -75,6 +75,7 @@ export function LobbyVoice({
   currentUserId,
   onConnectedChange,
   onAudible,
+  onUnavailable,
   children,
 }: {
   lobby: DebateLobbyView;
@@ -85,6 +86,8 @@ export function LobbyVoice({
   onConnectedChange: (connected: boolean) => void;
   /** Connected with playback allowed: a guest room still playing can go. */
   onAudible?: () => void;
+  /** Voice is refused, failed or in another tab: a guest room still playing goes too. */
+  onUnavailable?: () => void;
   children: React.ReactNode;
 }) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
@@ -220,6 +223,11 @@ export function LobbyVoice({
     if (connectFailed) return { message: 'Voice could not connect.', actionLabel: 'Try again', onAction: retry };
     return null;
   })();
+
+  const unavailable = ownership === 'elsewhere' || Boolean(token.error) || connectFailed;
+  React.useEffect(() => {
+    if (unavailable) onUnavailable?.();
+  }, [onUnavailable, unavailable]);
 
   if (notice || !data) {
     return (

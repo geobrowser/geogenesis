@@ -51,6 +51,7 @@ import {
 import { LobbyGuestBanner, LobbyGuestCount } from './lobby-guest';
 import {
   LobbyGuestProvider,
+  type LobbyMemberPath,
   lobbyViewForGuest,
   useDebateLobbyGuestView,
   useLobbyGuestSession,
@@ -116,13 +117,11 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
     lobby?.viewer.connected ?? false,
     lobby?.viewer.removed ?? false
   );
-  const guestSession = useLobbyGuestSession(lobbyId, guest && admitted);
-  // The member join ended the guest session; its room plays on until the member room is up.
-  const { release } = guestSession;
-  const memberJoined = presence.state.status === 'joined';
-  React.useEffect(() => {
-    if (memberJoined) release();
-  }, [memberJoined, release]);
+  const guestSession = useLobbyGuestSession(lobbyId, {
+    listen: signedOut && admitted,
+    signedIn: authenticated,
+    member: memberPath(authenticated, lobbyQuery, presence.state),
+  });
   // `debate.lobby_changed` only reaches people inside; until then this page hears opening,
   // arrivals and end through the matchmaking scope's `debate.lobbies_changed`. A guest polls.
   const waitingOutside =
@@ -143,6 +142,28 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
 }
 
 type LobbyGuestSession = ReturnType<typeof useLobbyGuestSession>;
+
+/** Presence states a member join does not come back from by itself. */
+const MEMBER_JOIN_FAILED: ReadonlySet<LobbyPresenceState['status']> = new Set([
+  'failed',
+  'confirm_leave_other',
+  'moved',
+  'dropped',
+  'left',
+]);
+
+/** How the signed-in path stands, for a guest session waiting on it. */
+export function memberPath(
+  signedIn: boolean,
+  lobbyQuery: Pick<ReturnType<typeof useDebateLobby>, 'data' | 'isError'>,
+  presence: LobbyPresenceState
+): LobbyMemberPath {
+  if (presence.status === 'joined') return 'joined';
+  if (!signedIn) return 'pending';
+  if (lobbyQuery.data === undefined) return lobbyQuery.isError ? 'failed' : 'pending';
+  if (lobbyQuery.data.access.status !== 'admitted') return 'failed';
+  return MEMBER_JOIN_FAILED.has(presence.status) ? 'failed' : 'pending';
+}
 
 function LobbyAccess({
   lobby,
@@ -435,7 +456,11 @@ function LobbyRoom({
   const queuedRequest = useLobbyQueuedRequest();
   // The guest room, a sibling of the member room so the handover can drop it mid-call.
   const [guestVoiceStates, setGuestVoiceStates] = React.useState<LobbyVoiceStates>(NO_LOBBY_VOICE);
-  const guestVoice = guestSession.state.status === 'listening' ? guestSession.state.session.voice : null;
+  const guestVoice =
+    guestSession.state.status === 'listening' || guestSession.state.status === 'handingOver'
+      ? guestSession.state.session.voice
+      : null;
+  const { authenticated } = useGeoChatAuth();
 
   const hosts = lobby.members.filter(isHosting);
   const isHost = lobby.viewer.hosting;
@@ -605,9 +630,11 @@ function LobbyRoom({
               {guestSession.state.message}
             </Text>
           </div>
-          <HubPillButton analyticsLabel="Lobby guest retry listen" onClick={() => void guestSession.retry()}>
-            Try again
-          </HubPillButton>
+          {authenticated ? null : (
+            <HubPillButton analyticsLabel="Lobby guest retry listen" onClick={guestSession.retry}>
+              Try again
+            </HubPillButton>
+          )}
         </div>
       ) : guest && guestSession.state.status === 'starting' ? (
         <Text as="p" variant="footnote" color="grey-04">
@@ -632,7 +659,8 @@ function LobbyRoom({
             joined={state.status === 'joined'}
             currentUserId={currentUserId}
             onConnectedChange={voice.setVoiceConnected}
-            onAudible={guestVoice ? guestSession.handOver : undefined}
+            onAudible={guestVoice ? guestSession.roomDone : undefined}
+            onUnavailable={guestVoice ? guestSession.roomDone : undefined}
           >
             <VoiceAwayWarning awayAt={voice.awayAt} />
             {people}

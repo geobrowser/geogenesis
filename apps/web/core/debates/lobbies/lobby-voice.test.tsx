@@ -344,6 +344,29 @@ describe('LobbyVoice handover signal', () => {
   });
 });
 
+describe('LobbyVoice unavailable signal', () => {
+  it('says so when the member token is refused, so a playing guest room can go', async () => {
+    mocks.getDebateLobbyVoiceToken.mockRejectedValue(new GeoChatRequestError('full', 'lobby_voice_full', 409));
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onUnavailable = vi.fn();
+    render(
+      <QueryClientProvider client={client}>
+        <LobbyVoice
+          lobby={lobby()}
+          connectionId="conn-1"
+          joined
+          currentUserId="u1"
+          onConnectedChange={vi.fn()}
+          onUnavailable={onUnavailable}
+        >
+          <Speaking />
+        </LobbyVoice>
+      </QueryClientProvider>
+    );
+    await waitFor(() => expect(onUnavailable).toHaveBeenCalled());
+  });
+});
+
 describe('LobbyGuestVoice', () => {
   const guestToken = token({ can_publish: false, token: 'guest-jwt' });
 

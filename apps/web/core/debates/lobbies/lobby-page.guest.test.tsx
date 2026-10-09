@@ -104,7 +104,7 @@ vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn() }))
 vi.mock('../matchmaking/hooks', () => ({ useMatchmakingScope: vi.fn() }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => null }));
 
-const { DebateLobbyPage } = await import('./lobby-page');
+const { DebateLobbyPage, memberPath } = await import('./lobby-page');
 const { readGuestSecret } = await import('./lobby-guest-secret');
 
 const adam: DebateLobbyMember = {
@@ -243,5 +243,45 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     // The join ended the guest session server-side, so no leave follows.
     cleanup();
     expect(mocks.leave).not.toHaveBeenCalled();
+  });
+});
+
+describe('memberPath', () => {
+  const loaded = { data: memberView, isError: false };
+  const loading = { data: undefined, isError: false };
+
+  it('waits while signed out, loading or joining', () => {
+    expect(memberPath(false, loading, { status: 'idle' })).toBe('pending');
+    expect(memberPath(true, loading, { status: 'idle' })).toBe('pending');
+    expect(memberPath(true, loaded, { status: 'joining' })).toBe('pending');
+  });
+
+  it('is joined once presence says so', () => {
+    expect(memberPath(true, loaded, { status: 'joined' })).toBe('joined');
+  });
+
+  it('fails when the member read fails, the lobby will not admit, or the join will not land', () => {
+    expect(memberPath(true, { data: undefined, isError: true }, { status: 'idle' })).toBe('failed');
+    expect(
+      memberPath(true, { data: { ...memberView, access: { status: 'banned' } }, isError: false }, { status: 'idle' })
+    ).toBe('failed');
+    expect(memberPath(true, loaded, { status: 'confirm_leave_other', otherLobbyId: null })).toBe('failed');
+    expect(memberPath(true, loaded, { status: 'failed', message: 'x' })).toBe('failed');
+  });
+});
+
+describe('DebateLobbyPage after sign-in that does not join here', () => {
+  it('leaves as a guest and drops the guest room', async () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+
+    mocks.authenticated = true;
+    mocks.memberLobby = memberView;
+    mocks.presenceStatus = 'confirm_leave_other';
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    await waitFor(() => expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1' }, true));
+    expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
+    expect(readGuestSecret('lobby1')).toBeNull();
   });
 });
