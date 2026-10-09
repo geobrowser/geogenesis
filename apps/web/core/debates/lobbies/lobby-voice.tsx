@@ -402,9 +402,8 @@ function ConnectedVoice({
 }
 
 /**
- * Calls `onFailed` when the room started connecting and dropped without ever connecting, which
- * otherwise reads as "Connecting…" for good (a kicked identity, a failed join). Read off the room's
- * own events, so a flip within one tick is not missed.
+ * Calls `onFailed` when the room drops before it ever connects, which would otherwise show
+ * "Connecting…" for good. Reads the room's events, so a flip within one tick is not missed.
  */
 function useNeverConnected(room: Room, onFailed: () => void) {
   const onFailedRef = React.useRef(onFailed);
