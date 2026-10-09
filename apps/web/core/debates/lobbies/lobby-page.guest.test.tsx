@@ -21,6 +21,9 @@ const mocks = vi.hoisted(() => ({
   presenceAdmitted: [] as boolean[],
   /** Whether the page asked for the member-only activity read, render by render. */
   activityEnabled: [] as boolean[],
+  /** When the guest view was last read; `refetchGuestView` moves it to now. */
+  guestViewAt: 0,
+  refetchGuestView: vi.fn(),
 }));
 
 vi.mock('../api', async importOriginal => ({
@@ -68,6 +71,8 @@ vi.mock('./lobby-guest-hooks', async importOriginal => ({
   useDebateLobbyGuestView: (_id: string, { enabled }: { enabled: boolean }) => ({
     data: enabled ? mocks.guestView : undefined,
     isError: false,
+    dataUpdatedAt: mocks.guestViewAt,
+    refetch: mocks.refetchGuestView,
   }),
 }));
 vi.mock('./lobby-voice', async () => {
@@ -178,6 +183,10 @@ beforeEach(() => {
   mocks.onAudible = null;
   mocks.presenceAdmitted = [];
   mocks.activityEnabled = [];
+  mocks.guestViewAt = 0;
+  mocks.refetchGuestView.mockReset().mockImplementation(async () => {
+    mocks.guestViewAt = Date.now() + 1;
+  });
   mocks.start.mockReset().mockResolvedValue({
     guest_id: 'g1',
     guest_secret: 'secret-1',
@@ -444,5 +453,42 @@ describe('DebateLobbyPage when guest listening is off', () => {
     mocks.start.mockRejectedValue(new GeoChatRequestError('full', 'guest_cap_reached', 409, 30_000, { limit: 15 }));
     render(<DebateLobbyPage lobbyId="lobby1" />);
     expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+});
+
+// The kill switch: the session ends while the lobby stays open.
+describe('DebateLobbyPage when guests are turned off mid-session', () => {
+  async function endSession() {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const view = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'ended', lease_expires_at: null });
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    await waitFor(() => expect(mocks.refetchGuestView).toHaveBeenCalled());
+    vi.useRealTimers();
+    return view;
+  }
+
+  it('says listening without an account was turned off, with sign-up and no Try again', async () => {
+    const { rerender } = await endSession();
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(
+      await screen.findByText(
+        'Listening without an account has been turned off for this lobby. Create an account to join.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
+  });
+
+  it('shows the closed lobby instead when the lobby itself ended', async () => {
+    const { rerender } = await endSession();
+    mocks.guestView = { ...mocks.guestView!, lobby: { ...lobbyFields, access: { status: 'closed', reason: 'ended' } } };
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(await screen.findByText('This lobby has ended.')).toBeInTheDocument();
+    expect(screen.queryByText(/has been turned off/)).not.toBeInTheDocument();
   });
 });

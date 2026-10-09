@@ -88,6 +88,7 @@ export const LOBBY_COPY = {
   guestRemoved: 'A host removed you from this lobby.',
   guestRemovedInvite: 'Create an account to come back and take part.',
   guestElsewhere: 'You’re listening in another tab.',
+  guestListeningOff: 'Listening without an account has been turned off for this lobby. Create an account to join.',
 } as const;
 
 /** `/debate/{id}` when the room is a lobby and `lobbyJoining` is off. */
@@ -464,6 +465,27 @@ function LobbyRoom({
     guestSession.state.status === 'listening' || guestSession.state.status === 'handingOver'
       ? guestSession.state.session.voice
       : null;
+  // An ended guest session in a lobby that is still open means guests were turned off here. Read
+  // after a fresh guest view, so a lobby that ended shows its closed notice instead.
+  const { dataUpdatedAt: guestViewAt, refetch: refetchGuestView } = useDebateLobbyGuestView(lobby.lobby_id, {
+    enabled: guest,
+  });
+  const guestEnded = guest && guestSession.state.status === 'ended';
+  const [guestEndedAt, setGuestEndedAt] = React.useState<number | null>(null);
+  React.useEffect(() => {
+    if (!guestEnded) return;
+    setGuestEndedAt(Date.now());
+    void refetchGuestView();
+  }, [guestEnded, refetchGuestView]);
+  const guestNotice: { message: string; retry: string | null } | null = !guest
+    ? null
+    : guestSession.state.status === 'refused'
+      ? { message: guestSession.state.message, retry: guestSession.state.retryable ? 'Try again' : null }
+      : guestSession.state.status === 'superseded'
+        ? { message: LOBBY_COPY.guestElsewhere, retry: 'Listen here' }
+        : guestEnded && guestEndedAt !== null && guestViewAt >= guestEndedAt
+          ? { message: LOBBY_COPY.guestListeningOff, retry: null }
+          : null;
   // One automatic reconnect per page for a guest join dropped before it connected.
   const guestAutoRetryLeftRef = React.useRef(true);
   const { reconnect: reconnectGuest } = guestSession;
@@ -637,18 +659,18 @@ function LobbyRoom({
         </Text>
       ) : null}
 
-      {guest && (guestSession.state.status === 'refused' || guestSession.state.status === 'superseded') ? (
+      {guestNotice ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2">
           <div role="status" className="min-w-0 flex-1">
             <Text as="p" variant="footnote" color="grey-04">
-              {guestSession.state.status === 'refused' ? guestSession.state.message : LOBBY_COPY.guestElsewhere}
+              {guestNotice.message}
             </Text>
           </div>
-          {authenticated || (guestSession.state.status === 'refused' && !guestSession.state.retryable) ? null : (
+          {guestNotice.retry && !authenticated ? (
             <HubPillButton analyticsLabel="Lobby guest retry listen" onClick={guestSession.retry}>
-              {guestSession.state.status === 'refused' ? 'Try again' : 'Listen here'}
+              {guestNotice.retry}
             </HubPillButton>
-          )}
+          ) : null}
         </div>
       ) : guest && guestSession.state.status === 'starting' ? (
         <Text as="p" variant="footnote" color="grey-04">
