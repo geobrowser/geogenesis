@@ -2356,7 +2356,17 @@ export type DebateLobbyDebateSubject =
 
 /** What a host did to someone, as `viewer.last_moderation` and the log spell it (GEO-3134). */
 export type DebateLobbyModerationAction =
-  'mute' | 'move_to_listeners' | 'move_to_speakers' | 'kick' | 'ban' | 'unban' | 'promote' | 'remove_host' | 'end';
+  | 'mute'
+  | 'move_to_listeners'
+  | 'move_to_speakers'
+  | 'kick'
+  | 'ban'
+  | 'unban'
+  | 'promote'
+  | 'remove_host'
+  | 'end'
+  /** Every guest without an account at once; no target (GEO-3129). */
+  | 'remove_guests';
 
 export type DebateLobbyView = {
   lobby_id: string;
@@ -2376,6 +2386,8 @@ export type DebateLobbyView = {
   members: DebateLobbyMember[];
   /** One per debate a member is in, in roster order (GEO-3131). Absent from older geo-chat. */
   debate_pairs?: DebateLobbyPair[];
+  /** Live visitors without an account (GEO-3129); absent from a geo-chat that predates guests. */
+  guest_count?: number;
   viewer: {
     /** `null` before the viewer's first join. */
     role: DebateLobbyRole | null;
@@ -2664,7 +2676,14 @@ export async function createDebateLobby(
  */
 export async function setDebateLobbyPresence(
   lobbyId: string,
-  body: { connection_id: string; joined: boolean; leave_other_lobby?: boolean; rejoin?: boolean },
+  body: {
+    connection_id: string;
+    joined: boolean;
+    leave_other_lobby?: boolean;
+    rejoin?: boolean;
+    /** Ends this tab's guest session in the same join, so nobody is counted twice. */
+    guest_secret?: string;
+  },
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
   keepalive = false
@@ -2764,6 +2783,80 @@ export async function getDebateLobbyVoiceToken(
   return geoChatRequest<DebateLobbyVoiceToken>(`/debate-lobbies/${lobbyId}/voice-token`, {
     method: 'POST',
     body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/* Guests without an account (GEO-3129, GEO-3131). No `Authorization`: a signed-in page uses the member routes. */
+
+/** The lobby as every guest sees it: `LobbyView` without `viewer`. */
+export type DebateLobbyGuestLobby = Omit<DebateLobbyView, 'viewer'>;
+
+export type DebateLobbyGuestView = {
+  lobby: DebateLobbyGuestLobby;
+  /** `null` unless the lobby is open. No viewer: nothing is requestable. */
+  claims: DebateLobbyClaims | null;
+  /** `null` unless the lobby is open. Ordered by its own `as_of`; the view has none, so its ETag holds. */
+  highlights: DebateLobbyHighlights | null;
+};
+
+/** `404 lobby_not_found`, `429 rate_limited`. Revalidates by `ETag`, so a poll is mostly a 304. */
+export async function getDebateLobbyGuestView(lobbyId: string, signal?: AbortSignal) {
+  return geoChatRequest<DebateLobbyGuestView>(`/debate-lobbies/${lobbyId}/guest-view`, { signal });
+}
+
+export type DebateLobbyGuestSession = {
+  guest_id: string;
+  /** Sent back on every guest call, and on the member join that replaces this session. */
+  guest_secret: string;
+  lease_expires_at: string;
+  heartbeat_interval_seconds: number;
+  /** Listen-only: `can_publish` is false. */
+  voice: DebateLobbyVoiceToken;
+};
+
+/** Only `lapsed` should start again. `left` follows this tab's own leave or member join. */
+export type DebateLobbyGuestGoneReason = 'lapsed' | 'removed' | 'ended' | 'left';
+
+export type DebateLobbyGuestHeartbeat = {
+  alive: boolean;
+  reason: DebateLobbyGuestGoneReason | null;
+  lease_expires_at: string | null;
+};
+
+/**
+ * Start listening, or resume with `guest_secret` after a reload or to reconnect. Refusals:
+ * `429 rate_limited` (`details.scope: "lobby"` for the lobby's own rate), `409 guest_cap_reached`,
+ * `409 lobby_voice_full`, `409 lobby_closed`, `503 voice_capacity_reached`, `503 voice_unavailable`,
+ * `404 lobby_not_found`, `403 lobby_guest_removed`.
+ */
+export async function startDebateLobbyGuest(lobbyId: string, body: { guest_secret?: string }) {
+  return geoChatRequest<DebateLobbyGuestSession>(`/debate-lobbies/${lobbyId}/guest`, { method: 'POST', body });
+}
+
+/** Renews the guest's 90s lease. Rate limited to 30 a minute per guest. */
+export async function sendDebateLobbyGuestHeartbeat(lobbyId: string, body: { guest_secret: string }) {
+  return geoChatRequest<DebateLobbyGuestHeartbeat>(`/debate-lobbies/${lobbyId}/guest/heartbeat`, {
+    method: 'POST',
+    body,
+  });
+}
+
+/** Always `204`. Drops the guest from the count at once. */
+export async function leaveDebateLobbyGuest(lobbyId: string, body: { guest_secret: string }, keepalive = false) {
+  return geoChatRequest<void>(`/debate-lobbies/${lobbyId}/guest/leave`, { method: 'POST', body, keepalive });
+}
+
+/** Host only. Removes every live guest; there is no identity to pick one by. */
+export async function removeDebateLobbyGuests(
+  lobbyId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyView>(`/debate-lobbies/${lobbyId}/guests/remove`, {
+    method: 'POST',
     auth: true,
     getPrivyIdentityToken,
     accountKey,

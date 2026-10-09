@@ -175,6 +175,9 @@ export function otherLobbyIdFrom(error: GeoChatRequestError) {
 /** What to tell someone geo-chat refused, by its error code; `fallback` for anything else. */
 export function lobbyErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof GeoChatRequestError)) return fallback;
+  if (error.status === 429 && error.details?.scope === 'lobby') {
+    return 'Lots of people are joining this lobby right now. Try again in a moment.';
+  }
   if (error.status === 429) return 'That was a lot of tries at once. Wait a moment and try again.';
   switch (error.code) {
     case 'lobby_limit_reached': {
@@ -237,7 +240,10 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
     case 'lobby_not_listener':
       return 'Only listeners raise a hand.';
     case 'lobby_removed':
+    case 'lobby_guest_removed':
       return 'A host removed you from this lobby.';
+    case 'guest_cap_reached':
+      return 'This lobby has as many listeners without an account as it can take. Create an account to join, or try again in a minute.';
     default:
       return fallback;
   }
@@ -351,6 +357,8 @@ export function moderationLogLabel(entry: Pick<DebateLobbyModerationEntry, 'acti
         : `${actor} removed ${target} as host`;
     case 'end':
       return `${actor} ended the lobby`;
+    case 'remove_guests':
+      return `${actor} removed the guests without an account`;
     default:
       return actor;
   }

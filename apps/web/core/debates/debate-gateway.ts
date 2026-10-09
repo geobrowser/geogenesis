@@ -74,6 +74,8 @@ type DebateEventPayload = {
   lobby_card?: unknown;
   /** On `debate.lobby_highlights_changed`: the full state; see `parseLobbyHighlights`. */
   lobby_highlights?: unknown;
+  /** On `debate.lobby_guests_changed`: visitors without an account. */
+  guest_count?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -566,6 +568,17 @@ export class DebateGatewayClient {
         const shown = query !== undefined && (query.state.fetchStatus === 'fetching' || query.getObserversCount() > 0);
         this.queryClient.setQueryData<LobbyHighlightsState>(key, current =>
           current || shown ? withLobbyHighlights(current, highlights) : current
+        );
+        break;
+      }
+      // GEO-3129. Coalesced to the roster; patches the cached view, never refetches.
+      case 'debate.lobby_guests_changed': {
+        const count = identifiers.guest_count;
+        if (!identifiers.lobby_id || !this.accountKey) break;
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) break;
+        this.queryClient.setQueryData<DebateLobbyView>(
+          ['debates', 'account', this.accountKey, 'lobby', dashlessId(identifiers.lobby_id)],
+          current => (current ? { ...current, guest_count: count } : current)
         );
         break;
       }

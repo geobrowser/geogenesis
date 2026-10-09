@@ -508,6 +508,41 @@ describe('DebateGatewayClient', () => {
     });
   });
 
+  describe('lobby guest count', () => {
+    const lobbyKey = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+
+    async function guestsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'guests-1', event_type: 'debate.lobby_guests_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('patches the cached view’s count and never refetches', async () => {
+      queryClient.setQueryData(lobbyKey, { lobby_id: 'abcd', guest_count: 1, members: [] });
+      await guestsChanged({ lobby_id: 'AB-CD', guest_count: 4 });
+      expect(queryClient.getQueryData<{ guest_count: number }>(lobbyKey)?.guest_count).toBe(4);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['no cached view', undefined, { lobby_id: 'AB-CD', guest_count: 4 }],
+      ['an unreadable count', { lobby_id: 'abcd', guest_count: 1 }, { lobby_id: 'AB-CD', guest_count: 'x' }],
+    ])('leaves %s alone', async (_label, cached, payload) => {
+      if (cached) queryClient.setQueryData(lobbyKey, cached);
+      await guestsChanged(payload);
+      expect(queryClient.getQueryData(lobbyKey)).toEqual(cached);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+  });
+
   describe('lobby highlights', () => {
     const highlightsKey = ['debates', 'account', 'user-a', 'lobby-highlights', 'abcd'];
     const state = (asOf: string | null, agree: number) => ({
