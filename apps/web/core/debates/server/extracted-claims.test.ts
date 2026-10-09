@@ -154,8 +154,8 @@ describe('decodeExtractedClaims highlight score', () => {
     expect(log).toHaveBeenCalledWith('[debate-acceptor] highlight scores decoded', {
       claims: 3,
       scored: 2,
-      // One scored claim without axes: an older task answered, which the log makes visible.
-      withAxes: 1,
+      // One scored claim without axes — an older task, or values geo-chat refused — shows per axis.
+      axes: { relevance: 1, quality: 1, controversy: 1 },
       model: 'perplexity/pplx-decider-v1.1-27b',
     });
     log.mockRestore();
@@ -202,7 +202,13 @@ describe('decodeExtractedClaims axis scores', () => {
       qualityScore: null,
       controversyScore: null,
     });
-    expect(warn).toHaveBeenCalledWith(expect.stringContaining('axis scores'), { count: 2, sample: [1.5, '0.7'] });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('axis scores'), {
+      count: 2,
+      sample: [
+        { field: 'quality_score', value: 1.5 },
+        { field: 'controversy_score', value: '0.7' },
+      ],
+    });
     warn.mockRestore();
   });
 });

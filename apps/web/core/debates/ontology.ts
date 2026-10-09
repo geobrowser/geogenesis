@@ -168,6 +168,13 @@ export const CLAIM_AXIS_SCORE_PROPERTY_IDS = {
 
 export type ClaimAxisScoreField = keyof typeof CLAIM_AXIS_SCORE_PROPERTY_IDS;
 
+/** The axis fields in one fixed order, for the publisher and the reader to walk without a cast. */
+export const CLAIM_AXIS_SCORE_FIELDS = [
+  'relevanceScore',
+  'qualityScore',
+  'controversyScore',
+] as const satisfies readonly ClaimAxisScoreField[];
+
 /**
  * The typing that says a relation points at a *span* of its target rather than the whole of it.
  *

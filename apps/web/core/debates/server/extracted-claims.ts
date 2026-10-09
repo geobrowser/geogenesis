@@ -133,10 +133,10 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     topics: decodeTopics(claim.topics, droppedTopics),
     isContestable: claim.is_contestable === true,
     timing: decodeTiming(claim.start_ms, claim.end_ms),
-    highlightScore: decodeScore(claim.highlight_score, droppedScores),
-    relevanceScore: decodeScore(claim.relevance_score, droppedScores),
-    qualityScore: decodeScore(claim.quality_score, droppedScores),
-    controversyScore: decodeScore(claim.controversy_score, droppedScores),
+    highlightScore: decodeScore('highlight_score', claim.highlight_score, droppedScores),
+    relevanceScore: decodeScore('relevance_score', claim.relevance_score, droppedScores),
+    qualityScore: decodeScore('quality_score', claim.quality_score, droppedScores),
+    controversyScore: decodeScore('controversy_score', claim.controversy_score, droppedScores),
     stance: decodeStance(claim.stance),
   }));
   if (droppedTopics.length > 0) {
@@ -167,13 +167,16 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     // Scores are written once: a debate published unscored stays unscored (no backfill), so the
     // count has to be visible here. `model` null with claims present means scoring did not run
     // or failed upstream; a model with zero scored means the field was dropped on the way. The
-    // axes come from the same run, so `withAxes` below `scored` means an older task answered.
+    // The axes come from the same run, so an axis count below `scored` means that axis went
+    // missing upstream: an older task that does not answer it, or a value geo-chat refused.
     console.log('[debate-acceptor] highlight scores decoded', {
       claims: claims.length,
       scored: claims.filter(claim => claim.highlightScore !== null).length,
-      withAxes: claims.filter(
-        claim => claim.relevanceScore !== null && claim.qualityScore !== null && claim.controversyScore !== null
-      ).length,
+      axes: {
+        relevance: claims.filter(claim => claim.relevanceScore !== null).length,
+        quality: claims.filter(claim => claim.qualityScore !== null).length,
+        controversy: claims.filter(claim => claim.controversyScore !== null).length,
+      },
       model: typeof response.highlight_model === 'string' ? response.highlight_model : null,
     });
   }
@@ -245,10 +248,12 @@ function decodeTiming(startMs: unknown, endMs: unknown): { startMs: number; endM
  * malformed value would rank. Null and absent are the ordinary "not scored"; a present value that
  * fails is recorded in `dropped` so the decoder can say so.
  */
-function decodeScore(score: unknown, dropped: unknown[]): number | null {
+function decodeScore(field: string, score: unknown, dropped: unknown[]): number | null {
   if (score === null || score === undefined) return null;
   const accepted = typeof score === 'number' ? publishableScore(score) : null;
-  if (accepted === null) dropped.push(score);
+  // Labelled, because the highlight score drifting breaks the ranking and an axis drifting does
+  // not yet break anything visible; the log has to say which.
+  if (accepted === null) dropped.push({ field, value: score });
   return accepted;
 }
 

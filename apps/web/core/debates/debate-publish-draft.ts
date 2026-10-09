@@ -11,13 +11,13 @@ import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
   CLAIM_ADDRESSES_PROPERTY_ID,
+  CLAIM_AXIS_SCORE_FIELDS,
   CLAIM_AXIS_SCORE_PROPERTY_IDS,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_OPPOSES_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
   CLAIM_SUPPORTS_PROPERTY_ID,
-  type ClaimAxisScoreField,
   DEBATE_CLAIMS_PROPERTY_ID,
   DEBATE_OPPOSED_BY_PROPERTY_ID,
   DEBATE_PARTICIPANTS_PROPERTY_ID,
@@ -627,11 +627,9 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           }
           // The axes come from the same run and follow the same rules, each on its own: one the
           // scorer did not report is simply not written, the others still are.
-          for (const [field, propertyId] of Object.entries(CLAIM_AXIS_SCORE_PROPERTY_IDS) as Array<
-            [ClaimAxisScoreField, string]
-          >) {
+          for (const field of CLAIM_AXIS_SCORE_FIELDS) {
             const axisScore = publishableScore(claim[field]);
-            if (axisScore !== null) setFloat(statement.id, propertyId, axisScore);
+            if (axisScore !== null) setFloat(statement.id, CLAIM_AXIS_SCORE_PROPERTY_IDS[field], axisScore);
           }
           const timing = publishableTiming(claim.timing);
           if (timing) {
@@ -892,7 +890,7 @@ export function publishableTiming(timing: DebateClaimInput['timing']): { startMs
  * stance as {@link publishableTiming}: the decoder refuses anything else already, and the publisher
  * refuses it again because a bad value here is ranked by, and nothing downstream can demote it.
  */
-export function publishableScore(score: DebateClaimInput['highlightScore']): number | null {
+export function publishableScore(score: number | null | undefined): number | null {
   if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   if (score < 0 || score > 1) return null;
   return score;

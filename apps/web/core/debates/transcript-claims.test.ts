@@ -18,7 +18,8 @@ type Claim = {
   /** null models a claim the graph reports no space for. */
   spaceId?: string | null;
   /**
-   * Values on the block → claim relation entity, where timecodes and the highlight score live.
+   * Values on the block → claim relation entity, where timecodes, the highlight score and the axis
+   * scores live.
    * Integers arrive from the API as strings, so these fixtures are written as strings too; floats
    * arrive as numbers.
    */
@@ -636,6 +637,25 @@ describe('published timecodes', () => {
       ])
     ).all[0];
     expect(row).toMatchObject({ restated: true, relevanceScore: 0.8, qualityScore: 0.9, controversyScore: null });
+
+    // Whichever statement comes first in (random) publish order, the highest stands.
+    const reversed = group(
+      response([
+        {
+          id: 'block-1',
+          position: 'a1',
+          author: PRESTON,
+          claims: [{ id: 'claim-1', offsets: [{ propertyId: RELEVANCE, float: 0.8 }] }],
+        },
+        {
+          id: 'block-2',
+          position: 'a2',
+          author: ARTURAS,
+          claims: [{ id: 'claim-1', offsets: [{ propertyId: RELEVANCE, float: 0.3 }] }],
+        },
+      ])
+    ).all[0];
+    expect(reversed).toMatchObject({ restated: true, relevanceScore: 0.8 });
   });
 
   it('carries the block each claim was said in, so its turn can be located on the recording', () => {

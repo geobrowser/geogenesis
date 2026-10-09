@@ -1,11 +1,11 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import {
+  CLAIM_AXIS_SCORE_FIELDS,
   CLAIM_AXIS_SCORE_PROPERTY_IDS,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
-  type ClaimAxisScoreField,
   NAME_PROPERTY_ID,
 } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
@@ -65,8 +65,8 @@ export type TranscriptClaim = {
   qualityScore: number | null;
   controversyScore: number | null;
   /**
-   * The id of the block → claim relation's own entity, which is where {@link publishedTiming} and
-   * {@link highlightScore} are read from and where a backfill writes them.
+   * The id of the block → claim relation's own entity, which is where {@link publishedTiming},
+   * {@link highlightScore} and the axis scores are read from and where a backfill writes them.
    *
    * From the same relation as {@link blockId} — the turn the claim was first seen on — so the two
    * always describe the same statement. Null only if the API omits it.
@@ -79,7 +79,8 @@ export type TranscriptClaim = {
    * be two statements by two speakers — see the grouping tests. This row is deduped, though, and
    * carries only the *first* relation's block, offsets and relation entity. Rather than let that
    * silently stand in for both statements, the flag says the row cannot answer "when" or "who"
-   * ({@link highlightScore} is the exception: it takes the highest of the statements), and the
+   * ({@link highlightScore} and the axis scores are the exception: each takes the highest of the
+   * statements), and the
    * surfaces that assert either decline it: {@link resolveClaimTimings} gives it no timing, so
    * no card is drawn over a face and no timecode is printed beside a row, and the backfill scripts
    * skip it rather than writing one occurrence and leaving the other unplaced.
@@ -241,8 +242,6 @@ function strongest(current: number | null, candidate: number | null): number | n
   return current === null || candidate > current ? candidate : current;
 }
 
-const AXIS_FIELDS = Object.keys(CLAIM_AXIS_SCORE_PROPERTY_IDS) as ClaimAxisScoreField[];
-
 type ClaimEntityNaming = {
   name?: string | null;
   spaceIds?: Array<string | null> | null;
@@ -364,7 +363,7 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
           // The strongest statement's scores stand for the claim — see `highlightScore`.
           const values = claim.entity?.valuesList;
           row.highlightScore = strongest(row.highlightScore, publishedScore(values, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID));
-          for (const field of AXIS_FIELDS) {
+          for (const field of CLAIM_AXIS_SCORE_FIELDS) {
             row[field] = strongest(row[field], publishedScore(values, CLAIM_AXIS_SCORE_PROPERTY_IDS[field]));
           }
         }
