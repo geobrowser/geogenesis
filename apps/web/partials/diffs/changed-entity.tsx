@@ -628,36 +628,51 @@ type BlockChangeRowProps = {
 };
 
 const BlockChangeRow = ({ block, spaceId }: BlockChangeRowProps) => {
-  switch (block.type) {
-    case 'textBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <TextBlockCell block={block} side="before" />
-          <TextBlockCell block={block} side="after" />
+  const row = (() => {
+    switch (block.type) {
+      case 'textBlock':
+        return (
+          <div className="grid grid-cols-2 gap-20">
+            <TextBlockCell block={block} side="before" />
+            <TextBlockCell block={block} side="after" />
+          </div>
+        );
+      case 'imageBlock':
+        return (
+          <div className="grid grid-cols-2 gap-20">
+            <ImageBlockCell block={block} side="before" />
+            <ImageBlockCell block={block} side="after" />
+          </div>
+        );
+      case 'videoBlock':
+        return (
+          <div className="grid grid-cols-2 gap-20">
+            <VideoBlockCell block={block} side="before" />
+            <VideoBlockCell block={block} side="after" />
+          </div>
+        );
+      case 'dataBlock':
+        return (
+          <div className="grid grid-cols-2 gap-20">
+            <DataBlockCell block={block} side="before" spaceId={spaceId} />
+            <DataBlockCell block={block} side="after" spaceId={spaceId} />
+          </div>
+        );
+    }
+  })();
+
+  if (block.moved) {
+    return (
+      <div>
+        <div className="mb-2 inline-flex items-center gap-1.5 rounded border border-grey-02 bg-grey-01 px-2 py-1">
+          <span className="text-metadata text-grey-04">Moved</span>
         </div>
-      );
-    case 'imageBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <ImageBlockCell block={block} side="before" />
-          <ImageBlockCell block={block} side="after" />
-        </div>
-      );
-    case 'videoBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <VideoBlockCell block={block} side="before" />
-          <VideoBlockCell block={block} side="after" />
-        </div>
-      );
-    case 'dataBlock':
-      return (
-        <div className="grid grid-cols-2 gap-20">
-          <DataBlockCell block={block} side="before" spaceId={spaceId} />
-          <DataBlockCell block={block} side="after" spaceId={spaceId} />
-        </div>
-      );
+        {row}
+      </div>
+    );
   }
+
+  return row;
 };
 
 const renderHeading = (level: number, children: React.ReactNode): React.ReactNode => {
@@ -1191,7 +1206,8 @@ const DataBlockCell = ({ block, side, spaceId }: DataBlockCellProps) => {
 
   if (isNew && side === 'before') return <div />;
   if (isDeleted && side === 'after') return <div />;
-  if (!hasNameChange && !hasConfigChanges) return <div />;
+  // A moved block has no name/config change of its own, but must still render so the reorder shows.
+  if (!hasNameChange && !hasConfigChanges && !dataBlock.moved) return <div />;
 
   return (
     <div
