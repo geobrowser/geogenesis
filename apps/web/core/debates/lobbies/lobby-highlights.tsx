@@ -13,7 +13,6 @@ import {
   type DebateLobbyClaim,
   type DebateLobbyHighlight,
   type DebateLobbyRoomVote,
-  type DebateLobbyView,
   GeoChatRequestError,
 } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
@@ -37,6 +36,7 @@ import {
 import { LobbyClaimRequest, LobbyRoomClaims, lobbyRoomClaimFrom } from './lobby-room-claims';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
+import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_HIGHLIGHTS_COPY = {
   highlight: 'Highlight at the top for everyone',
@@ -50,13 +50,7 @@ export const LOBBY_HIGHLIGHTS_COPY = {
  * "In this room" with the hosts' highlights first (GEO-3135). Highlighted claims leave the list
  * below, and the voted claim shows in the room vote card instead.
  */
-export function LobbyRoomClaimsWithHighlights({
-  lobby,
-  onExplore,
-}: {
-  lobby: DebateLobbyView;
-  onExplore?: () => void;
-}) {
+export function LobbyRoomClaimsWithHighlights({ lobby, onExplore }: { lobby: LobbyPageView; onExplore?: () => void }) {
   const { data: state } = useLobbyHighlights(lobby.lobby_id);
   const hosting = lobby.viewer.hosting;
   const excludeClaimIds = React.useMemo(() => highlightedClaimIds(state), [state]);
@@ -87,7 +81,7 @@ function LobbyHighlightedClaims({
   highlights,
   renderMenu,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   highlights: DebateLobbyHighlight[];
   renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
@@ -125,7 +119,7 @@ function HighlightedBy({ highlight }: { highlight: DebateLobbyHighlight | undefi
  * The running room vote, above the claims for everyone in the lobby. Agree and Disagree are the
  * claim card's own, so a vote is the viewer's normal position; the tally counts the room.
  */
-export function LobbyRoomVote({ lobby }: { lobby: DebateLobbyView }) {
+export function LobbyRoomVote({ lobby }: { lobby: LobbyPageView }) {
   const { data: state } = useLobbyHighlights(lobby.lobby_id);
   const vote = state?.room_vote ?? null;
   useRoomVoteHint(lobby.lobby_id, vote, lobby.viewer.connected);
@@ -138,7 +132,7 @@ function RoomVoteCard({
   vote,
   state,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   vote: DebateLobbyRoomVote;
   state: LobbyHighlightsState | undefined;
 }) {

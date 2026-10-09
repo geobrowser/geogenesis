@@ -6,7 +6,8 @@ import * as React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyMember, DebateLobbyView } from '../api';
+import type { DebateLobbyMember } from '../api';
+import type { LobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
   viewerId: null as string | null,
@@ -60,7 +61,7 @@ function member(userId: string, overrides: Partial<DebateLobbyMember> = {}): Deb
   };
 }
 
-function lobby(members: DebateLobbyMember[]): DebateLobbyView {
+function lobby(members: DebateLobbyMember[]): LobbyPageView {
   return {
     lobby_id: 'lobby1',
     name: 'Hour',
@@ -74,6 +75,7 @@ function lobby(members: DebateLobbyMember[]): DebateLobbyView {
     reminder_count: 0,
     members,
     viewer: {
+      kind: 'member',
       role: null,
       creator: false,
       hosting: false,
@@ -141,9 +143,9 @@ function Probe({ target }: { target: DebateLobbyMember }) {
   );
 }
 
-function renderProvider(view: DebateLobbyView) {
+function renderProvider(view: LobbyPageView) {
   const store = createStore();
-  const ui = (guest: boolean, joined: boolean, current: DebateLobbyView) => (
+  const ui = (guest: boolean, joined: boolean, current: LobbyPageView) => (
     <Provider store={store}>
       <LobbyQueuedRequestProvider lobby={current} guest={guest} joined={joined}>
         <Probe target={member('dan')} />
@@ -153,7 +155,7 @@ function renderProvider(view: DebateLobbyView) {
   const result = render(ui(true, false, view));
   return {
     store,
-    signedIn: (current: DebateLobbyView) => {
+    signedIn: (current: LobbyPageView) => {
       mocks.viewerId = 'me';
       mocks.activity = { data: {} };
       mocks.requests = { data: {} };

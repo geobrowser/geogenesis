@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyPerson, type DebateLobbyView, GeoChatRequestError } from '../api';
+import { type DebateLobbyPerson, GeoChatRequestError } from '../api';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import {
   lobbyErrorMessage,
@@ -24,6 +24,7 @@ import {
 } from './lobby-format';
 import { guestCountLabel } from './lobby-guest';
 import { LobbyPersonName } from './lobby-people';
+import type { LobbyMemberViewer, MemberLobbyPageView } from './lobby-view';
 import {
   useLobbyBans,
   useLobbyHand,
@@ -38,7 +39,7 @@ const MODERATION_NOTICE_MS = 10_000;
  * What a host just did to the viewer, from `viewer.last_moderation`, for a few seconds. Only an
  * action newer than the first view counts, so an old one is not replayed on opening the page.
  */
-export function useModerationNotice(viewer: Pick<DebateLobbyView['viewer'], 'last_moderation'>) {
+export function useModerationNotice(viewer: Pick<LobbyMemberViewer, 'last_moderation'>) {
   const last = viewer.last_moderation ?? null;
   const seenRef = React.useRef<string | null | undefined>(undefined);
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -62,7 +63,7 @@ export function useModerationNotice(viewer: Pick<DebateLobbyView['viewer'], 'las
 }
 
 /** Raise hand / Lower, for a listener who is in the lobby. */
-export function LobbyHandControl({ lobby }: { lobby: Pick<DebateLobbyView, 'lobby_id' | 'viewer'> }) {
+export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, 'lobby_id' | 'viewer'> }) {
   const hand = useLobbyHand(lobby.lobby_id);
   const raised = Boolean(lobby.viewer.hand_raised_at);
 
@@ -118,7 +119,7 @@ type HostTab = 'hands' | 'banned' | 'log';
  * Raised hands, the banned list and the log, for whoever is hosting now. Once the lobby has ended,
  * a host by role can still read the banned list and the log; nothing can change there.
  */
-export function LobbyHostLists({ lobby }: { lobby: DebateLobbyView }) {
+export function LobbyHostLists({ lobby }: { lobby: MemberLobbyPageView }) {
   const ended = lobby.access.status === 'closed';
   const [tab, setTab] = React.useState<HostTab>(ended ? 'banned' : 'hands');
   const hands = raisedHands(lobby.members);
@@ -172,7 +173,7 @@ export const REMOVE_GUESTS_COPY = {
 } as const;
 
 /** Removes every guest at once: guests are anonymous, so there is nobody to pick. */
-function LobbyRemoveGuests({ lobby }: { lobby: DebateLobbyView }) {
+function LobbyRemoveGuests({ lobby }: { lobby: MemberLobbyPageView }) {
   const remove = useRemoveLobbyGuests(lobby.lobby_id);
   const [confirming, setConfirming] = React.useState(false);
   const count = lobby.guest_count ?? 0;
@@ -224,7 +225,7 @@ function LobbyRemoveGuests({ lobby }: { lobby: DebateLobbyView }) {
   );
 }
 
-function RaisedHands({ lobby, hands }: { lobby: DebateLobbyView; hands: DebateLobbyView['members'] }) {
+function RaisedHands({ lobby, hands }: { lobby: MemberLobbyPageView; hands: MemberLobbyPageView['members'] }) {
   const moderate = useModerateLobbyMember(lobby.lobby_id);
   if (hands.length === 0) return <EmptyRow>No hands raised.</EmptyRow>;
 
@@ -259,7 +260,7 @@ function BannedList({
   banned,
   loading,
 }: {
-  lobby: DebateLobbyView;
+  lobby: MemberLobbyPageView;
   banned: NonNullable<ReturnType<typeof useLobbyBans>['data']>;
   loading: boolean;
 }) {

@@ -8,7 +8,7 @@ import {
   useMissingIntentRecovery,
 } from '~/core/claims/browse/use-claim-matchup';
 
-import { type DebateLobbyClaim, type DebateLobbyView, dashlessId } from '../api';
+import { type DebateLobbyClaim, dashlessId } from '../api';
 import { useDebateActivity } from '../hooks';
 import { useCreateDebateRequest, useDebateRequests } from '../matchmaking/hooks';
 import { HubMessageNote, HubQueryState } from '../matchmaking/hub-states';
@@ -21,6 +21,7 @@ import {
   useRefreshLobbyClaimsOnRefusal,
 } from './lobby-room-claims-hooks';
 import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
+import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_ROOM_CLAIMS_COPY = {
   empty: 'Nobody here has taken a side on a claim yet.',
@@ -38,7 +39,7 @@ export function LobbyRoomClaims({
   onExplore,
   renderMenu,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   excludeClaimIds?: ReadonlySet<string>;
   /** Offered when the list is empty. */
   onExplore?: () => void;

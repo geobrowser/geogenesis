@@ -6,6 +6,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyMember, DebateLobbyRole, DebateLobbyView } from '../api';
+import type { MemberLobbyPageView } from './lobby-view';
 
 const api = vi.hoisted(() => ({
   moderateDebateLobbyMember: vi.fn(),
@@ -43,7 +44,10 @@ function member(userId: string, role: DebateLobbyRole, extra: Partial<DebateLobb
   };
 }
 
-function lobby(viewer: Partial<DebateLobbyView['viewer']> = {}, extra: Partial<DebateLobbyView> = {}): DebateLobbyView {
+function lobby(
+  viewer: Partial<DebateLobbyView['viewer']> = {},
+  extra: Partial<Omit<DebateLobbyView, 'viewer'>> = {}
+): MemberLobbyPageView {
   return {
     lobby_id: 'lobby1',
     name: 'Hour',
@@ -57,6 +61,7 @@ function lobby(viewer: Partial<DebateLobbyView['viewer']> = {}, extra: Partial<D
     reminder_count: 0,
     members: [],
     viewer: {
+      kind: 'member',
       role: 'host',
       creator: true,
       hosting: true,

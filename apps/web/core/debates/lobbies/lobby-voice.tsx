@@ -28,12 +28,13 @@ import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-polic
 
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyView, type DebateLobbyVoiceToken, dashlessId, getDebateLobbyVoiceToken } from '../api';
+import { type DebateLobbyVoiceToken, dashlessId, getDebateLobbyVoiceToken } from '../api';
 import { MicrophoneIcon } from '../debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
+import type { MemberLobbyPageView } from './lobby-view';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
@@ -53,7 +54,7 @@ const voiceTokenKey = (accountKey: string | null, lobbyId: string, canPublish: b
   ['lobby-voice', accountKey, dashlessId(lobbyId), canPublish] as const;
 
 /** Hosts, the acting host and speakers publish; a change needs a new token. */
-function rolePublishes(lobby: DebateLobbyView) {
+function rolePublishes(lobby: MemberLobbyPageView) {
   return lobby.viewer.hosting || lobby.viewer.role === 'host' || lobby.viewer.role === 'speaker';
 }
 
@@ -78,7 +79,7 @@ export function LobbyVoice({
   onUnavailable,
   children,
 }: {
-  lobby: DebateLobbyView;
+  lobby: MemberLobbyPageView;
   connectionId: string;
   /** This tab's own join has landed. */
   joined: boolean;

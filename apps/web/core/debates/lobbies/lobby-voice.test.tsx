@@ -7,7 +7,8 @@ import * as React from 'react';
 import { ConnectionState } from 'livekit-client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyView, DebateLobbyVoiceToken } from '../api';
+import type { DebateLobbyVoiceToken } from '../api';
+import type { MemberLobbyPageView } from './lobby-view';
 
 const mocks = vi.hoisted(() => ({
   getDebateLobbyVoiceToken: vi.fn(),
@@ -66,7 +67,7 @@ vi.mock('@livekit/components-react', () => ({
 const { GeoChatRequestError } = await import('../api');
 const { LobbyGuestVoice, LobbyVoice, useLobbyVoiceStates } = await import('./lobby-voice');
 
-function lobby(role: 'host' | 'speaker' | 'listener' = 'speaker'): DebateLobbyView {
+function lobby(role: 'host' | 'speaker' | 'listener' = 'speaker'): MemberLobbyPageView {
   return {
     lobby_id: 'lobby1',
     name: 'Hour',
@@ -80,6 +81,7 @@ function lobby(role: 'host' | 'speaker' | 'listener' = 'speaker'): DebateLobbyVi
     reminder_count: 0,
     members: [],
     viewer: {
+      kind: 'member',
       role,
       creator: false,
       hosting: role === 'host',
@@ -192,7 +194,7 @@ describe('LobbyVoice', () => {
   it.each(['speaker', 'host'] as const)('starts muted after a listener becomes a %s', async role => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_publish: false }));
     const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const ui = (view: DebateLobbyView) => (
+    const ui = (view: MemberLobbyPageView) => (
       <QueryClientProvider client={client}>
         <LobbyVoice lobby={view} connectionId="conn-1" joined currentUserId="u1" onConnectedChange={vi.fn()}>
           <Speaking />

@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { useQueuedAction } from '~/core/state/pending-actions';
 
-import { type DebateLobbyMember, type DebateLobbyView, dashlessId } from '../api';
+import { type DebateLobbyMember, dashlessId } from '../api';
 import { useCreateDebateChallenge, useDebateActivity } from '../hooks';
 import { useDebateRequests } from '../matchmaking/hooks';
 import { useLiveRequestBlock } from '../matchmaking/use-live-request-block';
@@ -13,6 +13,7 @@ import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { personName } from './lobby-format';
 import { lobbyAuthPage, useLobbyGuestSignIn } from './lobby-guest-sign-in';
 import { canRequestLobbyMember, lobbyChallengeErrorMessage } from './lobby-request-debate';
+import type { LobbyPageView } from './lobby-view';
 
 /** Who a visitor without an account asked to debate, kept through sign-up. */
 export type QueuedLobbyRequest = { user_id: string; profile_space_id: string; name: string };
@@ -56,7 +57,7 @@ export type QueuedRequestCheck = { send: true; member: DebateLobbyMember } | { s
  */
 export function checkQueuedLobbyRequest(
   request: QueuedLobbyRequest,
-  lobby: Pick<DebateLobbyView, 'members'>,
+  lobby: Pick<LobbyPageView, 'members'>,
   viewerId: string,
   blockedReason: string | null
 ): QueuedRequestCheck {
@@ -103,7 +104,7 @@ export function LobbyQueuedRequestProvider({
   joined,
   children,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   guest: boolean;
   /** This tab has joined the lobby, which geo-chat requires of a lobby-scoped request. */
   joined: boolean;

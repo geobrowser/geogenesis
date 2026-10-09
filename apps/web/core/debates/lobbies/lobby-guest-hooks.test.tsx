@@ -20,7 +20,8 @@ vi.mock('../api', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { useLobbyGuestSession, lobbyViewForGuest, isGuestLobbyView } = await import('./lobby-guest-hooks');
+const { useLobbyGuestSession } = await import('./lobby-guest-hooks');
+const { isMemberView, lobbyViewForGuest, lobbyViewForMember } = await import('./lobby-view');
 const { readGuestSecret, storeGuestSecret } = await import('./lobby-guest-secret');
 
 function session(secret = 'secret-1', token = 'token-1'): DebateLobbyGuestSession {
@@ -289,6 +290,37 @@ describe('lobbyViewForGuest', () => {
     });
     expect(view.viewer).toMatchObject({ role: null, hosting: false, connected: false });
     expect(view.guest_count).toBe(2);
-    expect(isGuestLobbyView(view)).toBe(true);
+    expect(isMemberView(view)).toBe(false);
+    expect(view.viewer.kind).toBe('guest');
+  });
+});
+
+describe('lobbyViewForMember', () => {
+  it('tags a member view so member-only parts accept it', () => {
+    const view = lobbyViewForMember({
+      lobby_id: 'lobby1',
+      name: 'Hour',
+      access: { status: 'admitted' },
+      starts_at: 'x',
+      opens_at: 'x',
+      scheduled: false,
+      created_by: null,
+      acting_host_id: null,
+      hosts_changed_at: null,
+      reminder_count: 0,
+      members: [],
+      viewer: {
+        role: 'host',
+        creator: true,
+        hosting: true,
+        reminded: false,
+        voice_away_at: null,
+        connected: true,
+        stepped_out: false,
+        last_moderation: null,
+      },
+    });
+    expect(isMemberView(view)).toBe(true);
+    expect(view.viewer).toMatchObject({ kind: 'member', hosting: true, last_moderation: null });
   });
 });

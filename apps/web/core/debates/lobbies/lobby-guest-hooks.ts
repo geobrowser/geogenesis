@@ -5,9 +5,7 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import {
-  type DebateLobbyGuestLobby,
   type DebateLobbyGuestView,
-  type DebateLobbyView,
   GeoChatRequestError,
   dashlessId,
   getDebateLobbyGuestView,
@@ -59,27 +57,6 @@ export function useDebateLobbyGuestView<T = DebateLobbyGuestView>(
         }
       : {}),
   });
-}
-
-/** What a guest's page reads off `viewer`: nobody, with no role and no powers. */
-const GUEST_VIEWER: DebateLobbyView['viewer'] = {
-  role: null,
-  creator: false,
-  hosting: false,
-  reminded: false,
-  voice_away_at: null,
-  connected: false,
-  stepped_out: false,
-};
-
-/** The guest view's lobby in the member view's shape, so the page's components read it as is. */
-export function lobbyViewForGuest(lobby: DebateLobbyGuestLobby): DebateLobbyView {
-  return { ...lobby, viewer: GUEST_VIEWER };
-}
-
-/** True for the view drawn to a visitor without an account. */
-export function isGuestLobbyView(lobby: DebateLobbyView) {
-  return lobby.viewer === GUEST_VIEWER;
 }
 
 const LobbyGuestContext = React.createContext(false);

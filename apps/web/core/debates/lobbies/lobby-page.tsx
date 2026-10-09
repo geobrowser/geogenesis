@@ -11,7 +11,7 @@ import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyMember, type DebateLobbyView, dashlessId } from '../api';
+import { type DebateLobbyMember, dashlessId } from '../api';
 import { MicrophoneIcon } from '../debate-room-controls';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
@@ -52,7 +52,6 @@ import { LobbyGuestBanner, LobbyGuestCount } from './lobby-guest';
 import {
   LobbyGuestProvider,
   type LobbyMemberPath,
-  lobbyViewForGuest,
   useDebateLobbyGuestView,
   useLobbyGuestSession,
 } from './lobby-guest-hooks';
@@ -61,6 +60,7 @@ import { LobbyHandControl, LobbyHostLists, LobbyRemovedNotice, useModerationNoti
 import { LobbyPersonName } from './lobby-people';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { LobbyRequestDebate } from './lobby-request-debate';
+import { type LobbyPageView, isMemberView, lobbyViewForGuest, lobbyViewForMember } from './lobby-view';
 import {
   LobbyGuestVoice,
   LobbyVoice,
@@ -71,6 +71,7 @@ import {
 } from './lobby-voice';
 
 const HANDOFF_NOTICE_MS = 8_000;
+const NO_MODERATION = { last_moderation: null };
 
 export const LOBBY_COPY = {
   unavailable: 'Lobbies are not available right now.',
@@ -108,14 +109,17 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const guestQuery = useDebateLobbyGuestView(lobbyId, { enabled: guest, poll: true });
   const guestLobbyData = guestQuery.data?.lobby;
   const guestLobby = React.useMemo(() => (guestLobbyData ? lobbyViewForGuest(guestLobbyData) : null), [guestLobbyData]);
-  const lobby = guest ? guestLobby : (lobbyQuery.data ?? null);
+  const memberData = lobbyQuery.data;
+  const memberLobby = React.useMemo(() => (memberData ? lobbyViewForMember(memberData) : null), [memberData]);
+  const lobby: LobbyPageView | null = guest ? guestLobby : memberLobby;
+  const memberViewer = lobby && isMemberView(lobby) ? lobby.viewer : null;
   const admitted = lobby?.access.status === 'admitted';
   const presence = useLobbyPresence(
     lobbyId,
     admitted && !guest,
-    lobby?.viewer.stepped_out ?? false,
-    lobby?.viewer.connected ?? false,
-    lobby?.viewer.removed ?? false
+    memberViewer?.stepped_out ?? false,
+    memberViewer?.connected ?? false,
+    memberViewer?.removed ?? false
   );
   const guestSession = useLobbyGuestSession(lobbyId, {
     listen: signedOut && admitted,
@@ -172,7 +176,7 @@ function LobbyAccess({
   presence,
   guestSession,
 }: {
-  lobby: DebateLobbyView | null;
+  lobby: LobbyPageView | null;
   failed: boolean;
   guest: boolean;
   presence: ReturnType<typeof useLobbyPresence>;
@@ -200,7 +204,7 @@ function LobbyAccess({
         </LobbyNotice>
       );
       // Hosts can still look up who was banned and what was done.
-      if (lobby.viewer.role !== 'host') return notice;
+      if (!isMemberView(lobby) || lobby.viewer.role !== 'host') return notice;
       return (
         <>
           {notice}
@@ -228,7 +232,7 @@ function LobbyAccess({
   }
 }
 
-function NotYetOpen({ lobby, guest }: { lobby: DebateLobbyView; guest: boolean }) {
+function NotYetOpen({ lobby, guest }: { lobby: LobbyPageView; guest: boolean }) {
   const reminder = useDebateLobbyReminder();
   const end = useEndDebateLobby(lobby.lobby_id);
   const [confirmingCancel, setConfirmingCancel] = React.useState(false);
@@ -304,7 +308,7 @@ function AdmittedLobby({
   guest,
   guestSession,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   presence: ReturnType<typeof useLobbyPresence>;
   guest: boolean;
   guestSession: LobbyGuestSession;
@@ -317,7 +321,7 @@ function AdmittedLobby({
       return (
         <LobbyRemovedNotice
           onRejoin={() => void join(false, true)}
-          unbanned={lobby.viewer.last_moderation?.action === 'unban'}
+          unbanned={isMemberView(lobby) && lobby.viewer.last_moderation?.action === 'unban'}
         />
       );
     }
@@ -396,7 +400,7 @@ function MovedToOtherLobby({
   otherLobbyId,
   onJoin,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   otherLobbyId: string | null;
   onJoin: () => Promise<void>;
 }) {
@@ -436,7 +440,7 @@ function LobbyRoom({
   guest,
   guestSession,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   state: LobbyPresenceState;
   onRetry: () => void;
   onLeave: () => void;
@@ -452,7 +456,9 @@ function LobbyRoom({
   const [confirmingEnd, setConfirmingEnd] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
   const handoff = useHandoffNotice(lobby);
-  const moderationNotice = useModerationNotice(lobby.viewer);
+  // Member-only parts read this; a guest's view never reaches them.
+  const memberLobby = isMemberView(lobby) ? lobby : null;
+  const moderationNotice = useModerationNotice(memberLobby?.viewer ?? NO_MODERATION);
   const queuedRequest = useLobbyQueuedRequest();
   // The guest room, a sibling of the member room so the handover can drop it mid-call.
   const [guestVoiceStates, setGuestVoiceStates] = React.useState<LobbyVoiceStates>(NO_LOBBY_VOICE);
@@ -595,8 +601,11 @@ function LobbyRoom({
         </div>
       ) : null}
 
-      {state.status === 'joined' && lobby.viewer.role === 'listener' && !lobby.viewer.hosting ? (
-        <LobbyHandControl lobby={lobby} />
+      {memberLobby &&
+      state.status === 'joined' &&
+      memberLobby.viewer.role === 'listener' &&
+      !memberLobby.viewer.hosting ? (
+        <LobbyHandControl lobby={memberLobby} />
       ) : null}
 
       {state.status === 'stepped_out' ? (
@@ -652,9 +661,9 @@ function LobbyRoom({
             quiet={inVoice}
           />
         ) : null}
-        {inVoice ? (
+        {memberLobby && inVoice ? (
           <LobbyVoice
-            lobby={lobby}
+            lobby={memberLobby}
             connectionId={voice.connectionId}
             joined={state.status === 'joined'}
             currentUserId={currentUserId}
@@ -672,7 +681,7 @@ function LobbyRoom({
 
       {state.status === 'joined' || guest ? <LobbyClaimsArea lobby={lobby} /> : null}
 
-      {isHost ? <LobbyHostLists lobby={lobby} /> : null}
+      {memberLobby?.viewer.hosting ? <LobbyHostLists lobby={memberLobby} /> : null}
     </LobbyShell>
   );
 }
@@ -690,7 +699,7 @@ function RosterSection({
   ownAvailable,
 }: {
   label: string;
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   members: DebateLobbyMember[];
   isViewer: (member: DebateLobbyMember) => boolean;
   ownAvailable: boolean | undefined;
@@ -722,7 +731,7 @@ function RosterRow({
   isViewer,
   ownAvailable,
 }: {
-  lobby: DebateLobbyView;
+  lobby: LobbyPageView;
   member: DebateLobbyMember;
   isViewer: boolean;
   ownAvailable: boolean | undefined;
@@ -788,7 +797,7 @@ function RosterRow({
 }
 
 /** "X is hosting now" for a few seconds after hosting changes hands. */
-export function useHandoffNotice(lobby: Pick<DebateLobbyView, 'hosts_changed_at' | 'members'>) {
+export function useHandoffNotice(lobby: Pick<LobbyPageView, 'hosts_changed_at' | 'members'>) {
   const seenRef = React.useRef<string | null | undefined>(undefined);
   const [notice, setNotice] = React.useState<DebateLobbyMember | null>(null);
 
@@ -808,7 +817,7 @@ export function useHandoffNotice(lobby: Pick<DebateLobbyView, 'hosts_changed_at'
   return notice;
 }
 
-function LobbyTitle({ lobby }: { lobby: DebateLobbyView }) {
+function LobbyTitle({ lobby }: { lobby: LobbyPageView }) {
   return (
     <Text as="h1" variant="mediumTitle">
       {lobby.name}
