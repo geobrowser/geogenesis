@@ -108,7 +108,9 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const lobbyQuery = useDebateLobby(lobbyId);
   const [wasGuest, setWasGuest] = React.useState(false);
   if (signedOut && !wasGuest) setWasGuest(true);
-  const guest = signedOut || (wasGuest && lobbyQuery.data === undefined);
+  // A member view that failed for good (after the warm-up retries) ends guest mode: the page shows
+  // the error and its Retry rather than a guest snapshot nobody is listening on.
+  const guest = signedOut || (wasGuest && lobbyQuery.data === undefined && !lobbyQuery.isError);
   const guestQuery = useDebateLobbyGuestView(lobbyId, { enabled: guest, poll: true });
   const guestLobbyData = guestQuery.data?.lobby;
   const guestLobby = React.useMemo(() => (guestLobbyData ? lobbyViewForGuest(guestLobbyData) : null), [guestLobbyData]);
@@ -140,6 +142,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
       <LobbyAccess
         lobby={lobby}
         failed={(guest ? guestQuery : lobbyQuery).isError}
+        onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
         presence={presence}
         guestSession={guestSession}
       />
@@ -174,18 +177,23 @@ export function memberPath(
 function LobbyAccess({
   lobby,
   failed,
+  onRetry,
   presence,
   guestSession,
 }: {
   lobby: LobbyPageView | null;
   failed: boolean;
+  /** Reads the lobby again; a member join follows once it loads. */
+  onRetry: () => void;
   presence: ReturnType<typeof useLobbyPresence>;
   guestSession: LobbyGuestSession;
 }) {
   const guest = useIsLobbyGuest();
   if (!lobby) {
     return failed ? (
-      <LobbyNotice action={findDebateAction}>Could not open this lobby.</LobbyNotice>
+      <LobbyNotice action={findDebateAction} onRetry={onRetry}>
+        Could not open this lobby.
+      </LobbyNotice>
     ) : (
       <LobbyNotice busy>Opening the lobby…</LobbyNotice>
     );
@@ -618,7 +626,7 @@ function LobbyRoom({
         </div>
       ) : null}
 
-      {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} /> : null}
+      {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} listening={guestVoice !== null} /> : null}
 
       {moderationNotice ? (
         <div role="status" className="rounded-md bg-grey-01 px-3 py-2">
@@ -867,16 +875,23 @@ function LobbyNotice({
   children,
   busy = false,
   action,
+  onRetry,
 }: {
   children: React.ReactNode;
   busy?: boolean;
   action?: { href: string; label: string };
+  onRetry?: () => void;
 }) {
   return (
     <div className="flex min-h-[calc(100dvh-2.75rem)] items-center justify-center px-5 py-8" role="status">
       <div className="flex items-center gap-3 rounded-lg border border-grey-02 bg-white px-5 py-4 shadow-light">
         {busy && <Spinner />}
         <Text color="grey-04">{children}</Text>
+        {onRetry ? (
+          <HubPillButton analyticsLabel="Lobby retry open" onClick={onRetry}>
+            Try again
+          </HubPillButton>
+        ) : null}
         {action && (
           <Link href={action.href} className="shrink-0 rounded-full bg-text px-3 py-1.5 text-metadata text-white">
             {action.label}

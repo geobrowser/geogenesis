@@ -10,6 +10,9 @@ import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbyView } from '.
 const mocks = vi.hoisted(() => ({
   authenticated: false,
   memberLobby: undefined as DebateLobbyView | undefined,
+  /** The member read failed for good, after its warm-up retries. */
+  memberError: false,
+  memberRefetch: vi.fn(),
   guestView: undefined as DebateLobbyGuestView | undefined,
   presenceStatus: 'idle',
   start: vi.fn(),
@@ -50,7 +53,7 @@ vi.mock('../matchmaking/hub-header-controls', () => ({
 }));
 vi.mock('./hooks', () => ({
   MAX_TIMEOUT_MS: 2_147_483_647,
-  useDebateLobby: () => ({ data: mocks.memberLobby, isError: false }),
+  useDebateLobby: () => ({ data: mocks.memberLobby, isError: mocks.memberError, refetch: mocks.memberRefetch }),
   useLobbyPresence: (_id: string, admitted: boolean) => {
     mocks.presenceAdmitted.push(admitted);
     return {
@@ -178,6 +181,8 @@ beforeEach(() => {
   window.sessionStorage.clear();
   mocks.authenticated = false;
   mocks.memberLobby = undefined;
+  mocks.memberError = false;
+  mocks.memberRefetch.mockReset();
   mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
   mocks.presenceStatus = 'idle';
   mocks.onAudible = null;
@@ -215,7 +220,6 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
 
     expect(screen.getByRole('heading', { name: 'Onboarding with Adam' })).toBeInTheDocument();
-    expect(screen.getByText('You’re listening.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
     expect(screen.getByTestId('claims')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Leave lobby' })).toHaveAttribute(
@@ -223,6 +227,7 @@ describe('DebateLobbyPage for a visitor without an account', () => {
       expect.stringContaining('explore')
     );
     await screen.findByTestId('guest-room');
+    expect(screen.getByText('You’re listening.')).toBeInTheDocument();
     expect(screen.getByTestId('lobby-guest-count')).toHaveTextContent('2 guests without an account');
     expect(screen.queryByTestId('member-room')).not.toBeInTheDocument();
     expect(mocks.start).toHaveBeenCalledWith('lobby1', {});
@@ -490,5 +495,61 @@ describe('DebateLobbyPage when guests are turned off mid-session', () => {
 
     expect(await screen.findByText('This lobby has ended.')).toBeInTheDocument();
     expect(screen.queryByText(/has been turned off/)).not.toBeInTheDocument();
+  });
+});
+
+describe('DebateLobbyPage when the member view fails after sign-in', () => {
+  it('stays a guest, setting up, while the new account warms up', async () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    mocks.authenticated = true;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByText('Setting up your account…')).toBeInTheDocument();
+    expect(screen.getByTestId('guest-room')).toBeInTheDocument();
+  });
+
+  it('leaves guest mode on a terminal error and offers Try again, which reads the lobby again', async () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    mocks.authenticated = true;
+    mocks.memberError = true;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(await screen.findByText('Could not open this lobby.')).toBeInTheDocument();
+    expect(screen.queryByText('Setting up your account…')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1', admission: 1 }, true)
+    );
+
+    act(() => screen.getByRole('button', { name: 'Try again' }).click());
+    expect(mocks.memberRefetch).toHaveBeenCalled();
+  });
+});
+
+describe('DebateLobbyPage guest banner', () => {
+  it('says You’re listening only while this visitor listens', async () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    expect(screen.getByTestId('lobby-guest-banner')).toHaveTextContent('You’re listening.');
+  });
+
+  it('invites without claiming to listen when the visitor was refused', async () => {
+    const { GeoChatRequestError } = await import('../api');
+    mocks.start.mockRejectedValue(new GeoChatRequestError('off', 'guest_cap_reached', 409, 30_000, { limit: 0 }));
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByText(/isn’t available in this lobby/);
+    const banner = screen.getByTestId('lobby-guest-banner');
+    expect(banner).toHaveTextContent('Create an account to speak, vote and debate.');
+    expect(banner).not.toHaveTextContent('You’re listening');
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+  });
+
+  it('invites without claiming to listen while starting', async () => {
+    mocks.start.mockReturnValue(new Promise(() => undefined));
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByText('Connecting voice…');
+    expect(screen.getByTestId('lobby-guest-banner')).not.toHaveTextContent('You’re listening');
   });
 });

@@ -10,6 +10,9 @@ import { LOBBY_QUEUED_REQUEST_COPY, useLobbyQueuedRequest } from './lobby-queued
 
 export const LOBBY_GUEST_COPY = {
   listening: 'You’re listening.',
+  /** When this visitor is not listening (starting, refused, elsewhere, turned off). */
+  notListening: 'Create an account to speak, vote and debate.',
+  stay: 'You’ll stay in this lobby.',
   invite: 'Create an account to speak, vote and debate. You’ll stay in this lobby.',
   logIn: 'Log in',
   createAccount: 'Create account',
@@ -47,15 +50,18 @@ export function LobbyGuestCount({ count }: { count: number }) {
 }
 
 /**
- * "You're listening" for a visitor without an account, with the way in. Names a debate request
+ * The way in for a visitor without an account: "You're listening" while their room plays. Names a debate request
  * waiting on sign-up, so what they tapped stays on screen while they sign up.
  */
 export function LobbyGuestBanner({
   lobbyId,
+  listening = false,
   message,
 }: {
   lobbyId: string;
-  /** In place of "You're listening", e.g. after a host removed the guests. */
+  /** This visitor's room is playing; otherwise the banner only invites, so it never contradicts a notice. */
+  listening?: boolean;
+  /** In place of the default lines, e.g. after a host removed the guests. */
   message?: { title: string; detail: string };
 }) {
   const signIn = useLobbyGuestSignIn(lobbyId);
@@ -74,8 +80,10 @@ export function LobbyGuestBanner({
       </div>
     );
   }
-  const title =
-    message?.title ?? (pending ? LOBBY_QUEUED_REQUEST_COPY.prompt(pending.name) : LOBBY_GUEST_COPY.listening);
+  const fallback = listening
+    ? { title: LOBBY_GUEST_COPY.listening, detail: LOBBY_GUEST_COPY.invite }
+    : { title: LOBBY_GUEST_COPY.notListening, detail: LOBBY_GUEST_COPY.stay };
+  const title = message?.title ?? (pending ? LOBBY_QUEUED_REQUEST_COPY.prompt(pending.name) : fallback.title);
 
   return (
     <div
@@ -89,7 +97,7 @@ export function LobbyGuestBanner({
           {title}
         </Text>
         <Text as="p" variant="footnote" color="grey-02">
-          {message?.detail ?? LOBBY_GUEST_COPY.invite}
+          {message?.detail ?? (pending ? LOBBY_GUEST_COPY.invite : fallback.detail)}
         </Text>
       </div>
       <button
