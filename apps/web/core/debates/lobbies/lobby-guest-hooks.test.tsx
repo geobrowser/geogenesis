@@ -83,6 +83,19 @@ describe('useLobbyGuestSession', () => {
     expect(readGuestSecret('lobby1')).toBeNull();
   });
 
+  // Signed in and joined before the start answered: that session is over for this page.
+  it('gives back a place answered after the member join', async () => {
+    let answer!: (value: DebateLobbyGuestSession) => void;
+    mocks.start.mockReturnValue(new Promise(resolve => (answer = resolve)));
+    const { result } = renderHook(() => useLobbyGuestSession('lobby1', true));
+    await waitFor(() => expect(result.current.state.status).toBe('starting'));
+    act(() => result.current.release());
+    await act(async () => answer(session('late')));
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late' }, true);
+    expect(readGuestSecret('lobby1')).toBeNull();
+    expect(result.current.state.status).toBe('idle');
+  });
+
   it('resumes with the stored secret', async () => {
     storeGuestSecret('lobby1', 'kept');
     const { result } = renderHook(() => useLobbyGuestSession('lobby1', true));

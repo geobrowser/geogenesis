@@ -185,13 +185,13 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     expect(screen.getByRole('heading', { name: 'Onboarding with Adam' })).toBeInTheDocument();
     expect(screen.getByText('You’re listening.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
-    expect(screen.getByText(/You and 1 other/)).toBeInTheDocument();
     expect(screen.getByTestId('claims')).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Leave lobby' })).toHaveAttribute(
       'href',
       expect.stringContaining('explore')
     );
     await screen.findByTestId('guest-room');
+    expect(screen.getByText(/You and 1 other/)).toBeInTheDocument();
     expect(screen.queryByTestId('member-room')).not.toBeInTheDocument();
     expect(mocks.start).toHaveBeenCalledWith('lobby1', {});
     // No join, so no lobby_* analytics: those count members.

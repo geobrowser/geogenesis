@@ -237,7 +237,6 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
     void start();
   }, [start]);
 
-  /** The member join ended this session; stop heartbeating and never send a leave. */
   /** The member room is up, or there is no guest room to wait for: drop it and forget the secret. */
   const handOver = React.useCallback(() => {
     generationRef.current += 1;
