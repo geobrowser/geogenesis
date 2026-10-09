@@ -1,6 +1,6 @@
 'use client';
 
-import { useGeoLogin } from '@geogenesis/auth';
+import { useGeoLogin, usePrivy } from '@geogenesis/auth';
 
 import { useCallback, useRef } from 'react';
 
@@ -19,6 +19,12 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
     scope.target_id ?? 'genesis'
   );
   const requested = useRef<ActionContext | null>(null);
+  // Privy's `login()` does nothing for someone already signed in, so an attempt opened then can only
+  // ever be superseded by the next press (GEO-3245: 37 of them from one user stuck behind a Log in
+  // button). Read through a ref so the returned callback keeps its identity.
+  const { authenticated } = usePrivy();
+  const authenticatedRef = useRef(authenticated);
+  authenticatedRef.current = authenticated;
   const { login } = useGeoLogin({
     ...params,
     onComplete: args => {
@@ -35,6 +41,7 @@ export function useTrackedLogin(params: Parameters<typeof useGeoLogin>[0]) {
   });
   const trackedLogin = useCallback(
     (properties?: AnalyticsProperties, options?: Parameters<typeof beginPrivyAuth>[1]) => {
+      if (authenticatedRef.current) return undefined;
       const context = getContext(
         properties?.target_id && properties?.target_type
           ? { target_id: String(properties.target_id), target_type: String(properties.target_type) }

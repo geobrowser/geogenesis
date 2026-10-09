@@ -96,4 +96,5 @@ export type AnalyticsEventName =
   | 'signup_completed'
   | 'signup_cta_clicked'
   | 'space_created'
-  | 'vote_cast';
+  | 'vote_cast'
+  | 'wallet_connection_stalled';
