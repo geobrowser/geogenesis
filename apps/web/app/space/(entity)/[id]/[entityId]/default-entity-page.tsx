@@ -45,7 +45,7 @@ export default async function DefaultEntityPage({
       deterministicSpaceId={props.deterministicSpaceId}
       preventRedirect={isEditing}
     >
-      <EntityStoreProvider id={props.id} spaceId={props.spaceId}>
+      <EntityStoreProvider id={props.id} spaceId={props.spaceId} initialEntities={props.initialEntities}>
         <RouteEditorProvider
           id={props.id}
           spaceId={props.spaceId}

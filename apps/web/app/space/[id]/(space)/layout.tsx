@@ -160,7 +160,7 @@ export default async function Layout(props0: LayoutProps) {
      * profile and after a failed read, where this is a passthrough.
      */
     <HydrationBoundary state={profile?.dehydratedState}>
-      <EntityStoreProvider id={props.id} spaceId={spaceId}>
+      <EntityStoreProvider id={props.id} spaceId={spaceId} initialEntities={props.initialEntities}>
         <RouteEditorProvider
           id={props.id}
           spaceId={spaceId}
@@ -340,6 +340,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
       blockRelations: [],
       blocks: [],
       initialCollectionItems: {},
+      initialEntities: [],
       space: null,
       avatarUrl: null,
       coverUrl: null,
@@ -389,6 +390,7 @@ const getSpaceFrontPage = async (spaceId: string) => {
       blockRelations: syntheticEntity?.relations ?? [],
       blocks: [],
       initialCollectionItems: {},
+      initialEntities: [],
       space: spaceWithSyntheticEntity,
       avatarUrl: syntheticEntity ? (Entities.avatar(syntheticEntity.relations) ?? null) : null,
       coverUrl: syntheticEntity ? (Entities.cover(syntheticEntity.relations) ?? null) : null,
@@ -455,6 +457,19 @@ const getSpaceFrontPage = async (spaceId: string) => {
     // pass — a gallery needs the dimensions on them to size its cards on the first paint.
     blocks: [...blocks, ...shownPropertyEntities],
     initialCollectionItems,
+    /**
+     * Everything fetched here, for `EntityStoreProvider` to seed the store with — see
+     * `fetchEntityPageData`. `entity` is scoped to this space, a subset of what `useHydrateEntity`
+     * fetches next; the store merges values and relations by id, so the full copy only adds to it.
+     * Left out when it has no id yet, since `props.id` is then a page that does not exist.
+     */
+    initialEntities: [
+      ...(entity.id ? [entity] : []),
+      ...allBlocks,
+      ...shownPropertyEntities,
+      ...tabEntities,
+      ...Object.values(initialCollectionItems).flat(),
+    ],
     space,
     avatarUrl: Entities.avatar(entity.relations) ?? null,
     coverUrl: Entities.cover(entity.relations) ?? null,

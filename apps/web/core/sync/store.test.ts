@@ -493,6 +493,35 @@ describe('GeoStore', () => {
     });
   });
 
+  describe('seedFromServer', () => {
+    afterEach(() => {
+      vi.unstubAllGlobals();
+    });
+
+    it('in the browser, fills only entities the store does not already hold', () => {
+      store.hydrateWith([{ ...mockEntity1, values: [{ ...mockValue1, value: 'fresher' }] }]);
+
+      store.seedFromServer([
+        { ...mockEntity1, values: [{ ...mockValue1, value: 'stale server copy' }] },
+        { ...mockEntity2, values: [mockValue2] },
+      ]);
+
+      const values = reactiveValues.get();
+      expect(values.find(v => v.id === 'value-1')?.value).toBe('fresher');
+      expect(syncedEntities.has('entity-2')).toBe(true);
+      expect(values).toContain(mockValue2);
+    });
+
+    it('on the server, overwrites with the newer server data', () => {
+      vi.stubGlobal('window', undefined);
+      store.hydrateWith([{ ...mockEntity1, values: [mockValue1] }]);
+
+      store.seedFromServer([{ ...mockEntity1, values: [{ ...mockValue1, value: 'newer' }] }]);
+
+      expect(reactiveValues.get().find(v => v.id === 'value-1')?.value).toBe('newer');
+    });
+  });
+
   describe('getEntity', () => {
     beforeEach(() => {
       syncedEntities.set('entity-1', mockEntity1);
