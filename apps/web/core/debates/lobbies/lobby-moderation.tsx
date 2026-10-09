@@ -207,7 +207,7 @@ function LobbyRemoveGuests({ lobby }: { lobby: MemberLobbyPageView }) {
       ) : (
         <div className="flex items-center gap-2">
           <Text as="p" variant="footnote" color="grey-04" className="min-w-0 flex-1">
-            {count > 0 ? `${count} ${guestCountLabel(count, false)}` : REMOVE_GUESTS_COPY.done}
+            {count > 0 ? `${count} ${guestCountLabel(count)}` : REMOVE_GUESTS_COPY.done}
           </Text>
           {count > 0 ? (
             <HubPillButton analyticsLabel="Lobby remove guests" onClick={() => setConfirming(true)}>

@@ -452,7 +452,8 @@ function LobbyRoom({
   const currentUserId = useCurrentGeoChatUserId();
   const { authenticated } = useGeoChatAuth();
   // The viewer's own toggle, as the availability pill and People tab read it, ahead of the roster's.
-  const ownAvailable = useDebateActivity(authenticated).data?.available_to_debate;
+  // A member read: off for a guest, including one signed in while the member view loads.
+  const ownAvailable = useDebateActivity(authenticated && !guest).data?.available_to_debate;
   const end = useEndDebateLobby(lobby.lobby_id);
   const [confirmingEnd, setConfirmingEnd] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
@@ -467,7 +468,6 @@ function LobbyRoom({
     guestSession.state.status === 'listening' || guestSession.state.status === 'handingOver'
       ? guestSession.state.session.voice
       : null;
-  const { authenticated } = useGeoChatAuth();
   // One automatic reconnect per page for a guest join dropped before it connected.
   const guestAutoRetryLeftRef = React.useRef(true);
   const { reconnect: reconnectGuest } = guestSession;
@@ -509,7 +509,6 @@ function LobbyRoom({
           isViewer={isViewer}
           ownAvailable={ownAvailable}
         />
-        <LobbyGuestCount count={lobby.guest_count ?? 0} includesViewer={guest && guestVoice !== null} />
       </>
     );
 
@@ -533,7 +532,7 @@ function LobbyRoom({
               Live · {hereLabel(lobby.members.length)} · {debatingLabel(debatingCount(lobby.members))}
             </Text>
           </span>
-          {/* The visitor count for people without an account goes here. */}
+          <LobbyGuestCount count={lobby.guest_count ?? 0} />
           <Text as="span" variant="footnote" color="grey-04">
             {[hosts.length ? `Hosted by ${hostsLabel(hosts)}` : 'No host here', 'Not recorded'].join(' · ')}
           </Text>
@@ -551,7 +550,7 @@ function LobbyRoom({
               Leave lobby
             </HubPillButton>
           )}
-          <HubHeaderControls analyticsSurface="lobby" />
+          {guest ? null : <HubHeaderControls analyticsSurface="lobby" />}
           {isHost ? (
             confirmingEnd ? (
               <>

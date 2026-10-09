@@ -19,6 +19,8 @@ const mocks = vi.hoisted(() => ({
   onAutoReconnect: null as (() => boolean) | null,
   /** What the page asked presence to join with, render by render; only a member joins. */
   presenceAdmitted: [] as boolean[],
+  /** Whether the page asked for the member-only activity read, render by render. */
+  activityEnabled: [] as boolean[],
 }));
 
 vi.mock('../api', async importOriginal => ({
@@ -35,6 +37,13 @@ vi.mock('../hooks', async importOriginal => ({
     accountKey: mocks.authenticated ? 'acct' : null,
     getPrivyIdentityToken: vi.fn(),
   }),
+  useDebateActivity: (enabled: boolean) => {
+    mocks.activityEnabled.push(enabled);
+    return { data: undefined };
+  },
+}));
+vi.mock('../matchmaking/hub-header-controls', () => ({
+  HubHeaderControls: () => <div data-testid="availability-pill" />,
 }));
 vi.mock('./hooks', () => ({
   MAX_TIMEOUT_MS: 2_147_483_647,
@@ -168,6 +177,7 @@ beforeEach(() => {
   mocks.presenceStatus = 'idle';
   mocks.onAudible = null;
   mocks.presenceAdmitted = [];
+  mocks.activityEnabled = [];
   mocks.start.mockReset().mockResolvedValue({
     guest_id: 'g1',
     guest_secret: 'secret-1',
@@ -204,7 +214,7 @@ describe('DebateLobbyPage for a visitor without an account', () => {
       expect.stringContaining('explore')
     );
     await screen.findByTestId('guest-room');
-    expect(screen.getByText(/You and 1 other/)).toBeInTheDocument();
+    expect(screen.getByTestId('lobby-guest-count')).toHaveTextContent('2 guests without an account');
     expect(screen.queryByTestId('member-room')).not.toBeInTheDocument();
     expect(mocks.start).toHaveBeenCalledWith('lobby1', {});
     // No join, so no lobby_* analytics: those count members.
@@ -340,5 +350,76 @@ describe('DebateLobbyPage when another tab takes the session', () => {
     await screen.findByTestId('guest-room');
     expect(mocks.start).toHaveBeenCalledTimes(2);
     vi.useRealTimers();
+  });
+});
+
+// GEO-3131 for guests: the same status, pairs and badges members see, from the guest view.
+describe('DebateLobbyPage status and pairs for a guest', () => {
+  const person = (id: string, name: string, extra: Partial<DebateLobbyMember> = {}): DebateLobbyMember => ({
+    ...adam,
+    user_id: id,
+    profile_space_id: `space-${id}`,
+    display_name: name,
+    role: 'speaker',
+    creator: false,
+    ...extra,
+  });
+
+  it('shows statuses, New, the debating count and pair cards, with no availability pill', async () => {
+    const maya = person('maya', 'Maya', { in_debate: true });
+    const leo = person('leo', 'Leo', { in_debate: true });
+    mocks.guestView = {
+      lobby: {
+        ...lobbyFields,
+        members: [
+          { ...adam, available_to_debate: true },
+          person('priya', 'Priya', { available_to_debate: false, newcomer: true }),
+          maya,
+          leo,
+        ],
+        debate_pairs: [
+          {
+            people: [
+              {
+                user_id: 'maya',
+                profile_space_id: 'space-maya',
+                display_name: 'Maya',
+                avatar_cid: null,
+                in_lobby: true,
+              },
+              { user_id: 'leo', profile_space_id: 'space-leo', display_name: 'Leo', avatar_cid: null, in_lobby: true },
+            ],
+          },
+        ],
+      },
+      claims: null,
+      highlights: null,
+    };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+
+    expect(screen.getByText(/Live · 4 here · 2 debating/)).toBeInTheDocument();
+    expect(screen.getByTestId('lobby-debate-pair')).toHaveTextContent('Maya vs. Leo');
+    expect(screen.getByText('Looking to debate')).toBeInTheDocument();
+    expect(screen.getByText('Just chatting')).toBeInTheDocument();
+    expect(screen.getByText('New')).toBeInTheDocument();
+    expect(screen.queryByText(/\(you\)/)).not.toBeInTheDocument();
+    expect(screen.queryByTestId('availability-pill')).not.toBeInTheDocument();
+    expect(mocks.activityEnabled.every(enabled => !enabled)).toBe(true);
+  });
+
+  it('keeps member reads off while signed in and still a guest, and on once a member', async () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    mocks.authenticated = true;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.queryByTestId('availability-pill')).not.toBeInTheDocument();
+    expect(mocks.activityEnabled.at(-1)).toBe(false);
+
+    mocks.memberLobby = memberView;
+    mocks.presenceStatus = 'joined';
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByTestId('availability-pill')).toBeInTheDocument();
+    expect(mocks.activityEnabled.at(-1)).toBe(true);
   });
 });

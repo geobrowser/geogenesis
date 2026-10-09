@@ -19,30 +19,28 @@ export const LOBBY_GUEST_COPY = {
   settingUpDetail: 'You’ll stay in this lobby and can speak once it’s ready.',
 } as const;
 
-/** Visitors without an account, as a member reads them, or as one of them reads the rest. */
-export function guestCountLabel(count: number, includesViewer: boolean) {
-  if (!includesViewer) return `${pluralize('guest', count)} without an account`;
-  const others = count - 1;
-  return others <= 0 ? 'You' : `You and ${others} ${pluralize('other', others)}`;
+/** Visitors without an account, as the lobby header counts them. */
+export function guestCountLabel(count: number) {
+  return `${pluralize('guest', count)} without an account`;
 }
 
 /**
- * How many people listen without an account (GEO-3131). One element, so the header can place it
- * wherever its counts go.
+ * How many people listen without an account (GEO-3131), in the lobby header. The same for every
+ * viewer: "here" counts members only, so a guest's own "You" beside it would read as a mismatch.
  */
-export function LobbyGuestCount({ count, includesViewer = false }: { count: number; includesViewer?: boolean }) {
+export function LobbyGuestCount({ count }: { count: number }) {
   if (count <= 0) return null;
   return (
-    <span className="inline-flex items-center gap-2" data-testid="lobby-guest-count">
+    <span className="inline-flex items-center gap-1.5" data-testid="lobby-guest-count">
       <span
         aria-hidden
-        className="inline-flex size-6 items-center justify-center rounded-full bg-grey-02 text-[11px] leading-none font-medium text-grey-04"
+        className="inline-flex size-5 items-center justify-center rounded-full bg-grey-02 text-[11px] leading-none font-medium text-grey-04"
       >
         +{count}
       </span>
-      <Text as="span" variant="metadata" color="grey-04">
+      <Text as="span" variant="footnote" color="grey-04">
         <span className="sr-only">{count} </span>
-        {guestCountLabel(count, includesViewer)}
+        {guestCountLabel(count)}
       </Text>
     </span>
   );
