@@ -171,6 +171,7 @@ beforeEach(() => {
   mocks.start.mockReset().mockResolvedValue({
     guest_id: 'g1',
     guest_secret: 'secret-1',
+    admission: 1,
     lease_expires_at: 'x',
     heartbeat_interval_seconds: 20,
     voice: {
@@ -292,7 +293,9 @@ describe('DebateLobbyPage after sign-in that does not join here', () => {
     mocks.presenceStatus = 'confirm_leave_other';
     rerender(<DebateLobbyPage lobbyId="lobby1" />);
 
-    await waitFor(() => expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1' }, true));
+    await waitFor(() =>
+      expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1', admission: 1 }, true)
+    );
     expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
     expect(readGuestSecret('lobby1')).toBeNull();
   });
@@ -318,5 +321,24 @@ describe('DebateLobbyPage guest join that never connects', () => {
     });
     expect(retried).toBe(false);
     expect(mocks.start).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('DebateLobbyPage when another tab takes the session', () => {
+  it('drops this tab’s room, says so, and offers Listen here', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'superseded', lease_expires_at: null });
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    expect(await screen.findByText('You’re listening in another tab.')).toBeInTheDocument();
+    expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
+    expect(mocks.leave).not.toHaveBeenCalled();
+
+    act(() => screen.getByRole('button', { name: 'Listen here' }).click());
+    await screen.findByTestId('guest-room');
+    expect(mocks.start).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
   });
 });

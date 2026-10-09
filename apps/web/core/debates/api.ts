@@ -2811,14 +2811,19 @@ export type DebateLobbyGuestSession = {
   guest_id: string;
   /** Sent back on every guest call, and on the member join that replaces this session. */
   guest_secret: string;
+  /** This page's admission of the session; heartbeat and leave name it, so an older page's calls are no-ops. */
+  admission: number;
   lease_expires_at: string;
   heartbeat_interval_seconds: number;
   /** Listen-only: `can_publish` is false. */
   voice: DebateLobbyVoiceToken;
 };
 
-/** Only `lapsed` should start again. `left` follows this tab's own leave or member join. */
-export type DebateLobbyGuestGoneReason = 'lapsed' | 'removed' | 'ended' | 'left';
+/**
+ * Only `lapsed` should start again. `left` follows this tab's own leave or member join; `superseded`
+ * means a later admission (a reload, another tab) holds the session now.
+ */
+export type DebateLobbyGuestGoneReason = 'lapsed' | 'removed' | 'ended' | 'left' | 'superseded';
 
 export type DebateLobbyGuestHeartbeat = {
   alive: boolean;
@@ -2835,15 +2840,22 @@ export async function startDebateLobbyGuest(lobbyId: string, body: { guest_secre
 }
 
 /** Renews the guest's 90s lease. Rate limited to 30 a minute per guest. */
-export async function sendDebateLobbyGuestHeartbeat(lobbyId: string, body: { guest_secret: string }) {
+export async function sendDebateLobbyGuestHeartbeat(
+  lobbyId: string,
+  body: { guest_secret: string; admission: number }
+) {
   return geoChatRequest<DebateLobbyGuestHeartbeat>(`/debate-lobbies/${lobbyId}/guest/heartbeat`, {
     method: 'POST',
     body,
   });
 }
 
-/** Always `204`. Drops the guest from the count at once. */
-export async function leaveDebateLobbyGuest(lobbyId: string, body: { guest_secret: string }, keepalive = false) {
+/** Always `204`. Drops the guest from the count at once; a no-op for an older admission. */
+export async function leaveDebateLobbyGuest(
+  lobbyId: string,
+  body: { guest_secret: string; admission: number },
+  keepalive = false
+) {
   return geoChatRequest<void>(`/debate-lobbies/${lobbyId}/guest/leave`, { method: 'POST', body, keepalive });
 }
 

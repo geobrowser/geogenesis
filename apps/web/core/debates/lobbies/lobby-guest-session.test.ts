@@ -1,16 +1,12 @@
 import { describe, expect, it } from 'vitest';
 
 import type { DebateLobbyGuestSession } from '../api';
-import {
-  type GuestSessionEvent,
-  type GuestSessionState,
-  orphanedAnswerLeaves,
-  transition,
-} from './lobby-guest-session';
+import { type GuestSessionEvent, type GuestSessionState, transition } from './lobby-guest-session';
 
 const session = (secret = 's1'): DebateLobbyGuestSession => ({
   guest_id: 'g1',
   guest_secret: secret,
+  admission: 1,
   lease_expires_at: 'x',
   heartbeat_interval_seconds: 20,
   voice: { token: 't', url: 'u', room_name: 'r', can_publish: false, start_muted: false, expires_at: 'x' },
@@ -24,6 +20,7 @@ const released: GuestSessionState = { status: 'released', attempt: 1 };
 const refused: GuestSessionState = { status: 'refused', attempt: 1, message: 'full', retryAt: null };
 const removed: GuestSessionState = { status: 'removed', attempt: 1 };
 const ended: GuestSessionState = { status: 'ended', attempt: 1 };
+const superseded: GuestSessionState = { status: 'superseded', attempt: 1 };
 
 const out = { signedIn: false };
 const inn = { signedIn: true };
@@ -61,7 +58,7 @@ describe('guest session transitions', () => {
   it('leaves an answer that lands after sign-in', () => {
     expect(transition(starting, { type: 'started', attempt: 1, session: session('late') }, inn)).toEqual({
       next: released,
-      commands: [{ type: 'leave', secret: 'late' }, { type: 'clearSecret' }],
+      commands: [{ type: 'leave', secret: 'late', admission: 1 }, { type: 'clearSecret' }],
     });
   });
 
@@ -110,11 +107,30 @@ describe('guest session transitions', () => {
   it('abandons as a guest when the signed-in path failed', () => {
     expect(transition(listening, { type: 'abandon' }, inn)).toEqual({
       next: released,
-      commands: [{ type: 'leave', secret: 's1' }, { type: 'clearSecret' }],
+      commands: [{ type: 'leave', secret: 's1', admission: 1 }, { type: 'clearSecret' }],
     });
     expect(transition(refused, { type: 'abandon' }, inn).commands).toEqual([{ type: 'clearSecret' }]);
     // A removed guest stays removed.
     expect(transition(removed, { type: 'abandon' }, inn).next).toBe(removed);
+  });
+
+  it('steps aside when superseded: no leave, the secret stays with the newer page', () => {
+    expect(run(listening, { type: 'superseded' })).toEqual({ next: superseded, commands: [] });
+    for (const state of [idle, starting, handingOver, released, removed]) {
+      expect(run(state, { type: 'superseded' }).next).toBe(state);
+    }
+    for (const event of [{ type: 'restart' }, { type: 'abandon' }, { type: 'roomDone' }] as GuestSessionEvent[]) {
+      expect(run(superseded, event).next).toBe(superseded);
+    }
+  });
+
+  it('listens here again from superseded only on a press, never once signed in', () => {
+    expect(run(superseded, { type: 'start' }).next).toEqual({ status: 'starting', attempt: 2 });
+    expect(transition(superseded, { type: 'start' }, inn).next).toBe(superseded);
+  });
+
+  it('the member join releases a superseded page without touching the secret', () => {
+    expect(transition(superseded, { type: 'memberJoined' }, inn)).toEqual({ next: released, commands: [] });
   });
 
   it('a released session stays released', () => {
@@ -128,14 +144,5 @@ describe('guest session transitions', () => {
       { type: 'ended' },
     ];
     for (const event of events) expect(transition(released, event, out).next).toBe(released);
-  });
-});
-
-describe('orphanedAnswerLeaves', () => {
-  // A page that unmounted mid-resume must not end the session its remount resumed on the same secret.
-  it('keeps the session stored for this lobby, leaves any other', () => {
-    expect(orphanedAnswerLeaves('s1', 's1')).toBe(false);
-    expect(orphanedAnswerLeaves('s2', 's1')).toBe(true);
-    expect(orphanedAnswerLeaves('s1', null)).toBe(true);
   });
 });

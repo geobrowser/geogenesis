@@ -24,10 +24,11 @@ const { useLobbyGuestSession } = await import('./lobby-guest-hooks');
 const { isMemberView, lobbyViewForGuest, lobbyViewForMember } = await import('./lobby-view');
 const { readGuestSecret, storeGuestSecret } = await import('./lobby-guest-secret');
 
-function session(secret = 'secret-1', token = 'token-1'): DebateLobbyGuestSession {
+function session(secret = 'secret-1', token = 'token-1', admission = 1): DebateLobbyGuestSession {
   return {
     guest_id: 'guest1',
     guest_secret: secret,
+    admission,
     lease_expires_at: '2026-10-09T12:01:30Z',
     heartbeat_interval_seconds: 20,
     voice: {
@@ -103,12 +104,13 @@ describe('useLobbyGuestSession', () => {
     await waitFor(() => expect(mocks.start).toHaveBeenCalled());
     unmount();
     await act(async () => late.answer(session('late')));
-    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late' }, true);
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late', admission: 1 }, true);
     expect(readGuestSecret('lobby1')).toBeNull();
   });
 
-  // The backend resumes on the same secret, so the old page's leave would end the new page's session.
-  it('leaves nothing when a page unmounts mid-resume and a new one resumed the same secret', async () => {
+  // Both pages resume on the same secret; the old page's leave names its own admission, a no-op once
+  // the newer one holds the session.
+  it('a page that unmounted mid-resume leaves only its own admission', async () => {
     storeGuestSecret('lobby1', 'kept');
     const first = deferred();
     mocks.start.mockReturnValueOnce(first.promise);
@@ -116,12 +118,35 @@ describe('useLobbyGuestSession', () => {
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(1));
     old.unmount();
 
-    mocks.start.mockResolvedValueOnce(session('kept'));
+    mocks.start.mockResolvedValueOnce(session('kept', 'token-2', 3));
     const next = renderSession();
     await waitFor(() => expect(next.result.current.state.status).toBe('listening'));
-    await act(async () => first.answer(session('kept')));
-    expect(mocks.leave).not.toHaveBeenCalled();
+    await act(async () => first.answer(session('kept', 'token-1', 2)));
+    expect(mocks.leave).toHaveBeenCalledTimes(1);
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'kept', admission: 2 }, true);
     expect(readGuestSecret('lobby1')).toBe('kept');
+    expect(next.result.current.state.status).toBe('listening');
+  });
+
+  // A reload or another tab took the session: stop, drop the room, keep the secret, never restart by itself.
+  it('steps aside when superseded, and listens here again only on request', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'superseded', lease_expires_at: null });
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    await waitFor(() => expect(result.current.state.status).toBe('superseded'));
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+    expect(mocks.heartbeat).toHaveBeenCalledTimes(1);
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+    expect(mocks.leave).not.toHaveBeenCalled();
+    expect(readGuestSecret('lobby1')).toBe('secret-1');
+
+    mocks.start.mockResolvedValueOnce(session('secret-1', 'token-3', 3));
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    expect(mocks.start).toHaveBeenLastCalledWith('lobby1', { guest_secret: 'secret-1' });
   });
 
   it('gives back a place answered after the member join', async () => {
@@ -132,7 +157,7 @@ describe('useLobbyGuestSession', () => {
     rerender({ listen: false, signedIn: true, member: 'joined' });
     expect(result.current.state.status).toBe('released');
     await act(async () => late.answer(session('late')));
-    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late' }, true);
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late', admission: 1 }, true);
     expect(readGuestSecret('lobby1')).toBeNull();
   });
 
@@ -144,7 +169,7 @@ describe('useLobbyGuestSession', () => {
     rerender({ listen: false, signedIn: true, member: 'pending' });
     await act(async () => late.answer(session('late')));
     expect(result.current.state.status).toBe('released');
-    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late' }, true);
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late', admission: 1 }, true);
   });
 
   it('resumes with the stored secret', async () => {
@@ -224,7 +249,7 @@ describe('useLobbyGuestSession', () => {
     mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'lapsed', lease_expires_at: null });
     mocks.start.mockResolvedValueOnce(session('secret-1', 'token-2'));
     await act(async () => vi.advanceTimersByTimeAsync(20_000));
-    expect(mocks.heartbeat).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1' });
+    expect(mocks.heartbeat).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1', admission: 1 });
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(2));
     await waitFor(() =>
       expect(result.current.state.status === 'listening' && result.current.state.session.voice.token).toBe('token-2')
@@ -252,7 +277,7 @@ describe('useLobbyGuestSession', () => {
     const { result, unmount } = renderSession();
     await waitFor(() => expect(result.current.state.status).toBe('listening'));
     unmount();
-    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1' }, true);
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1', admission: 1 }, true);
   });
 
   // The member join ended the session: no leave, no heartbeat, but the room keeps playing.
@@ -281,7 +306,7 @@ describe('useLobbyGuestSession', () => {
     await waitFor(() => expect(result.current.state.status).toBe('listening'));
     rerender({ listen: false, signedIn: true, member: 'failed' });
     expect(result.current.state.status).toBe('released');
-    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1' }, true);
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1', admission: 1 }, true);
     expect(readGuestSecret('lobby1')).toBeNull();
   });
 

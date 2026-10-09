@@ -21,7 +21,6 @@ import {
   type GuestSessionCommand,
   type GuestSessionEvent,
   type GuestSessionState,
-  orphanedAnswerLeaves,
   transition,
 } from './lobby-guest-session';
 
@@ -103,7 +102,9 @@ export function useLobbyGuestSession(
     (command: GuestSessionCommand) => {
       switch (command.type) {
         case 'leave':
-          void leaveDebateLobbyGuest(id, { guest_secret: command.secret }, true).catch(() => undefined);
+          void leaveDebateLobbyGuest(id, { guest_secret: command.secret, admission: command.admission }, true).catch(
+            () => undefined
+          );
           return;
         case 'storeSecret':
           return storeGuestSecret(id, command.secret);
@@ -147,9 +148,8 @@ export function useLobbyGuestSession(
       .then(
         session => {
           if (current()) return send({ type: 'started', attempt, session });
-          if (orphanedAnswerLeaves(session.guest_secret, readGuestSecret(id))) {
-            runCommand({ type: 'leave', secret: session.guest_secret });
-          }
+          // Nobody listens on this admission. Its leave is a no-op if a later admission holds the session.
+          runCommand({ type: 'leave', secret: session.guest_secret, admission: session.admission });
         },
         error => {
           if (!current()) return;
@@ -174,14 +174,14 @@ export function useLobbyGuestSession(
   const session = state.status === 'listening' ? state.session : null;
   React.useEffect(() => {
     if (!session) return;
-    const secret = session.guest_secret;
+    const body = { guest_secret: session.guest_secret, admission: session.admission };
     const every = Math.max(session.heartbeat_interval_seconds * 1_000, 5_000) || HEARTBEAT_FALLBACK_MS;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
     const beat = (delay: number) => {
       timer = setTimeout(async () => {
         try {
-          const heartbeat = await sendDebateLobbyGuestHeartbeat(id, { guest_secret: secret });
+          const heartbeat = await sendDebateLobbyGuestHeartbeat(id, body);
           if (stopped) return;
           if (heartbeat.alive) return beat(every);
           switch (heartbeat.reason) {
@@ -189,6 +189,8 @@ export function useLobbyGuestSession(
               return send({ type: 'removed' });
             case 'ended':
               return send({ type: 'ended' });
+            case 'superseded':
+              return send({ type: 'superseded' });
             case 'left':
               // This tab's own member join or leave.
               return;
@@ -213,7 +215,8 @@ export function useLobbyGuestSession(
     mountedRef.current = true;
     const leave = () => {
       const current = stateRef.current;
-      if (current.status === 'listening') runCommand({ type: 'leave', secret: current.session.guest_secret });
+      if (current.status !== 'listening') return;
+      runCommand({ type: 'leave', secret: current.session.guest_secret, admission: current.session.admission });
     };
     const restore = (event: PageTransitionEvent) => {
       if (event.persisted) send({ type: 'restart' });

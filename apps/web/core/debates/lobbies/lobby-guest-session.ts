@@ -14,7 +14,9 @@ export type GuestSessionState =
   | { status: 'released'; attempt: number }
   | { status: 'refused'; attempt: number; message: string; retryAt: number | null }
   | { status: 'removed'; attempt: number }
-  | { status: 'ended'; attempt: number };
+  | { status: 'ended'; attempt: number }
+  /** A later admission (a reload, another tab) holds the session; the secret is theirs now. */
+  | { status: 'superseded'; attempt: number };
 
 export type GuestSessionEvent =
   /** Start listening, or retry after a refusal. Never once signed in. */
@@ -24,6 +26,7 @@ export type GuestSessionEvent =
   /** A host removed the guests: from the start's 403 or the heartbeat. */
   | { type: 'removed' }
   | { type: 'ended' }
+  | { type: 'superseded' }
   /** The lease lapsed, or the room needs a fresh token: start again on the same secret. */
   | { type: 'restart' }
   | { type: 'memberJoined' }
@@ -32,8 +35,17 @@ export type GuestSessionEvent =
   /** Signed in, and the member path failed: stop being a guest. */
   | { type: 'abandon' };
 
+/** A leave names its admission, so an older page's leave cannot end a newer page's session. */
 export type GuestSessionCommand =
-  { type: 'leave'; secret: string } | { type: 'storeSecret'; secret: string } | { type: 'clearSecret' };
+  | { type: 'leave'; secret: string; admission: number }
+  | { type: 'storeSecret'; secret: string }
+  | { type: 'clearSecret' };
+
+const leaveFor = (session: DebateLobbyGuestSession): GuestSessionCommand => ({
+  type: 'leave',
+  secret: session.guest_secret,
+  admission: session.admission,
+});
 
 export type GuestSessionContext = { signedIn: boolean };
 
@@ -58,13 +70,15 @@ export function transition(
   switch (event.type) {
     case 'start':
       if (signedIn) return stay(state);
-      return state.status === 'idle' || state.status === 'refused' ? starting(state) : stay(state);
+      // From `superseded` only by the visitor's own press: it takes the session back from the other page.
+      return state.status === 'idle' || state.status === 'refused' || state.status === 'superseded'
+        ? starting(state)
+        : stay(state);
 
     case 'started':
       if (state.status !== 'starting' || state.attempt !== event.attempt) return stay(state);
       // Signed in while it was in flight: a signed-in person is never a guest.
-      if (signedIn)
-        return released(state, [{ type: 'leave', secret: event.session.guest_secret }, { type: 'clearSecret' }]);
+      if (signedIn) return released(state, [leaveFor(event.session), { type: 'clearSecret' }]);
       return {
         next: { status: 'listening', attempt: state.attempt, session: event.session },
         commands: [{ type: 'storeSecret', secret: event.session.guest_secret }],
@@ -89,6 +103,12 @@ export function transition(
         ? { next: { status: 'ended', attempt: state.attempt }, commands: [{ type: 'clearSecret' }] }
         : stay(state);
 
+    case 'superseded':
+      // No leave and no clear: the session and its secret belong to the newer page.
+      return state.status === 'listening'
+        ? { next: { status: 'superseded', attempt: state.attempt }, commands: [] }
+        : stay(state);
+
     case 'restart':
       if (state.status !== 'listening') return stay(state);
       // Signed in, the session is over server-side and may not start again.
@@ -102,26 +122,18 @@ export function transition(
       if (state.status === 'idle' || state.status === 'starting' || state.status === 'refused') {
         return released(state, [{ type: 'clearSecret' }]);
       }
-      return stay(state);
+      return state.status === 'superseded' ? released(state) : stay(state);
 
     case 'roomDone':
       return state.status === 'handingOver' ? released(state, [{ type: 'clearSecret' }]) : stay(state);
 
     case 'abandon':
       if (state.status === 'listening') {
-        return released(state, [{ type: 'leave', secret: state.session.guest_secret }, { type: 'clearSecret' }]);
+        return released(state, [leaveFor(state.session), { type: 'clearSecret' }]);
       }
       if (state.status === 'idle' || state.status === 'starting' || state.status === 'refused') {
         return released(state, [{ type: 'clearSecret' }]);
       }
       return stay(state);
   }
-}
-
-/**
- * What a start's answer does once its state has moved on (or its page went): leave it, unless it
- * is the session stored for this lobby, which a remounted page resumed on the same secret.
- */
-export function orphanedAnswerLeaves(answerSecret: string, storedSecret: string | null) {
-  return answerSecret !== storedSecret;
 }

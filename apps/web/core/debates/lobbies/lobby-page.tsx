@@ -86,6 +86,7 @@ export const LOBBY_COPY = {
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
   guestRemoved: 'A host removed you from this lobby.',
   guestRemovedInvite: 'Create an account to come back and take part.',
+  guestElsewhere: 'You’re listening in another tab.',
 } as const;
 
 /** `/debate/{id}` when the room is a lobby and `lobbyJoining` is off. */
@@ -641,16 +642,16 @@ function LobbyRoom({
         </Text>
       ) : null}
 
-      {guest && guestSession.state.status === 'refused' ? (
+      {guest && (guestSession.state.status === 'refused' || guestSession.state.status === 'superseded') ? (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2">
           <div role="status" className="min-w-0 flex-1">
             <Text as="p" variant="footnote" color="grey-04">
-              {guestSession.state.message}
+              {guestSession.state.status === 'refused' ? guestSession.state.message : LOBBY_COPY.guestElsewhere}
             </Text>
           </div>
           {authenticated ? null : (
             <HubPillButton analyticsLabel="Lobby guest retry listen" onClick={guestSession.retry}>
-              Try again
+              {guestSession.state.status === 'refused' ? 'Try again' : 'Listen here'}
             </HubPillButton>
           )}
         </div>
