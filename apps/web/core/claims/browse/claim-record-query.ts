@@ -191,9 +191,57 @@ const COUNTS_SOURCE = /* GraphQL */ `
   }
 `;
 
+const DIRECT_DEBATES_SOURCE = /* GraphQL */ `
+  query ClaimRecordDirectDebates($filter: RelationFilter!) {
+    relationsConnection(filter: $filter, first: 1000) {
+      nodes {
+        fromEntityId
+        spaceId
+      }
+    }
+  }
+`;
+
+const CANDIDATES_SOURCE = /* GraphQL */ `
+  query ClaimRecordCandidates(
+    $topicFilter: RelationFilter!
+    $extractedFilter: RelationFilter!
+    $first: Int!
+    $skipExtracted: Boolean!
+  ) {
+    topic: relationsConnection(filter: $topicFilter, first: $first) {
+      pageInfo {
+        hasNextPage
+      }
+      nodes {
+        fromEntityId
+      }
+    }
+    extracted: relationsConnection(filter: $extractedFilter, first: $first) @skip(if: $skipExtracted) {
+      pageInfo {
+        hasNextPage
+      }
+      nodes {
+        fromEntityId
+      }
+    }
+  }
+`;
+
 export const claimRecordClaimsDocument = parse(CLAIMS_SOURCE) as TypedDocumentNode<any, any>;
 export const claimRecordDebatesDocument = parse(DEBATES_SOURCE) as TypedDocumentNode<any, any>;
 export const claimRecordCountsDocument = parse(COUNTS_SOURCE) as TypedDocumentNode<any, any>;
+export const claimRecordDirectDebatesDocument = parse(DIRECT_DEBATES_SOURCE) as TypedDocumentNode<any, any>;
+export const claimRecordCandidatesDocument = parse(CANDIDATES_SOURCE) as TypedDocumentNode<any, any>;
+
+/** Debates with a Debate claims relation to the viewed claim, keyed by `normId(spaceId)`. */
+export type ClaimRecordDirectDebates = Readonly<Record<string, readonly string[]>>;
+
+/**
+ * The cap on candidate relations fetched to drive the Topics facet. It is the API's `first` limit;
+ * a record past it falls back to the unrestricted facet filter, which is exact but slow.
+ */
+export const CLAIM_RECORD_CANDIDATE_LIMIT = 1000;
 
 export type ClaimRecordSort = 'best' | 'top' | 'new';
 
@@ -226,13 +274,19 @@ export function claimRecordFilters({
   spaceIds,
   topicIds,
   filterTopicIds,
+  directDebates,
+  candidateClaimIds = null,
 }: {
   claimId: string;
   spaceIds: string[];
   topicIds: string[];
   filterTopicIds: string[];
+  /** From `fetchClaimRecordDirectDebates`; a space missing from the map has no direct debates. */
+  directDebates: ClaimRecordDirectDebates;
+  /** From `fetchClaimRecordCandidates`; null leaves the Topics facet unrestricted. */
+  candidateClaimIds?: readonly string[] | null;
 }): ClaimRecordFilters {
-  const scopes = [...new Map(spaceIds.map(id => [normId(id), id])).values()];
+  const scopes = uniqueScopes(spaceIds);
   if (scopes.length === 0) throw new Error('Claim records require at least one space');
 
   const selectedTopicConditions = (spaceId: string): EntityFilter[] =>
@@ -259,19 +313,13 @@ export function claimRecordFilters({
     typeIds: { overlaps: [DEBATE_TYPE_ID] },
     spaceIds: { overlaps: [spaceId] },
   });
-  const directClaimRelation = (spaceId: string): RelationFilter => ({
-    typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
-    spaceId: { is: spaceId },
-    toEntityId: { is: claimId },
-  });
-  const directDebate = (spaceId: string): EntityFilter => ({
-    ...debateScope(spaceId),
-    relations: { some: directClaimRelation(spaceId) },
-  });
+  // The direct debates are resolved ids rather than a `toEntity` predicate. As a predicate, the
+  // planner had to walk every Sources relation in the space and test each target (1.6s on a large
+  // space); as ids, `to_entity_id` is indexed and the branch costs a lookup per debate.
   const extractedSourceRelation = (spaceId: string): RelationFilter => ({
     typeId: { is: SOURCES_PROPERTY_ID },
     spaceId: { is: spaceId },
-    toEntity: directDebate(spaceId),
+    toEntityId: { in: [...(directDebates[normId(spaceId)] ?? [])] },
   });
   const topicRelation = (spaceId: string): RelationFilter => ({
     typeId: { is: TOPICS_PROPERTY_ID },
@@ -318,17 +366,16 @@ export function claimRecordFilters({
       fromEntity: narrowedClaimScope(spaceId),
     },
   ]);
+  // Topics facets group every Topics relation of the related claims, so nothing in the predicate
+  // is indexed on the relation itself: unrestricted, it walks every Topics relation in the space
+  // (475k in the largest, 9s). Candidate ids bound that walk; `relatedClaim` keeps it exact.
   const claimTopicRelationBranches: RelationFilter[] = scopes.map(spaceId => ({
     typeId: { is: TOPICS_PROPERTY_ID },
     spaceId: { is: spaceId },
+    ...(candidateClaimIds ? { fromEntityId: { in: [...candidateClaimIds] } } : {}),
     fromEntity: relatedClaim(spaceId),
   }));
-  const debateRelationBranches: RelationFilter[] = scopes.map(spaceId => ({
-    typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
-    spaceId: { is: spaceId },
-    fromEntity: debateScope(spaceId),
-    toEntity: { id: { is: claimId } },
-  }));
+  const debateRelationBranches: RelationFilter[] = scopes.map(spaceId => directDebateRelation(claimId, spaceId));
 
   return {
     hasTopics: topicIds.length > 0,
@@ -341,6 +388,58 @@ export function claimRecordFilters({
     debateRelations:
       debateRelationBranches.length === 1 ? debateRelationBranches[0] : { or: debateRelationBranches },
   };
+}
+
+function directDebateRelation(claimId: string, spaceId: string): RelationFilter {
+  return {
+    typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
+    spaceId: { is: spaceId },
+    fromEntity: { typeIds: { overlaps: [DEBATE_TYPE_ID] }, spaceIds: { overlaps: [spaceId] } },
+    toEntity: { id: { is: claimId } },
+  };
+}
+
+function uniqueScopes(spaceIds: string[]): string[] {
+  return [...new Map(spaceIds.map(id => [normId(id), id])).values()];
+}
+
+type IdConnection = {
+  pageInfo?: { hasNextPage?: boolean | null } | null;
+  nodes?: Array<{ fromEntityId?: string | null; spaceId?: string | null } | null> | null;
+} | null;
+
+export function decodeClaimRecordDirectDebates(data: { relationsConnection?: IdConnection }): ClaimRecordDirectDebates {
+  const bySpace: Record<string, string[]> = {};
+  for (const node of data.relationsConnection?.nodes ?? []) {
+    if (!node?.fromEntityId || !node.spaceId) continue;
+    const ids = (bySpace[normId(node.spaceId)] ??= []);
+    const id = normId(node.fromEntityId);
+    if (!ids.includes(id)) ids.push(id);
+  }
+  for (const ids of Object.values(bySpace)) ids.sort();
+  return bySpace;
+}
+
+/** A stable query-key fragment for resolved direct debates. */
+export function claimRecordDirectDebatesKey(directDebates: ClaimRecordDirectDebates | undefined): string {
+  if (!directDebates) return '';
+  return Object.keys(directDebates)
+    .sort()
+    .map(spaceId => `${spaceId}=${directDebates[spaceId].join('+')}`)
+    .join(';');
+}
+
+/** Candidate ids, or null when either path exceeds the limit and the facet must stay unrestricted. */
+export function decodeClaimRecordCandidates(data: {
+  topic?: IdConnection;
+  extracted?: IdConnection;
+}): string[] | null {
+  if (data.topic?.pageInfo?.hasNextPage || data.extracted?.pageInfo?.hasNextPage) return null;
+  const ids = new Set<string>();
+  for (const node of [...(data.topic?.nodes ?? []), ...(data.extracted?.nodes ?? [])]) {
+    if (node?.fromEntityId) ids.add(normId(node.fromEntityId));
+  }
+  return [...ids].sort();
 }
 
 export type RankedClaimRecordEntity = ExploreCardEntity & {
@@ -611,6 +710,60 @@ export async function fetchClaimRecordCounts({
       query: claimRecordCountsDocument,
       decoder: decodeClaimRecordCounts,
       variables: { claimFilter: filters.claimRelations, debateFilter: filters.debateRelations },
+      signal,
+    })
+  );
+}
+
+export async function fetchClaimRecordDirectDebates({
+  claimId,
+  spaceIds,
+  signal,
+}: {
+  claimId: string;
+  spaceIds: string[];
+  signal?: AbortSignal;
+}): Promise<ClaimRecordDirectDebates> {
+  const branches = uniqueScopes(spaceIds).map(spaceId => directDebateRelation(claimId, spaceId));
+  if (branches.length === 0) return {};
+  return Effect.runPromise(
+    graphql({
+      query: claimRecordDirectDebatesDocument,
+      decoder: decodeClaimRecordDirectDebates,
+      variables: { filter: branches.length === 1 ? branches[0] : { or: branches } },
+      signal,
+    })
+  );
+}
+
+/**
+ * A superset of the Related claims: every claim with a Topics relation to a source topic, or a
+ * Sources relation to a direct debate, in the scoped spaces. Each path is one indexed
+ * `toEntityId` lookup; joined by `or`, the two defeat each other's index, so they stay separate.
+ */
+export async function fetchClaimRecordCandidates({
+  spaceIds,
+  topicIds,
+  directDebates,
+  signal,
+}: {
+  spaceIds: string[];
+  topicIds: string[];
+  directDebates: ClaimRecordDirectDebates;
+  signal?: AbortSignal;
+}): Promise<string[] | null> {
+  const scopes = uniqueScopes(spaceIds);
+  const debateIds = [...new Set(scopes.flatMap(spaceId => directDebates[normId(spaceId)] ?? []))];
+  return Effect.runPromise(
+    graphql({
+      query: claimRecordCandidatesDocument,
+      decoder: decodeClaimRecordCandidates,
+      variables: {
+        topicFilter: { typeId: { is: TOPICS_PROPERTY_ID }, spaceId: { in: scopes }, toEntityId: { in: topicIds } },
+        extractedFilter: { typeId: { is: SOURCES_PROPERTY_ID }, spaceId: { in: scopes }, toEntityId: { in: debateIds } },
+        first: CLAIM_RECORD_CANDIDATE_LIMIT,
+        skipExtracted: debateIds.length === 0,
+      },
       signal,
     })
   );
