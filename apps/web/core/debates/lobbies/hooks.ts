@@ -22,6 +22,7 @@ import {
 } from '../api';
 import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { viewerReadRetryOptions } from '../matchmaking/hooks';
 import { useConnectionId } from '../rooms/hooks';
 import {
   lobbyCreated,
@@ -34,6 +35,7 @@ import {
   markLobbyEntry,
 } from './lobby-analytics';
 import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
+import { readGuestSecret } from './lobby-guest-secret';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
@@ -102,6 +104,8 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
+    // Waits out a new account geo-chat does not know yet; a guest signing in listens meanwhile.
+    ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobby(accountKey, lobbyId),
     queryFn: ({ signal }) => getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
@@ -254,6 +258,8 @@ export function useLobbyPresence(
       else if (from === 'left' || from === 'dropped' || from === 'moved') markLobbyEntry(lobbyId, 'rejoin');
       sentRef.current = true;
       setState({ status: 'joining' });
+      // A guest signing in: the join ends their guest session, so they are never counted twice.
+      const guestSecret = readGuestSecret(lobbyId);
       try {
         const view = await enqueue(() =>
           retryOnceIfRateLimited(() =>
@@ -264,6 +270,7 @@ export function useLobbyPresence(
                 joined: true,
                 leave_other_lobby: leaveOtherLobby,
                 ...(rejoin ? { rejoin: true } : {}),
+                ...(guestSecret ? { guest_secret: guestSecret } : {}),
               },
               () => tokenRef.current(),
               accountKey

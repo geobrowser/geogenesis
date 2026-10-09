@@ -1,4 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
@@ -63,7 +64,7 @@ vi.mock('@livekit/components-react', () => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LobbyVoice, useLobbyVoiceStates } = await import('./lobby-voice');
+const { LobbyGuestVoice, LobbyVoice, useLobbyVoiceStates } = await import('./lobby-voice');
 
 function lobby(role: 'host' | 'speaker' | 'listener' = 'speaker'): DebateLobbyView {
   return {
@@ -311,5 +312,79 @@ describe('LobbyVoice', () => {
     renderVoice(lobby(), onConnectedChange);
     await waitFor(() => expect(screen.getByTestId('states').textContent).toBe('speaking:aabb mic:aabb,ccdd'));
     expect(onConnectedChange).toHaveBeenCalledWith(true);
+  });
+});
+
+describe('LobbyVoice handover signal', () => {
+  it('says the member room is audible only once connected with playback allowed', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onAudible = vi.fn();
+    mocks.canPlayAudio = false;
+    const ui = () => (
+      <QueryClientProvider client={client}>
+        <LobbyVoice
+          lobby={lobby()}
+          connectionId="conn-1"
+          joined
+          currentUserId="u1"
+          onConnectedChange={vi.fn()}
+          onAudible={onAudible}
+        >
+          <Speaking />
+        </LobbyVoice>
+      </QueryClientProvider>
+    );
+    const { rerender } = render(ui());
+    await screen.findByRole('button', { name: 'Join audio' });
+    expect(onAudible).not.toHaveBeenCalled();
+
+    mocks.canPlayAudio = true;
+    rerender(ui());
+    await waitFor(() => expect(onAudible).toHaveBeenCalled());
+  });
+});
+
+describe('LobbyGuestVoice', () => {
+  const guestToken = token({ can_publish: false, token: 'guest-jwt' });
+
+  it('listens only: no mic, and says so', () => {
+    render(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} />);
+    expect(mocks.roomProps).toMatchObject({ token: 'guest-jwt', audio: false, video: false });
+    expect(screen.getByText('Listening only. Your mic is off until you have an account.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Mute|Unmute/ })).not.toBeInTheDocument();
+  });
+
+  // iOS: one tap to start audio.
+  it('asks for a tap when playback is blocked', () => {
+    mocks.canPlayAudio = false;
+    render(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Join audio' }));
+    expect(mocks.startAudio).toHaveBeenCalled();
+  });
+
+  it('reports who is speaking for the roster, and clears it when dropped', async () => {
+    mocks.participants = [{ identity: 'U-2', isMicrophoneEnabled: true, isSpeaking: true }];
+    const onStates = vi.fn();
+    const { unmount } = render(<LobbyGuestVoice token={guestToken} onStates={onStates} onReconnect={vi.fn()} />);
+    await waitFor(() =>
+      expect(onStates).toHaveBeenLastCalledWith(expect.objectContaining({ connected: true, speaking: new Set(['u2']) }))
+    );
+    unmount();
+    expect(onStates).toHaveBeenLastCalledWith(expect.objectContaining({ connected: false }));
+  });
+
+  it('draws no bar while the member room takes over', () => {
+    render(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} quiet />);
+    expect(screen.queryByText(/Listening only/)).not.toBeInTheDocument();
+    expect(mocks.roomProps).toMatchObject({ token: 'guest-jwt' });
+  });
+
+  it('reconnects with a fresh token after giving up', async () => {
+    const onReconnect = vi.fn();
+    const { rerender } = render(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={onReconnect} />);
+    mocks.connectionState = ConnectionState.Disconnected;
+    rerender(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={onReconnect} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
+    expect(onReconnect).toHaveBeenCalled();
   });
 });

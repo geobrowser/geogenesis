@@ -28,7 +28,7 @@ import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-polic
 
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyView, dashlessId, getDebateLobbyVoiceToken } from '../api';
+import { type DebateLobbyView, type DebateLobbyVoiceToken, dashlessId, getDebateLobbyVoiceToken } from '../api';
 import { MicrophoneIcon } from '../debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
@@ -74,6 +74,7 @@ export function LobbyVoice({
   joined,
   currentUserId,
   onConnectedChange,
+  onAudible,
   children,
 }: {
   lobby: DebateLobbyView;
@@ -82,6 +83,8 @@ export function LobbyVoice({
   joined: boolean;
   currentUserId: string | null;
   onConnectedChange: (connected: boolean) => void;
+  /** Connected with playback allowed: a guest room still playing can go. */
+  onAudible?: () => void;
   children: React.ReactNode;
 }) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
@@ -248,6 +251,7 @@ export function LobbyVoice({
         onMicChoice={handleMicChoice}
         onRetry={retry}
         onConnectedChange={onConnectedChange}
+        onAudible={onAudible}
       >
         {children}
       </ConnectedVoice>
@@ -273,6 +277,7 @@ function ConnectedVoice({
   onMicChoice,
   onRetry,
   onConnectedChange,
+  onAudible,
   children,
 }: {
   canPublish: boolean;
@@ -281,6 +286,7 @@ function ConnectedVoice({
   onMicChoice: (enabled: boolean) => void;
   onRetry: () => void;
   onConnectedChange: (connected: boolean) => void;
+  onAudible?: () => void;
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
@@ -304,7 +310,10 @@ function ConnectedVoice({
   // Autoplay can be blocked with no click before connecting (iOS); playback needs a user gesture.
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
   const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
-  const participants = useParticipants();
+  const audible = connected && canPlayAudio;
+  React.useEffect(() => {
+    if (audible) onAudible?.();
+  }, [audible, onAudible]);
 
   // A host's move to listeners revokes publishing in LiveKit at once, before the lobby refetch
   // brings the new role and a listen-only token; the mic goes down now.
@@ -327,17 +336,7 @@ function ConnectedVoice({
     };
   }, [localParticipant, onMicChoice]);
 
-  const states = React.useMemo<LobbyVoiceStates>(() => {
-    const speaking = new Set<string>();
-    const micOn = new Set<string>();
-    for (const participant of participants) {
-      const id = dashlessId(participant.identity).toLowerCase();
-      if (!participant.isMicrophoneEnabled) continue;
-      micOn.add(id);
-      if (participant.isSpeaking) speaking.add(id);
-    }
-    return { speaking, micOn, connected };
-  }, [connected, participants]);
+  const states = useParticipantVoiceStates(connected);
 
   const setMicrophone = (enabled: boolean) => {
     onMicChoice(enabled);
@@ -379,6 +378,126 @@ function ConnectedVoice({
       {children}
     </LobbyVoiceContext.Provider>
   );
+}
+
+/** Who is speaking and whose mic is on in the room this sits in. */
+function useParticipantVoiceStates(connected: boolean) {
+  const participants = useParticipants();
+  return React.useMemo<LobbyVoiceStates>(() => {
+    const speaking = new Set<string>();
+    const micOn = new Set<string>();
+    for (const participant of participants) {
+      const id = dashlessId(participant.identity).toLowerCase();
+      if (!participant.isMicrophoneEnabled) continue;
+      micOn.add(id);
+      if (participant.isSpeaking) speaking.add(id);
+    }
+    return { speaking, micOn, connected };
+  }, [connected, participants]);
+}
+
+/** Holds the roster's voice state; a member room inside overrides it with its own. */
+export const LobbyVoiceStatesProvider = LobbyVoiceContext.Provider;
+export { NO_VOICE as NO_LOBBY_VOICE };
+
+export const LOBBY_GUEST_VOICE_COPY = {
+  listenOnly: 'Listening only. Your mic is off until you have an account.',
+  connecting: 'Connecting voice…',
+  tapToHear: 'Tap to hear the room',
+  joinAudio: 'Join audio',
+  disconnected: 'Voice disconnected',
+} as const;
+
+/**
+ * A visitor's listen-only room (GEO-3129). A sibling of the member room rather than a wrapper, so
+ * the handover can drop it while the member room keeps playing; the roster's speaking state comes
+ * up through `onStates`. No mic and no ownership lease: a guest identity is per tab.
+ */
+export function LobbyGuestVoice({
+  token,
+  onStates,
+  onReconnect,
+  quiet = false,
+}: {
+  token: DebateLobbyVoiceToken;
+  onStates: (states: LobbyVoiceStates) => void;
+  /** A full reconnect needs a fresh token on the same guest. */
+  onReconnect: () => void;
+  /** The member room is taking over and draws its own bar. */
+  quiet?: boolean;
+}) {
+  const [connectFailed, setConnectFailed] = React.useState(false);
+  const connectedRef = React.useRef(false);
+  const handleConnected = React.useCallback(() => {
+    connectedRef.current = true;
+    setConnectFailed(false);
+  }, []);
+  const handleError = React.useCallback(() => {
+    if (!connectedRef.current) setConnectFailed(true);
+  }, []);
+  React.useEffect(() => () => onStates(NO_VOICE), [onStates]);
+
+  if (connectFailed) {
+    return quiet ? null : (
+      <VoiceBar notice={{ message: 'Voice could not connect.', actionLabel: 'Try again', onAction: onReconnect }} />
+    );
+  }
+
+  return (
+    <LiveKitRoom
+      token={token.token}
+      serverUrl={token.url}
+      connect
+      audio={false}
+      video={false}
+      options={ROOM_OPTIONS}
+      onConnected={handleConnected}
+      onError={handleError}
+      className="contents"
+    >
+      <ConnectedGuestVoice onStates={onStates} onReconnect={onReconnect} quiet={quiet} />
+      <RoomAudioRenderer />
+    </LiveKitRoom>
+  );
+}
+
+function ConnectedGuestVoice({
+  onStates,
+  onReconnect,
+  quiet,
+}: {
+  onStates: (states: LobbyVoiceStates) => void;
+  onReconnect: () => void;
+  quiet: boolean;
+}) {
+  const room = useRoomContext();
+  const connectionState = useConnectionState();
+  const connected = connectionState === ConnectionState.Connected;
+  const [everConnected, setEverConnected] = React.useState(false);
+  React.useEffect(() => {
+    if (connected) setEverConnected(true);
+  }, [connected]);
+  // iOS blocks playback until a tap; "Join audio" is that tap.
+  const { canPlayAudio, startAudio } = useAudioPlayback(room);
+  const states = useParticipantVoiceStates(connected);
+  React.useEffect(() => onStates(states), [onStates, states]);
+
+  if (quiet) return null;
+  const notice: VoiceNotice =
+    connectionState === ConnectionState.Disconnected && everConnected
+      ? { message: LOBBY_GUEST_VOICE_COPY.disconnected, actionLabel: 'Try again', onAction: onReconnect }
+      : connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting
+        ? { message: 'Reconnecting…' }
+        : !connected
+          ? { message: LOBBY_GUEST_VOICE_COPY.connecting }
+          : !canPlayAudio
+            ? {
+                message: LOBBY_GUEST_VOICE_COPY.tapToHear,
+                actionLabel: LOBBY_GUEST_VOICE_COPY.joinAudio,
+                onAction: () => void startAudio(),
+              }
+            : { message: LOBBY_GUEST_VOICE_COPY.listenOnly };
+  return <VoiceBar notice={notice} />;
 }
 
 function VoiceBar({
