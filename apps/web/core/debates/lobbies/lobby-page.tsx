@@ -468,7 +468,7 @@ function LobbyRoom({
           isViewer={isViewer}
           ownAvailable={ownAvailable}
         />
-        <LobbyGuestCount count={lobby.guest_count ?? 0} includesViewer={guest} />
+        <LobbyGuestCount count={lobby.guest_count ?? 0} includesViewer={guest && guestVoice !== null} />
       </>
     );
 

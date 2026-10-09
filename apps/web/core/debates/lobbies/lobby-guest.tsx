@@ -90,7 +90,7 @@ export function LobbyGuestBanner({
         <Text as="p" variant="metadataMedium" color="white">
           {title}
         </Text>
-        <Text as="p" variant="footnote" className="text-grey-02">
+        <Text as="p" variant="footnote" color="grey-02">
           {message?.detail ?? LOBBY_GUEST_COPY.invite}
         </Text>
       </div>
