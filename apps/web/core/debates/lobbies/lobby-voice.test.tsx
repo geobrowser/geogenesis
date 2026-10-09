@@ -23,7 +23,27 @@ const mocks = vi.hoisted(() => ({
   permissions: undefined as { canPublish: boolean } | undefined,
   /** Local participant listeners, by event name. */
   listeners: new Map<string, (...args: unknown[]) => void>(),
+  /** Room event listeners, by event name; `emitRoom` plays connection states. */
+  roomListeners: new Map<string, Set<(...args: unknown[]) => void>>(),
 }));
+
+const fakeRoom = {
+  state: 'disconnected',
+  on: (event: string, listener: (...args: unknown[]) => void) => {
+    mocks.roomListeners.set(event, (mocks.roomListeners.get(event) ?? new Set()).add(listener));
+    return fakeRoom;
+  },
+  off: (event: string, listener: (...args: unknown[]) => void) => {
+    mocks.roomListeners.get(event)?.delete(listener);
+    return fakeRoom;
+  },
+};
+
+function emitRoom(...states: string[]) {
+  for (const state of states) {
+    act(() => mocks.roomListeners.get('connectionStateChanged')?.forEach(listener => listener(state)));
+  }
+}
 
 const localParticipant = {
   setMicrophoneEnabled: mocks.setMicrophoneEnabled,
@@ -56,7 +76,7 @@ vi.mock('@livekit/components-react', () => ({
     return <>{props.children}</>;
   },
   RoomAudioRenderer: () => null,
-  useRoomContext: () => ({}),
+  useRoomContext: () => fakeRoom,
   useConnectionState: () => mocks.connectionState,
   useAudioPlayback: () => ({ canPlayAudio: mocks.canPlayAudio, startAudio: mocks.startAudio }),
   useLocalParticipant: () => ({ localParticipant, isMicrophoneEnabled: mocks.isMicrophoneEnabled }),
@@ -143,6 +163,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mocks.roomListeners.clear();
 });
 
 describe('LobbyVoice', () => {
@@ -373,7 +394,9 @@ describe('LobbyGuestVoice', () => {
   const guestToken = token({ can_publish: false, token: 'guest-jwt' });
 
   it('listens only: no mic, and says so', () => {
-    render(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} />);
+    render(
+      <LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} onAutoReconnect={() => false} />
+    );
     expect(mocks.roomProps).toMatchObject({ token: 'guest-jwt', audio: false, video: false });
     expect(screen.getByText('Listening only. Your mic is off until you have an account.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Mute|Unmute/ })).not.toBeInTheDocument();
@@ -382,7 +405,9 @@ describe('LobbyGuestVoice', () => {
   // iOS: one tap to start audio.
   it('asks for a tap when playback is blocked', () => {
     mocks.canPlayAudio = false;
-    render(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} />);
+    render(
+      <LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} onAutoReconnect={() => false} />
+    );
     fireEvent.click(screen.getByRole('button', { name: 'Join audio' }));
     expect(mocks.startAudio).toHaveBeenCalled();
   });
@@ -390,7 +415,9 @@ describe('LobbyGuestVoice', () => {
   it('reports who is speaking for the roster, and clears it when dropped', async () => {
     mocks.participants = [{ identity: 'U-2', isMicrophoneEnabled: true, isSpeaking: true }];
     const onStates = vi.fn();
-    const { unmount } = render(<LobbyGuestVoice token={guestToken} onStates={onStates} onReconnect={vi.fn()} />);
+    const { unmount } = render(
+      <LobbyGuestVoice token={guestToken} onStates={onStates} onReconnect={vi.fn()} onAutoReconnect={() => false} />
+    );
     await waitFor(() =>
       expect(onStates).toHaveBeenLastCalledWith(expect.objectContaining({ connected: true, speaking: new Set(['u2']) }))
     );
@@ -399,17 +426,79 @@ describe('LobbyGuestVoice', () => {
   });
 
   it('draws no bar while the member room takes over', () => {
-    render(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} quiet />);
+    render(
+      <LobbyGuestVoice
+        token={guestToken}
+        onStates={vi.fn()}
+        onReconnect={vi.fn()}
+        onAutoReconnect={() => false}
+        quiet
+      />
+    );
     expect(screen.queryByText(/Listening only/)).not.toBeInTheDocument();
     expect(mocks.roomProps).toMatchObject({ token: 'guest-jwt' });
   });
 
   it('reconnects with a fresh token after giving up', async () => {
     const onReconnect = vi.fn();
-    const { rerender } = render(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={onReconnect} />);
+    const { rerender } = render(
+      <LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={onReconnect} onAutoReconnect={() => false} />
+    );
     mocks.connectionState = ConnectionState.Disconnected;
-    rerender(<LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={onReconnect} />);
+    rerender(
+      <LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={onReconnect} onAutoReconnect={() => false} />
+    );
     fireEvent.click(await screen.findByRole('button', { name: 'Try again' }));
     expect(onReconnect).toHaveBeenCalled();
+  });
+});
+
+// A join dropped before it ever connected (a kicked identity) otherwise reads "Connecting…" for good.
+describe('a join that never connects', () => {
+  const guestToken = token({ can_publish: false, token: 'guest-jwt' });
+
+  it('guest: asks the page for its one automatic reconnect', () => {
+    mocks.connectionState = ConnectionState.Connecting;
+    const onAutoReconnect = vi.fn(() => true);
+    render(
+      <LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} onAutoReconnect={onAutoReconnect} />
+    );
+    emitRoom(ConnectionState.Connecting, ConnectionState.Disconnected);
+    expect(onAutoReconnect).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('Voice could not connect.')).not.toBeInTheDocument();
+  });
+
+  it('guest: with the retry spent, says so and offers Try again', () => {
+    const onReconnect = vi.fn();
+    render(
+      <LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={onReconnect} onAutoReconnect={() => false} />
+    );
+    emitRoom(ConnectionState.Connecting, ConnectionState.Disconnected);
+    expect(screen.getByText('Voice could not connect.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    expect(onReconnect).toHaveBeenCalled();
+  });
+
+  it('guest: a drop after connecting is a disconnect, not a failed join', () => {
+    const onAutoReconnect = vi.fn(() => true);
+    render(
+      <LobbyGuestVoice token={guestToken} onStates={vi.fn()} onReconnect={vi.fn()} onAutoReconnect={onAutoReconnect} />
+    );
+    emitRoom(ConnectionState.Connecting, ConnectionState.Connected, ConnectionState.Disconnected);
+    expect(onAutoReconnect).not.toHaveBeenCalled();
+  });
+
+  it('member: retries once with a fresh token, then says it could not connect', async () => {
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(1);
+
+    emitRoom(ConnectionState.Connecting, ConnectionState.Disconnected);
+    await waitFor(() => expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(2));
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+
+    emitRoom(ConnectionState.Connecting, ConnectionState.Disconnected);
+    expect(await screen.findByText('Voice could not connect.')).toBeInTheDocument();
+    expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(2);
   });
 });

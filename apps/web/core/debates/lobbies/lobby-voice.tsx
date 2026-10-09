@@ -19,6 +19,7 @@ import {
   MediaDeviceFailure,
   ParticipantEvent,
   type Room,
+  RoomEvent,
   type RoomOptions,
   Track,
   type TrackPublication,
@@ -189,6 +190,13 @@ export function LobbyVoice({
     connectedRef.current = true;
     setConnectFailed(false);
   }, []);
+  // A join dropped before it ever connected gets one fresh token by itself, then the notice.
+  const autoRetriedRef = React.useRef(false);
+  const handleNeverConnected = React.useCallback(() => {
+    if (autoRetriedRef.current) return setConnectFailed(true);
+    autoRetriedRef.current = true;
+    retry();
+  }, [retry]);
   // `<LiveKitRoom>` publishes the mic on SignalConnected, before Connected, and sends a refusal here
   // too. A blocked or missing mic leaves the room up for listening; only a connection failure doesn't.
   const handleError = React.useCallback((error: Error) => {
@@ -261,6 +269,7 @@ export function LobbyVoice({
         onRetry={retry}
         onConnectedChange={onConnectedChange}
         onAudible={onAudible}
+        onNeverConnected={handleNeverConnected}
       >
         {children}
       </ConnectedVoice>
@@ -287,6 +296,7 @@ function ConnectedVoice({
   onRetry,
   onConnectedChange,
   onAudible,
+  onNeverConnected,
   children,
 }: {
   canPublish: boolean;
@@ -296,9 +306,11 @@ function ConnectedVoice({
   onRetry: () => void;
   onConnectedChange: (connected: boolean) => void;
   onAudible?: () => void;
+  onNeverConnected: () => void;
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
+  useNeverConnected(room, onNeverConnected);
   React.useEffect(() => {
     roomRef.current = room;
     return () => {
@@ -389,6 +401,31 @@ function ConnectedVoice({
   );
 }
 
+/**
+ * Calls `onFailed` when the room started connecting and dropped without ever connecting, which
+ * otherwise reads as "Connecting…" for good (a kicked identity, a failed join). Read off the room's
+ * own events, so a flip within one tick is not missed.
+ */
+function useNeverConnected(room: Room, onFailed: () => void) {
+  const onFailedRef = React.useRef(onFailed);
+  React.useEffect(() => {
+    onFailedRef.current = onFailed;
+  }, [onFailed]);
+  React.useEffect(() => {
+    let attempted = room.state !== ConnectionState.Disconnected;
+    let connected = room.state === ConnectionState.Connected;
+    const onState = (state: ConnectionState) => {
+      if (state === ConnectionState.Connected) connected = true;
+      else if (state !== ConnectionState.Disconnected) attempted = true;
+      else if (attempted && !connected) onFailedRef.current();
+    };
+    room.on(RoomEvent.ConnectionStateChanged, onState);
+    return () => {
+      room.off(RoomEvent.ConnectionStateChanged, onState);
+    };
+  }, [room]);
+}
+
 /** Who is speaking and whose mic is on in the room this sits in. */
 function useParticipantVoiceStates(connected: boolean) {
   const participants = useParticipants();
@@ -425,12 +462,18 @@ export function LobbyGuestVoice({
   token,
   onStates,
   onReconnect,
+  onAutoReconnect,
   quiet = false,
 }: {
   token: DebateLobbyVoiceToken;
   onStates: (states: LobbyVoiceStates) => void;
   /** A full reconnect needs a fresh token on the same guest. */
   onReconnect: () => void;
+  /**
+   * After a join dropped before connecting: reconnects if the page has an automatic retry left,
+   * and says whether it did. Kept by the page, since a fresh token remounts this room.
+   */
+  onAutoReconnect: () => boolean;
   /** The member room is taking over and draws its own bar. */
   quiet?: boolean;
 }) {
@@ -443,6 +486,9 @@ export function LobbyGuestVoice({
   const handleError = React.useCallback(() => {
     if (!connectedRef.current) setConnectFailed(true);
   }, []);
+  const handleNeverConnected = React.useCallback(() => {
+    if (!onAutoReconnect()) setConnectFailed(true);
+  }, [onAutoReconnect]);
   React.useEffect(() => () => onStates(NO_VOICE), [onStates]);
 
   if (connectFailed) {
@@ -463,7 +509,12 @@ export function LobbyGuestVoice({
       onError={handleError}
       className="contents"
     >
-      <ConnectedGuestVoice onStates={onStates} onReconnect={onReconnect} quiet={quiet} />
+      <ConnectedGuestVoice
+        onStates={onStates}
+        onReconnect={onReconnect}
+        onNeverConnected={handleNeverConnected}
+        quiet={quiet}
+      />
       <RoomAudioRenderer />
     </LiveKitRoom>
   );
@@ -472,13 +523,16 @@ export function LobbyGuestVoice({
 function ConnectedGuestVoice({
   onStates,
   onReconnect,
+  onNeverConnected,
   quiet,
 }: {
   onStates: (states: LobbyVoiceStates) => void;
   onReconnect: () => void;
+  onNeverConnected: () => void;
   quiet: boolean;
 }) {
   const room = useRoomContext();
+  useNeverConnected(room, onNeverConnected);
   const connectionState = useConnectionState();
   const connected = connectionState === ConnectionState.Connected;
   const [everConnected, setEverConnected] = React.useState(false);

@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   heartbeat: vi.fn(),
   leave: vi.fn(async () => undefined),
   onAudible: null as (() => void) | null,
+  onAutoReconnect: null as (() => boolean) | null,
   /** What the page asked presence to join with, render by render; only a member joins. */
   presenceAdmitted: [] as boolean[],
 }));
@@ -68,11 +69,22 @@ vi.mock('./lobby-voice', async () => {
     NO_LOBBY_VOICE: NO,
     LobbyVoiceStatesProvider: Context.Provider,
     useLobbyVoiceStates: () => ReactModule.useContext(Context),
-    LobbyGuestVoice: ({ token, quiet }: { token: { token: string }; quiet?: boolean }) => (
-      <div data-testid="guest-room" data-quiet={quiet ? 'yes' : 'no'}>
-        {token.token}
-      </div>
-    ),
+    LobbyGuestVoice: ({
+      token,
+      quiet,
+      onAutoReconnect,
+    }: {
+      token: { token: string };
+      quiet?: boolean;
+      onAutoReconnect: () => boolean;
+    }) => {
+      mocks.onAutoReconnect = onAutoReconnect;
+      return (
+        <div data-testid="guest-room" data-quiet={quiet ? 'yes' : 'no'}>
+          {token.token}
+        </div>
+      );
+    },
     LobbyVoice: ({ onAudible, children }: { onAudible?: () => void; children: React.ReactNode }) => {
       mocks.onAudible = onAudible ?? null;
       return <div data-testid="member-room">{children}</div>;
@@ -283,5 +295,28 @@ describe('DebateLobbyPage after sign-in that does not join here', () => {
     await waitFor(() => expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1' }, true));
     expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
     expect(readGuestSecret('lobby1')).toBeNull();
+  });
+});
+
+describe('DebateLobbyPage guest join that never connects', () => {
+  it('reconnects once on the same secret, then leaves it to Try again', async () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+
+    let retried = false;
+    act(() => {
+      retried = mocks.onAutoReconnect?.() ?? false;
+    });
+    expect(retried).toBe(true);
+    await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(2));
+    expect(mocks.start).toHaveBeenLastCalledWith('lobby1', { guest_secret: 'secret-1' });
+
+    await screen.findByTestId('guest-room');
+    act(() => {
+      retried = mocks.onAutoReconnect?.() ?? true;
+    });
+    expect(retried).toBe(false);
+    expect(mocks.start).toHaveBeenCalledTimes(2);
   });
 });

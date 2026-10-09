@@ -467,6 +467,15 @@ function LobbyRoom({
       ? guestSession.state.session.voice
       : null;
   const { authenticated } = useGeoChatAuth();
+  // One automatic reconnect per page for a guest join dropped before it connected.
+  const guestAutoRetryLeftRef = React.useRef(true);
+  const { reconnect: reconnectGuest } = guestSession;
+  const autoReconnectGuest = React.useCallback(() => {
+    if (!guestAutoRetryLeftRef.current) return false;
+    guestAutoRetryLeftRef.current = false;
+    reconnectGuest();
+    return true;
+  }, [reconnectGuest]);
 
   const hosts = lobby.members.filter(isHosting);
   const isHost = lobby.viewer.hosting;
@@ -658,6 +667,7 @@ function LobbyRoom({
             token={guestVoice}
             onStates={setGuestVoiceStates}
             onReconnect={guestSession.reconnect}
+            onAutoReconnect={autoReconnectGuest}
             quiet={inVoice}
           />
         ) : null}
