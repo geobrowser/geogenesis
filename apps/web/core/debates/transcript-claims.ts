@@ -1,9 +1,11 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import {
+  CLAIM_AXIS_SCORE_PROPERTY_IDS,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
+  type ClaimAxisScoreField,
   NAME_PROPERTY_ID,
 } from '~/core/debates/ontology';
 import { uuidToHex } from '~/core/id/normalize';
@@ -52,6 +54,16 @@ export type TranscriptClaim = {
    * consumer asks; the other per-statement fields on this row stay the first statement's.
    */
   highlightScore: number | null;
+  /**
+   * The three axis scores published beside {@link highlightScore} on the same relation entity, each
+   * 0–1: how directly the claim bears on the debated claim, whether it stands as a faithful, single,
+   * self-contained statement, and how likely an audience is to split on it. Null for debates
+   * published before the axes shipped (2026-10) and for a claim geo-chat could not score. For a
+   * {@link restated} claim each takes the highest of its statements, as {@link highlightScore} does.
+   */
+  relevanceScore: number | null;
+  qualityScore: number | null;
+  controversyScore: number | null;
   /**
    * The id of the block → claim relation's own entity, which is where {@link publishedTiming} and
    * {@link highlightScore} are read from and where a backfill writes them.
@@ -203,16 +215,18 @@ function publishedTiming(
 }
 
 /**
- * The highlight score published on a block → claim relation entity, or null when it carries none.
+ * The score under `propertyId` — the highlight score or one of the axes — published on a block →
+ * claim relation entity, or null when it carries none.
  *
  * Float values arrive as numbers. Anything outside [0, 1] is discarded: the live layer ranks by
- * this, and a value the publisher would never write is drift, not a very strong opinion.
+ * these, and a value the publisher would never write is drift, not a very strong opinion.
  */
-function publishedHighlightScore(
-  values: Array<{ propertyId: string; float?: number | null } | null> | null | undefined
+function publishedScore(
+  values: Array<{ propertyId: string; float?: number | null } | null> | null | undefined,
+  propertyId: string
 ): number | null {
   for (const value of values ?? []) {
-    if (!value || uuidToHex(value.propertyId) !== uuidToHex(CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID)) continue;
+    if (!value || uuidToHex(value.propertyId) !== uuidToHex(propertyId)) continue;
     const score = value.float;
     if (typeof score !== 'number' || !Number.isFinite(score)) continue;
     if (score < 0 || score > 1) continue;
@@ -220,6 +234,14 @@ function publishedHighlightScore(
   }
   return null;
 }
+
+/** The higher of a row's score and another statement's; a missing one never erases the other. */
+function strongest(current: number | null, candidate: number | null): number | null {
+  if (candidate === null) return current;
+  return current === null || candidate > current ? candidate : current;
+}
+
+const AXIS_FIELDS = Object.keys(CLAIM_AXIS_SCORE_PROPERTY_IDS) as ClaimAxisScoreField[];
 
 type ClaimEntityNaming = {
   name?: string | null;
@@ -326,7 +348,10 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
             spaceId: resolved.spaceId,
             blockId: blockEntity.id,
             publishedTiming: publishedTiming(claim.entity?.valuesList),
-            highlightScore: publishedHighlightScore(claim.entity?.valuesList),
+            highlightScore: publishedScore(claim.entity?.valuesList, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID),
+            relevanceScore: publishedScore(claim.entity?.valuesList, CLAIM_AXIS_SCORE_PROPERTY_IDS.relevanceScore),
+            qualityScore: publishedScore(claim.entity?.valuesList, CLAIM_AXIS_SCORE_PROPERTY_IDS.qualityScore),
+            controversyScore: publishedScore(claim.entity?.valuesList, CLAIM_AXIS_SCORE_PROPERTY_IDS.controversyScore),
             relationEntityId: claim.entityId ?? null,
             restated: false,
           };
@@ -336,10 +361,11 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
           // A second turn for a claim already seen. The same relation repeated inside one block is
           // just noise and does not count — see `restated`.
           row.restated = true;
-          // The strongest statement's score stands for the claim — see `highlightScore`.
-          const score = publishedHighlightScore(claim.entity?.valuesList);
-          if (score !== null && (row.highlightScore === null || score > row.highlightScore)) {
-            row.highlightScore = score;
+          // The strongest statement's scores stand for the claim — see `highlightScore`.
+          const values = claim.entity?.valuesList;
+          row.highlightScore = strongest(row.highlightScore, publishedScore(values, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID));
+          for (const field of AXIS_FIELDS) {
+            row[field] = strongest(row[field], publishedScore(values, CLAIM_AXIS_SCORE_PROPERTY_IDS[field]));
           }
         }
 

@@ -5,6 +5,7 @@ import { parse } from 'graphql';
 import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
+  CLAIM_AXIS_SCORE_PROPERTY_IDS,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
@@ -200,11 +201,12 @@ export function debateTranscriptClaimsVariables(
     claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
     namePropertyId: NAME_PROPERTY_ID,
     markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
-    // The name predates the score: these are every value the app reads off the relation entity.
+    // The name predates the scores: these are every value the app reads off the relation entity.
     offsetPropertyIds: [
       CLAIM_START_OFFSET_PROPERTY_ID,
       CLAIM_END_OFFSET_PROPERTY_ID,
       CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
+      ...Object.values(CLAIM_AXIS_SCORE_PROPERTY_IDS),
     ],
     ...(first === undefined ? {} : { first }),
   };

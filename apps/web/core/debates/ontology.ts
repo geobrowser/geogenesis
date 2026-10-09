@@ -147,6 +147,28 @@ export const CLAIM_END_OFFSET_PROPERTY_ID = '79a677b597f84ca8a1cf24eef7837b61';
 export const CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID = '580ba596988144a79716cd38a891319b';
 
 /**
+ * The three axis scores `claims.score_highlights` returns in the same request as the highlight
+ * score, each a position on a four-level scale from 0 to 1: how directly the claim bears on the
+ * debated claim (Relevance), whether it stands as a faithful, single, self-contained statement
+ * (Quality), and how likely a general audience is to split on it (Controversy). Written on the
+ * same block → claim relation entity as the highlight score, for the same reason, and like it
+ * compared within one debate rather than against a fixed cut-off. Float, in the Geo root space;
+ * created on 2026-10-09.
+ */
+export const CLAIM_RELEVANCE_SCORE_PROPERTY_ID = '3bce8adfccf14579b7dc2e736a30f1a1';
+export const CLAIM_QUALITY_SCORE_PROPERTY_ID = '8f766c854dce400d97101b5aa3850382';
+export const CLAIM_CONTROVERSY_SCORE_PROPERTY_ID = '5d32dba2b7a64da3a754e10f0bdc021b';
+
+/** The axis score properties with the `DebateClaimInput` / `TranscriptClaim` field each feeds. */
+export const CLAIM_AXIS_SCORE_PROPERTY_IDS = {
+  relevanceScore: CLAIM_RELEVANCE_SCORE_PROPERTY_ID,
+  qualityScore: CLAIM_QUALITY_SCORE_PROPERTY_ID,
+  controversyScore: CLAIM_CONTROVERSY_SCORE_PROPERTY_ID,
+} as const;
+
+export type ClaimAxisScoreField = keyof typeof CLAIM_AXIS_SCORE_PROPERTY_IDS;
+
+/**
  * The typing that says a relation points at a *span* of its target rather than the whole of it.
  *
  * A relation entity carrying offsets is typed `Selector` and given a `Target property` naming the

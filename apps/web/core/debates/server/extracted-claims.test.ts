@@ -144,15 +144,66 @@ describe('decodeExtractedClaims highlight score', () => {
     const log = vi.spyOn(console, 'log').mockImplementation(() => {});
     decodeExtractedClaims({
       turns: [turn],
-      claims: [claim({ highlight_score: 0.62 }), claim({ highlight_score: null })],
-      highlight_model: 'perplexity/pplx-decider-v1-27b',
+      claims: [
+        claim({ highlight_score: 0.62, relevance_score: 0.8, quality_score: 0.9, controversy_score: 0.7 }),
+        claim({ highlight_score: 0.4 }),
+        claim({ highlight_score: null }),
+      ],
+      highlight_model: 'perplexity/pplx-decider-v1.1-27b',
     });
     expect(log).toHaveBeenCalledWith('[debate-acceptor] highlight scores decoded', {
-      claims: 2,
-      scored: 1,
-      model: 'perplexity/pplx-decider-v1-27b',
+      claims: 3,
+      scored: 2,
+      // One scored claim without axes: an older task answered, which the log makes visible.
+      withAxes: 1,
+      model: 'perplexity/pplx-decider-v1.1-27b',
     });
     log.mockRestore();
+  });
+});
+
+describe('decodeExtractedClaims axis scores', () => {
+  const claim = (extra: Record<string, unknown>) =>
+    ({ text: 'A claim', is_factual: false, turn_index: 0, ...extra }) as Parameters<
+      typeof decodeExtractedClaims
+    >[0]['claims'][number];
+
+  it("carries geo-chat's three axis scores onto the claim beside the highlight score", () => {
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [claim({ highlight_score: 0.62, relevance_score: 0.8, quality_score: 0.9, controversy_score: 0.7 })],
+    });
+    expect(claims[0]).toMatchObject({
+      highlightScore: 0.62,
+      relevanceScore: 0.8,
+      qualityScore: 0.9,
+      controversyScore: 0.7,
+    });
+  });
+
+  it('decodes an absent, null or malformed axis as null without touching the others, and says so for drift', () => {
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    const { claims } = decodeExtractedClaims({
+      turns: [turn],
+      claims: [
+        claim({ highlight_score: 0.62, relevance_score: 0.8 }),
+        claim({ relevance_score: null, quality_score: 1.5, controversy_score: '0.7' }),
+      ],
+    });
+    expect(claims[0]).toMatchObject({
+      highlightScore: 0.62,
+      relevanceScore: 0.8,
+      qualityScore: null,
+      controversyScore: null,
+    });
+    expect(claims[1]).toMatchObject({
+      highlightScore: null,
+      relevanceScore: null,
+      qualityScore: null,
+      controversyScore: null,
+    });
+    expect(warn).toHaveBeenCalledWith(expect.stringContaining('axis scores'), { count: 2, sample: [1.5, '0.7'] });
+    warn.mockRestore();
   });
 });
 

@@ -231,6 +231,9 @@ describe('loadDebatePublishSource media gating', () => {
         isContestable: false,
         timing: { startMs: 0, endMs: 9_000 },
         highlightScore: null,
+        relevanceScore: null,
+        qualityScore: null,
+        controversyScore: null,
         stance: 'supports',
       },
       {
@@ -243,6 +246,9 @@ describe('loadDebatePublishSource media gating', () => {
         isContestable: false,
         timing: null,
         highlightScore: null,
+        relevanceScore: null,
+        qualityScore: null,
+        controversyScore: null,
         stance: null,
       },
     ]);
