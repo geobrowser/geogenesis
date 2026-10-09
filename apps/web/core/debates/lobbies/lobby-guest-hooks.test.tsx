@@ -172,7 +172,7 @@ describe('useLobbyGuestSession', () => {
     expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'late', admission: 1 }, true);
   });
 
-  // The other tab was removed meanwhile: Listen here asks with the shared secret and gets the removal.
+  // Listen here sends the shared secret, so a removed session answers 403.
   it('Listen here after a removal lands on removed, not back in', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const { result } = renderSession();
