@@ -627,3 +627,61 @@ describe('a room the server removed', () => {
     expect(screen.queryByText('Voice could not connect.')).not.toBeInTheDocument();
   });
 });
+
+// Members replace each other across tabs and devices through LiveKit's duplicate identity, and the
+// guest identity is stable per session, so a reload or second tab replaces the first the same way.
+describe('a room another tab or device took over', () => {
+  const guestToken = token({ can_publish: false, token: 'guest-jwt' });
+
+  it('guest: no automatic reconnect and no Try again; the page asks the session', async () => {
+    const onRemoved = vi.fn();
+    const onAutoReconnect = vi.fn(() => true);
+    render(
+      <LobbyGuestVoice
+        token={guestToken}
+        onStates={vi.fn()}
+        onReconnect={vi.fn()}
+        onAutoReconnect={onAutoReconnect}
+        onRemoved={onRemoved}
+      />
+    );
+    mocks.connectionState = ConnectionState.Disconnected;
+    await emitRoom(
+      [ConnectionState.Connecting, ConnectionState.Connected, ConnectionState.Disconnected],
+      DisconnectReason.DUPLICATE_IDENTITY
+    );
+    expect(onRemoved).toHaveBeenCalledTimes(1);
+    expect(onAutoReconnect).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+  });
+
+  it('member: says voice is on in another tab and fetches no token by itself', async () => {
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    await emitRoom(
+      [ConnectionState.Connecting, ConnectionState.Connected, ConnectionState.Disconnected],
+      DisconnectReason.DUPLICATE_IDENTITY
+    );
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Use voice here' })).toBeInTheDocument();
+    expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('member: replaced before connecting is not a failed join either', async () => {
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    await emitRoom([ConnectionState.Connecting, ConnectionState.Disconnected], DisconnectReason.DUPLICATE_IDENTITY);
+    expect(await screen.findByText('Voice is on in another tab')).toBeInTheDocument();
+    expect(mocks.getDebateLobbyVoiceToken).toHaveBeenCalledTimes(1);
+  });
+
+  it('member: a host’s removal does not read as another tab', async () => {
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    await emitRoom(
+      [ConnectionState.Connecting, ConnectionState.Connected, ConnectionState.Disconnected],
+      DisconnectReason.PARTICIPANT_REMOVED
+    );
+    expect(screen.queryByText('Voice is on in another tab')).not.toBeInTheDocument();
+  });
+});

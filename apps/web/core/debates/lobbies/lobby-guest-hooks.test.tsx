@@ -188,6 +188,34 @@ describe('useLobbyGuestSession', () => {
     expect(readGuestSecret('lobby1')).toBe('secret-1');
   });
 
+  // Two tabs on one session: the newer admission holds it. The replaced tab asks, hears superseded
+  // and stops; the current tab is never told to restart, so nothing bounces between them.
+  it('two tabs on one session settle without a restart loop', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    mocks.start
+      .mockResolvedValueOnce(session('secret-1', 'token-a', 1))
+      .mockResolvedValueOnce(session('secret-1', 'token-b', 2));
+    mocks.heartbeat.mockImplementation(async (_lobby: string, body: { admission: number }) =>
+      body.admission === 2
+        ? { alive: true, reason: null, lease_expires_at: 'x' }
+        : { alive: false, reason: 'superseded', lease_expires_at: null }
+    );
+    const a = renderSession();
+    await waitFor(() => expect(a.result.current.state.status).toBe('listening'));
+    const b = renderSession();
+    await waitFor(() => expect(b.result.current.state.status).toBe('listening'));
+
+    // LiveKit dropped tab A for B's duplicate identity; A asks the session.
+    act(() => a.result.current.checkNow());
+    await waitFor(() => expect(a.result.current.state.status).toBe('superseded'));
+    await act(async () => vi.advanceTimersByTimeAsync(60_000));
+
+    expect(b.result.current.state.status).toBe('listening');
+    expect(mocks.start).toHaveBeenCalledTimes(2);
+    // A stopped heartbeating; B kept its own admission.
+    expect(mocks.heartbeat.mock.calls.every(([, body], index) => index === 0 || body.admission === 2)).toBe(true);
+  });
+
   it('resumes with the stored secret', async () => {
     storeGuestSecret('lobby1', 'kept');
     const { result } = renderSession();

@@ -191,6 +191,8 @@ export function LobbyVoice({
     connectedRef.current = true;
     setConnectFailed(false);
   }, []);
+  // Shown as voice in another tab, with "Use voice here"; it does not reconnect by itself.
+  const handleReplaced = React.useCallback(() => setOwnership('elsewhere'), []);
   // A join dropped before it ever connected gets one fresh token by itself, then the notice.
   const autoRetriedRef = React.useRef(false);
   const handleNeverConnected = React.useCallback(() => {
@@ -271,6 +273,7 @@ export function LobbyVoice({
         onConnectedChange={onConnectedChange}
         onAudible={onAudible}
         onNeverConnected={handleNeverConnected}
+        onReplaced={handleReplaced}
       >
         {children}
       </ConnectedVoice>
@@ -298,6 +301,7 @@ function ConnectedVoice({
   onConnectedChange,
   onAudible,
   onNeverConnected,
+  onReplaced,
   children,
 }: {
   canPublish: boolean;
@@ -308,10 +312,17 @@ function ConnectedVoice({
   onConnectedChange: (connected: boolean) => void;
   onAudible?: () => void;
   onNeverConnected: () => void;
+  onReplaced: () => void;
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
-  useRoomEnding(room, { onNeverConnected });
+  useRoomEnding(room, {
+    onNeverConnected,
+    // Another tab or device took this identity; reconnecting would only take it back and forth.
+    onRemoved: reason => {
+      if (reason === DisconnectReason.DUPLICATE_IDENTITY) onReplaced();
+    },
+  });
   React.useEffect(() => {
     roomRef.current = room;
     return () => {
@@ -402,11 +413,20 @@ function ConnectedVoice({
   );
 }
 
+/** Disconnects that mean this identity was taken out or taken over: never a reason to reconnect by itself. */
+const REMOVED_REASONS: ReadonlySet<DisconnectReason> = new Set([
+  DisconnectReason.PARTICIPANT_REMOVED,
+  DisconnectReason.DUPLICATE_IDENTITY,
+]);
+
 /**
- * `onRemoved` when the server removed this identity, which must not reconnect by itself; else
- * `onNeverConnected` for a drop before connecting. LiveKit sends the reason after the state.
+ * `onRemoved` when the server removed this identity or another tab or device joined with it;
+ * else `onNeverConnected` for a drop before connecting. LiveKit sends the reason after the state.
  */
-function useRoomEnding(room: Room, handlers: { onNeverConnected: () => void; onRemoved?: () => void }) {
+function useRoomEnding(
+  room: Room,
+  handlers: { onNeverConnected: () => void; onRemoved?: (reason: DisconnectReason) => void }
+) {
   const handlersRef = React.useRef(handlers);
   React.useEffect(() => {
     handlersRef.current = handlers;
@@ -425,9 +445,9 @@ function useRoomEnding(room: Room, handlers: { onNeverConnected: () => void; onR
       }
     };
     const onDisconnected = (reason?: DisconnectReason) => {
-      if (reason !== DisconnectReason.PARTICIPANT_REMOVED) return;
+      if (reason === undefined || !REMOVED_REASONS.has(reason)) return;
       removed = true;
-      handlersRef.current.onRemoved?.();
+      handlersRef.current.onRemoved?.(reason);
     };
     room.on(RoomEvent.ConnectionStateChanged, onState);
     room.on(RoomEvent.Disconnected, onDisconnected);
