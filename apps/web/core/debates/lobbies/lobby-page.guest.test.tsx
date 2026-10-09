@@ -243,7 +243,8 @@ describe('DebateLobbyPage for a visitor without an account', () => {
       expect.stringContaining('explore')
     );
     await screen.findByTestId('guest-room');
-    expect(screen.getByText('You’re listening.')).toBeInTheDocument();
+    // The room reports its connection after it mounts.
+    expect(await screen.findByText('You’re listening.')).toBeInTheDocument();
     expect(screen.getByTestId('lobby-guest-count')).toHaveTextContent('2 guests without an account');
     expect(screen.queryByTestId('member-room')).not.toBeInTheDocument();
     expect(mocks.start).toHaveBeenCalledWith('lobby1', {});
@@ -547,7 +548,8 @@ describe('DebateLobbyPage guest banner', () => {
   it('says You’re listening only while this visitor listens', async () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
     await screen.findByTestId('guest-room');
-    expect(screen.getByTestId('lobby-guest-banner')).toHaveTextContent('You’re listening.');
+    // The room reports its connection after it mounts.
+    await waitFor(() => expect(screen.getByTestId('lobby-guest-banner')).toHaveTextContent('You’re listening.'));
   });
 
   it('invites without claiming to listen when the visitor was refused', async () => {
