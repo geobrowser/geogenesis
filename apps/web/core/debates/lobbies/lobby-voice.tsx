@@ -403,11 +403,8 @@ function ConnectedVoice({
 }
 
 /**
- * How a room ended without the viewer leaving it. `onRemoved`: the server removed this identity
- * (a newer tab or reload took over, or a host removed it), so it must not reconnect by itself.
- * `onNeverConnected`: any other drop before it ever connected, which would otherwise show
- * "Connecting…" for good. LiveKit sets the state before it emits the reason, so the drop waits a
- * microtask for it.
+ * `onRemoved` when the server removed this identity, which must not reconnect by itself; else
+ * `onNeverConnected` for a drop before connecting. LiveKit sends the reason after the state.
  */
 function useRoomEnding(room: Room, handlers: { onNeverConnected: () => void; onRemoved?: () => void }) {
   const handlersRef = React.useRef(handlers);

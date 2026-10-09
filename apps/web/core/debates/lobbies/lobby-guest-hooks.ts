@@ -180,7 +180,7 @@ export function useLobbyGuestSession(
     const every = Math.max(session.heartbeat_interval_seconds * 1_000, 5_000) || HEARTBEAT_FALLBACK_MS;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
-    // The room was removed yet the session may still be this tab's; then it reconnects.
+    // Set by `checkNow`: an alive session is still this tab's, so it reconnects.
     let restartIfAlive = false;
     const beat = (delay: number) => {
       timer = setTimeout(async () => {
