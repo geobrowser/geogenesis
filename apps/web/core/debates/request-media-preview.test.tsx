@@ -10,6 +10,9 @@ import { DebateRequestMediaPreview } from './request-media-preview';
 const mocks = vi.hoisted(() => ({
   /** What `permissions.query` answers for camera and microphone. */
   permission: 'prompt' as PermissionState | 'throw' | 'absent',
+  /** Overrides for `permission`, one device at a time. */
+  cameraPermission: null as PermissionState | null,
+  micPermission: null as PermissionState | null,
   ensurePreview: vi.fn(),
   beginSession: vi.fn(),
   releaseSession: vi.fn(),
@@ -52,6 +55,8 @@ vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avata
 
 beforeEach(() => {
   mocks.permission = 'prompt';
+  mocks.cameraPermission = null;
+  mocks.micPermission = null;
   mocks.previewState = 'idle';
   mocks.previewError = null;
   mocks.tracks = [{ mediaStreamTrack: { kind: 'audio' } }, { mediaStreamTrack: { kind: 'video' } }];
@@ -87,9 +92,10 @@ function mount() {
       mocks.permission === 'absent'
         ? undefined
         : {
-            query: vi.fn(async () => {
+            query: vi.fn(async ({ name }: { name: string }) => {
               if (mocks.permission === 'throw') throw new Error('nope');
-              return { state: mocks.permission as PermissionState };
+              const answer = name === 'camera' ? mocks.cameraPermission : mocks.micPermission;
+              return { state: (answer ?? mocks.permission) as PermissionState };
             }),
           },
   });
@@ -175,6 +181,48 @@ describe('DebateRequestMediaPreview', () => {
     );
     expect(await screen.findByText('Joining with mic on, camera off')).toBeInTheDocument();
     expect(screen.queryByText('Joining with mic and camera on')).toBeNull();
+  });
+});
+
+describe('one device refused and the other allowed', () => {
+  it('keeps the microphone switch when only the camera was refused', async () => {
+    mocks.cameraPermission = 'denied';
+    mocks.micPermission = 'granted';
+    mount();
+
+    expect(await screen.findByText(/^Camera is blocked for this site/)).toBeInTheDocument();
+    expect(screen.queryByText(/Camera and mic are blocked/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /microphone/i })).toBeInTheDocument();
+    // And the device that is allowed is opened, without prompting for the one that is not.
+    await waitFor(() =>
+      expect(mocks.ensurePreview).toHaveBeenLastCalledWith(expect.objectContaining({ audio: true, video: false }))
+    );
+    expect(await screen.findByText('Joining with mic on, camera off')).toBeInTheDocument();
+  });
+
+  it('keeps the camera switch when only the microphone was refused', async () => {
+    mocks.cameraPermission = 'granted';
+    mocks.micPermission = 'denied';
+    mount();
+
+    expect(await screen.findByText(/^Mic is blocked for this site/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /microphone/i })).toBeNull();
+    expect(screen.getByRole('button', { name: /camera/i })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mocks.ensurePreview).toHaveBeenLastCalledWith(expect.objectContaining({ audio: false, video: true }))
+    );
+  });
+
+  // Both refused is the one case where there is nothing left to choose.
+  it('offers nothing when both were refused', async () => {
+    mocks.cameraPermission = 'denied';
+    mocks.micPermission = 'denied';
+    mount();
+
+    expect(await screen.findByText(/Camera and mic are blocked/)).toBeInTheDocument();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.getByText('Joining listening only')).toBeInTheDocument();
   });
 });
 

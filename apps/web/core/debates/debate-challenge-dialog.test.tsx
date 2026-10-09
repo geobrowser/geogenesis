@@ -128,6 +128,15 @@ describe('DebateChallengeDialog', () => {
     expect(media.releaseSession).toHaveBeenCalledWith('debate-challenge:challenge-1');
   });
 
+  it('does not pin the height of the row holding the preview', () => {
+    renderDialog();
+
+    const row = document.querySelector('[class*="grid-cols-[1fr_auto_1fr]"]');
+    expect(row).not.toBeNull();
+    expect(row?.className).toContain('min-h-24');
+    expect(row?.className.split(/\s+/)).not.toContain('h-24');
+  });
+
   // The card still offers the choice, which is what puts the permission prompt before the call
   // rather than in the middle of one.
   it('still offers the camera and microphone toggles', async () => {

@@ -16,21 +16,24 @@ import {
   mayAutoStartPreview,
 } from './request-join-state';
 
-async function readMediaPermission(): Promise<DebateMediaPermission> {
-  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return 'unsupported';
+type DebateMediaPermissions = { camera: DebateMediaPermission; microphone: DebateMediaPermission };
 
-  try {
-    const [camera, microphone] = await Promise.all([
-      navigator.permissions.query({ name: 'camera' as PermissionName }),
-      navigator.permissions.query({ name: 'microphone' as PermissionName }),
-    ]);
-    const states = [camera.state, microphone.state];
-    if (states.includes('denied')) return 'denied';
-    if (states.every(state => state === 'granted')) return 'granted';
-    return 'prompt';
-  } catch {
-    return 'unsupported';
-  }
+const UNKNOWN_PERMISSIONS: DebateMediaPermissions = { camera: 'unsupported', microphone: 'unsupported' };
+
+async function readMediaPermission(): Promise<DebateMediaPermissions> {
+  if (typeof navigator === 'undefined' || !navigator.permissions?.query) return UNKNOWN_PERMISSIONS;
+
+  const ask = async (name: 'camera' | 'microphone'): Promise<DebateMediaPermission> => {
+    try {
+      const status = await navigator.permissions.query({ name: name as PermissionName });
+      return status.state;
+    } catch {
+      return 'unsupported';
+    }
+  };
+
+  const [camera, microphone] = await Promise.all([ask('camera'), ask('microphone')]);
+  return { camera, microphone };
 }
 
 type DebateRequestMediaPreviewProps = {
@@ -63,7 +66,7 @@ function MediaPreview({
   retain,
   session,
 }: Omit<DebateRequestMediaPreviewProps, 'fallback'> & { session: DebateMediaSession }) {
-  const [permission, setPermission] = React.useState<DebateMediaPermission | null>(null);
+  const [permission, setPermission] = React.useState<DebateMediaPermissions | null>(null);
 
   const [want, setWant] = React.useState<DebateJoinState>({ micOn: false, cameraOn: false });
   const [missing, setMissing] = React.useState<{ mic: boolean; camera: boolean }>({ mic: false, camera: false });
@@ -79,7 +82,7 @@ function MediaPreview({
     void readMediaPermission().then(answer => {
       if (!active) return;
       setPermission(answer);
-      if (mayAutoStartPreview(answer)) setWant({ micOn: true, cameraOn: true });
+      setWant({ micOn: mayAutoStartPreview(answer.microphone), cameraOn: mayAutoStartPreview(answer.camera) });
     });
 
     return () => {
@@ -124,7 +127,10 @@ function MediaPreview({
           if (failed.state === 'denied') {
             void readMediaPermission().then(answer => {
               if (!active) return;
-              setPermission(answer === 'unsupported' ? 'denied' : answer);
+              setPermission({
+                camera: answer.camera === 'unsupported' && want.cameraOn ? 'denied' : answer.camera,
+                microphone: answer.microphone === 'unsupported' && want.micOn ? 'denied' : answer.microphone,
+              });
             });
           }
         }
@@ -152,10 +158,13 @@ function MediaPreview({
     video.srcObject = session.previewStream ?? null;
   }, [session.previewStream]);
 
-  const blocked = permission !== null && isMediaBlocked(permission);
+  const cameraBlocked = permission !== null && isMediaBlocked(permission.camera);
+  const micBlocked = permission !== null && isMediaBlocked(permission.microphone);
+  const blocked = cameraBlocked && micBlocked;
 
   const toggle = (next: Partial<DebateJoinState>) => {
-    if (blocked) return;
+    if (next.micOn !== undefined && micBlocked) return;
+    if (next.cameraOn !== undefined && cameraBlocked) return;
     setFailure(null);
     setWant(current => ({ ...current, ...next }));
   };
@@ -172,20 +181,24 @@ function MediaPreview({
         tileControls={
           blocked ? null : (
             <div className="flex items-center gap-2">
-              <DebateTileToggleButton
-                ariaLabel={micOn ? 'Turn microphone off' : 'Turn microphone on'}
-                enabled={micOn}
-                onClick={() => toggle({ micOn: !micOn })}
-              >
-                <MicrophoneIcon muted={!micOn} />
-              </DebateTileToggleButton>
-              <DebateTileToggleButton
-                ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
-                enabled={cameraOn}
-                onClick={() => toggle({ cameraOn: !cameraOn })}
-              >
-                <CameraIcon disabled={!cameraOn} />
-              </DebateTileToggleButton>
+              {!micBlocked && (
+                <DebateTileToggleButton
+                  ariaLabel={micOn ? 'Turn microphone off' : 'Turn microphone on'}
+                  enabled={micOn}
+                  onClick={() => toggle({ micOn: !micOn })}
+                >
+                  <MicrophoneIcon muted={!micOn} />
+                </DebateTileToggleButton>
+              )}
+              {!cameraBlocked && (
+                <DebateTileToggleButton
+                  ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+                  enabled={cameraOn}
+                  onClick={() => toggle({ cameraOn: !cameraOn })}
+                >
+                  <CameraIcon disabled={!cameraOn} />
+                </DebateTileToggleButton>
+              )}
             </div>
           )
         }
@@ -203,6 +216,14 @@ function MediaPreview({
       {blocked ? (
         <Text variant="footnote" color="grey-04">
           Camera and mic are blocked for this site. Allow them in your browser&apos;s address bar to turn them on.
+        </Text>
+      ) : cameraBlocked ? (
+        <Text variant="footnote" color="grey-04">
+          Camera is blocked for this site. Allow it in your browser&apos;s address bar to turn it on.
+        </Text>
+      ) : micBlocked ? (
+        <Text variant="footnote" color="grey-04">
+          Mic is blocked for this site. Allow it in your browser&apos;s address bar to turn it on.
         </Text>
       ) : failure ? (
         <Text variant="footnote" color="grey-04">
