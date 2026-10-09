@@ -404,7 +404,7 @@ function LobbyRoom({
           <HubPillButton analyticsLabel="Lobby leave" onClick={onLeave}>
             Leave lobby
           </HubPillButton>
-          <HubHeaderControls />
+          <HubHeaderControls analyticsSurface="lobby" />
           {isHost ? (
             confirmingEnd ? (
               <>

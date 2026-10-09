@@ -6,6 +6,7 @@ export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'ca
  */
 export type DebateActionAnalyticsSurface =
   | DebateAnalyticsSurface
+  | 'lobby'
   | 'request-popup'
   | 'schedule-editor'
   | 'peer-availability'
@@ -48,6 +49,10 @@ const ACTION_SURFACE_ANALYTICS = {
   'room-join-prompt': {
     labelPrefix: 'Scheduled debate prompt',
     actionIntent: 'scheduled_debate_prompt_action',
+  },
+  lobby: {
+    labelPrefix: 'Debate lobby',
+    actionIntent: 'debate_lobby_action',
   },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 

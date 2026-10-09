@@ -16,6 +16,7 @@ describe('debate analytics attributes', () => {
     ['peer-availability', 'Send request', 'Availability Send request', 'peer_availability_action'],
     ['availability-link', 'Sign in', 'Availability link Sign in', 'availability_link_action'],
     ['room-join-prompt', 'Join', 'Scheduled debate prompt Join', 'scheduled_debate_prompt_action'],
+    ['lobby', 'Availability menu', 'Debate lobby Availability menu', 'debate_lobby_action'],
   ] as const)('labels the %s surface', (surface, action, label, defaultIntent) => {
     expect(debateActionAnalyticsAttributes(surface, action)).toEqual({
       'data-geo-analytics-label': label,
