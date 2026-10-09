@@ -7,6 +7,7 @@ import {
   getDebateLobbyBans,
   getDebateLobbyModerationLog,
   moderateDebateLobbyMember,
+  removeDebateLobbyGuests,
   setDebateLobbyHand,
 } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
@@ -34,6 +35,21 @@ export function useModerateLobbyMember(lobbyId: string) {
     onSuccess: view => {
       store(view);
       void queryClient.invalidateQueries({ queryKey: lobbyModerationKeys.bans(accountKey, lobbyId) });
+      void queryClient.invalidateQueries({ queryKey: lobbyModerationKeys.log(accountKey, lobbyId) });
+    },
+  });
+}
+
+/** Remove every guest without an account (GEO-3129). Host only; stores the returned view. */
+export function useRemoveLobbyGuests(lobbyId: string) {
+  const queryClient = useQueryClient();
+  const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
+  const store = useStoreLobbyView();
+
+  return useMutation({
+    mutationFn: () => removeDebateLobbyGuests(lobbyId, getPrivyIdentityToken, accountKey),
+    onSuccess: view => {
+      store(view);
       void queryClient.invalidateQueries({ queryKey: lobbyModerationKeys.log(accountKey, lobbyId) });
     },
   });

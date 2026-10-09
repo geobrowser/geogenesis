@@ -2,9 +2,12 @@
 
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 
-import { GeoChatRequestError, dashlessId, getDebateLobbyClaims } from '../api';
+import { type DebateLobbyGuestView, GeoChatRequestError, dashlessId, getDebateLobbyClaims } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
+import { useDebateLobbyGuestView, useIsLobbyGuest } from './lobby-guest-hooks';
+
+const guestClaims = (view: DebateLobbyGuestView) => view.claims ?? undefined;
 
 /**
  * The lobby's "In this room" claims. Refetched on `debate.lobby_changed`, after the viewer's own vote
@@ -12,14 +15,19 @@ import { viewerReadRetryOptions } from '../matchmaking/hooks';
  */
 export function useDebateLobbyClaims(lobbyId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+  // A guest reads them off the page's guest view, which polls.
+  const guest = useIsLobbyGuest();
+  const guestQuery = useDebateLobbyGuestView(lobbyId, { enabled: enabled && guest, select: guestClaims });
 
-  return useQuery({
+  const memberQuery = useQuery({
     ...debateQueryNetworkOptions,
     ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobbyClaims(accountKey, lobbyId),
     queryFn: ({ signal }) => getDebateLobbyClaims(dashlessId(lobbyId), getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && Boolean(lobbyId) && ready && authenticated,
+    enabled: enabled && !guest && Boolean(lobbyId) && ready && authenticated,
   });
+
+  return guest ? guestQuery : memberQuery;
 }
 
 /** Refusals that mean the list's request offer is out of date. */

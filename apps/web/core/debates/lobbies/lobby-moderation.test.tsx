@@ -6,12 +6,14 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyMember, DebateLobbyRole, DebateLobbyView } from '../api';
+import type { MemberLobbyPageView } from './lobby-view';
 
 const api = vi.hoisted(() => ({
   moderateDebateLobbyMember: vi.fn(),
   setDebateLobbyHand: vi.fn(),
   getDebateLobbyBans: vi.fn(),
   getDebateLobbyModerationLog: vi.fn(),
+  removeDebateLobbyGuests: vi.fn(),
 }));
 
 vi.mock('../api', async importOriginal => ({ ...(await importOriginal<typeof import('../api')>()), ...api }));
@@ -42,7 +44,10 @@ function member(userId: string, role: DebateLobbyRole, extra: Partial<DebateLobb
   };
 }
 
-function lobby(viewer: Partial<DebateLobbyView['viewer']> = {}, extra: Partial<DebateLobbyView> = {}): DebateLobbyView {
+function lobby(
+  viewer: Partial<DebateLobbyView['viewer']> = {},
+  extra: Partial<Omit<DebateLobbyView, 'viewer'>> = {}
+): MemberLobbyPageView {
   return {
     lobby_id: 'lobby1',
     name: 'Hour',
@@ -56,6 +61,7 @@ function lobby(viewer: Partial<DebateLobbyView['viewer']> = {}, extra: Partial<D
     reminder_count: 0,
     members: [],
     viewer: {
+      kind: 'member',
       role: 'host',
       creator: true,
       hosting: true,
@@ -303,5 +309,31 @@ describe('LobbyRemovedNotice', () => {
     expect(screen.getByText('A host lifted your ban')).toBeTruthy();
     expect(screen.getByText('Rejoin to come back.')).toBeTruthy();
     expect(screen.queryByText('A host removed you from this lobby')).toBeNull();
+  });
+});
+
+describe('Remove guests', () => {
+  it('removes every guest after an in-page confirmation', async () => {
+    api.removeDebateLobbyGuests.mockResolvedValue(lobby({}, { guest_count: 0 }));
+    renderWith(<LobbyHostLists lobby={lobby({}, { guest_count: 3 })} />);
+
+    expect(screen.getByText('3 guests without an account')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Remove guests' }));
+    expect(screen.getByText(/Remove all 3 guests without an account\?/)).toBeTruthy();
+    expect(api.removeDebateLobbyGuests).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove guests' }));
+    await waitFor(() =>
+      expect(api.removeDebateLobbyGuests).toHaveBeenCalledWith('lobby1', expect.any(Function), 'acct')
+    );
+    await waitFor(() => expect(screen.queryByText(/Remove all 3 guests/)).toBeNull());
+  });
+
+  it('is only for whoever is hosting, with guests to remove', () => {
+    renderWith(<LobbyHostLists lobby={lobby({}, { guest_count: 0 })} />);
+    expect(screen.queryByTestId('lobby-remove-guests')).toBeNull();
+    cleanup();
+    renderWith(<LobbyHostLists lobby={lobby({ hosting: false, role: 'host' }, { guest_count: 2 })} />);
+    expect(screen.queryByTestId('lobby-remove-guests')).toBeNull();
   });
 });

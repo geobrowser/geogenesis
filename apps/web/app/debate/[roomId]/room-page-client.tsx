@@ -10,6 +10,7 @@ import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
+import { useDebateLobbyGuestView } from '~/core/debates/lobbies/lobby-guest-hooks';
 import { DebateLobbyPage, LobbiesUnavailable } from '~/core/debates/lobbies/lobby-page';
 import {
   useDebateRoom,
@@ -70,6 +71,11 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const { rejoin } = useRoomPresence(roomId, admitted);
   const presence = useDebateRoomPresence(room);
   const { ready, authenticated } = useGeoChatAuth();
+  // Signed out, the room's kind is unknown; the guest view answers for a lobby (GEO-3129), and is
+  // kept through sign-in so the lobby page stays mounted until the member read says the same.
+  const signedOut = ready && !authenticated;
+  const guestView = useDebateLobbyGuestView(roomId, { enabled: signedOut && lobbyJoining });
+  const knownLobby = isLobby || guestView.data !== undefined;
 
   // A room whose debate is over would otherwise mount the picker, flash its claims and redirect
   // into the finished debate. Decided on the debate's own status: a session converts on acceptance,
@@ -90,10 +96,17 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // valid, they are just not in this one.
   if (denial) return null;
 
+  // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest, signed out too.
+  if (knownLobby) {
+    return lobbyJoining ? <DebateLobbyPage key={roomId} lobbyId={roomId} /> : <LobbiesUnavailable />;
+  }
+
   // A room link is pasted into a calendar invite, so the person opening it is often signed out.
   // The room cannot say who they are, and an error card is a dead end.
-  // Signed out, the room's kind is unknown; a lobby's shared link says so itself.
-  if (ready && !authenticated) {
+  if (signedOut) {
+    if (lobbyJoining && guestView.isPending && guestView.fetchStatus !== 'idle') {
+      return <RoomNotice busy>Opening…</RoomNotice>;
+    }
     const lobbyLink = searchParams?.get('via') === LOBBY_LINK_VIA;
     return (
       <RoomNotice
@@ -105,11 +118,6 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
         {lobbyLink ? 'Sign in to join the lobby.' : 'Sign in to join your debate.'}
       </RoomNotice>
     );
-  }
-
-  // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest.
-  if (isLobby) {
-    return lobbyJoining ? <DebateLobbyPage key={roomId} lobbyId={roomId} /> : <LobbiesUnavailable />;
   }
 
   if (!room) {

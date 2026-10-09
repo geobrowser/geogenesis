@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { type DebateClaimSummary, type DebateLobbyView, GeoChatRequestError } from '../api';
+import { type DebateClaimSummary, GeoChatRequestError } from '../api';
 import {
   LobbyRoomClaimsWithHighlights,
   LobbyRoomVote,
@@ -13,6 +13,7 @@ import {
 } from './lobby-highlights';
 import type { LobbyHighlightsState } from './lobby-highlights-state';
 import type { LobbyRoomClaim } from './lobby-room-claims-list';
+import type { LobbyPageView } from './lobby-view';
 
 type MutateOptions = { onSuccess?: () => void; onError?: (error: unknown) => void };
 
@@ -139,7 +140,7 @@ function stateWith({ vote = true }: { vote?: boolean } = {}): LobbyHighlightsSta
 }
 
 const lobby = (hosting: boolean) =>
-  ({ lobby_id: 'lobby', viewer: { hosting, connected: true } }) as unknown as DebateLobbyView;
+  ({ lobby_id: 'lobby', viewer: { kind: 'member', hosting, connected: true } }) as unknown as LobbyPageView;
 
 beforeEach(() => {
   mocks.state = stateWith();

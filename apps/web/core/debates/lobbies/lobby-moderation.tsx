@@ -10,7 +10,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyPerson, type DebateLobbyView, GeoChatRequestError } from '../api';
+import { type DebateLobbyPerson, GeoChatRequestError } from '../api';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import {
   lobbyErrorMessage,
@@ -22,8 +22,16 @@ import {
   raisedHands,
   sinceLabel,
 } from './lobby-format';
+import { guestCountLabel } from './lobby-guest';
 import { LobbyPersonName } from './lobby-people';
-import { useLobbyBans, useLobbyHand, useLobbyModerationLog, useModerateLobbyMember } from './moderation-hooks';
+import type { LobbyMemberViewer, MemberLobbyPageView } from './lobby-view';
+import {
+  useLobbyBans,
+  useLobbyHand,
+  useLobbyModerationLog,
+  useModerateLobbyMember,
+  useRemoveLobbyGuests,
+} from './moderation-hooks';
 
 const MODERATION_NOTICE_MS = 10_000;
 
@@ -31,7 +39,7 @@ const MODERATION_NOTICE_MS = 10_000;
  * What a host just did to the viewer, from `viewer.last_moderation`, for a few seconds. Only an
  * action newer than the first view counts, so an old one is not replayed on opening the page.
  */
-export function useModerationNotice(viewer: Pick<DebateLobbyView['viewer'], 'last_moderation'>) {
+export function useModerationNotice(viewer: Pick<LobbyMemberViewer, 'last_moderation'>) {
   const last = viewer.last_moderation ?? null;
   const seenRef = React.useRef<string | null | undefined>(undefined);
   const [notice, setNotice] = React.useState<string | null>(null);
@@ -55,7 +63,7 @@ export function useModerationNotice(viewer: Pick<DebateLobbyView['viewer'], 'las
 }
 
 /** Raise hand / Lower, for a listener who is in the lobby. */
-export function LobbyHandControl({ lobby }: { lobby: Pick<DebateLobbyView, 'lobby_id' | 'viewer'> }) {
+export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, 'lobby_id' | 'viewer'> }) {
   const hand = useLobbyHand(lobby.lobby_id);
   const raised = Boolean(lobby.viewer.hand_raised_at);
 
@@ -111,7 +119,7 @@ type HostTab = 'hands' | 'banned' | 'log';
  * Raised hands, the banned list and the log, for whoever is hosting now. Once the lobby has ended,
  * a host by role can still read the banned list and the log; nothing can change there.
  */
-export function LobbyHostLists({ lobby }: { lobby: DebateLobbyView }) {
+export function LobbyHostLists({ lobby }: { lobby: MemberLobbyPageView }) {
   const ended = lobby.access.status === 'closed';
   const [tab, setTab] = React.useState<HostTab>(ended ? 'banned' : 'hands');
   const hands = raisedHands(lobby.members);
@@ -126,6 +134,7 @@ export function LobbyHostLists({ lobby }: { lobby: DebateLobbyView }) {
 
   return (
     <section className="flex flex-col gap-2" aria-label="Host lists" data-testid="lobby-host-lists">
+      {!ended && lobby.viewer.hosting ? <LobbyRemoveGuests lobby={lobby} /> : null}
       <div role="group" aria-label="Show" className="flex gap-4">
         {tabs.map(item => (
           <button
@@ -156,7 +165,67 @@ export function LobbyHostLists({ lobby }: { lobby: DebateLobbyView }) {
   );
 }
 
-function RaisedHands({ lobby, hands }: { lobby: DebateLobbyView; hands: DebateLobbyView['members'] }) {
+export const REMOVE_GUESTS_COPY = {
+  action: 'Remove guests',
+  confirm: (count: number) =>
+    `Remove ${count === 1 ? 'the guest' : `all ${count} guests`} without an account? They stop hearing the room and can come back by signing in.`,
+  done: 'Guests removed.',
+} as const;
+
+/** Removes every guest at once: guests are anonymous, so there is nobody to pick. */
+function LobbyRemoveGuests({ lobby }: { lobby: MemberLobbyPageView }) {
+  const remove = useRemoveLobbyGuests(lobby.lobby_id);
+  const [confirming, setConfirming] = React.useState(false);
+  const count = lobby.guest_count ?? 0;
+  if (count === 0 && !remove.isSuccess) return null;
+
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2"
+      data-testid="lobby-remove-guests"
+    >
+      {confirming ? (
+        <>
+          <Text as="p" variant="metadata">
+            {REMOVE_GUESTS_COPY.confirm(count)}
+          </Text>
+          <div className="flex flex-wrap gap-2">
+            <HubPillButton
+              variant="primary"
+              analyticsLabel="Lobby remove guests confirm"
+              pending={remove.isPending}
+              pendingLabel="Removing…"
+              onClick={() => remove.mutate(undefined, { onSuccess: () => setConfirming(false) })}
+            >
+              {REMOVE_GUESTS_COPY.action}
+            </HubPillButton>
+            <HubPillButton analyticsLabel="Lobby remove guests cancel" onClick={() => setConfirming(false)}>
+              Cancel
+            </HubPillButton>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Text as="p" variant="footnote" color="grey-04" className="min-w-0 flex-1">
+            {count > 0 ? `${count} ${guestCountLabel(count)}` : REMOVE_GUESTS_COPY.done}
+          </Text>
+          {count > 0 ? (
+            <HubPillButton analyticsLabel="Lobby remove guests" onClick={() => setConfirming(true)}>
+              {REMOVE_GUESTS_COPY.action}
+            </HubPillButton>
+          ) : null}
+        </div>
+      )}
+      {remove.isError ? (
+        <Text as="p" variant="footnote" color="red-01">
+          {moderationErrorMessage(remove.error)}
+        </Text>
+      ) : null}
+    </div>
+  );
+}
+
+function RaisedHands({ lobby, hands }: { lobby: MemberLobbyPageView; hands: MemberLobbyPageView['members'] }) {
   const moderate = useModerateLobbyMember(lobby.lobby_id);
   if (hands.length === 0) return <EmptyRow>No hands raised.</EmptyRow>;
 
@@ -191,7 +260,7 @@ function BannedList({
   banned,
   loading,
 }: {
-  lobby: DebateLobbyView;
+  lobby: MemberLobbyPageView;
   banned: NonNullable<ReturnType<typeof useLobbyBans>['data']>;
   loading: boolean;
 }) {

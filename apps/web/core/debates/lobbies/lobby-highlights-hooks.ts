@@ -8,6 +8,7 @@ import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote'
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
 import {
+  type DebateLobbyGuestView,
   type DebateLobbyHighlights,
   type DebateLobbyRoomVote,
   dashlessId,
@@ -19,6 +20,7 @@ import {
 } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
+import { useDebateLobbyGuestView, useIsLobbyGuest } from './lobby-guest-hooks';
 import {
   type LobbyHighlightsState,
   createRoomVoteHintSender,
@@ -33,12 +35,20 @@ import {
  * `debate.lobby_highlights_changed` replaces it in between. A failed GET retries: with no running
  * vote, nothing else would bring the highlights back.
  */
+const guestHighlights = (view: DebateLobbyGuestView): LobbyHighlightsState | undefined =>
+  view.highlights
+    ? lobbyHighlightsFromResponse({ ...view.highlights, viewer: { room_vote_position: null } })
+    : undefined;
+
 export function useLobbyHighlights(lobbyId: string, enabled = true) {
   const queryClient = useQueryClient();
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
   const queryKey = debateQueryKeys.lobbyHighlights(accountKey, lobbyId);
+  // A guest reads them off the page's guest view, which polls; a guest has no side.
+  const guest = useIsLobbyGuest();
+  const guestQuery = useDebateLobbyGuestView(lobbyId, { enabled: enabled && guest, select: guestHighlights });
 
-  return useQuery({
+  const memberQuery = useQuery({
     ...debateQueryNetworkOptions,
     ...viewerReadRetryOptions(accountKey),
     queryKey,
@@ -50,8 +60,10 @@ export function useLobbyHighlights(lobbyId: string, enabled = true) {
         lobbyHighlightsFromResponse(response)
       );
     },
-    enabled: enabled && Boolean(lobbyId) && ready && authenticated,
+    enabled: enabled && !guest && Boolean(lobbyId) && ready && authenticated,
   });
+
+  return guest ? guestQuery : memberQuery;
 }
 
 /** Lays a host action's returned state over the cache when newer, or seeds it after a failed first GET. */

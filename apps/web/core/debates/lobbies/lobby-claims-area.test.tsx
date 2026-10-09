@@ -2,8 +2,8 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyView } from '../api';
 import { LobbyClaimsArea } from './lobby-claims-area';
+import type { LobbyPageView } from './lobby-view';
 
 vi.mock('./lobby-room-claims', () => ({
   LobbyRoomClaims: () => <p data-testid="lobby-room-claims" />,
@@ -13,7 +13,7 @@ vi.mock('./lobby-highlights', () => ({
   LobbyRoomClaimsWithHighlights: () => <p data-testid="lobby-room-claims" />,
 }));
 
-const lobby = { lobby_id: 'lobby-1' } as DebateLobbyView;
+const lobby = { lobby_id: 'lobby-1' } as LobbyPageView;
 
 afterEach(cleanup);
 

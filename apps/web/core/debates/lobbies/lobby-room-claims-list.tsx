@@ -22,6 +22,7 @@ import { trustedIndexedPosition, useBackfillReadinessForHeldPosition } from '../
 import { HubCardList } from '../matchmaking/hub-motion';
 import { MatchmakingClaimCard, isResolvableClaim } from '../matchmaking/matchmaking-claim-card';
 import { hostsLabel, personName } from './lobby-format';
+import { useIsLobbyGuest } from './lobby-guest-hooks';
 
 /** One side of an "In this room" claim, counted over the people in the room. */
 export type LobbyRoomSide = DebateClaimPositionSummary & {
@@ -92,6 +93,8 @@ function LobbyRoomClaimCard({
   renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
 }) {
   const { claim } = entry;
+  // A guest's vote is kept on the device until they save it with an account (GEO-3214).
+  const guest = useIsLobbyGuest();
   // The card holds its own response reads until it is near the viewport; this one follows it.
   const { ref, nearViewport } = useNearViewport();
   const indexing = useEntityResponseIndexingSnapshot({
@@ -150,6 +153,7 @@ function LobbyRoomClaimCard({
       readiness={entry.readiness}
       activeDebate={entry.activeDebate}
       answersMayComeFromIndex
+      allowsSignedOutVotes={guest}
       header={renderHeader?.(entry)}
       // Never the card's default slot: its request would not be lobby-scoped. The spacer keeps the
       // meta row's height when there is neither an action nor a host menu.
