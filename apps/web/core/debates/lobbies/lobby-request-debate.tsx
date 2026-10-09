@@ -10,6 +10,7 @@ import { useLiveRequestBlock } from '../matchmaking/use-live-request-block';
 import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { personName } from './lobby-format';
+import { LOBBY_QUEUED_REQUEST_COPY, useLobbyQueuedRequest } from './lobby-queued-request';
 import { lobbyClaimRequestErrorMessage } from './lobby-room-claims-hooks';
 
 /** Someone else, in the room and not debating. A signed-out viewer has no id and asks nobody. */
@@ -31,6 +32,36 @@ export function lobbyChallengeErrorMessage(error: unknown) {
  * sends. Accepting routes both into the picker through `DebateCoordinator`.
  */
 export function LobbyRequestDebate({ lobbyId, member }: { lobbyId: string; member: DebateLobbyMember }) {
+  const { guest } = useLobbyQueuedRequest();
+  return guest ? <GuestRequestDebate member={member} /> : <MemberRequestDebate lobbyId={lobbyId} member={member} />;
+}
+
+/** Without an account: the tap is queued and sign-up opens; it is sent after, if it still can be. */
+function GuestRequestDebate({ member }: { member: DebateLobbyMember }) {
+  const { pending, request } = useLobbyQueuedRequest();
+  if (member.in_debate || member.stepped_out) return null;
+  const name = personName(member);
+  if (pending && sameId(pending.user_id, member.user_id)) {
+    return (
+      <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
+        {LOBBY_QUEUED_REQUEST_COPY.signUpToSend}
+      </Text>
+    );
+  }
+  return (
+    <HubPillButton
+      variant="primary"
+      aria-label={`Request a debate with ${name}`}
+      analyticsLabel="Lobby guest request debate"
+      analyticsIntent="start_debate"
+      onClick={() => request(member)}
+    >
+      Request debate
+    </HubPillButton>
+  );
+}
+
+function MemberRequestDebate({ lobbyId, member }: { lobbyId: string; member: DebateLobbyMember }) {
   const viewerId = useCurrentGeoChatUserId();
   const visible = canRequestLobbyMember(member, viewerId);
   const { data: activity } = useDebateActivity(visible);
