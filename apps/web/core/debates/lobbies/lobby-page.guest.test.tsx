@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   heartbeat: vi.fn(),
   leave: vi.fn(async () => undefined),
   onAudible: null as (() => void) | null,
+  /** What the page asked presence to join with, render by render; only a member joins. */
+  presenceAdmitted: [] as boolean[],
 }));
 
 vi.mock('../api', async importOriginal => ({
@@ -36,15 +38,18 @@ vi.mock('../hooks', async importOriginal => ({
 vi.mock('./hooks', () => ({
   MAX_TIMEOUT_MS: 2_147_483_647,
   useDebateLobby: () => ({ data: mocks.memberLobby, isError: false }),
-  useLobbyPresence: () => ({
-    state: { status: mocks.presenceStatus },
-    join: vi.fn(),
-    leave: vi.fn(),
-    leaveSteppedOut: vi.fn(),
-    connectionId: 'conn-1',
-    setVoiceConnected: vi.fn(),
-    voiceAwayAt: null,
-  }),
+  useLobbyPresence: (_id: string, admitted: boolean) => {
+    mocks.presenceAdmitted.push(admitted);
+    return {
+      state: { status: mocks.presenceStatus },
+      join: vi.fn(),
+      leave: vi.fn(),
+      leaveSteppedOut: vi.fn(),
+      connectionId: 'conn-1',
+      setVoiceConnected: vi.fn(),
+      voiceAwayAt: null,
+    };
+  },
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false }),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }));
@@ -150,6 +155,7 @@ beforeEach(() => {
   mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
   mocks.presenceStatus = 'idle';
   mocks.onAudible = null;
+  mocks.presenceAdmitted = [];
   mocks.start.mockReset().mockResolvedValue({
     guest_id: 'g1',
     guest_secret: 'secret-1',
@@ -188,6 +194,8 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     await screen.findByTestId('guest-room');
     expect(screen.queryByTestId('member-room')).not.toBeInTheDocument();
     expect(mocks.start).toHaveBeenCalledWith('lobby1', {});
+    // No join, so no lobby_* analytics: those count members.
+    expect(mocks.presenceAdmitted.every(admitted => !admitted)).toBe(true);
   });
 
   it('shows the removal and offers sign-in instead of listening again', async () => {
@@ -210,10 +218,13 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     expect(screen.getByTestId('guest-room')).toBeInTheDocument();
     expect(screen.getByText('Setting up your account…')).toBeInTheDocument();
 
+    expect(mocks.presenceAdmitted.every(admitted => !admitted)).toBe(true);
+
     // The member view lands and the join goes out with the secret.
     mocks.memberLobby = memberView;
     mocks.presenceStatus = 'joining';
     rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.presenceAdmitted.at(-1)).toBe(true);
     expect(screen.getByTestId('member-room')).toBeInTheDocument();
     expect(screen.getByTestId('guest-room')).toHaveAttribute('data-quiet', 'yes');
     expect(screen.queryByText('You’re listening.')).not.toBeInTheDocument();

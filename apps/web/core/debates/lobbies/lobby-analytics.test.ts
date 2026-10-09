@@ -280,3 +280,23 @@ describe('lobby_debate_requested and lobby_created', () => {
     expect(capture).toHaveBeenCalledWith('lobby_created', { lobby_id: DASHLESS, scheduled: true });
   });
 });
+
+// GEO-3129. Guests are counted by ordinary page events; lobby_* events are members only.
+describe('a visit without an account', () => {
+  it('sends no lobby events for the page coming and going without a join', () => {
+    lobbyPageMounted(LOBBY);
+    lobbyPageUnmounted(LOBBY);
+    vi.runAllTimers();
+    lobbyPageMounted(LOBBY);
+    lobbyPageClosed(LOBBY);
+    lobbyLeft(LOBBY, 'left');
+    expect(capture).not.toHaveBeenCalled();
+  });
+
+  it('sends one lobby_joined, entry link, when the guest signs in and joins', () => {
+    lobbyPageMounted(LOBBY);
+    lobbyJoined(LOBBY, { isNewcomer: true });
+    lobbyJoined(LOBBY, { isNewcomer: true });
+    expect(events('lobby_joined')).toEqual([expect.objectContaining({ lobby_id: DASHLESS, entry: 'link' })]);
+  });
+});
