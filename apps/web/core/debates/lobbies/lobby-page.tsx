@@ -53,6 +53,7 @@ import {
   LobbyGuestProvider,
   type LobbyMemberPath,
   useDebateLobbyGuestView,
+  useIsLobbyGuest,
   useLobbyGuestSession,
 } from './lobby-guest-hooks';
 import { LobbyMemberMenu } from './lobby-member-actions';
@@ -138,7 +139,6 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
       <LobbyAccess
         lobby={lobby}
         failed={(guest ? guestQuery : lobbyQuery).isError}
-        guest={guest}
         presence={presence}
         guestSession={guestSession}
       />
@@ -173,16 +173,15 @@ export function memberPath(
 function LobbyAccess({
   lobby,
   failed,
-  guest,
   presence,
   guestSession,
 }: {
   lobby: LobbyPageView | null;
   failed: boolean;
-  guest: boolean;
   presence: ReturnType<typeof useLobbyPresence>;
   guestSession: LobbyGuestSession;
 }) {
+  const guest = useIsLobbyGuest();
   if (!lobby) {
     return failed ? (
       <LobbyNotice action={findDebateAction}>Could not open this lobby.</LobbyNotice>
@@ -216,7 +215,7 @@ function LobbyAccess({
       );
     }
     case 'not_yet_open':
-      return <NotYetOpen lobby={lobby} guest={guest} />;
+      return <NotYetOpen lobby={lobby} />;
     case 'admitted':
       if (guest && guestSession.state.status === 'removed') {
         return (
@@ -229,11 +228,12 @@ function LobbyAccess({
           </LobbyShell>
         );
       }
-      return <AdmittedLobby lobby={lobby} presence={presence} guest={guest} guestSession={guestSession} />;
+      return <AdmittedLobby lobby={lobby} presence={presence} guestSession={guestSession} />;
   }
 }
 
-function NotYetOpen({ lobby, guest }: { lobby: LobbyPageView; guest: boolean }) {
+function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
+  const guest = useIsLobbyGuest();
   const reminder = useDebateLobbyReminder();
   const end = useEndDebateLobby(lobby.lobby_id);
   const [confirmingCancel, setConfirmingCancel] = React.useState(false);
@@ -306,12 +306,10 @@ function NotYetOpen({ lobby, guest }: { lobby: LobbyPageView; guest: boolean }) 
 function AdmittedLobby({
   lobby,
   presence,
-  guest,
   guestSession,
 }: {
   lobby: LobbyPageView;
   presence: ReturnType<typeof useLobbyPresence>;
-  guest: boolean;
   guestSession: LobbyGuestSession;
 }) {
   const { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt } = presence;
@@ -381,14 +379,13 @@ function AdmittedLobby({
   }
 
   return (
-    <LobbyQueuedRequestProvider lobby={lobby} guest={guest} joined={state.status === 'joined'}>
+    <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
       <LobbyRoom
         lobby={lobby}
         state={state}
         onRetry={() => void join(false)}
         onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
         voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
-        guest={guest}
         guestSession={guestSession}
       />
     </LobbyQueuedRequestProvider>
@@ -438,7 +435,6 @@ function LobbyRoom({
   onRetry,
   onLeave,
   voice,
-  guest,
   guestSession,
 }: {
   lobby: LobbyPageView;
@@ -446,9 +442,9 @@ function LobbyRoom({
   onRetry: () => void;
   onLeave: () => void;
   voice: { connectionId: string; setVoiceConnected: (connected: boolean) => void; awayAt: string | null };
-  guest: boolean;
   guestSession: LobbyGuestSession;
 }) {
+  const guest = useIsLobbyGuest();
   const currentUserId = useCurrentGeoChatUserId();
   const { authenticated } = useGeoChatAuth();
   // The viewer's own toggle, as the availability pill and People tab read it, ahead of the roster's.
@@ -648,7 +644,7 @@ function LobbyRoom({
               {guestSession.state.status === 'refused' ? guestSession.state.message : LOBBY_COPY.guestElsewhere}
             </Text>
           </div>
-          {authenticated ? null : (
+          {authenticated || (guestSession.state.status === 'refused' && !guestSession.state.retryable) ? null : (
             <HubPillButton analyticsLabel="Lobby guest retry listen" onClick={guestSession.retry}>
               {guestSession.state.status === 'refused' ? 'Try again' : 'Listen here'}
             </HubPillButton>

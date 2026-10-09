@@ -243,10 +243,18 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
     case 'lobby_guest_removed':
       return 'A host removed you from this lobby.';
     case 'guest_cap_reached':
-      return 'This lobby has as many listeners without an account as it can take. Create an account to join, or try again in a minute.';
+      // A cap of 0 is listening without an account turned off, not full.
+      return isGuestListeningOff(error)
+        ? 'Listening without an account isn’t available in this lobby. Create an account to join.'
+        : 'This lobby has as many listeners without an account as it can take. Create an account to join, or try again in a minute.';
     default:
       return fallback;
   }
+}
+
+/** Guest listening is off for this lobby (`guest_cap_reached` with a cap of 0): retrying cannot help. */
+export function isGuestListeningOff(error: unknown) {
+  return error instanceof GeoChatRequestError && error.code === 'guest_cap_reached' && error.details?.limit === 0;
 }
 
 /** A refused moderation action. Hosts moderate from inside the lobby only. */

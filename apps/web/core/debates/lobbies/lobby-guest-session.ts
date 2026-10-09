@@ -12,7 +12,8 @@ export type GuestSessionState =
   | { status: 'handingOver'; attempt: number; session: DebateLobbyGuestSession }
   /** Done: handed over, or signed in and not becoming a member here. */
   | { status: 'released'; attempt: number }
-  | { status: 'refused'; attempt: number; message: string; retryAt: number | null }
+  /** `retryable` is false when trying again cannot help, e.g. guest listening is off here. */
+  | { status: 'refused'; attempt: number; message: string; retryAt: number | null; retryable: boolean }
   | { status: 'removed'; attempt: number }
   | { status: 'ended'; attempt: number }
   /** A later admission (a reload, another tab) holds the session; the secret is theirs now. */
@@ -22,7 +23,7 @@ export type GuestSessionEvent =
   /** Start listening, or retry after a refusal. Never once signed in. */
   | { type: 'start' }
   | { type: 'started'; attempt: number; session: DebateLobbyGuestSession }
-  | { type: 'refused'; attempt: number; message: string; retryAt: number | null }
+  | { type: 'refused'; attempt: number; message: string; retryAt: number | null; retryable: boolean }
   /** A host removed the guests: from the start's 403 or the heartbeat. */
   | { type: 'removed' }
   | { type: 'ended' }
@@ -88,7 +89,13 @@ export function transition(
       if (state.status !== 'starting' || state.attempt !== event.attempt) return stay(state);
       if (signedIn) return released(state, [{ type: 'clearSecret' }]);
       return {
-        next: { status: 'refused', attempt: state.attempt, message: event.message, retryAt: event.retryAt },
+        next: {
+          status: 'refused',
+          attempt: state.attempt,
+          message: event.message,
+          retryAt: event.retryAt,
+          retryable: event.retryable,
+        },
         commands: [],
       };
 

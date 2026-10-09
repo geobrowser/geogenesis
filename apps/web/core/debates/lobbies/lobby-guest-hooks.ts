@@ -15,7 +15,7 @@ import {
 } from '../api';
 import { debateQueryNetworkOptions } from '../hooks';
 import { rateLimitDelayMs } from './hooks';
-import { lobbyErrorMessage } from './lobby-format';
+import { isGuestListeningOff, lobbyErrorMessage } from './lobby-format';
 import { clearGuestSecret, readGuestSecret, storeGuestSecret } from './lobby-guest-secret';
 import {
   type GuestSessionCommand,
@@ -162,6 +162,7 @@ export function useLobbyGuestSession(
             attempt,
             message: lobbyErrorMessage(error, 'Couldn’t start listening. Try again.'),
             retryAt: delay === null ? null : Date.now() + delay,
+            retryable: !isGuestListeningOff(error),
           });
         }
       )

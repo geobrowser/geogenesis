@@ -208,6 +208,17 @@ describe('useLobbyGuestSession', () => {
     expect(mocks.start).toHaveBeenCalledTimes(2);
   });
 
+  // A cap of 0 turns guest listening off: say so, and offer no retry.
+  it('says listening without an account is off here, and that retrying cannot help', async () => {
+    mocks.start.mockRejectedValue(new GeoChatRequestError('off', 'guest_cap_reached', 409, 30_000, { limit: 0 }));
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('refused'));
+    expect(result.current.state).toMatchObject({
+      message: 'Listening without an account isn’t available in this lobby. Create an account to join.',
+      retryable: false,
+    });
+  });
+
   it('reads the per-lobby rate limit apart from the visitor’s own', async () => {
     mocks.start.mockRejectedValue(new GeoChatRequestError('slow', 'rate_limited', 429, 5_000, { scope: 'lobby' }));
     const { result } = renderSession();

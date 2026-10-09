@@ -36,6 +36,7 @@ vi.mock('~/core/action-context-provider', () => ({
 }));
 
 const { pendingActionsAtom } = await import('~/core/state/pending-actions');
+const { LobbyGuestProvider } = await import('./lobby-guest-hooks');
 const {
   LOBBY_QUEUED_REQUEST_COPY,
   LobbyQueuedRequestProvider,
@@ -147,9 +148,11 @@ function renderProvider(view: LobbyPageView) {
   const store = createStore();
   const ui = (guest: boolean, joined: boolean, current: LobbyPageView) => (
     <Provider store={store}>
-      <LobbyQueuedRequestProvider lobby={current} guest={guest} joined={joined}>
-        <Probe target={member('dan')} />
-      </LobbyQueuedRequestProvider>
+      <LobbyGuestProvider value={guest}>
+        <LobbyQueuedRequestProvider lobby={current} joined={joined}>
+          <Probe target={member('dan')} />
+        </LobbyQueuedRequestProvider>
+      </LobbyGuestProvider>
     </Provider>
   );
   const result = render(ui(true, false, view));

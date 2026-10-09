@@ -423,3 +423,26 @@ describe('DebateLobbyPage status and pairs for a guest', () => {
     expect(mocks.activityEnabled.at(-1)).toBe(true);
   });
 });
+
+describe('DebateLobbyPage when guest listening is off', () => {
+  it('says so, with Log in and Create account and no Try again', async () => {
+    const { GeoChatRequestError } = await import('../api');
+    mocks.start.mockRejectedValue(new GeoChatRequestError('off', 'guest_cap_reached', 409, 30_000, { limit: 0 }));
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(
+      await screen.findByText('Listening without an account isn’t available in this lobby. Create an account to join.')
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
+  });
+
+  it('a full lobby still offers Try again', async () => {
+    const { GeoChatRequestError } = await import('../api');
+    mocks.start.mockRejectedValue(new GeoChatRequestError('full', 'guest_cap_reached', 409, 30_000, { limit: 15 }));
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(await screen.findByRole('button', { name: 'Try again' })).toBeInTheDocument();
+  });
+});

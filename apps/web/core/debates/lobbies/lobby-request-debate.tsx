@@ -10,6 +10,7 @@ import { useLiveRequestBlock } from '../matchmaking/use-live-request-block';
 import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { personName } from './lobby-format';
+import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LOBBY_QUEUED_REQUEST_COPY, useLobbyQueuedRequest } from './lobby-queued-request';
 import { lobbyClaimRequestErrorMessage } from './lobby-room-claims-hooks';
 
@@ -32,7 +33,7 @@ export function lobbyChallengeErrorMessage(error: unknown) {
  * sends. Accepting routes both into the picker through `DebateCoordinator`.
  */
 export function LobbyRequestDebate({ lobbyId, member }: { lobbyId: string; member: DebateLobbyMember }) {
-  const { guest } = useLobbyQueuedRequest();
+  const guest = useIsLobbyGuest();
   return guest ? <GuestRequestDebate member={member} /> : <MemberRequestDebate lobbyId={lobbyId} member={member} />;
 }
 

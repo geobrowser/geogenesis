@@ -11,6 +11,7 @@ import { useLiveRequestBlock } from '../matchmaking/use-live-request-block';
 import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { personName } from './lobby-format';
+import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { lobbyAuthPage, useLobbyGuestSignIn } from './lobby-guest-sign-in';
 import { canRequestLobbyMember, lobbyChallengeErrorMessage } from './lobby-request-debate';
 import type { LobbyPageView } from './lobby-view';
@@ -72,8 +73,6 @@ export function checkQueuedLobbyRequest(
 }
 
 type LobbyQueuedRequestValue = {
-  /** Signed out: requests are queued and sign-up opens. */
-  guest: boolean;
   /** The request waiting on sign-up, if any. */
   pending: QueuedLobbyRequest | null;
   request: (member: DebateLobbyMember) => void;
@@ -83,7 +82,6 @@ type LobbyQueuedRequestValue = {
 };
 
 const LobbyQueuedRequestContext = React.createContext<LobbyQueuedRequestValue>({
-  guest: false,
   pending: null,
   request: () => undefined,
   outcome: null,
@@ -100,17 +98,17 @@ export function useLobbyQueuedRequest() {
  */
 export function LobbyQueuedRequestProvider({
   lobby,
-  guest,
   joined,
   children,
 }: {
   lobby: LobbyPageView;
-  guest: boolean;
   /** This tab has joined the lobby, which geo-chat requires of a lobby-scoped request. */
   joined: boolean;
   children: React.ReactNode;
 }) {
   const lobbyId = dashlessId(lobby.lobby_id);
+  // Signed out: requests are queued and sign-up opens.
+  const guest = useIsLobbyGuest();
   const viewerId = useCurrentGeoChatUserId();
   const member = !guest && joined;
   const activity = useDebateActivity(member);
@@ -178,8 +176,8 @@ export function LobbyQueuedRequestProvider({
   const pending = React.useMemo(() => decodeQueuedLobbyRequest(queued.intent), [queued.intent]);
   const dismissOutcome = React.useCallback(() => setOutcome(null), []);
   const value = React.useMemo(
-    () => ({ guest, pending, request, outcome, dismissOutcome }),
-    [guest, pending, request, outcome, dismissOutcome]
+    () => ({ pending, request, outcome, dismissOutcome }),
+    [pending, request, outcome, dismissOutcome]
   );
 
   return <LobbyQueuedRequestContext.Provider value={value}>{children}</LobbyQueuedRequestContext.Provider>;

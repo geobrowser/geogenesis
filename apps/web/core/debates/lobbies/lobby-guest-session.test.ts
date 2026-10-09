@@ -17,7 +17,7 @@ const starting: GuestSessionState = { status: 'starting', attempt: 1 };
 const listening: GuestSessionState = { status: 'listening', attempt: 1, session: session() };
 const handingOver: GuestSessionState = { status: 'handingOver', attempt: 1, session: session() };
 const released: GuestSessionState = { status: 'released', attempt: 1 };
-const refused: GuestSessionState = { status: 'refused', attempt: 1, message: 'full', retryAt: null };
+const refused: GuestSessionState = { status: 'refused', attempt: 1, message: 'full', retryAt: null, retryable: true };
 const removed: GuestSessionState = { status: 'removed', attempt: 1 };
 const ended: GuestSessionState = { status: 'ended', attempt: 1 };
 const superseded: GuestSessionState = { status: 'superseded', attempt: 1 };
@@ -63,15 +63,16 @@ describe('guest session transitions', () => {
   });
 
   it('refuses for its own attempt; signed in, it releases', () => {
-    expect(run(starting, { type: 'refused', attempt: 1, message: 'full', retryAt: 5 }).next).toEqual({
+    expect(run(starting, { type: 'refused', attempt: 1, message: 'full', retryAt: 5, retryable: false }).next).toEqual({
       status: 'refused',
       attempt: 1,
       message: 'full',
       retryAt: 5,
+      retryable: false,
     });
-    expect(transition(starting, { type: 'refused', attempt: 1, message: 'm', retryAt: null }, inn).next).toEqual(
-      released
-    );
+    expect(
+      transition(starting, { type: 'refused', attempt: 1, message: 'm', retryAt: null, retryable: true }, inn).next
+    ).toEqual(released);
   });
 
   it('a removal keeps the secret; an end forgets it', () => {
