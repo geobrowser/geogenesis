@@ -112,8 +112,18 @@ export function useLobbyGuestSession(lobbyId: string, enabled: boolean) {
     const generation = generationRef.current;
     setState({ status: 'starting' });
     const stored = readGuestSecret(id);
+    const request = async () => {
+      try {
+        return await startDebateLobbyGuest(id, stored ? { guest_secret: stored } : {});
+      } catch (error) {
+        // A reconnect that lost a race: that session is over, so start a new one.
+        if (!stored || !(error instanceof GeoChatRequestError) || error.code !== 'guest_session_ended') throw error;
+        clearGuestSecret(id);
+        return startDebateLobbyGuest(id, {});
+      }
+    };
     try {
-      const session = await startDebateLobbyGuest(id, stored ? { guest_secret: stored } : {});
+      const session = await request();
       if (generation !== generationRef.current) return;
       storeGuestSecret(id, session.guest_secret);
       secretRef.current = session.guest_secret;

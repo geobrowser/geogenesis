@@ -86,6 +86,18 @@ describe('useLobbyGuestSession', () => {
     expect((result.current.state as { message: string }).message).toMatch(/Lots of people are joining/);
   });
 
+  it('starts afresh when the stored session already ended', async () => {
+    storeGuestSecret('lobby1', 'old');
+    mocks.start
+      .mockRejectedValueOnce(new GeoChatRequestError('ended', 'guest_session_ended', 409))
+      .mockResolvedValueOnce(session('secret-2'));
+    const { result } = renderHook(() => useLobbyGuestSession('lobby1', true));
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    expect(mocks.start).toHaveBeenNthCalledWith(1, 'lobby1', { guest_secret: 'old' });
+    expect(mocks.start).toHaveBeenNthCalledWith(2, 'lobby1', {});
+    expect(readGuestSecret('lobby1')).toBe('secret-2');
+  });
+
   it('stays removed after a removed secret is refused', async () => {
     mocks.start.mockRejectedValue(new GeoChatRequestError('no', 'lobby_guest_removed', 403));
     const { result } = renderHook(() => useLobbyGuestSession('lobby1', true));
