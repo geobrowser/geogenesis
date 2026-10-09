@@ -11,6 +11,8 @@ import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
   CLAIM_ADDRESSES_PROPERTY_ID,
+  CLAIM_AXIS_SCORE_FIELDS,
+  CLAIM_AXIS_SCORE_PROPERTY_IDS,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_OPPOSES_PROPERTY_ID,
@@ -136,6 +138,14 @@ export type DebateClaimInput = {
    * nothing is written.
    */
   highlightScore?: number | null;
+  /**
+   * The three axis scores the same scoring run returns — geo-chat's `relevance_score`,
+   * `quality_score`, `controversy_score`, each 0–1. Written beside the highlight score on the
+   * block → claim relation entity, each only when present; null or absent writes nothing.
+   */
+  relevanceScore?: number | null;
+  qualityScore?: number | null;
+  controversyScore?: number | null;
   /**
    * GEO-3142: the claim's stance toward the debated claim, written as one Supports / Opposes /
    * Addresses relation from the claim to `claimEntityId`. Null/absent writes none: payloads from
@@ -611,9 +621,15 @@ export function buildDebatePublishDraft(input: DebatePublishInput, options: Buil
           // the FIRST extraction's for this (block, claim): two extractions in one turn that
           // resolve to one entity share one relation, and the later one's score is not consulted
           // even when the first had none.
-          const highlightScore = publishableHighlightScore(claim.highlightScore);
+          const highlightScore = publishableScore(claim.highlightScore);
           if (highlightScore !== null) {
             setFloat(statement.id, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID, highlightScore);
+          }
+          // The axes come from the same run and follow the same rules, each on its own: one the
+          // scorer did not report is simply not written, the others still are.
+          for (const field of CLAIM_AXIS_SCORE_FIELDS) {
+            const axisScore = publishableScore(claim[field]);
+            if (axisScore !== null) setFloat(statement.id, CLAIM_AXIS_SCORE_PROPERTY_IDS[field], axisScore);
           }
           const timing = publishableTiming(claim.timing);
           if (timing) {
@@ -870,11 +886,11 @@ export function publishableTiming(timing: DebateClaimInput['timing']): { startMs
 }
 
 /**
- * A claim's highlight score if it is a finite number in [0, 1], else null. Same stance as
- * {@link publishableTiming}: the decoder refuses anything else already, and the publisher refuses
- * it again because a bad value here is ranked by, and nothing downstream can demote it.
+ * A claim's highlight score or axis score if it is a finite number in [0, 1], else null. Same
+ * stance as {@link publishableTiming}: the decoder refuses anything else already, and the publisher
+ * refuses it again because a bad value here is ranked by, and nothing downstream can demote it.
  */
-export function publishableHighlightScore(score: DebateClaimInput['highlightScore']): number | null {
+export function publishableScore(score: number | null | undefined): number | null {
   if (typeof score !== 'number' || !Number.isFinite(score)) return null;
   if (score < 0 || score > 1) return null;
   return score;

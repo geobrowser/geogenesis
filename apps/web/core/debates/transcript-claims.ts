@@ -1,6 +1,8 @@
 import { Position } from '@geoprotocol/geo-sdk/lite';
 
 import {
+  CLAIM_AXIS_SCORE_FIELDS,
+  CLAIM_AXIS_SCORE_PROPERTY_IDS,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
@@ -53,8 +55,18 @@ export type TranscriptClaim = {
    */
   highlightScore: number | null;
   /**
-   * The id of the block → claim relation's own entity, which is where {@link publishedTiming} and
-   * {@link highlightScore} are read from and where a backfill writes them.
+   * The three axis scores published beside {@link highlightScore} on the same relation entity, each
+   * 0–1: how directly the claim bears on the debated claim, whether it stands as a faithful, single,
+   * self-contained statement, and how likely an audience is to split on it. Null for debates
+   * published before the axes shipped (2026-10) and for a claim geo-chat could not score. For a
+   * {@link restated} claim each takes the highest of its statements, as {@link highlightScore} does.
+   */
+  relevanceScore: number | null;
+  qualityScore: number | null;
+  controversyScore: number | null;
+  /**
+   * The id of the block → claim relation's own entity, which is where {@link publishedTiming},
+   * {@link highlightScore} and the axis scores are read from and where a backfill writes them.
    *
    * From the same relation as {@link blockId} — the turn the claim was first seen on — so the two
    * always describe the same statement. Null only if the API omits it.
@@ -67,7 +79,8 @@ export type TranscriptClaim = {
    * be two statements by two speakers — see the grouping tests. This row is deduped, though, and
    * carries only the *first* relation's block, offsets and relation entity. Rather than let that
    * silently stand in for both statements, the flag says the row cannot answer "when" or "who"
-   * ({@link highlightScore} is the exception: it takes the highest of the statements), and the
+   * ({@link highlightScore} and the axis scores are the exception: each takes the highest of the
+   * statements), and the
    * surfaces that assert either decline it: {@link resolveClaimTimings} gives it no timing, so
    * no card is drawn over a face and no timecode is printed beside a row, and the backfill scripts
    * skip it rather than writing one occurrence and leaving the other unplaced.
@@ -203,22 +216,30 @@ function publishedTiming(
 }
 
 /**
- * The highlight score published on a block → claim relation entity, or null when it carries none.
+ * The score under `propertyId` — the highlight score or one of the axes — published on a block →
+ * claim relation entity, or null when it carries none.
  *
  * Float values arrive as numbers. Anything outside [0, 1] is discarded: the live layer ranks by
- * this, and a value the publisher would never write is drift, not a very strong opinion.
+ * these, and a value the publisher would never write is drift, not a very strong opinion.
  */
-function publishedHighlightScore(
-  values: Array<{ propertyId: string; float?: number | null } | null> | null | undefined
+function publishedScore(
+  values: Array<{ propertyId: string; float?: number | null } | null> | null | undefined,
+  propertyId: string
 ): number | null {
   for (const value of values ?? []) {
-    if (!value || uuidToHex(value.propertyId) !== uuidToHex(CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID)) continue;
+    if (!value || uuidToHex(value.propertyId) !== uuidToHex(propertyId)) continue;
     const score = value.float;
     if (typeof score !== 'number' || !Number.isFinite(score)) continue;
     if (score < 0 || score > 1) continue;
     return score;
   }
   return null;
+}
+
+/** The higher of a row's score and another statement's; a missing one never erases the other. */
+function strongest(current: number | null, candidate: number | null): number | null {
+  if (candidate === null) return current;
+  return current === null || candidate > current ? candidate : current;
 }
 
 type ClaimEntityNaming = {
@@ -326,7 +347,10 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
             spaceId: resolved.spaceId,
             blockId: blockEntity.id,
             publishedTiming: publishedTiming(claim.entity?.valuesList),
-            highlightScore: publishedHighlightScore(claim.entity?.valuesList),
+            highlightScore: publishedScore(claim.entity?.valuesList, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID),
+            relevanceScore: publishedScore(claim.entity?.valuesList, CLAIM_AXIS_SCORE_PROPERTY_IDS.relevanceScore),
+            qualityScore: publishedScore(claim.entity?.valuesList, CLAIM_AXIS_SCORE_PROPERTY_IDS.qualityScore),
+            controversyScore: publishedScore(claim.entity?.valuesList, CLAIM_AXIS_SCORE_PROPERTY_IDS.controversyScore),
             relationEntityId: claim.entityId ?? null,
             restated: false,
           };
@@ -336,10 +360,11 @@ export function groupTranscriptClaims(data: DebateTranscriptClaimsQuery, spaceId
           // A second turn for a claim already seen. The same relation repeated inside one block is
           // just noise and does not count — see `restated`.
           row.restated = true;
-          // The strongest statement's score stands for the claim — see `highlightScore`.
-          const score = publishedHighlightScore(claim.entity?.valuesList);
-          if (score !== null && (row.highlightScore === null || score > row.highlightScore)) {
-            row.highlightScore = score;
+          // The strongest statement's scores stand for the claim — see `highlightScore`.
+          const values = claim.entity?.valuesList;
+          row.highlightScore = strongest(row.highlightScore, publishedScore(values, CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID));
+          for (const field of CLAIM_AXIS_SCORE_FIELDS) {
+            row[field] = strongest(row[field], publishedScore(values, CLAIM_AXIS_SCORE_PROPERTY_IDS[field]));
           }
         }
 

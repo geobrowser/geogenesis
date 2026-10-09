@@ -5,6 +5,7 @@ import { parse } from 'graphql';
 import {
   AUTHORS_PROPERTY_ID,
   BLOCKS_PROPERTY_ID,
+  CLAIM_AXIS_SCORE_PROPERTY_IDS,
   CLAIM_END_OFFSET_PROPERTY_ID,
   CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
   CLAIM_START_OFFSET_PROPERTY_ID,
@@ -88,12 +89,12 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
                 # onto. The app only reads them, so nothing here needs it — the backfill scripts do,
                 # and carrying it means they read this traversal rather than re-walking their own.
                 entityId
-                # The relation's own entity, which is where the claim's timecodes and its highlight
-                # score live — not on the claim, because one claim can be stated in two turns and
-                # each statement has its own moment and its own weight in that debate. Timecodes are
-                # populated for most of the corpus since the backfill (921 of 1,072 statements as of
-                # 2026-09-23); claim-timing.ts falls back to matching for the rest. The score is
-                # written only for debates published after scoring shipped.
+                # The relation's own entity, which is where the claim's timecodes, its highlight
+                # score and its axis scores live — not on the claim, because one claim can be stated
+                # in two turns and each statement has its own moment and its own weight in that
+                # debate. Timecodes are populated for most of the corpus since the backfill (921 of
+                # 1,072 statements as of 2026-09-23); claim-timing.ts falls back to matching for the
+                # rest. The scores are written only for debates published after each shipped.
                 entity {
                   valuesList(
                     first: $first
@@ -130,10 +131,10 @@ const DEBATE_TRANSCRIPT_CLAIMS_SOURCE = /* GraphQL */ `
 
 type RelationNode<T> = { position?: string | null; toEntity: T | null } | null;
 
-/** A block → claim relation, which carries the claim's timecodes and highlight score on its own entity. */
+/** A block → claim relation, which carries the claim's timecodes and scores on its own entity. */
 type ClaimRelationNode = {
   position?: string | null;
-  /** The relation entity's id — where a claim's timecodes and score are published. */
+  /** The relation entity's id — where a claim's timecodes and scores are published. */
   entityId?: string | null;
   /** Integer values arrive as strings, floats as numbers, the way the API serialises them. */
   entity?: {
@@ -200,11 +201,12 @@ export function debateTranscriptClaimsVariables(
     claimsPropertyId: DEBATE_CLAIMS_PROPERTY_ID,
     namePropertyId: NAME_PROPERTY_ID,
     markdownPropertyId: MARKDOWN_CONTENT_PROPERTY_ID,
-    // The name predates the score: these are every value the app reads off the relation entity.
+    // The name predates the scores: these are every value the app reads off the relation entity.
     offsetPropertyIds: [
       CLAIM_START_OFFSET_PROPERTY_ID,
       CLAIM_END_OFFSET_PROPERTY_ID,
       CLAIM_HIGHLIGHT_SCORE_PROPERTY_ID,
+      ...Object.values(CLAIM_AXIS_SCORE_PROPERTY_IDS),
     ],
     ...(first === undefined ? {} : { first }),
   };
