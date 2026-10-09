@@ -148,10 +148,15 @@ describe('DebateChallengeDialog', () => {
   });
 
   /*
-   * And once there is a picture, the frame is back and the switches are still under it rather than
-   * over the face.
+   * Once there is a picture, the switches sit on it — the ready room's arrangement, the tile's own
+   * overlay band, so the control is on the thing it controls. Over an avatar they covered the one
+   * thing saying whose tile this is, which is why the camera-off case keeps them underneath.
+   *
+   * Asserted against the real tile, which is what decides where `tileControls` land: with the tile
+   * mocked the buttons go wherever the mock puts them, so such a test passes with the controls on
+   * the tile, under it, or clipped out of view.
    */
-  it('puts the switches below the tile once the camera is on', async () => {
+  it('puts the switches on the tile once the camera is on', async () => {
     permission = 'granted';
     media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' } }]);
     renderDialog();
@@ -161,26 +166,22 @@ describe('DebateChallengeDialog', () => {
       expect(found).not.toBeNull();
       return found;
     });
-    const mic = screen.getByRole('button', { name: /microphone/i });
 
-    expect(tile?.contains(mic)).toBe(false);
-    expect(tile?.compareDocumentPosition(mic)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(tile?.contains(screen.getByRole('button', { name: /microphone/i }))).toBe(true);
+    expect(tile?.contains(screen.getByRole('button', { name: /camera/i }))).toBe(true);
   });
 
   /*
-   * Neither side the odd one out. Asserted as an equality rather than against a number, so the
-   * size can be changed in one place without this dictating which one wins.
+   * And with the camera off there is no tile at all, so they follow the avatar rather than sitting
+   * over it.
    */
-  it('shows the preview avatar at the same size as the summary opposite', async () => {
+  it('puts the switches under the avatar while the camera is off', async () => {
     renderDialog();
-    await screen.findByRole('button', { name: /microphone/i });
 
-    const sizes = [...document.querySelectorAll('[class*="overflow-hidden"][class*="rounded-full"]')].map(
-      node => node.className
-    );
-
-    expect(sizes).toHaveLength(2);
-    expect(sizes[0]).toBe(sizes[1]);
+    const mic = await screen.findByRole('button', { name: /microphone/i });
+    expect(document.querySelector('section[aria-label="You"]')).toBeNull();
+    const avatar = document.querySelector('[class*="overflow-hidden"][class*="rounded-full"]');
+    expect(avatar?.compareDocumentPosition(mic)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   // The card still offers the choice, which is what puts the permission prompt before the call

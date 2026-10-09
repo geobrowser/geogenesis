@@ -171,41 +171,50 @@ function MediaPreview({
 
   const { summary, announcement } = describeJoinState({ micOn, cameraOn });
 
+  const toggles = blocked ? null : (
+    <div className="flex items-center justify-center gap-2">
+      {!micBlocked && (
+        <DebateTileToggleButton
+          ariaLabel={micOn ? 'Turn microphone off' : 'Turn microphone on'}
+          enabled={micOn}
+          onClick={() => toggle({ micOn: !micOn })}
+        >
+          <MicrophoneIcon muted={!micOn} />
+        </DebateTileToggleButton>
+      )}
+      {!cameraBlocked && (
+        <DebateTileToggleButton
+          ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+          enabled={cameraOn}
+          onClick={() => toggle({ cameraOn: !cameraOn })}
+        >
+          <CameraIcon disabled={!cameraOn} />
+        </DebateTileToggleButton>
+      )}
+    </div>
+  );
+
   return (
     <div className="flex flex-col gap-2">
       {cameraOn ? (
-        <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
+        <DebateVideoTile
+          participantPosition={null}
+          active={false}
+          tileLabel="You"
+          inactiveIndicatorId="local"
+          tileControls={toggles}
+        >
           <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
         </DebateVideoTile>
       ) : (
-        <div className="grid place-items-center py-1">
-          <span className="h-5 w-5 overflow-hidden rounded-full">
-            <Avatar avatarUrl={avatarCid ?? undefined} value={avatarValue ?? undefined} alt="" size={20} />
-          </span>
-        </div>
-      )}
-
-      {!blocked && (
-        <div className="flex items-center justify-center gap-2">
-          {!micBlocked && (
-            <DebateTileToggleButton
-              ariaLabel={micOn ? 'Turn microphone off' : 'Turn microphone on'}
-              enabled={micOn}
-              onClick={() => toggle({ micOn: !micOn })}
-            >
-              <MicrophoneIcon muted={!micOn} />
-            </DebateTileToggleButton>
-          )}
-          {!cameraBlocked && (
-            <DebateTileToggleButton
-              ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
-              enabled={cameraOn}
-              onClick={() => toggle({ cameraOn: !cameraOn })}
-            >
-              <CameraIcon disabled={!cameraOn} />
-            </DebateTileToggleButton>
-          )}
-        </div>
+        <>
+          <div className="grid place-items-center py-1">
+            <span className="h-5 w-5 overflow-hidden rounded-full">
+              <Avatar avatarUrl={avatarCid ?? undefined} value={avatarValue ?? undefined} alt="" size={20} />
+            </span>
+          </div>
+          {toggles}
+        </>
       )}
 
       {blocked ? (
