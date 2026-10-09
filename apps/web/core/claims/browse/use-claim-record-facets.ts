@@ -17,12 +17,19 @@ import {
 } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
 
-import { claimRecordFilters } from './claim-record-query';
+import {
+  claimRecordDirectDebatesKey,
+  claimRecordFilters,
+  fetchClaimRecordCandidates,
+  type ClaimRecordDirectDebates,
+} from './claim-record-query';
+import { useClaimRecordDirectDebates } from './use-claim-record';
 
 const FACET_STALE_TIME = 60_000;
 const NAME_STALE_TIME = 30 * 60_000;
 const NO_FACETS: RelationFacetCount[] = [];
 const NO_NAMES = new Map<string, string | null>();
+const NO_DIRECT_DEBATES: ClaimRecordDirectDebates = {};
 
 export function fetchClaimRecordFacet({
   filter,
@@ -71,6 +78,15 @@ export function useClaimRecordFacets({
   const sourceTopicKey = sourceTopicIds.map(normId).sort().join(',');
   const selectedTopicKey = selectedTopicIds.map(normId).sort().join(',');
 
+  // Selected spaces are a subset of all spaces, so one lookup over all of them serves both.
+  const directDebatesQuery = useClaimRecordDirectDebates({
+    claimId,
+    spaceIds: allSpaceIds,
+    enabled: kind === 'claims',
+  });
+  const directDebates = directDebatesQuery.data;
+  const directDebatesKey = claimRecordDirectDebatesKey(directDebates);
+
   const allSpaceFilters = React.useMemo(
     () =>
       claimRecordFilters({
@@ -78,26 +94,25 @@ export function useClaimRecordFacets({
         spaceIds: allSpaceIds,
         topicIds: sourceTopicIds,
         filterTopicIds: kind === 'claims' ? selectedTopicIds : [],
+        directDebates: directDebates ?? NO_DIRECT_DEBATES,
       }),
     // The sorted keys are the semantic identity; callers can rebuild and reorder the arrays.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [claimId, kind, allSpaceKey, sourceTopicKey, selectedTopicKey]
-  );
-  const selectedSpaceFilters = React.useMemo(
-    () =>
-      claimRecordFilters({
-        claimId,
-        spaceIds: selectedSpaceIds,
-        topicIds: sourceTopicIds,
-        filterTopicIds: selectedTopicIds,
-      }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [claimId, selectedSpaceKey, sourceTopicKey, selectedTopicKey]
+    [claimId, kind, allSpaceKey, sourceTopicKey, selectedTopicKey, directDebatesKey]
   );
 
   const claimSpacesQuery = useQuery({
-    queryKey: ['claim-record', 'facets', 'claim-spaces', claimId, allSpaceKey, sourceTopicKey, selectedTopicKey],
-    enabled: kind === 'claims',
+    queryKey: [
+      'claim-record',
+      'facets',
+      'claim-spaces',
+      claimId,
+      allSpaceKey,
+      sourceTopicKey,
+      selectedTopicKey,
+      directDebatesKey,
+    ],
+    enabled: kind === 'claims' && directDebates !== undefined,
     placeholderData: keepPreviousData,
     queryFn: ({ signal }) =>
       fetchClaimRecordFacet({ filter: allSpaceFilters.claimRelations, groupBy: 'SPACE_ID', signal }),
@@ -112,11 +127,28 @@ export function useClaimRecordFacets({
       selectedSpaceKey,
       sourceTopicKey,
       selectedTopicKey,
+      directDebatesKey,
     ],
-    enabled: kind === 'claims',
+    enabled: kind === 'claims' && directDebates !== undefined,
     placeholderData: keepPreviousData,
-    queryFn: ({ signal }) =>
-      fetchClaimRecordFacet({ filter: selectedSpaceFilters.claimTopicRelations, groupBy: 'TO_ENTITY_ID', signal }),
+    queryFn: async ({ signal }) => {
+      const resolvedDirectDebates = directDebates ?? NO_DIRECT_DEBATES;
+      const candidateClaimIds = await fetchClaimRecordCandidates({
+        spaceIds: selectedSpaceIds,
+        topicIds: sourceTopicIds,
+        directDebates: resolvedDirectDebates,
+        signal,
+      });
+      const filters = claimRecordFilters({
+        claimId,
+        spaceIds: selectedSpaceIds,
+        topicIds: sourceTopicIds,
+        filterTopicIds: selectedTopicIds,
+        directDebates: resolvedDirectDebates,
+        candidateClaimIds,
+      });
+      return fetchClaimRecordFacet({ filter: filters.claimTopicRelations, groupBy: 'TO_ENTITY_ID', signal });
+    },
     staleTime: FACET_STALE_TIME,
   });
   const debateSpacesQuery = useQuery({
@@ -152,7 +184,7 @@ export function useClaimRecordFacets({
   }, [claimTopicsQuery.data, topicNamesQuery.data]);
 
   const activeQueries =
-    kind === 'claims' ? [claimSpacesQuery, claimTopicsQuery] : [debateSpacesQuery];
+    kind === 'claims' ? [directDebatesQuery, claimSpacesQuery, claimTopicsQuery] : [debateSpacesQuery];
   const countsPending = activeQueries.some(query => query.isLoading || query.isPlaceholderData);
   const facetsSettled = activeQueries.every(query => !query.isLoading && !query.isPlaceholderData && !query.error);
 

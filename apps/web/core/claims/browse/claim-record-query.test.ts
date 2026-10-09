@@ -2,7 +2,7 @@ import { print } from 'graphql';
 import { describe, expect, it } from 'vitest';
 
 import { CLAIM_TYPE_ID, TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
-import { DEBATE_CLAIMS_PROPERTY_ID, DEBATE_TYPE_ID, SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
+import { SOURCES_PROPERTY_ID } from '~/core/debates/ontology';
 import { EntitiesOrderBy } from '~/core/gql/graphql';
 
 import {
@@ -11,8 +11,10 @@ import {
   claimRecordDebatesDocument,
   claimRecordFilters,
   claimRecordOrderBy,
+  decodeClaimRecordCandidates,
   decodeClaimRecordClaims,
   decodeClaimRecordCounts,
+  decodeClaimRecordDirectDebates,
   mergeSortedRecordEntities,
   nextClaimRecordClaimsPageParam,
 } from './claim-record-query';
@@ -20,6 +22,7 @@ import {
 const CLAIM_ID = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const SPACE_ID = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const TOPIC_ID = 'cccccccccccccccccccccccccccccccc';
+const DEBATE_ID = 'dddddddddddddddddddddddddddddddd';
 
 describe('claim record GraphQL', () => {
   it('uses bounded, server-ranked entity pages and distinct union counts', () => {
@@ -62,6 +65,7 @@ describe('claim record GraphQL', () => {
   it('scopes both related-claim paths to the space and excludes the current claim', () => {
     const filters = claimRecordFilters({
       claimId: CLAIM_ID,
+      directDebates: { [SPACE_ID]: [DEBATE_ID] },
       spaceIds: [SPACE_ID],
       topicIds: [TOPIC_ID],
       filterTopicIds: [],
@@ -99,17 +103,7 @@ describe('claim record GraphQL', () => {
                 some: {
                   typeId: { is: SOURCES_PROPERTY_ID },
                   spaceId: { is: SPACE_ID },
-                  toEntity: {
-                    typeIds: { overlaps: [DEBATE_TYPE_ID] },
-                    spaceIds: { overlaps: [SPACE_ID] },
-                    relations: {
-                      some: {
-                        typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
-                        spaceId: { is: SPACE_ID },
-                        toEntityId: { is: CLAIM_ID },
-                      },
-                    },
-                  },
+                  toEntityId: { in: [DEBATE_ID] },
                 },
               },
             },
@@ -138,17 +132,7 @@ describe('claim record GraphQL', () => {
                 some: {
                   typeId: { is: SOURCES_PROPERTY_ID },
                   spaceId: { is: SPACE_ID },
-                  toEntity: {
-                    typeIds: { overlaps: [DEBATE_TYPE_ID] },
-                    spaceIds: { overlaps: [SPACE_ID] },
-                    relations: {
-                      some: {
-                        typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
-                        spaceId: { is: SPACE_ID },
-                        toEntityId: { is: CLAIM_ID },
-                      },
-                    },
-                  },
+                  toEntityId: { in: [DEBATE_ID] },
                 },
               },
             },
@@ -197,17 +181,7 @@ describe('claim record GraphQL', () => {
                   some: {
                     typeId: { is: SOURCES_PROPERTY_ID },
                     spaceId: { is: SPACE_ID },
-                    toEntity: {
-                      typeIds: { overlaps: [DEBATE_TYPE_ID] },
-                      spaceIds: { overlaps: [SPACE_ID] },
-                      relations: {
-                        some: {
-                          typeId: { is: DEBATE_CLAIMS_PROPERTY_ID },
-                          spaceId: { is: SPACE_ID },
-                          toEntityId: { is: CLAIM_ID },
-                        },
-                      },
-                    },
+                    toEntityId: { in: [DEBATE_ID] },
                   },
                 },
               },
@@ -218,9 +192,65 @@ describe('claim record GraphQL', () => {
     });
   });
 
+  it('matches extracted claims by resolved debate ids, per space', () => {
+    const otherSpace = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
+    const filters = claimRecordFilters({
+      claimId: CLAIM_ID,
+      spaceIds: [SPACE_ID, otherSpace],
+      topicIds: [],
+      filterTopicIds: [],
+      directDebates: { [SPACE_ID]: [DEBATE_ID] },
+    });
+
+    expect(filters.claimRelations.or?.map(branch => branch.toEntityId)).toEqual([
+      { in: [DEBATE_ID] },
+      // A space without a direct debate matches nothing on this path rather than every debate.
+      { in: [] },
+    ]);
+    expect(JSON.stringify(filters)).not.toContain('"toEntity":{"typeIds"');
+  });
+
+  it('bounds the Topics facet by candidate ids only when they were resolved', () => {
+    const base = { claimId: CLAIM_ID, spaceIds: [SPACE_ID], topicIds: [TOPIC_ID], filterTopicIds: [] };
+    const bounded = claimRecordFilters({ ...base, directDebates: {}, candidateClaimIds: ['f'.repeat(32)] });
+    const unbounded = claimRecordFilters({ ...base, directDebates: {}, candidateClaimIds: null });
+
+    expect(bounded.claimTopicRelations.or?.[0].fromEntityId).toEqual({ in: ['f'.repeat(32)] });
+    expect(bounded.claimTopicRelations.or?.[0].fromEntity).toEqual(unbounded.claimTopicRelations.or?.[0].fromEntity);
+    expect(unbounded.claimTopicRelations.or?.[0].fromEntityId).toBeUndefined();
+    // Candidates narrow only the facet; the counts and pages keep their own predicates.
+    expect(bounded.claimRelations).toEqual(unbounded.claimRelations);
+  });
+
+  it('decodes direct debates by space and drops candidates past the limit', () => {
+    expect(
+      decodeClaimRecordDirectDebates({
+        relationsConnection: {
+          nodes: [
+            { fromEntityId: 'dddddddd-dddd-dddd-dddd-dddddddddddd', spaceId: 'bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb' },
+            { fromEntityId: DEBATE_ID, spaceId: SPACE_ID },
+            null,
+          ],
+        },
+      })
+    ).toEqual({ [SPACE_ID]: [DEBATE_ID] });
+
+    const page = (hasNextPage: boolean, ids: string[]) => ({
+      pageInfo: { hasNextPage },
+      nodes: ids.map(fromEntityId => ({ fromEntityId })),
+    });
+    expect(decodeClaimRecordCandidates({ topic: page(false, ['b', 'a']), extracted: page(false, ['a']) })).toEqual([
+      'a',
+      'b',
+    ]);
+    expect(decodeClaimRecordCandidates({ topic: page(true, ['a']), extracted: page(false, []) })).toBeNull();
+    expect(decodeClaimRecordCandidates({ topic: page(false, []), extracted: page(true, ['a']) })).toBeNull();
+  });
+
   it('omits only the topic branch when there are no topics', () => {
     const filters = claimRecordFilters({
       claimId: CLAIM_ID,
+      directDebates: { [SPACE_ID]: [DEBATE_ID] },
       spaceIds: [SPACE_ID],
       topicIds: [],
       filterTopicIds: [],
@@ -240,6 +270,7 @@ describe('claim record GraphQL', () => {
   it('keeps Debates scoped to the viewed claim even when Related claims has topics', () => {
     const filters = claimRecordFilters({
       claimId: CLAIM_ID,
+      directDebates: { [SPACE_ID]: [DEBATE_ID] },
       spaceIds: [SPACE_ID],
       topicIds: [TOPIC_ID],
       filterTopicIds: [],
@@ -310,6 +341,7 @@ describe('claim record GraphQL', () => {
     const secondTopic = 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee';
     const filters = claimRecordFilters({
       claimId: CLAIM_ID,
+      directDebates: { [SPACE_ID]: [DEBATE_ID] },
       spaceIds: [SPACE_ID, secondSpace],
       topicIds: [TOPIC_ID],
       filterTopicIds: [TOPIC_ID, secondTopic],

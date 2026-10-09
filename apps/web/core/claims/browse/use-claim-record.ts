@@ -9,13 +9,16 @@ import { normId } from '~/core/utils/norm-id';
 
 import {
   CLAIM_RECORD_PAGE_SIZE,
+  claimRecordDirectDebatesKey,
   claimRecordFilters,
   fetchClaimRecordClaimsPage,
   fetchClaimRecordCounts,
   fetchClaimRecordDebatesPage,
+  fetchClaimRecordDirectDebates,
   firstClaimRecordClaimsPageParam,
   mergeSortedRecordEntities,
   nextClaimRecordClaimsPageParam,
+  type ClaimRecordDirectDebates,
   type ClaimRecordSort,
   type RankedClaimRecordEntity,
 } from './claim-record-query';
@@ -24,6 +27,26 @@ export { CLAIM_RECORD_PAGE_SIZE } from './claim-record-query';
 
 const CLAIM_RECORD_STALE_TIME = 60_000;
 const NO_ROWS: ExploreFeedRow[] = [];
+const NO_DIRECT_DEBATES: ClaimRecordDirectDebates = {};
+
+/** The direct debates both claim-record hooks resolve before building their filters. */
+export function useClaimRecordDirectDebates({
+  claimId,
+  spaceIds,
+  enabled = true,
+}: {
+  claimId: string;
+  spaceIds: string[];
+  enabled?: boolean;
+}) {
+  const spaceKey = spaceIds.map(normId).sort().join(',');
+  return useQuery({
+    queryKey: ['claim-record', 'direct-debates', normId(claimId), spaceKey],
+    enabled,
+    queryFn: ({ signal }) => fetchClaimRecordDirectDebates({ claimId, spaceIds, signal }),
+    staleTime: CLAIM_RECORD_STALE_TIME,
+  });
+}
 
 function useVisibleRecordPage({
   recordKey,
@@ -133,23 +156,40 @@ export function useClaimRecord({
   const filterTopicKey = filterTopicIds.map(normId).sort().join(',');
   const spaceKey = selectedSpaceIds.map(normId).sort().join(',');
   const recordKey = `${normId(claimId)}:${spaceKey}:${topicKey}:${filterTopicKey}`;
+  const directDebatesQuery = useClaimRecordDirectDebates({
+    claimId,
+    spaceIds: selectedSpaceIds,
+    enabled: claimsEnabled || countsEnabled,
+  });
+  const directDebates = directDebatesQuery.data;
+  const directDebatesKey = claimRecordDirectDebatesKey(directDebates);
+  // Only Related claims and the counts read the extracted path. Debates never do, so they build
+  // from the empty map and need not wait for it.
   const filters = React.useMemo(
-    () => claimRecordFilters({ claimId, spaceIds: selectedSpaceIds, topicIds, filterTopicIds }),
+    () =>
+      claimRecordFilters({
+        claimId,
+        spaceIds: selectedSpaceIds,
+        topicIds,
+        filterTopicIds,
+        directDebates: directDebates ?? NO_DIRECT_DEBATES,
+      }),
     // Topic/space order and UUID formatting do not change the query's meaning.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [claimId, spaceKey, topicKey, filterTopicKey]
+    [claimId, spaceKey, topicKey, filterTopicKey, directDebatesKey]
   );
+  const extractedReady = directDebates !== undefined;
 
   const counts = useQuery({
-    queryKey: ['claim-record', 'counts', recordKey],
-    enabled: countsEnabled,
+    queryKey: ['claim-record', 'counts', recordKey, directDebatesKey],
+    enabled: countsEnabled && extractedReady,
     queryFn: ({ signal }) => fetchClaimRecordCounts({ filters, signal }),
     staleTime: CLAIM_RECORD_STALE_TIME,
   });
 
   const claims = useInfiniteQuery({
-    queryKey: ['claim-record', 'claims', recordKey, claimSort],
-    enabled: claimsEnabled,
+    queryKey: ['claim-record', 'claims', recordKey, directDebatesKey, claimSort],
+    enabled: claimsEnabled && extractedReady,
     initialPageParam: firstClaimRecordClaimsPageParam(filters.hasTopics),
     queryFn: ({ pageParam, signal }) =>
       fetchClaimRecordClaimsPage({ filters, spaceIds: selectedSpaceIds, sort: claimSort, pageParam, signal }),
@@ -220,11 +260,11 @@ export function useClaimRecord({
     // Rows are a truthful lower bound while the independent exact aggregate is still in flight.
     claimsTotal: counts.data?.claims ?? claimEntities.length,
     debatesTotal: counts.data?.debates ?? debateEntities.length,
-    claimsCountUnavailable: counts.isError,
+    claimsCountUnavailable: counts.isError || directDebatesQuery.isError,
     debatesCountUnavailable: counts.isError,
-    claimsLoading: claims.isLoading,
+    claimsLoading: claims.isLoading || (claimsEnabled && directDebatesQuery.isLoading),
     debatesLoading: debates.isLoading,
-    claimsError: claims.isError,
+    claimsError: claims.isError || directDebatesQuery.isError,
     debatesError: debates.isError,
     claimsFetchingNextPage: claims.isFetchingNextPage,
     debatesFetchingNextPage: debates.isFetchingNextPage,
