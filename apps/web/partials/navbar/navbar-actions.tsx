@@ -22,8 +22,11 @@ import { useEditable } from '~/core/state/editable-store';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { NavUtils } from '~/core/utils/utils';
 import { GeoConnectButton } from '~/core/wallet';
+import { useWalletStall } from '~/core/wallet/use-wallet-stall';
+import { navbarAccountState } from '~/core/wallet/wallet-stall';
 
 import { Avatar } from '~/design-system/avatar';
+import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME } from '~/design-system/button';
 import { FallbackImage } from '~/design-system/fallback-image';
 import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { EyeSmall } from '~/design-system/icons/eye-small';
@@ -41,11 +44,11 @@ import { avatarAtom } from '../onboarding/dialog';
 import { EmailNotificationsMenuItem } from './email-notifications-menu-item';
 
 function useUser() {
-  const { smartAccount, isLoading: isLoadingSmartAccount } = useSmartAccount();
+  const { smartAccount, isLoading: isLoadingSmartAccount, error } = useSmartAccount();
   const address = smartAccount?.account.address;
   const { profile, isLoading: isLoadingProfile } = useGeoProfile(address);
 
-  return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile };
+  return { isLoading: isLoadingSmartAccount || isLoadingProfile, address, profile, error };
 }
 
 const MOBILE_NAVBAR_QUERY = '(max-width: 639px)';
@@ -90,11 +93,18 @@ export function NavbarActions() {
   const [hasOpenedSchedule, setHasOpenedSchedule] = React.useState(false);
   const avatarTriggerRef = React.useRef<HTMLButtonElement>(null);
 
-  const { isLoading: isUserLoading, profile: resolvedProfile, address: resolvedAddress } = useUser();
+  const {
+    isLoading: isUserLoading,
+    profile: resolvedProfile,
+    address: resolvedAddress,
+    error: smartAccountError,
+  } = useUser();
   const { personalSpaceId } = usePersonalSpaceId();
   const { isPending, topicId } = usePendingPersonalSpace();
   const pendingAvatar = useAtomValue(avatarAtom);
-  const { user } = usePrivy();
+  const { user, authenticated } = usePrivy();
+  // Signed in with no smart account is not signed out (GEO-3245): Log in does nothing for it.
+  const walletStall = useWalletStall({ authenticated, address: resolvedAddress, error: smartAccountError });
   const isMobileNavbar = useIsMobileNavbar();
   const spaceId = useSpaceId();
   const { canCreateInSpace, createEntity, createProperty, createSpace } = useCreateEntityActions(spaceId);
@@ -132,7 +142,31 @@ export function NavbarActions() {
     const address = resolvedAddress ?? held?.address;
     const profile = resolvedProfile ?? held?.profile;
 
-    if (isUserLoading && !held) {
+    const state = navbarAccountState({
+      authenticated,
+      isLoading: isUserLoading,
+      hasAddress: Boolean(address),
+      hasHeldIdentity: Boolean(held),
+      stalled: walletStall.stalled,
+    });
+
+    if (state === 'stalled') {
+      return (
+        <div key="navbar-content" className="flex items-center gap-4">
+          <Button
+            variant="secondary"
+            className={PILL_BUTTON_SECONDARY_CLASS_NAME}
+            onClick={walletStall.reconnect}
+            disabled={walletStall.reconnecting}
+            title="Your account didn’t finish loading"
+          >
+            {walletStall.reconnecting ? 'Reconnecting…' : 'Reconnect'}
+          </Button>
+        </div>
+      );
+    }
+
+    if (state === 'loading') {
       return (
         <div key="navbar-content" className="flex items-center gap-4">
           {!isMobileNavbar ? <Skeleton className="h-7 w-[66px]" radius="rounded-full" /> : null}
@@ -141,7 +175,7 @@ export function NavbarActions() {
       );
     }
 
-    if (!address) {
+    if (state === 'signed_out' || !address) {
       return <GeoConnectButton key="navbar-content" />;
     }
 

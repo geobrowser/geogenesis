@@ -650,3 +650,49 @@ describe('PrivyAuthTracker', () => {
     );
   });
 });
+
+// GEO-3245: Privy's `login()` does nothing for someone already signed in, so a press then only
+// opened an attempt that the next press superseded. One stuck user left 37 of them.
+describe('a sign-in pressed while already signed in', () => {
+  beforeEach(() => {
+    mocks.authenticated = true;
+    mocks.user = { id: 'did:privy:signed-in' };
+  });
+
+  it('neither calls login nor opens an attempt, from the tracked login', () => {
+    const control = renderHook(() => useTrackedLogin({}));
+    act(() => {
+      control.result.current.login({ component: 'navbar', auth_control: 'sign_in' });
+    });
+
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(currentAuthAttempt()).toBeUndefined();
+    expect(mocks.capture).not.toHaveBeenCalledWith('auth_attempt_started', expect.anything());
+  });
+
+  it('neither calls login nor opens an attempt, nor withdraws the press, from the sign-in control', () => {
+    const onCancel = vi.fn();
+    const control = renderHook(() => usePrivySignIn());
+    act(() => {
+      control.result.current({ component: 'navbar', auth_control: 'sign_in' }, { onCancel });
+    });
+
+    expect(mocks.login).not.toHaveBeenCalled();
+    expect(currentAuthAttempt()).toBeUndefined();
+    expect(mocks.capture).not.toHaveBeenCalledWith('auth_attempt_started', expect.anything());
+    expect(onCancel).not.toHaveBeenCalled();
+  });
+
+  it('works again once they are signed out', () => {
+    const control = renderHook(() => useTrackedLogin({}));
+    mocks.authenticated = false;
+    mocks.user = null;
+    control.rerender();
+    act(() => {
+      control.result.current.login({ component: 'navbar', auth_control: 'sign_in' });
+    });
+
+    expect(mocks.login).toHaveBeenCalledOnce();
+    expect(currentAuthAttempt()).toBeDefined();
+  });
+});

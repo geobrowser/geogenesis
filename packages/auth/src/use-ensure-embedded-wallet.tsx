@@ -2,7 +2,7 @@ import './ensure-web-storage.js';
 import { useCreateWallet, usePrivy, useWallets } from '@privy-io/react-auth';
 import { useSetActiveWallet } from '@privy-io/wagmi';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 /** What `useSmartAccount` looks for: Privy's own embedded wallet, not a linked external one. */
 const EMBEDDED_WALLET_TYPE = 'privy';
@@ -22,6 +22,32 @@ const MAX_ATTEMPTS = 3;
  * watching an empty onboarding screen while it waits.
  */
 const RETRY_DELAY_MS = 2_000;
+
+// Bumped by `retryEmbeddedWalletSetup`. Module-level because the hook is mounted once at the app root
+// while the control asking for a retry — the navbar's Reconnect (GEO-3245) — lives elsewhere.
+let retryGeneration = 0;
+const retryListeners = new Set<() => void>();
+
+function subscribeToRetries(listener: () => void) {
+  retryListeners.add(listener);
+  return () => {
+    retryListeners.delete(listener);
+  };
+}
+
+/**
+ * Gives the mounted `useEnsureEmbeddedWallet` a fresh budget: both attempt counts go back to zero and
+ * the wallet is activated in wagmi again, even if an earlier activation succeeded.
+ *
+ * Not a cure for an account whose embedded wallet never reaches `useWallets()` — nothing here can
+ * make Privy connect it, and creating one is still skipped because the account already has one. It
+ * covers the sessions that gave up after three failures, which otherwise stay stranded until a page
+ * load.
+ */
+export function retryEmbeddedWalletSetup() {
+  retryGeneration += 1;
+  retryListeners.forEach(listener => listener());
+}
 
 /**
  * Keeps an authenticated session holding an embedded wallet that wagmi knows about.
@@ -80,6 +106,12 @@ export function useEnsureEmbeddedWallet() {
   const walletToActivate =
     embeddedWallet ?? (linkedWalletAddress ? wallets.find(w => w.address === linkedWalletAddress) : undefined);
 
+  const generation = useSyncExternalStore(
+    subscribeToRetries,
+    () => retryGeneration,
+    () => 0
+  );
+
   const [createAttempts, setCreateAttempts] = useState(0);
   const createInFlightRef = useRef(false);
   const activatedAddressRef = useRef<string | null>(null);
@@ -98,6 +130,18 @@ export function useEnsureEmbeddedWallet() {
   const [activateAttempts, setActivateAttempts] = useState<Record<string, number>>({});
   const addressToActivate = walletToActivate?.address;
   const attemptsForAddress = addressToActivate ? (activateAttempts[addressToActivate] ?? 0) : 0;
+
+  // A retry starts both budgets over. The first render's generation is not a retry.
+  // Declared before both effects below: effects run in order, and the activation effect must see the
+  // cleared record in the same commit, or it skips the address it was asked to activate again.
+  const seenGenerationRef = useRef(generation);
+  useEffect(() => {
+    if (seenGenerationRef.current === generation) return;
+    seenGenerationRef.current = generation;
+    activatedAddressRef.current = null;
+    setCreateAttempts(0);
+    setActivateAttempts({});
+  }, [generation]);
 
   useEffect(() => {
     // `walletsReady` is the guard that stops this firing at everybody who already has a wallet.
@@ -194,7 +238,9 @@ export function useEnsureEmbeddedWallet() {
       cancelled = true;
       if (timer) clearTimeout(timer);
     };
-  }, [authenticated, addressToActivate, attemptsForAddress]);
+    // `generation` is a dependency so that a retry re-activates an address this effect already
+    // finished with; the reset below clears the record that would otherwise skip it.
+  }, [authenticated, addressToActivate, attemptsForAddress, generation]);
 
   // Giving up is the state that strands a session, so it is the one worth saying out loud.
   useEffect(() => {
