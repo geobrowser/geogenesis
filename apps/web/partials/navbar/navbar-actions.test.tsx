@@ -36,6 +36,8 @@ const mocks = vi.hoisted(() => ({
   isMobileNavbar: false,
   isSmartAccountLoading: false,
   hasSmartAccount: true,
+  authenticated: true,
+  walletStall: { stalled: false, reconnecting: false, reconnect: vi.fn() },
   dialogMounts: 0,
   shortcutCallback: null as (() => void) | null,
   pendingPersonalSpace: { isPending: false, topicId: null as string | null },
@@ -48,7 +50,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@geogenesis/auth', () => ({
   useLogout: () => ({ logout: mocks.logout }),
-  usePrivy: () => ({ ready: true, authenticated: true, user: mocks.privyUser }),
+  usePrivy: () => ({ ready: true, authenticated: mocks.authenticated, user: mocks.privyUser }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -71,6 +73,8 @@ vi.mock('~/core/hooks/use-smart-account', () => ({
     isLoading: mocks.isSmartAccountLoading,
   }),
 }));
+// Its timers and telemetry are covered in its own suite; here only what the navbar does with it.
+vi.mock('~/core/wallet/use-wallet-stall', () => ({ useWalletStall: () => mocks.walletStall }));
 vi.mock('~/core/hooks/use-geo-profile', () => ({
   useGeoProfile: () => ({ profile: mocks.profile, isLoading: false }),
 }));
@@ -192,6 +196,8 @@ describe('NavbarActions profile menu', () => {
     mocks.isMobileNavbar = false;
     mocks.isSmartAccountLoading = false;
     mocks.hasSmartAccount = true;
+    mocks.authenticated = true;
+    mocks.walletStall = { stalled: false, reconnecting: false, reconnect: vi.fn() };
     mocks.dialogMounts = 0;
     mocks.shortcutCallback = null;
     mocks.pendingPersonalSpace = { isPending: false, topicId: null };
@@ -406,10 +412,52 @@ describe('NavbarActions profile menu', () => {
     await user.click(screen.getByRole('button', { name: 'Open profile menu' }));
 
     mocks.hasSmartAccount = false;
+    mocks.authenticated = false;
     rerender(<NavbarActions />);
 
     expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Open profile menu' })).not.toBeInTheDocument();
+  });
+
+  // GEO-3245: Privy says signed in, the smart account never resolves. Connect (Log in) does nothing
+  // for a signed-in user, so it must never be what they see.
+  describe('signed in without an account', () => {
+    beforeEach(() => {
+      mocks.hasSmartAccount = false;
+    });
+
+    it('holds the skeleton, not Connect, while the account is late', () => {
+      const { container } = render(<NavbarActions />);
+
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Reconnect' })).not.toBeInTheDocument();
+      expect(container.querySelector('[class*="mobile:h-11"]')).not.toBeNull();
+    });
+
+    it('offers Reconnect once the wait counts as stalled', async () => {
+      mocks.walletStall.stalled = true;
+      const user = userEvent.setup();
+      render(<NavbarActions />);
+
+      expect(screen.queryByRole('button', { name: 'Connect' })).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Reconnect' }));
+
+      expect(mocks.walletStall.reconnect).toHaveBeenCalledOnce();
+    });
+
+    it('cannot be pressed twice while reconnecting', () => {
+      mocks.walletStall = { stalled: true, reconnecting: true, reconnect: vi.fn() };
+      render(<NavbarActions />);
+
+      expect(screen.getByRole('button', { name: 'Reconnecting…' })).toBeDisabled();
+    });
+
+    it('still shows Connect to someone who is signed out', () => {
+      mocks.authenticated = false;
+      render(<NavbarActions />);
+
+      expect(screen.getByRole('button', { name: 'Connect' })).toBeInTheDocument();
+    });
   });
 
   it('saves the schedule edited from the menu', async () => {

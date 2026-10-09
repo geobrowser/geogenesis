@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@geogenesis/auth', () => ({
   WagmiProvider: ({ children }: { children: React.ReactNode }) => <>{children}</>,
   useGeoLogin: () => ({ login: mocks.login }),
+  usePrivy: () => ({ authenticated: false }),
 }));
 vi.mock('@geogenesis/auth/wallet', () => ({
   createGeoWalletConfig: () => ({}),
