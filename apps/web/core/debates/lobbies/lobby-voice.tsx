@@ -16,6 +16,7 @@ import * as React from 'react';
 
 import {
   ConnectionState,
+  DisconnectReason,
   MediaDeviceFailure,
   ParticipantEvent,
   type Room,
@@ -310,7 +311,7 @@ function ConnectedVoice({
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
-  useNeverConnected(room, onNeverConnected);
+  useRoomEnding(room, { onNeverConnected });
   React.useEffect(() => {
     roomRef.current = room;
     return () => {
@@ -402,25 +403,40 @@ function ConnectedVoice({
 }
 
 /**
- * Calls `onFailed` when the room drops before it ever connects, which would otherwise show
- * "Connecting…" for good. Reads the room's events, so a flip within one tick is not missed.
+ * How a room ended without the viewer leaving it. `onRemoved`: the server removed this identity
+ * (a newer tab or reload took over, or a host removed it), so it must not reconnect by itself.
+ * `onNeverConnected`: any other drop before it ever connected, which would otherwise show
+ * "Connecting…" for good. LiveKit sets the state before it emits the reason, so the drop waits a
+ * microtask for it.
  */
-function useNeverConnected(room: Room, onFailed: () => void) {
-  const onFailedRef = React.useRef(onFailed);
+function useRoomEnding(room: Room, handlers: { onNeverConnected: () => void; onRemoved?: () => void }) {
+  const handlersRef = React.useRef(handlers);
   React.useEffect(() => {
-    onFailedRef.current = onFailed;
-  }, [onFailed]);
+    handlersRef.current = handlers;
+  });
   React.useEffect(() => {
     let attempted = room.state !== ConnectionState.Disconnected;
     let connected = room.state === ConnectionState.Connected;
+    let removed = false;
     const onState = (state: ConnectionState) => {
       if (state === ConnectionState.Connected) connected = true;
       else if (state !== ConnectionState.Disconnected) attempted = true;
-      else if (attempted && !connected) onFailedRef.current();
+      else if (attempted && !connected) {
+        queueMicrotask(() => {
+          if (!removed) handlersRef.current.onNeverConnected();
+        });
+      }
+    };
+    const onDisconnected = (reason?: DisconnectReason) => {
+      if (reason !== DisconnectReason.PARTICIPANT_REMOVED) return;
+      removed = true;
+      handlersRef.current.onRemoved?.();
     };
     room.on(RoomEvent.ConnectionStateChanged, onState);
+    room.on(RoomEvent.Disconnected, onDisconnected);
     return () => {
       room.off(RoomEvent.ConnectionStateChanged, onState);
+      room.off(RoomEvent.Disconnected, onDisconnected);
     };
   }, [room]);
 }
@@ -462,6 +478,7 @@ export function LobbyGuestVoice({
   onStates,
   onReconnect,
   onAutoReconnect,
+  onRemoved,
   quiet = false,
 }: {
   token: DebateLobbyVoiceToken;
@@ -473,6 +490,8 @@ export function LobbyGuestVoice({
    * and says whether it did. Kept by the page, since a fresh token remounts this room.
    */
   onAutoReconnect: () => boolean;
+  /** The server removed this room's identity; the page checks the session for why. */
+  onRemoved: () => void;
   /** The member room is taking over and draws its own bar. */
   quiet?: boolean;
 }) {
@@ -512,6 +531,7 @@ export function LobbyGuestVoice({
         onStates={onStates}
         onReconnect={onReconnect}
         onNeverConnected={handleNeverConnected}
+        onRemoved={onRemoved}
         quiet={quiet}
       />
       <RoomAudioRenderer />
@@ -523,15 +543,25 @@ function ConnectedGuestVoice({
   onStates,
   onReconnect,
   onNeverConnected,
+  onRemoved,
   quiet,
 }: {
   onStates: (states: LobbyVoiceStates) => void;
   onReconnect: () => void;
   onNeverConnected: () => void;
+  onRemoved: () => void;
   quiet: boolean;
 }) {
   const room = useRoomContext();
-  useNeverConnected(room, onNeverConnected);
+  // Removed by the server: no Try again, which would take the session back; the page asks why.
+  const [removed, setRemoved] = React.useState(false);
+  useRoomEnding(room, {
+    onNeverConnected,
+    onRemoved: () => {
+      setRemoved(true);
+      onRemoved();
+    },
+  });
   const connectionState = useConnectionState();
   const connected = connectionState === ConnectionState.Connected;
   const [everConnected, setEverConnected] = React.useState(false);
@@ -542,10 +572,12 @@ function ConnectedGuestVoice({
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
   const states = useParticipantVoiceStates(connected);
   React.useEffect(() => onStates(states), [onStates, states]);
+  React.useEffect(() => () => onStates(NO_VOICE), [onStates]);
 
   if (quiet) return null;
-  const notice: VoiceNotice =
-    connectionState === ConnectionState.Disconnected && everConnected
+  const notice: VoiceNotice = removed
+    ? { message: LOBBY_GUEST_VOICE_COPY.disconnected }
+    : connectionState === ConnectionState.Disconnected && everConnected
       ? { message: LOBBY_GUEST_VOICE_COPY.disconnected, actionLabel: 'Try again', onAction: onReconnect }
       : connectionState === ConnectionState.Reconnecting || connectionState === ConnectionState.SignalReconnecting
         ? { message: 'Reconnecting…' }

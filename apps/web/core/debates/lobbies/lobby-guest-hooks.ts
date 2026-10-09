@@ -171,20 +171,26 @@ export function useLobbyGuestSession(
       });
   }, [id, runCommand, send, startingAttempt]);
 
-  // Heartbeat while listening; only `lapsed` starts again.
+  // Heartbeat while listening; only `lapsed` starts again. `checkNow` beats at once.
   const session = state.status === 'listening' ? state.session : null;
+  const beatNowRef = React.useRef<(() => void) | null>(null);
   React.useEffect(() => {
     if (!session) return;
     const body = { guest_secret: session.guest_secret, admission: session.admission };
     const every = Math.max(session.heartbeat_interval_seconds * 1_000, 5_000) || HEARTBEAT_FALLBACK_MS;
     let timer: ReturnType<typeof setTimeout> | null = null;
     let stopped = false;
+    // The room was removed yet the session may still be this tab's; then it reconnects.
+    let restartIfAlive = false;
     const beat = (delay: number) => {
       timer = setTimeout(async () => {
         try {
           const heartbeat = await sendDebateLobbyGuestHeartbeat(id, body);
           if (stopped) return;
-          if (heartbeat.alive) return beat(every);
+          if (heartbeat.alive) {
+            if (restartIfAlive) return send({ type: 'restart' });
+            return beat(every);
+          }
           switch (heartbeat.reason) {
             case 'removed':
               return send({ type: 'removed' });
@@ -205,8 +211,14 @@ export function useLobbyGuestSession(
       }, delay);
     };
     beat(every);
+    beatNowRef.current = () => {
+      restartIfAlive = true;
+      if (timer) clearTimeout(timer);
+      beat(0);
+    };
     return () => {
       stopped = true;
+      beatNowRef.current = null;
       if (timer) clearTimeout(timer);
     };
   }, [id, send, session]);
@@ -240,5 +252,7 @@ export function useLobbyGuestSession(
     reconnect: React.useCallback(() => send({ type: 'restart' }), [send]),
     /** The member room is up, or will not come up: drop the guest room. */
     roomDone: React.useCallback(() => send({ type: 'roomDone' }), [send]),
+    /** The server removed this tab's room: ask the session why (superseded, removed, ended). */
+    checkNow: React.useCallback(() => beatNowRef.current?.(), []),
   };
 }

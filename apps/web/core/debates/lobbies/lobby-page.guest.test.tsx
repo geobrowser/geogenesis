@@ -20,6 +20,10 @@ const mocks = vi.hoisted(() => ({
   leave: vi.fn(async () => undefined),
   onAudible: null as (() => void) | null,
   onAutoReconnect: null as (() => boolean) | null,
+  onGuestStates: null as ((states: { speaking: Set<string>; micOn: Set<string>; connected: boolean }) => void) | null,
+  onGuestRemoved: null as (() => void) | null,
+  /** Whether the mock guest room reports a connection on mount. */
+  guestConnects: true,
   /** What the page asked presence to join with, render by render; only a member joins. */
   presenceAdmitted: [] as boolean[],
   /** Whether the page asked for the member-only activity read, render by render. */
@@ -90,12 +94,23 @@ vi.mock('./lobby-voice', async () => {
       token,
       quiet,
       onAutoReconnect,
+      onStates,
+      onRemoved,
     }: {
       token: { token: string };
       quiet?: boolean;
       onAutoReconnect: () => boolean;
+      onStates: (states: { speaking: Set<string>; micOn: Set<string>; connected: boolean }) => void;
+      onRemoved: () => void;
     }) => {
       mocks.onAutoReconnect = onAutoReconnect;
+      mocks.onGuestStates = onStates;
+      mocks.onGuestRemoved = onRemoved;
+      // Reports the room's connection as the real room does; tests change it through `mocks.onGuestStates`.
+      ReactModule.useEffect(() => {
+        if (mocks.guestConnects) onStates({ speaking: new Set(), micOn: new Set(), connected: true });
+        return () => onStates({ speaking: new Set(), micOn: new Set(), connected: false });
+      }, [onStates]);
       return (
         <div data-testid="guest-room" data-quiet={quiet ? 'yes' : 'no'}>
           {token.token}
@@ -186,6 +201,7 @@ beforeEach(() => {
   mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
   mocks.presenceStatus = 'idle';
   mocks.onAudible = null;
+  mocks.guestConnects = true;
   mocks.presenceAdmitted = [];
   mocks.activityEnabled = [];
   mocks.guestViewAt = 0;
@@ -551,5 +567,46 @@ describe('DebateLobbyPage guest banner', () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
     await screen.findByText('Connecting voice…');
     expect(screen.getByTestId('lobby-guest-banner')).not.toHaveTextContent('You’re listening');
+  });
+});
+
+// The banner follows the guest room's own connection, not whether a token exists.
+describe('DebateLobbyPage banner and the guest room connection', () => {
+  const states = (connected: boolean) => ({ speaking: new Set<string>(), micOn: new Set<string>(), connected });
+
+  it('invites while connecting, says listening once connected, and stops when it fails or drops', async () => {
+    mocks.guestConnects = false;
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    const banner = () => screen.getByTestId('lobby-guest-banner');
+    expect(banner()).toHaveTextContent('Create an account to speak, vote and debate.');
+    expect(banner()).not.toHaveTextContent('You’re listening');
+
+    act(() => mocks.onGuestStates?.(states(true)));
+    expect(banner()).toHaveTextContent('You’re listening.');
+
+    // Dropped, or never connected and gave up: the room reports not connected.
+    act(() => mocks.onGuestStates?.(states(false)));
+    expect(banner()).not.toHaveTextContent('You’re listening');
+  });
+
+  it('a removed room asks the session at once; superseded steps aside', async () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    expect(mocks.heartbeat).not.toHaveBeenCalled();
+
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'superseded', lease_expires_at: null });
+    act(() => mocks.onGuestRemoved?.());
+    await waitFor(() => expect(mocks.heartbeat).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('You’re listening in another tab.')).toBeInTheDocument();
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('a removed room whose session is still this tab’s reconnects on the same secret', async () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    act(() => mocks.onGuestRemoved?.());
+    await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(2));
+    expect(mocks.start).toHaveBeenLastCalledWith('lobby1', { guest_secret: 'secret-1' });
   });
 });

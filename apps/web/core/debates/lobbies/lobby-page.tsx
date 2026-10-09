@@ -626,7 +626,7 @@ function LobbyRoom({
         </div>
       ) : null}
 
-      {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} listening={guestVoice !== null} /> : null}
+      {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} listening={guestVoiceStates.connected} /> : null}
 
       {moderationNotice ? (
         <div role="status" className="rounded-md bg-grey-01 px-3 py-2">
@@ -694,6 +694,7 @@ function LobbyRoom({
             onStates={setGuestVoiceStates}
             onReconnect={guestSession.reconnect}
             onAutoReconnect={autoReconnectGuest}
+            onRemoved={guestSession.checkNow}
             quiet={inVoice}
           />
         ) : null}
