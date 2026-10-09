@@ -25,6 +25,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { isExpiredMediaUrl } from '../media-url-expiry';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
@@ -158,6 +159,7 @@ export function DebateFeedPlayer({
     turnCount,
     subtitle,
     onPlaybackTick,
+    onPlaybackError,
     resyncSlot,
     refreshSlotUrl,
     togglePlayback: togglePlaybackRaw,
@@ -648,6 +650,7 @@ export function DebateFeedPlayer({
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
+          onPlaybackError={onPlaybackError}
           onPauseTick={onPauseTick}
           onRecovered={() => resyncSlot(1)}
           onExhausted={() => void refreshSlotUrl(1)}
@@ -709,6 +712,7 @@ export function DebateFeedPlayer({
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
+          onPlaybackError={onPlaybackError}
           onPauseTick={onPauseTick}
           onRecovered={() => resyncSlot(2)}
           onExhausted={() => void refreshSlotUrl(2)}
@@ -885,6 +889,7 @@ function DebaterVideo({
   isResuming,
   onPlaybackTick,
   onPauseTick = onPlaybackTick,
+  onPlaybackError,
   onRecovered,
   onExhausted,
   onToggle,
@@ -929,6 +934,7 @@ function DebaterVideo({
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
+  onPlaybackError?: () => void;
   /** What a `pause` event runs; the player holds it while it re-plays both inside a gesture. */
   onPauseTick?: () => void;
   /** This tile's recording was rebuilt after its pipeline died — put it back in step with its
@@ -1197,7 +1203,10 @@ function DebaterVideo({
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
             muted={muted}
             onEnded={onPlaybackTick}
-            onError={onMediaError}
+            onError={() => {
+              if (onPlaybackError && isExpiredMediaUrl(src)) onPlaybackError();
+              else onMediaError();
+            }}
             onLoadedMetadata={onPlaybackTick}
             onPause={onPauseTick}
             onPlay={onPlaybackTick}

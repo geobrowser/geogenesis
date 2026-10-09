@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -84,6 +84,67 @@ describe('ProcessedDebatePlayer', () => {
     );
     expect(mocks.play).toHaveBeenCalledTimes(1);
     expect(container.querySelector('video')).toHaveAttribute('controls');
+  });
+
+  it('refreshes an expired URL after a media error and restores the playhead', async () => {
+    let attempt = 0;
+    mocks.mediaMutate.mockImplementation((_variables, options) => {
+      options.onSuccess({
+        upload: {
+          url:
+            ++attempt === 1
+              ? 'https://media.test/video?expires=1700000000&signature=abc'
+              : 'https://media.test/fresh?expires=9999999999&signature=abc',
+        },
+      });
+    });
+    const { container } = render(<ProcessedDebatePlayer debateId="debate-1" label="Video" previewAvailable={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play Video' }));
+    const video = container.querySelector('video')!;
+    await waitFor(() => expect(video.src).toContain('/video?'));
+    video.currentTime = 19;
+    fireEvent.error(video);
+    await waitFor(() => expect(video.src).toContain('/fresh?'));
+    video.currentTime = 0;
+    fireEvent.loadedMetadata(video);
+    expect(video.currentTime).toBe(19);
+    expect(mocks.mediaMutate).toHaveBeenCalledTimes(2);
+  });
+
+  it('ignores a late video response after switching debates', async () => {
+    let complete!: (value: { upload: { url: string } }) => void;
+    mocks.mediaMutate.mockImplementation((_variables, options) => {
+      complete = options.onSuccess;
+    });
+    const { container, rerender } = render(
+      <ProcessedDebatePlayer debateId="first" label="Video" previewAvailable={false} />
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Play Video' }));
+    rerender(<ProcessedDebatePlayer debateId="second" label="Video" previewAvailable={false} />);
+    await act(async () => complete({ upload: { url: 'https://media.test/stale' } }));
+    expect(container.querySelector('video')).not.toHaveAttribute('src');
+    expect(mocks.play).not.toHaveBeenCalled();
+  });
+
+  it('does not autoplay after a pause during URL renewal', async () => {
+    let complete!: (value: { upload: { url: string } }) => void;
+    mocks.mediaMutate
+      .mockImplementationOnce((_variables, options) => {
+        options.onSuccess({ upload: { url: 'https://media.test/video?expires=1700000000&signature=abc' } });
+      })
+      .mockImplementation((_variables, options) => {
+        complete = options.onSuccess;
+      });
+    const { container } = render(<ProcessedDebatePlayer debateId="first" label="Video" previewAvailable={false} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Play Video' }));
+    const video = container.querySelector('video')!;
+    await waitFor(() => expect(video.src).toContain('/video?'));
+    mocks.play.mockClear();
+    fireEvent.play(video);
+    fireEvent.pause(video);
+    await act(async () => complete({ upload: { url: 'https://media.test/fresh?expires=9999999999&signature=abc' } }));
+    fireEvent.loadedMetadata(video);
+    expect(mocks.play).not.toHaveBeenCalled();
   });
 
   it('delegates activation without requesting the final video when an external action is provided', async () => {

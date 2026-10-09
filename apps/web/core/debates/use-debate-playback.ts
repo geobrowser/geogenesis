@@ -8,6 +8,7 @@ import { reportEvent } from '~/core/telemetry/logger';
 
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
+import { isExpiredMediaUrl } from './media-url-expiry';
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
@@ -171,6 +172,9 @@ export function useDebatePlayback(
   const [resignAttempt, setResignAttempt] = React.useState(0);
   const [error, setError] = React.useState<string | null>(null);
   const [playing, setPlaying] = React.useState(false);
+  const [refreshingUrls, setRefreshingUrls] = React.useState(false);
+  const refreshingUrlsRef = React.useRef(false);
+  const urlRefreshGenerationRef = React.useRef(0);
   const [userPaused, setUserPaused] = React.useState(false);
   /**
    * The browser refused to start this pair, so the viewer has to.
@@ -770,7 +774,71 @@ export function useDebatePlayback(
     [noteDeliberateSeek, offsets]
   );
 
+  React.useEffect(() => {
+    refreshingUrlsRef.current = false;
+    setRefreshingUrls(false);
+    pendingSeekSecondsRef.current = null;
+    const generation = urlRefreshGenerationRef;
+    return () => {
+      generation.current++;
+    };
+  }, [debate.id, slot1RecordingFilename, slot2RecordingFilename]);
+
+  const refreshPlaybackUrls = React.useCallback(
+    async (fromSeconds?: number) => {
+      if (refreshingUrlsRef.current || !slot1RecordingFilename || !slot2RecordingFilename) return;
+      const generation = ++urlRefreshGenerationRef.current;
+      refreshingUrlsRef.current = true;
+      setRefreshingUrls(true);
+      resumeGenerationRef.current++;
+      const position = pairPlayhead(
+        slot1VideoRef.current,
+        slot2VideoRef.current,
+        offsets,
+        lastRunningPlayheadRef.current,
+        documentIsHidden()
+      );
+      pendingSeekSecondsRef.current = fromSeconds ?? position.seconds;
+      for (const video of videos()) video.pause();
+      setPlaying(false);
+      setError(null);
+      try {
+        const [first, second] = await Promise.all([
+          signRecording(recordingUrlsRef.current.refresh, debate.id, slot1RecordingFilename, slot1Variant),
+          signRecording(recordingUrlsRef.current.refresh, debate.id, slot2RecordingFilename, slot2Variant),
+        ]);
+        if (urlRefreshGenerationRef.current !== generation) return;
+        if (!first.url || !second.url || isExpiredMediaUrl(first.url) || isExpiredMediaUrl(second.url)) {
+          throw new Error('Could not refresh video access. Try Play again.');
+        }
+        setUrls({ slot1: first.url, slot2: second.url });
+      } catch (caught) {
+        if (urlRefreshGenerationRef.current !== generation) return;
+        setError(caught instanceof Error ? caught.message : 'Could not refresh video access.');
+        setUserPaused(true); // Require an explicit retry instead of an autoplay request loop.
+      } finally {
+        if (urlRefreshGenerationRef.current === generation) {
+          refreshingUrlsRef.current = false;
+          setRefreshingUrls(false);
+        }
+      }
+    },
+    [debate.id, offsets, slot1RecordingFilename, slot2RecordingFilename, slot1Variant, slot2Variant, videos]
+  );
+
+  const onPlaybackError = React.useCallback(() => {
+    if (isExpiredMediaUrl(urls.slot1) || isExpiredMediaUrl(urls.slot2)) {
+      void refreshPlaybackUrls();
+    } else {
+      for (const video of videos()) video.pause();
+      setPlaying(false);
+      setUserPaused(true);
+      setError('Could not play this debate. Try Play again.');
+    }
+  }, [refreshPlaybackUrls, urls, videos]);
+
   const updateTurnState = React.useCallback(() => {
+    if (refreshingUrlsRef.current) return;
     const primaryVideo = slot1VideoRef.current;
     const secondaryVideo = slot2VideoRef.current;
     const pendingSeekSeconds = pendingSeekSecondsRef.current;
@@ -1038,6 +1106,13 @@ export function useDebatePlayback(
 
   const resumeBoth = React.useCallback(
     async (fromSeconds?: number) => {
+      if (refreshingUrlsRef.current) return;
+      if (isExpiredMediaUrl(urls.slot1) || isExpiredMediaUrl(urls.slot2)) {
+        setUserPaused(false);
+        setAutoplayBlocked(false);
+        await refreshPlaybackUrls(fromSeconds);
+        return;
+      }
       const primaryVideo = slot1VideoRef.current;
       const secondaryVideo = slot2VideoRef.current;
       if (!primaryVideo || !secondaryVideo) return;
@@ -1060,7 +1135,9 @@ export function useDebatePlayback(
       // where the debate got to. It has already worked that out; re-deriving it here would read the
       // stale clock and rewind the pair over audio the viewer heard while away.
       const resumeFrom =
-        fromSeconds ?? pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current).seconds;
+        fromSeconds ??
+        pendingSeekSecondsRef.current ??
+        pairPlayhead(primaryVideo, secondaryVideo, offsets, lastRunningPlayheadRef.current).seconds;
       seekVideosTo(clampSeconds(resumeFrom, timelineSeconds));
       // allSettled never rejects, so a failed play() (e.g. blocked by autoplay
       // policy) leaves the video paused rather than throwing — check both the
@@ -1182,7 +1259,7 @@ export function useDebatePlayback(
       // Whatever refused last time has stopped refusing.
       setAutoplayBlocked(false);
     },
-    [offsets, seekVideosTo, setMutedByUser, timelineSeconds]
+    [offsets, refreshPlaybackUrls, seekVideosTo, setMutedByUser, timelineSeconds, urls]
   );
 
   const playFromStart = React.useCallback(async () => {
@@ -1317,7 +1394,7 @@ export function useDebatePlayback(
     [seekVideosTo, timelineSeconds, turnStateAt, updateTurnState]
   );
 
-  const ready = Boolean(urls.slot1 && urls.slot2);
+  const ready = Boolean(urls.slot1 && urls.slot2) && !refreshingUrls;
   const playbackEnded =
     ready && timelineSeconds > 0 && playheadSeconds >= timelineSeconds - PLAYBACK_END_EPSILON_SECONDS;
 
@@ -1520,6 +1597,7 @@ export function useDebatePlayback(
     onPlaybackTick: updateTurnState,
     resyncSlot,
     refreshSlotUrl,
+    onPlaybackError,
     togglePlayback,
     playFromStart,
     resumeBoth,

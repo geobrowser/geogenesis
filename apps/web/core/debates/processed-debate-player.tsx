@@ -8,6 +8,7 @@ import { VideoSmall } from '~/design-system/icons/video-small';
 import { Text } from '~/design-system/text';
 
 import { useDebateMediaArtifactUrl } from './hooks';
+import { isExpiredMediaUrl } from './media-url-expiry';
 
 export type ProcessedDebatePlayerHandle = {
   play: () => void;
@@ -36,6 +37,9 @@ export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandl
     const [previewFailed, setPreviewFailed] = React.useState(false);
     const [playbackError, setPlaybackError] = React.useState<string | null>(null);
     const shouldAutoPlayRef = React.useRef(false);
+    const videoRequestGenerationRef = React.useRef(0);
+    const refreshingUrlRef = React.useRef(false);
+    const pendingPositionRef = React.useRef<number | null>(null);
 
     React.useEffect(() => {
       loadPreviewRef.current = previewArtifact.mutate;
@@ -69,10 +73,17 @@ export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandl
       setVideoUrl(null);
       setPlaybackError(null);
       shouldAutoPlayRef.current = false;
+      pendingPositionRef.current = null;
+      refreshingUrlRef.current = false;
+      videoRequestGenerationRef.current++;
+      const generation = videoRequestGenerationRef;
+      return () => {
+        generation.current++;
+      };
     }, [debateId]);
 
     React.useEffect(() => {
-      if (!videoUrl || !shouldAutoPlayRef.current) return;
+      if (!videoUrl || !shouldAutoPlayRef.current || pendingPositionRef.current !== null) return;
       shouldAutoPlayRef.current = false;
       videoRef.current?.play().catch(error => {
         setPlaybackError(error instanceof Error ? error.message : 'Could not play this debate.');
@@ -86,11 +97,51 @@ export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandl
       []
     );
 
+    const requestVideo = React.useCallback(
+      (resume: boolean, position: number | null = null) => {
+        if (refreshingUrlRef.current) return;
+        refreshingUrlRef.current = true;
+        const generation = ++videoRequestGenerationRef.current;
+        shouldAutoPlayRef.current = resume;
+        pendingPositionRef.current = position;
+        videoArtifact.mutate(
+          { debateId, request: { kind: 'final_video' } },
+          {
+            onSuccess: response => {
+              if (videoRequestGenerationRef.current !== generation) return;
+              refreshingUrlRef.current = false;
+              if (position !== null && isExpiredMediaUrl(response.upload.url)) {
+                shouldAutoPlayRef.current = false;
+                pendingPositionRef.current = null;
+                setVideoUrl(null);
+                setPlaybackError('Could not refresh video access.');
+                return;
+              }
+              setVideoUrl(response.upload.url);
+            },
+            onError: error => {
+              if (videoRequestGenerationRef.current !== generation) return;
+              refreshingUrlRef.current = false;
+              shouldAutoPlayRef.current = false;
+              pendingPositionRef.current = null;
+              setVideoUrl(null);
+              setPlaybackError(error instanceof Error ? error.message : 'Could not load this debate.');
+            },
+          }
+        );
+      },
+      [debateId, videoArtifact]
+    );
+
     const play = React.useCallback(() => {
       setPlaybackError(null);
       if (!videoAvailable || videoArtifact.isPending) return;
       if (onActivate) {
         onActivate();
+        return;
+      }
+      if (videoUrl && isExpiredMediaUrl(videoUrl)) {
+        requestVideo(true, videoRef.current?.currentTime ?? 0);
         return;
       }
       if (videoUrl) {
@@ -100,18 +151,8 @@ export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandl
         return;
       }
 
-      shouldAutoPlayRef.current = true;
-      videoArtifact.mutate(
-        { debateId, request: { kind: 'final_video' } },
-        {
-          onSuccess: response => setVideoUrl(response.upload.url),
-          onError: error => {
-            shouldAutoPlayRef.current = false;
-            setPlaybackError(error instanceof Error ? error.message : 'Could not load this debate.');
-          },
-        }
-      );
-    }, [debateId, onActivate, videoArtifact, videoAvailable, videoUrl]);
+      requestVideo(true);
+    }, [onActivate, requestVideo, videoArtifact.isPending, videoAvailable, videoUrl]);
 
     React.useImperativeHandle(ref, () => ({ play }), [play]);
 
@@ -133,7 +174,34 @@ export const ProcessedDebatePlayer = React.forwardRef<ProcessedDebatePlayerHandl
           playsInline
           preload="none"
           aria-label={label}
+          onPlay={() => {
+            if (isExpiredMediaUrl(videoUrl)) requestVideo(true, videoRef.current?.currentTime ?? 0);
+          }}
+          onSeeking={() => {
+            if (isExpiredMediaUrl(videoUrl)) {
+              requestVideo(!videoRef.current?.paused, videoRef.current?.currentTime ?? 0);
+            }
+          }}
+          onPause={() => {
+            // A manual pause while renewal is in flight must win over its captured play intent.
+            if (refreshingUrlRef.current && !videoRef.current?.error) shouldAutoPlayRef.current = false;
+          }}
+          onLoadedMetadata={() => {
+            const video = videoRef.current;
+            if (!video || pendingPositionRef.current === null) return;
+            video.currentTime = pendingPositionRef.current;
+            pendingPositionRef.current = null;
+            if (shouldAutoPlayRef.current) {
+              shouldAutoPlayRef.current = false;
+              void video.play().catch(() => setPlaybackError('Could not play this debate.'));
+            }
+          }}
           onError={() => {
+            if (refreshingUrlRef.current) return;
+            if (isExpiredMediaUrl(videoUrl)) {
+              requestVideo(!videoRef.current?.paused, videoRef.current?.currentTime ?? 0);
+              return;
+            }
             setVideoUrl(null);
             setPlaybackError('Could not play this debate.');
           }}

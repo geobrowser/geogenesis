@@ -216,6 +216,60 @@ describe('useDebatePlayback — playback URLs survive re-activation (GEO-2895)',
     expect(mocks.recordingUrl).toHaveBeenCalledTimes(2);
   });
 
+  it('refreshes expired playback URLs once and preserves the pair position', async () => {
+    mocks.recordingUrl.mockResolvedValue({ url: 'https://media.test/video?expires=1700000000&signature=abc' });
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    const first = fakeVideo();
+    const second = fakeVideo();
+    first.currentTime = 12;
+    second.currentTime = 12;
+    result.current.slot1VideoRef.current = first;
+    result.current.slot2VideoRef.current = second;
+    mocks.recordingUrl.mockResolvedValue({ url: 'https://media.test/fresh?expires=9999999999&signature=abc' });
+    act(() => {
+      result.current.onPlaybackError();
+      result.current.onPlaybackError();
+    });
+    await waitFor(() => expect(result.current.urls.slot1).toContain('/fresh'));
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(4);
+    // Changing src resets the element's clock. The next metadata tick restores it.
+    first.currentTime = 0;
+    second.currentTime = 0;
+    act(() => result.current.onPlaybackTick());
+    expect(first.currentTime).toBe(12);
+    expect(second.currentTime).toBe(12);
+  });
+
+  it('does not apply a late refresh to a different inactive debate', async () => {
+    mocks.recordingUrl.mockResolvedValue({ url: 'https://media.test/video?expires=1700000000&signature=abc' });
+    const { result, rerender } = renderHook(({ debate, active }) => useDebatePlayback(debate, active), {
+      initialProps: { debate: debateFixture(), active: true },
+    });
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    let resolve!: (value: { url: string }) => void;
+    mocks.recordingUrl.mockReturnValue(
+      new Promise(done => {
+        resolve = done;
+      })
+    );
+    act(() => result.current.onPlaybackError());
+    rerender({ debate: debateFixture('different'), active: false });
+    await act(async () => resolve({ url: 'https://media.test/stale?expires=9999999999&signature=abc' }));
+    expect(result.current.urls.slot1).not.toContain('/stale');
+  });
+
+  it('surfaces a failed refresh and waits for the viewer to retry', async () => {
+    mocks.recordingUrl.mockResolvedValue({ url: 'https://media.test/video?expires=1700000000&signature=abc' });
+    const { result } = renderHook(() => useDebatePlayback(debateFixture(), true));
+    await waitFor(() => expect(result.current.urls.slot1).not.toBeNull());
+    mocks.recordingUrl.mockRejectedValue(new Error('Debate is hidden'));
+    act(() => result.current.onPlaybackError());
+    await waitFor(() => expect(result.current.error).toBe('Debate is hidden'));
+    expect(result.current.userPaused).toBe(true);
+    expect(mocks.recordingUrl).toHaveBeenCalledTimes(4);
+  });
+
   it('does refetch when the debate actually changes', async () => {
     const { result, rerender } = renderHook(({ debate }) => useDebatePlayback(debate, true), {
       initialProps: { debate: debateFixture('debate-1') },
