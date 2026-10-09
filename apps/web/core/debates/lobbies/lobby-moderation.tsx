@@ -22,8 +22,15 @@ import {
   raisedHands,
   sinceLabel,
 } from './lobby-format';
+import { guestCountLabel } from './lobby-guest';
 import { LobbyPersonName } from './lobby-people';
-import { useLobbyBans, useLobbyHand, useLobbyModerationLog, useModerateLobbyMember } from './moderation-hooks';
+import {
+  useLobbyBans,
+  useLobbyHand,
+  useLobbyModerationLog,
+  useModerateLobbyMember,
+  useRemoveLobbyGuests,
+} from './moderation-hooks';
 
 const MODERATION_NOTICE_MS = 10_000;
 
@@ -126,6 +133,7 @@ export function LobbyHostLists({ lobby }: { lobby: DebateLobbyView }) {
 
   return (
     <section className="flex flex-col gap-2" aria-label="Host lists" data-testid="lobby-host-lists">
+      {!ended && lobby.viewer.hosting ? <LobbyRemoveGuests lobby={lobby} /> : null}
       <div role="group" aria-label="Show" className="flex gap-4">
         {tabs.map(item => (
           <button
@@ -153,6 +161,66 @@ export function LobbyHostLists({ lobby }: { lobby: DebateLobbyView }) {
         )}
       </div>
     </section>
+  );
+}
+
+export const REMOVE_GUESTS_COPY = {
+  action: 'Remove guests',
+  confirm: (count: number) =>
+    `Remove ${count === 1 ? 'the guest' : `all ${count} guests`} without an account? They stop hearing the room and can come back by signing in.`,
+  done: 'Guests removed.',
+} as const;
+
+/** Removes every guest at once: guests are anonymous, so there is nobody to pick. */
+function LobbyRemoveGuests({ lobby }: { lobby: DebateLobbyView }) {
+  const remove = useRemoveLobbyGuests(lobby.lobby_id);
+  const [confirming, setConfirming] = React.useState(false);
+  const count = lobby.guest_count ?? 0;
+  if (count === 0 && !remove.isSuccess) return null;
+
+  return (
+    <div
+      className="flex flex-col gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2"
+      data-testid="lobby-remove-guests"
+    >
+      {confirming ? (
+        <>
+          <Text as="p" variant="metadata">
+            {REMOVE_GUESTS_COPY.confirm(count)}
+          </Text>
+          <div className="flex flex-wrap gap-2">
+            <HubPillButton
+              variant="primary"
+              analyticsLabel="Lobby remove guests confirm"
+              pending={remove.isPending}
+              pendingLabel="Removing…"
+              onClick={() => remove.mutate(undefined, { onSuccess: () => setConfirming(false) })}
+            >
+              {REMOVE_GUESTS_COPY.action}
+            </HubPillButton>
+            <HubPillButton analyticsLabel="Lobby remove guests cancel" onClick={() => setConfirming(false)}>
+              Cancel
+            </HubPillButton>
+          </div>
+        </>
+      ) : (
+        <div className="flex items-center gap-2">
+          <Text as="p" variant="footnote" color="grey-04" className="min-w-0 flex-1">
+            {count > 0 ? `${count} ${guestCountLabel(count, false)}` : REMOVE_GUESTS_COPY.done}
+          </Text>
+          {count > 0 ? (
+            <HubPillButton analyticsLabel="Lobby remove guests" onClick={() => setConfirming(true)}>
+              {REMOVE_GUESTS_COPY.action}
+            </HubPillButton>
+          ) : null}
+        </div>
+      )}
+      {remove.isError ? (
+        <Text as="p" variant="footnote" color="red-01">
+          {moderationErrorMessage(remove.error)}
+        </Text>
+      ) : null}
+    </div>
   );
 }
 
