@@ -298,6 +298,90 @@ describe('DebateMediaSessionProvider acquisition that outlives its card', () => 
   });
 });
 
+describe('DebateMediaSessionProvider topping up a handed-over session', () => {
+  async function withMicAlreadyOpen() {
+    const micStop = vi.fn();
+    mocks.createLocalTracks.mockResolvedValueOnce([{ mediaStreamTrack: { kind: 'audio' }, stop: micStop }]);
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure mic only' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    mocks.createLocalTracks.mockClear();
+    return { micStop };
+  }
+
+  it('opens only the kind that is missing', async () => {
+    const { micStop } = await withMicAlreadyOpen();
+    mocks.createLocalTracks.mockResolvedValueOnce([{ mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure preview' }));
+
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+    expect(mocks.createLocalTracks).toHaveBeenCalledWith(expect.objectContaining({ audio: false }));
+    expect(mocks.createLocalTracks.mock.calls[0]?.[0]?.video).not.toBe(false);
+    expect(micStop).not.toHaveBeenCalled();
+  });
+
+  it('does not re-announce a preview it is adding to', async () => {
+    await withMicAlreadyOpen();
+    let deliver: (tracks: unknown[]) => void = () => undefined;
+    mocks.createLocalTracks.mockReturnValueOnce(
+      new Promise(resolve => {
+        deliver = resolve as (tracks: unknown[]) => void;
+      })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure preview' }));
+
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+    expect(screen.getByTestId('preview-state')).toHaveTextContent('ready');
+
+    await act(async () => {
+      deliver([{ mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
+      await Promise.resolve();
+    });
+    expect(screen.getByTestId('preview-state')).toHaveTextContent('ready');
+  });
+
+  it('keeps the microphone when the camera it was adding fails', async () => {
+    const { micStop } = await withMicAlreadyOpen();
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure preview' }));
+
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+    expect(micStop).not.toHaveBeenCalled();
+  });
+
+  it('closes a kind that is no longer wanted', async () => {
+    const cameraStop = vi.fn();
+    mocks.createLocalTracks.mockResolvedValueOnce([
+      { mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() },
+      { mediaStreamTrack: { kind: 'video' }, stop: cameraStop },
+    ]);
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure preview' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    mocks.createLocalTracks.mockClear();
+    mocks.createLocalTracks.mockResolvedValueOnce([{ mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() }]);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure mic only' }));
+
+    await waitFor(() => expect(cameraStop).toHaveBeenCalled());
+  });
+});
+
 function MediaSessionHarness() {
   const media = useDebateMediaSession();
 

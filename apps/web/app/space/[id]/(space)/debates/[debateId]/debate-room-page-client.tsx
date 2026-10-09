@@ -102,7 +102,7 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
-import { inheritedJoinState } from '~/core/debates/request-join-state';
+import { inheritedJoinState, kindsForJoinState } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import {
   usePublishOptOutOffer,
@@ -1952,17 +1952,33 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     };
   }, [connectionConflictSource, roomState]);
 
+  const ensureKindsForJoinState = React.useCallback(
+    (next: { audioMuted: boolean; videoEnabled: boolean }) => {
+      const request = kindsForJoinState(
+        next,
+        mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind)
+      );
+      if (!request) return;
+      void ensureLocalPreview(request).catch(() => undefined);
+    },
+    [ensureLocalPreview, mediaSession.localTracksRef]
+  );
+
   const toggleAudioMuted = React.useCallback(() => {
-    setAudioMuted(current => !current);
-  }, []);
+    const next = !audioMuted;
+    setAudioMuted(next);
+    ensureKindsForJoinState({ audioMuted: next, videoEnabled });
+  }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
 
   const toggleRemoteAudioEnabled = React.useCallback(() => {
     setRemoteAudioEnabled(current => !current);
   }, []);
 
   const toggleVideoEnabled = React.useCallback(() => {
-    setVideoEnabled(current => !current);
-  }, []);
+    const next = !videoEnabled;
+    setVideoEnabled(next);
+    ensureKindsForJoinState({ audioMuted, videoEnabled: next });
+  }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
 
   const endLocalTurn = React.useCallback(async () => {
     if (

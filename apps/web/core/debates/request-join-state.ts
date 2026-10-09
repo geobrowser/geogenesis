@@ -90,3 +90,21 @@ export function inheritedJoinState(
     return handedOver ? { audioMuted: true, videoEnabled: false } : { audioMuted: false, videoEnabled: true };
   return { audioMuted: !kinds.includes('audio'), videoEnabled: kinds.includes('video') };
 }
+
+/**
+ * What `ensurePreview` should be asked to open for a new join state, or `null` when the session
+ * already holds everything that state needs.
+ */
+export function kindsForJoinState(
+  next: { audioMuted: boolean; videoEnabled: boolean },
+  liveKinds: readonly string[]
+): { audio: boolean; video: boolean } | null {
+  const kinds = new Set(liveKinds);
+  const needsAudio = !next.audioMuted && !kinds.has('audio');
+  const needsVideo = next.videoEnabled && !kinds.has('video');
+  if (!needsAudio && !needsVideo) return null;
+  return {
+    audio: !next.audioMuted || kinds.has('audio'),
+    video: next.videoEnabled || kinds.has('video'),
+  };
+}
