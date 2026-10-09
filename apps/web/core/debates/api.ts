@@ -2336,7 +2336,20 @@ export type DebateLobbyMember = {
   in_debate_subject?: DebateLobbyDebateSubject | null;
   /** A listener's raised hand (GEO-3134). Absent from a geo-chat that predates moderation. */
   hand_raised_at?: string | null;
+  /** No completed debate yet (GEO-3126); absent from a geo-chat that predates it. */
+  newcomer?: boolean;
+  /** Their "available to debate" toggle, as the People tab reads it (GEO-3131). Absent from older geo-chat. */
+  available_to_debate?: boolean;
 };
+
+/** Someone in a debate pair; the partner may be off this lobby's roster. */
+export type DebateLobbyPairPerson = DebateLobbyPerson & { in_lobby: boolean };
+
+/**
+ * One debate a member is in (GEO-3131): two people, or one when the partner is hidden. No debate id
+ * and no claim; the claim is the members' `in_debate_subject`.
+ */
+export type DebateLobbyPair = { people: DebateLobbyPairPerson[] };
 
 export type DebateLobbyDebateSubject =
   { phase: 'choosing_claim' } | { phase: 'on_claim'; claim_entity_id: string; claim_name: string; space_id: string };
@@ -2361,6 +2374,8 @@ export type DebateLobbyView = {
   reminder_count: number;
   /** The roster, stepped-out members included, longest there first. Empty for a banned viewer. */
   members: DebateLobbyMember[];
+  /** One per debate a member is in, in roster order (GEO-3131). Absent from older geo-chat. */
+  debate_pairs?: DebateLobbyPair[];
   viewer: {
     /** `null` before the viewer's first join. */
     role: DebateLobbyRole | null;

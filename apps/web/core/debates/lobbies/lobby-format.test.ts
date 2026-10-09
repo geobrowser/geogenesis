@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { type DebateLobbyMember, type DebateLobbyRole, GeoChatRequestError } from '../api';
 import {
+  debatingCount,
+  debatingLabel,
   hostAfterChange,
   hostsLabel,
   inDebateLabel,
@@ -10,11 +12,14 @@ import {
   lobbyScheduleLabel,
   lobbyTimeLabel,
   memberActions,
+  memberStatus,
   moderationErrorMessage,
   moderationLogLabel,
   moderationNoticeText,
   notYetOpenLabel,
   otherLobbyIdFrom,
+  pairLabel,
+  pairSubject,
   personName,
   raisedHands,
   rosterOrder,
@@ -306,5 +311,56 @@ describe('inDebateLabel', () => {
     expect(inDebateLabel({ phase: 'on_claim', claim_entity_id: 'c1', claim_name: '', space_id: 's1' })).toBe(
       'In a debate'
     );
+  });
+});
+
+describe('memberStatus', () => {
+  it('reads In a debate first, then the availability toggle', () => {
+    expect(memberStatus({ in_debate: true, available_to_debate: false })).toBe('in_debate');
+    expect(memberStatus({ in_debate: false, available_to_debate: true })).toBe('looking');
+    expect(memberStatus({ in_debate: false, available_to_debate: false })).toBe('chatting');
+  });
+
+  it('lets the viewer’s own toggle stand in for the roster’s flag', () => {
+    expect(memberStatus({ in_debate: false, available_to_debate: true }, false)).toBe('chatting');
+    expect(memberStatus({ in_debate: false, available_to_debate: false }, undefined)).toBe('chatting');
+  });
+
+  it('says nothing for a geo-chat that predates the flag', () => {
+    expect(memberStatus({ in_debate: false })).toBeNull();
+  });
+});
+
+describe('debating count', () => {
+  it('counts people in a debate, not pairs', () => {
+    expect(debatingCount([{ in_debate: true }, { in_debate: true }, { in_debate: false }])).toBe(2);
+    expect(debatingLabel(2)).toBe('2 debating');
+  });
+});
+
+describe('pairs', () => {
+  const person = (id: string, inLobby = true) => ({
+    user_id: id,
+    profile_space_id: `space-${id}`,
+    display_name: id.toUpperCase(),
+    avatar_cid: null,
+    in_lobby: inLobby,
+  });
+
+  it('reads "A vs. B", or the one name when the partner is hidden', () => {
+    expect(pairLabel({ people: [person('a'), person('b', false)] })).toBe('A vs. B');
+    expect(pairLabel({ people: [person('a')] })).toBe('A');
+  });
+
+  it('takes the claim from a lobby member’s roster row, matching ids across spellings', () => {
+    const subject = { phase: 'on_claim' as const, claim_entity_id: 'c', claim_name: 'Cats', space_id: 's' };
+    const debater = {
+      ...member('0193aaaa-bbbb', 'speaker'),
+      in_debate: true,
+      in_debate_subject: subject,
+    };
+    const pair = { people: [person('outsider', false), person('0193aaaabbbb')] };
+    expect(pairSubject(pair, [debater])).toBe(subject);
+    expect(pairSubject({ people: [person('outsider', false)] }, [debater])).toBeNull();
   });
 });
