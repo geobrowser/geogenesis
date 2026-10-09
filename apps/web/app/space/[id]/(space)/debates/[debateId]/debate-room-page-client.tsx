@@ -102,7 +102,7 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
-import { inheritedJoinState, kindsForJoinState } from '~/core/debates/request-join-state';
+import { inheritedJoinState, joinStateNeedsOpening, kindsForJoinState } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import {
   usePublishOptOutOffer,
@@ -1954,12 +1954,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const ensureKindsForJoinState = React.useCallback(
     (next: { audioMuted: boolean; videoEnabled: boolean }) => {
-      const request = kindsForJoinState(
-        next,
-        mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind)
-      );
-      if (!request) return;
-      void ensureLocalPreview(request).catch(() => undefined);
+      const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
+      if (!joinStateNeedsOpening(next, liveKinds)) return;
+      void ensureLocalPreview(kindsForJoinState(next, liveKinds)).catch(() => undefined);
     },
     [ensureLocalPreview, mediaSession.localTracksRef]
   );
@@ -2468,8 +2465,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // Warm the route's largest client-only dependency before the ten/finite-second connecting
     // window starts. The import is cached by the module loader; media preview remains independent.
     void import('livekit-client').catch(() => undefined);
-    void ensureLocalPreview().catch(() => undefined);
-  }, [debate, ensureLocalPreview, roomState]);
+
+    void ensureLocalPreview(
+      kindsForJoinState(
+        inherited,
+        mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind)
+      )
+    ).catch(() => undefined);
+  }, [debate, ensureLocalPreview, inherited, mediaSession.localTracksRef, roomState]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;

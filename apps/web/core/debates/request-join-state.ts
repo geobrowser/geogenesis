@@ -92,19 +92,32 @@ export function inheritedJoinState(
 }
 
 /**
- * What `ensurePreview` should be asked to open for a new join state, or `null` when the session
- * already holds everything that state needs.
+ * What `ensurePreview` should be asked for to hold a given join state.
+ *
+ * Never less than what is already open: a kind that is live is always named, so the request cannot
+ * close it. The ready room mutes rather than closes — unmuting has to be instant, and closing the
+ * device would put the browser's permission prompt in the middle of a call.
+ *
+ * Never more than the state wants, either, which is what keeps a card's choice intact on arrival.
+ * Asking for both kinds unconditionally there opened a camera the person had chosen to leave off,
+ * prompted them for it, and — if they said no — left the preview in an error state where the ready
+ * room hides its own toggles, so there was no way back.
  */
 export function kindsForJoinState(
   next: { audioMuted: boolean; videoEnabled: boolean },
   liveKinds: readonly string[]
-): { audio: boolean; video: boolean } | null {
+): { audio: boolean; video: boolean } {
   const kinds = new Set(liveKinds);
-  const needsAudio = !next.audioMuted && !kinds.has('audio');
-  const needsVideo = next.videoEnabled && !kinds.has('video');
-  if (!needsAudio && !needsVideo) return null;
   return {
     audio: !next.audioMuted || kinds.has('audio'),
     video: next.videoEnabled || kinds.has('video'),
   };
+}
+
+export function joinStateNeedsOpening(
+  next: { audioMuted: boolean; videoEnabled: boolean },
+  liveKinds: readonly string[]
+): boolean {
+  const kinds = new Set(liveKinds);
+  return (!next.audioMuted && !kinds.has('audio')) || (next.videoEnabled && !kinds.has('video'));
 }

@@ -7,6 +7,7 @@ import {
   formatTotalSpeakingTime,
   inheritedJoinState,
   isMediaBlocked,
+  joinStateNeedsOpening,
   kindsForJoinState,
   mayAutoStartPreview,
 } from './request-join-state';
@@ -150,34 +151,41 @@ describe('inheritedJoinState', () => {
 });
 
 describe('kindsForJoinState', () => {
-  it('opens the camera when the card handed over the microphone only', () => {
-    expect(kindsForJoinState({ audioMuted: false, videoEnabled: true }, ['audio'])).toEqual({
+  it('does not ask for a camera the card left off', () => {
+    expect(kindsForJoinState({ audioMuted: false, videoEnabled: false }, ['audio'])).toEqual({
+      audio: true,
+      video: false,
+    });
+  });
+
+  it('asks for both on a cold arrival, where the room defaults apply', () => {
+    expect(kindsForJoinState({ audioMuted: false, videoEnabled: true }, [])).toEqual({ audio: true, video: true });
+  });
+
+  it('never asks for less than what is already open', () => {
+    expect(kindsForJoinState({ audioMuted: true, videoEnabled: false }, ['audio', 'video'])).toEqual({
       audio: true,
       video: true,
     });
   });
+});
 
-  it('opens the microphone when the card handed over the camera only', () => {
-    expect(kindsForJoinState({ audioMuted: false, videoEnabled: true }, ['video'])).toEqual({
-      audio: true,
-      video: true,
-    });
+describe('joinStateNeedsOpening', () => {
+  it('needs the camera when the card handed over the microphone only', () => {
+    expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: true }, ['audio'])).toBe(true);
   });
 
-  it('asks for nothing when both kinds are already open', () => {
-    expect(kindsForJoinState({ audioMuted: false, videoEnabled: true }, ['audio', 'video'])).toBeNull();
-    expect(kindsForJoinState({ audioMuted: true, videoEnabled: false }, ['audio', 'video'])).toBeNull();
+  it('needs the microphone when the card handed over the camera only', () => {
+    expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: true }, ['video'])).toBe(true);
   });
 
-  it('does not close a device that is merely switched off', () => {
-    expect(kindsForJoinState({ audioMuted: true, videoEnabled: true }, ['audio', 'video'])).toBeNull();
-    expect(kindsForJoinState({ audioMuted: true, videoEnabled: true }, ['audio'])).toEqual({
-      audio: true,
-      video: true,
-    });
+  it('needs nothing when both kinds are already open', () => {
+    expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: true }, ['audio', 'video'])).toBe(false);
   });
 
-  it('asks for nothing when a device is turned off and was never open', () => {
-    expect(kindsForJoinState({ audioMuted: true, videoEnabled: false }, [])).toBeNull();
+  it('needs nothing when a device is being turned off, or was never wanted', () => {
+    expect(joinStateNeedsOpening({ audioMuted: true, videoEnabled: true }, ['audio', 'video'])).toBe(false);
+    expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: false }, ['audio'])).toBe(false);
+    expect(joinStateNeedsOpening({ audioMuted: true, videoEnabled: false }, [])).toBe(false);
   });
 });

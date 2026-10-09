@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
+import * as React from 'react';
 import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -8,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate, DebateRematchSession } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
+import { DebateMediaSessionProvider, debateMediaSessionKey, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   at as openRoundsAt,
   deciding as openRoundsDeciding,
@@ -1618,6 +1620,38 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
     expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
     expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
+  });
+
+  /*
+   * Arriving from a card that chose mic-only. The room requires both kinds to be ready, but it must
+   * not go and get the camera on arrival.
+   */
+  it('does not reach for the camera when a card handed over the microphone only', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack()]);
+
+    // The card's session, opened and settled before the room mounts.
+    const view = render(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('1'));
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+    mocks.createLocalTracks.mockClear();
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    // The gate holds, and nothing went looking for a camera to satisfy it.
+    expect(await screen.findByText('Enable video to start')).toBeInTheDocument();
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+    // Nor was the preview re-announced over a session that already had one.
+    expect(screen.queryByText('Requesting camera and mic…')).toBeNull();
   });
 
   // The intro's answer to GEO-2819's objection to having these toggles at all: the state is
@@ -5542,6 +5576,24 @@ function completedDebateOutsideThankYou(): Debate {
     turn_ends_at: '2026-07-02T00:00:20.000Z',
     completed_at: '2026-07-02T00:00:20.000Z',
   };
+}
+
+/**
+ * A card that handed over one device. It claims the debate's own session and opens the microphone
+ * only, which is what accepting a request with the camera off leaves behind.
+ */
+function MicOnlyHandover() {
+  const media = useDebateMediaSession();
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    media.beginSession(debateMediaSessionKey('debate-1'));
+    void media.ensurePreview({ audio: true, video: false }).catch(() => undefined);
+  }, [media]);
+
+  return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;
 }
 
 function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteReady: boolean }): Debate {
