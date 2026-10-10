@@ -18,10 +18,14 @@ import { ExplorePage } from '~/partials/explore/explore-page';
 const BEST_FEED_PRELOAD_HREF = '/api/explore/feed?sort=best';
 
 export default async function ExploreRoutePage() {
-  if (process.env.NEXT_PUBLIC_FOR_YOU_ENABLED !== 'true') {
+  const wallet = (await cookies()).get(WALLET_ADDRESS)?.value;
+  // A signed-in reader's Best request carries an identity token while interleaving is on, and a
+  // preload can't send one, so the feed's fetch would ignore it and the request would run twice.
+  const bestSendsIdentityToken =
+    wallet !== undefined && process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
+  if (process.env.NEXT_PUBLIC_FOR_YOU_ENABLED !== 'true' && !bestSendsIdentityToken) {
     preload(BEST_FEED_PRELOAD_HREF, { as: 'fetch', crossOrigin: 'use-credentials' });
   }
-  const wallet = (await cookies()).get(WALLET_ADDRESS)?.value;
 
   let memberSpaceId: string | null = null;
   try {
