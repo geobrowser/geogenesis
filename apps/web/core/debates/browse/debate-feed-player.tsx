@@ -550,16 +550,27 @@ export function DebateFeedPlayer({
     const history = ticker.historyBySlot.get(slot) ?? [];
     if (!stackShownFor(slot)) return null;
 
-    const pinned = pinnedSlot === slot;
     const clearSlot = (current: number | null) => (current === slot ? null : current);
+    // Held by something the chip can let go of — its own press, or focus — rather than by a mouse
+    // over the tile. The chip says "Hide" exactly when this is true, so a corner open for any
+    // reason but the pointer always offers the way out. It said "Hide" for its own press only, so a
+    // corner opened by focus sat open on a phone with the chip still offering to open it.
+    const held = pinnedSlot === slot || focusedSlot === slot;
 
     return (
       <DebateClaimTickerStack
         cards={cards}
         history={history}
         open={claimsOpenFor(slot)}
-        pinned={pinned}
-        onTogglePinned={() => setPinnedSlot(current => (current === slot ? null : slot))}
+        pinned={held}
+        onTogglePinned={() => {
+          if (held) {
+            setPinnedSlot(clearSlot);
+            setFocusedSlot(clearSlot);
+            return;
+          }
+          setPinnedSlot(slot);
+        }}
         onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
         participantByClaimId={ticker.participantByClaimId}
         rowsByClaimId={ticker.rowsByClaimId}

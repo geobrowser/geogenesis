@@ -789,6 +789,25 @@ describe('DebateClaimTickerStack', () => {
     expect(onFocusChange).not.toHaveBeenCalledWith(false);
   });
 
+  /**
+   * Focus that no key put there is not a keyboard arriving, whatever `:focus-visible` says.
+   *
+   * WebKit matches `:focus-visible` for focus a click did not cause — focus put back by a closing
+   * dialog, or restored when the viewer comes back to the tab — and on iOS a tap is never that
+   * click. A phone mid-debate opened the backlog with nothing touched, and the chip, which only knew
+   * about its own press, still offered to open it.
+   */
+  it('does not report focus that arrives after a pointer rather than a key', () => {
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange });
+
+    fireEvent.pointerDown(document.body);
+    // Focus restored programmatically, as WebKit does — jsdom's `:focus-visible` matches it either way.
+    act(() => screen.getByLabelText('Agree').focus());
+
+    expect(onFocusChange).not.toHaveBeenCalledWith(true);
+  });
+
   // Same for the thumbs, which is the other thing a pointer comes to a live card to do.
   it('does not report focus when a thumb is clicked', async () => {
     const onFocusChange = vi.fn();

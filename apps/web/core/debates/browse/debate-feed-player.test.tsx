@@ -18,6 +18,8 @@ const mocks = vi.hoisted(() => ({
   bylines: new Map<string, string>(),
   /** The `open` prop each render handed the stack, so a test can read the latest. */
   stackOpens: [] as boolean[],
+  /** The `pinned` prop each render handed the stack — whether its chip offers to Hide it. */
+  stackPinned: [] as boolean[],
   /** Each call's `enabled`, so a test can see when the end card's numbers are asked for. */
   endCardEnabled: [] as boolean[],
   /** Each call's `shown`, so a test can see when the card's numbers are refreshed. */
@@ -90,12 +92,28 @@ vi.mock('./debate-claim-ticker', () => ({
   // Stands in for the stack so the *player's* half is what is under test: whether it opens the
   // corner, and whether it lets go when the stack is gone. Clicking it reports focus arriving,
   // which is all the player ever learns from the real one.
-  DebateClaimTickerStack: ({ open, onFocusChange }: { open?: boolean; onFocusChange?: (f: boolean) => void }) => {
+  DebateClaimTickerStack: ({
+    open,
+    pinned,
+    onFocusChange,
+    onTogglePinned,
+  }: {
+    open?: boolean;
+    pinned?: boolean;
+    onFocusChange?: (f: boolean) => void;
+    onTogglePinned?: () => void;
+  }) => {
     mocks.stackOpens.push(open === true);
+    mocks.stackPinned.push(pinned === true);
     return (
-      <button type="button" data-testid="claim-stack" onClick={() => onFocusChange?.(true)}>
-        stack
-      </button>
+      <>
+        <button type="button" data-testid="claim-stack" onClick={() => onFocusChange?.(true)}>
+          stack
+        </button>
+        <button type="button" data-testid="claim-chip" onClick={onTogglePinned}>
+          chip
+        </button>
+      </>
     );
   },
   ClaimScrubberMarkers: () => null,
@@ -223,6 +241,7 @@ beforeEach(() => {
   mocks.ticker = emptyTicker();
   mocks.bylines = new Map();
   mocks.stackOpens = [];
+  mocks.stackPinned = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
@@ -762,6 +781,25 @@ describe('a backlog latch outliving its stack', () => {
     mocks.ticker = withCardsForSlot1();
     rerender(renderAt(false));
     expect(lastOpen()).toBe(false);
+  });
+
+  /**
+   * A corner held open by focus is one the chip has to be able to close. The chip said "Hide" for
+   * its own press only, so on a phone a focus-opened backlog sat over the video with the chip still
+   * offering to open it — and pressing it pinned the corner rather than closing it.
+   */
+  it('lets the chip close a corner that focus opened', () => {
+    mocks.ticker = withCardsForSlot1();
+    const { container } = render(renderAt(false));
+    const lastPinned = () => mocks.stackPinned[mocks.stackPinned.length - 1];
+
+    fireEvent.click(stackIn(container) as HTMLElement);
+    expect(lastOpen()).toBe(true);
+    expect(lastPinned()).toBe(true);
+
+    fireEvent.click(container.querySelector('[data-testid="claim-chip"]') as HTMLElement);
+    expect(lastOpen()).toBe(false);
+    expect(lastPinned()).toBe(false);
   });
 });
 
