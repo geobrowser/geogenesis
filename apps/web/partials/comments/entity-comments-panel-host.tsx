@@ -38,10 +38,13 @@ export function EntityCommentsPanelHost() {
 
   // Dismiss on a click outside the panel. Capture phase so it still fires when a
   // card's own handler stops propagation. Exempt: the panel itself; comment
-  // buttons, which switch the panel to their entity instead of closing it; the
-  // entity side panel, which opens on top from a comment author's name; and
+  // buttons, which switch the panel to their entity instead of closing it; and
   // anything Radix portals out of the panel (the sort/filter menus) or any
   // dialog, which live outside the panel in the DOM but not to the reader.
+  //
+  // The entity side panel used to be exempt too, so that a comment author's name
+  // could open it on top of the thread. It no longer can: the app has one panel
+  // slot and `openEntitySidePanelAtom` closes this one on the way in.
   React.useEffect(() => {
     if (!commentsTarget) return;
 
@@ -50,7 +53,7 @@ export function EntityCommentsPanelHost() {
       if (!(target instanceof Element)) return;
       if (
         target.closest(
-          '[data-entity-comments-panel], [data-entity-comments-opener], [data-entity-side-panel], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"]'
+          '[data-entity-comments-panel], [data-entity-comments-opener], [data-radix-popper-content-wrapper], [data-radix-portal], [role="dialog"], [role="menu"], [role="listbox"]'
         )
       ) {
         return;
