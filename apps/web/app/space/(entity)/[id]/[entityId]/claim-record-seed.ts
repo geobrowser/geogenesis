@@ -3,6 +3,13 @@ import {
   claimExploreRowsQueryKey,
   fetchClaimExploreRowsPage,
 } from '~/core/claims/browse/claim-explore-rows';
+import {
+  claimRecordDirectDebatesKey,
+  claimRecordFilters,
+  fetchClaimRecordClaimsPage,
+  fetchClaimRecordDirectDebates,
+  firstClaimRecordClaimsPageParam,
+} from '~/core/claims/browse/claim-record-query';
 import { getClaimSources } from '~/core/claims/browse/claim-sources';
 import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { ID } from '~/core/id';
@@ -64,4 +71,36 @@ export async function claimTopicsSeed(entity: Entity, spaceId: string): Promise<
   ]);
 
   return [...rows, ...counts];
+}
+
+/**
+ * What the claim's Related claims tab fetches on the client, for the space in the URL (the tab's
+ * initial Spaces selection) and the default Best order: the direct debates, which the filters are
+ * built from, then the first page of the claims query. Two requests, in sequence.
+ *
+ * Keyed as `useClaimRecord` keys them. The claims query is seeded under both the key it has today
+ * and the one geogenesis#2800 gives it (a trailing candidate count, null unless sorting by Top), so
+ * this works on either side of that change; once it lands the first can go.
+ */
+export async function claimRelatedClaimsSeed(entity: Entity, spaceId: string): Promise<QuerySeedEntry[]> {
+  const spaceIds = [spaceId];
+  const topicIds = entity.relations
+    .filter(relation => relation.isDeleted !== true && ID.equals(relation.type.id, TOPICS_PROPERTY_ID))
+    .map(relation => relation.toEntity.id);
+
+  const directDebates = await fetchClaimRecordDirectDebates({ claimId: entity.id, spaceIds });
+  const filters = claimRecordFilters({ claimId: entity.id, spaceIds, topicIds, filterTopicIds: [], directDebates });
+  const pageParam = firstClaimRecordClaimsPageParam(filters.hasTopics);
+  const page = await fetchClaimRecordClaimsPage({ filters, spaceIds, sort: 'best', pageParam });
+
+  const spaceKey = spaceIds.map(normId).sort().join(',');
+  const recordKey = `${normId(entity.id)}:${spaceKey}:${topicIds.map(normId).sort().join(',')}:`;
+  const claimsKey = ['claim-record', 'claims', recordKey, claimRecordDirectDebatesKey(directDebates), 'best'];
+  const claimsData = { pages: [page], pageParams: [pageParam] };
+
+  return [
+    { queryKey: ['claim-record', 'direct-debates', normId(entity.id), spaceKey], data: directDebates },
+    { queryKey: claimsKey, data: claimsData },
+    { queryKey: [...claimsKey, null], data: claimsData },
+  ];
 }
