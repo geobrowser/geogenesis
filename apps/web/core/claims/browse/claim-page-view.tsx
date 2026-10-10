@@ -35,7 +35,7 @@ import { Text } from '~/design-system/text';
 
 import { CommentSection } from '~/partials/comments/comments-section';
 import { ThreadRetry } from '~/partials/comments/thread-overflow';
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
 import {

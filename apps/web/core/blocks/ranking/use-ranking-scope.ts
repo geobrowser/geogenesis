@@ -9,7 +9,7 @@ import { produce } from 'immer';
 import type { Filter } from '~/core/blocks/data/filters';
 import { type Source, removeSourceType, sourceStableKey } from '~/core/blocks/data/source';
 import { useDataBlockInstance } from '~/core/blocks/data/use-data-block';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
 

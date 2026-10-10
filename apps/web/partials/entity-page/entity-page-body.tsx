@@ -21,7 +21,7 @@ import { useEntityMediaUrl, useImageUrlFromEntity } from '~/core/utils/use-entit
 import { Spacer } from '~/design-system/spacer';
 
 import { CommentSection } from '~/partials/comments/comments-section';
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { AutomaticModeToggle } from '~/partials/entity-page/automatic-mode-toggle';
 import {
   commentTargetEntityType,

@@ -6,44 +6,24 @@ import { JSONContent } from '@tiptap/react';
 import * as React from 'react';
 
 import { useAtom } from 'jotai';
-import { useSearchParams } from 'next/navigation';
 
-import { blockMediaFrame } from '~/core/hooks/use-block-media-dimensions';
 import { storage } from '~/core/sync/use-mutate';
-import { getRelations, getValues, useRelations, useValues } from '~/core/sync/use-store';
-import { store } from '~/core/sync/use-sync-engine';
+import { getRelations, getValues } from '~/core/sync/use-store';
 import { Relation, RenderableEntityType, Value } from '~/core/types';
-import { getImagePath, getVideoPath, validateEntityId } from '~/core/utils/utils';
 
-import type { ServerBlock } from '~/partials/editor/server-content';
-
-import { dataBlockViewFromRelations } from '../../blocks/data/data-block-view';
 import { toGeoFilterState } from '../../blocks/data/filters';
 import { makeInitialDataEntityRelations } from '../../blocks/data/initialize';
-import { readBlockPageSizeFromValues } from '../../blocks/data/parse-block-page-size';
-import { readBlockMediaDimensions } from '../../blocks/data/read-block-media-dimensions';
 import { makeInitialRankingBlockRelations } from '../../blocks/ranking/initialize';
-import {
-  RANKING_DATE_PROPERTY_IDS,
-  RANKING_END_PROPERTY_IDS,
-  RANKING_START_PROPERTY_IDS,
-  resolveRankingDate,
-} from '../../blocks/ranking/ranking-block-dates';
-import { isRankingBlockEntity, isRankingSetupConfigured } from '../../blocks/ranking/ranking-block-state';
 import { ID } from '../../id';
 import { EntityId } from '../../io/substream-schema';
 import { getRelationForBlockType } from './block-types';
-import { useActiveTabIdForEditor, useEditorBlocks, useEditorInstance } from './editor-provider';
 import { getBlockPositionChanges } from './get-block-position-changes';
 import { makeBlockPosition } from './make-block-position';
 import { markdownToEditorJson } from './markdown-adapter';
-import {
-  PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL,
-  PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT,
-} from './profile-overview-tail-placeholder';
 import * as TextEntity from './text-entity';
 import { Content } from './types';
 import { RelationWithBlock } from './use-blocks';
+import { useEditorBlockModels } from './use-editor-blocks';
 import { getNodeId } from './utils';
 import { editorHasContentAtom } from '~/atoms';
 
@@ -218,331 +198,24 @@ function deleteBlockEntityData(blockId: string, spaceId: string, initialValues: 
   }
 }
 
-export const useTabId = () => {
-  const searchParams = useSearchParams();
-  const maybeTabId = searchParams?.get('tabId');
-
-  if (!validateEntityId(maybeTabId)) return null;
-
-  return maybeTabId;
-};
-
-export function useEditorStoreLite() {
-  return useEditorBlocks();
-}
-
 export function useEditorStore() {
-  const { id: entityId, spaceId, initialBlocks } = useEditorInstance();
   const [hasContent, setHasContent] = useAtom(editorHasContentAtom);
-
-  const tabId = useActiveTabIdForEditor();
-  const activeEntityId = tabId ?? entityId;
-
-  const { blockRelations, initialBlockEntities } = useEditorBlocks();
-
-  const blockIds = React.useMemo(() => {
-    return blockRelations.map(b => b.block.id);
-  }, [blockRelations]);
-
-  const initialBlockValues = React.useMemo(() => {
-    return initialBlockEntities.flatMap(b => b.values);
-  }, [initialBlockEntities]);
-
-  const initialBlockEntityRelations = React.useMemo(() => {
-    return initialBlockEntities.flatMap(b => b.relations);
-  }, [initialBlockEntities]);
-
-  // Shown-column property entities are only ever attached to the page's own blocks, never to a
-  // tab's, so a tab's data blocks have to look outside their own scope to size their media frame.
-  const mediaPropertySource = React.useMemo(
-    () => (initialBlockEntities === initialBlocks ? initialBlockEntities : [...initialBlockEntities, ...initialBlocks]),
-    [initialBlockEntities, initialBlocks]
-  );
-
-  const markdownValues = useValues({
-    selector: value => blockIds.includes(value.entity.id) && value.property.id === SystemIds.MARKDOWN_CONTENT,
-  });
-
-  const blockConfigValues = useValues({
-    selector: value =>
-      blockIds.includes(value.entity.id) &&
-      value.spaceId === spaceId &&
-      (value.property.id === SystemIds.NAME_PROPERTY ||
-        value.property.id === SystemIds.FILTER ||
-        RANKING_DATE_PROPERTY_IDS.has(value.property.id)),
-  });
-
-  const blockTypesRelations = useRelations({
-    selector: relation =>
-      blockIds.includes(relation.fromEntity.id) &&
-      relation.spaceId === spaceId &&
-      relation.type.id === SystemIds.TYPES_PROPERTY,
-  });
+  const {
+    spaceId,
+    activeEntityId,
+    blockRelations,
+    initialBlockEntities,
+    blockIds,
+    initialBlockValues,
+    initialBlockEntityRelations,
+    blockModels,
+  } = useEditorBlockModels();
 
   const { editorJson, serverBlocks } = React.useMemo(() => {
-    const sBlocks: ServerBlock[] = [];
-
-    const json = {
-      type: 'doc',
-      content: blockRelations.flatMap(block => {
-        const markdownValueForBlockId =
-          markdownValues.find(v => v.entity.id === block.block.id) ??
-          initialBlockValues.find(v => v.entity.id === block.block.id && v.property.id === SystemIds.MARKDOWN_CONTENT);
-        const relationForBlockId = blockRelations.find(r => r.block.id === block.block.id);
-
-        const toEntity = relationForBlockId?.block;
-
-        if (toEntity?.type === 'IMAGE') {
-          // Read image URL from Values using IMAGE_URL_PROPERTY (unified IPFS URL property)
-          const imageUrlValues = getValues({
-            mergeWith: initialBlockValues,
-            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.IMAGE_URL_PROPERTY,
-          });
-          const imageUrlValue = imageUrlValues?.[0]?.value || toEntity.value;
-
-          // Read image title from Values using NAME_PROPERTY
-          const titleValues = getValues({
-            mergeWith: initialBlockValues,
-            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY,
-          });
-          const titleValue = titleValues?.[0]?.value || '';
-
-          sBlocks.push({ type: 'image', src: getImagePath(imageUrlValue) });
-
-          return [
-            {
-              type: 'image',
-              attrs: {
-                id: block.block.id,
-                src: getImagePath(imageUrlValue),
-                title: titleValue,
-                relationId: block.relationId,
-                spaceId,
-              },
-            },
-          ];
-        }
-
-        if (toEntity?.type === 'VIDEO') {
-          // Read video URL from Values using IMAGE_URL_PROPERTY (unified IPFS URL property)
-          const videoUrlValues = getValues({
-            mergeWith: initialBlockValues,
-            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.IMAGE_URL_PROPERTY,
-          });
-          const videoUrlValue = videoUrlValues?.[0]?.value || toEntity.value;
-
-          // Read video title from Values using NAME_PROPERTY
-          const titleValues = getValues({
-            mergeWith: initialBlockValues,
-            selector: value => value.entity.id === block.block.id && value.property.id === SystemIds.NAME_PROPERTY,
-          });
-          const titleValue = titleValues?.[0]?.value || '';
-
-          sBlocks.push({ type: 'video', src: getVideoPath(videoUrlValue) });
-
-          return [
-            {
-              type: 'video',
-              attrs: {
-                id: block.block.id,
-                src: getVideoPath(videoUrlValue),
-                title: titleValue,
-                relationId: block.relationId,
-                spaceId,
-              },
-            },
-          ];
-        }
-
-        const blockTypeRelations = getRelations({
-          mergeWith: initialBlockEntityRelations,
-          selector: r =>
-            r.fromEntity.id === block.block.id &&
-            r.type.id === SystemIds.TYPES_PROPERTY &&
-            r.spaceId === spaceId &&
-            !r.isDeleted,
-        });
-
-        if (isRankingBlockEntity(block.block.id, blockTypeRelations, spaceId)) {
-          sBlocks.push({ type: 'data' });
-
-          const configuredFilters = getValues({
-            mergeWith: initialBlockValues,
-            selector: v =>
-              v.entity.id === block.block.id &&
-              v.property.id === SystemIds.FILTER &&
-              v.spaceId === spaceId &&
-              v.value.length > 0 &&
-              !v.isDeleted,
-          });
-          const rankingBlockEntity = initialBlockEntities.find(b => b.id === block.block.id);
-          const blockName = store.getEntity(block.block.id, { spaceId })?.name ?? rankingBlockEntity?.name;
-          const rankingSetupConfigured = isRankingSetupConfigured(
-            block.block.id,
-            blockName,
-            configuredFilters,
-            spaceId
-          );
-          const readRankingDate = (propertyId: string) =>
-            getValues({
-              mergeWith: initialBlockValues,
-              selector: v =>
-                v.entity.id === block.block.id && v.property.id === propertyId && v.spaceId === spaceId && !v.isDeleted,
-            })[0]?.value ?? null;
-          const rankingStartDate = resolveRankingDate(RANKING_START_PROPERTY_IDS, readRankingDate) || null;
-          const rankingEndDate = resolveRankingDate(RANKING_END_PROPERTY_IDS, readRankingDate) || null;
-
-          return [
-            {
-              type: 'rankingNode',
-              attrs: {
-                id: block.block.id,
-                relationId: block.relationId,
-                spaceId,
-                rankingSetupCompleted: rankingSetupConfigured,
-                rankingStartDate,
-                rankingEndDate,
-              },
-            },
-          ];
-        }
-
-        if (toEntity?.type === 'DATA') {
-          // Shape the pre-hydration placeholder exactly like what's about to replace it: same
-          // view, same page size, same card ratio. All three come off the BLOCKS relation entity
-          // and the shown-column properties the server sends down with the page, so a gallery
-          // block never has to flash a table skeleton or a default-ratio one on its way to cards.
-          const blockRelationEntity = initialBlockEntities.find(b => b.id === block.entityId);
-          const viewRelations = getRelations({
-            mergeWith: initialBlockEntityRelations,
-            selector: r =>
-              r.fromEntity.id === block.entityId &&
-              r.type.id === SystemIds.VIEW_PROPERTY &&
-              r.spaceId === spaceId &&
-              !r.isDeleted,
-          });
-
-          sBlocks.push({
-            type: 'data',
-            view: dataBlockViewFromRelations(viewRelations),
-            pageSize: readBlockPageSizeFromValues(blockRelationEntity?.values, spaceId),
-            mediaFrame: blockMediaFrame(readBlockMediaDimensions(block.entityId, mediaPropertySource)),
-          });
-
-          const dataSourceType = getRelations({
-            mergeWith: initialBlockEntityRelations,
-            selector: r =>
-              r.fromEntity.id === block.block.id &&
-              r.type.id === SystemIds.DATA_SOURCE_TYPE_RELATION_TYPE &&
-              r.spaceId === spaceId &&
-              !r.isDeleted,
-          })[0]?.toEntity.id;
-          const isQuerySource =
-            dataSourceType === SystemIds.QUERY_DATA_SOURCE || dataSourceType === SystemIds.ALL_OF_GEO_DATA_SOURCE;
-          const configuredShownColumns = getRelations({
-            mergeWith: initialBlockEntityRelations,
-            selector: r =>
-              r.fromEntity.id === block.entityId &&
-              (r.type.id === SystemIds.PROPERTIES || r.type.id === SystemIds.SHOWN_COLUMNS) &&
-              r.spaceId === spaceId &&
-              !r.isDeleted,
-          });
-          const configuredFilters = getValues({
-            mergeWith: initialBlockValues,
-            selector: v =>
-              v.entity.id === block.block.id &&
-              v.property.id === SystemIds.FILTER &&
-              v.spaceId === spaceId &&
-              v.value.length > 0 &&
-              !v.isDeleted,
-          });
-
-          const initialDataSource = isQuerySource ? ('QUERY' as const) : ('COLLECTION' as const);
-
-          return [
-            {
-              type: 'tableNode',
-              attrs: {
-                id: block.block.id,
-                relationId: block.relationId,
-                spaceId,
-                initialDataSource,
-                querySetupCompleted: isQuerySource
-                  ? configuredShownColumns.length > 0 || configuredFilters.length > 0
-                  : null,
-              },
-            },
-          ];
-        }
-
-        let markdownStr = markdownValueForBlockId?.value || '';
-        const mdTrimmed = markdownStr.trim();
-        let restoreTailPlaceholder = false;
-        if (mdTrimmed === PROFILE_OVERVIEW_TAIL_PLACEHOLDER_TEXT) {
-          restoreTailPlaceholder = true;
-          markdownStr = '';
-        } else if (mdTrimmed === PROFILE_OVERVIEW_TAIL_BLOCK_SENTINEL) {
-          restoreTailPlaceholder = true;
-          markdownStr = '';
-        }
-        sBlocks.push({ type: 'text', markdown: markdownStr });
-
-        const parsed = markdownStr ? markdownToEditorJson(markdownStr) : { type: 'doc', content: [] };
-
-        // A single block's markdown can produce multiple Tiptap nodes (e.g. heading + paragraph + list).
-        // Return all of them so multi-element content renders fully.
-        if (!parsed.content || parsed.content.length === 0) {
-          return [
-            {
-              type: 'paragraph',
-              attrs: {
-                id: block.block.id,
-                relationId: block.relationId,
-                spaceId,
-                ...(restoreTailPlaceholder ? { tailPlaceholder: true } : {}),
-              },
-            },
-          ];
-        }
-
-        return parsed.content.map((nodeData: JSONContent, index: number) => ({
-          ...nodeData,
-          attrs: {
-            ...nodeData.attrs,
-            // First node keeps the block's real id. Continuation nodes get null so
-            // id-extension assigns fresh unique IDs on first blur, cleanly splitting
-            // multi-element markdown into separate blocks without a dedup storm.
-            id: index === 0 ? block.block.id : null,
-            relationId: block.relationId,
-            spaceId,
-          },
-        }));
-      }),
-    };
-
-    if (json.content.length === 0) {
-      json.content.push({
-        type: 'paragraph',
-      } as (typeof json.content)[number]);
-    }
-
-    return { editorJson: json, serverBlocks: sBlocks };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    blockRelations,
-    initialBlockEntityRelations,
-    spaceId,
-    initialBlockValues,
-    initialBlockEntities,
-    mediaPropertySource,
-    markdownValues,
-    // `blockConfigValues` and `blockTypesRelations` are not read in the body, and are not meant to
-    // be: they are store subscriptions, and the helpers this memo calls read that same store. They
-    // are here so the editor JSON is rebuilt when block config or types change. Dropping them as
-    // "unnecessary" would leave it stale.
-    blockConfigValues,
-    blockTypesRelations,
-  ]);
+    const content = blockModels.flatMap(model => model.build(markdownToEditorJson));
+    if (content.length === 0) content.push({ type: 'paragraph' });
+    return { editorJson: { type: 'doc', content }, serverBlocks: blockModels.map(model => model.server) };
+  }, [blockModels]);
 
   const upsertEditorState = React.useCallback(
     (json: JSONContent, options: UpsertEditorStateOptions = {}) => {
