@@ -39,6 +39,7 @@ const CLAIMS_SOURCE = /* GraphQL */ `
     $skipTopicClaims: Boolean!
     $skipExtractedClaims: Boolean!
     $fetchRelatedClaimsTop: Boolean!
+    $entityIds: [UUID!]
   ) {
     topicClaims: entitiesConnection(
       first: $first
@@ -86,6 +87,7 @@ const CLAIMS_SOURCE = /* GraphQL */ `
       first: $first
       after: $topicAfter
       filter: $relatedFilter
+      entityIds: $entityIds
       propertyId: $scorePropertyId
       dataType: "integer"
       sortDirection: DESC
@@ -334,13 +336,24 @@ export function claimRecordFilters({
     ...claimScope(spaceId),
     and: [{ relations: { some: extractedSourceRelation(spaceId) } }, ...selectedTopicConditions(spaceId)],
   });
-  const relatedClaim = (spaceId: string): EntityFilter => ({
-    ...narrowedClaimScope(spaceId),
-    or: [
-      ...(topicIds.length > 0 ? [{ relations: { some: topicRelation(spaceId) } }] : []),
-      { relations: { some: extractedSourceRelation(spaceId) } },
-    ],
-  });
+  // An empty `in: []` branch matches nothing but still sits in an `or`, and an `or` of two
+  // relation EXISTS tests defeats the `to_entity_id` index (the Topics facet on a 8k-claim topic:
+  // 9.5s with the dead branch, 1.2s without). Only live branches are emitted; a single one is
+  // inlined rather than wrapped in `or`. With no live branch the empty extracted branch stays so
+  // the filter still matches nothing.
+  const relatedBranches = (spaceId: string): EntityFilter[] => {
+    const branches: EntityFilter[] = [];
+    if (topicIds.length > 0) branches.push({ relations: { some: topicRelation(spaceId) } });
+    if ((directDebates[normId(spaceId)] ?? []).length > 0 || branches.length === 0) {
+      branches.push({ relations: { some: extractedSourceRelation(spaceId) } });
+    }
+    return branches;
+  };
+  const relatedClaim = (spaceId: string): EntityFilter => {
+    const branches = relatedBranches(spaceId);
+    const scope = narrowedClaimScope(spaceId);
+    return branches.length === 1 ? { ...scope, and: [...(scope.and ?? []), branches[0]] } : { ...scope, or: branches };
+  };
 
   const debateBranches: EntityFilter[] = scopes.map(spaceId => ({
     ...debateScope(spaceId),
@@ -352,20 +365,14 @@ export function claimRecordFilters({
       },
     },
   }));
-  const claimRelationBranches: RelationFilter[] = scopes.flatMap(spaceId => [
-    ...(topicIds.length > 0
-      ? [
-          {
-            ...topicRelation(spaceId),
-            fromEntity: narrowedClaimScope(spaceId),
-          },
-        ]
-      : []),
-    {
-      ...extractedSourceRelation(spaceId),
-      fromEntity: narrowedClaimScope(spaceId),
-    },
-  ]);
+  const claimRelationBranches: RelationFilter[] = scopes.flatMap(spaceId => {
+    const branches: RelationFilter[] = [];
+    if (topicIds.length > 0) branches.push(topicRelation(spaceId));
+    if ((directDebates[normId(spaceId)] ?? []).length > 0 || branches.length === 0) {
+      branches.push(extractedSourceRelation(spaceId));
+    }
+    return branches.map(branch => ({ ...branch, fromEntity: narrowedClaimScope(spaceId) }));
+  });
   // Topics facets group every Topics relation of the related claims, so nothing in the predicate
   // is indexed on the relation itself: unrestricted, it walks every Topics relation in the space
   // (475k in the largest, 9s). Candidate ids bound that walk; `relatedClaim` keeps it exact.
@@ -629,11 +636,19 @@ export async function fetchClaimRecordClaimsPage({
   spaceIds,
   sort,
   pageParam,
+  candidateClaimIds = null,
   signal,
 }: {
   filters: ClaimRecordFilters;
   spaceIds: string[];
   sort: ClaimRecordSort;
+  /**
+   * From `fetchClaimRecordCandidates`. Top sorts by a property over every entity of the type before
+   * `relatedFilter` runs (210k rows in the largest space, 2.3s); with the candidate ids as
+   * `entityIds` it sorts only those. Null, or empty (which the API reads as no restriction), leaves
+   * the sort unbounded; `relatedFilter` still applies either way, so the results are the same.
+   */
+  candidateClaimIds?: readonly string[] | null;
   pageParam: ClaimRecordClaimsPageParam;
   signal?: AbortSignal;
 }): Promise<ClaimRecordClaimsPage> {
@@ -658,6 +673,7 @@ export async function fetchClaimRecordClaimsPage({
         skipTopicClaims: pageParam.skipTopicClaims || isTop,
         skipExtractedClaims: pageParam.skipExtractedClaims || isTop,
         fetchRelatedClaimsTop: isTop,
+        entityIds: isTop && candidateClaimIds && candidateClaimIds.length > 0 ? [...candidateClaimIds] : null,
       },
       signal,
     })
