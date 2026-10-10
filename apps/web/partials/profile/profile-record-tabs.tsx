@@ -18,7 +18,7 @@ import type { Profile } from '~/core/types';
 import { Spacer } from '~/design-system/spacer';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { EntityBacklinks } from '~/partials/entity-page/entity-backlinks';
 
 import { PersonDebatesTab } from './person-debates-tab';

@@ -78,9 +78,8 @@ export async function claimTopicsSeed(entity: Entity, spaceId: string): Promise<
  * initial Spaces selection) and the default Best order: the direct debates, which the filters are
  * built from, then the first page of the claims query. Two requests, in sequence.
  *
- * Keyed as `useClaimRecord` keys them. The claims query is seeded under both the key it has today
- * and the one geogenesis#2800 gives it (a trailing candidate count, null unless sorting by Top), so
- * this works on either side of that change; once it lands the first can go.
+ * Keyed as `useClaimRecord` keys them; the claims key ends in the candidate count, null unless
+ * sorting by Top.
  */
 export async function claimRelatedClaimsSeed(entity: Entity, spaceId: string): Promise<QuerySeedEntry[]> {
   const spaceIds = [spaceId];
@@ -95,12 +94,11 @@ export async function claimRelatedClaimsSeed(entity: Entity, spaceId: string): P
 
   const spaceKey = spaceIds.map(normId).sort().join(',');
   const recordKey = `${normId(entity.id)}:${spaceKey}:${topicIds.map(normId).sort().join(',')}:`;
-  const claimsKey = ['claim-record', 'claims', recordKey, claimRecordDirectDebatesKey(directDebates), 'best'];
+  const claimsKey = ['claim-record', 'claims', recordKey, claimRecordDirectDebatesKey(directDebates), 'best', null];
   const claimsData = { pages: [page], pageParams: [pageParam] };
 
   return [
     { queryKey: ['claim-record', 'direct-debates', normId(entity.id), spaceKey], data: directDebates },
     { queryKey: claimsKey, data: claimsData },
-    { queryKey: [...claimsKey, null], data: claimsData },
   ];
 }

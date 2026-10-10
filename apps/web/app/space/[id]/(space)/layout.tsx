@@ -26,7 +26,7 @@ import { EditableSpaceHeading } from '~/partials/entity-page/editable-space-head
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';
 import { EntityPageInlineDescription } from '~/partials/entity-page/entity-page-inline-description';
 import { ENTITY_PAGE_WITH_SIDEBAR_MAX_WIDTH, PROFILE_COVER_SIZE } from '~/partials/entity-page/entity-page-layout';
-import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/personal-profile-bio-starter-merge';
+import { PersonalProfileBioStarterMerge } from '~/partials/entity-page/lazy-personal-profile-bio-starter-merge';
 import { PersonalProfileSuggestedCard } from '~/partials/entity-page/personal-profile-suggested-card';
 import { PersonalProfileSuggestedTaskSync } from '~/partials/entity-page/personal-profile-suggested-task-sync';
 import { TypeSchemaInline } from '~/partials/entity-page/type-schema-inline';

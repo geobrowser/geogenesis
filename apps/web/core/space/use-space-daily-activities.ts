@@ -33,7 +33,7 @@ import {
   msUntilNextLocalMidnight,
   readDailyUploadComplete,
 } from '~/core/space/daily-activities-storage';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { mergeRelations } from '~/core/sync/orm';
 import { useQueryEntity, useRelations, useValues } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';

@@ -7,7 +7,7 @@ import { spacePageEntityId } from '~/core/utils/space/space-page';
 import { EmptyErrorComponent } from '~/design-system/empty-error-component';
 import { Spacer } from '~/design-system/spacer';
 
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { BacklinksServerContainer } from '~/partials/entity-page/backlinks-server-container';
 import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-sidebar-layout';
 import { ToggleEntityPage } from '~/partials/entity-page/toggle-entity-page';

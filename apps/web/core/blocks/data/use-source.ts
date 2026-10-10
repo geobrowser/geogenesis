@@ -7,7 +7,7 @@ import * as React from 'react';
 import { produce } from 'immer';
 
 import { EntityId, SpaceId } from '~/core/io/substream-schema';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { useQueryEntity } from '~/core/sync/use-store';
 import type { Relation } from '~/core/types';
 

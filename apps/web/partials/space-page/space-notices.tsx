@@ -17,7 +17,7 @@ import { useAccessControl } from '~/core/hooks/use-access-control';
 import { useCreateEntityWithFilters } from '~/core/hooks/use-create-entity-with-filters';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useEditorInstance } from '~/core/state/editor/editor-provider';
-import { useTabId } from '~/core/state/editor/use-editor';
+import { useTabId } from '~/core/state/editor/use-editor-blocks';
 import { useName } from '~/core/state/entity-page-store/entity-store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { NavUtils } from '~/core/utils/utils';

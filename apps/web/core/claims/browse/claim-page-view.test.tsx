@@ -282,7 +282,7 @@ vi.mock('~/partials/profile/profile-activity-section', () => ({
     return <div data-testid="activity" />;
   },
 }));
-vi.mock('~/partials/editor/editor', () => ({ Editor: () => <div data-testid="editor" /> }));
+vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => <div data-testid="editor" /> }));
 vi.mock('~/partials/comments/comments-section', () => ({
   CommentSection: ({
     title,
