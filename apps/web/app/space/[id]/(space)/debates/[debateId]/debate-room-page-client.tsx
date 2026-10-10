@@ -118,6 +118,7 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
+import { inheritedJoinState, joinStateNeedsOpening, kindsForJoinState } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import {
   usePublishOptOutOffer,
@@ -425,10 +426,32 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const rematchLeaveRequestedRef = React.useRef(false);
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
-  const [audioMuted, setAudioMuted] = React.useState(false);
+
+  const inheritedTracks = mediaSession.localTracksRef.current;
+  /*
+   * Whether a card chose on this reader's behalf before the room opened. The session is already
+   * active under this room's key when one did — the ready prompt keys on the debate directly, and
+   * an accepted request is promoted onto it — and `beginSession` below is a no-op in that case.
+   *
+   * Read at first render, before that effect runs, because claiming the session is what erases the
+   * evidence.
+   */
+  const handedOverSession = mediaSession.activeSessionKey === mediaSessionKey;
+  const inherited = React.useMemo(
+    () =>
+      inheritedJoinState(
+        inheritedTracks.map(track => track.mediaStreamTrack.kind),
+        handedOverSession
+      ),
+    // First render only: claiming the session is what erases the evidence of a hand-off.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  const [audioMuted, setAudioMuted] = React.useState(inherited.audioMuted);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
-  const [videoEnabled, setVideoEnabled] = React.useState(true);
+  const [videoEnabled, setVideoEnabled] = React.useState(inherited.videoEnabled);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');
@@ -1969,17 +1992,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     };
   }, [connectionConflictSource, roomState]);
 
+  const ensureKindsForJoinState = React.useCallback(
+    (next: { audioMuted: boolean; videoEnabled: boolean }) => {
+      const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
+      if (!joinStateNeedsOpening(next, liveKinds)) return;
+      void ensureLocalPreview(kindsForJoinState(next, liveKinds)).catch(() => undefined);
+    },
+    [ensureLocalPreview, mediaSession.localTracksRef]
+  );
+
   const toggleAudioMuted = React.useCallback(() => {
-    setAudioMuted(current => !current);
-  }, []);
+    const next = !audioMuted;
+    setAudioMuted(next);
+    ensureKindsForJoinState({ audioMuted: next, videoEnabled });
+  }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
 
   const toggleRemoteAudioEnabled = React.useCallback(() => {
     setRemoteAudioEnabled(current => !current);
   }, []);
 
   const toggleVideoEnabled = React.useCallback(() => {
-    setVideoEnabled(current => !current);
-  }, []);
+    const next = !videoEnabled;
+    setVideoEnabled(next);
+    ensureKindsForJoinState({ audioMuted, videoEnabled: next });
+  }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
 
   const savePickAsync = saveOpenRoundPick.mutateAsync;
   const pickOpenRound = React.useCallback(
@@ -2492,8 +2528,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // Warm the route's largest client-only dependency before the ten/finite-second connecting
     // window starts. The import is cached by the module loader; media preview remains independent.
     void import('livekit-client').catch(() => undefined);
-    void ensureLocalPreview().catch(() => undefined);
-  }, [debate, ensureLocalPreview, roomState]);
+
+    void ensureLocalPreview(
+      kindsForJoinState(
+        inherited,
+        mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind)
+      )
+    ).catch(() => undefined);
+  }, [debate, ensureLocalPreview, inherited, mediaSession.localTracksRef, roomState]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;

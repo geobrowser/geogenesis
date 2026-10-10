@@ -11,6 +11,22 @@ const mocks = vi.hoisted(() => ({
   dismiss: vi.fn(),
   dismissIsError: false,
   block: vi.fn(),
+  promoteSession: vi.fn(),
+}));
+
+vi.mock('../media-session', async importOriginal => ({
+  ...(await importOriginal<typeof import('../media-session')>()),
+  useOptionalDebateMediaSession: () => ({
+    promoteSession: mocks.promoteSession,
+    beginSession: vi.fn(),
+    releaseSession: vi.fn(),
+    stopMedia: vi.fn(),
+    ensurePreview: vi.fn(async () => []),
+    previewStream: null,
+    previewState: 'idle',
+    previewError: null,
+    localTracksRef: { current: [] },
+  }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -82,6 +98,7 @@ const request: DebateRequest = {
 beforeEach(() => {
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
+  mocks.promoteSession.mockReset();
   mocks.dismissIsError = false;
   mocks.block.mockReset();
 
@@ -210,5 +227,35 @@ describe('IncomingRequestPopup answers', () => {
 
     expect(mocks.accept).toHaveBeenCalledTimes(1);
     expect(mocks.dismiss).not.toHaveBeenCalled();
+  });
+});
+
+/**
+ * The hand-off the room depends on.
+ *
+ * This card holds its devices under `debate-request:<id>`, because no debate exists until the
+ * accept returns one. The room then calls `beginSession('debate:<id>')`, and `beginSession` stops
+ * the media it finds under any other key.
+ */
+describe('IncomingRequestPopup media hand-off', () => {
+  it('promotes the open devices to the debate the accept created', () => {
+    render(<IncomingRequestPopup request={request} currentUserId="me" onNotNow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    const options = mocks.accept.mock.calls[0][1];
+    options.onSuccess({ debate: { id: 'debate-9' } });
+
+    expect(mocks.promoteSession).toHaveBeenCalledWith('debate-request:request-1', 'debate:debate-9');
+  });
+
+  // An accept that produced no debate has nothing to promote to, and guessing a key would stop the
+  // devices under one nothing is listening for.
+  it('promotes nothing when the accept produced no debate', () => {
+    render(<IncomingRequestPopup request={request} currentUserId="me" onNotNow={vi.fn()} />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
+    mocks.accept.mock.calls[0][1].onSuccess({ debate: null });
+
+    expect(mocks.promoteSession).not.toHaveBeenCalled();
   });
 });

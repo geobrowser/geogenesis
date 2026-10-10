@@ -28,7 +28,7 @@ export const systemDefaultAudioOutput: MediaDeviceOption = {
   label: 'System default',
 };
 
-type DebateMediaSession = {
+export type DebateMediaSession = {
   activeSessionKey: string | null;
   previewState: PreJoinMediaState;
   previewBusy: boolean;
@@ -58,6 +58,8 @@ type DebateMediaSession = {
     forceRestart?: boolean;
     audioInputId?: string;
     videoInputId?: string;
+    audio?: boolean;
+    video?: boolean;
   }) => Promise<LocalTrackLike[]>;
   changeAudioInput: (deviceId: string) => void;
   changeAudioOutput: (deviceId: string) => Promise<void>;
@@ -208,25 +210,44 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         forceRestart?: boolean;
         audioInputId?: string;
         videoInputId?: string;
+        audio?: boolean;
+        video?: boolean;
       } = {}
     ) => {
       if (!activeSessionKeyRef.current) return [];
-      if (!options.forceRestart && localTracksRef.current.length > 0 && localMediaStreamRef.current) {
+      const wantAudio = options.audio ?? true;
+      const wantVideo = options.video ?? true;
+      const liveKinds = new Set(localTracksRef.current.map(track => track.mediaStreamTrack.kind));
+      const hasLivePreview = localTracksRef.current.length > 0 && localMediaStreamRef.current !== null;
+      const haveEveryWantedKind = (!wantAudio || liveKinds.has('audio')) && (!wantVideo || liveKinds.has('video'));
+
+      const hasUnwantedKind = (!wantAudio && liveKinds.has('audio')) || (!wantVideo && liveKinds.has('video'));
+      if (!options.forceRestart && hasLivePreview && haveEveryWantedKind && !hasUnwantedKind) {
         setPreviewStreamState(localMediaStreamRef.current);
         setPreviewState('ready');
         setPreviewBusy(false);
         return localTracksRef.current;
       }
+
+      const opening = {
+        audio: wantAudio && (Boolean(options.forceRestart) || !liveKinds.has('audio')),
+        video: wantVideo && (Boolean(options.forceRestart) || !liveKinds.has('video')),
+      };
+      const keep = localTracksRef.current.filter(track => {
+        const kind = track.mediaStreamTrack.kind;
+        if (kind === 'audio') return wantAudio && !opening.audio;
+        if (kind === 'video') return wantVideo && !opening.video;
+        return false;
+      });
       if (localPreviewPromiseRef.current) {
         if (!options.forceRestart) return localPreviewPromiseRef.current;
         await localPreviewPromiseRef.current.catch(() => undefined);
       }
 
-      const replacingReadyPreview =
-        Boolean(options.forceRestart) && localTracksRef.current.length > 0 && localMediaStreamRef.current !== null;
       setPreviewError(null);
       setPreviewBusy(true);
-      if (!replacingReadyPreview) setPreviewState('requesting');
+
+      if (!hasLivePreview) setPreviewState('requesting');
       const generation = previewGenerationRef.current + 1;
       previewGenerationRef.current = generation;
       const isCurrent = () => mountedRef.current && previewGenerationRef.current === generation;
@@ -244,27 +265,32 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
           setSelectedAudioOutputId(systemDefaultAudioOutput.deviceId);
           setAudioOutputDevices([systemDefaultAudioOutput]);
         }
-        stopTracks(localTracksRef.current);
-        localTracksRef.current = [];
-        localMediaStreamRef.current = null;
-        if (!replacingReadyPreview) setPreviewStreamState(null);
+        stopTracks(localTracksRef.current.filter(track => !keep.includes(track)));
+        localTracksRef.current = keep;
+        if (keep.length === 0) localMediaStreamRef.current = null;
+        if (!hasLivePreview) setPreviewStreamState(null);
         const audioInputId = options.audioInputId ?? selectedAudioInputIdRef.current;
         const videoInputId = options.videoInputId ?? selectedVideoInputIdRef.current;
-        const tracks = (await livekit.createLocalTracks({
-          audio: audioInputId ? { deviceId: audioInputId } : true,
-          video: videoInputId ? { deviceId: videoInputId } : true,
-        })) as LocalTrackLike[];
+        const opened =
+          opening.audio || opening.video
+            ? ((await livekit.createLocalTracks({
+                audio: opening.audio ? (audioInputId ? { deviceId: audioInputId } : true) : false,
+                video: opening.video ? (videoInputId ? { deviceId: videoInputId } : true) : false,
+              })) as LocalTrackLike[])
+            : [];
         if (!isCurrent()) {
-          stopTracks(tracks);
+          stopTracks(opened);
           return [];
         }
+
         if (
-          !tracks.some(track => track.mediaStreamTrack.kind === 'audio') ||
-          !tracks.some(track => track.mediaStreamTrack.kind === 'video')
+          (opening.audio && !opened.some(track => track.mediaStreamTrack.kind === 'audio')) ||
+          (opening.video && !opened.some(track => track.mediaStreamTrack.kind === 'video'))
         ) {
-          stopTracks(tracks);
+          stopTracks(opened);
           throw Object.assign(new Error('Required media tracks are unavailable.'), { name: 'NotFoundError' });
         }
+        const tracks = [...keep, ...opened];
         localTracksRef.current = tracks;
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         localMediaStreamRef.current = stream;
@@ -286,14 +312,15 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         return await previewPromise;
       } catch (error) {
         if (isCurrent()) {
-          stopTracks(localTracksRef.current);
-          localTracksRef.current = [];
-          localMediaStreamRef.current = null;
+          stopTracks(localTracksRef.current.filter(track => !keep.includes(track)));
+          localTracksRef.current = keep;
+          const kept = keep.length > 0 ? new MediaStream(keep.map(track => track.mediaStreamTrack)) : null;
+          localMediaStreamRef.current = kept;
+          setPreviewStreamState(kept);
           const failure = preJoinMediaFailure(error);
           setPreviewError(failure.message);
           setPreviewState(failure.state);
           setPreviewBusy(false);
-          setPreviewStreamState(null);
         }
         throw error;
       } finally {
@@ -500,6 +527,13 @@ export function DebateMediaSessionBoundary({ children }: { children: React.React
   return <DebateMediaSessionProvider>{children}</DebateMediaSessionProvider>;
 }
 
+/**
+ * The session if there is one, rather than an error if there is not.
+ */
+export function useOptionalDebateMediaSession() {
+  return React.useContext(DebateMediaSessionContext);
+}
+
 export function useDebateMediaSession() {
   const session = React.useContext(DebateMediaSessionContext);
   if (!session) throw new Error('useDebateMediaSession must be used inside DebateMediaSessionProvider');
@@ -508,6 +542,18 @@ export function useDebateMediaSession() {
 
 export function debateMediaSessionKey(debateId: string) {
   return `debate:${debateId}`;
+}
+
+/**
+ * The session a request card owns, before any debate exists to own it.
+ * A profile challenge, which like a request has no debate id until it is accepted.
+ */
+export function debateChallengeMediaSessionKey(challengeId: string) {
+  return `debate-challenge:${challengeId}`;
+}
+
+export function debateRequestMediaSessionKey(requestId: string) {
+  return `debate-request:${requestId}`;
 }
 
 function retainOrPreferDefaultDevice(current: string, devices: MediaDeviceOption[]) {
@@ -528,7 +574,14 @@ function sameMediaDeviceOptions(current: MediaDeviceOption[], next: MediaDeviceO
   );
 }
 
-function preJoinMediaFailure(error: unknown): {
+/**
+ * Browser media errors in words a reader can act on.
+ *
+ * Exported because every surface that calls `ensurePreview` has to explain the same refusals, and
+ * `error.message` is the browser's own text — "Permission denied", or a sentence about user agents
+ * and platform contexts.
+ */
+export function preJoinMediaFailure(error: unknown): {
   state: Exclude<PreJoinMediaState, 'requesting' | 'ready'>;
   message: string;
 } {
