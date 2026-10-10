@@ -38,6 +38,7 @@ describe('claim record GraphQL', () => {
     expect(claims).toContain('orderBy: $orderBy');
     expect(claims).toContain('relatedClaimsTop: entitiesOrderedByPropertyConnection');
     expect(claims).toMatch(/relatedClaimsTop: entitiesOrderedByPropertyConnection\([\s\S]*?filter: \$relatedFilter/);
+    expect(claims).toMatch(/relatedClaimsTop: entitiesOrderedByPropertyConnection\([\s\S]*?entityIds: \$entityIds/);
     expect(claims).not.toContain('topicClaimsTop: entitiesOrderedByPropertyConnection');
     expect(claims).not.toContain('extractedClaimsTop: entitiesOrderedByPropertyConnection');
     expect(claims).toContain('@skip(if: $skipTopicClaims)');
@@ -257,14 +258,31 @@ describe('claim record GraphQL', () => {
     });
 
     expect(filters.hasTopics).toBe(false);
-    expect(filters.relatedClaims.or?.[0]?.or).toHaveLength(1);
-    expect(filters.relatedClaims.or?.[0]?.or?.[0]).toMatchObject({
+    expect(filters.relatedClaims.or?.[0]?.or).toBeUndefined();
+    expect(filters.relatedClaims.or?.[0]?.and).toHaveLength(1);
+    expect(filters.relatedClaims.or?.[0]?.and?.[0]).toMatchObject({
       relations: { some: { typeId: { is: SOURCES_PROPERTY_ID } } },
     });
     expect(filters.claimRelations.or).toHaveLength(1);
     expect(filters.claimRelations.or?.[0]).toMatchObject({ typeId: { is: SOURCES_PROPERTY_ID } });
     expect(filters.debates.relations?.some?.toEntity).toEqual({ id: { is: CLAIM_ID } });
     expect(filters.debateRelations.toEntity).toEqual({ id: { is: CLAIM_ID } });
+  });
+
+  it('drops the empty extracted branch so a topic-only record has no union to plan around', () => {
+    const filters = claimRecordFilters({
+      claimId: CLAIM_ID,
+      directDebates: {},
+      spaceIds: [SPACE_ID],
+      topicIds: [TOPIC_ID],
+      filterTopicIds: [],
+    });
+
+    expect(filters.relatedClaims.or?.[0]?.or).toBeUndefined();
+    expect(JSON.stringify(filters.relatedClaims)).not.toContain(SOURCES_PROPERTY_ID);
+    expect(filters.claimRelations.or).toHaveLength(1);
+    expect(filters.claimRelations.or?.[0]).toMatchObject({ toEntityId: { in: [TOPIC_ID] } });
+    expect(JSON.stringify(filters.claimTopicRelations)).not.toContain(SOURCES_PROPERTY_ID);
   });
 
   it('keeps Debates scoped to the viewed claim even when Related claims has topics', () => {

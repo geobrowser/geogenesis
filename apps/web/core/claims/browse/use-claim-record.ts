@@ -11,6 +11,7 @@ import {
   CLAIM_RECORD_PAGE_SIZE,
   claimRecordDirectDebatesKey,
   claimRecordFilters,
+  fetchClaimRecordCandidates,
   fetchClaimRecordClaimsPage,
   fetchClaimRecordCounts,
   fetchClaimRecordDebatesPage,
@@ -187,12 +188,37 @@ export function useClaimRecord({
     staleTime: CLAIM_RECORD_STALE_TIME,
   });
 
+  // Top sorts a property over the whole claim type, so it is bounded by the candidate ids instead.
+  // A record with more candidates than the API page limit resolves to null and sorts unbounded.
+  const isTop = claimSort === 'top';
+  const candidates = useQuery({
+    queryKey: ['claim-record', 'candidates', recordKey, directDebatesKey],
+    enabled: claimsEnabled && isTop && extractedReady,
+    queryFn: ({ signal }) =>
+      fetchClaimRecordCandidates({
+        spaceIds: selectedSpaceIds,
+        topicIds,
+        directDebates: directDebates ?? NO_DIRECT_DEBATES,
+        signal,
+      }),
+    staleTime: CLAIM_RECORD_STALE_TIME,
+  });
+  const candidateClaimIds = candidates.data ?? null;
+  const candidatesReady = !isTop || candidates.isSuccess || candidates.isError;
+
   const claims = useInfiniteQuery({
-    queryKey: ['claim-record', 'claims', recordKey, directDebatesKey, claimSort],
-    enabled: claimsEnabled && extractedReady,
+    queryKey: ['claim-record', 'claims', recordKey, directDebatesKey, claimSort, candidateClaimIds?.length ?? null],
+    enabled: claimsEnabled && extractedReady && candidatesReady,
     initialPageParam: firstClaimRecordClaimsPageParam(filters.hasTopics),
     queryFn: ({ pageParam, signal }) =>
-      fetchClaimRecordClaimsPage({ filters, spaceIds: selectedSpaceIds, sort: claimSort, pageParam, signal }),
+      fetchClaimRecordClaimsPage({
+        filters,
+        spaceIds: selectedSpaceIds,
+        sort: claimSort,
+        pageParam,
+        candidateClaimIds,
+        signal,
+      }),
     getNextPageParam: nextClaimRecordClaimsPageParam,
     staleTime: CLAIM_RECORD_STALE_TIME,
   });
