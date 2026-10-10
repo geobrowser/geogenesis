@@ -23,24 +23,46 @@ import { SlideUpBodyState } from '~/design-system/slide-up-body-state';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-drawer';
-import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
-import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
-import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
 import { EntityStickyHeaderHost } from '~/partials/entity-page/entity-sticky-header-host';
 import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
-import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
-import { FlowBar } from '~/partials/review/flow-bar';
-import { StatusBar } from '~/partials/review/status-bar';
 import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
-import { SaveVotesSheet } from '~/partials/save-votes/save-votes-sheet';
-import { SearchDialog } from '~/partials/search';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
 import { rankingFullscreenActiveAtom, rankingFullscreenFocusTargetAtom } from '~/atoms';
+
+// Opened on demand, so none of these is needed to paint or hydrate a page. Each renders nothing
+// until something opens it, which is also what the server rendered, so there is nothing to mismatch.
+const CreateSpaceDialog = dynamic(
+  () => import('~/partials/create-space/create-space-dialog').then(m => ({ default: m.CreateSpaceDialog })),
+  { ssr: false }
+);
+const EntitySidePanel = dynamic(
+  () => import('~/partials/entity-page/entity-side-panel').then(m => ({ default: m.EntitySidePanel })),
+  { ssr: false }
+);
+const EntityCommentsPanelHost = dynamic(
+  () => import('~/partials/comments/entity-comments-panel-host').then(m => ({ default: m.EntityCommentsPanelHost })),
+  { ssr: false }
+);
+const FeatureFlagsDialog = dynamic(
+  () => import('~/partials/feature-flags/feature-flags-dialog').then(m => ({ default: m.FeatureFlagsDialog })),
+  { ssr: false }
+);
+const FlowBar = dynamic(() => import('~/partials/review/flow-bar').then(m => ({ default: m.FlowBar })), { ssr: false });
+const StatusBar = dynamic(() => import('~/partials/review/status-bar').then(m => ({ default: m.StatusBar })), {
+  ssr: false,
+});
+const SaveVotesSheet = dynamic(
+  () => import('~/partials/save-votes/save-votes-sheet').then(m => ({ default: m.SaveVotesSheet })),
+  { ssr: false }
+);
+const SearchDialog = dynamic(() => import('~/partials/search').then(m => ({ default: m.SearchDialog })), {
+  ssr: false,
+});
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
