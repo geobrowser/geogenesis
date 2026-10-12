@@ -602,9 +602,13 @@ export async function postProcessDiffs(
   // 7. Synthesize diffs for missing block entities
   // blockChangeType is 'ADD' when the block was added/exists in the new state,
   // 'REMOVE' when it was present before and is now gone.
-  const processedIds = new Set(processed.map(e => e.entityId));
+  const processedById = new Map(processed.map(e => [e.entityId, e]));
   for (const [blockId, blockChangeType] of blocksWithParent) {
-    if (processedIds.has(blockId)) continue;
+    const alreadyProcessed = processedById.get(blockId);
+    if (alreadyProcessed) {
+      if (blockChangeType === 'MOVE') alreadyProcessed.movedBlock = true;
+      continue;
+    }
 
     const remoteBlock = fetchedEntityMap.get(blockId);
     if (!remoteBlock) continue;
