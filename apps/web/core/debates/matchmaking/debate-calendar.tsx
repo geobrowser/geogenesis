@@ -710,7 +710,6 @@ function DebateCalendarBody({
     setPicks(NO_PICKS);
     changeFilter('clear');
   };
-  /** One event per change, naming which kind of pick it was. */
   /**
    * One event per kind of pick that changed. A desktop press changes one; a phone's "Show N people"
    * applies a whole draft at once, and reporting only the first kind under-counted the rest.
@@ -883,43 +882,52 @@ function DebateCalendarBody({
   // The line above the week: what is narrowing it, and any pick it is hiding. Only with something
   // picked, so the calendar with nothing picked reads exactly as it did; and not while the picks
   // still wait on their data, when the empty week under the skeleton is no result to report.
-  const narrowNote =
-    picksPending || spacesPending
-      ? null
-      : narrowingSentence({
-          picks: judgedPicks,
-          shownCount: drawnUsers.size,
-          spaceNames: spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
-        });
+  //
+  // Space pills still waiting on who is active where narrow nothing yet, so the line names only what
+  // is applied: no "in AI" until it is. Only that half waits — the activity read behind it does not
+  // re-poll after an error, and the rest of the line does not depend on it (review on #2770).
+  const narrowNote = picksPending
+    ? null
+    : narrowingSentence({
+        picks: judgedPicks,
+        shownCount: drawnUsers.size,
+        spaceNames: spacesPending
+          ? []
+          : spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
+      });
   // Each picked person the week is not showing, and why: one classification, read by both the line
   // and its "Show next week" link, so the link is offered exactly when the line says that week has them.
   const hiddenPicks = React.useMemo(
     () =>
-      picks.people.flatMap(profileKey => {
-        const known = profileToUser.get(profileKey);
-        if (known && drawnUsers.has(known.userKey)) return [];
-        return [
-          {
-            name: known ? speakerLabel(known.person) : absentName(profileKey),
-            reason: hiddenPickReason({
-              onRoster: Boolean(known),
-              passesFilters: known ? include(known.userKey) : false,
-              freeOtherWeek: known ? freeInWeek(known.userKey, otherWeekOffset) : false,
-            }),
-          },
-        ];
-      }),
-    [absentName, drawnUsers, freeInWeek, include, otherWeekOffset, picks.people, profileToUser]
+      picks.people
+        .flatMap(profileKey => {
+          const known = profileToUser.get(profileKey);
+          if (known && drawnUsers.has(known.userKey)) return [];
+          return [
+            {
+              name: known ? speakerLabel(known.person) : absentName(profileKey),
+              reason: hiddenPickReason({
+                onRoster: Boolean(known),
+                passesFilters: known ? include(known.userKey) : false,
+                freeOtherWeek: known ? freeInWeek(known.userKey, otherWeekOffset) : false,
+              }),
+            },
+          ];
+        })
+        // Someone who passes every filter but spaces still waiting to apply may yet be excluded by
+        // them, so their week-based reason is not known: they are left out until it is. "Absent" and
+        // "doesn't match your other filters" are true whatever the spaces turn out to say.
+        .filter(pick => !spacesPending || pick.reason === 'absent' || pick.reason === 'filtered'),
+    [absentName, drawnUsers, freeInWeek, include, otherWeekOffset, picks.people, profileToUser, spacesPending]
   );
-  const hiddenNote =
-    picksPending || spacesPending
-      ? null
-      : hiddenPicksSentence({
-          hiddenPeople: hiddenPicks,
-          hiddenClaimCount: allPositionsReady ? panelRows.claims.filter(row => row.hidden).length : 0,
-          weekLabel: weekLabel(weekOffset),
-          otherWeekLabel: weekLabel(otherWeekOffset),
-        });
+  const hiddenNote = picksPending
+    ? null
+    : hiddenPicksSentence({
+        hiddenPeople: hiddenPicks,
+        hiddenClaimCount: allPositionsReady ? panelRows.claims.filter(row => row.hidden).length : 0,
+        weekLabel: weekLabel(weekOffset),
+        otherWeekLabel: weekLabel(otherWeekOffset),
+      });
   const pickFreeOtherWeek = hiddenNote !== null && hiddenPicks.some(pick => pick.reason === 'other-week');
   const goToOtherWeek = () => goToWeek(otherWeekOffset, otherWeekOffset > weekOffset ? 'next' : 'previous');
 

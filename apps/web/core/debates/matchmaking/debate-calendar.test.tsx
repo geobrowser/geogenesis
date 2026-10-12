@@ -1570,11 +1570,25 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(screen.getByRole('button', { name: 'Previous week' })).toBeDisabled();
     // Nor any reason given for Lena's absence, judged without the space it depends on.
     expect(screen.queryByText(/Lena is free next week/)).not.toBeInTheDocument();
+    // The line itself stays, saying only what applies: the people picked, and no space yet.
+    expect(screen.getByText(/Showing the person you picked\./)).toBeInTheDocument();
+    expect(screen.queryByText(/you picked in /)).not.toBeInTheDocument();
 
     // Activity lands: the space leaves only Lena, who is free next week.
     mocks.spaceActivityUnavailable = false;
     rerender(<DebateCalendar />);
     expect(screen.getByRole('button', { name: 'Previous week' })).toBeEnabled();
+  });
+
+  it('still says why a pick is hidden when the reason does not depend on spaces still loading', () => {
+    mocks.schedulable = response([free('11', 'Elena', [thursdaySix]), free('14', 'Lena', [[at(15, 18), at(15, 19)]])]);
+    mocks.spaceActivityUnavailable = true;
+    // Lena holds no position on claim one: hidden by the claim, whatever the space says.
+    mocks.searchParams = new URLSearchParams({ people: PROFILE('14'), claims: `${SPACE}:${CLAIM_ONE}` });
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a space' }));
+
+    expect(screen.getByText(/Lena doesn't match your other filters\./)).toBeInTheDocument();
   });
 
   it('reports each kind of pick a phone applies at once', () => {
