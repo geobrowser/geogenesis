@@ -10,10 +10,9 @@ import { NavUtils } from '~/core/utils/utils';
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyPerson, GeoChatRequestError } from '../api';
+import type { DebateLobbyPerson } from '../api';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import {
-  lobbyErrorMessage,
   lobbyTimeLabel,
   moderationErrorMessage,
   moderationLogLabel,
@@ -25,13 +24,7 @@ import {
 import { guestCountLabel } from './lobby-guest';
 import { LobbyPersonName } from './lobby-people';
 import type { LobbyMemberViewer, MemberLobbyPageView } from './lobby-view';
-import {
-  useLobbyBans,
-  useLobbyHand,
-  useLobbyModerationLog,
-  useModerateLobbyMember,
-  useRemoveLobbyGuests,
-} from './moderation-hooks';
+import { useLobbyBans, useLobbyModerationLog, useModerateLobbyMember, useRemoveLobbyGuests } from './moderation-hooks';
 
 const MODERATION_NOTICE_MS = 10_000;
 
@@ -60,57 +53,6 @@ export function useModerationNotice(viewer: Pick<LobbyMemberViewer, 'last_modera
   }, [notice]);
 
   return notice;
-}
-
-/** Raise hand / Lower, for a listener who is in the lobby. */
-export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, 'lobby_id' | 'viewer'> }) {
-  const hand = useLobbyHand(lobby.lobby_id);
-  const raised = Boolean(lobby.viewer.hand_raised_at);
-
-  return (
-    <div className="flex flex-col gap-1" data-testid="lobby-hand-control">
-      <div className="flex flex-wrap items-center gap-2">
-        {raised ? (
-          <>
-            <Text as="span" variant="metadata">
-              Hand raised
-            </Text>
-            <HubPillButton
-              analyticsLabel="Lobby lower hand"
-              pending={hand.isPending}
-              onClick={() => hand.mutate(false)}
-            >
-              Lower
-            </HubPillButton>
-          </>
-        ) : (
-          <HubPillButton
-            variant="primary"
-            analyticsLabel="Lobby raise hand"
-            pending={hand.isPending}
-            onClick={() => hand.mutate(true)}
-          >
-            Raise hand
-          </HubPillButton>
-        )}
-      </div>
-      <Text as="p" variant="footnote" color={hand.isError ? 'red-01' : 'grey-04'}>
-        {hand.isError
-          ? handErrorMessage(hand.error)
-          : raised
-            ? 'Hosts can see your hand.'
-            : 'Raise your hand to ask to speak.'}
-      </Text>
-    </div>
-  );
-}
-
-function handErrorMessage(error: unknown) {
-  if (error instanceof GeoChatRequestError) {
-    if (error.code === 'lobby_not_present') return 'Join the lobby to raise your hand.';
-    if (error.code === 'lobby_stepped_out') return 'You stepped out. Go back to the room to raise your hand.';
-  }
-  return lobbyErrorMessage(error, 'Could not change your hand. Try again.');
 }
 
 type HostTab = 'hands' | 'banned' | 'log';

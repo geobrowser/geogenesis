@@ -25,8 +25,7 @@ vi.mock('../hooks', async importOriginal => ({
 
 const { GeoChatRequestError } = await import('../api');
 const { LobbyMemberActions } = await import('./lobby-member-actions');
-const { LobbyHandControl, LobbyHostLists, LobbyRemovedNotice, useModerationNotice } =
-  await import('./lobby-moderation');
+const { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } = await import('./lobby-moderation');
 
 function member(userId: string, role: DebateLobbyRole, extra: Partial<DebateLobbyMember> = {}): DebateLobbyMember {
   return {
@@ -156,26 +155,6 @@ describe('LobbyMemberActions', () => {
   });
 });
 
-describe('LobbyHandControl', () => {
-  it('raises and lowers the viewer’s hand', async () => {
-    const { unmount } = renderWith(<LobbyHandControl lobby={lobby({ role: 'listener', hosting: false })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Raise hand' }));
-    await waitFor(() =>
-      expect(api.setDebateLobbyHand).toHaveBeenCalledWith('lobby1', true, expect.any(Function), 'acct')
-    );
-    unmount();
-
-    renderWith(
-      <LobbyHandControl lobby={lobby({ role: 'listener', hosting: false, hand_raised_at: '2026-10-05T10:01:00Z' })} />
-    );
-    expect(screen.getByText('Hosts can see your hand.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Lower' }));
-    await waitFor(() =>
-      expect(api.setDebateLobbyHand).toHaveBeenCalledWith('lobby1', false, expect.any(Function), 'acct')
-    );
-  });
-});
-
 describe('LobbyHostLists', () => {
   const banned = {
     banned: [
@@ -286,15 +265,6 @@ describe('useModerationNotice', () => {
     });
     rerender(at('2026-10-05T10:05:00Z'));
     expect(result.current).toBe('A host muted you. Unmute when you’re ready.');
-  });
-});
-
-describe('LobbyHandControl refusals', () => {
-  it('words a refused raise for the hand, not voice', async () => {
-    api.setDebateLobbyHand.mockRejectedValue(new GeoChatRequestError('raw', 'lobby_stepped_out', 409));
-    renderWith(<LobbyHandControl lobby={lobby({ role: 'listener', hosting: false })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Raise hand' }));
-    expect(await screen.findByText('You stepped out. Go back to the room to raise your hand.')).toBeTruthy();
   });
 });
 

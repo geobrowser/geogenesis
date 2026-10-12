@@ -126,11 +126,12 @@ vi.mock('./lobby-voice', async () => {
 vi.mock('./lobby-claims-area', () => ({ LobbyClaimsArea: () => <div data-testid="claims" /> }));
 vi.mock('./lobby-moderation', () => ({
   LobbyHostLists: () => null,
-  LobbyHandControl: () => null,
   LobbyRemovedNotice: () => null,
   useModerationNotice: () => null,
 }));
-vi.mock('./lobby-member-actions', () => ({ LobbyMemberMenu: () => null }));
+vi.mock('./lobby-member-actions', () => ({ hasMemberActions: () => false, LobbyMemberActions: () => null }));
+vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: undefined }) }));
+vi.mock('./lobby-highlights-hooks', () => ({ useLobbyHighlights: () => ({ data: undefined }) }));
 vi.mock('./lobby-request-debate', () => ({ LobbyRequestDebate: () => null }));
 vi.mock('./lobby-people', () => ({ LobbyPersonName: ({ children }: { children: React.ReactNode }) => children }));
 vi.mock('./lobby-queued-request', () => ({

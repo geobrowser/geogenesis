@@ -14,6 +14,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import {
   ConnectionState,
   DisconnectReason,
@@ -36,6 +37,7 @@ import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
+import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
@@ -290,7 +292,13 @@ function micFailureOf(error: Error): MediaDeviceFailure | null {
   return failure && failure !== MediaDeviceFailure.Other ? failure : null;
 }
 
-type VoiceNotice = { message: string; actionLabel?: string; onAction?: () => void };
+type VoiceNotice = {
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+  /** Shown beside a mic control too, e.g. a mic that could not be opened. */
+  visible?: boolean;
+};
 
 function ConnectedVoice({
   canPublish,
@@ -402,11 +410,12 @@ function ConnectedVoice({
               : isMicrophoneEnabled
                 ? 'You’re on the mic'
                 : 'You’re muted',
+            visible: Boolean(micFailure),
           }}
           mic={{ on: isMicrophoneEnabled && !micFailure, onToggle: setMicrophone }}
         />
       ) : (
-        <VoiceBar notice={{ message: 'You’re listening' }} />
+        <VoiceBar notice={{ message: 'You’re listening' }} listening />
       )}
       {children}
     </LobbyVoiceContext.Provider>
@@ -610,38 +619,65 @@ function ConnectedGuestVoice({
   return <VoiceBar notice={notice} />;
 }
 
+/**
+ * Mute, or the listening pill, and voice's status, drawn into the lobby's bottom bar. The status
+ * line is for screen readers while a mic control already says it, and on a phone unless it asks
+ * for a tap.
+ */
 function VoiceBar({
   notice,
   mic,
+  listening = false,
 }: {
   notice: VoiceNotice;
   mic?: { on: boolean; onToggle: (enabled: boolean) => void };
+  /** Connected without a mic: a disabled "Listening" pill stands in for Mute. */
+  listening?: boolean;
 }) {
+  const action = notice.actionLabel && notice.onAction ? notice : null;
   return (
-    <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2">
-      {mic ? (
-        <HubPillButton
-          variant={mic.on ? 'secondary' : 'primary'}
-          analyticsLabel={mic.on ? 'Lobby mute' : 'Lobby unmute'}
-          aria-pressed={!mic.on}
-          onClick={() => mic.onToggle(!mic.on)}
-        >
-          <span className="inline-flex items-center gap-1.5">
-            <MicrophoneIcon muted={!mic.on} />
-            {mic.on ? 'Mute' : 'Unmute'}
+    <LobbySlot name="controls">
+      <div className="flex min-w-0 items-center gap-2" data-testid="lobby-voice-bar">
+        {mic ? (
+          <HubPillButton
+            variant={mic.on ? 'secondary' : 'primary'}
+            analyticsLabel={mic.on ? 'Lobby mute' : 'Lobby unmute'}
+            aria-pressed={!mic.on}
+            onClick={() => mic.onToggle(!mic.on)}
+            className="md:h-10"
+          >
+            <span className="inline-flex items-center gap-1.5">
+              <MicrophoneIcon muted={!mic.on} />
+              {mic.on ? 'Mute' : 'Unmute'}
+            </span>
+          </HubPillButton>
+        ) : listening ? (
+          <span
+            aria-hidden
+            className="inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full bg-grey-01 px-3 text-metadata text-grey-03 md:h-10"
+          >
+            <MicrophoneIcon muted />
+            Listening
           </span>
-        </HubPillButton>
-      ) : null}
-      <div role="status">
-        <Text as="p" variant="footnote" color="grey-04">
-          {notice.message}
-        </Text>
+        ) : null}
+        <div
+          role="status"
+          className={cx('min-w-0', (mic || listening) && !notice.visible ? 'sr-only' : action ? '' : 'md:sr-only')}
+        >
+          <Text as="p" variant="footnote" color={notice.visible ? 'text' : 'grey-04'} className="truncate">
+            {notice.message}
+          </Text>
+        </div>
+        {action ? (
+          <HubPillButton
+            analyticsLabel={`Lobby voice ${action.actionLabel}`}
+            onClick={action.onAction}
+            className="md:h-10"
+          >
+            {action.actionLabel}
+          </HubPillButton>
+        ) : null}
       </div>
-      {notice.actionLabel && notice.onAction ? (
-        <HubPillButton analyticsLabel={`Lobby voice ${notice.actionLabel}`} onClick={notice.onAction}>
-          {notice.actionLabel}
-        </HubPillButton>
-      ) : null}
-    </div>
+    </LobbySlot>
   );
 }
