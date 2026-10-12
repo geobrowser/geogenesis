@@ -77,6 +77,6 @@ function useSavePromptOnGuestVote(lobbyName: string) {
     seenRef.current = count;
     if (guest && count > previous) openSaveVotesPrompt('single_claim', { lobbyName });
   }, [count, guest, lobbyName]);
-  // Off the lobby, the sheet no longer promises they stay in it.
+  // The lobby copy promises they stay here, so it ends with the claims area.
   React.useEffect(() => clearSaveVotesPromptLobby, []);
 }
