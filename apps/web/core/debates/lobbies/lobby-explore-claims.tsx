@@ -62,6 +62,8 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
         renderClaim={renderClaim}
         onVisibleClaims={onVisibleClaims}
         stickyTopClassName="top-[2.75rem]"
+        // A request needs the viewer's side, so answered claims stay listed.
+        hidesAnswered={false}
       />
     </div>
   );

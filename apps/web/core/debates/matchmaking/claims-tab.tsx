@@ -214,6 +214,7 @@ export function ClaimsTab({
   renderClaim,
   onVisibleClaims,
   stickyTopClassName,
+  hidesAnswered = true,
   trailing,
   warm = false,
   onSettledEmpty,
@@ -228,6 +229,11 @@ export function ClaimsTab({
   onVisibleClaims?: (entries: MatchmakingClaim[]) => void;
   /** Where the pinned controls stop, for a host scrolling the page under a fixed bar. */
   stickyTopClassName?: string;
+  /**
+   * False keeps the viewer's answered claims listed and drops the "Hide my positions" switch, for a
+   * host whose offer needs a side taken. The stored switch is left alone.
+   */
+  hidesAnswered?: boolean;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
   /**
@@ -448,7 +454,7 @@ export function ClaimsTab({
   // stored preference rather than on anything about the answers, so the query does not change when
   // they land.
   const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
-  const excludesAnswered = graphSourced && !isLobby && authenticated && hideMyPositions;
+  const excludesAnswered = graphSourced && !isLobby && hidesAnswered && authenticated && hideMyPositions;
   const excludeAnsweredBy = excludesAnswered ? personalSpaceId : null;
   // Until the account's space is known there is no telling which claims to leave out, and asking
   // without it would draw the answered ones and then take them back.
@@ -736,7 +742,7 @@ export function ClaimsTab({
   // Signed out there are no positions to hide — geo-chat answers every `viewer_response` null for
   // a viewer it has no account for — so the collapse is a no-op and the switch is a control that
   // cannot do anything. Both go, rather than leaving one drawn over the other's nothing.
-  const hidesMyPositions = authenticated && hideMyPositions;
+  const hidesMyPositions = hidesAnswered && authenticated && hideMyPositions;
 
   /**
    * And not when the answers cannot be had at all, which is a different thing from not having them
@@ -1084,7 +1090,7 @@ export function ClaimsTab({
           trailing={
             isLobby ? (
               trailing
-            ) : filter === 'mine' || !authenticated ? null : (
+            ) : filter === 'mine' || !authenticated || !hidesAnswered ? null : (
               <HideMyPositionsSwitch analyticsSurface="hub" checked={hideMyPositions} onChange={setHideMyPositions} />
             )
           }

@@ -9,7 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
-import { debatesHubExploreSpaceIdsAtom } from '~/atoms';
+import { debatesHubExploreSpaceIdsAtom, debatesHubHideMyPositionsAtom } from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -2651,6 +2651,45 @@ describe('claims the viewer has already answered', () => {
 
       expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+    });
+  });
+
+  // The lobby's Explore offers requests only on claims the viewer has a side on.
+  describe('for a host that keeps answered claims', () => {
+    const answerInPlace = (view: ReturnType<typeof render>, ui: ReactElement) => {
+      mocks.debateClaimRows = [answeredRow(FEATURED_A), answeredRow(FEATURED_B)];
+      view.rerender(ui);
+    };
+    const pastTheHold = () => act(() => new Promise(resolve => setTimeout(resolve, 1500)));
+
+    beforeEach(() => {
+      mocks.graphAnsweredIds = new Set([FEATURED_A]);
+    });
+
+    it('hides them by default, including one answered in place', async () => {
+      const view = render(<ClaimsTab />);
+      await showAllClaims();
+      expect(await screen.findByText('One you have not')).toBeInTheDocument();
+      expect(screen.queryByText('One you have answered')).toBeNull();
+
+      answerInPlace(view, <ClaimsTab />);
+      await waitFor(() => expect(screen.queryByText('One you have not')).toBeNull(), { timeout: 3000 });
+    });
+
+    it('lists them with hidesAnswered off, keeps one answered in place, and leaves the switch alone', async () => {
+      const view = render(<ClaimsTab hidesAnswered={false} />);
+      await showAllClaims();
+      expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+      expect(screen.getByText('One you have not')).toBeInTheDocument();
+      expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull();
+      expect(mocks.spaceFacetFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull();
+      expect(screen.queryByRole('switch', { name: 'Hide my positions' })).toBeNull();
+      expect(view.store.get(debatesHubHideMyPositionsAtom)).toBe(true);
+
+      answerInPlace(view, <ClaimsTab hidesAnswered={false} />);
+      await pastTheHold();
+      expect(screen.getByText('One you have not')).toBeInTheDocument();
+      expect(screen.getByText('One you have answered')).toBeInTheDocument();
     });
   });
 
