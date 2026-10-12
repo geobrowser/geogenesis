@@ -211,7 +211,42 @@ describe('AdminNewMatchDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Request availability from Sam Patel' }));
     });
     expect(mocks.prompt).toHaveBeenCalledWith('sam');
-    expect(screen.getByText('No email on file')).toBeInTheDocument();
+    expect(screen.getByText(/No email on file/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['disabled_by_preference', /Email turned off by them/],
+    ['channel_off', /Email delivery is off/],
+  ])('settles on %s without offering a resend', async (outcome, text) => {
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    mocks.prompt.mockResolvedValueOnce({ sent: false, outcome });
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Request availability from Sam Patel' }));
+    });
+    expect(screen.getByText(text)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry|Request availability/ })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['failed', /Email failed to send/],
+    ['rate_limited', /too many emails to them this hour/],
+  ])('offers Retry after %s, and stops once it is sent', async (outcome, text) => {
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    mocks.prompt.mockResolvedValueOnce({ sent: false, outcome }).mockResolvedValueOnce({ sent: true, outcome: 'sent' });
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Request availability from Sam Patel' }));
+    });
+    expect(screen.getByText(text)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry requesting availability from Sam Patel' }));
+    });
+    expect(mocks.prompt).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Request sent')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry/ })).not.toBeInTheDocument();
   });
 
   it('ranks everyone by matches with debater 1 once picked', () => {
@@ -332,7 +367,8 @@ describe('AdminNewMatchDialog', () => {
       fireEvent.click(ask);
     });
     expect(mocks.prompt.mock.calls.map(([userId]) => userId)).toEqual(['ana', 'raj']);
-    expect(screen.getByText('Asked Ana · Raj: No email on file')).toBeInTheDocument();
+    expect(screen.getByText('Asked Ana')).toBeInTheDocument();
+    expect(screen.getByText(/Raj: No email on file/)).toBeInTheDocument();
   });
 
   it('flags nothing in Pick any time until their shared times are known', () => {

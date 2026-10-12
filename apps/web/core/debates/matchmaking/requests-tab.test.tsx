@@ -29,6 +29,12 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 
 // The section's own rendering needs a QueryClientProvider, which this suite deliberately does without
 // (see below). Stubbed, because what is under test here is whether the section appears at all.
+// Reads the scheduled-debates query, like the section above, and is covered by its own suite.
+vi.mock('./availability-request-notice', () => ({
+  useAvailabilityRequests: () => [],
+  AvailabilityRequestNotice: () => null,
+}));
+
 vi.mock('./scheduled-debates-section', async importOriginal => ({
   ...(await importOriginal<typeof import('./scheduled-debates-section')>()),
   useScheduledContent: () => mocks.scheduled,
