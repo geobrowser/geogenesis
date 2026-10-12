@@ -24,10 +24,8 @@ export function exploreRoomClaimBatches(entries: readonly { claim: { claim_entit
 }
 
 /**
- * The room's sides for the Explore claims on screen, by `claimRowKey`. A claim with no entry has
- * nobody in the room on either side. Keyed under "In this room", so whatever refetches that list
- * (`debate.lobby_changed`, reconnect, a stale request offer) refetches these while they're mounted.
- * Members only: a guest gets no room context.
+ * The room's sides for the claims on screen, by `claimRowKey`; no entry means nobody in the room holds
+ * a side. Keyed under "In this room", so its refetches cover these. Members only.
  */
 export function useLobbyExploreRoomClaims(lobbyId: string, batches: string[][]) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
