@@ -185,6 +185,33 @@ describe('LobbyPeople on desktop', () => {
     expect(screen.getByRole('button', { name: 'Request a debate with Daniel' })).toBeInTheDocument();
   });
 
+  it('keeps the host controls event on a tile a host can act on, and a person menu event otherwise', () => {
+    renderPeople(lobby(roster));
+    expect(screen.getByRole('button', { name: 'Daniel' })).toHaveAttribute(
+      'data-geo-analytics-intent',
+      'open_lobby_host_controls'
+    );
+    cleanup();
+
+    mocks.guest = true;
+    const guestView = lobby(roster, {
+      viewer: {
+        kind: 'guest',
+        role: null,
+        creator: false,
+        hosting: false,
+        reminded: false,
+        voice_away_at: null,
+        connected: false,
+        stepped_out: false,
+      },
+    });
+    render(<LobbyPeople lobby={guestView} viewerId={null} ownAvailable={undefined} disagreements={null} />);
+    const daniel = screen.getByRole('button', { name: 'Daniel' });
+    expect(daniel).toHaveAttribute('data-geo-analytics-label', 'Debate hub Lobby person menu');
+    expect(daniel).toHaveAttribute('data-geo-analytics-intent', 'debates_hub_action');
+  });
+
   it('says nobody is here in an empty lobby', () => {
     renderPeople(lobby([]));
     expect(screen.getByText('Nobody’s here right now.')).toBeInTheDocument();

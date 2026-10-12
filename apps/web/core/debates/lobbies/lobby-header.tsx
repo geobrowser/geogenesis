@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Text } from '~/design-system/text';
 
-import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes, debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { useEndDebateLobby } from './hooks';
 import { lobbyShareUrl } from './lobby-analytics';
@@ -188,7 +188,7 @@ function LobbyTitleMenu({ lobby }: { lobby: LobbyPageView }) {
         <button
           type="button"
           aria-label="Lobby options"
-          {...debateActionAnalyticsAttributes('lobby', 'Lobby options', 'open_lobby_options')}
+          {...debateActionAnalyticsAttributes('hub', 'Lobby options')}
           className="flex size-8 shrink-0 items-center justify-center rounded-full text-grey-04 hover:bg-grey-01 hover:text-text"
         >
           <Ellipsis />
@@ -213,6 +213,7 @@ function CopyLinkRow({ lobbyId }: { lobbyId: string }) {
     <button
       type="button"
       data-geo-analytics-label="Lobby copy link"
+      data-geo-analytics-intent={debateSurfaceAnalyticsAttributes('hub', 'action')['data-geo-analytics-intent']}
       onClick={() => void copy()}
       className="flex h-11 w-full items-center gap-2.5 text-left text-[17px] text-text"
     >
@@ -236,7 +237,7 @@ function LobbyHostListsChip({ lobby }: { lobby: MemberLobbyPageView }) {
       trigger={
         <button
           type="button"
-          {...debateActionAnalyticsAttributes('lobby', 'Lobby host lists', 'open_lobby_host_lists')}
+          {...debateActionAnalyticsAttributes('hub', 'Lobby host lists', 'open_lobby_host_controls')}
           className={cx(
             'inline-flex h-7 shrink-0 items-center gap-1.5 rounded-full border px-3 text-metadata whitespace-nowrap transition-colors',
             hands > 0 ? 'border-ctaPrimary bg-ctaTertiary text-ctaPrimary' : 'border-grey-02 text-text hover:bg-grey-01'

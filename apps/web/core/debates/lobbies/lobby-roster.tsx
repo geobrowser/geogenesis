@@ -25,7 +25,7 @@ import {
   rosterOrder,
 } from './lobby-format';
 import { LobbyGuestCount } from './lobby-guest';
-import { LobbyPersonMenu } from './lobby-person-menu';
+import { LobbyPersonMenu, personMenuAnalyticsAttributes } from './lobby-person-menu';
 import type { LobbyPageView } from './lobby-view';
 import { useLobbyVoiceStates } from './lobby-voice';
 
@@ -154,6 +154,7 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
       <button
         type="button"
         aria-label={isSelf ? `${name} (you)` : name}
+        {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
         data-testid="lobby-speaker-tile"
         data-speaking={speaking || undefined}
         className={cx(
@@ -304,6 +305,7 @@ function ListenerChip({ lobby, member, isSelf, viewerId, status, disagreements }
       <button
         type="button"
         aria-label={isSelf ? `${name} (you)` : name}
+        {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
         data-testid="lobby-listener-chip"
         title={status ? STATUS_LABEL[status] : undefined}
         className="flex max-w-full min-w-0 items-center gap-2 rounded-full pr-1 text-left hover:bg-grey-01 data-[state=open]:bg-grey-01"

@@ -6,6 +6,7 @@ import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember } from '../api';
+import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyMemberActions, hasMemberActions } from './lobby-member-actions';
@@ -13,6 +14,20 @@ import { LobbyPersonName } from './lobby-people';
 import { LobbyPopup } from './lobby-popup';
 import { LobbyRequestDebate, canRequestLobbyMember } from './lobby-request-debate';
 import type { LobbyPageView } from './lobby-view';
+
+/**
+ * The person trigger's analytics: a host opening someone they can act on keeps the old host
+ * controls event; anyone else opens the person menu.
+ */
+export function personMenuAnalyticsAttributes(
+  lobby: Pick<LobbyPageView, 'viewer'>,
+  member: Pick<DebateLobbyMember, 'role' | 'creator'>,
+  isSelf: boolean
+) {
+  return hasMemberActions(lobby, member, isSelf)
+    ? debateActionAnalyticsAttributes('hub', 'Lobby host controls', 'open_lobby_host_controls')
+    : debateActionAnalyticsAttributes('hub', 'Lobby person menu');
+}
 
 export function disagreeOnLabel(count: number) {
   return `You disagree on ${count} ${count === 1 ? 'claim' : 'claims'}`;

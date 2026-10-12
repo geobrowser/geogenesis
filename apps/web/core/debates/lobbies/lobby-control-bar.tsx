@@ -7,10 +7,14 @@ import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { Text } from '~/design-system/text';
 
 import { GeoChatRequestError } from '../api';
+import { debateSurfaceAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
 import type { MemberLobbyPageView } from './lobby-view';
 import { useLobbyHand } from './moderation-hooks';
+
+/** The intent `HubPillButton` gives a hub pill, for the raised-hand pill drawn without it. */
+const HUB_PILL_INTENT = debateSurfaceAnalyticsAttributes('hub', 'action')['data-geo-analytics-intent'];
 
 export const LOBBY_CONTROL_COPY = {
   hint: 'Request someone on a claim, or tap a person to request them directly.',
@@ -105,7 +109,7 @@ export function LobbyHandControl({ lobby }: { lobby: Pick<MemberLobbyPageView, '
           type="button"
           aria-pressed
           data-geo-analytics-label="Lobby lower hand"
-          data-geo-analytics-intent="moderate_lobby_hand"
+          data-geo-analytics-intent={HUB_PILL_INTENT}
           disabled={hand.isPending}
           aria-busy={hand.isPending || undefined}
           onClick={() => hand.mutate(false)}
