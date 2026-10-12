@@ -40,6 +40,8 @@ export type ScheduleEntry =
   | 'reschedule_link'
   /** "Reschedule" on an accepted debate in the Requests tab, which moves it the same way. */
   | 'requests_reschedule'
+  /** "Choose different time" on an invite the viewer has yet to answer, which moves it the same way. */
+  | 'requests_new_time'
   /** A row in one hour's list of everyone free then, on the calendar's week grid (GEO-3152). */
   | 'calendar_hour'
   /** The card a face on the calendar opens on hover, and the phone list's rows. */
