@@ -38,6 +38,7 @@ const calibre = localFont({
     },
   ],
   variable: '--font-calibre',
+  preload: false,
 });
 
 const geistMedium = localFont({
