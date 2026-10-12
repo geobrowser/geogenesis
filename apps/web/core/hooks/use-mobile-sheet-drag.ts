@@ -35,7 +35,6 @@ type Options = {
 export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
   const top = useMotionValue(peekTopPx);
   const borderRadius = useTransform(top, [0, PEEK_CORNER_RADIUS_PX], [0, PEEK_CORNER_RADIUS_PX]);
-  const [snap, setSnap] = React.useState<MobileSheetSnap>('peek');
   const [overlayElement, setOverlayElement] = React.useState<HTMLElement | null>(null);
 
   const snapRef = React.useRef<MobileSheetSnap>('peek');
@@ -50,7 +49,6 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     (next: MobileSheetSnap) => {
       if (next === 'full' && snapRef.current !== 'full') scrolledSinceFullRef.current = false;
       snapRef.current = next;
-      setSnap(next);
       animate(top, next === 'full' ? 0 : peekTopPx, SNAP_SPRING);
     },
     [peekTopPx, top]
@@ -71,7 +69,6 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     snapRef.current = 'peek';
     scrolledSinceFullRef.current = false;
     dismissingRef.current = false;
-    setSnap('peek');
   }, [enabled, peekTopPx, top]);
 
   React.useLayoutEffect(() => {
@@ -110,8 +107,6 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
   }, [dismiss, enabled, overlayElement, peekTopPx, settle, top]);
 
   return {
-    dismiss,
-    isFullScreen: snap === 'full',
     setOverlayElement,
     sheetStyle: { top, borderTopLeftRadius: borderRadius, borderTopRightRadius: borderRadius },
   };

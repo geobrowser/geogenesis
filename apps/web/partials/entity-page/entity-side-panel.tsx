@@ -578,7 +578,7 @@ export function EntitySidePanel() {
           className="shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
           style={mobileSheet.sheetStyle}
         >
-          <MobileSheetGrabHandle isFullScreen={mobileSheet.isFullScreen} onClose={mobileSheet.dismiss} />
+          <MobileSheetGrabHandle />
           {panelBody}
         </motion.div>
       </motion.div>,

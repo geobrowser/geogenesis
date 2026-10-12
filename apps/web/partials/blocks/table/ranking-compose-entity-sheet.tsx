@@ -130,9 +130,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             style={isMobile ? mobileSheet.sheetStyle : undefined}
             onClick={event => event.stopPropagation()}
           >
-            {isMobile ? (
-              <MobileSheetGrabHandle isFullScreen={mobileSheet.isFullScreen} onClose={mobileSheet.dismiss} />
-            ) : null}
+            {isMobile ? <MobileSheetGrabHandle /> : null}
 
             <EntitySidePanelPopoverPortalProvider>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
