@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 
@@ -19,6 +20,15 @@ import { MAX_SCHEDULE_AHEAD_DAYS, NAME_MAX_CHARS, lobbyErrorMessage, lobbySchedu
 export function toDateTimeLocalValue(at: Date) {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+}
+
+/** The viewer's IANA zone, e.g. "Europe/Paris", which the date and time inputs are read in. */
+export function localTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
 }
 
 /** The request body for the form, or why it cannot be sent yet. */
@@ -47,7 +57,10 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateDebateLobby();
   const [name, setName] = React.useState('');
   const [when, setWhen] = React.useState<'now' | 'later'>('now');
-  const [startsAt, setStartsAt] = React.useState(() => toDateTimeLocalValue(new Date(Date.now() + 60 * 60_000)));
+  const [initialStart] = React.useState(() => toDateTimeLocalValue(new Date(Date.now() + 60 * 60_000)));
+  const [startDate, setStartDate] = React.useState(initialStart.slice(0, 10));
+  const [startTime, setStartTime] = React.useState(initialStart.slice(11));
+  const [timeZone] = React.useState(localTimeZone);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
@@ -66,7 +79,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    const request = lobbyRequestFor(name, when, startsAt);
+    const request = lobbyRequestFor(name, when, startDate && startTime ? `${startDate}T${startTime}` : '');
     if ('error' in request) {
       setFormError(request.error);
       return;
@@ -95,12 +108,19 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section className="grid w-[min(400px,100%)] gap-4 rounded-lg bg-white p-5 text-text shadow-card">
-        <h2 id={titleId}>
-          <Text as="span" variant="metadataMedium">
-            {created ? 'Your lobby is ready' : 'Open a lobby'}
-          </Text>
-        </h2>
+      <section className="grid max-h-full w-[min(560px,100%)] gap-5 overflow-y-auto rounded-lg bg-white p-5 text-text shadow-card">
+        <div className="grid gap-1.5">
+          <h2 id={titleId}>
+            <Text as="span" variant="smallTitle">
+              {created ? 'Your lobby is ready' : 'Open a debate lobby'}
+            </Text>
+          </h2>
+          {created ? null : (
+            <Text as="p" variant="metadata" color="grey-04">
+              A voice room anyone can join. People pair off into recorded debates and come back.
+            </Text>
+          )}
+        </div>
 
         {created && link ? (
           <>
@@ -143,34 +163,49 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
               <Input value={name} placeholder="Debate hour" onChange={event => setName(event.target.value)} autoFocus />
             </label>
 
-            <fieldset className="grid gap-2">
-              <legend className="sr-only">When</legend>
-              <label className="flex items-center gap-2">
-                <input type="radio" name="when" checked={when === 'now'} onChange={() => setWhen('now')} />
-                <Text as="span" variant="metadata">
+            <fieldset className="grid gap-1.5">
+              <legend className="mb-1.5">
+                <Text as="span" variant="footnoteMedium">
+                  When
+                </Text>
+              </legend>
+              <div className="flex gap-2">
+                <WhenOption checked={when === 'now'} onSelect={() => setWhen('now')}>
                   Open now
-                </Text>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" name="when" checked={when === 'later'} onChange={() => setWhen('later')} />
-                <Text as="span" variant="metadata">
-                  Schedule a start time
-                </Text>
-              </label>
-              {when === 'later' ? (
-                <div className="grid gap-1 pl-6">
-                  <Input
-                    type="datetime-local"
-                    value={startsAt}
-                    aria-label="Start time"
-                    onChange={event => setStartsAt(event.target.value)}
-                  />
-                  <Text as="p" variant="footnote" color="grey-04">
-                    Opens 10 minutes early. The link works now.
-                  </Text>
-                </div>
-              ) : null}
+                </WhenOption>
+                <WhenOption checked={when === 'later'} onSelect={() => setWhen('later')}>
+                  Schedule
+                </WhenOption>
+              </div>
             </fieldset>
+
+            {when === 'later' ? (
+              <div className="grid gap-1.5">
+                <div className="flex gap-3">
+                  <label className="grid min-w-0 flex-1 gap-1.5">
+                    <Text as="span" variant="footnoteMedium">
+                      Date
+                    </Text>
+                    <Input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} />
+                  </label>
+                  <label className="grid min-w-0 flex-1 gap-1.5">
+                    <Text as="span" variant="footnoteMedium">
+                      Start time
+                      {timeZone ? (
+                        <Text as="span" variant="footnote" color="grey-04">
+                          {' '}
+                          · {timeZone}
+                        </Text>
+                      ) : null}
+                    </Text>
+                    <Input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} />
+                  </label>
+                </div>
+                <Text as="p" variant="footnote" color="grey-04">
+                  Opens 10 minutes early. The link works now.
+                </Text>
+              </div>
+            ) : null}
 
             {formError || create.error ? (
               <Text as="p" variant="footnote" color="red-01">
@@ -191,5 +226,28 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
       </section>
     </div>,
     document.body
+  );
+}
+
+/** One half of the Open now / Schedule choice: a radio drawn as a pill, dark when chosen. */
+function WhenOption({
+  checked,
+  onSelect,
+  children,
+}: {
+  checked: boolean;
+  onSelect: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <label
+      className={cx(
+        'flex h-7 flex-1 cursor-pointer items-center justify-center rounded-full border text-metadata transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ctaPrimary',
+        checked ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:bg-grey-01'
+      )}
+    >
+      <input type="radio" name="when" checked={checked} onChange={onSelect} className="sr-only" />
+      {children}
+    </label>
   );
 }
