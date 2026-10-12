@@ -206,8 +206,13 @@ export const VARIANT_ATOMS = {
   },
 } as const;
 
+/** What the tab would hand its own card, for a host drawing the card itself. */
+export type ClaimCardDefaults = { answersReady: boolean; allowsSignedOutVotes: boolean };
+
 export function ClaimsTab({
   variant = 'explore',
+  renderClaim,
+  onVisibleClaims,
   trailing,
   warm = false,
   onSettledEmpty,
@@ -216,6 +221,10 @@ export function ClaimsTab({
   scopePicker,
 }: {
   variant?: ClaimsTabVariant;
+  /** Draws each claim in place of the default card, for a host with its own offer (the lobby). */
+  renderClaim?: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
+  /** The claims on screen, after each change. */
+  onVisibleClaims?: (entries: MatchmakingClaim[]) => void;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
   /**
@@ -908,6 +917,10 @@ export function ClaimsTab({
   const collapsedEverything = visibleClaims.length === 0 && (claims.length > 0 || excludedEverything);
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
+  React.useEffect(() => {
+    onVisibleClaims?.(visibleClaims);
+  }, [onVisibleClaims, visibleClaims]);
+
   // Reported once, and only from a settled, unnarrowed, working, *finished* list. Every one of
   // those matters: mid-load every list is empty, an error is not an answer about the corpus, a
   // filtered empty list is the viewer's own question rather than a dead end to be moved out of —
@@ -1175,23 +1188,33 @@ export function ClaimsTab({
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
           <HubCardList>
-            {visibleClaims.map(entry => (
-              <MatchmakingClaimCard
-                key={claimRowKey(entry)}
-                claim={entry.claim}
-                positions={entry.positions}
-                readiness={entry}
-                activeDebate={entry.active_debate}
-                // The paged list is geo-chat's own, so every row carries its kind already; only the
-                // tagged list has to wait for one — and only for the space this claim is in.
-                answersReady={taggedAnswersReadyFor(entry)}
-                // And where it cannot, the indexed read answers for the side, the same way the main
-                // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
-                // unpressable while those cards went on working.
-                answersMayComeFromIndex
-                allowsSignedOutVotes={!authenticated}
-              />
-            ))}
+            {visibleClaims.map(entry =>
+              renderClaim ? (
+                React.cloneElement(
+                  renderClaim(entry, {
+                    answersReady: taggedAnswersReadyFor(entry),
+                    allowsSignedOutVotes: !authenticated,
+                  }),
+                  { key: claimRowKey(entry) }
+                )
+              ) : (
+                <MatchmakingClaimCard
+                  key={claimRowKey(entry)}
+                  claim={entry.claim}
+                  positions={entry.positions}
+                  readiness={entry}
+                  activeDebate={entry.active_debate}
+                  // The paged list is geo-chat's own, so every row carries its kind already; only the
+                  // tagged list has to wait for one — and only for the space this claim is in.
+                  answersReady={taggedAnswersReadyFor(entry)}
+                  // And where it cannot, the indexed read answers for the side, the same way the main
+                  // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
+                  // unpressable while those cards went on working.
+                  answersMayComeFromIndex
+                  allowsSignedOutVotes={!authenticated}
+                />
+              )
+            )}
           </HubCardList>
         </HubQueryState>
         {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside

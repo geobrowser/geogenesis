@@ -1145,6 +1145,19 @@ describe('All claims reads the Debate tag', () => {
     expect(screen.getByRole('button', { name: /Agree/ })).toBeDisabled();
   });
 
+  it('hands each claim to the host’s renderer with what its own card would get', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.authenticated = false;
+    mocks.accountKey = null;
+    const renderClaim = vi.fn((entry: { claim: { claim: string } }) => <p>Hosted: {entry.claim.claim}</p>);
+    render(<ClaimsTab renderClaim={renderClaim} />);
+    await showAllClaims();
+
+    expect(await screen.findByText('Hosted: A tagged claim')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Agree/ })).toBeNull();
+    expect(renderClaim).toHaveBeenLastCalledWith(expect.anything(), { answersReady: true, allowsSignedOutVotes: true });
+  });
+
   it('lets a signed-out viewer press, because having no side is a real answer', async () => {
     // The other half: signed out is settled, and the press is what opens the sign-in prompt. Read
     // as "not ready" the whole list would be inert for everyone not signed in.
