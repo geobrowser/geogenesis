@@ -102,6 +102,7 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
+import { rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { inheritedJoinState, joinStateNeedsOpening, kindsForJoinState } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import {
@@ -1967,6 +1968,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     ensureKindsForJoinState({ audioMuted: next, videoEnabled });
   }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
 
+  const rememberJoinStateForPicker = React.useCallback(
+    (sessionId: string) => rememberRematchJoinIntent(sessionId, { micOn: !audioMuted, cameraOn: videoEnabled }),
+    [audioMuted, videoEnabled]
+  );
+
   const toggleRemoteAudioEnabled = React.useCallback(() => {
     setRemoteAudioEnabled(current => !current);
   }, []);
@@ -2098,6 +2104,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
       const destination = rematchDestination(session);
       if (destination && session) {
+        rememberJoinStateForPicker(session.id);
         await followDestination(destination, debateRematchDestinationClaimKey(session));
         return;
       }
@@ -2106,6 +2113,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     [
       debate,
       finishAndPersist,
+      rememberJoinStateForPicker,
       localMediaStreamRef,
       localTracksRef,
       locallyThanking,
@@ -2450,8 +2458,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     if (!session) return;
     // This tab is idle in the room — another tab held it, or it dropped — so it follows only if no
     // tab nearer the viewer has already gone on (GEO-3149).
+    rememberJoinStateForPicker(session.id);
     void followDestination(idleRematchDestination, debateRematchDestinationClaimKey(session));
-  }, [bothPressedDebateAgain, followDestination, idleRematchDestination, locallyThanking, rematchQuery.data]);
+  }, [
+    bothPressedDebateAgain,
+    followDestination,
+    idleRematchDestination,
+    locallyThanking,
+    rematchQuery.data,
+    rememberJoinStateForPicker,
+  ]);
 
   React.useEffect(() => {
     if (!debate || storagePersistenceRequestedRef.current) return;

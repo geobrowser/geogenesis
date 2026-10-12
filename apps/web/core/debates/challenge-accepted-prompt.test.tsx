@@ -7,7 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from './api';
 import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
-import { clearRematchJoinIntents, readRematchMicIntent } from './rematch-join-intent';
+import { clearRematchJoinIntents, readRematchJoinIntent } from './rematch-join-intent';
 
 const media = vi.hoisted(() => ({
   releaseSession: vi.fn(),
@@ -111,10 +111,10 @@ describe('ChallengeAcceptedPrompt', () => {
 
     // Opened on arrival, because the browser already allows it.
     await screen.findByRole('button', { name: 'Turn microphone off' });
-    await waitFor(() => expect(readRematchMicIntent('rematch-1')).toBe(true));
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')?.micOn).toBe(true));
 
     fireEvent.click(screen.getByRole('button', { name: 'Turn microphone off' }));
-    await waitFor(() => expect(readRematchMicIntent('rematch-1')).toBe(false));
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')?.micOn).toBe(false));
 
     // Away, and back. Cleared so what follows is about the remount alone.
     view.unmount();
@@ -122,7 +122,7 @@ describe('ChallengeAcceptedPrompt', () => {
     renderPrompt();
 
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(readRematchMicIntent('rematch-1')).toBe(false);
+    expect(readRematchJoinIntent('rematch-1')?.micOn).toBe(false);
     expect(screen.getByRole('button', { name: 'Turn microphone on' })).toBeInTheDocument();
     // And nothing was opened to get there.
     expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
@@ -131,7 +131,7 @@ describe('ChallengeAcceptedPrompt', () => {
   it('keeps a mic-on choice across an unmount and remount', async () => {
     const view = renderPrompt();
     await screen.findByRole('button', { name: 'Turn microphone off' });
-    await waitFor(() => expect(readRematchMicIntent('rematch-1')).toBe(true));
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')?.micOn).toBe(true));
 
     view.unmount();
     renderPrompt();

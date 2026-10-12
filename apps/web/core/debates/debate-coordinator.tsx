@@ -40,7 +40,7 @@ import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { useOptionalDebateMediaSession } from './media-session';
-import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchMicIntent } from './rematch-join-intent';
+import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { sameId } from './rooms/room-presence';
@@ -548,13 +548,14 @@ export function DebateCoordinator() {
              * nothing left to read. Recording it against that id is also what stops the sender's
              * card appearing in front of the person who just answered here.
              */
-            const micOn = Boolean(
-              mediaSession?.localTracksRef.current.some(track => track.mediaStreamTrack.kind === 'audio')
+            const kinds = new Set(
+              (mediaSession?.localTracksRef.current ?? []).map(track => track.mediaStreamTrack.kind)
             );
+            const chosen = { micOn: kinds.has('audio'), cameraOn: kinds.has('video') };
             acceptChallenge.mutate(promptedChallenge.id, {
               onSuccess: result => {
                 if (!result.session) return;
-                rememberRematchMicIntent(result.session.id, micOn);
+                rememberRematchJoinIntent(result.session.id, chosen);
                 markRematchAnswered(result.session.id);
               },
             });

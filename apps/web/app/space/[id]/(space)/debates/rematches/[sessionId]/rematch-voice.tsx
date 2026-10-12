@@ -31,7 +31,7 @@ import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
-import { readRematchMicIntent } from '~/core/debates/rematch-join-intent';
+import { readRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
@@ -55,8 +55,8 @@ import {
  * Otherwise live after a debate, muted off a challenge.
  */
 function microphoneEnabledByDefault(session: DebateRematchSession) {
-  const chosen = readRematchMicIntent(session.id);
-  if (chosen !== null) return chosen;
+  const chosen = readRematchJoinIntent(session.id);
+  if (chosen) return chosen.micOn;
   return session.source_debate_id !== null;
 }
 

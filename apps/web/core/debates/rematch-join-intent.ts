@@ -1,29 +1,27 @@
 'use client';
 
-const micIntentBySessionId = new Map<string, boolean>();
+import type { DebateJoinState } from './request-join-state';
+
+const joinIntentBySessionId = new Map<string, DebateJoinState>();
 
 const answeredSessionIds = new Set<string>();
 
 /** Deliberately small. These only ever hold the sessions of one visit. */
 const MAX_REMEMBERED_SESSIONS = 20;
 
-function evict(sessionId: string) {
-  // Oldest first, so a long visit cannot grow this without bound.
-  if (micIntentBySessionId.size >= MAX_REMEMBERED_SESSIONS && !micIntentBySessionId.has(sessionId)) {
-    const oldest = micIntentBySessionId.keys().next();
-    if (!oldest.done) micIntentBySessionId.delete(oldest.value);
-  }
-}
-
-export function rememberRematchMicIntent(sessionId: string, micOn: boolean) {
+export function rememberRematchJoinIntent(sessionId: string, state: DebateJoinState) {
   if (!sessionId) return;
-  evict(sessionId);
-  micIntentBySessionId.set(sessionId, micOn);
+  // Oldest first, so a long visit cannot grow this without bound.
+  if (joinIntentBySessionId.size >= MAX_REMEMBERED_SESSIONS && !joinIntentBySessionId.has(sessionId)) {
+    const oldest = joinIntentBySessionId.keys().next();
+    if (!oldest.done) joinIntentBySessionId.delete(oldest.value);
+  }
+  joinIntentBySessionId.set(sessionId, state);
 }
 
-export function readRematchMicIntent(sessionId: string): boolean | null {
+export function readRematchJoinIntent(sessionId: string): DebateJoinState | null {
   if (!sessionId) return null;
-  return micIntentBySessionId.get(sessionId) ?? null;
+  return joinIntentBySessionId.get(sessionId) ?? null;
 }
 
 export function markRematchAnswered(sessionId: string) {
@@ -38,7 +36,8 @@ export function hasAnsweredRematchJoin(sessionId: string): boolean {
   return Boolean(sessionId) && answeredSessionIds.has(sessionId);
 }
 
+/** Test seam. Nothing in the app forgets either of these; a reload is what clears them. */
 export function clearRematchJoinIntents() {
-  micIntentBySessionId.clear();
+  joinIntentBySessionId.clear();
   answeredSessionIds.clear();
 }

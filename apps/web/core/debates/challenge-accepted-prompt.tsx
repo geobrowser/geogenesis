@@ -8,7 +8,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateRematchParticipant, DebateRematchSession } from './api';
 import { debateRematchMediaSessionKey } from './media-session';
-import { readRematchMicIntent, rememberRematchMicIntent } from './rematch-join-intent';
+import { readRematchJoinIntent, rememberRematchJoinIntent } from './rematch-join-intent';
 import { DebateRequestMediaPreview } from './request-media-preview';
 import { useScrollLock } from './use-scroll-lock';
 
@@ -32,8 +32,11 @@ export function ChallengeAcceptedPrompt({
 }) {
   const titleId = React.useId();
 
-  const [initialMicOn] = React.useState(() => readRematchMicIntent(session.id));
-  const rememberMic = React.useCallback((micOn: boolean) => rememberRematchMicIntent(session.id, micOn), [session.id]);
+  const [initialMicOn] = React.useState(() => readRematchJoinIntent(session.id)?.micOn ?? null);
+  const rememberMic = React.useCallback(
+    (micOn: boolean) => rememberRematchJoinIntent(session.id, { micOn, cameraOn: false }),
+    [session.id]
+  );
   const you = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
   const other = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
 

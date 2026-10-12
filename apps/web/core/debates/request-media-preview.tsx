@@ -42,6 +42,7 @@ type DebateRequestMediaPreviewProps = {
   avatarValue?: string | null;
   retain?: React.MutableRefObject<boolean>;
   fallback?: React.ReactNode;
+  micOnly?: boolean;
   initialMicOn?: boolean | null;
   onMicChange?: (micOn: boolean) => void;
 };
