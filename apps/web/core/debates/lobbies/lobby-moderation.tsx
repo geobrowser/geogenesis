@@ -304,7 +304,7 @@ function BannedList({
       )}
       {moderate.isError ? <ErrorRow>{moderationErrorMessage(moderate.error)}</ErrorRow> : null}
       <Text as="p" variant="footnote" color="grey-04" className="px-3 py-2">
-        Bans apply to this lobby only.
+        Bans apply to this lobby only. Guests without an account can be removed but not banned.
       </Text>
     </>
   );
