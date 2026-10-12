@@ -554,6 +554,28 @@ describe('open rounds: the lead-in to a required round (GEO-3258)', () => {
     expect(upcomingTurnLabel(withLeadIn, inLeadIn)).toBe('Rebut in');
   });
 
+  it('counts the opener in once when the opening ends early, during the hand-off as well', () => {
+    // Bob yields the opening's last turn at 20:01:40, with a hand-off to 20:01:45.
+    const yielded: Debate = {
+      ...withLeadIn,
+      turn_yields: [
+        {
+          turn_index: 1,
+          user_id: 'user-b',
+          participant_slot: 2,
+          yielded_at: '2026-10-06T20:01:40.000Z',
+          accepted_at: '2026-10-06T20:01:40.000Z',
+          handoff_deadline_at: '2026-10-06T20:01:45.000Z',
+        },
+      ],
+    };
+    const handoff = countdownAt(yielded, at('20:01:42.000'));
+    expect(handoff).toMatchObject({ yieldingSlot: 2, incomingSlot: 1 });
+    expect(localTurnStartsInSeconds(yielded, handoff, 1)).toBeNull();
+    // The lead-in still counts Alice in, after the hand-off.
+    expect(localTurnStartsInSeconds(yielded, countdownAt(yielded, at('20:01:50.000')), 1)).toBe(3);
+  });
+
   it('starts round 1 when the lead-in ends', () => {
     const countdown = countdownAt(withLeadIn, at('20:02:09.000'));
     expect(countdown).toMatchObject({ turnIndex: 2, activeSlot: 1, remainingSeconds: 44 });

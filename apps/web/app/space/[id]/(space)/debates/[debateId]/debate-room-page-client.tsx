@@ -3799,17 +3799,17 @@ export function localTurnStartsInSeconds(
   }
 
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
+  // A required round's lead-in follows this turn and counts its opener in itself, so counting them in
+  // over this turn's end as well, or over its hand-off when it ends early, would count twice.
+  if (countdown.openRounds?.phase === 'speaking' && openRoundLeadInAfterTurn(debate, countdown.turnIndex) > 0) {
+    return null;
+  }
   if (countdown.yieldingSlot !== null) {
     return countdown.incomingSlot === localSlot ? countdown.remainingSeconds : null;
   }
   if (countdown.activeSlot === localSlot) return null;
   // An undecided round has no next turn to count into (GEO-3175).
   if (countdown.openRounds?.phase === 'deciding') return null;
-  // A required round's lead-in follows this turn and counts its opener in itself, so counting them in
-  // over this turn's end as well would count twice.
-  if (countdown.openRounds?.phase === 'speaking' && openRoundLeadInAfterTurn(debate, countdown.turnIndex) > 0) {
-    return null;
-  }
 
   const nextTurnIndex = countdown.turnIndex + 1;
   if (nextTurnIndex >= debate.turn_durations_ms.length) return null;
