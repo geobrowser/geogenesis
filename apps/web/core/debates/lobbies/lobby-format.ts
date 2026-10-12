@@ -69,6 +69,14 @@ export function notYetOpenLabel(lobby: { starts_at: string; opens_at: string }, 
   return `Opens ${opens} · starts ${starts}`;
 }
 
+/**
+ * Who a lobby counts as here: the whole roster, stepped-out members included. The lobby header and
+ * the debate end card both count this way, so they never disagree.
+ */
+export function lobbyHeadcount(lobby: Pick<DebateLobbyView, 'members'>) {
+  return lobby.members.length;
+}
+
 export function hereLabel(headcount: number) {
   return `${headcount} here`;
 }

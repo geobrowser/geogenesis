@@ -79,10 +79,10 @@ describe('BackToLobbyRow', () => {
     expect(consumeLobbyRejoin('lobby1')).toBe(true);
   });
 
-  it('names the lobby and counts the people still in it, not those debating', () => {
+  it('names the lobby, counts it as the lobby header does, and shows faces of people in the room', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
     render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()?.textContent).toContain('4 here now');
+    expect(backButton()?.textContent).toContain('5 here now');
     expect(screen.getAllByRole('listitem')).toHaveLength(3);
   });
 

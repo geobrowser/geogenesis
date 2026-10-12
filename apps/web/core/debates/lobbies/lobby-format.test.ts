@@ -4,11 +4,13 @@ import { type DebateLobbyMember, type DebateLobbyRole, GeoChatRequestError } fro
 import {
   debatingCount,
   debatingLabel,
+  hereNowLabel,
   hostAfterChange,
   hostsLabel,
   inDebateLabel,
   isAlreadyInAnotherLobby,
   lobbyErrorMessage,
+  lobbyHeadcount,
   lobbyScheduleLabel,
   lobbyTimeLabel,
   memberActions,
@@ -362,5 +364,13 @@ describe('pairs', () => {
     const pair = { people: [person('outsider', false), person('0193aaaabbbb')] };
     expect(pairSubject(pair, [debater])).toBe(subject);
     expect(pairSubject({ people: [person('outsider', false)] }, [debater])).toBeNull();
+  });
+});
+
+describe('lobbyHeadcount', () => {
+  it('counts the whole roster, stepped-out members included', () => {
+    const members = [{ stepped_out: false }, { stepped_out: true }, { stepped_out: false }] as DebateLobbyMember[];
+    expect(lobbyHeadcount({ members })).toBe(3);
+    expect(hereNowLabel(lobbyHeadcount({ members }))).toBe('3 here now');
   });
 });

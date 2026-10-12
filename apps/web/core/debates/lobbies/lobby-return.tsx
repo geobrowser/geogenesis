@@ -9,7 +9,7 @@ import { Text } from '~/design-system/text';
 import { consumeDebateReturnDestination, peekDebateReturnDestination } from '../debate-return-navigation';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
 import { useDebateLobby, useMyDebateLobby } from './hooks';
-import { hereNowLabel } from './lobby-format';
+import { hereNowLabel, lobbyHeadcount } from './lobby-format';
 import { LobbyAvatarStack } from './lobby-people';
 import { requestLobbyRejoin } from './step-out';
 
@@ -68,7 +68,7 @@ function OpenLobbyRow({ lobbyId, onLeave, disabled = false }: BackToLobbyProps &
   // A host removed them: going back is a choice made on the lobby page, not from here.
   if (lobby?.access.status !== 'admitted' || lobby.viewer.removed) return null;
 
-  // Stepped-out members are debating elsewhere, the viewer among them.
+  // Faces of people in the room now; stepped-out members, the viewer among them, are debating.
   const present = lobby.members.filter(member => !member.stepped_out);
 
   return (
@@ -90,7 +90,7 @@ function OpenLobbyRow({ lobbyId, onLeave, disabled = false }: BackToLobbyProps &
             Back to {lobby.name}
           </Text>
           <Text as="span" variant="footnote" color="grey-02">
-            {hereNowLabel(present.length)}
+            {hereNowLabel(lobbyHeadcount(lobby))}
           </Text>
         </span>
       </button>
