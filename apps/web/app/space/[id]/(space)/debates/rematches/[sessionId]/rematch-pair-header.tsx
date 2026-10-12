@@ -55,6 +55,7 @@ export type PairHeaderVoice =
       onRetryMic: () => void;
       /** The mute/unmute pill and its attached settings chevron. Owned by `rematch-voice.tsx`. */
       controls: React.ReactNode;
+      localVideo?: React.ReactNode;
       opponentState: PairMicState;
       /**
        * The viewer is making sound the room cannot hear. Wired to nothing today — see the note on
@@ -96,6 +97,8 @@ type RematchPairHeaderProps = {
    * "View profile" on the other card, so each card's corner is that person's secondary action, and
    * the row it used to occupy at the end of the tab strip is now the tabs' alone.
    */
+  /** The other person's camera, where they have one running. */
+  opponentVideo?: React.ReactNode;
   leaveAction?: React.ReactNode;
 };
 
@@ -108,6 +111,7 @@ export function RematchPairHeader({
   toast,
   onOpenOpponentSpace,
   leaveAction,
+  opponentVideo,
 }: RematchPairHeaderProps) {
   /**
    * Everything about the opponent that their card cannot say for itself.
@@ -133,6 +137,7 @@ export function RematchPairHeader({
           of this change. */}
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 mobile:grid-cols-1">
         <OpponentCard
+          video={opponentVideo}
           opponent={opponent}
           name={opponentName}
           state={voice.kind === 'live' ? voice.opponentState : 'waiting'}
@@ -330,6 +335,7 @@ function YouCard({
             value={local?.profileSpaceId}
             name="You"
             speaking={speaking}
+            video={live ? voice.localVideo : null}
           />
         }
         name="You"
@@ -368,6 +374,7 @@ function OpponentCard({
   showMicState,
   onOpen,
   describedBy,
+  video,
 }: {
   opponent: PairHeaderParticipant;
   name: string;
@@ -376,6 +383,7 @@ function OpponentCard({
   onOpen: (event: React.MouseEvent) => void;
   /** The header's live region, which also serves as this button's description. */
   describedBy: string;
+  video?: React.ReactNode;
 }) {
   const talking = showMicState && state === 'talking';
 
@@ -393,6 +401,7 @@ function OpponentCard({
           value={opponent.profileSpaceId}
           name={name}
           speaking={talking}
+          video={video}
         />
       }
       name={name}
@@ -428,22 +437,22 @@ function ParticipantAvatar({
   value,
   name,
   speaking,
+  video,
 }: {
   avatarUrl: string | null;
   value?: string;
   name: string;
   speaking: boolean;
+  video?: React.ReactNode;
 }) {
   return (
-    // The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the generated
-    // fallback, while a real avatar renders `h-full w-full` and takes whatever box it is given.
     <span
       className={cx(
-        'inline-flex size-8 shrink-0 overflow-hidden rounded-full',
+        'inline-flex size-14 shrink-0 overflow-hidden rounded-full bg-grey-01',
         speaking && 'ring-2 ring-successTertiary'
       )}
     >
-      <Avatar avatarUrl={avatarUrl} value={value ?? name} size={32} alt="" />
+      {video ?? <Avatar avatarUrl={avatarUrl} value={value ?? name} size={56} alt="" />}
     </span>
   );
 }

@@ -78,6 +78,8 @@ function microphoneEnabledByDefault(session: DebateRematchSession) {
  */
 const NUDGE_MS = 10_000;
 
+type TrackLike = { attach: (element: HTMLVideoElement) => void; detach: (element: HTMLVideoElement) => void };
+
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
 /**
@@ -808,7 +810,7 @@ function VoiceHeaderBody({
   // button that now sits in the card, and re-insert the `role="status"` regions with their text
   // already in them — the one thing those regions are shaped to avoid. So the hooks run
   // unconditionally and the connection state picks the `voice` rather than the component.
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const { localParticipant, isMicrophoneEnabled, cameraTrack } = useLocalParticipant();
   const micFailed = Boolean(micFailure);
   const muted = !isMicrophoneEnabled || micFailed;
   // Muting publishes nothing, but it does not retract the active-speaker update that came just
@@ -898,6 +900,9 @@ function VoiceHeaderBody({
     return null;
   })();
 
+  const localVideo = <TrackVideo track={cameraTrack?.track} />;
+  const opponentVideo = <TrackVideo track={opponentParticipant?.getTrackPublication(Track.Source.Camera)?.track} />;
+
   const opponentState: PairMicState = !opponentParticipant
     ? 'waiting'
     : opponentMuted
@@ -912,6 +917,7 @@ function VoiceHeaderBody({
     localSpeaking,
     micFailureMessage: micFailure ? micFailureMessage(micFailure) : null,
     onRetryMic: onRetry,
+    localVideo,
     controls: (
       <LocalAudioControls
         room={room}
@@ -977,7 +983,7 @@ function VoiceHeaderBody({
           onMutedChange={setOpponentMuted}
         />
       ) : null}
-      <RematchPairHeader {...pair} voice={voice} notice={notice} toast={toast} />
+      <RematchPairHeader {...pair} voice={voice} notice={notice} toast={toast} opponentVideo={opponentVideo} />
     </>
   );
 }
@@ -1245,6 +1251,22 @@ function LocalAudioControls({
       )}
     </span>
   );
+}
+
+function TrackVideo({ track }: { track: TrackLike | null | undefined }) {
+  const ref = React.useRef<HTMLVideoElement | null>(null);
+
+  React.useEffect(() => {
+    const element = ref.current;
+    if (!element || !track) return;
+    track.attach(element);
+    return () => {
+      track.detach(element);
+    };
+  }, [track]);
+
+  if (!track) return null;
+  return <video ref={ref} className="size-full object-cover" playsInline muted autoPlay />;
 }
 
 function DesktopSettingsPopover({

@@ -72,6 +72,10 @@ const mocks = vi.hoisted(() => ({
   selectedAudioInputId: '',
   /** The published microphone, once there is one. */
   microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
+  localCameraTrack: undefined as
+    { track: { attach: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> } } | undefined,
+  opponentCameraPublication: undefined as
+    { track: { attach: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> } } | undefined,
   useKrispNoiseFilter: vi.fn(() => ({ setNoiseFilterEnabled: vi.fn(() => Promise.resolve()) })),
   capture: vi.fn(),
   personProfileOpened: vi.fn(),
@@ -124,6 +128,7 @@ vi.mock('@livekit/components-react', () => ({
     },
     isMicrophoneEnabled: mocks.isMicrophoneEnabled,
     microphoneTrack: mocks.microphoneTrack,
+    cameraTrack: mocks.localCameraTrack,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
   useRoomContext: () => ({
@@ -178,7 +183,7 @@ vi.mock('livekit-client', () => ({
     DeviceInUse: 'DeviceInUse',
     Other: 'Other',
   },
-  Track: { Source: { Microphone: 'microphone' } },
+  Track: { Source: { Microphone: 'microphone', Camera: 'camera' } },
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -343,7 +348,12 @@ function remoteOpponent() {
   // must come back empty rather than quietly handing over the microphone.
   return {
     identity: 'them',
-    getTrackPublication: (source: string) => (source === 'microphone' ? mocks.opponentMicPublication : undefined),
+    getTrackPublication: (source: string) =>
+      source === 'microphone'
+        ? mocks.opponentMicPublication
+        : source === 'camera'
+          ? mocks.opponentCameraPublication
+          : undefined,
   };
 }
 
@@ -428,6 +438,8 @@ beforeEach(() => {
   mocks.deviceSelectCalls = [];
   mocks.remoteParticipants = [];
   mocks.opponentMicPublication = { isMuted: false };
+  mocks.localCameraTrack = undefined;
+  mocks.opponentCameraPublication = undefined;
   mocks.setMicrophoneEnabled.mockReset().mockResolvedValue(undefined);
   mocks.setCameraEnabled.mockReset().mockResolvedValue(undefined);
   clearRematchJoinIntents();
@@ -2478,5 +2490,68 @@ describe('choosing a camera', () => {
     const videoCalls = mocks.deviceSelectCalls.filter(call => call.kind === 'videoinput');
     expect(videoCalls.length).toBeGreaterThan(0);
     expect(videoCalls.every(call => call.requestPermissions === false)).toBe(true);
+  });
+});
+
+describe('video in the header', () => {
+  function cameraTrack() {
+    return { track: { attach: vi.fn(), detach: vi.fn() } };
+  }
+
+  it('draws your camera where one is running', async () => {
+    mocks.localCameraTrack = cameraTrack();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(mocks.localCameraTrack!.track.attach).toHaveBeenCalled());
+    const element = mocks.localCameraTrack!.track.attach.mock.calls[0]?.[0] as HTMLVideoElement;
+    expect(element.tagName).toBe('VIDEO');
+    expect(element.muted).toBe(true);
+  });
+
+  it('draws the other person’s camera where theirs is running', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentCameraPublication = cameraTrack();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(mocks.opponentCameraPublication!.track.attach).toHaveBeenCalled());
+  });
+
+  it('leaves the avatar in place when no camera is running', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(document.querySelector('video')).toBeNull();
+  });
+
+  it('hands the track back when the header goes away', async () => {
+    mocks.localCameraTrack = cameraTrack();
+    const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    await waitFor(() => expect(mocks.localCameraTrack!.track.attach).toHaveBeenCalled());
+
+    view.unmount();
+
+    expect(mocks.localCameraTrack!.track.detach).toHaveBeenCalled();
+  });
+
+  it('keeps the slot the same size with a camera and without', async () => {
+    const slotSizes = () =>
+      [...document.querySelectorAll('[class*="rounded-full"]')]
+        .map(node => /size-\d+/.exec(node.className)?.[0])
+        .filter(Boolean);
+
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const withoutCamera = slotSizes();
+    cleanup();
+
+    mocks.localCameraTrack = cameraTrack();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(slotSizes()).toEqual(withoutCamera);
+    expect(withoutCamera).toContain('size-14');
   });
 });
