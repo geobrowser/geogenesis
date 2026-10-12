@@ -48,10 +48,31 @@ const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_MATCHES: ClaimMatch[] = [];
 
 /** What became of asking someone to set their availability. */
-type PromptOutcome = 'pending' | 'sent' | 'no_email' | 'not_on_debates' | 'error';
+type PromptOutcome =
+  | 'pending'
+  | 'sent'
+  | 'disabled_by_preference'
+  | 'rate_limited'
+  | 'channel_off'
+  | 'failed'
+  | 'no_email'
+  | 'not_on_debates'
+  | 'error';
 
-/** The outcomes that settle it: asking again would email someone for nothing. */
-const SETTLED_PROMPTS: ReadonlySet<PromptOutcome> = new Set(['pending', 'sent', 'no_email', 'not_on_debates']);
+/**
+ * The outcomes that settle it: asking again would email someone for nothing, or could not change
+ * the answer. Failed, rate-limited and errored requests stay open so the admin can retry them.
+ */
+const SETTLED_PROMPTS: ReadonlySet<PromptOutcome> = new Set([
+  'pending',
+  'sent',
+  'no_email',
+  'disabled_by_preference',
+  'channel_off',
+  'not_on_debates',
+]);
+
+const isRetryable = (outcome: PromptOutcome | undefined) => outcome !== undefined && !SETTLED_PROMPTS.has(outcome);
 
 /** A time picked, and whether it is outside their availability: `null` until their overlap is known. */
 type Choice = { start: number; outside: boolean | null };
@@ -245,7 +266,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
     for (const userId of toAsk) {
       let outcome: PromptOutcome;
       try {
-        outcome = (await prompt.mutateAsync(userId)).sent ? 'sent' : 'no_email';
+        const res = await prompt.mutateAsync(userId);
+        outcome = res.outcome ?? (res.sent ? 'sent' : 'no_email');
       } catch (error) {
         outcome = isDebateProfileMissing(error) ? 'not_on_debates' : 'error';
       }
@@ -493,9 +515,13 @@ function PickBox({
 
 const PROMPT_LABELS: Record<Exclude<PromptOutcome, 'pending'>, string> = {
   sent: 'Request sent',
-  no_email: 'No email on file',
+  disabled_by_preference: 'Email turned off by them. They’ll see it on Geo; message them directly.',
+  rate_limited: 'Held back: too many emails to them this hour. Try again later.',
+  channel_off: 'Email delivery is off. They’ll see it on Geo; message them directly.',
+  failed: 'Email failed to send. Try again.',
+  no_email: 'No email on file. They’ll see it on Geo; message them directly.',
   not_on_debates: 'Hasn’t joined debates',
-  error: 'Couldn’t send. Try again later.',
+  error: 'Couldn’t send. Try again.',
 };
 
 function PersonOption({
@@ -572,15 +598,26 @@ function PersonOption({
         Select
       </HubPillButton>
     );
-  } else if (prompt && prompt !== 'pending' && prompt !== 'error') {
+  } else if (prompt && prompt !== 'pending' && !isRetryable(prompt)) {
     action = (
       <Text
         as="span"
         variant="footnote"
-        className={cx('pt-1.5 text-right', prompt === 'sent' ? POSITIVE_TEXT_CLASS : 'text-grey-04')}
+        className={cx('max-w-[14rem] pt-1.5 text-right', prompt === 'sent' ? POSITIVE_TEXT_CLASS : 'text-grey-04')}
       >
         {PROMPT_LABELS[prompt]}
       </Text>
+    );
+  } else if (isRetryable(prompt)) {
+    action = (
+      <HubPillButton
+        analyticsSurface="calendar"
+        analyticsLabel="New match Retry availability request"
+        aria-label={`Retry requesting availability from ${name}`}
+        onClick={onRequest}
+      >
+        Retry
+      </HubPillButton>
     );
   } else {
     action = (
@@ -615,9 +652,9 @@ function PersonOption({
             No availability set. Can&rsquo;t be matched until they set it.
           </Text>
         )}
-        {prompt === 'error' ? (
+        {isRetryable(prompt) ? (
           <Text as="span" variant="footnote" className="text-red-01">
-            {PROMPT_LABELS.error}
+            {PROMPT_LABELS[prompt as 'error']}
           </Text>
         ) : null}
       </div>
@@ -779,7 +816,8 @@ function TimePicker({
     } else if (slots.length === 0) {
       const outcomes = [first, second].map(person => prompts.get(normId(person.userId)));
       const asking = outcomes.includes('pending');
-      const asked = outcomes.every(outcome => outcome !== undefined && SETTLED_PROMPTS.has(outcome));
+      const answered = outcomes.every(outcome => outcome !== undefined && outcome !== 'pending');
+      const retry = outcomes.some(isRetryable);
       body = (
         <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
           <Text as="p" variant="metadataMedium">
@@ -793,15 +831,28 @@ function TimePicker({
             >
               Pick any time
             </HubPillButton>
-            {asked && !asking ? (
-              <Text as="span" variant="footnote" color="grey-04">
-                {[a, b]
-                  .map((name, index) => {
-                    const outcome = outcomes[index];
-                    return outcome === 'sent' ? `Asked ${name}` : `${name}: ${PROMPT_LABELS[outcome as 'no_email']}`;
-                  })
-                  .join(' · ')}
-              </Text>
+            {answered && !asking ? (
+              <>
+                <div className="flex flex-col gap-0.5">
+                  {[a, b].map((name, index) => {
+                    const outcome = outcomes[index] as Exclude<PromptOutcome, 'pending'>;
+                    return (
+                      <Text key={index} as="span" variant="footnote" color="grey-04">
+                        {outcome === 'sent' ? `Asked ${name}` : `${name}: ${PROMPT_LABELS[outcome]}`}
+                      </Text>
+                    );
+                  })}
+                </div>
+                {retry ? (
+                  <HubPillButton
+                    analyticsSurface="calendar"
+                    analyticsLabel="New match Retry ask both"
+                    onClick={onRequestBoth}
+                  >
+                    Retry
+                  </HubPillButton>
+                ) : null}
+              </>
             ) : (
               <HubPillButton
                 analyticsSurface="calendar"
