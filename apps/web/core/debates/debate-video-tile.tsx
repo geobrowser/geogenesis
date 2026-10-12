@@ -119,6 +119,8 @@ export function DebateVideoTile({
   closingMessage = false,
   tileControls,
   status,
+  reveal,
+  chipsHidden = false,
   children,
 }: {
   participantPosition: boolean | null;
@@ -150,6 +152,13 @@ export function DebateVideoTile({
    * so nothing the debate does later can displace it.
    */
   status?: React.ReactNode;
+  /** Over the middle of the tile, above the phase overlays: the Open rounds pick reveal (GEO-3179). */
+  reveal?: React.ReactNode;
+  /**
+   * Fades the bottom row out while result text sits over the gap between the tiles, which is where
+   * the upper tile's chips are (GEO-3179).
+   */
+  chipsHidden?: boolean;
   children: React.ReactNode;
 }) {
   const positionLabel = participantPosition === null ? null : responsePositionLabel(participantPosition);
@@ -205,7 +214,13 @@ export function DebateVideoTile({
           is room for equal columns, which is every width from ~360px up, the two resolve equal and
           the controls land exactly on the centre line. */}
       {(positionLabel !== null || tileControls || status) && (
-        <div className="pointer-events-none absolute inset-x-3 bottom-3 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center gap-2">
+        <div
+          data-tile-chips={chipsHidden ? 'hidden' : 'visible'}
+          className={cx(
+            'pointer-events-none absolute inset-x-3 bottom-3 z-30 grid grid-cols-[minmax(0,1fr)_auto_minmax(auto,1fr)] items-center gap-2 transition-opacity duration-200 motion-reduce:transition-none',
+            chipsHidden && 'opacity-0'
+          )}
+        >
           <div className="flex min-w-0 justify-start">
             {positionLabel !== null && <DebatePositionChip label={positionLabel} />}
           </div>
@@ -273,6 +288,8 @@ export function DebateVideoTile({
           Debate ends soon
         </div>
       )}
+
+      {reveal}
 
       {overlayText && (
         <div

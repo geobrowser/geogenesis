@@ -1189,7 +1189,7 @@ export function ClaimsTab({
                 // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
                 // unpressable while those cards went on working.
                 answersMayComeFromIndex
-                onRequireSignIn={onRequireSignIn}
+                allowsSignedOutVotes={!authenticated}
               />
             ))}
           </HubCardList>

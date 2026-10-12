@@ -100,7 +100,7 @@ vi.mock('~/partials/entity-page/automatic-mode-toggle', () => ({
 vi.mock('~/partials/entity-page/backlinks-client-container', () => ({ BacklinksClientContainer: () => null }));
 vi.mock('~/partials/entity-page/type-schema-inline', () => ({ TypeSchemaInline: () => null }));
 vi.mock('~/partials/entity-page/entity-page-header', () => ({ EntityPageHeader: () => null }));
-vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
+vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/comments/comments-section', () => ({
   CommentSection: (props: Record<string, unknown>) => {
     mocks.commentSection = props;

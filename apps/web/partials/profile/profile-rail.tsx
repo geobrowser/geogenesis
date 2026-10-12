@@ -24,8 +24,12 @@ import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
+import { useFollowTopics } from '~/core/topics/use-follow-topics';
+import { useFollowedTopics } from '~/core/topics/use-followed-topics';
+import { useTopicMetadata } from '~/core/topics/use-topic-metadata';
 import { NavUtils } from '~/core/utils/utils';
 
+import { AvatarGroup } from '~/design-system/avatar-group';
 import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton, SquareButton } from '~/design-system/button';
 import { ClampedText } from '~/design-system/clamped-text';
 import { PageStringField } from '~/design-system/editable-fields/editable-fields';
@@ -488,6 +492,8 @@ export function AboutSection({
             <VerifiedBy verifiers={facts.verifiedBy} />
           </Row>
         )}
+        {/* Only a personal space follows anything; a DAO's would always come back empty. */}
+        {spaceType === 'PERSONAL' && <FollowingTopics spaceId={spaceId} />}
 
         {/* Each count is the tab that lists what it counts, which is the only
             question a number like this raises. */}
@@ -605,20 +611,159 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
     return spaceImage && spaceImage !== PLACEHOLDER_SPACE_IMAGE ? spaceImage : null;
   };
 
+  // The trigger is the same face pile a claim card draws over its agree and disagree counts:
+  // overlapped avatars, then a +N badge in the same ring. It resolves its own images from the space
+  // ids, which is why the stack is the whole control rather than a stack plus a count.
   return (
-    // A popover rather than a boolean and a positioned div: outside-click,
-    // Escape, focus return and the aria wiring are the behaviours people expect
-    // of a thing that opened, and hand-rolling them got only the toggle right.
+    <RailPopover
+      label={`Verified by ${verifiers.length} ${verifiers.length === 1 ? 'space or person' : 'spaces and people'}`}
+      trigger={<RankingAggregatedSubmitterAvatars submitterSpaceIds={verifierSpaceIds} size={20} maxVisible={3} />}
+    >
+      {verifiers.map(verifier => (
+        <li key={verifier.spaceId}>
+          <Link
+            href={NavUtils.toSpace(verifier.spaceId)}
+            className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
+          >
+            {/* Resolved here rather than read off the verifier: the facts
+                      query never fetches these, so `avatarUrl` is null for
+                      everyone and the whole list drew placeholders under a stack
+                      of real faces. `RankingAggregatedSubmitterAvatars` above
+                      already primed these caches from the same space ids. */}
+            <RailListThumb image={avatarFor(verifier.spaceId)} />
+            <span className="min-w-0 flex-1 truncate text-metadata text-text">
+              {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
+            </span>
+            <span className="shrink-0 text-tag text-grey-04">{verifier.isPerson ? 'Person' : 'Space'}</span>
+          </Link>
+        </li>
+      ))}
+    </RailPopover>
+  );
+}
+
+/**
+ * The topics this space follows (GEO-3191): how many, a few of their pictures, and the whole list on
+ * a click — the same shape as Verified by above it. Hidden for a space that follows nothing.
+ *
+ * Read from the followed topic ids rather than the `Following` rows, because with the Interested
+ * flag on there are no rows: a follow is an Interested vote. The ids are right under either.
+ *
+ * The owner can unfollow from the list. It writes through the same hook as every Follow button,
+ * so the topic leaves the list, the count and any card on screen at once. Built on the row from
+ * #2685 (GEO-3081), which read the rows and so stayed empty with the flag on.
+ */
+export function FollowingTopics({ spaceId }: { spaceId: string }) {
+  const { personalSpaceId } = usePersonalSpaceId();
+  const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
+
+  const { topicIds, isLoading } = useFollowedTopics(spaceId);
+  const ids = React.useMemo(() => [...topicIds], [topicIds]);
+  const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(ids);
+  const { unfollow, isPending } = useFollowTopics();
+
+  // By name, so a long list reads like an index rather than in the order the votes were cast.
+  const topics = React.useMemo(
+    () =>
+      ids
+        .map(id => ({ id, meta: metadata.get(id) }))
+        .sort((a, b) => (a.meta?.name ?? '').localeCompare(b.meta?.name ?? '')),
+    [ids, metadata]
+  );
+
+  if (!isLoading && topics.length === 0) return null;
+  if (isLoading || isLoadingMetadata) return <FollowingSkeleton />;
+
+  const visible = topics.slice(0, 3);
+
+  return (
+    <Row label="Following">
+      <RailPopover
+        label={`Following ${topics.length} ${topics.length === 1 ? 'topic' : 'topics'}`}
+        trigger={
+          <>
+            <span className="tabular-nums">{topics.length.toLocaleString('en-US')}</span>
+            <AvatarGroup>
+              {visible.map(topic => (
+                <AvatarGroup.Item key={topic.id} size={20}>
+                  <FallbackImage
+                    value={topic.meta?.image ?? PLACEHOLDER_SPACE_IMAGE}
+                    sizes="20px"
+                    className="object-cover"
+                  />
+                </AvatarGroup.Item>
+              ))}
+              <AvatarGroup.Overflow count={topics.length - visible.length} size={20} />
+            </AvatarGroup>
+          </>
+        }
+      >
+        {topics.map(({ id, meta }) => {
+          const name = meta?.name ?? 'Untitled topic';
+          // The topic's own space. A follow carries none of its own: the space it was cast in is
+          // the follower's.
+          const homeSpaceId = meta?.homeSpaceId;
+          const label = (
+            <>
+              <RailListThumb image={meta?.image} />
+              <span className="min-w-0 flex-1 truncate text-metadata text-text">{name}</span>
+            </>
+          );
+
+          return (
+            <li key={id} className="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-grey-01">
+              {homeSpaceId ? (
+                <Link
+                  href={NavUtils.toEntity(homeSpaceId, id)}
+                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                >
+                  {label}
+                </Link>
+              ) : (
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">{label}</span>
+              )}
+              {isOwner ? (
+                <button
+                  type="button"
+                  aria-label={`Unfollow ${name}`}
+                  onClick={() => void unfollow([id])}
+                  disabled={isPending(id)}
+                  className="shrink-0 text-tag text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+                >
+                  Unfollow
+                </button>
+              ) : (
+                <span className="shrink-0 text-tag text-grey-04">Topic</span>
+              )}
+            </li>
+          );
+        })}
+      </RailPopover>
+    </Row>
+  );
+}
+
+/**
+ * A rail row's value that opens a list: Verified by and Following. A popover rather than a boolean
+ * and a positioned div: outside-click, Escape, focus return and the aria wiring are the behaviours
+ * people expect of a thing that opened, and hand-rolling them got only the toggle right.
+ */
+function RailPopover({
+  label,
+  trigger,
+  children,
+}: {
+  label: string;
+  trigger: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
     <Popover.Root>
       <Popover.Trigger
-        aria-label={`Verified by ${verifiers.length} ${verifiers.length === 1 ? 'space or person' : 'spaces and people'}`}
+        aria-label={label}
         className="inline-flex items-center gap-2 text-metadata text-text hover:underline"
       >
-        {/* The same face pile a claim card draws over its agree and disagree
-            counts: overlapped avatars, then a +N badge in the same ring. It
-            resolves its own images from the space ids, which is why the stack
-            is the whole control rather than a stack plus a count. */}
-        <RankingAggregatedSubmitterAvatars submitterSpaceIds={verifierSpaceIds} size={20} maxVisible={3} />
+        {trigger}
       </Popover.Trigger>
 
       <Popover.Portal>
@@ -627,36 +772,34 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
           sideOffset={4}
           className="z-100 max-h-64 w-64 overflow-y-auto rounded-lg border border-grey-02 bg-white py-1 shadow-dropdown"
         >
-          <ul>
-            {verifiers.map(verifier => (
-              <li key={verifier.spaceId}>
-                <Link
-                  href={NavUtils.toSpace(verifier.spaceId)}
-                  className="flex items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-grey-01"
-                >
-                  {/* Resolved here rather than read off the verifier: the facts
-                      query never fetches these, so `avatarUrl` is null for
-                      everyone and the whole list drew placeholders under a stack
-                      of real faces. `RankingAggregatedSubmitterAvatars` above
-                      already primed these caches from the same space ids. */}
-                  <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
-                    <FallbackImage
-                      value={avatarFor(verifier.spaceId) ?? PLACEHOLDER_SPACE_IMAGE}
-                      sizes="20px"
-                      className="object-cover"
-                    />
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-metadata text-text">
-                    {verifier.name ?? (verifier.isPerson ? 'Untitled person' : 'Untitled space')}
-                  </span>
-                  <span className="shrink-0 text-tag text-grey-04">{verifier.isPerson ? 'Person' : 'Space'}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          <ul>{children}</ul>
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
+  );
+}
+
+/** The 20px picture that leads each row of a rail list, with the placeholder for none. */
+function RailListThumb({ image }: { image: string | null | undefined }) {
+  return (
+    <span className="relative h-5 w-5 shrink-0 overflow-hidden rounded-full bg-white">
+      <FallbackImage value={image ?? PLACEHOLDER_SPACE_IMAGE} sizes="20px" className="object-cover" />
+    </span>
+  );
+}
+
+function FollowingSkeleton() {
+  return (
+    <Row label="Following">
+      <span className="inline-flex items-center gap-2" aria-hidden>
+        <span className="inline-block h-4 w-4 animate-pulse rounded bg-grey-01" />
+        <span className="inline-flex">
+          <span className="inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+        </span>
+      </span>
+    </Row>
   );
 }
 

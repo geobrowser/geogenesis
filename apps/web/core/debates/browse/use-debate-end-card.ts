@@ -120,6 +120,8 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
     // fails, or never starts because the transcript failed, the entity is handed over anyway and
     // the claim asks for itself: its own row needs nothing from the transcript.
     entity: batchPending ? null : (entities[0] ?? null),
+    // The debate is over and this is its only claim: ask to save after the first vote.
+    savePromptSurface: 'single',
   });
 
   const nextDebate = useNextDebate(debate, live);

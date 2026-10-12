@@ -22,8 +22,20 @@ import {
 } from '../api';
 import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
+import { viewerReadRetryOptions } from '../matchmaking/hooks';
 import { useConnectionId } from '../rooms/hooks';
+import {
+  lobbyCreated,
+  lobbyJoined,
+  lobbyLeft,
+  lobbyPageClosed,
+  lobbyPageMounted,
+  lobbyPageUnmounted,
+  lobbySteppedOut,
+  markLobbyEntry,
+} from './lobby-analytics';
 import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
+import { readGuestSecret } from './lobby-guest-secret';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
@@ -92,6 +104,8 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
+    // Waits out a new account geo-chat does not know yet; a guest signing in listens meanwhile.
+    ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobby(accountKey, lobbyId),
     queryFn: ({ signal }) => getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
@@ -134,7 +148,10 @@ export function useCreateDebateLobby() {
   return useMutation({
     mutationFn: (body: { name: string; starts_at?: string }) =>
       createDebateLobby(body, getPrivyIdentityToken, accountKey),
-    onSuccess: store,
+    onSuccess: view => {
+      store(view);
+      lobbyCreated(view.lobby_id, { scheduled: view.scheduled });
+    },
   });
 }
 
@@ -236,8 +253,13 @@ export function useLobbyPresence(
     /** `rejoin` only from the removed screen's Rejoin: the viewer chose to come back. */
     async (leaveOtherLobby = false, rejoin = false) => {
       const generation = generationRef.current;
+      const from = statusRef.current;
+      if (from === 'stepped_out') markLobbyEntry(lobbyId, 'back_after_debate');
+      else if (from === 'left' || from === 'dropped' || from === 'moved') markLobbyEntry(lobbyId, 'rejoin');
       sentRef.current = true;
       setState({ status: 'joining' });
+      // A guest signing in: the join ends their guest session, so they are never counted twice.
+      const guestSecret = readGuestSecret(lobbyId);
       try {
         const view = await enqueue(() =>
           retryOnceIfRateLimited(() =>
@@ -248,6 +270,7 @@ export function useLobbyPresence(
                 joined: true,
                 leave_other_lobby: leaveOtherLobby,
                 ...(rejoin ? { rejoin: true } : {}),
+                ...(guestSecret ? { guest_secret: guestSecret } : {}),
               },
               () => tokenRef.current(),
               accountKey
@@ -258,6 +281,8 @@ export function useLobbyPresence(
         store(view);
         // A lobby that would not admit answers with its view; the page renders its access.
         joinedRef.current = view.viewer.connected;
+        // A reconnect in the same visit is not a new session; `lobbyJoined` tells them apart.
+        if (view.viewer.connected) lobbyJoined(lobbyId, { isNewcomer: view.viewer.newcomer ?? null });
         setState(view.viewer.connected ? { status: 'joined' } : { status: 'idle' });
       } catch (error) {
         if (generation !== generationRef.current) return;
@@ -299,12 +324,13 @@ export function useLobbyPresence(
     sentRef.current = false;
     joinedRef.current = false;
     setState({ status: 'left' });
+    lobbyLeft(lobbyId, 'left');
     try {
       store(await enqueue(() => sendLeave(false)));
     } catch {
       // The lease lapses within a minute anyway.
     }
-  }, [enqueue, sendLeave, setState, store]);
+  }, [enqueue, lobbyId, sendLeave, setState, store]);
 
   // Out of the lobby without a leave: stops the heartbeat and the unmount's leave.
   const stopWithout = React.useCallback(
@@ -322,6 +348,7 @@ export function useLobbyPresence(
     // the routing), and the lobby must still be where the debate returns to.
     const steppedOutAlready = statusRef.current === 'stepped_out';
     if (!sentRef.current && !steppedOutAlready) return;
+    lobbySteppedOut(lobbyId);
     rememberLobbyReturnDestination(lobbyId);
     // Only a press on the coming debate's end card may skip the stepped-out prompt.
     clearLobbyRejoin();
@@ -341,6 +368,7 @@ export function useLobbyPresence(
   /** Stepped out, leave for good. */
   const leaveSteppedOut = React.useCallback(async () => {
     stopWithout({ status: 'left' });
+    lobbyLeft(lobbyId, 'left');
     try {
       store(await enqueue(() => endDebateLobbyStepOut(lobbyId, () => tokenRef.current(), accountKey)));
     } catch {
@@ -359,6 +387,7 @@ export function useLobbyPresence(
     if (!admitted || status !== 'idle') return;
     // Consumed on every arrival so a flag left by a failed leave cannot outlive it.
     const rejoin = consumeLobbyRejoin(lobbyId);
+    if (rejoin) markLobbyEntry(lobbyId, 'back_after_debate');
     // A host removed them, possibly mid-debate: coming back is their call, even after Back to the room.
     if (removed) setState({ status: 'dropped', reason: 'removed' });
     else if (steppedOut && !rejoin) setState({ status: 'stepped_out' });
@@ -378,24 +407,31 @@ export function useLobbyPresence(
     (heartbeat: DebateLobbyHeartbeat) => {
       switch (heartbeat.reason) {
         case 'moved':
+          lobbyLeft(lobbyId, 'unknown');
           stopWithout({
             status: 'moved',
             otherLobbyId: heartbeat.current_lobby_id ? dashlessId(heartbeat.current_lobby_id) : null,
           });
           return;
         case 'stepped_out':
+          lobbySteppedOut(lobbyId);
           stopWithout({ status: 'stepped_out' });
           void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobby(accountKey, lobbyId) });
           return;
         case 'ended':
         case 'banned':
         case 'removed':
+          lobbyLeft(lobbyId, heartbeat.reason === 'ended' ? 'lobby_ended' : 'unknown');
           stopWithout({ status: 'dropped', reason: heartbeat.reason });
           void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobby(accountKey, lobbyId) });
           return;
         default:
-          // `lapsed`.
-          void join(false);
+          // `lapsed`. Off the roster, the page missed the lobby's events; reread what they keep current.
+          void join(false).then(() => {
+            if (!joinedRef.current) return;
+            void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbyHighlights(accountKey, lobbyId) });
+            void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobbyClaims(accountKey, lobbyId) });
+          });
       }
     },
     [accountKey, join, lobbyId, queryClient, stopWithout]
@@ -451,6 +487,19 @@ export function useLobbyPresence(
   React.useEffect(() => {
     if ((steppedOut || !connected) && joinedRef.current) beatNowRef.current?.();
   }, [connected, steppedOut]);
+
+  // One lobby session per visit: a StrictMode remount cancels the end its unmount scheduled.
+  React.useEffect(() => {
+    lobbyPageMounted(lobbyId);
+    const close = (event: PageTransitionEvent) => {
+      if (!event.persisted) lobbyPageClosed(lobbyId);
+    };
+    window.addEventListener('pagehide', close);
+    return () => {
+      window.removeEventListener('pagehide', close);
+      lobbyPageUnmounted(lobbyId);
+    };
+  }, [lobbyId]);
 
   // Leave on navigation away and on tab close. A bfcache restore joins again. Callbacks are read
   // through refs so a changed identity never runs the cleanup, which would send a leave.

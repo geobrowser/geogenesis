@@ -35,7 +35,16 @@ vi.mock('~/design-system/prefetch-link', () => ({
 }));
 
 vi.mock('~/partials/entity-page/entity-row-actions', () => ({
-  EntityRowActions: (props: { children?: React.ReactNode }) => <div data-testid="actions">{props.children}</div>,
+  EntityRowActions: (props: { entityId: string; children?: React.ReactNode }) => (
+    <div data-testid="actions" data-entity={props.entityId}>
+      {props.children}
+    </div>
+  ),
+}));
+
+const followers = vi.hoisted(() => ({ count: null as number | null }));
+vi.mock('~/core/topics/use-topic-follower-count', () => ({
+  useTopicFollowerCount: () => followers.count,
 }));
 
 const item = (overrides: Partial<ExploreFeedItem> = {}): ExploreFeedItem => ({
@@ -57,7 +66,10 @@ const item = (overrides: Partial<ExploreFeedItem> = {}): ExploreFeedItem => ({
   ...overrides,
 });
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  followers.count = null;
+});
 
 describe('TopicExploreFeedCard', () => {
   it('names every attached kind, with thousands separated', () => {
@@ -129,6 +141,42 @@ describe('TopicExploreFeedCard', () => {
     expect(screen.getByTestId('title')).toHaveAttribute('data-opens-panel', 'true');
     expect(screen.getByText('Preventing harm from advanced AI systems.')).toBeInTheDocument();
     expect(screen.getByTestId('actions')).toBeInTheDocument();
+  });
+
+  it('ends on the shared action row, which draws Follow for a topic, and the comment count', () => {
+    render(<TopicExploreFeedCard item={item({ commentCount: 4 })} counts={null} />);
+
+    expect(screen.getByTestId('actions')).toHaveAttribute('data-entity', 'topic-1');
+    expect(screen.getByText('4')).toBeInTheDocument();
+  });
+
+  it('leads the metadata line with the follower count', () => {
+    followers.count = 1280;
+    const { container } = render(
+      <TopicExploreFeedCard
+        item={item({ description: null })}
+        counts={{ claims: 117, news: 2, debates: 3, total: 122 }}
+      />
+    );
+
+    expect(container.querySelector('p')?.textContent).toBe('1,280 following·3 debates·117 claims·2 news stories');
+  });
+
+  it('draws the follower count alone when the connection counts were not asked for', () => {
+    followers.count = 12;
+    const { container } = render(<TopicExploreFeedCard item={item({ description: null })} counts={null} />);
+
+    expect(container.querySelector('p')?.textContent).toBe('12 following');
+  });
+
+  it('leaves the follower count out at zero', () => {
+    followers.count = 0;
+    const { container } = render(
+      <TopicExploreFeedCard item={item({ description: null })} counts={{ claims: 2, news: 0, debates: 0, total: 2 }} />
+    );
+
+    expect(container.querySelector('p')?.textContent).toBe('2 claims');
+    expect(screen.queryByText(/following/)).toBeNull();
   });
 
   it('draws the thumbnail well only for a topic with a picture', () => {

@@ -223,3 +223,43 @@ describe('when the fresh slot is off or does not apply', () => {
     expect(page?.items.some(item => item.ranking?.slot === 'fresh')).toBe(false);
   });
 });
+
+// GEO-3234. The browser may replace a lead its visitor has seen only with a debate the server
+// verified, so Best marks them, and only while seen demotion is on.
+describe('playable lead marks', () => {
+  async function firstPage(markPlayableLeads: boolean) {
+    const playable = new Set([bestIds[3], bestIds[6]]);
+    vi.stubGlobal('fetch', async (url: string) => {
+      const debateId = url.split('/debates/')[1]?.split('/')[0]?.replace(/-/g, '');
+      const ok = playable.has(debateId);
+      return new Response(JSON.stringify({ artifacts: ok ? [{ kind: 'final_video' }] : [] }), { status: 200 });
+    });
+    try {
+      return await fetchExploreFeed({
+        browse,
+        sort: 'best',
+        time: 'all',
+        spaceFilterIds: null,
+        cursor: null,
+        memberOrEditorSpaceIds: [],
+        typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+        leadWithPlayableDebate: true,
+        markPlayableLeads,
+      });
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  }
+
+  it('marks the verified debates on the page, the lead first', async () => {
+    const page = await firstPage(true);
+    expect(page.items[0]?.entityId).toBe(bestIds[3]);
+    expect(page.items.filter(item => item.playableLead).map(item => item.entityId)).toEqual([bestIds[3], bestIds[6]]);
+  });
+
+  it('marks nothing while seen demotion is off', async () => {
+    const page = await firstPage(false);
+    expect(page.items[0]?.entityId).toBe(bestIds[3]);
+    expect(page.items.some(item => 'playableLead' in item)).toBe(false);
+  });
+});

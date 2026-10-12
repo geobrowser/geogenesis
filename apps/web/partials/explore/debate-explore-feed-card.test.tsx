@@ -689,6 +689,7 @@ describe('DebateExploreFeedCard', () => {
       renderCard();
 
       const expand = screen.getByRole('link', { name: 'Watch this debate full screen' });
+      expect(expand).toHaveAttribute('data-entity-side-panel-full-page');
       expect(expand.getAttribute('href')).toBe('/space/space-1/fd51f9352063461780397b672b23364c');
     });
 

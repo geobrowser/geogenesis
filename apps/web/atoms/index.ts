@@ -2,6 +2,7 @@ import { atom } from 'jotai';
 import { atomWithStorage } from 'jotai/utils';
 
 import type { ActionContext } from '~/core/action-context';
+import type { EntitySidePanelTabSelection } from '~/core/utils/entity-tab-navigation';
 
 export const showingIdsAtom = atomWithStorage<boolean>('showingIds', false);
 
@@ -9,6 +10,8 @@ export const editingPropertiesAtom = atom<boolean>(false);
 
 export type EntitySidePanelTarget = {
   analyticsContext?: ActionContext;
+  /** A linked entity tab to select when the panel opens. */
+  initialTab?: EntitySidePanelTabSelection;
   entityId: string;
   spaceId: string;
   openedWithMainViewEditing: boolean;

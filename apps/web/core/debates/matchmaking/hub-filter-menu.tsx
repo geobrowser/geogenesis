@@ -194,6 +194,12 @@ type MultiProps<T extends string> = {
   searchPlaceholder?: string;
   /** What the menu says when the query matches nothing. */
   searchEmptyLabel?: string;
+  /**
+   * Replaces the labelled pill that opens the menu, for a host that opens it from something of its
+   * own. The topic pill row ends in a "…" that opens this list, and a second labelled trigger there
+   * would read as one more topic. `label` and `labelPending` go unused when this is set.
+   */
+  trigger?: React.ReactElement;
 };
 
 /**
@@ -244,6 +250,7 @@ export function HubMultiFilterMenu<T extends string>({
   countsPending,
   searchPlaceholder,
   searchEmptyLabel = 'No matches',
+  trigger,
 }: MultiProps<T>) {
   const [open, setOpen] = React.useState(false);
   const [query, setQuery] = React.useState('');
@@ -373,19 +380,21 @@ export function HubMultiFilterMenu<T extends string>({
       className="max-w-[280px]"
       viewportRef={setViewportNode}
       trigger={
-        <SmallButton
-          icon={<ChevronDownSmall />}
-          className="max-w-[160px]"
-          {...(analytics
-            ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter`, 'filter')
-            : {})}
-        >
-          {labelPending ? (
-            <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
-          ) : (
-            <span className="truncate">{label}</span>
-          )}
-        </SmallButton>
+        trigger ?? (
+          <SmallButton
+            icon={<ChevronDownSmall />}
+            className="max-w-[160px]"
+            {...(analytics
+              ? debateSurfaceAnalyticsAttributes(analytics.surface, `${analytics.name} filter`, 'filter')
+              : {})}
+          >
+            {labelPending ? (
+              <Skeleton className="h-[1em] w-16" aria-label="Loading space name" />
+            ) : (
+              <span className="truncate">{label}</span>
+            )}
+          </SmallButton>
+        )
       }
     >
       <>

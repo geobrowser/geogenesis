@@ -6,6 +6,7 @@ export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'ca
  */
 export type DebateActionAnalyticsSurface =
   | DebateAnalyticsSurface
+  | 'lobby'
   | 'request-popup'
   | 'schedule-editor'
   | 'peer-availability'
@@ -49,6 +50,10 @@ const ACTION_SURFACE_ANALYTICS = {
     labelPrefix: 'Scheduled debate prompt',
     actionIntent: 'scheduled_debate_prompt_action',
   },
+  lobby: {
+    labelPrefix: 'Debate lobby',
+    actionIntent: 'debate_lobby_action',
+  },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 
 const FILTER_INTENTS = {
@@ -89,7 +94,7 @@ export function debateSurfaceAnalyticsAttributes(
 
 /**
  * Stable metadata for hub-only controls that cannot use {@link HubPillButton} because their visual
- * treatment is different (inline links, menus, and the schedule callout).
+ * treatment is different (inline links and menus).
  */
 export function hubAnalyticsAttributes(action: string, intent?: string) {
   return debateActionAnalyticsAttributes('hub', action, intent);

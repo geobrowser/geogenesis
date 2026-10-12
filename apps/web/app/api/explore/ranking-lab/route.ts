@@ -11,6 +11,7 @@ import {
 } from '~/core/explore/fresh-slot/fresh-slot-store';
 import { type RankingLabAdminResult, requireRankingLabAdmin } from '~/core/explore/fresh-slot/ranking-lab-admin';
 import { fetchRankingParams } from '~/core/explore/fresh-slot/ranking-params';
+import { SEEN_DEMOTION_BOUNDS } from '~/core/explore/seen-demotion/seen-demotion-config';
 
 /**
  * The ranking lab's config API (GEO-3221). Every method is admin-only (see `requireRankingLabAdmin`)
@@ -69,6 +70,7 @@ export async function GET(request: Request) {
       history,
       defaults: DEFAULT_FRESH_SLOT_CONFIG,
       bounds: FRESH_SLOT_BOUNDS,
+      seenDemotionBounds: SEEN_DEMOTION_BOUNDS,
       rankingParams,
       viewer: { spaceId: gate.admin.spaceId },
     },

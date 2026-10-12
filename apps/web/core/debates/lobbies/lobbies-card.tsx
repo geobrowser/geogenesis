@@ -13,7 +13,15 @@ import { useGeoChatAuth } from '../hooks';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
-import { hereLabel, hostsLabel, lobbyErrorMessage, lobbyScheduleLabel, remindedLabel } from './lobby-format';
+import { markLobbyEntry } from './lobby-analytics';
+import {
+  debatingLabel,
+  hereLabel,
+  hostsLabel,
+  lobbyErrorMessage,
+  lobbyScheduleLabel,
+  remindedLabel,
+} from './lobby-format';
 import { LobbyAvatarStack } from './lobby-people';
 import { OpenLobbyDialog } from './open-lobby-dialog';
 
@@ -84,17 +92,48 @@ function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
   const hosts = hostsLabel(lobby.hosts);
   const schedule = lobbyScheduleLabel(lobby);
 
+  const href = debateRoomPath(lobby.lobby_id);
+  const enter = () => markLobbyEntry(lobby.lobby_id, 'side_panel');
+  const hostedBy = hosts ? `Hosted by ${hosts}` : null;
+
   return (
     <li className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0" data-testid="lobby-row">
-      <div className="flex items-start justify-between gap-2">
-        <Link href={debateRoomPath(lobby.lobby_id)} className="min-w-0 hover:underline">
-          <Text as="p" variant="metadataMedium" className="truncate">
-            {lobby.name}
+      {lobby.open ? (
+        <span className="inline-flex items-center gap-1.5">
+          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-green" />
+          <Text as="span" variant="footnoteMedium" color="text">
+            Live
           </Text>
-        </Link>
+        </span>
+      ) : schedule ? (
+        <Text as="p" variant="footnoteMedium" color="grey-04">
+          {schedule}
+        </Text>
+      ) : null}
+
+      <Link href={href} onClick={enter} className="min-w-0 hover:underline">
+        <Text as="p" variant="metadataMedium" className="truncate">
+          {lobby.name}
+        </Text>
+      </Link>
+
+      <div className="flex items-center gap-2.5">
+        {lobby.open ? <LobbyAvatarStack people={lobby.avatars} total={lobby.headcount} /> : null}
+        <Text as="span" variant="footnote" color={lobby.open ? 'text' : 'grey-04'} className="min-w-0 flex-1 truncate">
+          {lobby.open
+            ? [
+                hereLabel(lobby.headcount),
+                lobby.debating_count > 0 ? debatingLabel(lobby.debating_count) : null,
+                lobby.viewer_on_roster ? 'You’re here' : null,
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : [hostedBy, remindedLabel(lobby.reminder_count)].filter(Boolean).join(' · ')}
+        </Text>
         {lobby.open ? (
           <Link
-            href={debateRoomPath(lobby.lobby_id)}
+            href={href}
+            onClick={enter}
             className={hubPillClassName(lobby.viewer_on_roster ? 'secondary' : 'primary')}
           >
             {lobby.viewer_on_roster ? 'Open' : 'Join'}
@@ -111,27 +150,11 @@ function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
         )}
       </div>
 
-      {lobby.open ? (
-        <div className="flex items-center gap-2">
-          <span aria-hidden className="size-2 shrink-0 rounded-full bg-green" />
-          <Text as="span" variant="footnote" color="text">
-            {hereLabel(lobby.headcount)}
-            {lobby.debating_count > 0 ? ` · ${lobby.debating_count} debating` : ''}
-            {lobby.viewer_on_roster ? ' · You’re here' : ''}
-          </Text>
-          <LobbyAvatarStack people={lobby.avatars} total={lobby.headcount} />
-        </div>
-      ) : schedule ? (
-        <Text as="p" variant="footnote" color="text">
-          {schedule}
+      {lobby.open && hostedBy ? (
+        <Text as="p" variant="footnote" color="grey-04" className="truncate">
+          {hostedBy}
         </Text>
       ) : null}
-
-      <Text as="p" variant="footnote" color="grey-04" className="truncate">
-        {[hosts ? `Hosted by ${hosts}` : null, lobby.open ? null : remindedLabel(lobby.reminder_count)]
-          .filter(Boolean)
-          .join(' · ')}
-      </Text>
       {reminder.isError ? (
         <Text as="p" variant="footnote" color="red-01">
           {lobbyErrorMessage(reminder.error, REMINDER_FAILED)}

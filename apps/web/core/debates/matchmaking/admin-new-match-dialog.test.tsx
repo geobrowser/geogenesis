@@ -18,6 +18,10 @@ const mocks = vi.hoisted(() => ({
   debatersError: null as Error | null,
   refetchDebaters: vi.fn(),
   prompt: vi.fn(),
+  // GEO-3224: gaia's pair fit, by anchor profile space id; null is gaia unavailable.
+  fitByAnchor: {} as Record<string, [string, unknown][] | null>,
+  fitAnchors: [] as (string | null)[],
+  freeSlots: new Map<string, number>(),
 }));
 
 vi.mock('./admin-hooks', () => ({
@@ -44,6 +48,14 @@ vi.mock('./admin-hooks', () => ({
       : { isPending: false },
   useCreateAdminMatch: () => ({ mutate: mocks.create, isPending: false, error: null }),
   useAdminAvailabilityPrompt: () => ({ mutateAsync: mocks.prompt }),
+}));
+vi.mock('./admin-pair-fit', () => ({
+  useAdminPairFit: (anchor: string | null) => {
+    mocks.fitAnchors.push(anchor);
+    const items = anchor ? mocks.fitByAnchor[anchor] : null;
+    return { available: Boolean(items), byProfile: new Map(items ?? []), isPending: false };
+  },
+  useAdminSharedFreeSlots: (first: string | null) => (first ? mocks.freeSlots : new Map()),
 }));
 vi.mock('~/core/hooks/use-search', () => ({
   useSearch: () => ({
@@ -97,6 +109,13 @@ const person = (id: string, name: string) => ({
   display_name: name,
   avatar_cid: null,
 });
+const fitItem = (userId: string, score: number, reason: unknown) => ({
+  userId,
+  score,
+  parts: { interest: 0, disagreement: 0, sharedClaims: 0, opposed: 1, agreed: 0, accountWeight: 1 },
+  disagreeing: (reason as { kind?: string } | null)?.kind === 'disagree',
+  reason,
+});
 const match = (n: number) => Array.from({ length: n }, (_, index) => ({ claimId: `claim-${index}` }));
 
 function renderDialog(onSent = vi.fn()) {
@@ -146,6 +165,9 @@ beforeEach(() => {
       ],
     },
     anchors: [],
+    fitByAnchor: {},
+    fitAnchors: [],
+    freeSlots: new Map(),
     matchesKnown: true,
     debatersError: null,
   });
@@ -201,6 +223,59 @@ describe('AdminNewMatchDialog', () => {
     expect(rows[0]).toHaveTextContent('Leo Okafor');
     expect(rows[0]).toHaveTextContent('4 matches with Ana');
     expect(rows[1]).toHaveTextContent('1 match with Ana');
+  });
+
+  it('ranks by pair fit with debater 1 when gaia has it, and says why', () => {
+    mocks.fitByAnchor = {
+      spaceana: [
+        ['spaceraj', fitItem('spaceraj', 0.6, { kind: 'disagree', claimId: 'c1', name: 'Nuclear is green' })],
+        ['spaceleo', fitItem('spaceleo', 0.2, { kind: 'shared_topic', topicId: 't1', name: 'Energy' })],
+      ],
+    };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    expect(mocks.fitAnchors.at(-1)).toBe('spaceana');
+    expect(screen.getByText(/Ordered by fit with Ana Ruiz/)).toBeInTheDocument();
+    const rows = people();
+    // Raj has one match to Leo's four, but disagrees with Ana on something both care about.
+    expect(rows[0]).toHaveTextContent('Raj Mehta');
+    expect(rows[0]).toHaveTextContent('Disagrees with Ana on Nuclear is green');
+    expect(rows[1]).toHaveTextContent('Leo Okafor');
+    expect(rows[1]).toHaveTextContent('Shares Ana’s interest in Energy');
+  });
+
+  it('halves the fit of someone with no free time in common with debater 1', () => {
+    mocks.fitByAnchor = {
+      spaceana: [
+        ['spaceraj', fitItem('spaceraj', 0.6, null)],
+        ['spaceleo', fitItem('spaceleo', 0.4, null)],
+      ],
+    };
+    mocks.freeSlots = new Map([
+      ['raj', 0],
+      ['leo', 3],
+    ]);
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    const rows = people();
+    expect(rows[0]).toHaveTextContent('Leo Okafor');
+    expect(rows[1]).toHaveTextContent('Raj Mehta');
+    expect(rows[1]).toHaveTextContent('No free time in common');
+  });
+
+  it('keeps the matches order exactly when pair fit is unavailable', () => {
+    mocks.fitByAnchor = { spaceana: null };
+    mocks.freeSlots = new Map([['leo', 0]]);
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    expect(screen.getByText('Ordered by matches with Ana Ruiz, most first')).toBeInTheDocument();
+    const rows = people();
+    expect(rows[0]).toHaveTextContent('Leo Okafor');
+    expect(rows[1]).toHaveTextContent('Raj Mehta');
+    expect(screen.queryByText(/Disagrees with|Shares Ana|No free time in common/)).not.toBeInTheDocument();
   });
 
   it('offers their shared half-hours with both clocks, and sends the invites for the one picked', () => {

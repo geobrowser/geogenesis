@@ -37,6 +37,8 @@ vi.mock('~/partials/explore/explore-card-title', () => ({
 vi.mock('~/design-system/prefetch-link', () => ({
   PrefetchLink: ({ children, href }: { children: React.ReactNode; href: string }) => <a href={href}>{children}</a>,
 }));
+// The card leads its counts line with followers; that hook reads the account, which isn't here.
+vi.mock('~/core/topics/use-topic-follower-count', () => ({ useTopicFollowerCount: () => null }));
 vi.mock('~/partials/entity-page/entity-row-actions', () => ({
   EntityRowActions: ({ entityId }: { entityId: string }) => {
     const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);

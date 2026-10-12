@@ -17,6 +17,7 @@ import {
   type RankingLabPreviewResponse,
 } from '~/core/explore/fresh-slot/ranking-lab-types';
 import type { RankingParams } from '~/core/explore/fresh-slot/ranking-params';
+import type { SeenDemotionConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 
 import { Button } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -34,6 +35,7 @@ type LabResponse = {
   history: FreshSlotHistoryEntry[];
   defaults: FreshSlotConfig;
   bounds: Record<'cadence' | 'firstPosition' | 'maxPerPage' | 'freshnessHours', { min: number; max: number }>;
+  seenDemotionBounds: Record<'minViews' | 'days', { min: number; max: number }>;
   rankingParams: RankingParams | null;
 };
 
@@ -88,6 +90,11 @@ const NUMERIC_FIELDS: { key: keyof LabResponse['bounds']; label: string; hint: s
   { key: 'freshnessHours', label: 'Fresh for (hours)', hint: 'W: an item stops being fresh at this age' },
 ];
 
+const SEEN_FIELDS: { key: 'minViews' | 'days'; label: string; hint: string }[] = [
+  { key: 'minViews', label: 'After N views', hint: 'N: a card shown this many times moves down' },
+  { key: 'days', label: 'Within D days', hint: 'D: counting views from the last D days' },
+];
+
 function sameConfig(a: FreshSlotConfig, b: FreshSlotConfig) {
   return JSON.stringify(a) === JSON.stringify(b);
 }
@@ -104,6 +111,11 @@ function describeChange(entry: FreshSlotHistoryEntry): string {
     if (before !== after) {
       parts.push(`${TYPE_LABEL.get(typeId) ?? typeId.slice(0, 8)} cap ${before ?? 'none'} → ${after ?? 'none'}`);
     }
+  }
+  for (const key of ['enabled', 'minViews', 'days'] as const) {
+    const before = entry.before.seenDemotion[key];
+    const after = entry.after.seenDemotion[key];
+    if (before !== after) parts.push(`seen ${key} ${before} → ${after}`);
   }
   return parts.length > 0 ? parts.join(', ') : 'no change';
 }
@@ -123,6 +135,10 @@ export function RankingLab() {
   });
 
   const [draft, setDraft] = React.useState<FreshSlotConfig | null>(null);
+  // An in-page confirmation, not window.confirm: a native dialog blocks the whole page.
+  const [confirming, setConfirming] = React.useState<{ kind: 'save' } | { kind: 'rollback'; revision: number } | null>(
+    null
+  );
   const live = lab.data?.state?.config ?? lab.data?.defaults ?? null;
   React.useEffect(() => {
     if (live && draft === null) setDraft(live);
@@ -185,6 +201,8 @@ export function RankingLab() {
     else if (Number.isFinite(Number(value))) perTypeCaps[typeId] = Number(value);
     setDraft({ ...draft, perTypeCaps });
   };
+  const setSeen = (patch: Partial<SeenDemotionConfig>) =>
+    setDraft({ ...draft, seenDemotion: { ...draft.seenDemotion, ...patch } });
 
   return (
     <LabShell>
@@ -247,15 +265,50 @@ export function RankingLab() {
           ))}
         </div>
 
+        <Text as="h3" variant="bodySemibold">
+          Seen demotion
+        </Text>
+        <Text variant="metadata" color="grey-04">
+          In each visitor&apos;s browser: a card shown to them N or more times in the last D days, without a click,
+          moves below the unseen cards of its type on its page. The lead debate and fresh cards keep their places. Not
+          shown in the preview, which has no visitor. Live: {state?.config.seenDemotion.enabled ? 'on' : 'off'}.
+        </Text>
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={draft.seenDemotion.enabled}
+            onChange={event => setSeen({ enabled: event.target.checked })}
+          />
+          <Text variant="body">Seen demotion enabled</Text>
+        </label>
+        <div className="sm:grid-cols-4 grid grid-cols-2 gap-3">
+          {SEEN_FIELDS.map(field => (
+            <label key={field.key} className="flex flex-col gap-1" title={field.hint}>
+              <Text variant="metadata" color="grey-04">
+                {field.label} ({data.seenDemotionBounds[field.key].min}–{data.seenDemotionBounds[field.key].max})
+              </Text>
+              <input
+                type="number"
+                className="rounded border border-grey-02 px-2 py-1"
+                min={data.seenDemotionBounds[field.key].min}
+                max={data.seenDemotionBounds[field.key].max}
+                value={draft.seenDemotion[field.key]}
+                onChange={event => {
+                  const number = Number(event.target.value);
+                  if (Number.isFinite(number)) setSeen({ [field.key]: number });
+                }}
+              />
+            </label>
+          ))}
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <Button variant="secondary" onClick={() => preview.mutate(draft)} disabled={preview.isPending}>
             {preview.isPending ? 'Previewing…' : 'Preview'}
           </Button>
           <Button
-            onClick={() => {
-              if (window.confirm('Save these settings? Explore serves them within a minute.')) save.mutate(draft);
-            }}
-            disabled={!dirty || save.isPending || !data.storeConfigured}
+            onClick={() => setConfirming({ kind: 'save' })}
+            disabled={!dirty || save.isPending || !data.storeConfigured || confirming !== null}
           >
             {save.isPending ? 'Saving…' : 'Save'}
           </Button>
@@ -266,6 +319,17 @@ export function RankingLab() {
             Defaults
           </Button>
         </div>
+        {confirming?.kind === 'save' ? (
+          <ConfirmBar
+            message="Save these settings? Explore serves them within a minute."
+            confirmLabel="Save"
+            onConfirm={() => {
+              save.mutate(draft);
+              setConfirming(null);
+            }}
+            onCancel={() => setConfirming(null)}
+          />
+        ) : null}
         {save.error ? <ErrorLine error={save.error} /> : null}
         {save.data?.adjustments.length ? (
           <Text variant="metadata" color="grey-04">
@@ -303,12 +367,8 @@ export function RankingLab() {
                   <Button
                     variant="secondary"
                     small
-                    disabled={rollback.isPending}
-                    onClick={() => {
-                      if (window.confirm(`Restore the settings saved in revision ${entry.revision}?`)) {
-                        rollback.mutate(entry.revision);
-                      }
-                    }}
+                    disabled={rollback.isPending || confirming !== null}
+                    onClick={() => setConfirming({ kind: 'rollback', revision: entry.revision })}
                   >
                     Restore
                   </Button>
@@ -321,6 +381,17 @@ export function RankingLab() {
             ))}
           </ul>
         )}
+        {confirming?.kind === 'rollback' ? (
+          <ConfirmBar
+            message={`Restore the settings saved in revision ${confirming.revision}? Explore serves them within a minute.`}
+            confirmLabel="Restore"
+            onConfirm={() => {
+              rollback.mutate(confirming.revision);
+              setConfirming(null);
+            }}
+            onCancel={() => setConfirming(null)}
+          />
+        ) : null}
         {rollback.error ? <ErrorLine error={rollback.error} /> : null}
       </section>
 
@@ -336,6 +407,34 @@ function LabShell({ children }: { children: React.ReactNode }) {
         Ranking lab
       </Text>
       {typeof children === 'string' ? <Text variant="body">{children}</Text> : children}
+    </div>
+  );
+}
+
+function ConfirmBar({
+  message,
+  confirmLabel,
+  onConfirm,
+  onCancel,
+}: {
+  message: string;
+  confirmLabel: string;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  return (
+    <div
+      role="alertdialog"
+      aria-label={message}
+      className="flex flex-wrap items-center gap-2 rounded border border-grey-02 p-3"
+    >
+      <Text variant="metadata">{message}</Text>
+      <Button small onClick={onConfirm}>
+        {confirmLabel}
+      </Button>
+      <Button small variant="secondary" onClick={onCancel}>
+        Cancel
+      </Button>
     </div>
   );
 }
@@ -443,16 +542,19 @@ function RankingParamsSection({ params }: { params: RankingParams | null }) {
       </Text>
       {params?.config ? (
         <div className="sm:grid-cols-3 grid grid-cols-2 gap-x-6 gap-y-1">
-          {Object.entries(params.config).map(([key, value]) => (
-            <div key={key} className="flex justify-between gap-2">
-              <Text as="span" variant="metadata" color="grey-04">
-                {key}
-              </Text>
-              <Text as="span" variant="metadata">
-                {value ?? '—'}
-              </Text>
-            </div>
-          ))}
+          {Object.entries(params.config)
+            // GraphQL response metadata (e.g. the response cache's `__responseCacheId`), not a parameter.
+            .filter(([key]) => !key.startsWith('__'))
+            .map(([key, value]) => (
+              <div key={key} className="flex justify-between gap-2">
+                <Text as="span" variant="metadata" color="grey-04">
+                  {key}
+                </Text>
+                <Text as="span" variant="metadata">
+                  {value ?? '—'}
+                </Text>
+              </div>
+            ))}
           {params.typeWeights.map(weight => (
             <div key={weight.typeId} className="flex justify-between gap-2">
               <Text as="span" variant="metadata" color="grey-04">

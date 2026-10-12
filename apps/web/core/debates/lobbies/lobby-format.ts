@@ -1,8 +1,10 @@
 import {
+  type DebateLobbyClaims,
   type DebateLobbyMember,
   type DebateLobbyMemberAction,
   type DebateLobbyModerationAction,
   type DebateLobbyModerationEntry,
+  type DebateLobbyPair,
   type DebateLobbyPerson,
   type DebateLobbyRole,
   type DebateLobbyView,
@@ -68,8 +70,84 @@ export function notYetOpenLabel(lobby: { starts_at: string; opens_at: string }, 
   return `Opens ${opens} · starts ${starts}`;
 }
 
+/**
+ * Who a lobby counts as here: the whole roster, stepped-out members included. The lobby header and
+ * the debate end card both count this way, so they never disagree.
+ */
+export function lobbyHeadcount(lobby: Pick<DebateLobbyView, 'members'>) {
+  return lobby.members.length;
+}
+
 export function hereLabel(headcount: number) {
   return `${headcount} here`;
+}
+
+export function hereNowLabel(count: number) {
+  return `${count} here now`;
+}
+
+export function debatingLabel(count: number) {
+  return `${count} debating`;
+}
+
+/** Members in a debate. People, not pairs: the lobby card's `debating_count` counts the same way. */
+export function debatingCount(members: Pick<DebateLobbyMember, 'in_debate'>[]) {
+  return members.filter(member => member.in_debate).length;
+}
+
+export type LobbyMemberStatus = 'in_debate' | 'looking' | 'chatting';
+
+export const STATUS_LABEL: Record<LobbyMemberStatus, string> = {
+  in_debate: 'In a debate',
+  looking: 'Looking to debate',
+  chatting: 'Just chatting',
+};
+
+/** One word or two, for a phone's narrow tile. */
+export const SHORT_STATUS_LABEL: Record<LobbyMemberStatus, string> = {
+  in_debate: 'In a debate',
+  looking: 'Looking',
+  chatting: 'Just chatting',
+};
+
+/**
+ * In a debate, else Looking to debate by the availability toggle, else Just chatting. `available`
+ * stands in for the roster's flag; `null` when there is neither, from a geo-chat that predates it.
+ */
+export function memberStatus(
+  member: Pick<DebateLobbyMember, 'in_debate' | 'available_to_debate'>,
+  available: boolean | undefined = member.available_to_debate
+): LobbyMemberStatus | null {
+  if (member.in_debate) return 'in_debate';
+  if (available === undefined) return null;
+  return available ? 'looking' : 'chatting';
+}
+
+/** "Ana vs. Ben"; a pair whose partner is hidden reads as the one name. */
+export function pairLabel(pair: DebateLobbyPair) {
+  return pair.people.map(personName).join(' vs. ');
+}
+
+/** "round 2 of 3", "round 2" for open rounds; `null` before the first round or without progress. */
+export function pairRoundLabel(progress: DebateLobbyPair['progress']) {
+  if (!progress || progress.round === null) return null;
+  return progress.rounds === null ? `round ${progress.round}` : `round ${progress.round} of ${progress.rounds}`;
+}
+
+/** How many claims the viewer and `userId` disagree on; `null` for none, unknown, or the viewer. */
+export function disagreementCount(disagreements: DebateLobbyClaims['disagreements'], userId: string): number | null {
+  const entry = disagreements?.find(row => dashlessId(row.user_id) === dashlessId(userId));
+  return entry && entry.claims > 0 ? entry.claims : null;
+}
+
+/** What the pair is debating, from its first lobby member's roster row. */
+export function pairSubject(pair: DebateLobbyPair, members: DebateLobbyMember[]) {
+  for (const person of pair.people) {
+    if (!person.in_lobby) continue;
+    const member = members.find(m => sameUser(m, person));
+    if (member?.in_debate_subject) return member.in_debate_subject;
+  }
+  return null;
 }
 
 export function remindedLabel(count: number) {
@@ -129,6 +207,9 @@ export function otherLobbyIdFrom(error: GeoChatRequestError) {
 /** What to tell someone geo-chat refused, by its error code; `fallback` for anything else. */
 export function lobbyErrorMessage(error: unknown, fallback: string): string {
   if (!(error instanceof GeoChatRequestError)) return fallback;
+  if (error.status === 429 && error.details?.scope === 'lobby') {
+    return 'Lots of people are joining this lobby right now. Try again in a moment.';
+  }
   if (error.status === 429) return 'That was a lot of tries at once. Wait a moment and try again.';
   switch (error.code) {
     case 'lobby_limit_reached': {
@@ -191,10 +272,21 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
     case 'lobby_not_listener':
       return 'Only listeners raise a hand.';
     case 'lobby_removed':
+    case 'lobby_guest_removed':
       return 'A host removed you from this lobby.';
+    case 'guest_cap_reached':
+      // A cap of 0 is listening without an account turned off, not full.
+      return isGuestListeningOff(error)
+        ? 'Listening without an account isn’t available in this lobby. Create an account to join.'
+        : 'This lobby has as many listeners without an account as it can take. Create an account to join, or try again in a minute.';
     default:
       return fallback;
   }
+}
+
+/** Guest listening is off for this lobby (`guest_cap_reached` with a cap of 0): retrying cannot help. */
+export function isGuestListeningOff(error: unknown) {
+  return error instanceof GeoChatRequestError && error.code === 'guest_cap_reached' && error.details?.limit === 0;
 }
 
 /** A refused moderation action. Hosts moderate from inside the lobby only. */
@@ -241,6 +333,11 @@ export function inDebateLabel(subject: DebateLobbyMember['in_debate_subject']) {
   if (subject?.phase === 'on_claim' && subject.claim_name.trim())
     return `In a debate on “${subject.claim_name.trim()}”`;
   return 'In a debate';
+}
+
+/** "Moved to listeners by Priya", or without a name when geo-chat has none. */
+export function movedToListenersLabel(moved: NonNullable<DebateLobbyMember['moved_to_listeners']>) {
+  return moved.by ? `Moved to listeners by ${personName(moved.by)}` : 'Moved to listeners';
 }
 
 /** Raised hands, oldest first. */
@@ -305,6 +402,8 @@ export function moderationLogLabel(entry: Pick<DebateLobbyModerationEntry, 'acti
         : `${actor} removed ${target} as host`;
     case 'end':
       return `${actor} ended the lobby`;
+    case 'remove_guests':
+      return `${actor} removed the guests without an account`;
     default:
       return actor;
   }

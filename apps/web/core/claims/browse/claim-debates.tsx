@@ -299,6 +299,7 @@ export function DebateRow({
   return (
     <Link
       href={NavUtils.toEntity(spaceId, debate.id)}
+      data-entity-side-panel-full-page
       className="flex items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 transition-colors hover:border-grey-03"
     >
       {/* The still the debate was published with, in the shape the video actually is. The `Debate

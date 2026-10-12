@@ -1,5 +1,6 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import '@testing-library/jest-dom/vitest';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor } from '@testing-library/react';
 
 import type React from 'react';
 
@@ -11,6 +12,16 @@ import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import type { Entity } from '~/core/types';
 
 import { ClaimExploreFeedCard } from './claim-explore-feed-card';
+
+// The readiness backfill refreshes readiness reads through the query client once it lands.
+function render(ui: React.ReactElement) {
+  const queryClient = new QueryClient();
+  return rtlRender(ui, {
+    wrapper: ({ children }: { children: React.ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    ),
+  });
+}
 
 // Node's built-in localStorage shim can shadow jsdom with a partial object. The card only needs the
 // pending-account hook indirectly, so keep this layout suite independent of that persisted atom.

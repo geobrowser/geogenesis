@@ -405,6 +405,7 @@ function PanelClaimControls({
         disabled={!control.canRespond}
         pending={control.isResponseSubmitting}
         titleFor={control.actionTitle}
+        localSide={control.localVoteSide}
       />
       {control.responseError ? (
         <div role="alert" className="mt-1.5">

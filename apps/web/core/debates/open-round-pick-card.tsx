@@ -11,6 +11,11 @@ import type { OpenRoundPick } from './api';
 import { DebateRoomOverlayCard } from './debate-room-overlay-card';
 import { COUNTDOWN_WARNING_COLOR } from './recording-countdown-ring';
 
+export type OpenRoundPickContext = {
+  previousPick: OpenRoundPick | null;
+  msSinceCardOpened: number;
+};
+
 type OpenRoundPickCardProps = {
   /** The round that just ended, which is the round the pick is for. */
   roundIndex: number;
@@ -21,8 +26,12 @@ type OpenRoundPickCardProps = {
   remainingSeconds: number;
   /** How much of the decision window has gone, 0 to 1. */
   progress: number;
-  /** Saves the pick. A rejection puts the selection back to `savedPick` and asks for another tap. */
-  onPick: (pick: OpenRoundPick) => Promise<unknown>;
+  /**
+   * Saves the pick. A rejection puts the selection back to `savedPick` and asks for another tap.
+   * `context` is for analytics (GEO-3182): what was selected when the pick was tapped, and how long
+   * the card had been open.
+   */
+  onPick: (pick: OpenRoundPick, context: OpenRoundPickContext) => Promise<unknown>;
   localReconnecting: boolean;
   /** The other debater's name while their connection is down, else `null`. */
   reconnectingOpponentName: string | null;
@@ -53,6 +62,8 @@ export function OpenRoundPickCard({
   const [saveFailed, setSaveFailed] = React.useState(false);
   // Only the latest tap settles the card: an earlier save answering after a later tap must not undo it.
   const latestRequestRef = React.useRef(0);
+  // The card is keyed by round, so this is when the round's card opened.
+  const [openedAtMs] = React.useState(() => Date.now());
   const headingId = React.useId();
 
   const selectedPick = requestedPick ?? savedPick;
@@ -63,7 +74,7 @@ export function OpenRoundPickCard({
     const request = ++latestRequestRef.current;
     setRequestedPick(choice);
     setSaveFailed(false);
-    onPick(choice).then(
+    onPick(choice, { previousPick: selectedPick, msSinceCardOpened: Date.now() - openedAtMs }).then(
       () => {
         if (request === latestRequestRef.current) setRequestedPick(null);
       },

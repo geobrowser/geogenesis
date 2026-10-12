@@ -25,6 +25,7 @@ import {
   resetGeoChatSession,
 } from './api';
 import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
+import { type LobbyHighlightsState, parseLobbyHighlights, withLobbyHighlights } from './lobbies/lobby-highlights-state';
 
 export type DebateGatewaySession = GeoChatSession;
 
@@ -71,6 +72,10 @@ type DebateEventPayload = {
   lobby_id?: string;
   /** On `debate.lobbies_changed`; see `parseLobbyCardPatch`. */
   lobby_card?: unknown;
+  /** On `debate.lobby_highlights_changed`: the full state; see `parseLobbyHighlights`. */
+  lobby_highlights?: unknown;
+  /** On `debate.lobby_guests_changed`: visitors without an account. */
+  guest_count?: unknown;
   claim_entity_ids?: string[];
   sections?: MatchmakingSection[];
 };
@@ -543,9 +548,41 @@ export class DebateGatewayClient {
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
-      case 'debate.lobby_changed':
-        if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
+      // `sections: ["claims"]` means only the In this room list changed; `["people"]`, only the view
+      // (a pair's round or recording).
+      case 'debate.lobby_changed': {
+        if (!identifiers.lobby_id) break;
+        const lobbyId = dashlessId(identifiers.lobby_id);
+        const only = identifiers.sections?.length === 1 ? identifiers.sections[0] : null;
+        if (only !== 'claims') this.queueAccountQuery('lobby', lobbyId);
+        if (only !== 'people') this.queueAccountQuery('lobby-claims', lobbyId);
         break;
+      }
+      // GEO-3135. Full state to the roster: replaces the cached copy when newer, never refetches.
+      // An empty cache is seeded only for a lobby on screen (its GET in flight or failed), never for
+      // one the page isn't showing.
+      case 'debate.lobby_highlights_changed': {
+        const highlights = parseLobbyHighlights(identifiers.lobby_highlights);
+        if (!highlights || !this.accountKey) break;
+        const key = ['debates', 'account', this.accountKey, 'lobby-highlights', dashlessId(highlights.lobby_id)];
+        const query = this.queryClient.getQueryCache().find({ queryKey: key, exact: true });
+        const shown = query !== undefined && (query.state.fetchStatus === 'fetching' || query.getObserversCount() > 0);
+        this.queryClient.setQueryData<LobbyHighlightsState>(key, current =>
+          current || shown ? withLobbyHighlights(current, highlights) : current
+        );
+        break;
+      }
+      // GEO-3129. Coalesced to the roster; patches the cached view, never refetches.
+      case 'debate.lobby_guests_changed': {
+        const count = identifiers.guest_count;
+        if (!identifiers.lobby_id || !this.accountKey) break;
+        if (typeof count !== 'number' || !Number.isInteger(count) || count < 0) break;
+        this.queryClient.setQueryData<DebateLobbyView>(
+          ['debates', 'account', this.accountKey, 'lobby', dashlessId(identifiers.lobby_id)],
+          current => (current ? { ...current, guest_count: count } : current)
+        );
+        break;
+      }
     }
   }
 
@@ -622,6 +659,7 @@ export class DebateGatewayClient {
       // `debate.lobbies_changed` rides this scope too.
       this.queueAccountQuery('lobbies');
       this.queueAccountQuery('lobby');
+      this.queueAccountQuery('lobby-claims');
       return;
     }
     this.queueQuery(['debates', 'detail', scope.debate_id]);
@@ -664,6 +702,7 @@ export class DebateGatewayClient {
       | 'room'
       | 'lobbies'
       | 'lobby'
+      | 'lobby-claims'
       | 'my-lobby',
     id?: string
   ) {

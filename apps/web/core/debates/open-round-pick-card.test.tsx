@@ -6,12 +6,14 @@ import { type ComponentProps } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { OpenRoundPick } from './api';
-import { OpenRoundPickCard } from './open-round-pick-card';
+import { OpenRoundPickCard, type OpenRoundPickContext } from './open-round-pick-card';
 
 afterEach(cleanup);
 
 function renderCard(props: Partial<ComponentProps<typeof OpenRoundPickCard>> = {}) {
-  const onPick = vi.fn<(pick: OpenRoundPick) => Promise<unknown>>().mockResolvedValue(undefined);
+  const onPick = vi
+    .fn<(pick: OpenRoundPick, context: OpenRoundPickContext) => Promise<unknown>>()
+    .mockResolvedValue(undefined);
   const allProps: ComponentProps<typeof OpenRoundPickCard> = {
     roundIndex: 0,
     savedPick: null,
@@ -57,7 +59,7 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     const view = renderCard();
 
     fireEvent.click(extend());
-    expect(view.onPick).toHaveBeenLastCalledWith('extend');
+    expect(view.onPick).toHaveBeenLastCalledWith('extend', expect.objectContaining({ previousPick: null }));
     expect(extend()).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('heading', { name: 'Locked in' })).toBeInTheDocument();
     expect(screen.getByText('You can change it until the reveal.')).toBeInTheDocument();
@@ -67,9 +69,21 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     expect(extend()).toHaveAttribute('aria-pressed', 'true');
 
     fireEvent.click(end());
-    expect(view.onPick).toHaveBeenLastCalledWith('end');
+    expect(view.onPick).toHaveBeenLastCalledWith('end', expect.objectContaining({ previousPick: 'extend' }));
     expect(end()).toHaveAttribute('aria-pressed', 'true');
     expect(extend()).toHaveAttribute('aria-pressed', 'false');
+  });
+
+  it('tells the room how long the card was open when the pick was tapped (GEO-3182)', () => {
+    vi.useFakeTimers({ now: 1_000 });
+    try {
+      const view = renderCard();
+      vi.setSystemTime(4_250);
+      fireEvent.click(end());
+      expect(view.onPick).toHaveBeenLastCalledWith('end', { previousPick: null, msSinceCardOpened: 3_250 });
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('does not save the pick it already holds again', () => {

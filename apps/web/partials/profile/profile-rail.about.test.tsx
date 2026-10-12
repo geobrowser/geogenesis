@@ -20,6 +20,15 @@ const mocks = vi.hoisted(() => ({
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.isEditing }));
 vi.mock('~/core/hooks/use-profile-facts', () => ({ useProfileFacts: () => ({}) }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: SPACE_ID }) }));
+vi.mock('~/core/topics/use-followed-topics', () => ({
+  useFollowedTopics: () => ({ rows: [], topicIds: new Set(), isLoading: false }),
+}));
+vi.mock('~/core/topics/use-topic-metadata', () => ({
+  useTopicMetadata: () => ({ metadata: new Map(), isLoading: false }),
+}));
+vi.mock('~/core/topics/use-follow-topics', () => ({
+  useFollowTopics: () => ({ follow: vi.fn(), unfollow: vi.fn(), isPending: () => false, canFollow: true }),
+}));
 vi.mock('~/core/sync/use-store', () => ({ useValue: () => mocks.stored ?? null }));
 vi.mock('~/core/sync/use-mutate', () => ({
   useMutate: () => ({ storage: { values: { set: mocks.setValue, delete: mocks.deleteValue } } }),

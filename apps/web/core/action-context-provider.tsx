@@ -12,6 +12,7 @@ import {
   subscribeToActionPageViews,
 } from './action-context';
 import { capture } from './analytics';
+import { seenStore } from './explore/seen-demotion/seen-store';
 import { equals } from './id/normalize';
 
 const Context = React.createContext<ActionScope>({});
@@ -29,6 +30,21 @@ const IMPRESSION_COMPONENTS = new Set<ActionComponent>([
   'debate_end_card',
   'debate_claims_panel',
 ]);
+
+/**
+ * GEO-3234. Explore cards feed the browser's seen store: an impression is a view, and any click
+ * inside the card (open, vote, join, play) is engagement, which exempts it from seen demotion.
+ * Both are queued in memory and written when the browser is idle.
+ */
+function noteExploreCardImpression(context: ActionScope, pageViewId: string) {
+  if (context.component === 'explore_feed_card' && context.target_id) {
+    seenStore().recordImpression(context.target_id, pageViewId);
+  }
+}
+
+function noteExploreCardEngagement(context: ActionScope) {
+  if (context.component === 'explore_feed_card' && context.target_id) seenStore().recordEngagement(context.target_id);
+}
 
 /** Read inherited attribution when a reusable component supplies optional overrides. */
 export function useActionScope() {
@@ -142,6 +158,7 @@ export function ActionSurface({
       if (!active || !visible || document.visibilityState !== 'visible' || seen.has(key)) return;
       seen.add(key);
       const current = latest.current;
+      noteExploreCardImpression(current, pageId);
       capture('component_impression', {
         ...snapshotActionContext(
           current.component,
@@ -171,7 +188,10 @@ export function ActionSurface({
       document.removeEventListener('visibilitychange', record);
     };
   }, [measurementNode, key, pageId, value.component, trackImpression]);
-  const enter = () => enterActionContext({ ...pageContext(), ...context }, depth);
+  const enter = () => {
+    noteExploreCardEngagement(context);
+    enterActionContext({ ...pageContext(), ...context }, depth);
+  };
   return (
     <DepthContext.Provider value={depth}>
       <Context.Provider value={context}>
@@ -206,6 +226,7 @@ function useActionSurfaceRoot<T extends HTMLElement>(
   return {
     ref: attach,
     onClickCapture: (event: React.MouseEvent<T>) => {
+      noteExploreCardEngagement(context);
       if (context.component && context.target_id && context.target_type)
         enterActionContext(
           {

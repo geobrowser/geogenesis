@@ -347,7 +347,9 @@ describe('debate recording streaming', () => {
       shouldPause: () => false,
     });
     live.append(new Blob(['0123456789ab']), 2_000);
-    await new Promise(resolve => setTimeout(resolve, 20));
+    // Both whole parts out before the hand-over, however slowly this run is going: a fixed 20 ms
+    // sleep stopped the recorder before the second had gone out when the machine was busy.
+    await vi.waitFor(() => expect(wire.sent).toHaveLength(2), { timeout: 10_000 });
 
     await live.finish();
 

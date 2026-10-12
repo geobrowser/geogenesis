@@ -63,6 +63,7 @@ import {
 } from './fresh-slot/fresh-slot-cursor';
 import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-slot';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
+import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-config';
 
 /**
  * `best` is the Phase A ranked feed (quality + structure + recency, server-side).
@@ -95,6 +96,11 @@ export type ExploreFeedResult = {
    * window hook replaced it with (For you, an interleaved page); absent on New and Top.
    */
   feed?: FeedDescriptor;
+  /**
+   * GEO-3234. Present on a plain Best page while seen demotion is on: the browser moves cards its
+   * visitor has already seen down the page. The same for every visitor, so the page stays cacheable.
+   */
+  seenDemotion?: SeenDemotionPageConfig;
 };
 
 /**
@@ -856,6 +862,12 @@ export async function fetchExploreFeed(args: {
    * `now` pins the clock for tests and the ranking lab's preview.
    */
   freshSlot?: { config: FreshSlotConfig; revision: number; now?: number };
+  /**
+   * GEO-3234. Marks the debates the lead check verified playable (`playableLead`), so a browser
+   * demoting a lead its visitor has seen can promote another verified one. Only while seen demotion
+   * is on, so with it off the page is exactly what it was.
+   */
+  markPlayableLeads?: boolean;
 }): Promise<ExploreFeedResult> {
   const spaceMeta = browseSpaceRowsToMap(args.browse);
   const baseIds = exploreBrowseSpaceIds(args.browse, args.spaceFilterIds);
@@ -1188,10 +1200,18 @@ export async function fetchExploreFeed(args: {
   // GEO-3070. Only on the first ranked window, which is where page one comes from. Every page cut
   // from that window is reordered the same way, so the lead debate is served once and nothing it
   // displaced is skipped; later windows are ranked further down and left as they are.
+  //
+  // GEO-3234: `playableLeads` is filled by the check's callback, hence a holder, not a `let`.
+  const playableLeads: { ids: Set<string> | null } = { ids: null };
   if (args.leadWithPlayableDebate && args.sort === 'best' && windowAfter === null) {
     const led = await leadWithPlayableDebate(window.rows, {
       isDebate: row => exploreItemTypeKey(row) === normId(DEBATE_TYPE_ID),
       isPlayable: (row, signal) => debateHasProcessedVideo(row.entityId, signal),
+      onPlayable: args.markPlayableLeads
+        ? rows => {
+            playableLeads.ids = new Set(rows.map(row => normId(row.entityId)));
+          }
+        : undefined,
     });
     // The merge's page boundaries depend only on which rows Best holds, never their order, so
     // merging the led order again moves no boundary (GEO-3221).
@@ -1201,7 +1221,12 @@ export async function fetchExploreFeed(args: {
 
   // Serving a prefix and advancing the cursor past the whole scan is what dropped ranks
   // 23-30 of every page before (GEO-2695). The offset keeps the rest reachable.
-  const slice = ordered.slice(windowOffset, windowOffset + pageSize);
+  const served = ordered.slice(windowOffset, windowOffset + pageSize);
+  const leadIds = playableLeads.ids;
+  const slice =
+    leadIds !== null && window.feed?.name === 'best'
+      ? served.map(row => (leadIds.has(normId(row.entityId)) ? { ...row, playableLead: true } : row))
+      : served;
 
   const nextWindowCursor = scanBudgetSpent
     ? null

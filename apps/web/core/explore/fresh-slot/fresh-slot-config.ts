@@ -1,3 +1,8 @@
+import {
+  DEFAULT_SEEN_DEMOTION_CONFIG,
+  type SeenDemotionConfig,
+  parseSeenDemotionConfig,
+} from '~/core/explore/seen-demotion/seen-demotion-config';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -22,6 +27,11 @@ export type FreshSlotConfig = {
   freshnessHours: number;
   /** Normalized type id to the most fresh items of that type on one page. Unlisted types: no cap. */
   perTypeCaps: Record<string, number>;
+  /**
+   * GEO-3234. Not part of the fresh slot, but stored and served with it so the ranking lab holds
+   * one config: Best's per-visitor demotion of cards already seen, applied in the browser.
+   */
+  seenDemotion: SeenDemotionConfig;
 };
 
 /** Off until someone turns it on from the ranking lab. */
@@ -32,6 +42,7 @@ export const DEFAULT_FRESH_SLOT_CONFIG: FreshSlotConfig = {
   maxPerPage: 3,
   freshnessHours: 48,
   perTypeCaps: {},
+  seenDemotion: DEFAULT_SEEN_DEMOTION_CONFIG,
 };
 
 /**
@@ -106,8 +117,16 @@ export function parseFreshSlotConfig(input: unknown): FreshSlotConfigParse {
     }
   }
 
-  if (errors.length > 0) return { ok: false, errors };
-  return { ok: true, config: { enabled: raw.enabled as boolean, ...numbers, perTypeCaps }, adjustments };
+  const seen = parseSeenDemotionConfig(raw.seenDemotion);
+  if (!seen.ok) errors.push(...seen.errors);
+  else adjustments.push(...seen.adjustments);
+
+  if (errors.length > 0 || !seen.ok) return { ok: false, errors };
+  return {
+    ok: true,
+    config: { enabled: raw.enabled as boolean, ...numbers, perTypeCaps, seenDemotion: seen.config },
+    adjustments,
+  };
 }
 
 /**

@@ -72,4 +72,9 @@ export type FeedItemRanking = {
    * version then reads `best-1+fresh.<config revision>`.
    */
   slot?: 'fresh';
+  /**
+   * GEO-3234. Set in the browser on a card seen demotion moved down (or would have, had nothing
+   * unseen been below it). The page's version then ends `+seen.<n>`.
+   */
+  seenDemoted?: boolean;
 };

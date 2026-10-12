@@ -8,7 +8,15 @@ import {
 } from './fresh-slot-config';
 
 const DEBATE = 'f26d2ad9d0f64bee9e4c18dc5fd4e7bb';
-const valid = { enabled: true, cadence: 4, firstPosition: 3, maxPerPage: 3, freshnessHours: 48, perTypeCaps: {} };
+const valid = {
+  enabled: true,
+  cadence: 4,
+  firstPosition: 3,
+  maxPerPage: 3,
+  freshnessHours: 48,
+  perTypeCaps: {},
+  seenDemotion: { enabled: false, minViews: 2, days: 3 },
+};
 
 describe('parseFreshSlotConfig', () => {
   it('accepts a valid config unchanged', () => {
@@ -50,6 +58,35 @@ describe('parseFreshSlotConfig', () => {
     expect(parseFreshSlotConfig({ ...valid, cadence: Number.NaN })).toMatchObject({ ok: false });
     expect(parseFreshSlotConfig({ ...valid, perTypeCaps: { 'not-a-type': 1 } })).toMatchObject({ ok: false });
     expect(parseFreshSlotConfig({ ...valid, perTypeCaps: [] })).toMatchObject({ ok: false });
+  });
+});
+
+describe('seenDemotion (GEO-3234)', () => {
+  const { seenDemotion: _omitted, ...legacy } = valid;
+
+  it('defaults to off when a config saved before it existed has none', () => {
+    const parsed = parseFreshSlotConfig(legacy);
+    expect(parsed).toEqual({ ok: true, config: valid, adjustments: [] });
+    expect(DEFAULT_FRESH_SLOT_CONFIG.seenDemotion).toEqual({ enabled: false, minViews: 2, days: 3 });
+    expect(coerceFreshSlotConfig(legacy).seenDemotion.enabled).toBe(false);
+  });
+
+  it('clamps views and days into range and says so', () => {
+    const parsed = parseFreshSlotConfig({ ...valid, seenDemotion: { enabled: true, minViews: 0, days: 30 } });
+    expect(parsed.ok && parsed.config.seenDemotion).toEqual({ enabled: true, minViews: 1, days: 7 });
+    expect(parsed.ok && parsed.adjustments).toEqual(['seenDemotion.minViews 0 -> 1', 'seenDemotion.days 30 -> 7']);
+    const rounded = parseFreshSlotConfig({ ...valid, seenDemotion: { enabled: true, minViews: 2.6, days: 99 } });
+    expect(rounded.ok && rounded.config.seenDemotion).toEqual({ enabled: true, minViews: 3, days: 7 });
+  });
+
+  it('rejects values of the wrong kind', () => {
+    expect(parseFreshSlotConfig({ ...valid, seenDemotion: true })).toMatchObject({ ok: false });
+    expect(parseFreshSlotConfig({ ...valid, seenDemotion: { enabled: 'on', minViews: 2, days: 3 } })).toMatchObject({
+      ok: false,
+    });
+    expect(parseFreshSlotConfig({ ...valid, seenDemotion: { enabled: true, minViews: '2', days: 3 } })).toMatchObject({
+      ok: false,
+    });
   });
 });
 

@@ -4,8 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { Ellipsis } from '~/design-system/icons/ellipsis';
-import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember, DebateLobbyMemberAction, DebateLobbyView } from '../api';
@@ -27,8 +25,8 @@ export function hasMemberActions(
 }
 
 /**
- * The host actions on one person, as a list of rows: shared by the roster's menu and the phone
- * layout's per-person sheet. Renders nothing for someone the viewer may not act on.
+ * The host actions on one person, as a list of rows, in the person menu. Renders nothing for
+ * someone the viewer may not act on.
  */
 export function LobbyMemberActions({
   lobby,
@@ -116,54 +114,5 @@ export function LobbyMemberActions({
         </Text>
       ) : null}
     </div>
-  );
-}
-
-/** The roster row's "…" menu around `LobbyMemberActions`. Hidden when there is nothing to do. */
-export function LobbyMemberMenu({
-  lobby,
-  member,
-  isSelf,
-  micOn,
-}: {
-  lobby: Pick<DebateLobbyView, 'lobby_id' | 'viewer'>;
-  member: DebateLobbyMember;
-  isSelf: boolean;
-  micOn?: boolean;
-}) {
-  const [open, setOpen] = React.useState(false);
-  if (!hasMemberActions(lobby, member, isSelf)) return null;
-
-  return (
-    <Menu
-      open={open}
-      onOpenChange={setOpen}
-      asChild
-      align="end"
-      className="max-w-[260px]"
-      trigger={
-        <button
-          type="button"
-          aria-label={`Host controls for ${personName(member)}`}
-          {...debateActionAnalyticsAttributes('hub', 'Lobby host controls', 'open_lobby_host_controls')}
-          className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
-        >
-          <Ellipsis />
-        </button>
-      }
-    >
-      {/* Remounted on each open, so a confirm or error from last time does not linger. */}
-      {open ? (
-        <div role="group" aria-label={`Host controls for ${personName(member)}`}>
-          <LobbyMemberActions
-            lobby={lobby}
-            member={member}
-            isSelf={isSelf}
-            micOn={micOn}
-            onDone={() => setOpen(false)}
-          />
-        </div>
-      ) : null}
-    </Menu>
   );
 }

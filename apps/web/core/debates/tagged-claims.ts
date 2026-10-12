@@ -64,6 +64,9 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
       typeIds: { in: [$claimTypeId] }
       filter: $filter
     ) {
+      # Distinct claims under the filter, which the facet buckets cannot give: a claim tagged in two
+      # spaces is counted under both (GEO-3223).
+      totalCount
       pageInfo {
         hasNextPage
         endCursor
@@ -102,6 +105,7 @@ const TAGGED_CLAIMS_SOURCE = /* GraphQL */ `
 
 type TaggedClaimsQuery = {
   entitiesConnection: {
+    totalCount?: number | null;
     pageInfo: { hasNextPage: boolean; endCursor: string | null } | null;
     nodes: Array<{
       id: string;
@@ -157,8 +161,22 @@ export type TaggedClaimFilters = {
   search: string;
   /** AND, not OR: a claim has to carry every picked topic. */
   topicIds: string[];
-  /** OR: any of the picked spaces. Left out of the space facet, which must not narrow by itself. */
+  /**
+   * OR by default: any of the picked spaces, and left out of the space facet, which must not narrow
+   * by itself. With `spaceMatch: 'all'`, AND — see there.
+   */
   spaceIds: string[];
+  /**
+   * How picked spaces combine. `'any'` (the default) is the hub's menu: a claim in any of them, and a
+   * space facet counted without the space selection so every space keeps its own number.
+   *
+   * `'all'` is the debate again picker's single row of space and topic pills (GEO-3223), where a
+   * space is one more facet to drill into: a claim has to be tagged in every picked space, and the
+   * space facet is co-occurrence over the narrowed list, the way the topic facet always is. Since
+   * most claims are tagged in one space, picking one space leaves only the spaces its claims are
+   * also tagged in.
+   */
+  spaceMatch?: 'any' | 'all';
   /**
    * Every space this viewer may be shown claims from at all — their allowlist, already cut to what
    * a debate can be published into. Applied to *everything*, the space facet included: a space the
@@ -194,7 +212,29 @@ export type TaggedClaimFilters = {
    * Undefined or `null` excludes nothing.
    */
   excludeAnsweredBy?: string | null;
+  /**
+   * Topics whose names the search text matched, so a claim carrying any of them answers the search
+   * as well as a claim whose own text does. Searching "nuclear" then finds a claim tagged Nuclear
+   * power that never says the word.
+   *
+   * Only read while there is a search. The rows these add come after the text matches rather than
+   * among them: the text search ranks its own hits, and a topic match is not a hit it scored. The
+   * facets count both, since both are on the list.
+   *
+   * Undefined or empty adds nothing.
+   */
+  searchTopicIds?: string[];
 };
+
+/** The topics a search also matches, or `null` when it adds none — the shape the keys carry. */
+function searchTopicKey(filters: TaggedClaimFilters): string[] | null {
+  return filters.searchTopicIds && filters.searchTopicIds.length > 0 ? filters.searchTopicIds : null;
+}
+
+/** A claim carrying any of these topics, as an `EntityFilter` clause. */
+function carriesAnyTopic(topicIds: string[]) {
+  return { relations: { some: { typeId: { is: TOPICS_PROPERTY_ID }, toEntityId: { in: topicIds } } } };
+}
 
 export const NO_TAGGED_CLAIM_FILTERS: TaggedClaimFilters = {
   search: '',
@@ -266,6 +306,7 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
 
   return {
     claims,
+    totalCount: data.entitiesConnection?.totalCount ?? null,
     hasNextPage: data.entitiesConnection?.pageInfo?.hasNextPage ?? false,
     endCursor: data.entitiesConnection?.pageInfo?.endCursor ?? null,
   };
@@ -285,6 +326,10 @@ function decodeTaggedClaimsPage(data: TaggedClaimsQuery) {
  * (GEO-2696): the menu answers "what else do the claims I have narrowed to carry", so it *is*
  * counted over the topic selection — and each picked topic comes back with its current result
  * count, which is what lets it be un-picked.
+ *
+ * That is the hub's arrangement, `spaceMatch: 'any'`. The debate again picker asks for
+ * `spaceMatch: 'all'` (GEO-3223), where spaces work as topics do: AND, and counted as co-occurrence
+ * over the selection.
  */
 /**
  * The clause that says "tagged with this, in these spaces, carrying these topics, matching this
@@ -312,12 +357,14 @@ export function taggedEntityFilter(
   // Two space filters with different jobs. The picked one narrows and is what the space facet must
   // *not* apply to itself; the eligible one is what the viewer may see at all, and applies to
   // everything. Where both exist the picked set is already a subset, so the narrower wins.
-  const picked = omit === 'spaces' ? [] : filters.spaceIds;
+  const matchAll = filters.spaceMatch === 'all';
+  const picked = omit === 'spaces' && !matchAll ? [] : filters.spaceIds;
   // `null` and `[]` are different answers and only one of them narrows nothing. Unresolved is
   // `null` — the allowlist has not come back, and a list that is briefly too wide beats a panel
   // that never fills. Resolved-and-empty is a viewer who may see no space at all, and collapsing
   // the two showed them the entire tag. `spaceId: { in: [] }` returns nothing, which is the answer.
-  const spaceIds = picked.length > 0 ? picked : filters.eligibleSpaceIds;
+  // Under `'all'` the picked spaces each get their own clause below, so this one keeps only the scope.
+  const spaceIds = picked.length > 0 && !matchAll ? picked : filters.eligibleSpaceIds;
 
   // The space goes on the *tag relation*, not on the entity.
   //
@@ -332,6 +379,15 @@ export function taggedEntityFilter(
 
   const and: Record<string, unknown>[] = [{ relations: { some: tagRelation } }];
 
+  // AND across spaces: one tag relation per picked space, so the claim is tagged in all of them.
+  if (matchAll) {
+    for (const spaceId of picked) {
+      and.push({
+        relations: { some: { typeId: { is: TAG_PROPERTY_ID }, toEntityId: { is: tagId }, spaceId: { is: spaceId } } },
+      });
+    }
+  }
+
   // AND, not OR (GEO-2696): one clause per topic, so a claim has to carry all of them. Scoped to
   // the spaces the topic must have been assigned in, where the caller asked — see `topicSpaceIds`.
   for (const topicId of filters.topicIds) {
@@ -344,8 +400,16 @@ export function taggedEntityFilter(
   // matching happen somewhere that can stem, rank and score it while the rest of this filter — the
   // tag, the topics, the spaces — keeps being answered here, over the set it returned. The facets
   // ride the same filter, so their counts describe the search's results too.
+  //
+  // A claim carrying a topic the text matched answers it too (`searchTopicIds`), so the facets and
+  // counts built on this clause cover both kinds of match.
   if (searchClaimIds !== null) {
-    and.push({ id: { in: searchClaimIds } });
+    const searchTopicIds = searchTopicKey(filters);
+    and.push(
+      searchTopicIds
+        ? { or: [{ id: { in: searchClaimIds } }, carriesAnyTopic(searchTopicIds)] }
+        : { id: { in: searchClaimIds } }
+    );
   }
 
   // An anti-join through the vote table's primary key (gaia#987), so it costs the same however
@@ -391,6 +455,39 @@ const taggedClaimsDocument = parse(TAGGED_CLAIMS_SOURCE) as TypedDocumentNode<
   TaggedClaimsQuery,
   Record<string, unknown>
 >;
+
+/** One page of tagged claims under `filter` — the request behind the list, a search page and its topic matches. */
+function fetchTaggedClaimsPage({
+  tagId,
+  filter,
+  first,
+  after,
+  signal,
+}: {
+  tagId: string;
+  filter: ReturnType<typeof taggedEntityFilter>;
+  first: number;
+  after: string | null;
+  signal?: AbortSignal;
+}) {
+  return Effect.runPromise(
+    graphql({
+      query: taggedClaimsDocument,
+      decoder: decodeTaggedClaimsPage,
+      variables: {
+        tagPropertyId: TAG_PROPERTY_ID,
+        tagId,
+        claimTypeId: CLAIM_TYPE_ID,
+        topicsPropertyId: TOPICS_PROPERTY_ID,
+        propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
+        filter,
+        first,
+        after,
+      },
+      signal,
+    })
+  );
+}
 
 /**
  * Deliberately not under `'debates'`, for the same reason as the claim picker's key: that root is
@@ -444,6 +541,7 @@ const taggedSearchClaimsQueryKey = (tagId: string, filters: TaggedClaimFilters, 
     filters.spaceIds,
     filters.eligibleSpaceIds,
     filters.excludeAnsweredBy ?? null,
+    filters.spaceMatch ?? 'any',
     ids,
   ] as const;
 
@@ -467,6 +565,8 @@ export const taggedClaimsQueryKey = (
     filters.eligibleSpaceIds,
     filters.topicSpaceIds ?? null,
     filters.excludeAnsweredBy ?? null,
+    searchTopicKey(filters),
+    filters.spaceMatch ?? 'any',
   ] as const;
 
 const NO_TAGGED_CLAIMS: TaggedClaim[] = [];
@@ -495,23 +595,13 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     queryKey: taggedClaimsQueryKey(tagId, filters, search.claimIds),
     initialPageParam: null as string | null,
     queryFn: ({ pageParam, signal }) =>
-      Effect.runPromise(
-        graphql({
-          query: taggedClaimsDocument,
-          decoder: decodeTaggedClaimsPage,
-          variables: {
-            tagPropertyId: TAG_PROPERTY_ID,
-            tagId,
-            claimTypeId: CLAIM_TYPE_ID,
-            topicsPropertyId: TOPICS_PROPERTY_ID,
-            propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
-            filter: taggedEntityFilter(tagId, filters, null),
-            first: TAGGED_CLAIMS_PAGE_SIZE,
-            after: pageParam,
-          },
-          signal,
-        })
-      ),
+      fetchTaggedClaimsPage({
+        tagId,
+        filter: taggedEntityFilter(tagId, filters, null),
+        first: TAGGED_CLAIMS_PAGE_SIZE,
+        after: pageParam,
+        signal,
+      }),
     getNextPageParam: page => (page.hasNextPage ? page.endCursor : undefined),
     // Narrowing a list should narrow it, not blank it and fill it in again. Every filter mints a
     // new key, so without this the rows vanish for a round trip on each pick.
@@ -536,25 +626,17 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
       // with `undefined` and the list came back empty while both requests had succeeded.
       queryKey: taggedSearchClaimsQueryKey(tagId, filters, ids),
       queryFn: ({ signal }: { signal?: AbortSignal }) =>
-        Effect.runPromise(
-          graphql({
-            query: taggedClaimsDocument,
-            decoder: decodeTaggedClaimsPage,
-            variables: {
-              tagPropertyId: TAG_PROPERTY_ID,
-              tagId,
-              claimTypeId: CLAIM_TYPE_ID,
-              topicsPropertyId: TOPICS_PROPERTY_ID,
-              propertyIds: [SystemIds.NAME_PROPERTY, CLAIM_IS_FACTUAL_PROPERTY_ID],
-              // The ids of this page only. The tag, the topics and the spaces still narrow here, so
-              // a claim the search matched but a topic filter excludes never reaches the list.
-              filter: taggedEntityFilter(tagId, filters, ids),
-              first: ids.length,
-              after: null,
-            },
-            signal,
-          })
-        ),
+        // The ids of this page only. The tag, the topics and the spaces still narrow here, so
+        // a claim the search matched but a topic filter excludes never reaches the list.
+        // Without the topics the text matched: those rows are their own request below, and
+        // here they would come back on every page.
+        fetchTaggedClaimsPage({
+          tagId,
+          filter: taggedEntityFilter(tagId, { ...filters, searchTopicIds: undefined }, ids),
+          first: ids.length,
+          after: null,
+          signal,
+        }),
       staleTime: TAGGED_STALE_TIME,
       // No `placeholderData` here, unlike every other query in this module. It is the right tool
       // and it does not reach: `useQueries` rebuilds its observers from the array each render, so a
@@ -564,6 +646,46 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     })),
     combine: combineSearchPages,
   });
+
+  /**
+   * The claims a search reaches through a topic name rather than through their own text: one ranked
+   * page of claims carrying any of the matched topics.
+   *
+   * Drawn after the text matches, once the text search has nothing more to page, so a topic match
+   * never pushes a scored hit down or lands between two of them as pages arrive. One page, because
+   * a topic broad enough to fill more than that is one to pick as a filter, and its suggestion is
+   * under the search box for exactly that.
+   */
+  const searchTopicIds = searchTopicKey(filters);
+  const topicRows = useQuery({
+    queryKey: [
+      'tagged-claims',
+      'search-topic-claims',
+      tagId,
+      filters.topicIds,
+      filters.spaceIds,
+      filters.eligibleSpaceIds,
+      filters.topicSpaceIds ?? null,
+      filters.excludeAnsweredBy ?? null,
+      filters.spaceMatch ?? 'any',
+      searchTopicIds,
+    ] as const,
+    queryFn: ({ signal }) => {
+      const { and } = taggedEntityFilter(tagId, { ...filters, search: '', searchTopicIds: undefined }, null);
+      return fetchTaggedClaimsPage({
+        tagId,
+        filter: { and: [...and, carriesAnyTopic(searchTopicIds ?? [])] },
+        first: TAGGED_CLAIMS_PAGE_SIZE,
+        after: null,
+        signal,
+      });
+    },
+    staleTime: TAGGED_STALE_TIME,
+    enabled: enabled && searching && searchTopicIds !== null,
+  });
+  /** Whether the topic matches are part of this search, and so part of what it is waiting on. */
+  const topicRowsWanted = searching && searchTopicIds !== null;
+  const topicRowsPending = topicRowsWanted && topicRows.isLoading;
 
   const searchClaimsNow = React.useMemo(() => {
     if (search.claimIds === null) return NO_TAGGED_CLAIMS;
@@ -575,14 +697,23 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // A page still waiting is left out rather than skipped over, so the rows keep arriving in
     // relevance order instead of a later page jumping the queue and being overtaken.
     const claims: TaggedClaim[] = [];
+    let pagesComplete = true;
     for (const page of searchPages.pages) {
-      if (!page) break;
+      if (!page) {
+        pagesComplete = false;
+        break;
+      }
       claims.push(
         ...[...page].sort((a, b) => (byRelevance.get(a.entity.id) ?? 0) - (byRelevance.get(b.entity.id) ?? 0))
       );
     }
+    // The topic matches go last, once the text search has no more pages to add above them.
+    if (topicRowsWanted && pagesComplete && !search.hasNextPage && topicRows.data) {
+      const listed = new Set(claims.map(claim => claim.entity.id));
+      claims.push(...topicRows.data.claims.filter(claim => !listed.has(claim.entity.id)));
+    }
     return claims;
-  }, [search.claimIds, searchPages.pages]);
+  }, [search.claimIds, search.hasNextPage, searchPages.pages, topicRows.data, topicRowsWanted]);
 
   const cache = useQueryClient();
   const searchRefetch = search.refetch;
@@ -608,7 +739,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     searching &&
     search.error === null &&
     searchPages.error === null &&
-    (!search.settled || searchPages.firstPagePending || searchPages.appendedPending);
+    (!search.settled || searchPages.firstPagePending || searchPages.appendedPending || topicRowsPending);
 
   const browsedClaims = React.useMemo(
     () => query.data?.pages.flatMap(page => page.claims) ?? NO_TAGGED_CLAIMS,
@@ -644,6 +775,12 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // wasteful — `fetchNextPage` is a manual call and ignores `enabled`, so a sentinel reading a
     // cached `true` pages a query whose scope has not been resolved yet, from an old cursor.
     claims: enabled ? claims : NO_TAGGED_CLAIMS,
+    /**
+     * How many distinct claims the filters match, while browsing — `null` while a search runs (its
+     * rows come from id pages, which carry no total) or before the first page lands. The facet
+     * buckets cannot stand in for it: a claim tagged in two spaces is counted under each.
+     */
+    totalCount: enabled && browsing ? (query.data?.pages[0]?.totalCount ?? null) : null,
     // `enabled: false` leaves react-query pending, and a caller waiting on this would read that as
     // "still looking" and never show its empty state.
     //
@@ -659,7 +796,7 @@ export function useTaggedClaims(tagId: string, filters: TaggedClaimFilters, enab
     // re-asked with the previous rows still held is not a list appearing, and drawing a skeleton
     // over readable rows is the flash all of this exists to avoid.
     isLoading: enabled && (searching ? searchRowsSettling && claims.length === 0 : query.isLoading),
-    error: enabled ? (searching ? (search.error ?? searchPages.error) : query.error) : null,
+    error: enabled ? (searching ? (search.error ?? searchPages.error ?? topicRows.error) : query.error) : null,
     // Paging follows whichever source is answering. A search's next page is another `/search`
     // offset, not a graph cursor — the cursor belongs to a query that is not running.
     hasNextPage: enabled && (searching ? search.hasNextPage : query.hasNextPage),
@@ -807,11 +944,14 @@ export const taggedFacetQueryKey = (
     filters.search,
     searchClaimIds,
     filters.topicIds,
-    // The space facet does not narrow by the picked spaces, so they are not part of its identity.
-    dimension === 'spaces' ? null : filters.spaceIds,
+    // The space facet does not narrow by the picked spaces, so they are not part of its identity —
+    // unless spaces are AND, where it is co-occurrence and does.
+    dimension === 'spaces' && filters.spaceMatch !== 'all' ? null : filters.spaceIds,
+    filters.spaceMatch ?? 'any',
     filters.eligibleSpaceIds,
     filters.topicSpaceIds ?? null,
     filters.excludeAnsweredBy ?? null,
+    searchTopicKey(filters),
   ] as const;
 
 const NO_FACET_COUNTS: TaggedFacetCount[] = [];
@@ -927,7 +1067,8 @@ export function useTaggedTopicFacet(tagId: string, filters: TaggedClaimFilters, 
 }
 
 /**
- * The space menu, counted the same way and narrowed by everything except the space selection.
+ * The space menu, counted the same way and narrowed by everything except the space selection —
+ * or, with `spaceMatch: 'all'`, by the space selection too, as co-occurrence.
  *
  * Grouped on the tag relation's own `SPACE_ID`, so a space is offered for the claims tagged *in* it
  * rather than for every space the claim happens to be named in.

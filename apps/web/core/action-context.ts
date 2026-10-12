@@ -8,6 +8,7 @@ export const ACTION_COMPONENTS = [
   'sign_in_deep_link',
   'invite_link',
   'explore_email_capture',
+  'save_votes_prompt',
   'entity_vote_buttons',
   'claim_position_control',
   'winner_vote_button',
@@ -28,10 +29,13 @@ export const ACTION_COMPONENTS = [
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',
+  'topic_follow_button',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
   | 'vote'
+  | 'local_vote'
+  | 'local_vote_dropped'
   | 'ranking'
   | 'comment'
   | 'edit_comment'
@@ -39,6 +43,8 @@ export type ActionKind =
   | 'edit'
   | 'share'
   | 'join_space'
+  | 'follow_topic'
+  | 'unfollow_topic'
   | 'bounty_interest'
   | 'start_debate'
   | 'join_debate'
@@ -82,6 +88,8 @@ export type ActionContext = {
   feed_experiment_id?: string;
   feed_exploration?: boolean;
   feed_slot?: 'fresh';
+  /** GEO-3234. The card was moved down because this visitor had already seen it. */
+  feed_seen_demoted?: boolean;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -109,6 +117,7 @@ export const ACTION_CONTEXT_FIELDS = [
   'feed_experiment_id',
   'feed_exploration',
   'feed_slot',
+  'feed_seen_demoted',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',

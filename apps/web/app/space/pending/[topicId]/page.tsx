@@ -17,7 +17,7 @@ import { FallbackImage } from '~/design-system/fallback-image';
 import { Spacer } from '~/design-system/spacer';
 import { Text } from '~/design-system/text';
 
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { EntityPageContentContainer } from '~/partials/entity-page/entity-page-content-container';
 import { avatarAtom, nameAtom, spaceIdAtom } from '~/partials/onboarding/dialog';
 

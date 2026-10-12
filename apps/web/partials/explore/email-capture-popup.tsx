@@ -16,14 +16,25 @@ import { usePrepareOnboarding } from '~/core/hooks/use-prepare-onboarding';
 import { type NewsletterSubscribeResult, isLikelyEmail } from '~/core/newsletter/subscribe-result';
 import { beginPrivyAuth, cancelPrivyAuth } from '~/core/privy-auth-events';
 import { isChatOpenAtom } from '~/core/state/chat-store';
+import { useLocalVoteCount } from '~/core/state/local-votes';
 import { timeoutSignal } from '~/core/timeout-signal';
 
 import { ClientOnly } from '~/design-system/client-only';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
 import { ACCOUNT_ANALYTICS, AccountStep } from './email-capture-account-step';
-import { HEADING_CLASS, SUBTEXT_CLASS } from './email-capture-styles';
-import { CONTROL_HEIGHT_CLASS, CONTROL_LABEL_CLASS } from './email-capture-styles';
+import { useMarkEmailCaptureShowing } from './email-capture-presence';
+import {
+  CARD_CLASS,
+  CLOSE_BUTTON_CLASS,
+  ERROR_CLASS,
+  FORM_STACK_CLASS,
+  HEADING_CLASS,
+  PRIMARY_BUTTON_CLASS,
+  SECONDARY_BUTTON_CLASS,
+  SUBTEXT_CLASS,
+  fieldClass,
+} from './email-capture-styles';
 import { clearPendingSignup, readPendingSignup, writePendingSignup } from './pending-signup';
 import { entitySidePanelAtom } from '~/atoms';
 
@@ -75,6 +86,9 @@ function EmailCapturePopup() {
   const { isOpen: isDebatesHubOpen } = useDebatesHub();
   const entitySidePanelTarget = useAtomValue(entitySidePanelAtom);
   const { dismissed, remember: rememberDismissed } = useDismissedNotice(EMAIL_CAPTURE_ID);
+  // A visitor with votes on this device gets the save sheet instead, which asks for the same
+  // email for a reason they already have (GEO-3214). The two never stack.
+  const hasLocalVotes = useLocalVoteCount() > 0;
   // Read once, at mount. An attempt left mid-flight by a navigation comes back into the code step
   // rather than vanishing: `dismissed` is already true by then, and the `status === 'done'`
   // exception that would otherwise keep the card up is component state a navigation destroyed.
@@ -233,6 +247,8 @@ function EmailCapturePopup() {
   if (authenticated) clearPendingSignup();
 
   if (closed || !ready || authenticated || !scrolledEnough) return null;
+  // Not mid-sign-up, though: a code already sent must not vanish because they voted meanwhile.
+  if (hasLocalVotes && !wantsAccount && status !== 'done') return null;
 
   // An overlay normally takes the card off the screen entirely. Not once a code has been sent:
   // returning `null` unmounts the step, and mounting is what sends a code — so opening search or
@@ -284,11 +300,9 @@ function EmailCapturePopup() {
       //
       // Rises 5px into place as it fades in, each time it mounts — including when it comes back after
       // an overlay closes. With reduced motion it only fades.
-      className={cx(
-        'fixed right-4 bottom-4 z-1101 w-[308px] animate-rise-in overflow-clip rounded-xl border border-grey-02 bg-white shadow-lg motion-reduce:animate-fade-in',
-        'mobile:inset-x-0 mobile:bottom-0 mobile:w-auto mobile:rounded-none mobile:rounded-t-xl mobile:shadow-none'
-      )}
+      className={CARD_CLASS}
     >
+      <ShowingMarker />
       <DesktopArtwork />
       <MobileArtwork />
 
@@ -316,7 +330,7 @@ function EmailCapturePopup() {
         // Culture card slides under the glyph — measured 2.06-2.93:1 against `grey-04` at 480px.
         // `text` (#202020) is 5.34:1 or better across that range, and hover cannot make up the
         // difference on touch, where there is no hover.
-        className="absolute top-[7px] right-[7px] z-20 p-1 text-grey-04 transition-colors duration-200 ease-in-out hover:text-text mobile:top-[-5px] mobile:right-[-5px] mobile:p-4 mobile:text-text"
+        className={CLOSE_BUTTON_CLASS}
       >
         <CloseSmall />
       </button>
@@ -361,19 +375,11 @@ function EmailCapturePopup() {
 
                     Laid out as the subscribe row is after the restyle: a column with the same
                     spacing and width, so the card keeps one shape whichever state it is in. */}
-                <div className="mt-[19px] flex flex-col gap-[6px] mobile:mx-auto mobile:mt-5 mobile:max-w-[394px]">
-                  <button
-                    type="button"
-                    onClick={startAccount}
-                    className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90`}
-                  >
+                <div className={FORM_STACK_CLASS}>
+                  <button type="button" onClick={startAccount} className={PRIMARY_BUTTON_CLASS}>
                     Create account
                   </button>
-                  <button
-                    type="button"
-                    onClick={close}
-                    className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full border border-grey-02 px-2.5 whitespace-nowrap text-[rgba(21,21,21,0.7)] transition-colors hover:border-text hover:text-text`}
-                  >
+                  <button type="button" onClick={close} className={SECONDARY_BUTTON_CLASS}>
                     Skip
                   </button>
                 </div>
@@ -397,7 +403,7 @@ function EmailCapturePopup() {
             <p className={HEADING_CLASS}>Geo network launching soon!</p>
             <p className={SUBTEXT_CLASS}>Get updates on features, points, and path to mainnet.</p>
 
-            <div className="mt-[19px] flex flex-col gap-[6px] mobile:mx-auto mobile:mt-5 mobile:max-w-[394px]">
+            <div className={FORM_STACK_CLASS}>
               <input
                 type="text"
                 inputMode="email"
@@ -414,18 +420,14 @@ function EmailCapturePopup() {
                 aria-invalid={status === 'invalid-email'}
                 disabled={status === 'submitting'}
                 className={cx(
-                  `${CONTROL_HEIGHT_CLASS} w-full min-w-0 rounded-full border bg-white px-3 text-left text-[17px] leading-[19px] text-text outline-hidden transition-colors placeholder:text-grey-03 disabled:text-grey-03 mobile:text-center`,
-                  status === 'invalid-email' ? 'border-red-01' : 'border-grey-02 focus:border-text'
+                  fieldClass(status === 'invalid-email'),
+                  'text-left placeholder:text-grey-03 mobile:text-center'
                 )}
               />
               {/* Not the design-system `Button`: this one is a full pill at 28px on a dark fill,
                   which none of its variants draw — and `Button` also defaults to `type="button"`,
                   which inside a form is silently inert. */}
-              <button
-                type="submit"
-                disabled={status === 'submitting'}
-                className={`inline-flex ${CONTROL_HEIGHT_CLASS} ${CONTROL_LABEL_CLASS} w-full items-center justify-center rounded-full bg-[#151515] px-2.5 whitespace-nowrap text-white transition-opacity hover:opacity-90 disabled:opacity-60`}
-              >
+              <button type="submit" disabled={status === 'submitting'} className={PRIMARY_BUTTON_CLASS}>
                 {status === 'submitting' ? 'Subscribing…' : 'Subscribe'}
               </button>
             </div>
@@ -433,7 +435,7 @@ function EmailCapturePopup() {
             {errorMessage ? (
               // `role="alert"` on the element rather than on `Text`, which takes no such prop —
               // and it is what makes a failure reach someone who is not watching this corner.
-              <p role="alert" className="mt-2 text-[14px] tracking-[-0.35px] text-red-01">
+              <p role="alert" className={ERROR_CLASS}>
                 {errorMessage}
               </p>
             ) : null}
@@ -442,6 +444,12 @@ function EmailCapturePopup() {
       </div>
     </div>
   );
+}
+
+/** Tells the save-votes sheet this card holds the corner, for as long as the card is mounted. */
+function ShowingMarker() {
+  useMarkEmailCaptureShowing();
+  return null;
 }
 
 const ASSET = '/explore-email-capture';

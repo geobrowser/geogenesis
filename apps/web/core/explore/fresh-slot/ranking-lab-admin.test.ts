@@ -65,6 +65,18 @@ describe('the ranking lab admin gate', () => {
     });
   });
 
+  it('does not cache a 503, so an admin is let in once geo-chat answers again', async () => {
+    expect(await requireRankingLabAdmin(signedIn(), deps(status(503)))).toMatchObject({ ok: false, code: 'not_admin' });
+    expect(await requireRankingLabAdmin(signedIn(), deps(status(200)))).toMatchObject({ ok: true });
+  });
+
+  it('caches a 403', async () => {
+    const fetcher = status(403);
+    await requireRankingLabAdmin(signedIn(), deps(fetcher));
+    await requireRankingLabAdmin(signedIn(), deps(fetcher));
+    expect(fetcher).toHaveBeenCalledTimes(1);
+  });
+
   it('refuses when the two tokens belong to different people', async () => {
     const token = geoChatToken({ profile_space_id: 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb', user_id: 'u2' });
     expect(await requireRankingLabAdmin(signedIn(token), deps(status(200)))).toMatchObject({
