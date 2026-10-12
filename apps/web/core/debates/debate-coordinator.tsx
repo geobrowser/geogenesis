@@ -14,6 +14,7 @@ import { Text } from '~/design-system/text';
 
 import { activeDebate } from './activity-state';
 import { type DebateSharePrompt, GeoChatRequestError } from './api';
+import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
@@ -31,12 +32,15 @@ import {
   useDebateSharePrompts,
   useGeoChatAuth,
   useHandleDebateSharePrompt,
+  useLeaveDebateRematch,
   useRejectDebateChallenge,
 } from './hooks';
 import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { useOptionalDebateMediaSession } from './media-session';
+import { hasRematchJoinChoice, rememberRematchMicIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { sameId } from './rooms/room-presence';
@@ -226,7 +230,26 @@ export function DebateCoordinator() {
   // The claimless challenge gets the same treatment: "Not now" only closes the popup, and the
   // challenge keeps its place in the hub's Requests tab until it is answered or expires.
   const [snoozedChallengeId, setSnoozedChallengeId] = React.useState<string | null>(null);
+  /*
+   * Re-read on every render rather than held in state: the answer lives in module memory so that
+   * it survives the walk into the picker, and this is what closes the card as soon as it is given.
+   */
+  const rematchChoiceMade = Boolean(activity?.rematch && hasRematchJoinChoice(activity.rematch.id));
+  const [rematchAnswerTick, setRematchAnswerTick] = React.useState(0);
+  const leaveRematch = useLeaveDebateRematch(activity?.rematch?.id ?? '');
+  // Optional: a missing provider should cost the media choice, not the card.
+  const mediaSession = useOptionalDebateMediaSession();
+  const [rematchJoinError, setRematchJoinError] = React.useState<string | null>(null);
   const promptedChallenge = challenge && challenge.id !== snoozedChallengeId ? challenge : null;
+
+  const promptedRematchSender =
+    hasAttention &&
+    activity?.rematch &&
+    !activity.rematch.source_debate_id &&
+    !rematchChoiceMade &&
+    (activity.rematch.status === 'browsing' || activity.rematch.status === 'request_pending')
+      ? activity.rematch
+      : null;
   // Only the recipient is prompted. `challenge` itself stays live for everyone, since `activeFlow`
   // above reads it to keep other popups from stacking on top of an outstanding challenge.
   const isChallengeRecipient = promptedChallenge?.recipient.user_id === currentUserId;
@@ -396,6 +419,10 @@ export function DebateCoordinator() {
     // coordinator sent every other open tab into that room, where ownership correctly rejected it.
     // The room handles deciding, recording finalization, browsing, and conversion itself.
     if (sourceDebatePath) return;
+    /*
+     * A profile challenge waits for its sender to say how they want to join.
+     */
+    if (!rematch.source_debate_id && !hasRematchJoinChoice(rematch.id) && rematch.participants.length >= 2) return;
     // Past that guard there is no room to hand off from — a session with no source debate comes
     // from the matchmaking hub or a profile challenge, so this coordinator is the only thing that
     // can route the viewer in, and it must. But it runs in *every* tab, and the guard above only
@@ -486,12 +513,51 @@ export function DebateCoordinator() {
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
           hub's Requests tab, and the rematch routing effect above walks them into the claim picker
           the moment it is accepted. */}
+      {promptedRematchSender && currentUserId && (
+        <ChallengeAcceptedPrompt
+          key={promptedRematchSender.id}
+          session={promptedRematchSender}
+          currentUserId={currentUserId}
+          busy={leaveRematch.isPending || rematchAnswerTick > 0}
+          error={rematchJoinError}
+          onExplore={() => {
+            const micOn = mediaSession?.localTracksRef.current.some(track => track.mediaStreamTrack.kind === 'audio');
+            rememberRematchMicIntent(promptedRematchSender.id, Boolean(micOn));
+            setRematchAnswerTick(tick => tick + 1);
+            rememberDebateReturnDestination();
+            routeIntoDebate(() => router.push(debateRematchPath(promptedRematchSender)));
+          }}
+          onDecline={() => {
+            setRematchJoinError(null);
+            leaveRematch.mutate(undefined, {
+              onSuccess: () => rememberRematchMicIntent(promptedRematchSender.id, false),
+              onError: error =>
+                setRematchJoinError(error instanceof Error ? error.message : 'Could not decline. Try again.'),
+            });
+          }}
+        />
+      )}
       {promptedChallenge && isChallengeRecipient && !debate && !activity?.rematch && (
         <DebateChallengeDialog
           challenge={promptedChallenge}
           busy={acceptChallenge.isPending || rejectChallenge.isPending}
           error={challengeError instanceof Error ? challengeError.message : null}
-          onAccept={() => acceptChallenge.mutate(promptedChallenge.id)}
+          onAccept={() => {
+            /*
+             * What they chose, captured now rather than in `onSuccess`: accepting unmounts this
+             * card, which stops the devices, so by the time the session id arrives there is
+             * nothing left to read. Recording it against that id is also what stops the sender's
+             * card appearing in front of the person who just answered here.
+             */
+            const micOn = Boolean(
+              mediaSession?.localTracksRef.current.some(track => track.mediaStreamTrack.kind === 'audio')
+            );
+            acceptChallenge.mutate(promptedChallenge.id, {
+              onSuccess: result => {
+                if (result.session) rememberRematchMicIntent(result.session.id, micOn);
+              },
+            });
+          }}
           onReject={() => rejectChallenge.mutate(promptedChallenge.id)}
           onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
