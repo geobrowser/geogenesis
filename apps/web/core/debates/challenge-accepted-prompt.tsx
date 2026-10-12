@@ -34,7 +34,7 @@ export function ChallengeAcceptedPrompt({
 
   const [initialMicOn] = React.useState(() => readRematchJoinIntent(session.id)?.micOn ?? null);
   const rememberMic = React.useCallback(
-    (micOn: boolean) => rememberRematchJoinIntent(session.id, { micOn, cameraOn: false }),
+    (micOn: boolean) => rememberRematchJoinIntent(session.id, { micOn, cameraOn: null }),
     [session.id]
   );
   const you = session.participants.find(participant => participant.user_id === currentUserId) ?? null;

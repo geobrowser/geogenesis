@@ -14,7 +14,7 @@ import { CloseSmall } from '~/design-system/icons/close-small';
  * The "You VS them" header for the rematch claim picker (GEO-2992).
  *
  * The voice controls used to live in a 200px dock pinned to the bottom-right corner, outside the
- * 720px column the viewer is actually reading. People were not finding it, so they never learned
+ * content column the viewer is actually reading. People were not finding it, so they never learned
  * they could unmute and talk while picking a claim. This puts the same controls in the page header,
  * inside the column, and gives the room a face: two participant cards either side of a VS badge —
  * them on the left, you on the right.

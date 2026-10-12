@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
+import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
@@ -36,6 +37,10 @@ const mocks = vi.hoisted(() => ({
   startAudio: vi.fn(() => Promise.resolve()),
   audioDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
   speakerDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
+  cameraDevices: [] as Array<{ deviceId: string; groupId: string; kind: string; label: string }>,
+  activeCameraId: '',
+  setActiveCamera: vi.fn(),
+  changeVideoInput: vi.fn(),
   activeDeviceId: 'mic-a',
   activeSpeakerId: 'speaker-a',
   setActiveMediaDevice: vi.fn(() => Promise.resolve()),
@@ -47,6 +52,7 @@ const mocks = vi.hoisted(() => ({
   opponentMicPublication: { isMuted: false } as { isMuted: boolean } | undefined,
   // Returns a promise, like the real one: the unmute click attaches a `.catch` to it.
   setMicrophoneEnabled: vi.fn(() => Promise.resolve()),
+  setCameraEnabled: vi.fn((_enabled: boolean) => Promise.resolve()),
   isMicrophoneEnabled: true,
   isSpeaking: false,
   localIsSpeaking: false,
@@ -111,28 +117,46 @@ vi.mock('@livekit/components-react', () => ({
     return participant.identity === 'me' ? mocks.localIsSpeaking : mocks.isSpeaking;
   },
   useLocalParticipant: () => ({
-    localParticipant: { identity: 'me', setMicrophoneEnabled: mocks.setMicrophoneEnabled },
+    localParticipant: {
+      identity: 'me',
+      setMicrophoneEnabled: mocks.setMicrophoneEnabled,
+      setCameraEnabled: mocks.setCameraEnabled,
+    },
     isMicrophoneEnabled: mocks.isMicrophoneEnabled,
     microphoneTrack: mocks.microphoneTrack,
   }),
   useRemoteParticipants: () => mocks.remoteParticipants,
   useRoomContext: () => ({
     disconnect: mocks.disconnect,
-    localParticipant: { identity: 'me', setMicrophoneEnabled: mocks.setMicrophoneEnabled },
+    localParticipant: {
+      identity: 'me',
+      setMicrophoneEnabled: mocks.setMicrophoneEnabled,
+      setCameraEnabled: mocks.setCameraEnabled,
+    },
   }),
   useMediaDeviceSelect: ({ kind, requestPermissions }: { kind: MediaDeviceKind; requestPermissions?: boolean }) => {
     mocks.deviceSelectCalls.push({ kind, requestPermissions });
-    return kind === 'audiooutput'
-      ? {
-          devices: mocks.speakerDevices,
-          activeDeviceId: mocks.activeSpeakerId,
-          setActiveMediaDevice: mocks.setActiveSpeaker,
-        }
-      : {
-          devices: mocks.audioDevices,
-          activeDeviceId: mocks.activeDeviceId,
-          setActiveMediaDevice: mocks.setActiveMediaDevice,
-        };
+    if (kind === 'audiooutput') {
+      return {
+        devices: mocks.speakerDevices,
+        activeDeviceId: mocks.activeSpeakerId,
+        setActiveMediaDevice: mocks.setActiveSpeaker,
+      };
+    }
+    // Its own list, deliberately: falling through to the microphones made a camera picker that
+    // listed microphones, and a test against it would have passed on nonsense.
+    if (kind === 'videoinput') {
+      return {
+        devices: mocks.cameraDevices,
+        activeDeviceId: mocks.activeCameraId,
+        setActiveMediaDevice: mocks.setActiveCamera,
+      };
+    }
+    return {
+      devices: mocks.audioDevices,
+      activeDeviceId: mocks.activeDeviceId,
+      setActiveMediaDevice: mocks.setActiveMediaDevice,
+    };
   },
 }));
 
@@ -184,6 +208,7 @@ vi.mock('~/core/debates/media-session', () => ({
     selectedAudioInputId: mocks.selectedAudioInputId,
     audioOutputError: null,
     changeAudioInput: mocks.changeAudioInput,
+    changeVideoInput: mocks.changeVideoInput,
     changeAudioOutput: mocks.changeAudioOutput,
   }),
 }));
@@ -343,6 +368,12 @@ function stubMicrophoneApis() {
   });
 }
 
+function callToken(sources: string[]) {
+  const encode = (value: unknown) =>
+    Buffer.from(JSON.stringify(value)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ video: { canPublish: true, canPublishSources: sources } })}.sig`;
+}
+
 beforeEach(() => {
   stubMicrophoneApis();
   // The settings popover measures its trigger to place itself; jsdom has no ResizeObserver.
@@ -356,7 +387,7 @@ beforeEach(() => {
   );
   setMobileLayout(false);
   mocks.joinData = {
-    token: 'token-1',
+    token: callToken(['microphone']),
     url: 'wss://livekit.test',
     room_name: 'geo-rematch-session-1',
     participant_slot: 1,
@@ -377,6 +408,13 @@ beforeEach(() => {
     { deviceId: 'mic-a', groupId: 'g1', kind: 'audioinput', label: 'Built-in Microphone' },
     { deviceId: 'mic-b', groupId: 'g2', kind: 'audioinput', label: 'USB Microphone' },
   ];
+  mocks.cameraDevices = [
+    { deviceId: 'cam-a', groupId: 'g3', kind: 'videoinput', label: 'FaceTime HD Camera' },
+    { deviceId: 'cam-b', groupId: 'g4', kind: 'videoinput', label: 'USB Webcam' },
+  ];
+  mocks.activeCameraId = 'cam-a';
+  mocks.setActiveCamera.mockReset();
+  mocks.changeVideoInput.mockReset();
   mocks.speakerDevices = [
     { deviceId: 'speaker-a', groupId: 'g1', kind: 'audiooutput', label: 'Built-in Speakers' },
     { deviceId: 'speaker-b', groupId: 'g2', kind: 'audiooutput', label: 'AirPods' },
@@ -391,6 +429,8 @@ beforeEach(() => {
   mocks.remoteParticipants = [];
   mocks.opponentMicPublication = { isMuted: false };
   mocks.setMicrophoneEnabled.mockReset().mockResolvedValue(undefined);
+  mocks.setCameraEnabled.mockReset().mockResolvedValue(undefined);
+  clearRematchJoinIntents();
   mocks.isMicrophoneEnabled = true;
   mocks.isSpeaking = false;
   mocks.localIsSpeaking = false;
@@ -2299,5 +2339,143 @@ describe('the mic inside a debate room', () => {
 
     await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
     expect(lastAudio()).toBe(false);
+  });
+});
+
+describe('the camera', () => {
+  it('offers no camera control when the token grants only the microphone', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+    expect(mocks.setCameraEnabled).not.toHaveBeenCalled();
+  });
+
+  it('offers a camera control when the token grants one', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+  });
+
+  it('turns the camera on and off', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera off' }));
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(false));
+  });
+
+  it('joins with the camera the chosen state asked for', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
+    expect(await screen.findByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+  });
+
+  it('stays off when nothing asked about the camera', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: null });
+
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+  });
+
+  it('keeps the call on audio when the camera cannot open, and asks once', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    mocks.setCameraEnabled.mockRejectedValue(new Error('NotReadableError'));
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    const attempts = mocks.setCameraEnabled.mock.calls.filter(call => call[0] === true).length;
+    expect(attempts).toBe(1);
+    expect(screen.getByRole('button', { name: /microphone/i })).toBeInTheDocument();
+  });
+});
+
+describe('choosing a camera', () => {
+  function withCameraAllowed() {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+  }
+
+  it('names the action on the pill, the way the microphone does', async () => {
+    withCameraAllowed();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const camera = await screen.findByRole('button', { name: 'Turn camera on' });
+    expect(camera).toHaveTextContent('Camera on');
+
+    fireEvent.click(camera);
+
+    expect(await screen.findByRole('button', { name: 'Turn camera off' })).toHaveTextContent('Camera off');
+  });
+
+  it('drops both labels at the same width, not one of them', async () => {
+    withCameraAllowed();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const micLabel = within(screen.getByRole('button', { name: /microphone/i })).getByText(/^(Mute|Unmute)$/);
+    const cameraLabel = await screen.findByText('Camera on');
+
+    expect(micLabel.className).toContain('max-[400px]:hidden');
+    expect(cameraLabel.className).toBe(micLabel.className);
+  });
+
+  it('offers no camera settings when the token grants no camera', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(screen.queryByRole('button', { name: 'Camera settings' })).toBeNull();
+  });
+
+  it('lists the cameras, not the microphones', async () => {
+    withCameraAllowed();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Camera settings' }));
+
+    expect(await screen.findByText('FaceTime HD Camera')).toBeInTheDocument();
+    expect(screen.getByText('USB Webcam')).toBeInTheDocument();
+    expect(screen.queryByText('USB Microphone')).toBeNull();
+  });
+
+  it('switches the live camera and carries the choice into the debate', async () => {
+    withCameraAllowed();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Camera settings' }));
+    fireEvent.click(await screen.findByText('USB Webcam'));
+
+    expect(mocks.setActiveCamera).toHaveBeenCalledWith('cam-b');
+    expect(mocks.changeVideoInput).toHaveBeenCalledWith('cam-b');
+  });
+
+  it('never asks for a camera to fill its own picker', async () => {
+    withCameraAllowed();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const videoCalls = mocks.deviceSelectCalls.filter(call => call.kind === 'videoinput');
+    expect(videoCalls.length).toBeGreaterThan(0);
+    expect(videoCalls.every(call => call.requestPermissions === false)).toBe(true);
   });
 });
