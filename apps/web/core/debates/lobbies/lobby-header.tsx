@@ -18,6 +18,7 @@ import {
   hostsLabel,
   isHosting,
   lobbyErrorMessage,
+  lobbyHeadcount,
   raisedHands,
 } from './lobby-format';
 import { LobbyHostLists } from './lobby-moderation';
@@ -119,7 +120,7 @@ function LivePill({ lobby, small = false }: { lobby: LobbyPageView; small?: bool
       )}
     >
       <span aria-hidden className={cx('rounded-full bg-green', small ? 'size-1.5' : 'size-2')} />
-      Live · {hereLabel(lobby.members.length)} · {debatingLabel(debatingCount(lobby.members))}
+      Live · {hereLabel(lobbyHeadcount(lobby))} · {debatingLabel(debatingCount(lobby.members))}
     </span>
   );
 }
