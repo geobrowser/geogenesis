@@ -17,6 +17,7 @@ import {
   moderationErrorMessage,
   moderationLogLabel,
   moderationNoticeText,
+  movedToListenersLabel,
   personName,
   raisedHands,
   sinceLabel,
@@ -202,7 +203,7 @@ function raisedHandDetail(member: MemberLobbyPageView['members'][number]) {
   const since = sinceLabel(member.hand_raised_at!);
   const moved = member.moved_to_listeners;
   if (!moved) return `Hand up ${since ?? ''}`.trim();
-  const by = moved.by ? `Moved to listeners by ${personName(moved.by)}` : 'Moved to listeners';
+  const by = movedToListenersLabel(moved);
   return since ? `${by} · hand up ${since}` : by;
 }
 

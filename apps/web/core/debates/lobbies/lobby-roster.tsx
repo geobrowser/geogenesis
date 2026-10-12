@@ -32,6 +32,7 @@ import { useLobbyVoiceStates } from './lobby-voice';
 export const LOBBY_ROSTER_COPY = {
   empty: 'Nobody’s here right now.',
   movedToListeners: 'moved to listeners',
+  handRaised: 'hand raised',
   disagreesOn: (count: number) => `Disagrees on ${count}`,
 } as const;
 
@@ -292,12 +293,13 @@ function ListenerChip({ lobby, member, isSelf, viewerId, status, disagreements }
   const moved =
     Boolean(member.moved_to_listeners) ||
     (isSelf && lobby.viewer.kind === 'member' && lobby.viewer.last_moderation?.action === 'move_to_listeners');
+  // A raised hand first: for a host, every listener here may carry a move.
   const detail = member.stepped_out
     ? 'stepped out'
-    : moved
-      ? LOBBY_ROSTER_COPY.movedToListeners
-      : member.hand_raised_at
-        ? 'hand raised'
+    : member.hand_raised_at
+      ? LOBBY_ROSTER_COPY.handRaised
+      : moved
+        ? LOBBY_ROSTER_COPY.movedToListeners
         : null;
 
   return (

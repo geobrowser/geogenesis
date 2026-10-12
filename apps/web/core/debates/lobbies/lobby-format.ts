@@ -335,6 +335,11 @@ export function inDebateLabel(subject: DebateLobbyMember['in_debate_subject']) {
   return 'In a debate';
 }
 
+/** "Moved to listeners by Priya", or without a name when geo-chat has none. */
+export function movedToListenersLabel(moved: NonNullable<DebateLobbyMember['moved_to_listeners']>) {
+  return moved.by ? `Moved to listeners by ${personName(moved.by)}` : 'Moved to listeners';
+}
+
 /** Raised hands, oldest first. */
 export function raisedHands(members: DebateLobbyMember[]) {
   return members

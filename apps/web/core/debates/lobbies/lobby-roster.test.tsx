@@ -159,6 +159,24 @@ describe('LobbyPeople on desktop', () => {
     expect(screen.getByTestId('lobby-guest-count')).toHaveTextContent('2 guests without an account');
   });
 
+  it('shows a raised hand on a chip before the move a host made', () => {
+    const moved = {
+      by: { user_id: 'priya', profile_space_id: 'space-priya', display_name: 'Priya', avatar_cid: null },
+      at: '2026-10-09T10:05:00Z',
+    };
+    renderPeople(
+      lobby([
+        member('Adam', { role: 'host' }),
+        member('Sam', { role: 'listener', moved_to_listeners: moved, hand_raised_at: '2026-10-09T10:06:00Z' }),
+      ])
+    );
+
+    const chip = screen.getByTestId('lobby-listener-chip');
+    expect(chip).toHaveTextContent('Samhand raised');
+    fireEvent.click(chip);
+    expect(screen.getByTestId('lobby-person-card')).toHaveTextContent('Moved to listeners by Priya');
+  });
+
   it('opens a person menu with their disagreements, Request a debate and host controls', () => {
     renderPeople(lobby(roster));
 

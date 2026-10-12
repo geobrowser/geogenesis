@@ -7,7 +7,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
-import { personName } from './lobby-format';
+import { movedToListenersLabel, personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyMemberActions, hasMemberActions } from './lobby-member-actions';
 import { LobbyPersonName } from './lobby-people';
@@ -112,6 +112,11 @@ export function LobbyPersonCard({
           {disagreements !== null && !isSelf ? (
             <Text as="p" variant="footnote" color="grey-04">
               {disagreeOnLabel(disagreements)}
+            </Text>
+          ) : null}
+          {member.moved_to_listeners ? (
+            <Text as="p" variant="footnote" color="grey-04">
+              {movedToListenersLabel(member.moved_to_listeners)}
             </Text>
           ) : null}
         </div>
