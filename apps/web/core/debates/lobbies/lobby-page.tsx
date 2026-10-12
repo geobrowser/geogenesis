@@ -497,6 +497,8 @@ function LobbyRoom({
   const disagreements = useDebateLobbyClaims(lobby.lobby_id, showClaims).data?.disagreements ?? null;
   const highlights = useLobbyHighlights(lobby.lobby_id, phone && showClaims).data;
   const claimsMark = useClaimsTabMark(highlights, phone && tab === 'claims');
+  const tabbed = phone && showClaims;
+  const tabIds = useTabIds();
   const onPeopleTab = !phone || !showClaims || tab === 'people';
   const onClaimsTab = !phone || tab === 'claims';
 
@@ -525,7 +527,7 @@ function LobbyRoom({
     <LobbySlotsProvider value={slots.targets}>
       <div className="flex min-h-[calc(100dvh-2.75rem)] flex-col" data-testid="debate-lobby">
         <LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />
-        {phone && showClaims ? <LobbyPhoneTabs tab={tab} onTab={setTab} claimsMark={claimsMark} /> : null}
+        {tabbed ? <LobbyPhoneTabs ids={tabIds} tab={tab} onTab={setTab} claimsMark={claimsMark} /> : null}
 
         <div
           className={cx(
@@ -534,7 +536,9 @@ function LobbyRoom({
           )}
         >
           <section
-            aria-label="People in the lobby"
+            {...(tabbed
+              ? { role: 'tabpanel', id: tabIds.people.panel, 'aria-labelledby': tabIds.people.tab }
+              : { 'aria-label': 'People in the lobby' })}
             hidden={!onPeopleTab}
             className="flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5"
           >
@@ -572,7 +576,9 @@ function LobbyRoom({
 
           {showClaims ? (
             <aside
-              aria-label="Claims in the room"
+              {...(tabbed
+                ? { role: 'tabpanel', id: tabIds.claims.panel, 'aria-labelledby': tabIds.claims.tab }
+                : { 'aria-label': 'Claims in the room' })}
               hidden={!onClaimsTab}
               className="flex min-w-0 flex-col gap-3 border-l border-grey-02 px-4 py-5 md:border-l-0 md:py-3"
             >
@@ -646,29 +652,70 @@ function LeaveLabel() {
   );
 }
 
-/** Phone: People and Claims, with a dot on Claims for a room vote or highlight not seen yet. */
+type TabIds = Record<LobbyPhoneTab, { tab: string; panel: string }>;
+
+function useTabIds(): TabIds {
+  const base = React.useId();
+  return {
+    people: { tab: `${base}-people-tab`, panel: `${base}-people-panel` },
+    claims: { tab: `${base}-claims-tab`, panel: `${base}-claims-panel` },
+  };
+}
+
+const PHONE_TABS: { id: LobbyPhoneTab; label: string }[] = [
+  { id: 'people', label: 'People' },
+  { id: 'claims', label: 'Claims' },
+];
+
+/**
+ * Phone: People and Claims, with a dot on Claims for a room vote or highlight not seen yet. Arrow
+ * keys, Home and End move between tabs; only the selected one is in the tab order.
+ */
 function LobbyPhoneTabs({
+  ids,
   tab,
   onTab,
   claimsMark,
 }: {
+  ids: TabIds;
   tab: LobbyPhoneTab;
   onTab: (tab: LobbyPhoneTab) => void;
   claimsMark: boolean;
 }) {
-  const tabs: { id: LobbyPhoneTab; label: string }[] = [
-    { id: 'people', label: 'People' },
-    { id: 'claims', label: 'Claims' },
-  ];
+  const select = (index: number) => {
+    const next = PHONE_TABS[(index + PHONE_TABS.length) % PHONE_TABS.length]!;
+    onTab(next.id);
+    document.getElementById(ids[next.id].tab)?.focus();
+  };
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const current = PHONE_TABS.findIndex(item => item.id === tab);
+    const target =
+      event.key === 'ArrowRight'
+        ? current + 1
+        : event.key === 'ArrowLeft'
+          ? current - 1
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? PHONE_TABS.length - 1
+              : null;
+    if (target === null) return;
+    event.preventDefault();
+    select(target);
+  };
+
   return (
-    <div role="tablist" aria-label="Lobby" className="mx-4 mt-2 flex border-b border-grey-02">
-      {tabs.map(item => (
+    <div role="tablist" aria-label="Lobby" onKeyDown={onKeyDown} className="mx-4 mt-2 flex border-b border-grey-02">
+      {PHONE_TABS.map(item => (
         <button
           key={item.id}
+          id={ids[item.id].tab}
           type="button"
           role="tab"
           aria-selected={tab === item.id}
-          {...hubAnalyticsAttributes(`Lobby ${item.label} tab`, 'navigate_lobby_tabs')}
+          aria-controls={ids[item.id].panel}
+          tabIndex={tab === item.id ? 0 : -1}
+          {...hubAnalyticsAttributes(`Lobby ${item.label} tab`, 'navigate_lobby_claims')}
           onClick={() => onTab(item.id)}
           className={cx(
             'inline-flex flex-1 items-center justify-center gap-1.5 pb-2 text-[17px] leading-[22px] font-semibold',

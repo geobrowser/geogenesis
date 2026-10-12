@@ -211,7 +211,7 @@ describe('DebateLobbyPage layout on a phone', () => {
 
     const tabs = screen.getByRole('tablist', { name: 'Lobby' });
     expect(within(tabs).getByRole('tab', { name: 'People' })).toHaveAttribute('aria-selected', 'true');
-    expect(screen.getByRole('region', { name: 'People in the lobby' })).toBeVisible();
+    expect(screen.getByRole('tabpanel', { name: 'People' })).toBeVisible();
     expect(screen.getByTestId('claims')).not.toBeVisible();
     expect(within(screen.getByTestId('lobby-control-bar')).getByTestId('availability-pill')).toBeInTheDocument();
 
@@ -219,6 +219,34 @@ describe('DebateLobbyPage layout on a phone', () => {
     expect(screen.getByTestId('claims')).toBeVisible();
     expect(screen.getByTestId('member-room')).not.toBeVisible();
     expect(screen.getByRole('button', { name: 'Lobby options' })).toBeInTheDocument();
+  });
+
+  it('gives the tabs tab and tabpanel semantics, with arrow keys', () => {
+    mocks.phone = true;
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    const people = screen.getByRole('tab', { name: 'People' });
+    const claims = screen.getByRole('tab', { name: 'Claims' });
+    expect(screen.getByRole('tabpanel', { name: 'People' })).toHaveAttribute(
+      'id',
+      people.getAttribute('aria-controls')
+    );
+    expect(people).toHaveAttribute('tabindex', '0');
+    expect(claims).toHaveAttribute('tabindex', '-1');
+
+    people.focus();
+    fireEvent.keyDown(people, { key: 'ArrowRight' });
+    expect(claims).toHaveAttribute('aria-selected', 'true');
+    expect(claims).toHaveFocus();
+    expect(screen.getByRole('tabpanel', { name: 'Claims' })).toHaveAttribute(
+      'id',
+      claims.getAttribute('aria-controls')
+    );
+
+    fireEvent.keyDown(claims, { key: 'Home' });
+    expect(people).toHaveAttribute('aria-selected', 'true');
+    fireEvent.keyDown(people, { key: 'ArrowLeft' });
+    expect(claims).toHaveAttribute('aria-selected', 'true');
   });
 
   it('marks the Claims tab when a room vote starts while on People', () => {
