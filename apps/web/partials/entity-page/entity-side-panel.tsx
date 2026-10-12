@@ -44,7 +44,7 @@ import { BulkEdit } from '~/design-system/icons/bulk-edit';
 import { CloseSidePanel } from '~/design-system/icons/close-side-panel';
 import { EyeSmall } from '~/design-system/icons/eye-small';
 import { Fullscreen } from '~/design-system/icons/full-screen';
-import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
+import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 import { PrefetchLink as Link } from '~/design-system/prefetch-link';
 import { Text } from '~/design-system/text';
 
@@ -428,7 +428,7 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
 
-  const mobileSheet = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle } = useMobileSheetDrag({
     enabled: isMobile && Boolean(sidePanelTarget),
     onDismiss: handleCloseSidePanel,
     peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
@@ -550,7 +550,7 @@ export function EntitySidePanel() {
   if (isMobile) {
     return createPortal(
       <motion.div
-        ref={mobileSheet.setOverlayElement}
+        ref={setOverlayElement}
         className={cx(
           'fixed inset-0 overscroll-none',
           overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]'
@@ -565,22 +565,16 @@ export function EntitySidePanel() {
           onClick={handleCloseSidePanel}
           aria-label="Close"
         />
-        <motion.div
+        <MobileSheetSurface
           ref={panelHostRef as React.Ref<HTMLDivElement>}
           data-entity-side-panel
-          data-mobile-sheet-surface
           role="dialog"
           aria-modal="true"
           aria-label="Entity side panel"
-          initial={{ y: '100%' }}
-          animate={{ y: 0 }}
-          transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-          className="shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
-          style={mobileSheet.sheetStyle}
+          sheetStyle={sheetStyle}
         >
-          <MobileSheetGrabHandle />
           {panelBody}
-        </motion.div>
+        </MobileSheetSurface>
       </motion.div>,
       document.body
     );

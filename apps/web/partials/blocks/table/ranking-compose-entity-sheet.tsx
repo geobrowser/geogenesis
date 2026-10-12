@@ -44,12 +44,11 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
 
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
 
-  const mobileSheet = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle } = useMobileSheetDrag({
     enabled: isMobile && Boolean(target),
     onDismiss: onClose,
     peekTopPx: ENTITY_SHEET_TOP_OFFSET_PX,
   });
-  const { setOverlayElement } = mobileSheet;
 
   const overlayRef = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -127,7 +126,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
                 ? 'inset-x-0 bottom-0 overscroll-none'
                 : 'rounded-l-2xl inset-y-0 right-0 w-[min(600px,100vw)] border-l border-grey-02'
             )}
-            style={isMobile ? mobileSheet.sheetStyle : undefined}
+            style={isMobile ? sheetStyle : undefined}
             onClick={event => event.stopPropagation()}
           >
             {isMobile ? <MobileSheetGrabHandle /> : null}

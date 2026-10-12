@@ -9,9 +9,9 @@ const GESTURE_SLOP_PX = 4;
 const VELOCITY_SAMPLE_WINDOW_MS = 100;
 
 /** How far (or how fast) a release has to travel before the sheet changes state. */
-export const MOBILE_SHEET_SNAP_OFFSET_PX = 64;
-export const MOBILE_SHEET_DISMISS_OFFSET_PX = 72;
-export const MOBILE_SHEET_FLING_VELOCITY_PX_PER_SECOND = 420;
+const MOBILE_SHEET_SNAP_OFFSET_PX = 64;
+const MOBILE_SHEET_DISMISS_OFFSET_PX = 72;
+const MOBILE_SHEET_FLING_VELOCITY_PX_PER_SECOND = 420;
 
 /**
  * `peek` is the bottom-sheet container that opens first; `full` covers the viewport. The sheet goes

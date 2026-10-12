@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { animate, useMotionValue, useTransform } from 'framer-motion';
+import { type MotionValue, animate, useMotionValue, useReducedMotion, useTransform } from 'framer-motion';
 
 import {
   type MobileSheetSnap,
@@ -14,7 +14,15 @@ import {
 
 const SNAP_SPRING = { type: 'spring', damping: 32, stiffness: 340 } as const;
 const DISMISS_TWEEN = { type: 'tween', ease: 'easeIn', duration: 0.18 } as const;
+// Imperative `animate` ignores `MotionConfig`, so reduced motion is honoured here directly.
+const INSTANT = { duration: 0 } as const;
 const PEEK_CORNER_RADIUS_PX = 16;
+
+export type MobileSheetStyle = {
+  top: MotionValue<number>;
+  borderTopLeftRadius: MotionValue<number>;
+  borderTopRightRadius: MotionValue<number>;
+};
 
 type Options = {
   enabled: boolean;
@@ -29,12 +37,14 @@ type Options = {
  * the top of its content, and dismisses when pulled down from `peek`. See `resolveMobileSheetRelease`
  * for the one-motion dismiss from full screen.
  *
- * Spread `top` and `borderRadius` onto the sheet surface's `style`; the surface should be pinned to
- * the bottom of the viewport so `top` sets its height.
+ * Pass `sheetStyle` to `MobileSheetSurface` (or to any surface pinned to the bottom of the
+ * viewport, so `top` sets its height) and `setOverlayElement` to the fixed overlay around it.
  */
 export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
   const top = useMotionValue(peekTopPx);
-  const borderRadius = useTransform(top, [0, PEEK_CORNER_RADIUS_PX], [0, PEEK_CORNER_RADIUS_PX]);
+  // Square corners only once the sheet reaches the top of the screen.
+  const borderRadius = useTransform(top, value => Math.min(value, PEEK_CORNER_RADIUS_PX));
+  const reduceMotion = useReducedMotion();
   const [overlayElement, setOverlayElement] = React.useState<HTMLElement | null>(null);
 
   const snapRef = React.useRef<MobileSheetSnap>('peek');
@@ -49,9 +59,9 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     (next: MobileSheetSnap) => {
       if (next === 'full' && snapRef.current !== 'full') scrolledSinceFullRef.current = false;
       snapRef.current = next;
-      animate(top, next === 'full' ? 0 : peekTopPx, SNAP_SPRING);
+      animate(top, next === 'full' ? 0 : peekTopPx, reduceMotion ? INSTANT : SNAP_SPRING);
     },
-    [peekTopPx, top]
+    [peekTopPx, reduceMotion, top]
   );
 
   /** Slides the sheet off the bottom of the screen, then closes it. */
@@ -59,8 +69,8 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     if (dismissingRef.current) return;
     dismissingRef.current = true;
     const offscreen = typeof window === 'undefined' ? top.get() : window.innerHeight;
-    animate(top, offscreen, DISMISS_TWEEN).then(() => onDismissRef.current());
-  }, [top]);
+    animate(top, offscreen, reduceMotion ? INSTANT : DISMISS_TWEEN).then(() => onDismissRef.current());
+  }, [reduceMotion, top]);
 
   // Every open starts as a container.
   React.useLayoutEffect(() => {
@@ -106,8 +116,6 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     };
   }, [dismiss, enabled, overlayElement, peekTopPx, settle, top]);
 
-  return {
-    setOverlayElement,
-    sheetStyle: { top, borderTopLeftRadius: borderRadius, borderTopRightRadius: borderRadius },
-  };
+  const sheetStyle: MobileSheetStyle = { top, borderTopLeftRadius: borderRadius, borderTopRightRadius: borderRadius };
+  return { setOverlayElement, sheetStyle };
 }
