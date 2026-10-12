@@ -86,7 +86,7 @@ function OpenLobbyRow({ lobbyId, onLeave, disabled = false }: BackToLobbyProps &
       >
         <LobbyAvatarStack people={present.slice(0, BACK_AVATARS)} total={Math.min(present.length, BACK_AVATARS)} />
         <span className="flex min-w-0 flex-col gap-0.5">
-          <Text as="span" variant="metadataMedium" color="white" className="truncate">
+          <Text as="span" variant="metadataMedium" color="white" className="line-clamp-2 break-words">
             Back to {lobby.name}
           </Text>
           <Text as="span" variant="footnote" color="grey-02">
