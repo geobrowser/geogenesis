@@ -350,9 +350,12 @@ function DebateCalendarBody({
   const viewerProfileSpaceId = personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;
   // The roster's positions whether or not the viewer has a personal space of their own: someone
   // still setting one up can pick a claim and see who holds it, just not who opposes them.
+  // Not before the viewer's own space has settled: a read started without them and then re-keyed
+  // with them holds the viewer-less answer as placeholder data, and opponents judged on it are
+  // nobody — a `claims=…&matches=1` link briefly emptied the week (Copilot on #2770).
   const allPositionParticipants = React.useMemo(
     () =>
-      wantAllPositions
+      wantAllPositions && !personalSpaceLoading
         ? [
             ...(viewerProfileSpaceId ? [{ profile_space_id: viewerProfileSpaceId }] : []),
             ...allPeople.flatMap(person =>
@@ -360,7 +363,7 @@ function DebateCalendarBody({
             ),
           ]
         : [],
-    [allPeople, viewerProfileSpaceId, wantAllPositions]
+    [allPeople, personalSpaceLoading, viewerProfileSpaceId, wantAllPositions]
   );
   const allPositions = useParticipantPositions(allPositionParticipants, viewerProfileSpaceId);
   /**

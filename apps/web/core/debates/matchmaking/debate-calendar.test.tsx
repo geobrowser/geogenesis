@@ -63,6 +63,7 @@ const mocks = vi.hoisted(() => ({
   sidePanelTarget: null as { entityId: string } | null,
   spaceLabels: new Map<string, { name: string; image: string | null }>(),
   debateSpaces: new Map<string, string[]>(),
+  personalSpaceLoading: false,
   labelRequests: [] as string[][],
   sidePanelListeners: new Set<() => void>(),
 }));
@@ -180,7 +181,7 @@ vi.mock('../browse/use-open-debater-profile', () => ({
 vi.mock('~/core/hooks/use-media-query', () => ({ useMediaQuery: () => mocks.isPhone }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.promptSignIn }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
-  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId }),
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId, isLoading: mocks.personalSpaceLoading }),
 }));
 vi.mock('~/core/hooks/use-space-labels', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/hooks/use-space-labels')>()),
@@ -454,6 +455,7 @@ beforeEach(() => {
     sidePanelTarget: null,
     spaceLabels: new Map(),
     debateSpaces: new Map(),
+    personalSpaceLoading: false,
     labelRequests: [],
     claimNames: new Map(),
     claimTopics: new Map(),
@@ -1512,6 +1514,20 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     expect(screen.getByText(/Couldn’t load everyone’s positions/)).toBeInTheDocument();
     // The matches read is fine; it was the claim that could not be judged.
     expect(screen.queryByText(/Couldn’t load your matches/)).not.toBeInTheDocument();
+  });
+
+  it("waits for the viewer's own space before reading everyone's positions", () => {
+    mocks.personalSpaceLoading = true;
+    mocks.searchParams = new URLSearchParams({ claims: `${SPACE}:${CLAIM_ONE}`, matches: '1' });
+    const { rerender } = render(<DebateCalendar />);
+
+    // No read without the viewer, whose answer would stand in once they are added.
+    expect(mocks.positionReads.every(participants => participants.length === 0)).toBe(true);
+    expect(screen.getByLabelText('Loading who is free')).toBeInTheDocument();
+
+    mocks.personalSpaceLoading = false;
+    rerender(<DebateCalendar />);
+    expect(mocks.positionReads.at(-1)).toContainEqual({ profile_space_id: VIEWER });
   });
 
   it('keeps picks from the URL on a reload', () => {
