@@ -9,7 +9,8 @@ export function claimsActivityKeys(state: Pick<DebateLobbyHighlights, 'highlight
   if (!state) return [];
   return [
     ...(state.room_vote ? [`vote:${state.room_vote.vote_id}`] : []),
-    ...state.highlights.map(highlight => `highlight:${highlight.claim.id}`),
+    // With its time, so the same claim highlighted again later counts as new.
+    ...state.highlights.map(highlight => `highlight:${highlight.claim.id}:${highlight.highlighted_at}`),
   ];
 }
 

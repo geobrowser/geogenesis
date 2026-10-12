@@ -8,8 +8,8 @@ import { useClaimsTabMark } from './lobby-claims-mark';
 type State = Pick<DebateLobbyHighlights, 'highlights' | 'room_vote'>;
 
 const claim = (id: string) => ({ id, claim: id }) as DebateLobbyHighlights['highlights'][number]['claim'];
-const highlight = (id: string) =>
-  ({ claim: claim(id), highlighted_by: null }) as DebateLobbyHighlights['highlights'][number];
+const highlight = (id: string, at = '2026-10-12T09:00:00Z') =>
+  ({ claim: claim(id), highlighted_by: null, highlighted_at: at }) as DebateLobbyHighlights['highlights'][number];
 const vote = (id: string) =>
   ({ vote_id: id, claim: claim('c-vote') }) as NonNullable<DebateLobbyHighlights['room_vote']>;
 
@@ -42,6 +42,15 @@ describe('useClaimsTabMark', () => {
       useClaimsTabMark({ highlights: [highlight('h1')], room_vote: vote('v1') }, false)
     );
     expect(result.current).toBe(false);
+  });
+
+  it('marks a claim highlighted again after its highlight was seen and removed', () => {
+    const { result, rerender } = renderHook(({ state, viewing }) => useClaimsTabMark(state, viewing), {
+      initialProps: { state: { highlights: [highlight('h1')], room_vote: null } as State, viewing: false },
+    });
+    rerender({ state: { highlights: [], room_vote: null }, viewing: false });
+    rerender({ state: { highlights: [highlight('h1', '2026-10-12T09:20:00Z')], room_vote: null }, viewing: false });
+    expect(result.current).toBe(true);
   });
 
   it('does not mark a vote that ended', () => {
