@@ -4,9 +4,12 @@ import { Content, Overlay, Portal, Root, Title, Trigger } from '@radix-ui/react-
 
 import type * as React from 'react';
 
+import { Z_LAYER_CLASS } from '~/core/z-layers';
+
 /**
  * A modal sheet that rises from the bottom of a phone screen, for a menu that has no room to drop
- * down. Radix Dialog underneath: focus moves in, Escape and a tap outside close it.
+ * down. Radix Dialog underneath: focus moves in, Escape and a tap outside close it. It has no
+ * drag, so no grab handle.
  */
 export function BottomSheet({
   open,
@@ -27,13 +30,12 @@ export function BottomSheet({
     <Root open={open} onOpenChange={onOpenChange}>
       {trigger ? <Trigger asChild>{trigger}</Trigger> : null}
       <Portal>
-        <Overlay className="fixed inset-0 z-100 bg-text/40" />
+        <Overlay className={`fixed inset-0 ${Z_LAYER_CLASS.bottomSheetBackdrop} bg-text/40`} />
         <Content
           aria-describedby={undefined}
-          className="rounded-t-2xl fixed inset-x-0 bottom-0 z-101 flex max-h-[85dvh] flex-col overflow-y-auto overscroll-contain bg-white px-4 pt-2 pb-[max(1.75rem,env(safe-area-inset-bottom))] focus:outline-hidden"
+          className={`fixed inset-x-0 bottom-0 ${Z_LAYER_CLASS.bottomSheet} rounded-t-2xl flex max-h-[85dvh] flex-col overflow-y-auto overscroll-contain bg-white px-4 pt-4 pb-[max(1.75rem,env(safe-area-inset-bottom))] focus:outline-hidden`}
           data-testid="bottom-sheet"
         >
-          <span aria-hidden className="mx-auto mb-2 block h-1 w-9 shrink-0 rounded-full bg-grey-02" />
           <Title className="sr-only">{title}</Title>
           {children}
         </Content>
