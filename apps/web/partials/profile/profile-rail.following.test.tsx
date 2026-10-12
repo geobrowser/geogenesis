@@ -38,7 +38,12 @@ vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId }),
 }));
 vi.mock('~/core/topics/use-followed-topics', () => ({
-  useFollowedInterests: () => ({ ids: new Set(mocks.topicIds), isLoading: mocks.isLoading }),
+  // What each id is comes with the follow; here a followed id the space lookup knows is a person.
+  useFollowedInterests: () => ({
+    ids: new Set(mocks.topicIds),
+    kinds: new Map(mocks.topicIds.map(id => [id, mocks.spaces.has(id) ? 'person' : 'topic'])),
+    isLoading: mocks.isLoading,
+  }),
 }));
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
   useSpacesByIds: () => ({ spaces: [], spacesById: mocks.spaces, isLoading: false, isPlaceholderData: false }),

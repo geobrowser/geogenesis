@@ -7,7 +7,8 @@ import * as React from 'react';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { type Followers, fetchFollowers, followersQueryKey } from '~/core/io/subgraph/fetch-followers';
 import { isInterestedFollowEnabled } from '~/core/topics/interested';
-import { useFollowedInterests, useFollowedTopics } from '~/core/topics/use-followed-topics';
+import type { FollowKind } from '~/core/topics/interested';
+import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
 
 /** Topics per request: a feed page of them fits in one, and the query stays a sane size. */
@@ -73,14 +74,14 @@ function flush() {
  * the count comes from their own follows instead, which update as soon as the write succeeds: the
  * others from the indexer, plus one if the viewer follows now.
  *
- * `interestedOnly` for a person, whose follows are only ever Interested votes. A topic reads
+ * `kind: 'person'` for a person, whose follows are only ever Interested votes. A topic reads
  * whichever kind the Interested flag writes.
  *
  * `null` until the count has loaded, so a control draws nothing rather than a zero that jumps.
  */
 export function useFollowerCount(
   entityId: string,
-  options: { interestedOnly?: boolean; enabled?: boolean } = {}
+  options: { kind?: FollowKind; enabled?: boolean } = {}
 ): number | null {
   return useFollowers(entityId, options)?.count ?? null;
 }
@@ -91,18 +92,15 @@ export function useFollowerCount(
  */
 export function useFollowers(
   entityId: string,
-  { interestedOnly = false, enabled = true }: { interestedOnly?: boolean; enabled?: boolean } = {}
+  { kind = 'topic', enabled = true }: { kind?: FollowKind; enabled?: boolean } = {}
 ): { count: number; ids: string[] } | null {
-  const interested = interestedOnly || isInterestedFollowEnabled();
+  // A person's follows are only ever Interested; a topic's are whichever kind the flag writes.
+  const interested = kind === 'person' || isInterestedFollowEnabled();
   const { personalSpaceId } = usePersonalSpaceId();
-  const topicFollows = useFollowedTopics();
-  const interestFollows = useFollowedInterests();
-  const { ids: followedIds, isLoading: isLoadingFollows } = interestedOnly
-    ? interestFollows
-    : { ids: topicFollows.topicIds, isLoading: topicFollows.isLoading };
+  const { topicIds: followedIds, isLoading: isLoadingFollows } = useFollowedEntities({ kind });
   const viewerId = personalSpaceId ?? undefined;
 
-  const { data } = useQuery({
+  const { data, isError } = useQuery({
     queryKey: followersQueryKey(entityId, interested, viewerId),
     queryFn: () => loadFollowers(entityId, interested, viewerId),
     staleTime: 60_000,
@@ -110,10 +108,12 @@ export function useFollowers(
   });
 
   return React.useMemo(() => {
+    // A count that couldn't be read draws as none rather than loading forever.
+    if (isError) return { count: 0, ids: [] };
     if (!data) return null;
     if (!viewerId || isLoadingFollows) return { count: data.count, ids: data.followerIds };
     return followersForViewer(data, viewerId, followedIds.has(normId(entityId)));
-  }, [data, viewerId, isLoadingFollows, followedIds, entityId]);
+  }, [data, isError, viewerId, isLoadingFollows, followedIds, entityId]);
 }
 
 /** A topic's follower count; see `useFollowerCount`. */

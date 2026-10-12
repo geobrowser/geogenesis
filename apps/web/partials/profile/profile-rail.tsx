@@ -686,8 +686,8 @@ export function FollowersRow({ spaceId }: { spaceId: string }) {
 /**
  * Everything this space follows: people and topics in one list, since following is one action for
  * both and the count is of both (GEO-3236). Read off the Interested votes the space holds, which
- * are its follows of either kind (GEO-3191); a vote on a personal space id is a person, any other a
- * topic. Hidden for a space that follows nothing.
+ * are its follows of either kind (GEO-3191), each marked as a person or a topic when it is read.
+ * Hidden for a space that follows nothing.
  *
  * The owner can unfollow from the list, through the same writes as every Follow button, so an
  * entry leaves the list, the count and any button on screen at once.
@@ -696,20 +696,24 @@ export function FollowingRow({ spaceId }: { spaceId: string }) {
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
-  const { ids: followedIds, isLoading } = useFollowedInterests(spaceId);
+  const { ids: followedIds, kinds, isLoading } = useFollowedInterests(spaceId);
   const ids = React.useMemo(() => [...followedIds], [followedIds]);
-  const { spacesById, isLoading: isLoadingSpaces } = useSpacesByIds(ids);
-  const spaceIds = React.useMemo(() => new Set([...spacesById.keys()].map(normId)), [spacesById]);
-  const topicIds = React.useMemo(() => ids.filter(id => !spaceIds.has(id)), [ids, spaceIds]);
+  const personIds = React.useMemo(() => ids.filter(id => kinds.get(id) === 'person'), [ids, kinds]);
+  const topicIds = React.useMemo(() => ids.filter(id => kinds.get(id) !== 'person'), [ids, kinds]);
+  // Names and faces only: what each id is comes from the follow itself, never from this map, which
+  // holds the previous id set's spaces while a new one loads.
+  const { spacesById, isLoading: isLoadingSpaces } = useSpacesByIds(personIds);
   const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(topicIds);
-  const { unfollow, isPending } = useFollowEntities({ interestedOnly: true });
+  // The list is Interested follows, so each kind unfollows as one, whatever the flag says.
+  const topicFollows = useFollowEntities({ kind: 'topic', interestedOnly: true });
+  const personFollows = useFollowEntities({ kind: 'person' });
 
   // By name, so a long list reads like an index rather than in the order the votes were cast.
   const entries = React.useMemo(
     () =>
       ids
         .map((id): FollowListEntry => {
-          if (spaceIds.has(id)) return personEntry(id, spacesById);
+          if (kinds.get(id) === 'person') return personEntry(id, spacesById);
           const meta = metadata.get(id);
           // The topic's own space. A follow carries none of its own: the space it was cast in is
           // the follower's.
@@ -723,11 +727,11 @@ export function FollowingRow({ spaceId }: { spaceId: string }) {
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [ids, spaceIds, spacesById, metadata]
+    [ids, kinds, spacesById, metadata]
   );
 
   if (!isLoading && ids.length === 0) return null;
-  if (isLoading || (ids.length > 0 && isLoadingSpaces && spacesById.size === 0) || isLoadingMetadata) {
+  if (isLoading || (personIds.length > 0 && isLoadingSpaces && spacesById.size === 0) || isLoadingMetadata) {
     return <FollowRowSkeleton label="Following" />;
   }
 
@@ -742,8 +746,8 @@ export function FollowingRow({ spaceId }: { spaceId: string }) {
           <button
             type="button"
             aria-label={`Unfollow ${entry.name}`}
-            onClick={() => void unfollow([entry.id])}
-            disabled={isPending(entry.id)}
+            onClick={() => void (entry.kind === 'person' ? personFollows : topicFollows).unfollow([entry.id])}
+            disabled={(entry.kind === 'person' ? personFollows : topicFollows).isPending(entry.id)}
             className="shrink-0 text-tag text-grey-04 transition-colors hover:text-text disabled:opacity-50"
           >
             Unfollow

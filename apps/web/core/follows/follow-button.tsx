@@ -118,8 +118,8 @@ export function FollowButton({
   const kind = KIND[target.kind];
   const interestedOnly = target.kind === 'person';
   const targetId = normId(target.id);
-  const { follow, unfollow, isPending } = useFollowEntities({ interestedOnly });
-  const { topicIds: followedIds, isLoading: isLoadingFollows } = useFollowedEntities({ interestedOnly });
+  const { follow, unfollow, isPending } = useFollowEntities({ kind: target.kind });
+  const { topicIds: followedIds, isLoading: isLoadingFollows } = useFollowedEntities({ kind: target.kind });
   const { ready: authReady, authenticated } = usePrivy();
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId: anyPersonalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
@@ -131,6 +131,10 @@ export function FollowButton({
   const getContext = useActionContext(kind.component, kind.targetType, targetId);
 
   const followed = followedIds.has(targetId);
+  // Nobody follows themselves. Read again when a queued press replays, since the press can come
+  // before the account it belongs to is known: their own row, pressed signed out.
+  const isSelf =
+    target.kind === 'person' && Boolean(anyPersonalSpaceId) && normId(anyPersonalSpaceId ?? '') === targetId;
   const targetRef = React.useMemo(() => ({ id: targetId, name: target.name ?? null }), [targetId, target.name]);
 
   const observed = React.useCallback(
@@ -147,8 +151,8 @@ export function FollowButton({
     liveOnly: true,
     ready: !isLoadingFollows,
     run: async () => {
-      // Signed in to an account that already follows it: what the press asked for is already true.
-      if (followed) return;
+      // Signed in to an account that already follows it, or that is this person: nothing to write.
+      if (followed || isSelf) return;
       // The runner drops an action whose run resolves, so a follow that didn't land has to throw.
       if (!(await observed('follow', () => follow([targetRef])))) {
         throw new Error('Your follow could not be saved yet.');
@@ -168,7 +172,7 @@ export function FollowButton({
   });
 
   // Your own profile: there is nothing to follow.
-  if (target.kind === 'person' && anyPersonalSpaceId && normId(anyPersonalSpaceId) === targetId) return null;
+  if (isSelf) return null;
 
   const saving = isPending(targetId);
   const shownFollowed = followed || queuedFollow.isQueued;

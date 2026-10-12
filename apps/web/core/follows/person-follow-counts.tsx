@@ -9,12 +9,12 @@ import { useFollowerCount, useFollowers } from './use-follower-count';
 
 /** How many follow this person, by their personal space id; see `useFollowerCount`. */
 export function usePersonFollowerCount(spaceId: string, { enabled = true }: { enabled?: boolean } = {}) {
-  return useFollowerCount(spaceId, { interestedOnly: true, enabled });
+  return useFollowerCount(spaceId, { kind: 'person', enabled });
 }
 
 /** Who follows this person, as personal space ids, with the count; see `useFollowers`. */
 export function usePersonFollowers(spaceId: string) {
-  return useFollowers(spaceId, { interestedOnly: true });
+  return useFollowers(spaceId, { kind: 'person' });
 }
 
 /**
@@ -28,11 +28,13 @@ export function usePersonFollowingCount(spaceId: string): number | null {
 
 /**
  * "42 followers · 18 following" under a profile's tagline, on the page and in the side panel. Each
- * half is left out at zero, and the line with it when both are.
+ * half is left out at zero, and the line with it when both are, once both are known.
  */
 export function PersonFollowCounts({ spaceId, className }: { spaceId: string; className?: string }) {
   const followers = usePersonFollowerCount(spaceId);
   const following = usePersonFollowingCount(spaceId);
+  // Holds its line while either count loads, so the profile under it doesn't jump when it fills in.
+  if (followers === null || following === null) return <p aria-hidden className={cx('m-0 h-5', className)} />;
   if (!followers && !following) return null;
 
   return (

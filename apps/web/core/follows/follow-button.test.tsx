@@ -27,17 +27,17 @@ const mocks = vi.hoisted(() => ({
   isQueued: false,
   queuedRun: null as null | (() => Promise<void> | void),
   observed: vi.fn(),
-  /** The `interestedOnly` each follow hook was last asked for. */
-  writesInterestedOnly: null as boolean | null,
-  readsInterestedOnly: null as boolean | null,
+  /** The kind each follow hook was last asked for. */
+  writesKind: null as string | null,
+  readsKind: null as string | null,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated }),
 }));
 vi.mock('~/core/topics/use-follow-topics', () => ({
-  useFollowEntities: ({ interestedOnly }: { interestedOnly?: boolean } = {}) => {
-    mocks.writesInterestedOnly = interestedOnly ?? false;
+  useFollowEntities: ({ kind }: { kind: string }) => {
+    mocks.writesKind = kind;
     return {
       follow: mocks.follow,
       unfollow: mocks.unfollow,
@@ -47,8 +47,8 @@ vi.mock('~/core/topics/use-follow-topics', () => ({
   },
 }));
 vi.mock('~/core/topics/use-followed-topics', () => ({
-  useFollowedEntities: ({ interestedOnly }: { interestedOnly?: boolean } = {}) => {
-    mocks.readsInterestedOnly = interestedOnly ?? false;
+  useFollowedEntities: ({ kind }: { kind: string }) => {
+    mocks.readsKind = kind;
     return { topicIds: mocks.followedIds, rows: [], isLoading: mocks.isLoadingFollows };
   },
 }));
@@ -262,8 +262,8 @@ describe('FollowTopicButton', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Follow Ada Okafor' }));
 
       expect(mocks.follow).toHaveBeenCalledWith([{ id: ADA_SPACE, name: 'Ada Okafor' }]);
-      expect(mocks.writesInterestedOnly).toBe(true);
-      expect(mocks.readsInterestedOnly).toBe(true);
+      expect(mocks.writesKind).toBe('person');
+      expect(mocks.readsKind).toBe('person');
       expect(mocks.observed).toHaveBeenCalledWith('follow_person');
     });
 
@@ -283,6 +283,15 @@ describe('FollowTopicButton', () => {
       expect(container).toBeEmptyDOMElement();
     });
 
+    it('drops a queued follow that turns out to be for your own space', async () => {
+      // Pressed on your own row while signed out; you then sign in as that person.
+      mocks.personalSpaceId = ADA_SPACE;
+      renderPerson();
+      await mocks.queuedRun?.();
+
+      expect(mocks.follow).not.toHaveBeenCalled();
+    });
+
     it('needs a registered personal space even with the Interested flag off', () => {
       // A person follow is only ever an Interested, which is cast on chain.
       mocks.isRegistered = false;
@@ -292,10 +301,10 @@ describe('FollowTopicButton', () => {
     });
   });
 
-  it('leaves a topic follow to the Interested flag', () => {
+  it('follows a topic as a topic', () => {
     renderButton();
 
-    expect(mocks.writesInterestedOnly).toBe(false);
-    expect(mocks.readsInterestedOnly).toBe(false);
+    expect(mocks.writesKind).toBe('topic');
+    expect(mocks.readsKind).toBe('topic');
   });
 });

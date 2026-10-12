@@ -71,5 +71,44 @@ export async function fetchInterestedTopics(spaceId: string, signal?: AbortSigna
     after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
   } while (after);
 
-  return rows;
+  const people = await personalSpaceIds(
+    rows.map(row => row.objectId),
+    signal
+  );
+  return rows.map(row => ({ ...row, kind: people.has(row.objectId) ? 'person' : 'topic' }));
+}
+
+const SPACE_LOOKUP_SIZE = 100;
+
+/**
+ * Which of these ids are personal spaces: a person follow (GEO-3236) is an Interested on one, and a
+ * vote row carries no more than the id, so this is how a person is told from a topic.
+ */
+async function personalSpaceIds(ids: readonly string[], signal?: AbortSignal): Promise<Set<string>> {
+  const unique = [...new Set(ids)];
+  const people = new Set<string>();
+
+  for (let start = 0; start < unique.length; start += SPACE_LOOKUP_SIZE) {
+    const chunk = unique.slice(start, start + SPACE_LOOKUP_SIZE);
+    const result = await Effect.runPromise(
+      Effect.either(
+        graphql<{ spaces: { id: string; type: string }[] }>({
+          query: `query {
+            spaces(filter: { id: { in: [${chunk.map(id => JSON.stringify(id)).join(', ')}] } }, first: ${chunk.length}) {
+              id
+              type
+            }
+          }`,
+          endpoint: Environment.getConfig().api,
+          signal,
+        })
+      )
+    );
+    if (Either.isLeft(result)) {
+      throw new Error('Failed to tell followed people from topics', { cause: result.left });
+    }
+    for (const space of result.right.spaces) if (space.type === 'PERSONAL') people.add(normId(space.id));
+  }
+
+  return people;
 }

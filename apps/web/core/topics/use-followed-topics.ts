@@ -9,7 +9,7 @@ import { fetchFollowedTopics, followedTopicsQueryKey } from '~/core/io/subgraph/
 import { fetchInterestedTopics, interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import { normId } from '~/core/utils/norm-id';
 
-import { interestedTopicIds, isInterestedFollowEnabled } from './interested';
+import { type FollowKind, interestedTopicIds, isInterestedFollowEnabled } from './interested';
 
 export function followedTopicsQueryOptions(spaceId: string) {
   return queryOptions({
@@ -37,7 +37,7 @@ export function interestedTopicsQueryOptions(spaceId: string) {
  * `topicIds` for "is this followed", never `rows`.
  */
 export function useFollowedTopics(spaceId?: string) {
-  return useFollowedEntities({ spaceId });
+  return useFollowedEntities({ spaceId, kind: 'topic' });
 }
 
 /**
@@ -46,16 +46,19 @@ export function useFollowedTopics(spaceId?: string) {
  * says, because a person follow is only ever an Interested. Its size is the space's following count.
  */
 export function useFollowedInterests(spaceId?: string) {
-  const { topicIds, isLoading } = useFollowedEntities({ spaceId, interestedOnly: true });
-  return { ids: topicIds, isLoading };
+  const { topicIds, kinds, isLoading } = useFollowedEntities({ spaceId, kind: 'any', interestedOnly: true });
+  return { ids: topicIds, kinds, isLoading };
 }
 
 /** The followed set for a kind of follow; see `useFollowedTopics` and `useFollowedInterests`. */
 export function useFollowedEntities({
   spaceId,
-  interestedOnly = false,
+  kind,
+  interestedOnly = kind === 'person',
 }: {
   spaceId?: string;
+  /** Which follows to return. A topic and a person are both Interested, so one read holds both. */
+  kind: FollowKind | 'any';
   interestedOnly?: boolean;
 }) {
   const { personalSpaceId, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
@@ -74,13 +77,20 @@ export function useFollowedEntities({
   const topicIds = React.useMemo(
     () =>
       interestedEnabled
-        ? interestedTopicIds(interested ?? [])
-        : new Set((data ?? []).map(row => normId(row.toEntityId))),
-    [data, interested, interestedEnabled]
+        ? interestedTopicIds(interested ?? [], kind)
+        : // A `Following` relation was only ever written for a topic.
+          new Set(kind === 'person' ? [] : (data ?? []).map(row => normId(row.toEntityId))),
+    [data, interested, interestedEnabled, kind]
+  );
+  const kinds = React.useMemo(
+    () => new Map((interested ?? []).map(row => [normId(row.objectId), row.kind ?? 'topic'] as const)),
+    [interested]
   );
 
   return {
     topicIds,
+    /** What each Interested id is, for a list that holds both kinds. */
+    kinds,
     rows: interestedEnabled ? [] : (data ?? []),
     isLoading: (interestedEnabled ? isLoadingInterested : isLoading) || (!spaceId && isLoadingPersonalSpace),
   };
