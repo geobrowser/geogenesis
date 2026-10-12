@@ -38,8 +38,32 @@ describe('LobbyDebatePairs', () => {
 
     const cards = screen.getAllByTestId('lobby-debate-pair');
     expect(cards).toHaveLength(2);
-    expect(cards[0]!.textContent).toBe('Ana vs. BenIn a debate on “Cats are better”');
-    expect(cards[1]!.textContent).toBe('CyIn a debate');
+    expect(cards[0]!.textContent).toBe('Ana vs. BenCats are better');
+    expect(cards[1]!.textContent).toBe('Cy');
+  });
+
+  it('adds the round and a Recording pill when geo-chat sends progress', () => {
+    render(
+      <Provider store={createStore()}>
+        <LobbyDebatePairs
+          pairs={[
+            { people: [person('Ana'), person('Ben')], progress: { round: 2, rounds: 3, recording: true } },
+            { people: [person('Cy')], progress: { round: 1, rounds: null, recording: false } },
+            { people: [person('Di')], progress: { round: null, rounds: 3, recording: false } },
+          ]}
+          members={[
+            member('Ana'),
+            { ...member('Cy'), in_debate_subject: null },
+            { ...member('Di'), in_debate_subject: null },
+          ]}
+        />
+      </Provider>
+    );
+
+    const cards = screen.getAllByTestId('lobby-debate-pair');
+    expect(cards[0]!.textContent).toBe('Ana vs. BenCats are better · round 2 of 3Recording');
+    expect(cards[1]!.textContent).toBe('Cyround 1');
+    expect(cards[2]!.textContent).toBe('Di');
   });
 
   it('draws nothing when nobody is debating', () => {

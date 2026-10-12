@@ -89,14 +89,15 @@ export function LobbyGuestBanner({
     <div
       role="region"
       aria-label="Create an account"
-      className="flex flex-wrap items-center gap-3 rounded-xl bg-text px-4 py-3 text-white"
+      className="flex flex-wrap items-center gap-3 rounded-xl bg-text px-4 py-3 text-white md:gap-x-3 md:gap-y-2 md:px-3 md:py-2.5"
       data-testid="lobby-guest-banner"
     >
       <div className="flex min-w-0 flex-[1_1_240px] flex-col gap-0.5">
         <Text as="p" variant="metadataMedium" color="white">
           {title}
         </Text>
-        <Text as="p" variant="footnote" color="grey-02">
+        {/* On a phone it sits in the bottom bar, where the title says enough. */}
+        <Text as="p" variant="footnote" color="grey-02" className="md:hidden">
           {message?.detail ?? (pending ? LOBBY_GUEST_COPY.invite : fallback.detail)}
         </Text>
       </div>

@@ -9,6 +9,7 @@ import { AvatarGroup } from '~/design-system/avatar-group';
 
 import type { DebateLobbyPerson } from '../api';
 import { personName } from './lobby-format';
+import { useLobbyHandoff } from './lobby-popup';
 
 /** An overlapping avatar stack with a `+N` tail for people present but not in `people`. */
 export function LobbyAvatarStack({ people, total }: { people: DebateLobbyPerson[]; total: number }) {
@@ -38,7 +39,14 @@ export function LobbyPersonName({
   interactionSurface: string;
   children: React.ReactNode;
 }) {
-  const openProfile = useOpenDebaterProfile(person.profile_space_id, { interactionSurface, lazy: true });
+  // In a lobby menu the profile is read up front, and the menu closes once the profile opens: closing
+  // on the click would unmount this name and drop an open still waiting on the lookup.
+  const { inPopup, close } = useLobbyHandoff();
+  const openProfile = useOpenDebaterProfile(person.profile_space_id, {
+    interactionSurface,
+    lazy: !inPopup,
+    onOpened: inPopup ? close : undefined,
+  });
 
   return (
     <button type="button" onClick={openProfile} className="block max-w-full truncate text-left hover:underline">

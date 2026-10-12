@@ -25,8 +25,7 @@ vi.mock('../hooks', async importOriginal => ({
 
 const { GeoChatRequestError } = await import('../api');
 const { LobbyMemberActions } = await import('./lobby-member-actions');
-const { LobbyHandControl, LobbyHostLists, LobbyRemovedNotice, useModerationNotice } =
-  await import('./lobby-moderation');
+const { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } = await import('./lobby-moderation');
 
 function member(userId: string, role: DebateLobbyRole, extra: Partial<DebateLobbyMember> = {}): DebateLobbyMember {
   return {
@@ -156,26 +155,6 @@ describe('LobbyMemberActions', () => {
   });
 });
 
-describe('LobbyHandControl', () => {
-  it('raises and lowers the viewer’s hand', async () => {
-    const { unmount } = renderWith(<LobbyHandControl lobby={lobby({ role: 'listener', hosting: false })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Raise hand' }));
-    await waitFor(() =>
-      expect(api.setDebateLobbyHand).toHaveBeenCalledWith('lobby1', true, expect.any(Function), 'acct')
-    );
-    unmount();
-
-    renderWith(
-      <LobbyHandControl lobby={lobby({ role: 'listener', hosting: false, hand_raised_at: '2026-10-05T10:01:00Z' })} />
-    );
-    expect(screen.getByText('Hosts can see your hand.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Lower' }));
-    await waitFor(() =>
-      expect(api.setDebateLobbyHand).toHaveBeenCalledWith('lobby1', false, expect.any(Function), 'acct')
-    );
-  });
-});
-
 describe('LobbyHostLists', () => {
   const banned = {
     banned: [
@@ -200,6 +179,7 @@ describe('LobbyHostLists', () => {
     );
     renderWith(<LobbyHostLists lobby={view} />);
     expect(screen.getByRole('button', { name: 'Raised hands · 2' })).toBeTruthy();
+    expect(screen.getAllByText(/^Hand up /)).toHaveLength(2);
     const moves = screen.getAllByRole('button', { name: 'Move to speakers' });
     fireEvent.click(moves[0]!);
     await waitFor(() =>
@@ -211,6 +191,28 @@ describe('LobbyHostLists', () => {
         'acct'
       )
     );
+  });
+
+  it('says who moved a raised hand to listeners', () => {
+    vi.useFakeTimers({ now: Date.parse('2026-10-05T10:02:00Z') });
+    const view = lobby(
+      {},
+      {
+        members: [
+          member('sam', 'listener', {
+            hand_raised_at: '2026-10-05T10:01:00Z',
+            moved_to_listeners: { by: person('priya', 'Priya'), at: '2026-10-05T10:00:00Z' },
+          }),
+          member('leo', 'listener', {
+            hand_raised_at: '2026-10-05T10:01:40Z',
+            moved_to_listeners: { by: null, at: '2026-10-05T10:00:00Z' },
+          }),
+        ],
+      }
+    );
+    renderWith(<LobbyHostLists lobby={view} />);
+    expect(screen.getByText('Moved to listeners by Priya · hand up 1 min')).toBeTruthy();
+    expect(screen.getByText('Moved to listeners · hand up 20 s')).toBeTruthy();
   });
 
   it('lets a host unban', async () => {
@@ -286,15 +288,6 @@ describe('useModerationNotice', () => {
     });
     rerender(at('2026-10-05T10:05:00Z'));
     expect(result.current).toBe('A host muted you. Unmute when you’re ready.');
-  });
-});
-
-describe('LobbyHandControl refusals', () => {
-  it('words a refused raise for the hand, not voice', async () => {
-    api.setDebateLobbyHand.mockRejectedValue(new GeoChatRequestError('raw', 'lobby_stepped_out', 409));
-    renderWith(<LobbyHandControl lobby={lobby({ role: 'listener', hosting: false })} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Raise hand' }));
-    expect(await screen.findByText('You stepped out. Go back to the room to raise your hand.')).toBeTruthy();
   });
 });
 

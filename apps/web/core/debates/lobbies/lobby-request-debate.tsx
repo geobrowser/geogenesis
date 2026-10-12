@@ -11,6 +11,7 @@ import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
+import { useLobbyHandoff } from './lobby-popup';
 import { LOBBY_QUEUED_REQUEST_COPY, useLobbyQueuedRequest } from './lobby-queued-request';
 import { lobbyClaimRequestErrorMessage } from './lobby-room-claims-hooks';
 
@@ -30,21 +31,27 @@ export function lobbyChallengeErrorMessage(error: unknown) {
 
 /**
  * Asks one lobby member for a claimless debate, the same challenge a profile or the People tab
- * sends. Accepting routes both into the picker through `DebateCoordinator`.
+ * sends. Accepting routes both into the picker through `DebateCoordinator`. Drawn full width in the
+ * person menu.
  */
 export function LobbyRequestDebate({ lobbyId, member }: { lobbyId: string; member: DebateLobbyMember }) {
   const guest = useIsLobbyGuest();
   return guest ? <GuestRequestDebate member={member} /> : <MemberRequestDebate lobbyId={lobbyId} member={member} />;
 }
 
+const REQUEST_LABEL = 'Request a debate';
+const WIDE_PILL = 'w-full md:h-10';
+
 /** Without an account: the tap is queued and sign-up opens; it is sent after, if it still can be. */
 function GuestRequestDebate({ member }: { member: DebateLobbyMember }) {
   const { pending, request } = useLobbyQueuedRequest();
+  // Sign-in opens its own modal, so the person menu closes first.
+  const { handoff } = useLobbyHandoff();
   if (member.in_debate || member.stepped_out) return null;
   const name = personName(member);
   if (pending && sameId(pending.user_id, member.user_id)) {
     return (
-      <Text as="span" variant="footnote" color="grey-04" className="shrink-0">
+      <Text as="p" variant="footnote" color="grey-04" className="px-1.5 py-1">
         {LOBBY_QUEUED_REQUEST_COPY.signUpToSend}
       </Text>
     );
@@ -55,9 +62,10 @@ function GuestRequestDebate({ member }: { member: DebateLobbyMember }) {
       aria-label={`Request a debate with ${name}`}
       analyticsLabel="Lobby guest request debate"
       analyticsIntent="start_debate"
-      onClick={() => request(member)}
+      onClick={() => handoff(() => request(member))}
+      className={WIDE_PILL}
     >
-      Request debate
+      {REQUEST_LABEL}
     </HubPillButton>
   );
 }
@@ -78,9 +86,9 @@ function MemberRequestDebate({ lobbyId, member }: { lobbyId: string; member: Deb
   const error = (sentHere ? cancelChallenge.error : createChallenge.error) ?? null;
 
   return (
-    <div className="flex shrink-0 flex-col items-end gap-1">
+    <div className="flex flex-col gap-1">
       {sentHere ? (
-        <span className="flex items-center gap-2 text-footnote text-grey-04">
+        <span className="flex items-center justify-center gap-2 py-1 text-footnote text-grey-04">
           <span>Awaiting response</span>
           <span aria-hidden>·</span>
           <button
@@ -108,8 +116,9 @@ function MemberRequestDebate({ lobbyId, member }: { lobbyId: string; member: Deb
               lobby_id: dashlessId(lobbyId),
             })
           }
+          className={WIDE_PILL}
         >
-          Request debate
+          {REQUEST_LABEL}
         </HubPillButton>
       )}
       {error instanceof Error ? (

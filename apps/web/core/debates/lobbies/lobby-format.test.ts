@@ -4,6 +4,7 @@ import { type DebateLobbyMember, type DebateLobbyRole, GeoChatRequestError } fro
 import {
   debatingCount,
   debatingLabel,
+  disagreementCount,
   hereNowLabel,
   hostAfterChange,
   hostsLabel,
@@ -21,6 +22,7 @@ import {
   notYetOpenLabel,
   otherLobbyIdFrom,
   pairLabel,
+  pairRoundLabel,
   pairSubject,
   personName,
   raisedHands,
@@ -372,5 +374,31 @@ describe('lobbyHeadcount', () => {
     const members = [{ stepped_out: false }, { stepped_out: true }, { stepped_out: false }] as DebateLobbyMember[];
     expect(lobbyHeadcount({ members })).toBe(3);
     expect(hereNowLabel(lobbyHeadcount({ members }))).toBe('3 here now');
+  });
+});
+
+describe('pairRoundLabel', () => {
+  it.each([
+    [{ round: 2, rounds: 3, recording: false }, 'round 2 of 3'],
+    [{ round: 2, rounds: null, recording: false }, 'round 2'],
+    [{ round: null, rounds: 3, recording: true }, null],
+    [null, null],
+    [undefined, null],
+  ])('%j reads %s', (progress, label) => {
+    expect(pairRoundLabel(progress)).toBe(label);
+  });
+});
+
+describe('disagreementCount', () => {
+  const rows = [
+    { user_id: 'ab-cd', claims: 4 },
+    { user_id: 'ef', claims: 0 },
+  ];
+  it('matches ids with or without dashes and hides zero or missing', () => {
+    expect(disagreementCount(rows, 'ABCD')).toBe(4);
+    expect(disagreementCount(rows, 'ef')).toBeNull();
+    expect(disagreementCount(rows, 'gh')).toBeNull();
+    expect(disagreementCount(null, 'abcd')).toBeNull();
+    expect(disagreementCount(undefined, 'abcd')).toBeNull();
   });
 });

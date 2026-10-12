@@ -287,6 +287,11 @@ describe('DebateGatewayClient', () => {
       { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD', sections: ['claims'] } },
       [['debates', 'account', 'user-a', 'lobby-claims', 'abcd']],
     ],
+    [
+      'one lobby’s people only',
+      { event_type: 'debate.lobby_changed', payload: { lobby_id: 'AB-CD', sections: ['people'] } },
+      [['debates', 'account', 'user-a', 'lobby', 'abcd']],
+    ],
   ])('maps %s events to their authoritative query families', async (_label, event, expectedKeys) => {
     client.start(
       vi.fn(async () => 'privy-token'),

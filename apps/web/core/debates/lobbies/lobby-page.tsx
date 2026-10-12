@@ -5,19 +5,18 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { NavUtils } from '~/core/utils/utils';
 
-import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyMember, dashlessId } from '../api';
-import { MicrophoneIcon } from '../debate-room-controls';
+import type { DebateLobbyMember } from '../api';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
+import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
-import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import {
@@ -28,27 +27,12 @@ import {
   useEndDebateLobby,
   useLobbyPresence,
 } from './hooks';
-import { lobbyShareUrl, markLobbyEntry } from './lobby-analytics';
+import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
-import { LobbyDebatePairs } from './lobby-debate-pairs';
-import { LobbyDebateSubject } from './lobby-debate-subject';
-import {
-  ROLE_LABEL,
-  STATUS_LABEL,
-  debatingCount,
-  debatingLabel,
-  hereLabel,
-  hostAfterChange,
-  hostsLabel,
-  isHosting,
-  lobbyErrorMessage,
-  memberStatus,
-  notYetOpenLabel,
-  personName,
-  remindedLabel,
-  rosterOrder,
-} from './lobby-format';
-import { LobbyGuestBanner, LobbyGuestCount } from './lobby-guest';
+import { useClaimsTabMark } from './lobby-claims-mark';
+import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
+import { hostAfterChange, lobbyErrorMessage, notYetOpenLabel, remindedLabel } from './lobby-format';
+import { LobbyGuestBanner } from './lobby-guest';
 import {
   LobbyGuestProvider,
   type LobbyMemberPath,
@@ -56,11 +40,14 @@ import {
   useIsLobbyGuest,
   useLobbyGuestSession,
 } from './lobby-guest-hooks';
-import { LobbyMemberMenu } from './lobby-member-actions';
-import { LobbyHandControl, LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
-import { LobbyPersonName } from './lobby-people';
+import { LobbyHeader } from './lobby-header';
+import { useLobbyHighlights } from './lobby-highlights-hooks';
+import { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
+import { type LobbyGuestNotice, LobbyNotices, LobbyToast } from './lobby-notices';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
-import { LobbyRequestDebate } from './lobby-request-debate';
+import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
+import { LobbyPeople } from './lobby-roster';
+import { LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
 import { type LobbyPageView, isMemberView, lobbyViewForGuest, lobbyViewForMember } from './lobby-view';
 import {
   LobbyGuestVoice,
@@ -456,17 +443,17 @@ function LobbyRoom({
   const guest = useIsLobbyGuest();
   const currentUserId = useCurrentGeoChatUserId();
   const { authenticated } = useGeoChatAuth();
+  const phone = useIsPhoneLayout();
   // The viewer's own toggle, as the availability pill and People tab read it, ahead of the roster's.
   // A member read: off for a guest, including one signed in while the member view loads.
   const ownAvailable = useDebateActivity(authenticated && !guest).data?.available_to_debate;
-  const end = useEndDebateLobby(lobby.lobby_id);
-  const [confirmingEnd, setConfirmingEnd] = React.useState(false);
-  const [copied, setCopied] = React.useState(false);
   const handoff = useHandoffNotice(lobby);
   // Member-only parts read this; a guest's view never reaches them.
   const memberLobby = isMemberView(lobby) ? lobby : null;
   const moderationNotice = useModerationNotice(memberLobby?.viewer ?? NO_MODERATION);
   const queuedRequest = useLobbyQueuedRequest();
+  const slots = useLobbySlotTargets();
+  const [tab, setTab] = React.useState<LobbyPhoneTab>('people');
   // The guest room, a sibling of the member room so the handover can drop it mid-call.
   const [guestVoiceStates, setGuestVoiceStates] = React.useState<LobbyVoiceStates>(NO_LOBBY_VOICE);
   const guestVoice =
@@ -485,7 +472,7 @@ function LobbyRoom({
     setGuestEndedAt(Date.now());
     void refetchGuestView();
   }, [guestEnded, refetchGuestView]);
-  const guestNotice: { message: string; retry: string | null } | null = !guest
+  const guestNotice: LobbyGuestNotice | null = !guest
     ? null
     : guestSession.state.status === 'refused'
       ? { message: guestSession.state.message, retry: guestSession.state.retryable ? 'Try again' : null }
@@ -504,333 +491,253 @@ function LobbyRoom({
     return true;
   }, [reconnectGuest]);
 
-  const hosts = lobby.members.filter(isHosting);
-  const isHost = lobby.viewer.hosting;
-  const roster = rosterOrder(lobby.members);
-  const speakers = roster.filter(publishes);
-  const listeners = roster.filter(member => !publishes(member));
   // Only while in the lobby: stepping out or leaving unmounts it, which disconnects.
   const inVoice = state.status === 'joined' || state.status === 'joining';
+  const showClaims = state.status === 'joined' || guest;
+  // Per-person disagreements ride on the claims read the claims panel already makes.
+  const disagreements = useDebateLobbyClaims(lobby.lobby_id, showClaims).data?.disagreements ?? null;
+  const highlights = useLobbyHighlights(lobby.lobby_id, phone && showClaims).data;
+  const claimsMark = useClaimsTabMark(highlights, phone && tab === 'claims');
+  const tabbed = phone && showClaims;
+  const tabIds = useTabIds();
+  const onPeopleTab = !phone || !showClaims || tab === 'people';
+  const onClaimsTab = !phone || tab === 'claims';
 
-  const isViewer = (member: DebateLobbyMember) => currentUserId !== null && sameId(member.user_id, currentUserId);
-  const people =
-    roster.length === 0 ? (
-      <Text as="p" variant="metadata" color="grey-04">
-        Nobody’s here right now.
-      </Text>
-    ) : (
-      <>
-        <LobbyDebatePairs pairs={lobby.debate_pairs ?? []} members={lobby.members} />
-        <RosterSection
-          label="Speakers"
-          lobby={lobby}
-          members={speakers}
-          isViewer={isViewer}
-          ownAvailable={ownAvailable}
-        />
-        <RosterSection
-          label="Listeners"
-          lobby={lobby}
-          members={listeners}
-          isViewer={isViewer}
-          ownAvailable={ownAvailable}
-        />
-      </>
-    );
+  const people = (
+    <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+  );
+  const availability = guest ? null : <HubHeaderControls analyticsSurface="lobby" />;
+  const handControl =
+    memberLobby &&
+    state.status === 'joined' &&
+    memberLobby.viewer.role === 'listener' &&
+    !memberLobby.viewer.hosting ? (
+      <LobbyHandControl lobby={memberLobby} />
+    ) : null;
+  const leave = guest ? (
+    <Link href={NavUtils.toExplore()} aria-label="Leave lobby" className={hubPillClassName('secondary', 'md:h-10')}>
+      <LeaveLabel />
+    </Link>
+  ) : (
+    <HubPillButton analyticsLabel="Lobby leave" aria-label="Leave lobby" onClick={onLeave} className="md:h-10">
+      <LeaveLabel />
+    </HubPillButton>
+  );
 
-  const copyLink = async () => {
-    try {
-      await navigator.clipboard.writeText(lobbyShareUrl(lobby.lobby_id));
-      setCopied(true);
-    } catch {
-      setCopied(false);
-    }
+  return (
+    <LobbySlotsProvider value={slots.targets}>
+      <div className="flex min-h-[calc(100dvh-2.75rem)] flex-col" data-testid="debate-lobby">
+        <LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />
+        {tabbed ? <LobbyPhoneTabs ids={tabIds} tab={tab} onTab={setTab} claimsMark={claimsMark} /> : null}
+
+        <div
+          className={cx(
+            'flex-1',
+            showClaims && !phone && 'grid grid-cols-[minmax(0,1fr)_minmax(320px,420px)] items-stretch'
+          )}
+        >
+          <section
+            {...(tabbed
+              ? { role: 'tabpanel', id: tabIds.people.panel, 'aria-labelledby': tabIds.people.tab }
+              : { 'aria-label': 'People in the lobby' })}
+            hidden={!onPeopleTab}
+            className="flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5"
+          >
+            <LobbyRoomStatus state={state} onRetry={onRetry} />
+            <LobbyVoiceStatesProvider value={guestVoiceStates}>
+              {guestVoice ? (
+                <LobbyGuestVoice
+                  key={guestVoice.token}
+                  token={guestVoice}
+                  onStates={setGuestVoiceStates}
+                  onReconnect={guestSession.reconnect}
+                  onAutoReconnect={autoReconnectGuest}
+                  onRemoved={guestSession.checkNow}
+                  quiet={inVoice}
+                />
+              ) : null}
+              {memberLobby && inVoice ? (
+                <LobbyVoice
+                  lobby={memberLobby}
+                  connectionId={voice.connectionId}
+                  joined={state.status === 'joined'}
+                  currentUserId={currentUserId}
+                  onConnectedChange={voice.setVoiceConnected}
+                  onAudible={guestVoice ? guestSession.roomDone : undefined}
+                  onUnavailable={guestVoice ? guestSession.roomDone : undefined}
+                >
+                  <VoiceAwayWarning awayAt={voice.awayAt} />
+                  {people}
+                </LobbyVoice>
+              ) : (
+                people
+              )}
+            </LobbyVoiceStatesProvider>
+          </section>
+
+          {showClaims ? (
+            <aside
+              {...(tabbed
+                ? { role: 'tabpanel', id: tabIds.claims.panel, 'aria-labelledby': tabIds.claims.tab }
+                : { 'aria-label': 'Claims in the room' })}
+              hidden={!onClaimsTab}
+              className="flex min-w-0 flex-col gap-3 border-l border-grey-02 px-4 py-5 md:border-l-0 md:py-3"
+            >
+              <LobbyClaimsArea lobby={lobby} />
+            </aside>
+          ) : null}
+        </div>
+
+        <LobbyControlBar
+          controlsRef={slots.controlsRef}
+          hand={handControl}
+          availability={phone ? availability : null}
+          showHint={!guest}
+          leave={leave}
+          banner={guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} listening={guestVoiceStates.connected} /> : null}
+          notices={
+            <LobbyNotices
+              noticesRef={slots.noticesRef}
+              handoff={handoff}
+              queuedOutcome={queuedRequest.outcome}
+              onDismissQueuedOutcome={queuedRequest.dismissOutcome}
+              moderationNotice={moderationNotice}
+              guestNotice={guestNotice}
+              guestConnecting={guest && guestSession.state.status === 'starting'}
+              onGuestRetry={authenticated ? null : guestSession.retry}
+            />
+          }
+        />
+      </div>
+    </LobbySlotsProvider>
+  );
+}
+
+type LobbyPhoneTab = 'people' | 'claims';
+
+function LeaveLabel() {
+  return (
+    <>
+      <span className="md:hidden">Leave lobby</span>
+      <span className="hidden md:inline">Leave</span>
+    </>
+  );
+}
+
+type TabIds = Record<LobbyPhoneTab, { tab: string; panel: string }>;
+
+function useTabIds(): TabIds {
+  const base = React.useId();
+  return {
+    people: { tab: `${base}-people-tab`, panel: `${base}-people-panel` },
+    claims: { tab: `${base}-claims-tab`, panel: `${base}-claims-panel` },
+  };
+}
+
+const PHONE_TABS: { id: LobbyPhoneTab; label: string }[] = [
+  { id: 'people', label: 'People' },
+  { id: 'claims', label: 'Claims' },
+];
+
+/**
+ * Phone: People and Claims, with a dot on Claims for a room vote or highlight not seen yet. Arrow
+ * keys, Home and End move between tabs; only the selected one is in the tab order.
+ */
+function LobbyPhoneTabs({
+  ids,
+  tab,
+  onTab,
+  claimsMark,
+}: {
+  ids: TabIds;
+  tab: LobbyPhoneTab;
+  onTab: (tab: LobbyPhoneTab) => void;
+  claimsMark: boolean;
+}) {
+  const select = (index: number) => {
+    const next = PHONE_TABS[(index + PHONE_TABS.length) % PHONE_TABS.length]!;
+    onTab(next.id);
+    document.getElementById(ids[next.id].tab)?.focus();
+  };
+  const onKeyDown = (event: React.KeyboardEvent) => {
+    const current = PHONE_TABS.findIndex(item => item.id === tab);
+    const target =
+      event.key === 'ArrowRight'
+        ? current + 1
+        : event.key === 'ArrowLeft'
+          ? current - 1
+          : event.key === 'Home'
+            ? 0
+            : event.key === 'End'
+              ? PHONE_TABS.length - 1
+              : null;
+    if (target === null) return;
+    event.preventDefault();
+    select(target);
   };
 
   return (
-    <LobbyShell>
-      <div className="flex flex-col gap-2">
-        <LobbyTitle lobby={lobby} />
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-green/10 px-2 py-0.5">
-            <span aria-hidden className="size-2 rounded-full bg-green" />
-            <Text as="span" variant="footnoteMedium" color="text">
-              Live · {hereLabel(lobby.members.length)} · {debatingLabel(debatingCount(lobby.members))}
-            </Text>
-          </span>
-          <LobbyGuestCount count={lobby.guest_count ?? 0} />
-          <Text as="span" variant="footnote" color="grey-04">
-            {[hosts.length ? `Hosted by ${hostsLabel(hosts)}` : 'No host here', 'Not recorded'].join(' · ')}
-          </Text>
-        </div>
-        <div className="flex flex-wrap gap-2 pt-1">
-          <HubPillButton analyticsLabel="Lobby copy link" onClick={() => void copyLink()}>
-            {copied ? 'Link copied' : 'Copy link'}
-          </HubPillButton>
-          {guest ? (
-            <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
-              Leave lobby
-            </Link>
-          ) : (
-            <HubPillButton analyticsLabel="Lobby leave" onClick={onLeave}>
-              Leave lobby
-            </HubPillButton>
+    <div role="tablist" aria-label="Lobby" onKeyDown={onKeyDown} className="mx-4 mt-2 flex border-b border-grey-02">
+      {PHONE_TABS.map(item => (
+        <button
+          key={item.id}
+          id={ids[item.id].tab}
+          type="button"
+          role="tab"
+          aria-selected={tab === item.id}
+          aria-controls={ids[item.id].panel}
+          tabIndex={tab === item.id ? 0 : -1}
+          {...hubAnalyticsAttributes(`Lobby ${item.label} tab`, 'navigate_lobby_claims')}
+          onClick={() => onTab(item.id)}
+          className={cx(
+            'inline-flex flex-1 items-center justify-center gap-1.5 pb-2 text-[17px] leading-[22px] font-semibold',
+            tab === item.id ? 'text-text shadow-[inset_0_-1px_0_var(--color-text)]' : 'text-grey-04'
           )}
-          {guest ? null : <HubHeaderControls analyticsSurface="lobby" />}
-          {isHost ? (
-            confirmingEnd ? (
-              <>
-                <HubPillButton
-                  variant="primary"
-                  analyticsLabel="Lobby end confirm"
-                  pending={end.isPending}
-                  pendingLabel="Ending…"
-                  onClick={() => end.mutate()}
-                >
-                  End for everyone
-                </HubPillButton>
-                <HubPillButton analyticsLabel="Lobby end cancel" onClick={() => setConfirmingEnd(false)}>
-                  Cancel
-                </HubPillButton>
-              </>
-            ) : (
-              <HubPillButton analyticsLabel="Lobby end" onClick={() => setConfirmingEnd(true)}>
-                End lobby
-              </HubPillButton>
-            )
+        >
+          {item.label}
+          {item.id === 'claims' && claimsMark ? (
+            <span className="size-1.5 rounded-full bg-ctaPrimary" aria-label="New" role="img" />
           ) : null}
-        </div>
-        {end.isError ? (
-          <Text as="p" variant="footnote" color="red-01">
-            {lobbyErrorMessage(end.error, 'Could not end the lobby. Try again.')}
-          </Text>
-        ) : null}
-      </div>
-
-      {handoff ? (
-        <div role="status" className="rounded-md bg-grey-01 px-3 py-2">
-          <Text as="p" variant="footnote" color="text">
-            {personName(handoff)} is hosting now
-          </Text>
-        </div>
-      ) : null}
-
-      {queuedRequest.outcome ? (
-        <div role="status" className="flex items-center gap-2 rounded-md bg-grey-01 px-3 py-2">
-          <Text as="p" variant="footnote" color="text" className="min-w-0 flex-1">
-            {queuedRequest.outcome}
-          </Text>
-          <HubPillButton analyticsLabel="Lobby queued request dismiss" onClick={queuedRequest.dismissOutcome}>
-            OK
-          </HubPillButton>
-        </div>
-      ) : null}
-
-      {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} listening={guestVoiceStates.connected} /> : null}
-
-      {moderationNotice ? (
-        <div role="status" className="rounded-md bg-grey-01 px-3 py-2">
-          <Text as="p" variant="footnote" color="text">
-            {moderationNotice}
-          </Text>
-        </div>
-      ) : null}
-
-      {memberLobby &&
-      state.status === 'joined' &&
-      memberLobby.viewer.role === 'listener' &&
-      !memberLobby.viewer.hosting ? (
-        <LobbyHandControl lobby={memberLobby} />
-      ) : null}
-
-      {state.status === 'stepped_out' ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Text as="p" variant="footnote" color="text">
-            {LOBBY_COPY.steppedOut}
-          </Text>
-          <HubPillButton variant="primary" analyticsLabel="Lobby back to the room" onClick={onRetry}>
-            Back to the room
-          </HubPillButton>
-        </div>
-      ) : state.status === 'failed' ? (
-        <div className="flex items-center gap-2">
-          <Text as="p" variant="footnote" color="red-01">
-            {state.message}
-          </Text>
-          <HubPillButton analyticsLabel="Lobby retry join" onClick={onRetry}>
-            Try again
-          </HubPillButton>
-        </div>
-      ) : state.status === 'joining' ? (
-        <Text as="p" variant="footnote" color="grey-04">
-          Joining…
-        </Text>
-      ) : null}
-
-      {guestNotice ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2">
-          <div role="status" className="min-w-0 flex-1">
-            <Text as="p" variant="footnote" color="grey-04">
-              {guestNotice.message}
-            </Text>
-          </div>
-          {guestNotice.retry && !authenticated ? (
-            <HubPillButton analyticsLabel="Lobby guest retry listen" onClick={guestSession.retry}>
-              {guestNotice.retry}
-            </HubPillButton>
-          ) : null}
-        </div>
-      ) : guest && guestSession.state.status === 'starting' ? (
-        <Text as="p" variant="footnote" color="grey-04">
-          Connecting voice…
-        </Text>
-      ) : null}
-
-      <LobbyVoiceStatesProvider value={guestVoiceStates}>
-        {guestVoice ? (
-          <LobbyGuestVoice
-            key={guestVoice.token}
-            token={guestVoice}
-            onStates={setGuestVoiceStates}
-            onReconnect={guestSession.reconnect}
-            onAutoReconnect={autoReconnectGuest}
-            onRemoved={guestSession.checkNow}
-            quiet={inVoice}
-          />
-        ) : null}
-        {memberLobby && inVoice ? (
-          <LobbyVoice
-            lobby={memberLobby}
-            connectionId={voice.connectionId}
-            joined={state.status === 'joined'}
-            currentUserId={currentUserId}
-            onConnectedChange={voice.setVoiceConnected}
-            onAudible={guestVoice ? guestSession.roomDone : undefined}
-            onUnavailable={guestVoice ? guestSession.roomDone : undefined}
-          >
-            <VoiceAwayWarning awayAt={voice.awayAt} />
-            {people}
-          </LobbyVoice>
-        ) : (
-          people
-        )}
-      </LobbyVoiceStatesProvider>
-
-      {state.status === 'joined' || guest ? <LobbyClaimsArea lobby={lobby} /> : null}
-
-      {memberLobby?.viewer.hosting ? <LobbyHostLists lobby={memberLobby} /> : null}
-    </LobbyShell>
+        </button>
+      ))}
+    </div>
   );
 }
 
-/** Hosts, the acting host and speakers; they are the ones voice lets publish. */
-function publishes(member: DebateLobbyMember) {
-  return isHosting(member) || member.role === 'speaker';
-}
-
-function RosterSection({
-  label,
-  lobby,
-  members,
-  isViewer,
-  ownAvailable,
-}: {
-  label: string;
-  lobby: LobbyPageView;
-  members: DebateLobbyMember[];
-  isViewer: (member: DebateLobbyMember) => boolean;
-  ownAvailable: boolean | undefined;
-}) {
-  if (members.length === 0) return null;
-  return (
-    <section className="flex flex-col gap-2" aria-label={label}>
-      <Text as="h2" variant="footnoteMedium" color="grey-04">
-        {label} · {members.length}
+/** Stepped out, a failed join, or joining: above the people, where the room would be. */
+function LobbyRoomStatus({ state, onRetry }: { state: LobbyPresenceState; onRetry: () => void }) {
+  if (state.status === 'stepped_out') {
+    return (
+      <div className="flex flex-wrap items-center gap-2">
+        <Text as="p" variant="footnote" color="text">
+          {LOBBY_COPY.steppedOut}
+        </Text>
+        <HubPillButton variant="primary" analyticsLabel="Lobby back to the room" onClick={onRetry}>
+          Back to the room
+        </HubPillButton>
+      </div>
+    );
+  }
+  if (state.status === 'failed') {
+    return (
+      <div className="flex items-center gap-2">
+        <Text as="p" variant="footnote" color="red-01">
+          {state.message}
+        </Text>
+        <HubPillButton analyticsLabel="Lobby retry join" onClick={onRetry}>
+          Try again
+        </HubPillButton>
+      </div>
+    );
+  }
+  if (state.status === 'joining') {
+    return (
+      <Text as="p" variant="footnote" color="grey-04">
+        Joining…
       </Text>
-      <ul className="flex flex-col divide-y divide-grey-02 rounded-lg border border-grey-02 bg-white">
-        {members.map(member => (
-          <RosterRow
-            key={member.user_id}
-            lobby={lobby}
-            member={member}
-            isViewer={isViewer(member)}
-            ownAvailable={ownAvailable}
-          />
-        ))}
-      </ul>
-    </section>
-  );
-}
-
-function RosterRow({
-  lobby,
-  member,
-  isViewer,
-  ownAvailable,
-}: {
-  lobby: LobbyPageView;
-  member: DebateLobbyMember;
-  isViewer: boolean;
-  ownAvailable: boolean | undefined;
-}) {
-  const status = memberStatus(member, isViewer ? ownAvailable : undefined);
-  const statusLine = member.in_debate ? (
-    <LobbyDebateSubject subject={member.in_debate_subject} />
-  ) : member.stepped_out ? (
-    'Stepped out'
-  ) : status ? (
-    STATUS_LABEL[status]
-  ) : null;
-  const voice = useLobbyVoiceStates();
-  const voiceId = dashlessId(member.user_id).toLowerCase();
-  const speaking = voice.speaking.has(voiceId);
-  // Mic state only means something for someone who can publish, in a room this tab is connected to.
-  const showMic = voice.connected && publishes(member) && !member.stepped_out;
-  const micOn = voice.micOn.has(voiceId);
-
-  return (
-    <li className="flex items-center gap-3 px-3 py-2" data-testid="lobby-roster-row">
-      <span
-        className={cx('h-8 w-8 shrink-0 overflow-hidden rounded-full', speaking && 'ring-2 ring-successTertiary')}
-        data-speaking={speaking || undefined}
-      >
-        <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt={personName(member)} size={32} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex min-w-0 items-center gap-1.5">
-          <LobbyPersonName person={member} interactionSurface="lobby_roster">
-            <Text as="span" variant="metadataMedium" className="truncate">
-              {personName(member)}
-              {isViewer ? ' (you)' : ''}
-            </Text>
-          </LobbyPersonName>
-          {member.newcomer ? (
-            <span className="shrink-0 rounded bg-ctaTertiary px-1 text-footnoteMedium text-ctaPrimary">New</span>
-          ) : null}
-        </div>
-        {statusLine ? (
-          <Text as="p" variant="footnote" color="grey-04" ellipsize>
-            {statusLine}
-          </Text>
-        ) : null}
-      </div>
-      {showMic ? (
-        <span className={micOn ? 'text-green' : 'text-grey-04'} aria-label={micOn ? 'Mic on' : 'Muted'} role="img">
-          <MicrophoneIcon muted={!micOn} />
-        </span>
-      ) : null}
-      <LobbyRequestDebate lobbyId={lobby.lobby_id} member={member} />
-      <span
-        className={cx(
-          'rounded-full px-2 py-0.5 text-footnoteMedium',
-          isHosting(member) ? 'bg-text text-white' : 'bg-grey-01 text-grey-04'
-        )}
-      >
-        {member.acting_host ? 'Hosting' : ROLE_LABEL[member.role]}
-      </span>
-      <LobbyMemberMenu lobby={lobby} member={member} isSelf={isViewer} micOn={showMic ? micOn : undefined} />
-    </li>
-  );
+    );
+  }
+  return null;
 }
 
 /** "X is hosting now" for a few seconds after hosting changes hands. */
@@ -927,13 +834,20 @@ function VoiceAwayWarning({ awayAt }: { awayAt: string | null }) {
 
   if (!connected || Number.isNaN(at) || ackedAt === at || now < at - VOICE_AWAY_WARNING_MS) return null;
   return (
-    <div role="status" className="flex flex-wrap items-center gap-2 rounded-md bg-grey-01 px-3 py-2">
-      <Text as="p" variant="footnote" color="text">
+    <LobbySlot name="notices">
+      <LobbyToast
+        action={
+          <HubPillButton
+            analyticsLabel="Lobby voice still here"
+            onClick={() => setAckedAt(at)}
+            className="border-white bg-white"
+          >
+            I’m still here
+          </HubPillButton>
+        }
+      >
         {now >= at ? 'You show as away to others.' : 'You’ll show as away soon unless you’re still here.'}
-      </Text>
-      <HubPillButton analyticsLabel="Lobby voice still here" onClick={() => setAckedAt(at)}>
-        I’m still here
-      </HubPillButton>
-    </div>
+      </LobbyToast>
+    </LobbySlot>
   );
 }
