@@ -579,10 +579,13 @@ function LiveClaimSides({ summary, name }: { summary: ClaimSummary; name: string
           claimName: name,
         }}
       />
+      {/* Announced, as on the other claim-voting surfaces: the vote fails after the press, out of sight. */}
       {control.responseError ? (
-        <Text as="p" variant="footnote" color="red-01">
-          {control.responseError}
-        </Text>
+        <span role="alert" className="pointer-events-auto">
+          <Text as="span" variant="footnote" color="red-01">
+            {control.responseError}
+          </Text>
+        </span>
       ) : null}
     </>
   );

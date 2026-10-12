@@ -1058,7 +1058,9 @@ function DebateCalendarBody({
               Couldn&rsquo;t load your own debates, so they&rsquo;re missing from the week.
             </PartialLoadNote>
           ) : null}
-          {allPositionsState === 'failed' ? (
+          {/* Only when a claim is picked: otherwise claims are narrowing nothing, and the Claims tab says
+              the read failed itself. */}
+          {allPositionsState === 'failed' && effectivePicks.claims.length > 0 ? (
             <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
               Couldn&rsquo;t load everyone&rsquo;s positions, so claims can&rsquo;t narrow the week yet.
             </Text>

@@ -64,6 +64,7 @@ const mocks = vi.hoisted(() => ({
   spaceLabels: new Map<string, { name: string; image: string | null }>(),
   debateSpaces: new Map<string, string[]>(),
   personalSpaceLoading: false,
+  voteError: null as string | null,
   labelRequests: [] as string[][],
   sidePanelListeners: new Set<() => void>(),
 }));
@@ -161,7 +162,7 @@ vi.mock('../browse/use-debate-claim-response', () => ({
       canRespond: true,
       isResponseSubmitting: false,
       actionTitle: () => undefined,
-      responseError: null,
+      responseError: mocks.voteError,
     },
   }),
 }));
@@ -456,6 +457,7 @@ beforeEach(() => {
     spaceLabels: new Map(),
     debateSpaces: new Map(),
     personalSpaceLoading: false,
+    voteError: null,
     labelRequests: [],
     claimNames: new Map(),
     claimTopics: new Map(),
@@ -1529,6 +1531,22 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     mocks.personalSpaceLoading = false;
     rerender(<DebateCalendar />);
     expect(mocks.positionReads.at(-1)).toContainEqual({ profile_space_id: VIEWER });
+  });
+
+  it('announces a vote that failed', () => {
+    mocks.voteError = 'Couldn’t save your position. Try again.';
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
+
+    expect(within(panel()).getAllByRole('alert')[0]).toHaveTextContent('Couldn’t save your position. Try again.');
+  });
+
+  it('only says claims cannot narrow the week when a claim is picked', () => {
+    mocks.positionsError = new Error('graph down');
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+
+    expect(screen.queryByText(/claims can’t narrow the week/)).not.toBeInTheDocument();
   });
 
   it('keeps picks from the URL on a reload', () => {
