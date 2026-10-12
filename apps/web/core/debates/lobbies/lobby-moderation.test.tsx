@@ -179,6 +179,7 @@ describe('LobbyHostLists', () => {
     );
     renderWith(<LobbyHostLists lobby={view} />);
     expect(screen.getByRole('button', { name: 'Raised hands · 2' })).toBeTruthy();
+    expect(screen.getAllByText(/^Hand up /)).toHaveLength(2);
     const moves = screen.getAllByRole('button', { name: 'Move to speakers' });
     fireEvent.click(moves[0]!);
     await waitFor(() =>
@@ -190,6 +191,28 @@ describe('LobbyHostLists', () => {
         'acct'
       )
     );
+  });
+
+  it('says who moved a raised hand to listeners', () => {
+    vi.useFakeTimers({ now: Date.parse('2026-10-05T10:02:00Z') });
+    const view = lobby(
+      {},
+      {
+        members: [
+          member('sam', 'listener', {
+            hand_raised_at: '2026-10-05T10:01:00Z',
+            moved_to_listeners: { by: person('priya', 'Priya'), at: '2026-10-05T10:00:00Z' },
+          }),
+          member('leo', 'listener', {
+            hand_raised_at: '2026-10-05T10:01:40Z',
+            moved_to_listeners: { by: null, at: '2026-10-05T10:00:00Z' },
+          }),
+        ],
+      }
+    );
+    renderWith(<LobbyHostLists lobby={view} />);
+    expect(screen.getByText('Moved to listeners by Priya · hand up 1 min')).toBeTruthy();
+    expect(screen.getByText('Moved to listeners · hand up 20 s')).toBeTruthy();
   });
 
   it('lets a host unban', async () => {

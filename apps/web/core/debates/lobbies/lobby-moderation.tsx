@@ -178,7 +178,7 @@ function RaisedHands({ lobby, hands }: { lobby: MemberLobbyPageView; hands: Memb
           <PersonRow
             key={member.user_id}
             person={member}
-            detail={`Hand up ${sinceLabel(member.hand_raised_at!) ?? ''}`.trim()}
+            detail={raisedHandDetail(member)}
             action={
               <HubPillButton
                 analyticsLabel="Lobby move to speakers from hands"
@@ -195,6 +195,15 @@ function RaisedHands({ lobby, hands }: { lobby: MemberLobbyPageView; hands: Memb
       {moderate.isError ? <ErrorRow>{moderationErrorMessage(moderate.error)}</ErrorRow> : null}
     </>
   );
+}
+
+/** "Moved to listeners by Priya · hand up 1 min"; the move only when geo-chat says who. */
+function raisedHandDetail(member: MemberLobbyPageView['members'][number]) {
+  const since = sinceLabel(member.hand_raised_at!);
+  const moved = member.moved_to_listeners;
+  if (!moved) return `Hand up ${since ?? ''}`.trim();
+  const by = moved.by ? `Moved to listeners by ${personName(moved.by)}` : 'Moved to listeners';
+  return since ? `${by} · hand up ${since}` : by;
 }
 
 function BannedList({
