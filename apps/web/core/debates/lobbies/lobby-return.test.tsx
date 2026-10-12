@@ -83,7 +83,11 @@ describe('BackToLobbyRow', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
     render(<BackToLobbyRow onLeave={vi.fn()} />);
     expect(backButton()?.textContent).toContain('5 here now');
-    expect(screen.getAllByRole('listitem')).toHaveLength(3);
+    // The faces stay out of the button and out of its name.
+    const faces = screen.getByTestId('back-to-lobby-faces');
+    expect(faces.getAttribute('aria-hidden')).toBe('true');
+    expect(faces.querySelectorAll('li')).toHaveLength(3);
+    expect(backButton()!.querySelector('ul, li, img')).toBeNull();
   });
 
   it('prefers geo-chat over this tab’s record', () => {

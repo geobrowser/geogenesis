@@ -74,26 +74,32 @@ function OpenLobbyRow({ lobbyId, onLeave, disabled = false }: BackToLobbyProps &
   return (
     <>
       <div aria-hidden className="h-px w-full shrink-0 bg-divider" />
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => {
-          requestLobbyRejoin(lobbyId);
-          onLeave();
-        }}
-        className="flex w-full items-center gap-3 rounded-lg bg-text p-3 text-left text-white transition-colors hover:bg-text/90 disabled:cursor-default disabled:opacity-50"
+      {/* The faces are a list, which a button may not hold: they sit beside it, hidden from
+          assistive tech, and the button's hit area stretches over the whole row. */}
+      <div
+        className="relative flex w-full items-center gap-3 rounded-lg bg-text p-3 text-white transition-colors has-[button:disabled]:opacity-50 has-[button:enabled:hover]:bg-text/90 has-[button:focus-visible]:ring-2 has-[button:focus-visible]:ring-ctaPrimary"
         style={{ '--avatar-group-ring': 'var(--color-text)' } as React.CSSProperties}
       >
-        <LobbyAvatarStack people={present.slice(0, BACK_AVATARS)} total={Math.min(present.length, BACK_AVATARS)} />
-        <span className="flex min-w-0 flex-col gap-0.5">
+        <div aria-hidden className="shrink-0" data-testid="back-to-lobby-faces">
+          <LobbyAvatarStack people={present.slice(0, BACK_AVATARS)} total={Math.min(present.length, BACK_AVATARS)} />
+        </div>
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => {
+            requestLobbyRejoin(lobbyId);
+            onLeave();
+          }}
+          className="flex min-w-0 flex-col gap-0.5 text-left outline-none after:absolute after:inset-0 after:rounded-lg disabled:cursor-default"
+        >
           <Text as="span" variant="metadataMedium" color="white" className="line-clamp-2 break-words">
             Back to {lobby.name}
           </Text>
           <Text as="span" variant="footnote" color="grey-02">
             {hereNowLabel(lobbyHeadcount(lobby))}
           </Text>
-        </span>
-      </button>
+        </button>
+      </div>
     </>
   );
 }
