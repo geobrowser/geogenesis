@@ -120,6 +120,16 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
                 viewerId={viewerId}
                 busy={respond.isPending}
                 onAnswer={answer}
+                onReschedule={opener => {
+                  const opponentUserId = opponentOf(request, viewerId);
+                  if (!opponentUserId) return;
+                  rescheduleOpenerRef.current = opener;
+                  setRescheduling({
+                    requestId: request.request_id,
+                    opponentUserId,
+                    opponentName: lookUp(opponentUserId)?.display_name ?? null,
+                  });
+                }}
               />
             ))}
           </HubCardList>
@@ -320,6 +330,7 @@ function ScheduledRow({
   viewerId,
   busy,
   onAnswer,
+  onReschedule,
   ref,
 }: {
   /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
@@ -330,14 +341,18 @@ function ScheduledRow({
   viewerId: string | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
+  /** Opens the other debater's week to propose a new time for this request. */
+  onReschedule: (opener: HTMLElement) => void;
 }) {
   const expiry = useScheduledExpiry(request.scheduled_start_at);
-  // While pending, only whoever proposed the current time may withdraw it; the other side declines.
-  const withdrawable =
-    !request.viewer_must_answer &&
-    viewerId !== null &&
-    request.proposed_by_user_id !== null &&
-    sameId(request.proposed_by_user_id, viewerId);
+  // Whoever proposed the current time may withdraw it, and so may anyone who has already accepted
+  // it (GEO-3233: in an admin match neither debater proposed it). Someone who has not answered
+  // declines instead.
+  const proposedByViewer =
+    viewerId !== null && request.proposed_by_user_id !== null && sameId(request.proposed_by_user_id, viewerId);
+  const viewerAccepted =
+    viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
+  const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
 
   return (
     <ScheduleCard
@@ -345,7 +360,13 @@ function ScheduledRow({
       opponent={opponent}
       viewer={viewer}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
-      status={`${request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'} · ${expiry}`}
+      status={`${
+        request.viewer_must_answer
+          ? 'Waiting on your answer'
+          : viewerAccepted
+            ? `Not confirmed until ${opponentName(opponent)} answers`
+            : 'Waiting on their answer'
+      } · ${expiry}`}
       actions={
         request.viewer_must_answer ? (
           // Decline first, Accept primary on the right: the order every other request card uses.
@@ -371,7 +392,25 @@ function ScheduledRow({
             </HubPillButton>
           </div>
         ) : (
-          withdrawable && <CancelScheduled requestId={request.request_id} kind="request" opponent={opponent} />
+          withdrawable && (
+            <div className="flex flex-col gap-2">
+              {viewerAccepted && (
+                <HubPillButton
+                  className="w-full"
+                  analyticsLabel="Debate hub Reschedule scheduled request"
+                  analyticsIntent="reschedule_scheduled_request"
+                  onClick={event => onReschedule(event.currentTarget)}
+                >
+                  Reschedule
+                </HubPillButton>
+              )}
+              <CancelScheduled
+                requestId={request.request_id}
+                kind={proposedByViewer ? 'request' : 'debate'}
+                opponent={opponent}
+              />
+            </div>
+          )
         )
       }
     />
