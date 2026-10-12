@@ -26,7 +26,7 @@ const TABS: { id: LobbyClaimsTab; label: string }[] = [
 /** The lobby's claims: "In this room" and "Explore", in the debates hub's tab row. */
 export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
   const [activeTab, setActiveTab] = React.useState<LobbyClaimsTab>('room');
-  useSavePromptOnGuestVote();
+  useSavePromptOnGuestVote(lobby.name);
 
   return (
     <section className="flex flex-col gap-3" aria-label="Claims">
@@ -68,13 +68,13 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
  * A guest's vote here opens the save sheet at once, which shows the vote and signs them up in
  * place; elsewhere it waits for a second vote. The lobby has no claim card option for it.
  */
-function useSavePromptOnGuestVote() {
+function useSavePromptOnGuestVote(lobbyName: string) {
   const guest = useIsLobbyGuest();
   const count = useLocalVotes().votes.length;
   const seenRef = React.useRef(count);
   React.useEffect(() => {
     const previous = seenRef.current;
     seenRef.current = count;
-    if (guest && count > previous) openSaveVotesPrompt('single_claim');
-  }, [count, guest]);
+    if (guest && count > previous) openSaveVotesPrompt('single_claim', { lobbyName });
+  }, [count, guest, lobbyName]);
 }

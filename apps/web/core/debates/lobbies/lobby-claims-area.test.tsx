@@ -1,10 +1,20 @@
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import { clearLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
+import { closeSaveVotesPrompt, openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import { LobbyClaimsArea } from './lobby-claims-area';
 import type { LobbyPageView } from './lobby-view';
 
+const mocks = vi.hoisted(() => ({ guest: false }));
+
+vi.mock('~/core/state/save-votes-prompt', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/state/save-votes-prompt')>()),
+  openSaveVotesPrompt: vi.fn(),
+}));
+vi.mock('./lobby-guest-hooks', () => ({ useIsLobbyGuest: () => mocks.guest }));
 vi.mock('./lobby-room-claims', () => ({
   LobbyRoomClaims: () => <p data-testid="lobby-room-claims" />,
 }));
@@ -13,9 +23,15 @@ vi.mock('./lobby-highlights', () => ({
   LobbyRoomClaimsWithHighlights: () => <p data-testid="lobby-room-claims" />,
 }));
 
-const lobby = { lobby_id: 'lobby-1' } as LobbyPageView;
+const lobby = { lobby_id: 'lobby-1', name: 'Onboarding with Adam' } as LobbyPageView;
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  clearLocalVotes();
+  closeSaveVotesPrompt();
+  mocks.guest = false;
+  vi.mocked(openSaveVotesPrompt).mockClear();
+});
 
 describe('LobbyClaimsArea', () => {
   it('opens on In this room and switches to Explore', () => {
@@ -27,5 +43,14 @@ describe('LobbyClaimsArea', () => {
     expect(screen.getByRole('button', { name: 'Explore' }).getAttribute('aria-current')).toBe('true');
     expect(screen.queryByTestId('lobby-room-claims')).toBeNull();
     expect(screen.getByTestId('lobby-explore-placeholder')).toBeTruthy();
+  });
+
+  it('opens the save sheet with the lobby name when a guest votes', () => {
+    mocks.guest = true;
+    render(<LobbyClaimsArea lobby={lobby} />);
+    act(() => {
+      toggleLocalVote({ entityId: 'c1', spaceId: 's1', responseKind: 'stance', direction: 'negative', title: 'Claim' });
+    });
+    expect(openSaveVotesPrompt).toHaveBeenCalledWith('single_claim', { lobbyName: 'Onboarding with Adam' });
   });
 });

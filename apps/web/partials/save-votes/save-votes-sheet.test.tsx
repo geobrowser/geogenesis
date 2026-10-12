@@ -113,6 +113,24 @@ describe('SaveVotesSheet', () => {
     expect(mocks.impression).toHaveBeenCalledWith('return_visit', 2);
   });
 
+  it('speaks to the lobby only when opened with a lobby name', () => {
+    vote('a', 'Couples should keep separate finances');
+    markPromptedThisSession();
+    render(<SaveVotesSheet />);
+
+    act(() => openSaveVotesPrompt('single_claim', { lobbyName: 'Onboarding with Adam' }));
+    const region = screen.getByRole('region', { name: 'Join the discussion' });
+    expect(region).toHaveTextContent('Join the discussion');
+    expect(region).toHaveTextContent('You’ll stay in Onboarding with Adam, and your audio keeps playing.');
+    expect(region).toHaveTextContent('Saved for after sign-up');
+    expect(screen.getByRole('list', { name: 'Your votes' })).toHaveTextContent('Couples should keep separate finances');
+
+    act(() => closeSaveVotesPrompt());
+    act(() => openSaveVotesPrompt('single_claim'));
+    expect(screen.getByRole('region', { name: 'Save your votes' })).not.toHaveTextContent('Join the discussion');
+    expect(screen.getByText('Save your vote')).toBeInTheDocument();
+  });
+
   it('counts an automatic ask toward the next one', () => {
     vote('a');
     vote('b');
