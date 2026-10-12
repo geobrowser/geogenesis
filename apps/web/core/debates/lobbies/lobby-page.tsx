@@ -31,7 +31,7 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
-import { hostAfterChange, lobbyErrorMessage, notYetOpenLabel, personName, remindedLabel } from './lobby-format';
+import { hostAfterChange, lobbyErrorMessage, notYetOpenLabel, remindedLabel } from './lobby-format';
 import { LobbyGuestBanner } from './lobby-guest';
 import {
   LobbyGuestProvider,
@@ -43,6 +43,7 @@ import {
 import { LobbyHeader } from './lobby-header';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
+import { type LobbyGuestNotice, LobbyNotices, LobbyToast } from './lobby-notices';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LobbyPeople } from './lobby-roster';
@@ -471,7 +472,7 @@ function LobbyRoom({
     setGuestEndedAt(Date.now());
     void refetchGuestView();
   }, [guestEnded, refetchGuestView]);
-  const guestNotice: { message: string; retry: string | null } | null = !guest
+  const guestNotice: LobbyGuestNotice | null = !guest
     ? null
     : guestSession.state.status === 'refused'
       ? { message: guestSession.state.message, retry: guestSession.state.retryable ? 'Try again' : null }
@@ -595,45 +596,16 @@ function LobbyRoom({
           leave={leave}
           banner={guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} listening={guestVoiceStates.connected} /> : null}
           notices={
-            <div ref={slots.noticesRef} className="contents">
-              {handoff ? <LobbyToast>{personName(handoff)} is hosting now</LobbyToast> : null}
-              {queuedRequest.outcome ? (
-                <LobbyToast
-                  action={
-                    <HubPillButton
-                      analyticsLabel="Lobby queued request dismiss"
-                      onClick={queuedRequest.dismissOutcome}
-                      className="border-white bg-white"
-                    >
-                      OK
-                    </HubPillButton>
-                  }
-                >
-                  {queuedRequest.outcome}
-                </LobbyToast>
-              ) : null}
-              {moderationNotice ? <LobbyToast>{moderationNotice}</LobbyToast> : null}
-              {/* With the toasts, so a guest listening from the Claims tab sees them too. */}
-              {guestNotice ? (
-                <LobbyToast
-                  action={
-                    guestNotice.retry && !authenticated ? (
-                      <HubPillButton
-                        analyticsLabel="Lobby guest retry listen"
-                        onClick={guestSession.retry}
-                        className="border-white bg-white"
-                      >
-                        {guestNotice.retry}
-                      </HubPillButton>
-                    ) : null
-                  }
-                >
-                  {guestNotice.message}
-                </LobbyToast>
-              ) : guest && guestSession.state.status === 'starting' ? (
-                <LobbyToast>Connecting voice…</LobbyToast>
-              ) : null}
-            </div>
+            <LobbyNotices
+              noticesRef={slots.noticesRef}
+              handoff={handoff}
+              queuedOutcome={queuedRequest.outcome}
+              onDismissQueuedOutcome={queuedRequest.dismissOutcome}
+              moderationNotice={moderationNotice}
+              guestNotice={guestNotice}
+              guestConnecting={guest && guestSession.state.status === 'starting'}
+              onGuestRetry={authenticated ? null : guestSession.retry}
+            />
           }
         />
       </div>
@@ -766,19 +738,6 @@ function LobbyRoomStatus({ state, onRetry }: { state: LobbyPresenceState; onRetr
     );
   }
   return null;
-}
-
-/** A notice over the page, above the bottom bar, so it never pushes the room down. */
-function LobbyToast({ children, action }: { children: React.ReactNode; action?: React.ReactNode }) {
-  return (
-    <div
-      role="status"
-      className="pointer-events-auto flex max-w-[min(560px,100%)] items-center gap-2.5 rounded-xl bg-text px-3.5 py-2.5 text-metadata text-white shadow-lg"
-    >
-      <span className="min-w-0 flex-1">{children}</span>
-      {action}
-    </div>
-  );
 }
 
 /** "X is hosting now" for a few seconds after hosting changes hands. */
