@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { useAppBottomInset } from '~/core/app-bottom-inset';
+import { BOTTOM_STACK, useAppBottomInset, useAppBottomInsetBelow } from '~/core/app-bottom-inset';
 
 import { Text } from '~/design-system/text';
 
@@ -50,12 +50,14 @@ export function LobbyControlBar({
 }) {
   const [footer, setFooter] = React.useState<HTMLElement | null>(null);
   const height = useElementHeight(footer);
-  // Floating chrome (the assistant launcher) and dropdown placement keep clear of the bar.
-  useAppBottomInset('lobby-control-bar', height, height > 0);
+  // Docked over the upload banner when it shows; the launcher and dropdowns keep clear of both.
+  useAppBottomInset('lobby-control-bar', height, height > 0, BOTTOM_STACK.lobbyControlBar);
+  const below = useAppBottomInsetBelow(BOTTOM_STACK.lobbyControlBar);
 
   return (
     <footer
       ref={setFooter}
+      style={below > 0 ? { bottom: below } : undefined}
       className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-grey-02 bg-white px-8 py-3 md:gap-2.5 md:px-4 md:pt-2.5 md:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
       data-testid="lobby-control-bar"
     >

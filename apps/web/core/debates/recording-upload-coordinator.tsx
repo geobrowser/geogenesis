@@ -7,7 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { capture } from '~/core/analytics';
-import { useAppBottomInset } from '~/core/app-bottom-inset';
+import { BOTTOM_STACK, useAppBottomInset } from '~/core/app-bottom-inset';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { SmallButton } from '~/design-system/button';
@@ -1018,7 +1018,12 @@ export function DebateRecordingUploadCoordinator() {
   //
   // Claimed before the early return below, since hooks cannot run conditionally, and gated on the
   // same two conditions that decide whether the banner actually paints.
-  useAppBottomInset('debate-upload-banner', DEBATE_UPLOAD_BANNER_HEIGHT_PX, bannerVisible && !inLiveDebate);
+  useAppBottomInset(
+    'debate-upload-banner',
+    DEBATE_UPLOAD_BANNER_HEIGHT_PX,
+    bannerVisible && !inLiveDebate,
+    BOTTOM_STACK.uploadBanner
+  );
 
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;

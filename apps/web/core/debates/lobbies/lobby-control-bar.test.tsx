@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import type * as React from 'react';
 
@@ -16,6 +16,7 @@ vi.mock('../hooks', async importOriginal => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
 }));
 
+const { BOTTOM_STACK, useAppBottomInset } = await import('~/core/app-bottom-inset');
 const { GeoChatRequestError } = await import('../api');
 const { LOBBY_CONTROL_COPY, LobbyControlBar, LobbyHandControl } = await import('./lobby-control-bar');
 
@@ -117,6 +118,22 @@ describe('LobbyControlBar', () => {
     expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('64px');
     unmount();
     expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('');
+    spy.mockRestore();
+  });
+
+  it('sits on the upload banner when it shows, and the inset counts both', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(64);
+    const banner = renderHook(() => useAppBottomInset('debate-upload-banner', 40, true, BOTTOM_STACK.uploadBanner));
+    render(
+      <LobbyControlBar controlsRef={() => undefined} showHint leave={<button type="button">Leave lobby</button>} />
+    );
+
+    expect(screen.getByTestId('lobby-control-bar').style.bottom).toBe('40px');
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('104px');
+
+    act(() => banner.unmount());
+    expect(screen.getByTestId('lobby-control-bar').style.bottom).toBe('');
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('64px');
     spy.mockRestore();
   });
 
