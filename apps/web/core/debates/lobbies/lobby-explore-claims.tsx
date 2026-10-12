@@ -53,7 +53,18 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     [hosting, renderMenu, renderOffer, roomRows]
   );
 
-  return <ClaimsTab variant="explore" renderClaim={renderClaim} onVisibleClaims={onVisibleClaims} />;
+  // The tab pads its own controls and list, inside the claims pane's padding. The page scrolls under
+  // the 2.75rem app bar, so the controls pin below it.
+  return (
+    <div className="-mx-4">
+      <ClaimsTab
+        variant="explore"
+        renderClaim={renderClaim}
+        onVisibleClaims={onVisibleClaims}
+        stickyTopClassName="top-[2.75rem]"
+      />
+    </div>
+  );
 }
 
 function sameBatches(a: string[][], b: string[][]) {

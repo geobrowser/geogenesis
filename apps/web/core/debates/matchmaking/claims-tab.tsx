@@ -213,6 +213,7 @@ export function ClaimsTab({
   variant = 'explore',
   renderClaim,
   onVisibleClaims,
+  stickyTopClassName,
   trailing,
   warm = false,
   onSettledEmpty,
@@ -225,6 +226,8 @@ export function ClaimsTab({
   renderClaim?: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
   /** The claims on screen, after each change. */
   onVisibleClaims?: (entries: MatchmakingClaim[]) => void;
+  /** Where the pinned controls stop, for a host scrolling the page under a fixed bar. */
+  stickyTopClassName?: string;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
   /**
@@ -1043,7 +1046,7 @@ export function ClaimsTab({
         />
       }
     >
-      <HubStickyControls workspaceStickyOffset={workspace}>
+      <HubStickyControls workspaceStickyOffset={workspace} topClassName={stickyTopClassName}>
         {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
             and the only evidence was on another tab. It rides inside the sticky block rather than
@@ -1285,15 +1288,17 @@ export function HubListColumns({
 export function HubStickyControls({
   children,
   workspaceStickyOffset = false,
+  topClassName,
 }: {
   children: React.ReactNode;
   workspaceStickyOffset?: boolean;
+  topClassName?: string;
 }) {
   return (
     <div
       className={cx(
         'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
-        workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0'
+        topClassName ?? (workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0')
       )}
     >
       {children}
