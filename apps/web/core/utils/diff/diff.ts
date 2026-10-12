@@ -419,7 +419,7 @@ export async function postProcessDiffs(
   const fetchedEntityMap = new Map<string, Entity>();
   if (idsToResolve.size > 0) {
     try {
-      const fetched = await Effect.runPromise(getBatchEntities([...idsToResolve]));
+      const fetched = await Effect.runPromise(getBatchEntities([...idsToResolve], spaceId));
       for (const e of fetched) {
         nameMap.set(e.id, e.name);
         fetchedEntityMap.set(e.id, e);
