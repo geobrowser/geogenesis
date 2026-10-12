@@ -11,6 +11,7 @@ import { sameId } from '../rooms/room-presence';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
+import { useLobbyHandoff } from './lobby-popup';
 import { LOBBY_QUEUED_REQUEST_COPY, useLobbyQueuedRequest } from './lobby-queued-request';
 import { lobbyClaimRequestErrorMessage } from './lobby-room-claims-hooks';
 
@@ -44,6 +45,8 @@ const WIDE_PILL = 'w-full md:h-10';
 /** Without an account: the tap is queued and sign-up opens; it is sent after, if it still can be. */
 function GuestRequestDebate({ member }: { member: DebateLobbyMember }) {
   const { pending, request } = useLobbyQueuedRequest();
+  // Sign-in opens its own modal, so the person menu closes first.
+  const { handoff } = useLobbyHandoff();
   if (member.in_debate || member.stepped_out) return null;
   const name = personName(member);
   if (pending && sameId(pending.user_id, member.user_id)) {
@@ -59,7 +62,7 @@ function GuestRequestDebate({ member }: { member: DebateLobbyMember }) {
       aria-label={`Request a debate with ${name}`}
       analyticsLabel="Lobby guest request debate"
       analyticsIntent="start_debate"
-      onClick={() => request(member)}
+      onClick={() => handoff(() => request(member))}
       className={WIDE_PILL}
     >
       {REQUEST_LABEL}

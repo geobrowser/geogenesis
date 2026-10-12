@@ -1,11 +1,32 @@
 'use client';
 
-import type * as React from 'react';
+import * as React from 'react';
+
+import { flushSync } from 'react-dom';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 
 import { BottomSheet } from '~/design-system/bottom-sheet';
 import { Menu, type MenuAlign } from '~/design-system/menu';
+
+type Handoff = {
+  /** Inside a lobby popup. */
+  inPopup: boolean;
+  /** Closes the popup now; nothing outside one. */
+  close: () => void;
+  /**
+   * For an action that opens another modal (sign-in): closes the popup first and runs `then` once
+   * its focus trap and focus return are done. Outside a popup, runs it now.
+   */
+  handoff: (then: () => void) => void;
+};
+
+const OUTSIDE: Handoff = { inPopup: false, close: () => undefined, handoff: then => then() };
+const LobbyHandoffContext = React.createContext<Handoff>(OUTSIDE);
+
+export function useLobbyHandoff() {
+  return React.useContext(LobbyHandoffContext);
+}
 
 /**
  * A lobby menu: a dropdown on desktop, a bottom sheet on a phone. The content mounts on each open,
@@ -31,7 +52,19 @@ export function LobbyPopup({
   children: React.ReactNode;
 }) {
   const phone = useIsPhoneLayout();
-  const content = open ? children : null;
+  const handoff = React.useMemo<Handoff>(
+    () => ({
+      inPopup: true,
+      close: () => onOpenChange(false),
+      handoff: then => {
+        // Committed now, so Radix's focus return (queued on unmount) runs before `then`.
+        flushSync(() => onOpenChange(false));
+        setTimeout(then, 0);
+      },
+    }),
+    [onOpenChange]
+  );
+  const content = open ? <LobbyHandoffContext.Provider value={handoff}>{children}</LobbyHandoffContext.Provider> : null;
 
   if (phone) {
     return (
