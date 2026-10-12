@@ -320,10 +320,10 @@ export type DebateOpenRounds = {
    */
   extend_count_in_ms?: number;
   /**
-   * Rebuttal rounds that run without a pick, straight after the opening: rounds
-   * `1..=required_rebuttal_rounds` are appended with the opening and only the round after them ends
-   * on the first Extend / End decision. Snapshotted per debate like the cap, and absent from a
-   * geo-chat that predates it, which reads as `0`: the opening ends on a pick, as it always did.
+   * Rebuttal rounds every debate plays: rounds `1..=required_rebuttal_rounds` are appended with the
+   * opening, the rounds before the last of them run straight on, and the first Extend / End pick
+   * follows the last of them. Snapshotted per debate like the cap, and absent from a geo-chat that
+   * predates it, which reads as `0`: the opening ends on a pick, as it always did.
    */
   required_rebuttal_rounds?: number;
   /** The round this block describes. In `result` it is the round that just resolved. */
