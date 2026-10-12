@@ -53,6 +53,8 @@ export type ScheduleEditorSurface =
   /** The set-schedule banner under that header, which only introduces it. */
   | 'hub_banner'
   | 'people_tab'
+  /** An admin's request for more times, shown on the Requests tab (GEO-3228). */
+  | 'requests_tab'
   | 'availability_link'
   /** The calendar's own prompt and its Edit my times (GEO-3152). */
   | 'calendar';
