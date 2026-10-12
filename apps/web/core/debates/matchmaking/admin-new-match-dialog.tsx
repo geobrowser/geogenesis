@@ -7,8 +7,10 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { useSearch } from '~/core/hooks/use-search';
+import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
@@ -29,9 +31,11 @@ import {
 } from './admin-hooks';
 import { useAdminPairFit, useAdminSharedFreeSlots } from './admin-pair-fit';
 import { SegmentedControl, useMinuteClock } from './debate-calendar-controls';
+import { type ClaimMatch, matchesInSpaces } from './disagreement-counts';
 import { HubPillButton } from './hub-pill-button';
 import { offlinePerson } from './offline-person';
-import { byPairFit, fitReasonText } from './pair-fit';
+import { byPairFit, fitReasonText, withSharedTime } from './pair-fit';
+import { MatchingClaim } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { SpaceFilterPills } from './space-filter-pills';
@@ -41,6 +45,7 @@ import { useSpaceFilterMenu } from './use-space-filter-selection';
 
 const SLOT_MINUTES = 30;
 const EMPTY_SPACE_IDS: string[] = [];
+const EMPTY_MATCHES: ClaimMatch[] = [];
 
 /** What became of asking someone to set their availability. */
 type PromptOutcome =
@@ -92,6 +97,10 @@ type Props = {
  *   measured from that person instead of the viewer. When gaia's pair fit is available (GEO-3224)
  *   it orders by fit instead, halved for anyone with no free time in common, and each row says
  *   why ("Disagrees with Ana on ..."); when it is not, the order is exactly the matches order.
+ * - **Each count opens its claims** (GEO-3230): the claims the pair holds opposite positions on, and
+ *   each one's side. With spaces selected, the count, the list and the order cover those spaces
+ *   alone, and gaia's fit stands aside: it scores the pair across every space, so it would rank and
+ *   explain a pair by disagreements the admin has filtered out.
  * - **Recommended** offers the half-hours both are free; **Pick any time** is the override, kept a
  *   separate mode so nobody drifts into it. Every time shows both debaters' own clocks.
  */
@@ -168,10 +177,24 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   const rosterProfileIds = React.useMemo(() => rosterPeople.map(person => person.profile_space_id), [rosterPeople]);
   const fit = useAdminPairFit(first ? first.person.profile_space_id : null, rosterProfileIds);
   const freeSlots = useAdminSharedFreeSlots(first ? first.userId : null, availableIds);
-  const fitRanking = first !== null && fit.available;
+  const wanted = React.useMemo(() => new Set(spaceIds.map(normId)), [spaceIds]);
+  const narrowed = wanted.size > 0;
+  const fitRanking = first !== null && fit.available && !narrowed;
   const fitOf = (person: DebatePerson) => (first ? fit.byProfile.get(normId(person.profile_space_id)) : undefined);
-  const matchCount = (person: DebatePerson) =>
-    facts.matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0;
+  // Narrowed once per analysis and filter, not per comparison: the sort reads each count often.
+  const matchesByProfile = React.useMemo(
+    () =>
+      new Map(
+        rosterPeople.map(person => [
+          normId(person.profile_space_id),
+          matchesInSpaces(facts.matchAnalysis, person.profile_space_id, wanted),
+        ])
+      ),
+    [facts.matchAnalysis, rosterPeople, wanted]
+  );
+  const matchesOf = (person: DebatePerson) => matchesByProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES;
+  const matchCount = (person: DebatePerson) => matchesOf(person).length;
+  const sharedFreeSlotsOf = (person: DebatePerson) => (first ? freeSlots.get(normId(person.user_id)) : undefined);
 
   const offeredSpaces = React.useMemo(() => {
     const counts = new Map<string, number>();
@@ -192,8 +215,19 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
     seedSpent: true,
   });
 
+  const { labelsById } = useSpaceLabels(
+    React.useMemo(
+      () => [...new Set([...facetSpaces.map(space => space.id), ...facts.matchingSpaceIds])],
+      [facetSpaces, facts.matchingSpaceIds]
+    )
+  );
+  // Whose claims are open, keyed by everything the list depends on: a new debater 1 or filter
+  // closes it rather than showing a different pair's claims under the same row.
+  const [openClaims, setOpenClaims] = React.useState<string | null>(null);
+  const claimsKey = (person: DebatePerson) =>
+    [first ? normId(first.userId) : '', ...[...wanted].sort(), normId(person.user_id)].join('|');
+
   const picked = new Set([first?.userId, second?.userId].filter(Boolean).map(id => normId(id!)));
-  const wanted = new Set(spaceIds.map(normId));
   const debatesOf = (person: DebatePerson) => facts.records.get(person.profile_space_id)?.debatesArgued ?? 0;
   const listedRoster = rosterPeople
     .filter(person => !picked.has(normId(person.user_id)))
@@ -208,10 +242,15 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
         {
           available: fitRanking,
           fitOf,
-          sharedFreeSlotsOf: person => freeSlots.get(normId(person.user_id)),
+          sharedFreeSlotsOf,
         },
         (left, right) =>
-          (ranking ? matchCount(right) - matchCount(left) : 0) ||
+          (ranking
+            ? narrowed
+              ? withSharedTime(matchCount(right), sharedFreeSlotsOf(right)) -
+                withSharedTime(matchCount(left), sharedFreeSlotsOf(left))
+              : matchCount(right) - matchCount(left)
+            : 0) ||
           debatesOf(right) - debatesOf(left) ||
           speakerLabel(left).localeCompare(speakerLabel(right))
       )
@@ -271,10 +310,15 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
             ? fitReasonText(personFit.reason, debaterFirstName(first.person), personFit.parts.opposed)
             : null
         }
-        noSharedTime={available && fitRanking && freeSlots.get(normId(person.user_id)) === 0}
+        noSharedTime={available && (fitRanking || (ranking && narrowed)) && sharedFreeSlotsOf(person) === 0}
         record={available ? (facts.records.get(person.profile_space_id) ?? null) : null}
-        matches={available && ranking ? matchCount(person) : null}
+        matches={available && ranking ? matchesOf(person) : null}
         matchesWith={first ? debaterFirstName(first.person) : null}
+        claimsOpen={openClaims === claimsKey(person)}
+        onClaimsToggle={() => setOpenClaims(current => (current === claimsKey(person) ? null : claimsKey(person)))}
+        claimNamesById={facts.matchingClaimNamesById}
+        claimNamesLoading={facts.matchingClaimsLoading}
+        labelsById={labelsById}
         prompt={prompts.get(normId(person.user_id))}
         onPick={() => pick(person)}
         onRequest={() => void requestAvailability([person.user_id])}
@@ -317,7 +361,9 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
               : fitRanking
                 ? `Ordered by fit with ${speakerLabel(first.person)}: disagreements, shared interests and free time`
                 : ranking
-                  ? `Ordered by matches with ${speakerLabel(first.person)}, most first`
+                  ? narrowed
+                    ? `Ordered by matches with ${speakerLabel(first.person)} in the selected spaces, most first`
+                    : `Ordered by matches with ${speakerLabel(first.person)}, most first`
                   : `Counting matches with ${speakerLabel(first.person)}…`}
           </Text>
           <ul aria-label="People" className="min-h-0 flex-1 overflow-y-auto border-t border-grey-02">
@@ -484,6 +530,11 @@ function PersonOption({
   record,
   matches,
   matchesWith,
+  claimsOpen,
+  onClaimsToggle,
+  claimNamesById,
+  claimNamesLoading,
+  labelsById,
   fitReason,
   noSharedTime,
   prompt,
@@ -497,24 +548,42 @@ function PersonOption({
   /** Pair fit is ranking and they share no free half-hour with debater 1. */
   noSharedTime: boolean;
   record: PersonRecord | null;
-  /** Matches with debater 1, once known; null hides the count. */
-  matches: number | null;
+  /** Matches with debater 1, once known and narrowed to the selected spaces; null hides the count. */
+  matches: ClaimMatch[] | null;
   matchesWith: string | null;
+  /** Whether the claims behind the count are listed under the row. */
+  claimsOpen: boolean;
+  onClaimsToggle: () => void;
+  claimNamesById: ReadonlyMap<string, string | null>;
+  claimNamesLoading: boolean;
+  labelsById: Map<string, SpaceLabel>;
   prompt: PromptOutcome | undefined;
   onPick: () => void;
   onRequest: () => void;
 }) {
   const name = speakerLabel(person);
+  const count = matches?.length ?? 0;
+  const claimsId = React.useId();
+  const matchText = `${count} ${count === 1 ? 'match' : 'matches'} with ${matchesWith}`;
+  // A count with claims behind it opens them; zero has nothing to open, and reads as no match.
   const matchPill =
     matches !== null && matchesWith ? (
-      <span
-        className={cx(
-          'rounded-full px-1.5 py-0.5 font-medium',
-          matches > 0 ? 'bg-ctaTertiary text-ctaPrimary' : 'bg-grey-01 text-grey-04'
-        )}
-      >
-        {matches} {matches === 1 ? 'match' : 'matches'} with {matchesWith}
-      </span>
+      count > 0 ? (
+        <button
+          type="button"
+          aria-expanded={claimsOpen}
+          aria-controls={claimsOpen ? claimsId : undefined}
+          onClick={onClaimsToggle}
+          className="inline-flex items-center gap-0.5 rounded-full bg-ctaTertiary px-1.5 py-0.5 font-medium text-ctaPrimary transition-opacity hover:opacity-75"
+        >
+          {matchText}
+          <span className={cx('transition-transform', claimsOpen && 'rotate-180')} aria-hidden>
+            <ChevronDownSmall />
+          </span>
+        </button>
+      ) : (
+        <span className="rounded-full bg-grey-01 px-1.5 py-0.5 font-medium text-grey-04">{matchText}</span>
+      )
     ) : null;
 
   let action: React.ReactNode;
@@ -590,6 +659,28 @@ function PersonOption({
         ) : null}
       </div>
       {action}
+      {matches && matchesWith && count > 0 && claimsOpen ? (
+        <ul
+          id={claimsId}
+          aria-label={`Matching claims: ${matchesWith} and ${debaterFirstName(person)}`}
+          className="col-span-2 col-start-2 mt-2 overflow-hidden rounded-lg border border-grey-02"
+        >
+          {matches.map(match => (
+            <li key={normId(match.claimId)} className="border-t border-grey-02 first:border-t-0">
+              <MatchingClaim
+                match={match}
+                viewerName={matchesWith}
+                personName={debaterFirstName(person)}
+                claimNamesById={claimNamesById}
+                claimNamesLoading={claimNamesLoading}
+                labelsById={labelsById}
+                newTab
+                className="px-3 py-2.5"
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </li>
   );
 }
