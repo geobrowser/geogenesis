@@ -27,6 +27,15 @@ const mocks = vi.hoisted(() => ({
   space: null as { type: string; entity: { id: string; types: { id: string }[] } } | null,
 }));
 
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  PersonFollowCounts: () => null,
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+  usePersonFollowingCount: () => null,
+}));
+
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.editing }));
 // Node's built-in localStorage shim can shadow jsdom with a partial object. This
 // layout test only reaches the pending-space atom through transitive UI imports.
@@ -224,7 +233,9 @@ describe('EntityPageBody relation side panel', () => {
     ).toBe(4);
     expect(screen.queryByTestId('description')).toBeNull();
     expect(screen.getByTestId('person-profile').parentElement).toHaveClass('mt-6');
-    expect(mocks.actions).toMatchObject({ isVoteable: true, compact: true });
+    // GEO-3236: a profile is followed, not voted on, so Follow leads the actions and the votes go.
+    expect(mocks.actions).toMatchObject({ isVoteable: false, compact: true });
+    expect((mocks.actions as { leading?: unknown }).leading).toBeTruthy();
   });
 
   it('withholds generic-only chrome while the Person space lookup is pending', () => {

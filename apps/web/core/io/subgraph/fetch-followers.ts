@@ -19,9 +19,11 @@ const FOLLOWER_ROWS = 500;
  * `viewerIndexed` is what lets a control draw the viewer's own follow before the indexer has it:
  * the count it shows is the others plus the viewer, whatever the indexer has caught up to.
  */
-export type TopicFollowers = {
+export type Followers = {
   count: number;
   viewerIndexed: boolean;
+  /** Who they are, as indexed: the distinct own-space followers read, up to the rows read. */
+  followerIds: string[];
 };
 
 /** A follow row in either shape: an Interested vote (`userId`) or a `Following` relation (`fromEntityId`). */
@@ -40,7 +42,7 @@ type Connection = { totalCount: number; nodes?: FollowRow[] };
  * control. Either way a raw row total would let one person count many times, and no filter can
  * compare two columns, so the rows are read and the rule applied here.
  */
-export function topicFollowersQuery(topicIds: readonly string[], interested: boolean, viewerId?: string): string {
+export function followersQuery(topicIds: readonly string[], interested: boolean, viewerId?: string): string {
   const viewer = viewerId ? normId(viewerId) : null;
 
   const fields = topicIds.flatMap((id, index) => {
@@ -75,22 +77,19 @@ export function topicFollowersQuery(topicIds: readonly string[], interested: boo
   return `query {\n${fields.join('\n')}\n}`;
 }
 
-export function topicFollowersQueryKey(topicId: string, interested: boolean, viewerId?: string | null) {
+export function followersQueryKey(topicId: string, interested: boolean, viewerId?: string | null) {
   return [
-    'topic-followers',
+    'followers',
     normId(topicId),
     interested ? 'interested' : 'following',
     viewerId ? normId(viewerId) : null,
   ] as const;
 }
 
-/** One topic's followers off its connections; see `topicFollowersQuery` for which rows count. */
-export function readTopicFollowers(
-  topic: Connection | null | undefined,
-  viewer: Connection | null | undefined
-): TopicFollowers {
+/** One topic's followers off its connections; see `followersQuery` for which rows count. */
+export function readFollowers(topic: Connection | null | undefined, viewer: Connection | null | undefined): Followers {
   const viewerIndexed = (viewer?.totalCount ?? 0) > 0;
-  if (!topic) return { count: 0, viewerIndexed };
+  if (!topic) return { count: 0, viewerIndexed, followerIds: [] };
 
   const nodes = topic.nodes ?? [];
   const followers = new Set<string>();
@@ -102,19 +101,19 @@ export function readTopicFollowers(
   // Past the rows read, the server's total stands in. It can't apply the rule above, so a topic that
   // popular can read a little high; every topic today is far short of it.
   const count = topic.totalCount > nodes.length ? topic.totalCount : followers.size;
-  return { count, viewerIndexed };
+  return { count, viewerIndexed, followerIds: [...followers] };
 }
 
-export async function fetchTopicFollowers(
+export async function fetchFollowers(
   topicIds: readonly string[],
   interested: boolean,
   viewerId?: string,
   signal?: AbortSignal
-): Promise<Map<string, TopicFollowers>> {
+): Promise<Map<string, Followers>> {
   const result = await Effect.runPromise(
     Effect.either(
       graphql<Record<string, Connection | null>>({
-        query: topicFollowersQuery(topicIds, interested, viewerId),
+        query: followersQuery(topicIds, interested, viewerId),
         endpoint: Environment.getConfig().api,
         signal,
       })
@@ -126,9 +125,9 @@ export async function fetchTopicFollowers(
     throw new Error('Failed to fetch topic followers', { cause: result.left });
   }
 
-  const followers = new Map<string, TopicFollowers>();
+  const followers = new Map<string, Followers>();
   topicIds.forEach((id, index) => {
-    followers.set(normId(id), readTopicFollowers(result.right[`t${index}`], result.right[`v${index}`]));
+    followers.set(normId(id), readFollowers(result.right[`t${index}`], result.right[`v${index}`]));
   });
   return followers;
 }

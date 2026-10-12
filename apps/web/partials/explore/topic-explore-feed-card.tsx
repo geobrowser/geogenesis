@@ -6,9 +6,9 @@ import cx from 'classnames';
 
 import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { ExploreFeedItem } from '~/core/explore/explore-card-item';
+import { FollowerCount } from '~/core/follows/follow-control';
+import { useTopicFollowerCount } from '~/core/follows/use-follower-count';
 import type { TopicConnectionCounts } from '~/core/topics/browse/use-topic-connection-counts';
-import { TopicFollowerCount } from '~/core/topics/topic-follow-control';
-import { useTopicFollowerCount } from '~/core/topics/use-topic-follower-count';
 
 import {
   EXPLORE_CARD_CLASS,
@@ -96,7 +96,7 @@ export function TopicConnectionMeta({
   followerCount?: number | null;
   className?: string;
 }) {
-  const followers = followerCount ? <TopicFollowerCount count={followerCount} /> : null;
+  const followers = followerCount ? <FollowerCount count={followerCount} /> : null;
 
   if (!counts) {
     return followers ? (

@@ -5,6 +5,8 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { FollowButton } from '~/core/follows/follow-button';
+import { useSpace } from '~/core/hooks/use-space';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
@@ -92,14 +94,7 @@ export function ExploreMetaRow({
       // Joining is behaviour, not metadata. Compacting the row must never remove an action the
       // ordinary Explore card offers; only the Claim type disappears on mobile.
       showOnCompactMobile: true,
-      content: (
-        <ExploreJoinSpaceButton
-          spaceId={item.spaceId}
-          hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
-          variant="compact"
-          label="Join"
-        />
-      ),
+      content: <JoinOrFollowSpace item={item} />,
     });
   }
 
@@ -195,5 +190,29 @@ export function ExploreMetaRow({
       )}
       {endSlot}
     </div>
+  );
+}
+
+/**
+ * Join for a space; Follow for a person (GEO-3236). Nobody joins someone's personal space, so when
+ * an item was posted in one, the offer is to follow its owner instead.
+ *
+ * The feed doesn't carry space types, so this reads the space, which is cached across every card
+ * from it. Join draws until the answer is in: nearly every card is in a shared space, and holding
+ * Join back on all of them to spare the rare personal one a swap would cost more than it saves.
+ */
+function JoinOrFollowSpace({ item }: { item: ExploreFeedItem }) {
+  const { space } = useSpace(item.spaceId);
+
+  if (space?.type === 'PERSONAL') {
+    return <FollowButton target={{ kind: 'person', id: item.spaceId, name: item.spaceName }} />;
+  }
+  return (
+    <ExploreJoinSpaceButton
+      spaceId={item.spaceId}
+      hasRequestedSpaceMembership={item.hasPendingMembershipRequest}
+      variant="compact"
+      label="Join"
+    />
   );
 }

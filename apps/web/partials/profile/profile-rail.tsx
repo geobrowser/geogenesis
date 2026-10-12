@@ -10,6 +10,7 @@ import Link from 'next/link';
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 import { useEntity } from '~/core/database/entities';
+import { usePersonFollowers } from '~/core/follows/person-follow-counts';
 import { useEditProfile } from '~/core/hooks/use-edit-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useProfileFacts } from '~/core/hooks/use-profile-facts';
@@ -18,15 +19,17 @@ import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { ID } from '~/core/id';
+import type { Space } from '~/core/io/dto/spaces';
 import { type Verifier, formatJoined, timeOnGeo } from '~/core/profile/profile-facts';
 import { type ProfileLinkField, changedLinkFields, profileLinkFields } from '~/core/profile/profile-link-fields';
 import { type ProfileLink, profileLinks } from '~/core/profile/profile-links';
 import type { ProfileRailFacts } from '~/core/profile/profile-rail-facts';
 import { useEntitySchemaWithGroups } from '~/core/state/entity-page-store/entity-store';
 import { useEntityTextValue } from '~/core/sync/use-entity-text-value';
-import { useFollowTopics } from '~/core/topics/use-follow-topics';
-import { useFollowedTopics } from '~/core/topics/use-followed-topics';
+import { useFollowEntities } from '~/core/topics/use-follow-topics';
+import { useFollowedInterests } from '~/core/topics/use-followed-topics';
 import { useTopicMetadata } from '~/core/topics/use-topic-metadata';
+import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { AvatarGroup } from '~/design-system/avatar-group';
@@ -493,7 +496,8 @@ export function AboutSection({
           </Row>
         )}
         {/* Only a personal space follows anything; a DAO's would always come back empty. */}
-        {spaceType === 'PERSONAL' && <FollowingTopics spaceId={spaceId} />}
+        {spaceType === 'PERSONAL' && <FollowersRow spaceId={spaceId} />}
+        {spaceType === 'PERSONAL' && <FollowingRow spaceId={spaceId} />}
 
         {/* Each count is the tab that lists what it counts, which is the only
             question a number like this raises. */}
@@ -642,99 +646,180 @@ function VerifiedBy({ verifiers }: { verifiers: Verifier[] }) {
   );
 }
 
+type FollowListEntry = {
+  id: string;
+  kind: 'person' | 'topic';
+  name: string;
+  image: string | null;
+  href: string | null;
+};
+
 /**
- * The topics this space follows (GEO-3191): how many, a few of their pictures, and the whole list on
- * a click — the same shape as Verified by above it. Hidden for a space that follows nothing.
- *
- * Read from the followed topic ids rather than the `Following` rows, because with the Interested
- * flag on there are no rows: a follow is an Interested vote. The ids are right under either.
- *
- * The owner can unfollow from the list. It writes through the same hook as every Follow button,
- * so the topic leaves the list, the count and any card on screen at once. Built on the row from
- * #2685 (GEO-3081), which read the rows and so stayed empty with the flag on.
+ * Who follows this person (GEO-3236): how many, a few faces, and the whole list on a click — the
+ * same shape as Verified by above it. Hidden while nobody does.
  */
-export function FollowingTopics({ spaceId }: { spaceId: string }) {
+export function FollowersRow({ spaceId }: { spaceId: string }) {
+  const followers = usePersonFollowers(spaceId);
+  const ids = followers?.ids ?? EMPTY_IDS;
+  const { spacesById, isLoading: isLoadingSpaces } = useSpacesByIds(ids);
+
+  const entries = React.useMemo(
+    () => ids.map(id => personEntry(id, spacesById)).sort((a, b) => a.name.localeCompare(b.name)),
+    [ids, spacesById]
+  );
+
+  if (!followers) return <FollowRowSkeleton label="Followers" />;
+  if (followers.count === 0) return null;
+  if (isLoadingSpaces && spacesById.size === 0) return <FollowRowSkeleton label="Followers" />;
+
+  return (
+    <FollowListRow
+      label="Followers"
+      count={followers.count}
+      noun={['follower', 'followers']}
+      entries={entries}
+      trailing={() => null}
+    />
+  );
+}
+
+/**
+ * Everything this space follows: people and topics in one list, since following is one action for
+ * both and the count is of both (GEO-3236). Read off the Interested votes the space holds, which
+ * are its follows of either kind (GEO-3191); a vote on a personal space id is a person, any other a
+ * topic. Hidden for a space that follows nothing.
+ *
+ * The owner can unfollow from the list, through the same writes as every Follow button, so an
+ * entry leaves the list, the count and any button on screen at once.
+ */
+export function FollowingRow({ spaceId }: { spaceId: string }) {
   const { personalSpaceId } = usePersonalSpaceId();
   const isOwner = Boolean(personalSpaceId && ID.equals(personalSpaceId, spaceId));
 
-  const { topicIds, isLoading } = useFollowedTopics(spaceId);
-  const ids = React.useMemo(() => [...topicIds], [topicIds]);
-  const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(ids);
-  const { unfollow, isPending } = useFollowTopics();
+  const { ids: followedIds, isLoading } = useFollowedInterests(spaceId);
+  const ids = React.useMemo(() => [...followedIds], [followedIds]);
+  const { spacesById, isLoading: isLoadingSpaces } = useSpacesByIds(ids);
+  const spaceIds = React.useMemo(() => new Set([...spacesById.keys()].map(normId)), [spacesById]);
+  const topicIds = React.useMemo(() => ids.filter(id => !spaceIds.has(id)), [ids, spaceIds]);
+  const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(topicIds);
+  const { unfollow, isPending } = useFollowEntities({ interestedOnly: true });
 
   // By name, so a long list reads like an index rather than in the order the votes were cast.
-  const topics = React.useMemo(
+  const entries = React.useMemo(
     () =>
       ids
-        .map(id => ({ id, meta: metadata.get(id) }))
-        .sort((a, b) => (a.meta?.name ?? '').localeCompare(b.meta?.name ?? '')),
-    [ids, metadata]
+        .map((id): FollowListEntry => {
+          if (spaceIds.has(id)) return personEntry(id, spacesById);
+          const meta = metadata.get(id);
+          // The topic's own space. A follow carries none of its own: the space it was cast in is
+          // the follower's.
+          const homeSpaceId = meta?.homeSpaceId;
+          return {
+            id,
+            kind: 'topic',
+            name: meta?.name ?? 'Untitled topic',
+            image: meta?.image ?? null,
+            href: homeSpaceId ? NavUtils.toEntity(homeSpaceId, id) : null,
+          };
+        })
+        .sort((a, b) => a.name.localeCompare(b.name)),
+    [ids, spaceIds, spacesById, metadata]
   );
 
-  if (!isLoading && topics.length === 0) return null;
-  if (isLoading || isLoadingMetadata) return <FollowingSkeleton />;
-
-  const visible = topics.slice(0, 3);
+  if (!isLoading && ids.length === 0) return null;
+  if (isLoading || (ids.length > 0 && isLoadingSpaces && spacesById.size === 0) || isLoadingMetadata) {
+    return <FollowRowSkeleton label="Following" />;
+  }
 
   return (
-    <Row label="Following">
+    <FollowListRow
+      label="Following"
+      count={entries.length}
+      noun={['follow', 'follows']}
+      entries={entries}
+      trailing={entry =>
+        isOwner ? (
+          <button
+            type="button"
+            aria-label={`Unfollow ${entry.name}`}
+            onClick={() => void unfollow([entry.id])}
+            disabled={isPending(entry.id)}
+            className="shrink-0 text-tag text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+          >
+            Unfollow
+          </button>
+        ) : (
+          <span className="shrink-0 text-tag text-grey-04">{entry.kind === 'person' ? 'Person' : 'Topic'}</span>
+        )
+      }
+    />
+  );
+}
+
+const EMPTY_IDS: string[] = [];
+
+function personEntry(id: string, spacesById: Map<string, Space>): FollowListEntry {
+  const space = spacesById.get(id) ?? [...spacesById.values()].find(candidate => normId(candidate.id) === id);
+  return {
+    id,
+    kind: 'person',
+    name: space?.entity?.name ?? 'Untitled person',
+    image: space?.entity?.image && space.entity.image !== PLACEHOLDER_SPACE_IMAGE ? space.entity.image : null,
+    href: NavUtils.toSpace(id),
+  };
+}
+
+/** A follow row's count, face pile and the list it opens: Followers and Following share it. */
+function FollowListRow({
+  label,
+  count,
+  noun,
+  entries,
+  trailing,
+}: {
+  label: string;
+  count: number;
+  noun: readonly [string, string];
+  entries: FollowListEntry[];
+  trailing: (entry: FollowListEntry) => React.ReactNode;
+}) {
+  const visible = entries.slice(0, 3);
+
+  return (
+    <Row label={label}>
       <RailPopover
-        label={`Following ${topics.length} ${topics.length === 1 ? 'topic' : 'topics'}`}
+        label={`${label}: ${count} ${count === 1 ? noun[0] : noun[1]}`}
         trigger={
           <>
-            <span className="tabular-nums">{topics.length.toLocaleString('en-US')}</span>
+            <span className="tabular-nums">{count.toLocaleString('en-US')}</span>
             <AvatarGroup>
-              {visible.map(topic => (
-                <AvatarGroup.Item key={topic.id} size={20}>
-                  <FallbackImage
-                    value={topic.meta?.image ?? PLACEHOLDER_SPACE_IMAGE}
-                    sizes="20px"
-                    className="object-cover"
-                  />
+              {visible.map(entry => (
+                <AvatarGroup.Item key={entry.id} size={20}>
+                  <FallbackImage value={entry.image ?? PLACEHOLDER_SPACE_IMAGE} sizes="20px" className="object-cover" />
                 </AvatarGroup.Item>
               ))}
-              <AvatarGroup.Overflow count={topics.length - visible.length} size={20} />
+              <AvatarGroup.Overflow count={count - visible.length} size={20} />
             </AvatarGroup>
           </>
         }
       >
-        {topics.map(({ id, meta }) => {
-          const name = meta?.name ?? 'Untitled topic';
-          // The topic's own space. A follow carries none of its own: the space it was cast in is
-          // the follower's.
-          const homeSpaceId = meta?.homeSpaceId;
-          const label = (
+        {entries.map(entry => {
+          const content = (
             <>
-              <RailListThumb image={meta?.image} />
-              <span className="min-w-0 flex-1 truncate text-metadata text-text">{name}</span>
+              <RailListThumb image={entry.image} />
+              <span className="min-w-0 flex-1 truncate text-metadata text-text">{entry.name}</span>
             </>
           );
-
           return (
-            <li key={id} className="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-grey-01">
-              {homeSpaceId ? (
-                <Link
-                  href={NavUtils.toEntity(homeSpaceId, id)}
-                  className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                >
-                  {label}
+            <li key={entry.id} className="flex items-center gap-2 px-3 py-2 transition-colors hover:bg-grey-01">
+              {entry.href ? (
+                <Link href={entry.href} className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                  {content}
                 </Link>
               ) : (
-                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">{label}</span>
+                <span className="flex min-w-0 flex-1 items-center gap-2 text-left">{content}</span>
               )}
-              {isOwner ? (
-                <button
-                  type="button"
-                  aria-label={`Unfollow ${name}`}
-                  onClick={() => void unfollow([id])}
-                  disabled={isPending(id)}
-                  className="shrink-0 text-tag text-grey-04 transition-colors hover:text-text disabled:opacity-50"
-                >
-                  Unfollow
-                </button>
-              ) : (
-                <span className="shrink-0 text-tag text-grey-04">Topic</span>
-              )}
+              {trailing(entry)}
             </li>
           );
         })}
@@ -788,9 +873,9 @@ function RailListThumb({ image }: { image: string | null | undefined }) {
   );
 }
 
-function FollowingSkeleton() {
+function FollowRowSkeleton({ label }: { label: string }) {
   return (
-    <Row label="Following">
+    <Row label={label}>
       <span className="inline-flex items-center gap-2" aria-hidden>
         <span className="inline-block h-4 w-4 animate-pulse rounded bg-grey-01" />
         <span className="inline-flex">

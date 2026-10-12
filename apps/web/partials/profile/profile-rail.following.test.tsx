@@ -6,13 +6,15 @@ import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vite
 
 import { PLACEHOLDER_SPACE_IMAGE } from '~/core/constants';
 
-import { FollowingTopics } from './profile-rail';
+import { FollowersRow, FollowingRow } from './profile-rail';
 
 const OWNER_SPACE = '11111111111111111111111111111111';
 const OTHER_SPACE = '99999999999999999999999999999999';
 const TOPIC_A = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
 const TOPIC_B = 'bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
 const TOPIC_HOME = '33333333333333333333333333333333';
+const ADA_SPACE = '44444444444444444444444444444444';
+const ZED_SPACE = '55555555555555555555555555555555';
 
 type Meta = { name: string | null; image: string; homeSpaceId: string | null };
 
@@ -27,13 +29,22 @@ const mocks = vi.hoisted(() => ({
   metadataError: false,
   unfollow: vi.fn(),
   pending: new Set<string>(),
+  /** Personal spaces the space lookup knows, by id: these follows are people. */
+  spaces: new Map<string, { id: string; entity: { name: string; image: string | null } }>(),
+  followers: null as { count: number; ids: string[] } | null,
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
   usePersonalSpaceId: () => ({ personalSpaceId: mocks.personalSpaceId }),
 }));
 vi.mock('~/core/topics/use-followed-topics', () => ({
-  useFollowedTopics: () => ({ rows: [], topicIds: new Set(mocks.topicIds), isLoading: mocks.isLoading }),
+  useFollowedInterests: () => ({ ids: new Set(mocks.topicIds), isLoading: mocks.isLoading }),
+}));
+vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
+  useSpacesByIds: () => ({ spaces: [], spacesById: mocks.spaces, isLoading: false, isPlaceholderData: false }),
+}));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowers: () => mocks.followers,
 }));
 vi.mock('~/core/topics/use-topic-metadata', () => ({
   useTopicMetadata: () => ({
@@ -43,7 +54,7 @@ vi.mock('~/core/topics/use-topic-metadata', () => ({
   }),
 }));
 vi.mock('~/core/topics/use-follow-topics', () => ({
-  useFollowTopics: () => ({
+  useFollowEntities: () => ({
     follow: vi.fn(),
     unfollow: mocks.unfollow,
     isPending: (id: string) => mocks.pending.has(id),
@@ -84,12 +95,14 @@ beforeEach(() => {
   mocks.metadataError = false;
   mocks.unfollow = vi.fn().mockResolvedValue(true);
   mocks.pending = new Set();
+  mocks.spaces = new Map();
+  mocks.followers = null;
 });
 
 afterEach(cleanup);
 
 function renderFollowing(spaceId = OWNER_SPACE) {
-  return render(<FollowingTopics spaceId={spaceId} />);
+  return render(<FollowingRow spaceId={spaceId} />);
 }
 
 describe('Following row visibility', () => {
@@ -123,9 +136,9 @@ describe('Following row visibility', () => {
 
     expect(screen.getByText('Following')).toBeInTheDocument();
     expect(document.querySelector('.animate-pulse')).not.toBeInTheDocument();
-    expect(screen.getByLabelText('Following 1 topic')).toBeInTheDocument();
+    expect(screen.getByLabelText('Following: 1 follow')).toBeInTheDocument();
 
-    await userEvent.click(screen.getByLabelText('Following 1 topic'));
+    await userEvent.click(screen.getByLabelText('Following: 1 follow'));
     expect(screen.getByText('Untitled topic')).toBeInTheDocument();
   });
 });
@@ -136,7 +149,7 @@ describe('Following row data', () => {
     mocks.topicIds = [TOPIC_A];
     mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', homeSpaceId: TOPIC_HOME });
     renderFollowing();
-    await userEvent.click(screen.getByLabelText('Following 1 topic'));
+    await userEvent.click(screen.getByLabelText('Following: 1 follow'));
 
     expect(screen.getByRole('link', { name: /Mental health/ })).toBeInTheDocument();
   });
@@ -146,7 +159,7 @@ describe('Following row data', () => {
     mocks.metadata.set(TOPIC_A, { name: 'Zoning', image: 'ipfs://a', homeSpaceId: TOPIC_HOME });
     mocks.metadata.set(TOPIC_B, { name: 'Energy', image: 'ipfs://b', homeSpaceId: TOPIC_HOME });
     renderFollowing();
-    await userEvent.click(screen.getByLabelText('Following 2 topics'));
+    await userEvent.click(screen.getByLabelText('Following: 2 follows'));
 
     expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual(['Energy', 'Zoning']);
   });
@@ -173,9 +186,9 @@ describe('Following row count and stack', () => {
   it('shows the count, a stack of three, and a +N badge for the rest', () => {
     renderFollowing();
 
-    expect(screen.getByLabelText('Following 5 topics')).toBeInTheDocument();
+    expect(screen.getByLabelText('Following: 5 follows')).toBeInTheDocument();
     // The visible numeric count, which this row shows unlike "Verified by".
-    expect(within(screen.getByLabelText('Following 5 topics')).getByText('5')).toBeInTheDocument();
+    expect(within(screen.getByLabelText('Following: 5 follows')).getByText('5')).toBeInTheDocument();
     // Three faces in the closed stack, then the tail.
     expect(screen.getAllByTestId('topic-image')).toHaveLength(3);
     expect(screen.getByText('+2')).toBeInTheDocument();
@@ -196,7 +209,7 @@ describe('Following dropdown', () => {
 
   it('lists every followed topic, each linking to its topic page', async () => {
     renderFollowing();
-    await userEvent.click(screen.getByLabelText('Following 2 topics'));
+    await userEvent.click(screen.getByLabelText('Following: 2 follows'));
 
     const mentalHealth = screen.getByRole('link', { name: /Mental health/ });
     expect(mentalHealth).toHaveAttribute('href', `/space/${TOPIC_HOME}/${TOPIC_A}`);
@@ -208,7 +221,7 @@ describe('Following dropdown', () => {
 
   it('shows the placeholder image for a topic with no image', async () => {
     renderFollowing();
-    await userEvent.click(screen.getByLabelText('Following 2 topics'));
+    await userEvent.click(screen.getByLabelText('Following: 2 follows'));
 
     const warRow = screen.getByRole('link', { name: /Russia-Ukraine war/ });
     const image = within(warRow).getByTestId('topic-image');
@@ -218,7 +231,7 @@ describe('Following dropdown', () => {
   it('keeps the list in its own scroll container so 100+ topics do not grow the page', async () => {
     mocks.topicIds = Array.from({ length: 120 }, (_, i) => i.toString(16).padStart(32, '0'));
     renderFollowing();
-    await userEvent.click(screen.getByLabelText('Following 120 topics'));
+    await userEvent.click(screen.getByLabelText('Following: 120 follows'));
 
     const scroll = document.querySelector('.overflow-y-auto');
     expect(scroll).toBeInTheDocument();
@@ -234,7 +247,7 @@ describe('Following unfollow control', () => {
 
   it('lets the owner unfollow a topic from the list', async () => {
     renderFollowing(OWNER_SPACE);
-    await userEvent.click(screen.getByLabelText('Following 1 topic'));
+    await userEvent.click(screen.getByLabelText('Following: 1 follow'));
 
     await userEvent.click(screen.getByRole('button', { name: 'Unfollow Mental health' }));
     expect(mocks.unfollow).toHaveBeenCalledWith([TOPIC_A]);
@@ -243,7 +256,7 @@ describe('Following unfollow control', () => {
   it('disables the unfollow control while that topic is being written', async () => {
     mocks.pending = new Set([TOPIC_A]);
     renderFollowing(OWNER_SPACE);
-    await userEvent.click(screen.getByLabelText('Following 1 topic'));
+    await userEvent.click(screen.getByLabelText('Following: 1 follow'));
 
     expect(screen.getByRole('button', { name: 'Unfollow Mental health' })).toBeDisabled();
   });
@@ -252,9 +265,71 @@ describe('Following unfollow control', () => {
     // A visitor: the space being viewed is not the viewer's personal space.
     mocks.personalSpaceId = OTHER_SPACE;
     renderFollowing(OWNER_SPACE);
-    await userEvent.click(screen.getByLabelText('Following 1 topic'));
+    await userEvent.click(screen.getByLabelText('Following: 1 follow'));
 
     expect(screen.getByRole('link', { name: /Mental health/ })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Unfollow/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('Following row with people (GEO-3236)', () => {
+  beforeEach(() => {
+    mocks.topicIds = [TOPIC_A, ADA_SPACE];
+    mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', homeSpaceId: TOPIC_HOME });
+    mocks.spaces.set(ADA_SPACE, { id: ADA_SPACE, entity: { name: 'Ada Okafor', image: 'ipfs://ada' } });
+  });
+
+  it('counts people and topics together', () => {
+    renderFollowing();
+
+    expect(screen.getByLabelText('Following: 2 follows')).toBeInTheDocument();
+  });
+
+  it('lists a followed person by name, linking to their profile, beside the topics', async () => {
+    mocks.personalSpaceId = OTHER_SPACE;
+    renderFollowing();
+    await userEvent.click(screen.getByLabelText('Following: 2 follows'));
+
+    expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual(['Ada Okafor', 'Mental health']);
+    expect(screen.getByRole('link', { name: /Ada Okafor/ })).toHaveAttribute('href', `/space/${ADA_SPACE}`);
+    expect(screen.getByText('Person')).toBeInTheDocument();
+    expect(screen.getByText('Topic')).toBeInTheDocument();
+  });
+
+  it('lets the owner unfollow a person from the list', async () => {
+    renderFollowing(OWNER_SPACE);
+    await userEvent.click(screen.getByLabelText('Following: 2 follows'));
+    await userEvent.click(screen.getByRole('button', { name: 'Unfollow Ada Okafor' }));
+
+    expect(mocks.unfollow).toHaveBeenCalledWith([ADA_SPACE]);
+  });
+});
+
+describe('Followers row (GEO-3236)', () => {
+  const renderFollowers = () => render(<FollowersRow spaceId={OWNER_SPACE} />);
+
+  it('is hidden while nobody follows them', () => {
+    mocks.followers = { count: 0, ids: [] };
+    renderFollowers();
+
+    expect(screen.queryByText('Followers')).toBeNull();
+  });
+
+  it('pulses while the followers load', () => {
+    renderFollowers();
+
+    expect(screen.getByText('Followers')).toBeInTheDocument();
+    expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+  });
+
+  it('shows the count and lists the followers, each linking to their profile', async () => {
+    mocks.followers = { count: 2, ids: [ZED_SPACE, ADA_SPACE] };
+    mocks.spaces.set(ADA_SPACE, { id: ADA_SPACE, entity: { name: 'Ada Okafor', image: null } });
+    mocks.spaces.set(ZED_SPACE, { id: ZED_SPACE, entity: { name: 'Zed Lee', image: null } });
+    renderFollowers();
+    await userEvent.click(screen.getByLabelText('Followers: 2 followers'));
+
+    expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual(['Ada Okafor', 'Zed Lee']);
+    expect(screen.getByRole('link', { name: /Zed Lee/ })).toHaveAttribute('href', `/space/${ZED_SPACE}`);
   });
 });

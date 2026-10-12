@@ -7,6 +7,8 @@ import {
   CLAIM_PAGE_CONTENT_MAX_WIDTH,
   ClaimPageView,
 } from '~/core/claims/browse/claim-page-view';
+import { FollowButton } from '~/core/follows/follow-button';
+import { PersonFollowCounts } from '~/core/follows/person-follow-counts';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -343,8 +345,20 @@ export function EntityPageBody(props: EntityPageBodyProps) {
     const { isRelationPage = false, previewName, previewDescription, notice, belowBodySlot, hideProperties } = props;
     const avatarUrl = props.avatarUrl ?? entityMediaUrl ?? previewImageUrlResolved ?? null;
     const heading = <EditableHeading spaceId={spaceId} entityId={entityId} fallbackName={previewName} />;
+    // A profile is followed, not voted on (GEO-3236): Follow, by the personal space this view is
+    // only ever shown for, stands where the votes were.
     const actions = (
-      <EntityPageActions entityId={entityId} spaceId={spaceId} isVoteable={!isRelationPage} compact={isPersonProfile} />
+      <EntityPageActions
+        entityId={entityId}
+        spaceId={spaceId}
+        isVoteable={!isRelationPage && !isPersonProfile}
+        compact={isPersonProfile}
+        leading={
+          isPersonProfile ? (
+            <FollowButton target={{ kind: 'person', id: spaceId, name: entity?.name ?? previewName }} />
+          ) : null
+        }
+      />
     );
 
     return (
@@ -364,7 +378,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
           <div>
             <div className="space-y-2">
               {isPersonProfile ? (
-                // The mobile profile keeps voting, history and the overflow
+                // The mobile profile keeps Follow, history and the overflow
                 // menu beside the name, wrapping only when space runs out.
                 <div className="relative flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
                   <div className="min-w-0 grow">{heading}</div>
@@ -375,6 +389,7 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               )}
               {isPersonProfile && <PersonalSpaceTagline spaceId={spaceId} personEntityId={entityId} />}
               {isPersonProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={entityId} />}
+              {isPersonProfile && <PersonFollowCounts spaceId={spaceId} />}
               {/*
                * A person's description lives in their About tab here too, not under their
                * name — the panel renders the same About card the space route puts in its rail,

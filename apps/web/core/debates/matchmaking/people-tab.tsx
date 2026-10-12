@@ -10,6 +10,8 @@ import { personProfileOpened } from '~/core/analytics';
 import { SLOT_MINUTES } from '~/core/availability/blocks';
 import { PEER_SCHEDULE_DAYS, slotStarts } from '~/core/availability/peer-schedule';
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
+import { FollowButton } from '~/core/follows/follow-button';
+import { usePersonFollowerCount } from '~/core/follows/person-follow-counts';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -618,6 +620,7 @@ export function PersonRow({
     onSeeTimes({ userId: person.user_id, name: speakerLabel(person) }, opener, entry ?? 'people_schedule');
   const chips = schedule ?? times;
   const profileHref = validateSpaceId(person.profile_space_id) ? NavUtils.toSpace(person.profile_space_id) : null;
+  const followers = usePersonFollowerCount(person.profile_space_id, { enabled: profileHref !== null });
   const activeSpaces =
     spaceIds.length > 0 ? (
       <PersonSpaceIcons
@@ -667,25 +670,32 @@ export function PersonRow({
 
             Unlinked when the id is not a space id. Rendering an anchor to `/space/undefined`
             would look identical until it was clicked. */}
-        {profileHref ? (
-          <Link
-            href={profileHref}
-            onClick={() =>
-              personProfileOpened(person.profile_space_id, null, {
-                interaction_surface: analyticsSurface === 'calendar' ? 'debate_calendar' : 'debates_hub_people',
-              })
-            }
-            className="min-w-0"
-          >
-            <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
+        <div className="flex min-w-0 items-center gap-2">
+          {profileHref ? (
+            <Link
+              href={profileHref}
+              onClick={() =>
+                personProfileOpened(person.profile_space_id, null, {
+                  interaction_surface: analyticsSurface === 'calendar' ? 'debate_calendar' : 'debates_hub_people',
+                })
+              }
+              className="min-w-0"
+            >
+              <Text as="span" variant="metadataMedium" className="block truncate hover:underline">
+                {speakerLabel(person)}
+              </Text>
+            </Link>
+          ) : (
+            <Text as="p" variant="metadataMedium" className="truncate">
               {speakerLabel(person)}
             </Text>
-          </Link>
-        ) : (
-          <Text as="p" variant="metadataMedium" className="truncate">
-            {speakerLabel(person)}
-          </Text>
-        )}
+          )}
+          {/* GEO-3236. Beside the name rather than among the row's actions, which belong to debating
+              them; it draws nothing on the viewer's own row. */}
+          {profileHref ? (
+            <FollowButton target={{ kind: 'person', id: person.profile_space_id, name: speakerLabel(person) }} />
+          ) : null}
+        </div>
         {/* One compact row: debates, positions, then the viewer-relative match count. The
             latter opens the exact claims without making every person row permanently taller. */}
         {/* Says why the pill books a time. When the pill reads Away itself, this would only repeat it. */}
@@ -694,9 +704,9 @@ export function PersonRow({
             Away
           </Text>
         ) : null}
-        {record || activeSpaces || match ? (
+        {record || activeSpaces || match || followers ? (
           <div className="flex min-w-0 flex-col gap-0.5">
-            <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} />
+            <PersonRecordLine record={record} match={match} activeSpaces={activeSpaces} followers={followers} />
           </div>
         ) : null}
         {chips ? (

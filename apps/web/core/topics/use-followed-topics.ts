@@ -37,9 +37,30 @@ export function interestedTopicsQueryOptions(spaceId: string) {
  * `topicIds` for "is this followed", never `rows`.
  */
 export function useFollowedTopics(spaceId?: string) {
+  return useFollowedEntities({ spaceId });
+}
+
+/**
+ * Everything a personal space follows (default: the viewer's) as Interested votes (GEO-3236):
+ * people, by personal space id, and topics, as normalized ids in one set. Read whatever the flag
+ * says, because a person follow is only ever an Interested. Its size is the space's following count.
+ */
+export function useFollowedInterests(spaceId?: string) {
+  const { topicIds, isLoading } = useFollowedEntities({ spaceId, interestedOnly: true });
+  return { ids: topicIds, isLoading };
+}
+
+/** The followed set for a kind of follow; see `useFollowedTopics` and `useFollowedInterests`. */
+export function useFollowedEntities({
+  spaceId,
+  interestedOnly = false,
+}: {
+  spaceId?: string;
+  interestedOnly?: boolean;
+}) {
   const { personalSpaceId, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
   const targetSpaceId = spaceId ?? personalSpaceId;
-  const interestedEnabled = isInterestedFollowEnabled();
+  const interestedEnabled = interestedOnly || isInterestedFollowEnabled();
 
   const { data, isLoading } = useQuery({
     ...followedTopicsQueryOptions(targetSpaceId ?? ''),

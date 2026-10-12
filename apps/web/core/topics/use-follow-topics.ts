@@ -35,9 +35,9 @@ import { followedTopicsQueryOptions, interestedTopicsQueryOptions } from './use-
 
 const FOLLOW_MUTATION_KEY = ['follow-topics'] as const;
 
-type FollowVariables =
-  | { kind: 'follow'; spaceId: string; topicIds: string[]; topics: TopicRef[] }
-  | { kind: 'unfollow'; spaceId: string; topicIds: string[] };
+type FollowVariables = { spaceId: string; topicIds: string[]; interestedOnly: boolean } & (
+  { kind: 'follow'; topics: TopicRef[] } | { kind: 'unfollow' }
+);
 
 /**
  * One edit per call, published to the viewer's personal space. Topics already being written by any
@@ -50,6 +50,23 @@ type FollowVariables =
  * left where they are and count for nothing. Flag off, nothing here reads or writes Interested.
  */
 export function useFollowTopics() {
+  return useFollowEntities();
+}
+
+/**
+ * Follow and unfollow people (GEO-3236), keyed by their personal space id. Always an Interested
+ * vote, whatever the flag: people never had a `Following` relation, and none is written for them.
+ */
+export function useFollowPeople() {
+  return useFollowEntities({ interestedOnly: true });
+}
+
+/**
+ * The follow writes for any entity. `interestedOnly` writes an Interested whatever the flag says;
+ * otherwise the flag picks Interested or the legacy `Following` relation (topics only). Every
+ * caller shares one mutation key, so a follow in flight shows as saving on every control for it.
+ */
+export function useFollowEntities({ interestedOnly = false }: { interestedOnly?: boolean } = {}) {
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
   const { makeProposal } = usePublish();
   const { smartAccount } = useSmartAccount();
@@ -121,7 +138,7 @@ export function useFollowTopics() {
     mutationKey: FOLLOW_MUTATION_KEY,
     mutationFn: async (variables: FollowVariables) => {
       const { spaceId } = variables;
-      if (isInterestedFollowEnabled()) {
+      if (variables.interestedOnly || isInterestedFollowEnabled()) {
         const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
         return runInterested(variables, interested);
       }
@@ -189,15 +206,15 @@ export function useFollowTopics() {
       try {
         return await mutateAsync(
           kind === 'follow'
-            ? { kind, spaceId: personalSpaceId, topicIds, topics: free }
-            : { kind, spaceId: personalSpaceId, topicIds }
+            ? { kind, spaceId: personalSpaceId, topicIds, topics: free, interestedOnly }
+            : { kind, spaceId: personalSpaceId, topicIds, interestedOnly }
         );
       } catch (error) {
         console.error(`[follow-topics] ${kind} failed:`, error);
         return false;
       }
     },
-    [mutateAsync, personalSpaceId, queryClient]
+    [mutateAsync, personalSpaceId, queryClient, interestedOnly]
   );
 
   const follow = React.useCallback((topics: readonly TopicRef[]) => run('follow', topics), [run]);
