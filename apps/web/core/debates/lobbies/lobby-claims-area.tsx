@@ -5,7 +5,7 @@ import * as React from 'react';
 import { motion } from 'framer-motion';
 
 import { useLocalVotes } from '~/core/state/local-votes';
-import { openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
+import { clearSaveVotesPromptLobby, openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 
@@ -77,4 +77,6 @@ function useSavePromptOnGuestVote(lobbyName: string) {
     seenRef.current = count;
     if (guest && count > previous) openSaveVotesPrompt('single_claim', { lobbyName });
   }, [count, guest, lobbyName]);
+  // Off the lobby, the sheet no longer promises they stay in it.
+  React.useEffect(() => clearSaveVotesPromptLobby, []);
 }

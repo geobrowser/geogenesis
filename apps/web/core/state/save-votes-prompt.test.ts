@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 
 import {
+  clearSaveVotesPromptLobby,
   closeSaveVotesPrompt,
   openSaveVotesPrompt,
   readSaveVotesPrompt,
@@ -42,5 +43,16 @@ describe('the lobby the sheet opened from', () => {
     act(() => openSaveVotesPrompt('single_claim', { lobbyName: 'Debate hour' }));
     act(() => closeSaveVotesPrompt());
     expect(result.current).toBeNull();
+  });
+});
+
+describe('clearSaveVotesPromptLobby', () => {
+  it('drops the lobby and keeps the sheet open', () => {
+    const { result } = renderHook(() => useSaveVotesPromptLobbyName());
+    act(() => openSaveVotesPrompt('single_claim', { lobbyName: 'Debate hour' }));
+    act(() => clearSaveVotesPromptLobby());
+    expect(result.current).toBeNull();
+    expect(readSaveVotesPrompt()).toBe('single_claim');
+    act(() => closeSaveVotesPrompt());
   });
 });

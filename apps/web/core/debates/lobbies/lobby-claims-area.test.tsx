@@ -3,7 +3,7 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { clearLocalVotes, toggleLocalVote } from '~/core/state/local-votes';
-import { closeSaveVotesPrompt, openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
+import { clearSaveVotesPromptLobby, closeSaveVotesPrompt, openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import { LobbyClaimsArea } from './lobby-claims-area';
 import type { LobbyPageView } from './lobby-view';
@@ -13,6 +13,7 @@ const mocks = vi.hoisted(() => ({ guest: false }));
 vi.mock('~/core/state/save-votes-prompt', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/state/save-votes-prompt')>()),
   openSaveVotesPrompt: vi.fn(),
+  clearSaveVotesPromptLobby: vi.fn(),
 }));
 vi.mock('./lobby-guest-hooks', () => ({ useIsLobbyGuest: () => mocks.guest }));
 vi.mock('./lobby-room-claims', () => ({
@@ -31,6 +32,7 @@ afterEach(() => {
   closeSaveVotesPrompt();
   mocks.guest = false;
   vi.mocked(openSaveVotesPrompt).mockClear();
+  vi.mocked(clearSaveVotesPromptLobby).mockClear();
 });
 
 describe('LobbyClaimsArea', () => {
@@ -52,5 +54,12 @@ describe('LobbyClaimsArea', () => {
       toggleLocalVote({ entityId: 'c1', spaceId: 's1', responseKind: 'stance', direction: 'negative', title: 'Claim' });
     });
     expect(openSaveVotesPrompt).toHaveBeenCalledWith('single_claim', { lobbyName: 'Onboarding with Adam' });
+  });
+
+  it('drops the lobby from the save sheet when the claims area goes away', () => {
+    const { unmount } = render(<LobbyClaimsArea lobby={lobby} />);
+    expect(clearSaveVotesPromptLobby).not.toHaveBeenCalled();
+    unmount();
+    expect(clearSaveVotesPromptLobby).toHaveBeenCalledTimes(1);
   });
 });

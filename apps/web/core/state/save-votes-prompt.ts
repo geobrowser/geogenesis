@@ -67,6 +67,13 @@ export function openSaveVotesPrompt(reason: SaveVotesPromptReason, options?: { l
   emit();
 }
 
+/** Back to the sheet's usual copy, for a lobby the visitor has left; the sheet stays as it is. */
+export function clearSaveVotesPromptLobby() {
+  if (currentLobbyName === null) return;
+  currentLobbyName = null;
+  emit();
+}
+
 export function closeSaveVotesPrompt() {
   if (current === null) return;
   current = null;
