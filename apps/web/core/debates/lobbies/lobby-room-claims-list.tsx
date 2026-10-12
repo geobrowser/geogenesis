@@ -36,6 +36,8 @@ export type LobbyRoomClaim = {
   readiness: MatchmakingReadiness;
   positions: LobbyRoomSide[];
   activeDebate?: Debate | boolean | null;
+  /** The sides are counted across Geo, not the room: no room faces and no offer. */
+  outsideRoom?: boolean;
 };
 
 /** What the card offers, given the side the viewer holds now. */
@@ -81,13 +83,16 @@ export function LobbyRoomClaimsList({
   );
 }
 
-function LobbyRoomClaimCard({
+export function LobbyRoomClaimCard({
   entry,
+  answersReady,
   renderOffer,
   renderHeader,
   renderMenu,
 }: {
   entry: LobbyRoomClaim;
+  /** The host's own `MatchmakingClaimCard.answersReady`, where it has one. */
+  answersReady?: boolean;
   renderOffer: (offer: LobbyRoomOffer) => React.ReactNode;
   renderHeader?: (entry: LobbyRoomClaim) => React.ReactNode;
   renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
@@ -129,7 +134,7 @@ function LobbyRoomClaimCard({
     spaceId: claim.space_id,
     indexedPosition,
   });
-  const opposing = roomSideOpposing(entry.positions, viewerPosition);
+  const opposing = entry.outsideRoom ? null : roomSideOpposing(entry.positions, viewerPosition);
   const requestableCount = opposing?.requestable_count ?? 0;
   const offer =
     viewerPosition !== null && requestableCount > 0
@@ -152,6 +157,7 @@ function LobbyRoomClaimCard({
       positions={entry.positions}
       readiness={entry.readiness}
       activeDebate={entry.activeDebate}
+      answersReady={answersReady}
       answersMayComeFromIndex
       allowsSignedOutVotes={guest}
       header={renderHeader?.(entry)}
