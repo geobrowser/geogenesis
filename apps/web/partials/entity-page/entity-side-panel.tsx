@@ -367,7 +367,8 @@ export function EntitySidePanelSurface({
 }
 
 // On mobile the panel opens as a bottom sheet (like the ranking compose flow) rather than a
-// full-height right-hand drawer. It starts this far below the top of the screen.
+// full-height right-hand drawer. It starts this far below the top of the screen, and an upward
+// swipe takes it full screen.
 const MOBILE_SHEET_TOP_OFFSET_PX = 200;
 
 export function EntitySidePanel() {
@@ -427,14 +428,10 @@ export function EntitySidePanel() {
     closeSidePanel();
   }, [bumpReviewVersion, closeSidePanel, createPostFlow, jotaiStore, setCreatePostFlow, setEditable, sidePanelTarget]);
 
-  const {
-    dragControls,
-    handleDragEnd: handleSheetDragEnd,
-    handlePointerDown: handleSheetPointerDown,
-    setOverlayElement,
-  } = useMobileSheetDrag({
+  const mobileSheet = useMobileSheetDrag({
     enabled: isMobile && Boolean(sidePanelTarget),
     onDismiss: handleCloseSidePanel,
+    peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
   });
 
   React.useEffect(() => {
@@ -553,7 +550,7 @@ export function EntitySidePanel() {
   if (isMobile) {
     return createPortal(
       <motion.div
-        ref={setOverlayElement}
+        ref={mobileSheet.setOverlayElement}
         className={cx(
           'fixed inset-0 overscroll-none',
           overSlideUp ? Z_LAYER_CLASS.entitySidePanelOverSlideUp : 'z-[200]'
@@ -561,7 +558,6 @@ export function EntitySidePanel() {
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.15 }}
-        onPointerDown={handleSheetPointerDown}
       >
         <button
           type="button"
@@ -576,19 +572,13 @@ export function EntitySidePanel() {
           role="dialog"
           aria-modal="true"
           aria-label="Entity side panel"
-          drag="y"
-          dragControls={dragControls}
-          dragListener={false}
-          dragConstraints={{ top: 0, bottom: 0 }}
-          dragElastic={0.12}
-          onDragEnd={handleSheetDragEnd}
           initial={{ y: '100%' }}
           animate={{ y: 0 }}
           transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-          className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
-          style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+          className="shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
+          style={mobileSheet.sheetStyle}
         >
-          <MobileSheetGrabHandle />
+          <MobileSheetGrabHandle isFullScreen={mobileSheet.isFullScreen} onClose={mobileSheet.dismiss} />
           {panelBody}
         </motion.div>
       </motion.div>,

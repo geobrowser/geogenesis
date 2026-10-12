@@ -94,9 +94,10 @@ function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHu
 export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
-  const { dragControls, handleDragEnd, handlePointerDown, setOverlayElement } = useMobileSheetDrag({
+  const mobileSheet = useMobileSheetDrag({
     enabled: isMobile && isOpen,
     onDismiss: close,
+    peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
   });
   // Held here rather than per tab, so switching tabs doesn't drop and re-take the gateway scope.
   useMatchmakingScope(isOpen);
@@ -197,12 +198,11 @@ export function DebatesHubPanel() {
       // animation in the app. `user` keeps opacity fades but drops transform and layout motion.
       <MotionConfig reducedMotion="user">
         <motion.div
-          ref={setOverlayElement}
+          ref={mobileSheet.setOverlayElement}
           className="fixed inset-0 z-[200] overscroll-none"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15 }}
-          onPointerDown={handlePointerDown}
         >
           {/* Not a button: `aria-modal` hides it from assistive tech anyway, so labelling it
               "Close" only promised a control nobody could hear about — the header's button is the
@@ -216,19 +216,13 @@ export function DebatesHubPanel() {
             role="dialog"
             aria-modal="true"
             aria-label="Debates"
-            drag="y"
-            dragControls={dragControls}
-            dragListener={false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.12}
-            onDragEnd={handleDragEnd}
             initial={{ y: '100%' }}
             animate={{ y: 0 }}
             transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
-            style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+            className="shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
+            style={mobileSheet.sheetStyle}
           >
-            <MobileSheetGrabHandle />
+            <MobileSheetGrabHandle isFullScreen={mobileSheet.isFullScreen} onClose={mobileSheet.dismiss} />
             {body}
           </motion.div>
         </motion.div>

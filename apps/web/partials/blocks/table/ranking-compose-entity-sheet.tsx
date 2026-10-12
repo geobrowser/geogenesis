@@ -44,10 +44,12 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
 
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
 
-  const { dragControls, handleDragEnd, handlePointerDown, setOverlayElement } = useMobileSheetDrag({
+  const mobileSheet = useMobileSheetDrag({
     enabled: isMobile && Boolean(target),
     onDismiss: onClose,
+    peekTopPx: ENTITY_SHEET_TOP_OFFSET_PX,
   });
+  const { setOverlayElement } = mobileSheet;
 
   const overlayRef = React.useCallback(
     (node: HTMLDivElement | null) => {
@@ -102,7 +104,6 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
           transition={{ duration: 0.15 }}
-          onPointerDown={handlePointerDown}
         >
           <button
             type="button"
@@ -116,12 +117,6 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             aria-modal="true"
             data-ranking-entity-sheet
             data-mobile-sheet-surface
-            drag={isMobile ? 'y' : false}
-            dragControls={dragControls}
-            dragListener={false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.12}
-            onDragEnd={handleDragEnd}
             initial={isMobile ? { y: '100%' } : { x: '100%' }}
             animate={isMobile ? { y: 0 } : { x: 0 }}
             exit={isMobile ? { y: '100%' } : { x: '100%' }}
@@ -129,13 +124,15 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             className={cx(
               'shadow-2xl absolute z-1 flex flex-col overflow-hidden bg-white',
               isMobile
-                ? 'rounded-t-2xl inset-x-0 bottom-0 overscroll-none'
+                ? 'inset-x-0 bottom-0 overscroll-none'
                 : 'rounded-l-2xl inset-y-0 right-0 w-[min(600px,100vw)] border-l border-grey-02'
             )}
-            style={isMobile ? { top: ENTITY_SHEET_TOP_OFFSET_PX } : undefined}
+            style={isMobile ? mobileSheet.sheetStyle : undefined}
             onClick={event => event.stopPropagation()}
           >
-            {isMobile ? <MobileSheetGrabHandle /> : null}
+            {isMobile ? (
+              <MobileSheetGrabHandle isFullScreen={mobileSheet.isFullScreen} onClose={mobileSheet.dismiss} />
+            ) : null}
 
             <EntitySidePanelPopoverPortalProvider>
               <div className="flex min-h-0 flex-1 flex-col overflow-hidden">

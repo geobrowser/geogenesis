@@ -774,6 +774,11 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
   body[data-mobile-sheet-open] {
     overscroll-behavior-y: none;
   }
+
+  /* No rubber-band at the top of sheet content: a pull down from there moves the sheet instead. */
+  [data-mobile-sheet-surface] [data-mobile-sheet-scroll] {
+    overscroll-behavior-y: none;
+  }
 }
 
 /* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */
