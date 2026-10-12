@@ -129,10 +129,12 @@ describe('LobbyControlBar', () => {
     );
 
     expect(screen.getByTestId('lobby-control-bar').style.bottom).toBe('40px');
+    expect(screen.getByTestId('lobby-control-bar').style.marginBottom).toBe('40px');
     expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('104px');
 
     act(() => banner.unmount());
     expect(screen.getByTestId('lobby-control-bar').style.bottom).toBe('');
+    expect(screen.getByTestId('lobby-control-bar').style.marginBottom).toBe('');
     expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('64px');
     spy.mockRestore();
   });

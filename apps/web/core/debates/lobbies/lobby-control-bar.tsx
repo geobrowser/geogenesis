@@ -57,7 +57,8 @@ export function LobbyControlBar({
   return (
     <footer
       ref={setFooter}
-      style={below > 0 ? { bottom: below } : undefined}
+      // The margin keeps that space in the flow, so the content above the bar can still scroll clear.
+      style={below > 0 ? { bottom: below, marginBottom: below } : undefined}
       className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-grey-02 bg-white px-8 py-3 md:gap-2.5 md:px-4 md:pt-2.5 md:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
       data-testid="lobby-control-bar"
     >
