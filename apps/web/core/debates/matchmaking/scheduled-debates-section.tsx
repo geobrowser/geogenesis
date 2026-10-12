@@ -367,6 +367,7 @@ function ScheduledRow({
             ? `Not confirmed until ${opponentName(opponent)} answers`
             : 'Waiting on their answer'
       } · ${expiry}`}
+      note={adminArrangedNote(request, opponent, viewerId)}
       actions={
         request.viewer_must_answer ? (
           // Decline first, Accept primary on the right: the order every other request card uses.
@@ -415,6 +416,24 @@ function ScheduledRow({
       }
     />
   );
+}
+
+/**
+ * GEO-3229: a match the Geo team arranged says so on the card for as long as it is pending, including
+ * after one debater has accepted, so it never reads as the other debater having asked. Once a time
+ * has been moved, it also says which debater proposed the new one. Null for a request between people.
+ */
+export function adminArrangedNote(
+  request: ScheduledDebateRequest,
+  opponent: DebateParticipantSummary | null,
+  viewerId: string | null
+): string | null {
+  if (!request.created_by_admin) return null;
+  const arranged = 'Arranged by the Geo team';
+  const proposer = request.proposed_by_user_id;
+  if (request.reschedule_count === 0 || proposer === null) return arranged;
+  if (viewerId !== null && sameId(proposer, viewerId)) return `${arranged} · You proposed this time`;
+  return `${arranged} · ${opponentName(opponent)} proposed this time`;
 }
 
 const CANCEL_COPY = {
@@ -558,6 +577,7 @@ function ScheduleCard({
   viewer,
   when,
   status,
+  note = null,
   urgent = false,
   actions,
   ref,
@@ -567,6 +587,8 @@ function ScheduleCard({
   viewer: DebateParticipantSummary | null;
   when: string;
   status: string;
+  /** A second line under the status, e.g. that the Geo team arranged the debate. */
+  note?: string | null;
   urgent?: boolean;
   actions?: React.ReactNode;
 }) {
@@ -587,6 +609,11 @@ function ScheduleCard({
           <Text as="span" variant="footnote" color={urgent ? 'text' : 'grey-04'}>
             {status}
           </Text>
+          {note && (
+            <Text as="span" variant="footnote" color="grey-04">
+              {note}
+            </Text>
+          )}
         </div>
       </div>
 
