@@ -98,6 +98,7 @@ import {
   openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundLastWord,
+  openRoundsRequiredRebuttalRounds,
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
 import { captureOpenRoundPickSet, useOpenRoundsOutcomeAnalytics } from '~/core/debates/open-rounds-analytics';
@@ -3246,6 +3247,7 @@ function DebateRecordingModal({
               // Once the new round is announced, the counter moves to it.
               phase={reveal.announcedRoundPhase ?? countdown.openRounds}
               maxRounds={debate.open_rounds.max_rebuttal_rounds}
+              requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
             />
           )}
           <RecordingCircleButton
