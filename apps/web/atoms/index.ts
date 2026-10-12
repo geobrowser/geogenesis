@@ -216,6 +216,12 @@ export const debatesHubExploreSpaceSeedSpentAtom = atom(false);
 export const debatesHubLobbySpaceSeedSpentAtom = atom(false);
 export const debatesHubPositionsSpaceSeedSpentAtom = atom(false);
 
+/** The debate lobby's Explore tab: its own filters, apart from the hub's Explore. */
+export const lobbyExploreSpaceIdsAtom = atom<string[]>([]);
+export const lobbyExploreTopicIdsAtom = atom<string[]>([]);
+export const lobbyExploreSearchAtom = atom('');
+export const lobbyExploreSpaceSeedSpentAtom = atom(false);
+
 /**
  * Whether the hub's move off an empty Lobby is spent for this session (GEO-2863).
  *
@@ -270,6 +276,10 @@ export const resetDebatesHubFiltersAtom = atom(null, (_get, set) => {
   set(debatesHubPositionsTopicIdsAtom, []);
   set(debatesHubPositionsSearchAtom, '');
   set(debatesHubPositionsSpaceSeedSpentAtom, false);
+  set(lobbyExploreSpaceIdsAtom, []);
+  set(lobbyExploreTopicIdsAtom, []);
+  set(lobbyExploreSearchAtom, '');
+  set(lobbyExploreSpaceSeedSpentAtom, false);
   set(debatesHubPeopleSpaceIdsAtom, []);
   set(debatesHubPeopleOnlineOnlyAtom, false);
   // A different viewer has not been shown anything yet, so the courtesy is theirs to receive.

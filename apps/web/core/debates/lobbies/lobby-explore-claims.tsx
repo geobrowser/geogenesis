@@ -54,16 +54,14 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
   );
 
   // The tab pads its own controls and list, inside the claims pane's padding. The page scrolls under
-  // the 2.75rem app bar, so the controls pin below it.
+  // the navbar (`sticky top-0 h-11`), so the controls pin below it.
   return (
     <div className="-mx-4">
       <ClaimsTab
-        variant="explore"
+        variant="lobbyExplore"
         renderClaim={renderClaim}
         onVisibleClaims={onVisibleClaims}
-        stickyTopClassName="top-[2.75rem]"
-        // A request needs the viewer's side, so answered claims stay listed.
-        hidesAnswered={false}
+        stickyTopClassName="top-11"
       />
     </div>
   );

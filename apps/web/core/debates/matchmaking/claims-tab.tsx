@@ -73,6 +73,10 @@ import {
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
   debatesHubPositionsTopicIdsAtom,
+  lobbyExploreSearchAtom,
+  lobbyExploreSpaceIdsAtom,
+  lobbyExploreSpaceSeedSpentAtom,
+  lobbyExploreTopicIdsAtom,
 } from '~/atoms';
 
 /**
@@ -139,6 +143,9 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  */
 export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
+/** Every list the tab draws: the hub's, plus the debate lobby's Explore tab (`lobbyExplore`). */
+export type ClaimsListVariant = ClaimsTabVariant | 'lobbyExplore';
+
 /** Every value the `list` param may name, for validating one that arrived from outside. */
 export const CLAIMS_TAB_VARIANTS: readonly ClaimsTabVariant[] = ['explore', 'lobby', 'positions'];
 
@@ -204,7 +211,24 @@ export const VARIANT_ATOMS = {
     search: debatesHubLobbySearchAtom,
     seedSpent: debatesHubLobbySpaceSeedSpentAtom,
   },
-} as const;
+  lobbyExplore: {
+    spaceIds: lobbyExploreSpaceIdsAtom,
+    topicIds: lobbyExploreTopicIdsAtom,
+    search: lobbyExploreSearchAtom,
+    seedSpent: lobbyExploreSpaceSeedSpentAtom,
+  },
+} as const satisfies Record<ClaimsListVariant, unknown>;
+
+/**
+ * Where each list reports, and whether it hides the viewer's answered claims. `lobbyExplore` reads the
+ * Debate tag like `explore`, but its cards offer requests only on a side taken, so it keeps them.
+ */
+const LIST_SURFACE: Record<ClaimsListVariant, { analyticsSurface: DebateAnalyticsSurface; hidesAnswered: boolean }> = {
+  explore: { analyticsSurface: 'hub', hidesAnswered: true },
+  lobby: { analyticsSurface: 'hub', hidesAnswered: true },
+  positions: { analyticsSurface: 'hub', hidesAnswered: true },
+  lobbyExplore: { analyticsSurface: 'lobby', hidesAnswered: false },
+};
 
 /** What the tab would hand its own card, for a host drawing the card itself. */
 export type ClaimCardDefaults = { answersReady: boolean; allowsSignedOutVotes: boolean };
@@ -214,7 +238,6 @@ export function ClaimsTab({
   renderClaim,
   onVisibleClaims,
   stickyTopClassName,
-  hidesAnswered = true,
   trailing,
   warm = false,
   onSettledEmpty,
@@ -222,18 +245,13 @@ export function ClaimsTab({
   layout = 'panel',
   scopePicker,
 }: {
-  variant?: ClaimsTabVariant;
+  variant?: ClaimsListVariant;
   /** Draws each claim in place of the default card, for a host with its own offer (the lobby). */
   renderClaim?: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
   /** The claims on screen, after each change. */
   onVisibleClaims?: (entries: MatchmakingClaim[]) => void;
   /** Where the pinned controls stop, for a host scrolling the page under a fixed bar. */
   stickyTopClassName?: string;
-  /**
-   * False keeps the viewer's answered claims listed and drops the "Hide my positions" switch, for a
-   * host whose offer needs a side taken. The stored switch is left alone.
-   */
-  hidesAnswered?: boolean;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
   /**
@@ -272,6 +290,7 @@ export function ClaimsTab({
 } = {}) {
   const isLobby = variant === 'lobby';
   const atoms = VARIANT_ATOMS[variant];
+  const { analyticsSurface, hidesAnswered } = LIST_SURFACE[variant];
   const workspace = layout === 'workspace';
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
@@ -1069,7 +1088,7 @@ export function ClaimsTab({
         />
 
         <SpaceTopicFilters
-          analyticsSurface="hub"
+          analyticsSurface={analyticsSurface}
           leading={scopePicker}
           menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
@@ -1091,7 +1110,11 @@ export function ClaimsTab({
             isLobby ? (
               trailing
             ) : filter === 'mine' || !authenticated || !hidesAnswered ? null : (
-              <HideMyPositionsSwitch analyticsSurface="hub" checked={hideMyPositions} onChange={setHideMyPositions} />
+              <HideMyPositionsSwitch
+                analyticsSurface={analyticsSurface}
+                checked={hideMyPositions}
+                onChange={setHideMyPositions}
+              />
             )
           }
         />
@@ -1099,7 +1122,7 @@ export function ClaimsTab({
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
-          analyticsSurface="hub"
+          analyticsSurface={analyticsSurface}
           // Plus the answers, where the list hides some of them. Drawing before they land shows a
           // screenful the tab is about to take back — see `answersSettled`.
           isLoading={

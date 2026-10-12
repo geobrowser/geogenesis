@@ -9,7 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
-import { debatesHubExploreSpaceIdsAtom, debatesHubHideMyPositionsAtom } from '~/atoms';
+import {
+  debatesHubExploreSearchAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubHideMyPositionsAtom,
+  lobbyExploreSearchAtom,
+} from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -2655,7 +2660,7 @@ describe('claims the viewer has already answered', () => {
   });
 
   // The lobby's Explore offers requests only on claims the viewer has a side on.
-  describe('for a host that keeps answered claims', () => {
+  describe('on the lobby’s Explore list', () => {
     const answerInPlace = (view: ReturnType<typeof render>, ui: ReactElement) => {
       mocks.debateClaimRows = [answeredRow(FEATURED_A), answeredRow(FEATURED_B)];
       view.rerender(ui);
@@ -2666,7 +2671,7 @@ describe('claims the viewer has already answered', () => {
       mocks.graphAnsweredIds = new Set([FEATURED_A]);
     });
 
-    it('hides them by default, including one answered in place', async () => {
+    it('hides them on the hub’s Explore, including one answered in place', async () => {
       const view = render(<ClaimsTab />);
       await showAllClaims();
       expect(await screen.findByText('One you have not')).toBeInTheDocument();
@@ -2676,8 +2681,8 @@ describe('claims the viewer has already answered', () => {
       await waitFor(() => expect(screen.queryByText('One you have not')).toBeNull(), { timeout: 3000 });
     });
 
-    it('lists them with hidesAnswered off, keeps one answered in place, and leaves the switch alone', async () => {
-      const view = render(<ClaimsTab hidesAnswered={false} />);
+    it('lists them, keeps one answered in place, and leaves the switch alone', async () => {
+      const view = render(<ClaimsTab variant="lobbyExplore" />);
       await showAllClaims();
       expect(await screen.findByText('One you have answered')).toBeInTheDocument();
       expect(screen.getByText('One you have not')).toBeInTheDocument();
@@ -2686,10 +2691,25 @@ describe('claims the viewer has already answered', () => {
       expect(screen.queryByRole('switch', { name: 'Hide my positions' })).toBeNull();
       expect(view.store.get(debatesHubHideMyPositionsAtom)).toBe(true);
 
-      answerInPlace(view, <ClaimsTab hidesAnswered={false} />);
+      answerInPlace(view, <ClaimsTab variant="lobbyExplore" />);
       await pastTheHold();
       expect(screen.getByText('One you have not')).toBeInTheDocument();
       expect(screen.getByText('One you have answered')).toBeInTheDocument();
+    });
+
+    it('keeps its own filters and reports as the lobby', async () => {
+      const view = render(<ClaimsTab variant="lobbyExplore" />);
+      await showAllClaims();
+      await screen.findByText('One you have not');
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'friends' } });
+      expect(view.store.get(lobbyExploreSearchAtom)).toBe('friends');
+      expect(view.store.get(debatesHubExploreSearchAtom)).toBe('');
+      expect(
+        document.querySelector('[data-geo-analytics-intent="filter_debate_lobby"]'),
+        'a filter control reports the lobby surface'
+      ).not.toBeNull();
+      expect(document.querySelector('[data-geo-analytics-intent="filter_debates_hub"]')).toBeNull();
     });
   });
 
