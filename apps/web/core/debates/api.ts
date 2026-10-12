@@ -2515,13 +2515,22 @@ export type DebateLobbyClaims = {
  * Roster members only. `404 lobby_not_found`, `403 lobby_banned`, `409 lobby_closed`,
  * `403 lobby_not_member`.
  */
+/** At most this many `claimEntityIds` per read (`400 too_many_claim_ids`). */
+export const LOBBY_CLAIMS_MAX_IDS = 50;
+
+/**
+ * With `claimEntityIds`, only those claims, one entry per space row someone in the room holds a side
+ * on; `source` is then always `room` and `disagreements` null.
+ */
 export async function getDebateLobbyClaims(
   lobbyId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  claimEntityIds?: readonly string[]
 ) {
-  return geoChatRequest<DebateLobbyClaims>(`/debate-lobbies/${lobbyId}/claims`, {
+  const query = claimEntityIds?.length ? `?claim_entity_ids=${claimEntityIds.map(dashlessId).join(',')}` : '';
+  return geoChatRequest<DebateLobbyClaims>(`/debate-lobbies/${lobbyId}/claims${query}`, {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
