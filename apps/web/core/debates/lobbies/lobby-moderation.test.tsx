@@ -218,6 +218,9 @@ describe('LobbyHostLists', () => {
     renderWith(<LobbyHostLists lobby={lobby()} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Banned · 1' }));
     expect(screen.getByText(/Banned by Adam/)).toBeTruthy();
+    expect(
+      screen.getByText('Bans apply to this lobby only. Guests without an account can be removed but not banned.')
+    ).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Unban' }));
     await waitFor(() =>
       expect(api.moderateDebateLobbyMember).toHaveBeenCalledWith('lobby1', 'jo', 'unban', expect.any(Function), 'acct')

@@ -24,6 +24,8 @@ export const SECOND_ASK_AT = 5;
 const SESSION_KEY = 'geo:save-votes-prompted';
 
 let current: SaveVotesPromptReason | null = null;
+/** The lobby the sheet was opened from, which changes its copy; `null` everywhere else. */
+let currentLobbyName: string | null = null;
 const listeners = new Set<() => void>();
 
 function subscribe(listener: () => void) {
@@ -43,21 +45,39 @@ export function useSaveVotesPrompt(): SaveVotesPromptReason | null {
   );
 }
 
+export function useSaveVotesPromptLobbyName(): string | null {
+  return useSyncExternalStore(
+    subscribe,
+    () => currentLobbyName,
+    () => null
+  );
+}
+
 /** The open reason outside React, for tests and for code that decides without rendering. */
 export function readSaveVotesPrompt(): SaveVotesPromptReason | null {
   return current;
 }
 
-export function openSaveVotesPrompt(reason: SaveVotesPromptReason) {
+export function openSaveVotesPrompt(reason: SaveVotesPromptReason, options?: { lobbyName?: string }) {
   markPromptedThisSession();
-  if (current === reason) return;
+  const lobbyName = options?.lobbyName?.trim() || null;
+  if (current === reason && currentLobbyName === lobbyName) return;
   current = reason;
+  currentLobbyName = lobbyName;
+  emit();
+}
+
+/** Back to the sheet's usual copy, for a lobby the visitor has left; the sheet stays as it is. */
+export function clearSaveVotesPromptLobby() {
+  if (currentLobbyName === null) return;
+  currentLobbyName = null;
   emit();
 }
 
 export function closeSaveVotesPrompt() {
   if (current === null) return;
   current = null;
+  currentLobbyName = null;
   emit();
 }
 

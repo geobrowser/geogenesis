@@ -26,6 +26,7 @@ import {
   closeSaveVotesPrompt,
   openSaveVotesPrompt,
   useSaveVotesPrompt,
+  useSaveVotesPromptLobbyName,
   wasPromptedThisSession,
 } from '~/core/state/save-votes-prompt';
 
@@ -67,6 +68,7 @@ const AUTOMATIC_REASONS: ReadonlySet<SaveVotesPromptReason> = new Set([
 export function SaveVotesSheet() {
   const { ready, authenticated, isModalOpen } = usePrivy();
   const reason = useSaveVotesPrompt();
+  const lobbyName = useSaveVotesPromptLobbyName();
   const { votes } = useLocalVotes();
   const count = votes.length;
   const isChatOpen = useAtomValue(isChatOpenAtom);
@@ -158,7 +160,7 @@ export function SaveVotesSheet() {
     <div
       hidden={overlayOpen}
       role="region"
-      aria-label="Save your votes"
+      aria-label={lobbyName ? 'Join the discussion' : 'Save your votes'}
       onKeyDown={event => {
         if (event.key === 'Escape') close();
       }}
@@ -194,9 +196,22 @@ export function SaveVotesSheet() {
             onSubmit={submitEmail}
             noValidate
           >
-            <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit)}</p>
-            <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit)}</p>
-            <VoteChips votes={votes} />
+            {lobbyName ? (
+              <>
+                <p className={HEADING_CLASS}>Join the discussion</p>
+                <p className={SUBTEXT_CLASS}>
+                  Create an account to vote on claims, speak and debate. You’ll stay in{' '}
+                  <span className="font-medium text-text">{lobbyName}</span>, and your audio keeps playing.
+                </p>
+                <p className="mt-[14px] text-[11px] leading-[13px] font-medium text-grey-04">Saved for after sign-up</p>
+              </>
+            ) : (
+              <>
+                <p className={HEADING_CLASS}>{saveVotesHeading(count, returnVisit)}</p>
+                <p className={SUBTEXT_CLASS}>{saveVotesSubtext(count, returnVisit)}</p>
+              </>
+            )}
+            <VoteChips votes={votes} className={lobbyName ? 'mt-1.5' : undefined} />
 
             <div className={FORM_STACK_CLASS}>
               <input
@@ -247,7 +262,7 @@ const CHIP_CLASS =
   'flex items-center rounded-full border border-grey-02 bg-grey-01 px-2 py-[3px] text-[12px] leading-[14px] text-text';
 
 /** Up to two of the visitor's votes, then how many more: a reminder of what closing this leaves behind. */
-function VoteChips({ votes }: { votes: LocalVote[] }) {
+function VoteChips({ votes, className }: { votes: LocalVote[]; className?: string }) {
   const shown = [...votes]
     .reverse()
     .filter(vote => vote.title)
@@ -255,7 +270,7 @@ function VoteChips({ votes }: { votes: LocalVote[] }) {
   const more = votes.length - shown.length;
   if (shown.length === 0) return null;
   return (
-    <ul className="mt-[14px] flex flex-wrap justify-center gap-1" aria-label="Your votes">
+    <ul className={cx('mt-[14px] flex flex-wrap justify-center gap-1', className)} aria-label="Your votes">
       {shown.map(vote => (
         <li
           key={`${vote.entityId}:${vote.spaceId}:${vote.responseKind}`}
