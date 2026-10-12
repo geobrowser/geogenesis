@@ -1,7 +1,15 @@
+import { act, renderHook } from '@testing-library/react';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { type DebateLobbyClaim, LOBBY_CLAIMS_MAX_IDS, getDebateLobbyClaims } from '../api';
-import { exploreRoomClaimBatches, roomRowsByClaim } from './lobby-explore-claims-hooks';
+import {
+  exploreRoomClaimBatches,
+  namedRoomClaims,
+  nearBatchIndexes,
+  roomRowsByClaim,
+  useNearExploreBatches,
+} from './lobby-explore-claims-hooks';
 
 function entry(id: string) {
   return { claim: { claim_entity_id: id } };
@@ -66,5 +74,50 @@ describe('getDebateLobbyClaims', () => {
     expect(urls).toHaveLength(2);
     expect(urls[0]).toMatch(`/debate-lobbies/lobby1/claims?claim_entity_ids=${hex(1)},${hex(2)}`);
     expect(urls[1]).toMatch(/\/debate-lobbies\/lobby1\/claims$/);
+  });
+});
+
+describe('reading only near the viewport', () => {
+  const batches = [
+    [hex(1), hex(2)],
+    [hex(3), hex(4)],
+    [hex(5), hex(6)],
+  ];
+
+  it('picks the batches with a claim in range', () => {
+    expect(nearBatchIndexes(batches, new Set([hex(2), hex(5)]))).toEqual([0, 2]);
+    expect(nearBatchIndexes(batches, new Set())).toEqual([]);
+  });
+
+  it('follows cards in and out of range, keeping each batch as it was', () => {
+    const { result } = renderHook(() => useNearExploreBatches(batches));
+    expect(result.current.active).toEqual([]);
+
+    act(() => result.current.onNear(hex(3), true));
+    expect(result.current.active).toEqual([batches[1]]);
+
+    // Ids arrive in either spelling.
+    act(() => result.current.onNear(hex(6).toUpperCase(), true));
+    expect(result.current.active).toEqual([batches[1], batches[2]]);
+
+    act(() => result.current.onNear(hex(3), false));
+    expect(result.current.active).toEqual([batches[2]]);
+  });
+});
+
+describe('namedRoomClaims', () => {
+  const row = (entityId: string) =>
+    ({
+      claim: { id: entityId, space_id: hex(9), claim_entity_id: entityId, claim: '', description: null },
+    }) as DebateLobbyClaim;
+
+  it('keeps only the claims the batch named', () => {
+    const response = { lobby_id: 'l', source: 'room' as const, claims: [row(hex(1)), row(hex(7))] };
+    expect(namedRoomClaims(response, [hex(1), hex(2)]).claims.map(r => r.claim.claim_entity_id)).toEqual([hex(1)]);
+  });
+
+  it('ignores a recent-claims answer from a geo-chat that dropped the filter', () => {
+    const response = { lobby_id: 'l', source: 'recent' as const, claims: [row(hex(1))] };
+    expect(namedRoomClaims(response, [hex(1)]).claims).toEqual([]);
   });
 });

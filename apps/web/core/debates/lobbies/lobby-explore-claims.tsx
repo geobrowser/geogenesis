@@ -2,12 +2,17 @@
 
 import * as React from 'react';
 
+import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { normId } from '~/core/utils/norm-id';
 
 import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { type ClaimCardDefaults, ClaimsTab } from '../matchmaking/claims-tab';
-import { exploreRoomClaimBatches, useLobbyExploreRoomClaims } from './lobby-explore-claims-hooks';
+import {
+  exploreRoomClaimBatches,
+  useLobbyExploreRoomClaims,
+  useNearExploreBatches,
+} from './lobby-explore-claims-hooks';
 import { LobbyClaimHostMenu } from './lobby-highlights';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { LobbyClaimRequest, lobbyRoomClaimFrom } from './lobby-room-claims';
@@ -25,7 +30,8 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     const next = exploreRoomClaimBatches(entries);
     setBatches(current => (sameBatches(current, next) ? current : next));
   }, []);
-  const roomRows = useLobbyExploreRoomClaims(lobbyId, batches);
+  const { active, onNear } = useNearExploreBatches(batches);
+  const roomRows = useLobbyExploreRoomClaims(lobbyId, active);
   const { data: highlights } = useLobbyHighlights(lobbyId);
   const hosting = lobby.viewer.hosting;
 
@@ -43,14 +49,16 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
 
   const renderClaim = React.useCallback(
     (entry: MatchmakingClaim, card: ClaimCardDefaults) => (
-      <LobbyRoomClaimCard
-        entry={exploreRoomClaim(entry, roomRows.get(claimRowKey(entry)))}
-        answersReady={card.answersReady}
-        renderOffer={renderOffer}
-        renderMenu={hosting ? renderMenu : undefined}
-      />
+      <NearViewport claimEntityId={entry.claim.claim_entity_id} onNear={onNear}>
+        <LobbyRoomClaimCard
+          entry={exploreRoomClaim(entry, roomRows.get(claimRowKey(entry)))}
+          answersReady={card.answersReady}
+          renderOffer={renderOffer}
+          renderMenu={hosting ? renderMenu : undefined}
+        />
+      </NearViewport>
     ),
-    [hosting, renderMenu, renderOffer, roomRows]
+    [hosting, onNear, renderMenu, renderOffer, roomRows]
   );
 
   // The tab pads its own controls and list, inside the claims pane's padding. The page scrolls under
@@ -65,6 +73,35 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
       />
     </div>
   );
+}
+
+/** Reports whether its card is near the viewport, both ways, so far-off batches stop being read. */
+function NearViewport({
+  claimEntityId,
+  onNear,
+  children,
+  ref: listRef,
+}: {
+  claimEntityId: string;
+  onNear: (claimEntityId: string, near: boolean) => void;
+  children: React.ReactNode;
+  /** The list's popLayout measures the row through this. */
+  ref?: React.Ref<HTMLDivElement>;
+}) {
+  const { ref, nearViewport } = useNearViewport({ sticky: false });
+  React.useEffect(() => {
+    onNear(claimEntityId, nearViewport);
+    return () => onNear(claimEntityId, false);
+  }, [claimEntityId, nearViewport, onNear]);
+  const setRef = React.useCallback(
+    (node: HTMLDivElement | null) => {
+      ref(node);
+      if (typeof listRef === 'function') listRef(node);
+      else if (listRef) listRef.current = node;
+    },
+    [listRef, ref]
+  );
+  return <div ref={setRef}>{children}</div>;
 }
 
 function sameBatches(a: string[][], b: string[][]) {
