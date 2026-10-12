@@ -7,9 +7,8 @@ import type * as React from 'react';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 /**
- * A modal sheet that rises from the bottom of a phone screen, for a menu that has no room to drop
- * down. Radix Dialog underneath: focus moves in, Escape and a tap outside close it. It has no
- * drag, so no grab handle.
+ * A modal bottom sheet for a phone menu (Radix Dialog: focus trap, Escape and outside tap close).
+ * It can't be dragged, so it has no grab handle.
  */
 export function BottomSheet({
   open,

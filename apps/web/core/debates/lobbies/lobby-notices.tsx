@@ -30,7 +30,7 @@ export function LobbyNotices({
   moderationNotice: string | null;
   guestNotice: LobbyGuestNotice | null;
   guestConnecting: boolean;
-  /** `null` once signed in, when listening again as a guest no longer applies. */
+  /** `null` for a signed-in viewer, who does not listen as a guest. */
   onGuestRetry: (() => void) | null;
 }) {
   return (
