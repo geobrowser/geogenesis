@@ -9,7 +9,7 @@ import { Text } from '~/design-system/text';
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
 import { recordingLabelTextShadow, recordingOverlayTextShadow } from './debate-video-tile';
-import { type OpenRoundsRoomPhase, openRoundNumber, openRoundRevealedPicks } from './open-rounds';
+import { type OpenRoundsRoomPhase, openRoundCountInMs, openRoundNumber, openRoundRevealedPicks } from './open-rounds';
 
 /**
  * The Open rounds reveal (GEO-3179): the result window after a round resolves (`result_window_ms`,
@@ -261,9 +261,10 @@ export function useOpenRoundReveal({
   const leadIn = resultPhase?.leadIn === true;
   // A lead-in's announcement runs until the count-in, which takes the end of the pause as it does
   // after an Extend.
-  const windowMs = leadIn
-    ? Math.max(0, resultPhase.nextPhaseStartsAtMs - resultPhase.resolvedAtMs - (openRounds?.extend_count_in_ms ?? 0))
-    : (openRounds?.result_window_ms ?? 0);
+  const windowMs =
+    leadIn && openRounds
+      ? Math.max(0, resultPhase.nextPhaseStartsAtMs - resultPhase.resolvedAtMs - openRoundCountInMs(openRounds))
+      : (openRounds?.result_window_ms ?? 0);
   const thankingStarted =
     openRounds !== null && effectiveStatus === 'thanking' && phase?.phase === 'finished' && remainingSeconds > 0;
   const maxReached = thankingStarted && phase.isFinalRound && elapsedMs < windowMs;
