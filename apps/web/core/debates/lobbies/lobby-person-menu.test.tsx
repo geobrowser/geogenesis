@@ -17,7 +17,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
-vi.mock('~/core/debates/browse/use-open-debater-profile', () => ({ useOpenDebaterProfile: () => mocks.openProfile }));
+// Opens as if the profile were cached: right on the click, then `onOpened`.
+vi.mock('~/core/debates/browse/use-open-debater-profile', () => ({
+  useOpenDebaterProfile:
+    (_person: unknown, { onOpened }: { onOpened?: () => void } = {}) =>
+    (event: unknown) => {
+      mocks.openProfile(event);
+      onOpened?.();
+    },
+}));
 vi.mock('./lobby-guest-hooks', () => ({ useIsLobbyGuest: () => mocks.guest }));
 vi.mock('./lobby-queued-request', () => ({
   LOBBY_QUEUED_REQUEST_COPY: { signUpToSend: 'Sign up to send' },
@@ -118,7 +126,7 @@ describe('LobbyPersonMenu handing off to another overlay', () => {
     expect(document.body.style.pointerEvents).not.toBe('none');
   });
 
-  it('opens the profile on the click and closes the sheet', () => {
+  it('opens a cached profile on the click and closes the sheet', () => {
     renderMenu(lobby(false), null);
 
     fireEvent.click(within(screen.getByTestId('lobby-person-card')).getByRole('button', { name: 'Daniel' }));

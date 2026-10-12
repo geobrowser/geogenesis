@@ -38,10 +38,15 @@ let latestProfileOpenRequest: symbol | null = null;
  * id: the resolution below is exactly what turns the space into the profile.
  *
  * `lazy` reads the space on the first click instead of on mount, for long lists of people.
+ * `onOpened` runs once the profile is in the side panel, which can be after the click resolves.
  */
 export function useOpenDebaterProfile(
   participant: Pick<DebateParticipant, 'profile_space_id'> | string | null | undefined,
-  { interactionSurface = 'debate_media', lazy = false }: { interactionSurface?: string; lazy?: boolean } = {}
+  {
+    interactionSurface = 'debate_media',
+    lazy = false,
+    onOpened,
+  }: { interactionSurface?: string; lazy?: boolean; onOpened?: () => void } = {}
 ) {
   const { openSidePanel, sidePanelTarget } = useEntitySidePanel();
   const profileSpaceId = typeof participant === 'string' ? participant : participant?.profile_space_id;
@@ -59,7 +64,8 @@ export function useOpenDebaterProfile(
       navigation_mode: 'entity_side_panel',
     });
     openSidePanel(profileEntityId, profileSpaceId, false, { forceRequestedSpace: true });
-  }, [interactionSurface, openSidePanel, profileEntityId, profileSpaceId]);
+    onOpened?.();
+  }, [interactionSurface, onOpened, openSidePanel, profileEntityId, profileSpaceId]);
 
   React.useEffect(() => {
     const pendingProfileOpen = pendingProfileOpenRef.current;

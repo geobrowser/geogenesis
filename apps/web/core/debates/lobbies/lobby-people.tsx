@@ -39,20 +39,17 @@ export function LobbyPersonName({
   interactionSurface: string;
   children: React.ReactNode;
 }) {
-  // In a lobby menu the profile is read up front: the click opens it and closes the menu, which
-  // unmounts this name, so a lookup still pending at the click would be lost.
+  // In a lobby menu the profile is read up front, and the menu closes once the profile opens: closing
+  // on the click would unmount this name and drop an open still waiting on the lookup.
   const { inPopup, close } = useLobbyHandoff();
-  const openProfile = useOpenDebaterProfile(person.profile_space_id, { interactionSurface, lazy: !inPopup });
+  const openProfile = useOpenDebaterProfile(person.profile_space_id, {
+    interactionSurface,
+    lazy: !inPopup,
+    onOpened: inPopup ? close : undefined,
+  });
 
   return (
-    <button
-      type="button"
-      onClick={event => {
-        openProfile(event);
-        close();
-      }}
-      className="block max-w-full truncate text-left hover:underline"
-    >
+    <button type="button" onClick={openProfile} className="block max-w-full truncate text-left hover:underline">
       {children}
     </button>
   );
