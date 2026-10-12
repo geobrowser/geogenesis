@@ -4,15 +4,18 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { SLOT_MINUTES } from '~/core/availability/blocks';
 import { slotStarts } from '~/core/availability/peer-schedule';
 
 import { Text } from '~/design-system/text';
 
+import { LegendItem } from '~/partials/availability/peer-availability';
+
 import type { AnnotatedSlot } from '../api';
 import { dateLabels, instantAt, wallTime } from './admin-match-zone';
+import { hourLabel } from './debate-calendar-model';
 import { HubPillButton } from './hub-pill-button';
 
-const SLOT_MINUTES = 30;
 const CELLS_PER_DAY = (24 * 60) / SLOT_MINUTES;
 /** Far past a fortnight of half-hours, so no window is ever cut short. */
 const MAX_STARTS_PER_WINDOW = CELLS_PER_DAY * 31;
@@ -98,9 +101,9 @@ export function AdminPairAvailability({
           <LegendItem swatch={BOTH_FREE}>Both free</LegendItem>
         </ul>
       </div>
-      {[first, second].map(person =>
+      {[first, second].map((person, index) =>
         person.error ? (
-          <div key={person.name} className="flex flex-wrap items-center gap-2">
+          <div key={index} className="flex flex-wrap items-center gap-2">
             <Text as="p" variant="footnote" className="text-red-01">
               Couldn&rsquo;t load {person.name}&rsquo;s availability.
             </Text>
@@ -109,7 +112,7 @@ export function AdminPairAvailability({
             </HubPillButton>
           </div>
         ) : person.pending ? (
-          <Text key={person.name} as="p" variant="footnote" color="grey-04">
+          <Text key={index} as="p" variant="footnote" color="grey-04">
             Loading {person.name}&rsquo;s availability…
           </Text>
         ) : null
@@ -136,7 +139,7 @@ export function AdminPairAvailability({
                 <Text as="span" variant="footnote" color="grey-04" className="truncate">
                   {labels.full}
                 </Text>
-                <span className="sr-only">{daySummary(labels.longWeekday, cells, first, second)}</span>
+                <span className="sr-only">{daySummary(labels.long, cells, first, second)}</span>
                 <div
                   aria-hidden
                   onClick={pick}
@@ -187,10 +190,6 @@ function useStarts(slots: AnnotatedSlot[] | null): Set<number> {
   );
 }
 
-function hourLabel(hour: number) {
-  return new Date(Date.UTC(2000, 0, 1, hour)).toLocaleTimeString(undefined, { hour: 'numeric', timeZone: 'UTC' });
-}
-
 function cellTitle(cell: Cell, index: number, firstName: string, secondName: string, zoneName: string) {
   const who =
     cell.first && cell.second
@@ -204,7 +203,7 @@ function cellTitle(cell: Cell, index: number, firstName: string, secondName: str
 }
 
 /** `9:00 AM–12:00 PM, 3:00 PM–5:00 PM`: the runs of cells `free` is true for, as wall clocks. */
-export function freeRanges(cells: Cell[], free: (cell: Cell) => boolean): string {
+function freeRanges(cells: Cell[], free: (cell: Cell) => boolean): string {
   const ranges: string[] = [];
   let from: number | null = null;
   cells.forEach((cell, index) => {
@@ -231,15 +230,4 @@ function daySummary(day: string, cells: Cell[], first: DebaterAvailability, seco
     `${side(second, cell => cell.second)};`,
     both ? `both free ${both}` : 'never both free',
   ].join(' ');
-}
-
-function LegendItem({ swatch, children }: { swatch: string; children: React.ReactNode }) {
-  return (
-    <li className="flex items-center gap-1.5">
-      <span aria-hidden className={cx('h-3 w-4 shrink-0 rounded-sm', swatch)} />
-      <Text as="span" variant="footnote" color="grey-04">
-        {children}
-      </Text>
-    </li>
-  );
 }

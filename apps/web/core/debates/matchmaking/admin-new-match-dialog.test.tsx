@@ -47,7 +47,7 @@ vi.mock('./admin-hooks', () => ({
   useAdminDebaterAvailability: (userId: string | null) =>
     userId
       ? {
-          data: { timezone: null, slots: mocks.availability[userId] ?? [] },
+          data: { with_timezone: '', their_slots: mocks.availability[userId] ?? [] },
           isPending: false,
           error: null,
           refetch: vi.fn(),
@@ -107,6 +107,7 @@ vi.mock('./person-record-line', () => ({
 vi.mock('~/partials/availability/peer-availability', () => ({
   MUTUAL_SLOT: 'mutual',
   SELECTED_SLOT: 'selected',
+  LegendItem: ({ children }: { children: React.ReactNode }) => <li>{children}</li>,
 }));
 
 const { AdminNewMatchDialog } = await import('./admin-new-match-dialog');

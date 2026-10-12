@@ -232,7 +232,8 @@ function zoneOffsetMinutes(instant: Date, zone: string | undefined): number {
   return wallMinutes(zonedParts(instant, zone)) - wallMinutes(zonedParts(instant, 'UTC'));
 }
 
-function dayLabels(date: string) {
+/** `Tue` and `Oct 6` for an ISO date: it is already a calendar date, so the same in every zone. */
+export function dayLabels(date: string) {
   const [year, month, day] = date.split('-').map(Number);
   const local = new Date(year, month - 1, day, 12);
   return {

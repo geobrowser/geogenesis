@@ -1,6 +1,9 @@
-import { zonedClock, zonedWallClockInstant } from '~/core/availability/peer-schedule';
+import { addDays, isoDate } from '~/core/availability/blocks';
+import { dayLabels, zonedClock, zonedWallClockInstant } from '~/core/availability/peer-schedule';
+import { isValidTimeZone, tzAbbreviation } from '~/core/utils/schedule';
+import { getViewerTimeZone } from '~/core/utils/utils';
 
-import { zoneCity } from './admin-debate-calendar-model';
+import { timeIn, zoneCity } from './admin-debate-calendar-model';
 
 /**
  * The zone New match draws every time in (GEO-3231). An admin who sends personal invites in GMT
@@ -16,32 +19,14 @@ export const GMT = 'UTC';
  */
 const STORAGE_KEY = 'geogenesis.debates.admin-match-zone.v1';
 
-/** The browser's own zone, or GMT where the browser will not say. */
-export function browserZone(): string {
-  try {
-    return Intl.DateTimeFormat().resolvedOptions().timeZone || GMT;
-  } catch {
-    return GMT;
-  }
-}
-
-function isUsableZone(zone: string): boolean {
-  try {
-    new Intl.DateTimeFormat('en-US', { timeZone: zone });
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 /** The zone picked last time, or the browser's own the first time and for anything unreadable. */
 export function readAdminMatchZone(): string {
-  if (typeof window === 'undefined') return browserZone();
+  if (typeof window === 'undefined') return getViewerTimeZone();
   try {
     const saved = window.localStorage.getItem(STORAGE_KEY);
-    return saved && isUsableZone(saved) ? saved : browserZone();
+    return saved && isValidTimeZone(saved) ? saved : getViewerTimeZone();
   } catch {
-    return browserZone();
+    return getViewerTimeZone();
   }
 }
 
@@ -57,16 +42,7 @@ export function saveAdminMatchZone(zone: string): void {
 /** `GMT`, or `Madrid (GMT+2)`: what the zone is called beside every time drawn in it. */
 export function zoneLabel(zone: string, at: number = Date.now()): string {
   if (zone === GMT || zone === 'Etc/UTC' || zone === 'GMT') return 'GMT';
-  let offset = '';
-  try {
-    offset =
-      new Intl.DateTimeFormat('en-US', { timeZone: zone, timeZoneName: 'shortOffset' })
-        .formatToParts(at)
-        .find(part => part.type === 'timeZoneName')?.value ?? '';
-  } catch {
-    // An engine without `shortOffset` still gets the city.
-  }
-  return offset ? `${zoneCity(zone)} (${offset})` : zoneCity(zone);
+  return `${zoneCity(zone)} (${tzAbbreviation(zone, at)})`;
 }
 
 /** `2026-10-06`: the date `at` falls on in `zone`. */
@@ -82,9 +58,9 @@ export function minutesIn(at: number, zone: string): number {
 /** `count` dates in `zone`, today first: the days a match can be booked on, as that zone counts them. */
 export function zoneDays(now: number, zone: string, count: number): string[] {
   const [year, month, day] = dateIn(now, zone).split('-').map(Number);
-  return Array.from({ length: count }, (_, index) =>
-    new Date(Date.UTC(year, month - 1, day + index)).toISOString().slice(0, 10)
-  );
+  // Midday, so no date in the run can sit on an hour a DST jump skipped.
+  const first = new Date(year, month - 1, day, 12);
+  return Array.from({ length: count }, (_, offset) => isoDate(addDays(first, offset)));
 }
 
 /**
@@ -96,28 +72,24 @@ export function instantAt(date: string, minutes: number, zone: string): number {
   return zonedWallClockInstant(Date.UTC(year, month - 1, day, 0, minutes), zone).getTime();
 }
 
-/** `Tue` and `Oct 6` for a date, the same in every zone: it is already a calendar date. */
+/** The peer week's `Tue` and `Oct 6` for a date, plus the two forms New match also needs. */
 export function dateLabels(date: string) {
+  const { weekdayLabel, dayLabel } = dayLabels(date);
   const [year, month, day] = date.split('-').map(Number);
-  const noon = new Date(Date.UTC(year, month - 1, day, 12));
   return {
-    weekday: noon.toLocaleDateString(undefined, { weekday: 'short', timeZone: 'UTC' }),
-    longWeekday: noon.toLocaleDateString(undefined, {
+    weekday: weekdayLabel,
+    monthDay: dayLabel,
+    full: `${weekdayLabel}, ${dayLabel}`,
+    /** `Wednesday, October 7`, for names read aloud. */
+    long: new Date(year, month - 1, day, 12).toLocaleDateString('en-US', {
       weekday: 'long',
       month: 'long',
       day: 'numeric',
-      timeZone: 'UTC',
     }),
-    monthDay: noon.toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' }),
-    full: noon.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC' }),
   };
 }
 
-/** `3:00 PM` for minutes past midnight, as a wall clock: no zone, so no DST hour can repeat or vanish. */
+/** `3:00 PM` for minutes past midnight, as a wall clock: read in GMT, so no DST hour repeats or vanishes. */
 export function wallTime(minutes: number): string {
-  return new Date(Date.UTC(2000, 0, 1, 0, minutes)).toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    timeZone: 'UTC',
-  });
+  return timeIn(Date.UTC(2000, 0, 1, 0, minutes), GMT);
 }

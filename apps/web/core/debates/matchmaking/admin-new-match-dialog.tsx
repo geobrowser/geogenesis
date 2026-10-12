@@ -6,8 +6,10 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { SLOT_MINUTES } from '~/core/availability/blocks';
 import { useSearch } from '~/core/hooks/use-search';
 import { normId } from '~/core/utils/norm-id';
+import { getViewerTimeZone } from '~/core/utils/utils';
 
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Input } from '~/design-system/input';
@@ -30,7 +32,6 @@ import {
 } from './admin-hooks';
 import {
   GMT,
-  browserZone,
   dateIn,
   dateLabels,
   instantAt,
@@ -54,7 +55,6 @@ import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { usePersonFacts } from './use-person-facts';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 
-const SLOT_MINUTES = 30;
 const EMPTY_SPACE_IDS: string[] = [];
 
 /** What became of asking someone to set their availability. */
@@ -629,6 +629,9 @@ function PersonOption({
   );
 }
 
+/** The dialog's native dropdowns: day, start and zone, kept native so a long list scrolls as the OS draws it. */
+const NATIVE_SELECT_CLASS = 'h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02';
+
 const MODE_OPTIONS = [
   { value: 'recommended', label: 'Recommended' },
   { value: 'any', label: 'Pick any time' },
@@ -653,7 +656,7 @@ function TimePicker({
   second: Picked | null;
   zone: string;
   onZoneChange: (zone: string) => void;
-  /** A debater's zone from the roster, for whenever the overlap has not said. */
+  /** A debater's zone from the roster of everyone with availability. */
   zoneOf: (userId: string) => string | undefined;
   prompts: ReadonlyMap<string, PromptOutcome>;
   onChoose: (choice: Choice | null) => void;
@@ -672,16 +675,9 @@ function TimePicker({
   const firstAvailability = useAdminDebaterAvailability(first && second ? first.userId : null);
   const secondAvailability = useAdminDebaterAvailability(first && second ? second.userId : null);
   const candidate = overlap.data?.candidates[0];
-  const firstZone =
-    overlap.data?.viewer_timezone ||
-    firstAvailability.data?.timezone ||
-    (first ? zoneOf(first.userId) : undefined) ||
-    undefined;
-  const secondZone =
-    candidate?.with_timezone ||
-    secondAvailability.data?.timezone ||
-    (second ? zoneOf(second.userId) : undefined) ||
-    undefined;
+  // The roster's zone, the one the footer shows too; the overlap's only for anyone it lacks.
+  const firstZone = (first && zoneOf(first.userId)) || overlap.data?.viewer_timezone || undefined;
+  const secondZone = (second && zoneOf(second.userId)) || candidate?.with_timezone || undefined;
   const slots = React.useMemo(
     () => (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > now),
     [candidate, now]
@@ -705,7 +701,7 @@ function TimePicker({
 
   const zoneName = zoneLabel(zone);
   const zoneOptions = [
-    { value: browserZone(), label: `Your time · ${zoneLabel(browserZone())}` },
+    { value: getViewerTimeZone(), label: `Your time · ${zoneLabel(getViewerTimeZone())}` },
     { value: GMT, label: 'GMT' },
     ...(first && firstZone
       ? [{ value: firstZone, label: `${debaterFirstName(first.person)}’s time · ${zoneLabel(firstZone)}` }]
@@ -725,7 +721,7 @@ function TimePicker({
       <select
         value={zone}
         onChange={event => onZoneChange(event.currentTarget.value)}
-        className="h-8 max-w-[16rem] rounded px-2 text-metadata shadow-inner shadow-grey-02"
+        className={cx(NATIVE_SELECT_CLASS, 'max-w-[16rem]')}
       >
         {zoneOptions.map(option => (
           <option key={option.value} value={option.value}>
@@ -877,7 +873,7 @@ function TimePicker({
                   <section
                     key={day}
                     role="group"
-                    aria-label={labels.longWeekday}
+                    aria-label={labels.long}
                     className="flex flex-col gap-2 rounded-lg border border-grey-02 p-2"
                   >
                     <div className="flex flex-col">
@@ -935,7 +931,7 @@ function TimePicker({
             <select
               value={anyDay}
               onChange={event => setAnyDay(Number(event.currentTarget.value))}
-              className="h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02"
+              className={NATIVE_SELECT_CLASS}
             >
               {days.map((day, index) => (
                 <option key={day} value={index}>
@@ -951,7 +947,7 @@ function TimePicker({
             <select
               value={anyMinutes}
               onChange={event => setAnyMinutes(Number(event.currentTarget.value))}
-              className="h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02"
+              className={NATIVE_SELECT_CLASS}
             >
               {Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES).map(minutes => (
                 <option key={minutes} value={minutes}>
@@ -1017,14 +1013,15 @@ function TimePicker({
         now={now}
         first={{
           name: a,
-          slots: firstAvailability.data?.slots ?? null,
+          // Absent only on geo-chat builds before #134: nothing known, rather than nothing free.
+          slots: firstAvailability.data?.their_slots ?? null,
           pending: firstAvailability.isPending,
           error: Boolean(firstAvailability.error),
           onRetry: () => void firstAvailability.refetch(),
         }}
         second={{
           name: b,
-          slots: secondAvailability.data?.slots ?? null,
+          slots: secondAvailability.data?.their_slots ?? null,
           pending: secondAvailability.isPending,
           error: Boolean(secondAvailability.error),
           onRetry: () => void secondAvailability.refetch(),
