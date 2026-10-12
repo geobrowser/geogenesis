@@ -15,8 +15,13 @@ import {
 } from './lobby-explore-claims-hooks';
 import { LobbyClaimHostMenu } from './lobby-highlights';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
-import { LobbyClaimRequest, lobbyRoomClaimFrom } from './lobby-room-claims';
-import { type LobbyRoomClaim, LobbyRoomClaimCard, type LobbyRoomOffer } from './lobby-room-claims-list';
+import { LobbyClaimRequest } from './lobby-room-claims';
+import {
+  type LobbyRoomClaim,
+  LobbyRoomClaimCard,
+  type LobbyRoomOffer,
+  type LobbyRoomSide,
+} from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
 
 /**
@@ -109,17 +114,30 @@ function sameBatches(a: string[][], b: string[][]) {
 }
 
 /**
- * An Explore row as the room card reads it: the room's sides where geo-chat has an entry for it,
- * otherwise (nobody in the room holds a side, or a guest) the tab's own sides, marked as not the room's.
+ * An Explore row as the room card reads it: the tab's Geo-wide sides, plus the room's where geo-chat
+ * has an entry (none means nobody in the room holds a side, or a guest). An entry's id is geo-chat's
+ * claim row, which host actions need.
  */
 export function exploreRoomClaim(entry: MatchmakingClaim, roomRow: DebateLobbyClaim | undefined): LobbyRoomClaim {
-  if (roomRow) return lobbyRoomClaimFrom(roomRow);
   return {
-    claim: entry.claim,
+    claim: roomRow ? { ...entry.claim, id: roomRow.claim.id } : entry.claim,
     readiness: entry,
     activeDebate: entry.active_debate,
     positions: entry.positions.map(side => ({ ...side, requestable_count: 0 })),
-    outsideRoom: true,
+    roomSides: roomRow ? roomRow.positions.map(roomSide) : null,
+  };
+}
+
+/** One side as the room line counts it: the others in the room, without the viewer. */
+function roomSide(side: DebateLobbyClaim['positions'][number]): LobbyRoomSide {
+  return {
+    position: side.position,
+    position_label: side.position_label,
+    total_count: side.total_in_room,
+    available_now_count: side.requestable_count,
+    present_count: side.total_in_room,
+    participants: side.participants,
+    requestable_count: side.requestable_count,
   };
 }
 

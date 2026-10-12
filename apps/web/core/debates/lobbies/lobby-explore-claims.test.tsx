@@ -69,10 +69,10 @@ vi.mock('./lobby-room-claims-list', () => ({
     renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
   }) => {
     const viewerPosition = entry.readiness.viewer_response?.position ?? null;
-    const requestableCount = entry.positions.find(side => side.position !== viewerPosition)?.requestable_count ?? 0;
+    const requestableCount = entry.roomSides?.find(side => side.position !== viewerPosition)?.requestable_count ?? 0;
     return (
-      <article data-testid={`card-${entry.claim.id}`} data-outside-room={entry.outsideRoom ? 'true' : undefined}>
-        {viewerPosition !== null && requestableCount > 0 && !entry.outsideRoom
+      <article data-testid={`card-${entry.claim.id}`} data-outside-room={entry.roomSides ? undefined : 'true'}>
+        {viewerPosition !== null && requestableCount > 0
           ? renderOffer({ entry, viewerPosition, requestableCount, indexedPosition: null, indexingDelayed: false })
           : null}
         {renderMenu?.(entry)}
@@ -145,17 +145,19 @@ afterEach(() => {
 });
 
 describe('exploreRoomClaim', () => {
-  it('takes the room’s sides where geo-chat has an entry for the claim', () => {
-    const claim = exploreRoomClaim(exploreEntry('row-1', ENTITY), roomRow('row-1', ENTITY, 2));
-    expect(claim.outsideRoom).toBeUndefined();
-    expect(claim.positions.find(side => !side.position)?.requestable_count).toBe(2);
-    // The viewer is counted back on their own side.
-    expect(claim.positions.find(side => side.position)?.total_count).toBe(3);
+  it('keeps the Geo-wide sides and adds the room’s where geo-chat has an entry', () => {
+    const claim = exploreRoomClaim(exploreEntry(ENTITY, ENTITY), roomRow('row-1', ENTITY, 2));
+    expect(claim.positions.map(side => side.total_count)).toEqual([5, 5]);
+    // The others in the room; the card counts the viewer in.
+    expect(claim.roomSides?.map(side => side.total_count)).toEqual([2, 2]);
+    expect(claim.roomSides?.find(side => !side.position)?.requestable_count).toBe(2);
+    // The entry's id is geo-chat's claim row, for host actions.
+    expect(claim.claim.id).toBe('row-1');
   });
 
   it('keeps the tab’s sides, with nobody requestable, for a claim with no entry', () => {
     const claim = exploreRoomClaim(exploreEntry('row-1', ENTITY), undefined);
-    expect(claim.outsideRoom).toBe(true);
+    expect(claim.roomSides).toBeNull();
     expect(claim.positions.map(side => side.total_count)).toEqual([5, 5]);
     expect(claim.positions.every(side => side.requestable_count === 0)).toBe(true);
   });
