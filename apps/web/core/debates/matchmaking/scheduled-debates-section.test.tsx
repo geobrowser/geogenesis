@@ -225,7 +225,7 @@ describe('answering in the tab', () => {
   it('offers no answer on one the viewer is not holding up', () => {
     setup({ answerable: [request({ viewer_must_answer: false })] });
 
-    expect(screen.getByText('Waiting on their answer · Expires at start')).toBeInTheDocument();
+    expect(screen.getByText('Not confirmed until Your opponent answers · Expires at start')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
@@ -358,10 +358,81 @@ describe('calling a scheduled debate off', () => {
     expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
   });
 
+  // GEO-3229: a match the Geo team arranged must not read as the other debater having asked.
+  it('says the Geo team arranged a pending match, before and after the viewer accepts', () => {
+    setup({
+      answerable: [
+        request({ request_id: 'asked', created_by_admin: true, proposed_by_user_id: null }),
+        request({
+          request_id: 'accepted',
+          created_by_admin: true,
+          proposed_by_user_id: null,
+          viewer_must_answer: false,
+        }),
+      ],
+    });
+
+    expect(screen.getAllByText('Arranged by the Geo team')).toHaveLength(2);
+  });
+
+  it('says which debater proposed a moved time on a Geo-arranged match, and nothing on a peer request', () => {
+    setup({
+      answerable: [
+        request({
+          request_id: 'theirs',
+          created_by_admin: true,
+          reschedule_count: 1,
+          proposed_by_user_id: 'user-them',
+        }),
+        request({
+          request_id: 'mine',
+          created_by_admin: true,
+          reschedule_count: 1,
+          proposed_by_user_id: 'user-me',
+          viewer_must_answer: false,
+        }),
+        request({ request_id: 'peer' }),
+      ],
+    });
+
+    expect(screen.getAllByText(/proposed this time/)).toHaveLength(2);
+    expect(screen.getByText('Arranged by the Geo team · You proposed this time')).toBeInTheDocument();
+    expect(screen.getAllByText(/Arranged by the Geo team/)).toHaveLength(2);
+  });
+
   it('offers no cancel on a pending request someone else proposed', () => {
-    setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-admin' })] });
+    setup({
+      answerable: [
+        request({
+          viewer_must_answer: false,
+          proposed_by_user_id: 'user-admin',
+          participants: [
+            { user_id: 'user-me', accepted: null },
+            { user_id: 'user-them', accepted: null },
+          ],
+        }),
+      ],
+    });
 
     expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+  });
+
+  // GEO-3233: an admin match neither debater proposed; the first to accept is not stuck.
+  it('lets someone who accepted cancel or reschedule before the partner answers', async () => {
+    mocks.people = [ADA];
+    const { user } = setup({
+      answerable: [request({ viewer_must_answer: false, proposed_by_user_id: null, created_by_admin: true })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Reschedule' }));
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+    await user.click(screen.getByRole('button', { name: 'close week' }));
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    expect(mocks.cancel.mock.calls[0][0]).toEqual({ requestId: 'request-1' });
   });
 });
 
@@ -404,10 +475,11 @@ describe('moving a scheduled debate', () => {
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
   });
 
-  it('is not offered on a pending request, which offers "Choose different time" instead', () => {
+  it('is not offered on a request the viewer must still answer, which offers "Choose different time"', () => {
     setup({ answerable: [request()] });
 
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
   });
 });
@@ -441,11 +513,15 @@ describe('choosing a different time for an invite', () => {
     expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
   });
 
+  // Moving it accepts the new time on the viewer's behalf, so the card then waits on the other side
+  // and offers the accepted request's Reschedule (GEO-3233) instead.
   it('is not offered once the invite is waiting on the other side', () => {
+    mocks.people = [ADA];
     setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' })] });
 
     expect(screen.queryByRole('button', { name: 'Choose different time' })).not.toBeInTheDocument();
-    expect(screen.getByText(/Waiting on their answer/)).toBeInTheDocument();
+    expect(screen.getByText(/Not confirmed until Ada answers/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
   });
 
   it('is not offered while the other debater is not known', () => {

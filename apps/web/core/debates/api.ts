@@ -2063,8 +2063,19 @@ export type ScheduledDebateRequest = {
   outside_availability?: boolean;
 };
 
+/** An admin asking the viewer to add availability (GEO-3228); it lapses once they add some. */
+export type AvailabilityRequest = {
+  /** `no_availability`: nothing set yet. `more_times`: set, but it overlaps with nobody. */
+  kind: 'no_availability' | 'more_times';
+  requested_by_name: string | null;
+  requested_at: string;
+  expires_at: string;
+};
+
 export type ScheduledDebateRequestsResponse = {
   requests: ScheduledDebateRequest[];
+  /** Absent from a geo-chat that predates it. */
+  availability_requests?: AvailabilityRequest[];
 };
 
 /** Accepting can fail without being an error: the slot went while you were deciding. */
@@ -2205,8 +2216,19 @@ export async function createAdminScheduledDebate(
   });
 }
 
-/** `sent: false` means they have no email on file, so nothing went out. */
-export type AdminAvailabilityPromptResponse = { sent: boolean };
+/** What became of the email, as geo-notifications decided it. `no_email` is only for no address on file. */
+export type AvailabilityPromptOutcome =
+  'sent' | 'disabled_by_preference' | 'rate_limited' | 'channel_off' | 'failed' | 'no_email';
+
+/**
+ * `outcome` is absent from a geo-chat that predates GEO-3228, which answered `sent` alone. The person
+ * can also see the request on their Requests tab whatever happened to the email.
+ */
+export type AdminAvailabilityPromptResponse = {
+  sent: boolean;
+  outcome?: AvailabilityPromptOutcome;
+  variant?: 'no_availability' | 'more_times';
+};
 
 /** Emails someone asking them to set their availability (GEO-2942). Admins only. */
 export async function sendAdminAvailabilityPrompt(

@@ -110,7 +110,7 @@ export function useCreateAdminMatch() {
   });
 }
 
-/** Emails someone asking them to set availability. `sent: false` means no email on file. */
+/** Asks someone to add availability; the answer says what became of the email (GEO-3228). */
 export function useAdminAvailabilityPrompt() {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   return useMutation({

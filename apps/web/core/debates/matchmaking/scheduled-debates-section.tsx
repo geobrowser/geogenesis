@@ -127,7 +127,12 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
                   viewerId={viewerId}
                   busy={respond.isPending}
                   onAnswer={answer}
-                  onReschedule={reschedulerFor(request.request_id, opponentUserId, 'requests_new_time')}
+                  onReschedule={reschedulerFor(
+                    request.request_id,
+                    opponentUserId,
+                    // "Choose different time" on an unanswered invite; Reschedule once accepted.
+                    request.viewer_must_answer ? 'requests_new_time' : 'requests_reschedule'
+                  )}
                 />
               );
             })}
@@ -340,16 +345,18 @@ function ScheduledRow({
   viewerId: string | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
-  /** Opens the other debater's week to propose another time. Null when they are not known. */
+  /** Opens the other debater's week to propose a new time for this request. Null when they are not known. */
   onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
   const expiry = useScheduledExpiry(request.scheduled_start_at);
-  // While pending, only whoever proposed the current time may withdraw it; the other side declines.
-  const withdrawable =
-    !request.viewer_must_answer &&
-    viewerId !== null &&
-    request.proposed_by_user_id !== null &&
-    sameId(request.proposed_by_user_id, viewerId);
+  // Whoever proposed the current time may withdraw it, and so may anyone who has already accepted
+  // it (GEO-3233: in an admin match neither debater proposed it). Someone who has not answered
+  // declines instead.
+  const proposedByViewer =
+    viewerId !== null && request.proposed_by_user_id !== null && sameId(request.proposed_by_user_id, viewerId);
+  const viewerAccepted =
+    viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
+  const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
 
   return (
     <ScheduleCard
@@ -357,7 +364,14 @@ function ScheduledRow({
       opponent={opponent}
       viewer={viewer}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
-      status={`${request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'} · ${expiry}`}
+      status={`${
+        request.viewer_must_answer
+          ? 'Waiting on your answer'
+          : viewerAccepted
+            ? `Not confirmed until ${opponentName(opponent)} answers`
+            : 'Waiting on their answer'
+      } · ${expiry}`}
+      note={adminArrangedNote(request, opponent, viewerId)}
       actions={
         request.viewer_must_answer ? (
           // Decline first, Accept primary on the right: the order every other request card uses.
@@ -386,8 +400,8 @@ function ScheduledRow({
             {onReschedule && (
               <HubPillButton
                 className="col-span-2"
-                analyticsLabel="Debate hub Reschedule scheduled request"
-                analyticsIntent="reschedule_scheduled_request"
+                analyticsLabel="Debate hub Choose different time for scheduled request"
+                analyticsIntent="choose_different_time_scheduled_request"
                 onClick={event => onReschedule(event.currentTarget)}
                 disabled={busy}
               >
@@ -396,11 +410,47 @@ function ScheduledRow({
             )}
           </div>
         ) : (
-          withdrawable && <CancelScheduled requestId={request.request_id} kind="request" opponent={opponent} />
+          withdrawable && (
+            <div className="flex flex-col gap-2">
+              {viewerAccepted && onReschedule && (
+                <HubPillButton
+                  className="w-full"
+                  analyticsLabel="Debate hub Reschedule scheduled request"
+                  analyticsIntent="reschedule_scheduled_request"
+                  onClick={event => onReschedule(event.currentTarget)}
+                >
+                  Reschedule
+                </HubPillButton>
+              )}
+              <CancelScheduled
+                requestId={request.request_id}
+                kind={proposedByViewer ? 'request' : 'debate'}
+                opponent={opponent}
+              />
+            </div>
+          )
         )
       }
     />
   );
+}
+
+/**
+ * GEO-3229: a match the Geo team arranged says so on the card for as long as it is pending, including
+ * after one debater has accepted, so it never reads as the other debater having asked. Once a time
+ * has been moved, it also says which debater proposed the new one. Null for a request between people.
+ */
+export function adminArrangedNote(
+  request: ScheduledDebateRequest,
+  opponent: DebateParticipantSummary | null,
+  viewerId: string | null
+): string | null {
+  if (!request.created_by_admin) return null;
+  const arranged = 'Arranged by the Geo team';
+  const proposer = request.proposed_by_user_id;
+  if (request.reschedule_count === 0 || proposer === null) return arranged;
+  if (viewerId !== null && sameId(proposer, viewerId)) return `${arranged} · You proposed this time`;
+  return `${arranged} · ${opponentName(opponent)} proposed this time`;
 }
 
 const CANCEL_COPY = {
@@ -544,6 +594,7 @@ function ScheduleCard({
   viewer,
   when,
   status,
+  note = null,
   urgent = false,
   actions,
   ref,
@@ -553,6 +604,8 @@ function ScheduleCard({
   viewer: DebateParticipantSummary | null;
   when: string;
   status: string;
+  /** A second line under the status, e.g. that the Geo team arranged the debate. */
+  note?: string | null;
   urgent?: boolean;
   actions?: React.ReactNode;
 }) {
@@ -573,6 +626,11 @@ function ScheduleCard({
           <Text as="span" variant="footnote" color={urgent ? 'text' : 'grey-04'}>
             {status}
           </Text>
+          {note && (
+            <Text as="span" variant="footnote" color="grey-04">
+              {note}
+            </Text>
+          )}
         </div>
       </div>
 

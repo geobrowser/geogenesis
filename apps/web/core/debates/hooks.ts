@@ -693,6 +693,8 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
       queryClient.setQueryData(scheduleKey, saved);
       // Who shares a slot with the viewer is computed from this schedule.
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.schedulablePeopleRoot(accountKey) });
+      // An admin's request for more times is answered by saving (GEO-3228).
+      void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },
   });
 }
