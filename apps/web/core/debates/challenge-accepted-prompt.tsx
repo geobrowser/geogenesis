@@ -8,6 +8,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateRematchParticipant, DebateRematchSession } from './api';
 import { debateRematchMediaSessionKey } from './media-session';
+import { readRematchMicIntent, rememberRematchMicIntent } from './rematch-join-intent';
 import { DebateRequestMediaPreview } from './request-media-preview';
 import { useScrollLock } from './use-scroll-lock';
 
@@ -30,6 +31,9 @@ export function ChallengeAcceptedPrompt({
   onDecline: () => void;
 }) {
   const titleId = React.useId();
+
+  const [initialMicOn] = React.useState(() => readRematchMicIntent(session.id));
+  const rememberMic = React.useCallback((micOn: boolean) => rememberRematchMicIntent(session.id, micOn), [session.id]);
   const you = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
   const other = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
 
@@ -59,6 +63,8 @@ export function ChallengeAcceptedPrompt({
             avatarCid={you.avatar_cid}
             avatarValue={you.profile_space_id}
             micOnly
+            initialMicOn={initialMicOn}
+            onMicChange={rememberMic}
             fallback={<RematchParticipant participant={you} label="You" />}
           />
           <div className="relative grid w-7 place-items-center">
