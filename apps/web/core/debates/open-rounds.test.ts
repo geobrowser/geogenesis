@@ -360,3 +360,53 @@ describe('open rounds: the count-in after an Extend (GEO-3179)', () => {
     });
   });
 });
+
+describe('open rounds: a required rebuttal round before the first pick', () => {
+  const start = at('20:00:00.000');
+  const openingEnd = at('20:02:00.000');
+  const roundOneEnd = at('20:03:30.000');
+
+  function requiredRound(overrides: { max_rebuttal_rounds?: number } = {}): Debate {
+    const debate = listening();
+    return {
+      ...debate,
+      turn_durations_ms: [60_000, 60_000, 45_000, 45_000],
+      open_rounds: {
+        ...debate.open_rounds!,
+        required_rebuttal_rounds: 1,
+        turn_roles: ['opening', 'opening', 'rebuttal', 'rebuttal'],
+        ...overrides,
+      },
+    };
+  }
+
+  it('runs the opening straight into round 1, however late, with no decision', () => {
+    for (const nowMs of [openingEnd, at('20:02:30.000'), at('20:05:00.000')]) {
+      expect(openRoundGapAfterTurn(requiredRound(), 1, openingEnd, nowMs)).toEqual({
+        kind: 'continue',
+        nextTurnStartsAtMs: openingEnd,
+      });
+    }
+  });
+
+  it('decides after the required round, the first round that ends on a pick', () => {
+    expect(openRoundGapAfterTurn(requiredRound(), 3, roundOneEnd, at('20:03:31.000'))).toMatchObject({
+      kind: 'hold',
+      phase: { phase: 'deciding', roundIndex: 1, decisionDeadlineAtMs: at('20:03:40.000') },
+    });
+    expect(debateThankingStartsAtMs(requiredRound(), start, naturalTurnEnd)).toBeNull();
+  });
+
+  it('gives the last word to the round that ends on a pick, not the opening', () => {
+    expect(openRoundLastWord(requiredRound(), 1)).toBeNull();
+    expect(openRoundLastWord(requiredRound(), 3)).toBe('round');
+    expect(debateTurnRoleForDebate(requiredRound(), 2)).toBe('rebuttal');
+  });
+
+  it('ends at the required round when the cap is no higher', () => {
+    const capped = requiredRound({ max_rebuttal_rounds: 1 });
+    expect(openRoundLastWord(capped, 3)).toBe('debate');
+    expect(isDebatesLastTurn(capped, 3)).toBe(true);
+    expect(debateThankingStartsAtMs(capped, start, naturalTurnEnd)).toBe(roundOneEnd);
+  });
+});

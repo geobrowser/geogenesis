@@ -3171,7 +3171,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           participants={incomingRequestParticipants}
           currentUserId={currentUserId}
           formatId={incomingRequest.turn_format_id}
-          openRounds={requestOpenRounds(incomingRequest.max_rebuttal_rounds)}
+          openRounds={requestOpenRounds(incomingRequest)}
           busy={acceptRequest.isPending || rejectRequest.isPending}
           error={
             acceptRequest.error instanceof Error
