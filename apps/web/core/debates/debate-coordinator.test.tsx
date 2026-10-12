@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
-import { clearRematchJoinIntents, hasRematchJoinChoice, rememberRematchMicIntent } from './rematch-join-intent';
+import { clearRematchJoinIntents, hasAnsweredRematchJoin, markRematchAnswered } from './rematch-join-intent';
 
 const mocks = vi.hoisted(() => ({
   leaveRematchMutate: vi.fn(),
@@ -585,7 +585,7 @@ describe('DebateCoordinator', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Explore claims' }));
 
     expect(mocks.acceptChallengeMutate).toHaveBeenCalled();
-    expect(hasRematchJoinChoice('rematch-1')).toBe(true);
+    expect(hasAnsweredRematchJoin('rematch-1')).toBe(true);
   });
 
   it('asks the sender how to join instead of moving them', async () => {
@@ -613,7 +613,7 @@ describe('DebateCoordinator', () => {
       expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
     );
 
-    expect(hasRematchJoinChoice('rematch-1')).toBe(true);
+    expect(hasAnsweredRematchJoin('rematch-1')).toBe(true);
   });
 
   /*
@@ -641,7 +641,7 @@ describe('DebateCoordinator', () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = challengeRematchActivity();
-    rememberRematchMicIntent('rematch-1', true);
+    markRematchAnswered('rematch-1');
 
     render(<DebateCoordinator />);
 

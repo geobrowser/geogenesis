@@ -42,7 +42,8 @@ type DebateRequestMediaPreviewProps = {
   avatarValue?: string | null;
   retain?: React.MutableRefObject<boolean>;
   fallback?: React.ReactNode;
-  micOnly?: boolean;
+  initialMicOn?: boolean | null;
+  onMicChange?: (micOn: boolean) => void;
 };
 
 /**
@@ -66,16 +67,19 @@ function MediaPreview({
   avatarValue,
   retain,
   micOnly = false,
+  initialMicOn = null,
+  onMicChange,
   session,
 }: Omit<DebateRequestMediaPreviewProps, 'fallback'> & { session: DebateMediaSession }) {
   const [permission, setPermission] = React.useState<DebateMediaPermissions | null>(null);
 
-  const [want, setWant] = React.useState<DebateJoinState>({ micOn: false, cameraOn: false });
+  const [want, setWant] = React.useState<DebateJoinState>({ micOn: initialMicOn ?? false, cameraOn: false });
   const [missing, setMissing] = React.useState<{ mic: boolean; camera: boolean }>({ mic: false, camera: false });
   const [failure, setFailure] = React.useState<string | null>(null);
 
   const acquired = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
+  const initialMicOnRef = React.useRef(initialMicOn);
 
   React.useEffect(() => {
     let active = true;
@@ -84,6 +88,8 @@ function MediaPreview({
     void readMediaPermission().then(answer => {
       if (!active) return;
       setPermission(answer);
+
+      if (initialMicOnRef.current !== null) return;
       setWant({
         micOn: mayAutoStartPreview(answer.microphone),
         cameraOn: !micOnly && mayAutoStartPreview(answer.camera),
@@ -167,6 +173,11 @@ function MediaPreview({
   const cameraBlocked = !micOnly && permission !== null && isMediaBlocked(permission.camera);
   const micBlocked = permission !== null && isMediaBlocked(permission.microphone);
   const blocked = micOnly ? micBlocked : cameraBlocked && micBlocked;
+
+  React.useEffect(() => {
+    if (permission === null) return;
+    onMicChange?.(micOn);
+  }, [micOn, onMicChange, permission]);
 
   const toggle = (next: Partial<DebateJoinState>) => {
     if (next.micOn !== undefined && micBlocked) return;

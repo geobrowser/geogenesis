@@ -40,7 +40,7 @@ import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
 import { useOptionalDebateMediaSession } from './media-session';
-import { hasRematchJoinChoice, rememberRematchMicIntent } from './rematch-join-intent';
+import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchMicIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { sameId } from './rooms/room-presence';
@@ -234,7 +234,7 @@ export function DebateCoordinator() {
    * Re-read on every render rather than held in state: the answer lives in module memory so that
    * it survives the walk into the picker, and this is what closes the card as soon as it is given.
    */
-  const rematchChoiceMade = Boolean(activity?.rematch && hasRematchJoinChoice(activity.rematch.id));
+  const rematchAnswered = Boolean(activity?.rematch && hasAnsweredRematchJoin(activity.rematch.id));
   const [rematchAnswerTick, setRematchAnswerTick] = React.useState(0);
   const leaveRematch = useLeaveDebateRematch(activity?.rematch?.id ?? '');
   // Optional: a missing provider should cost the media choice, not the card.
@@ -246,7 +246,7 @@ export function DebateCoordinator() {
     hasAttention &&
     activity?.rematch &&
     !activity.rematch.source_debate_id &&
-    !rematchChoiceMade &&
+    !rematchAnswered &&
     (activity.rematch.status === 'browsing' || activity.rematch.status === 'request_pending')
       ? activity.rematch
       : null;
@@ -422,7 +422,7 @@ export function DebateCoordinator() {
     /*
      * A profile challenge waits for its sender to say how they want to join.
      */
-    if (!rematch.source_debate_id && !hasRematchJoinChoice(rematch.id) && rematch.participants.length >= 2) return;
+    if (!rematch.source_debate_id && !hasAnsweredRematchJoin(rematch.id) && rematch.participants.length >= 2) return;
     // Past that guard there is no room to hand off from — a session with no source debate comes
     // from the matchmaking hub or a profile challenge, so this coordinator is the only thing that
     // can route the viewer in, and it must. But it runs in *every* tab, and the guard above only
@@ -521,8 +521,7 @@ export function DebateCoordinator() {
           busy={leaveRematch.isPending || rematchAnswerTick > 0}
           error={rematchJoinError}
           onExplore={() => {
-            const micOn = mediaSession?.localTracksRef.current.some(track => track.mediaStreamTrack.kind === 'audio');
-            rememberRematchMicIntent(promptedRematchSender.id, Boolean(micOn));
+            markRematchAnswered(promptedRematchSender.id);
             setRematchAnswerTick(tick => tick + 1);
             rememberDebateReturnDestination();
             routeIntoDebate(() => router.push(debateRematchPath(promptedRematchSender)));
@@ -530,7 +529,7 @@ export function DebateCoordinator() {
           onDecline={() => {
             setRematchJoinError(null);
             leaveRematch.mutate(undefined, {
-              onSuccess: () => rememberRematchMicIntent(promptedRematchSender.id, false),
+              onSuccess: () => markRematchAnswered(promptedRematchSender.id),
               onError: error =>
                 setRematchJoinError(error instanceof Error ? error.message : 'Could not decline. Try again.'),
             });
@@ -554,7 +553,9 @@ export function DebateCoordinator() {
             );
             acceptChallenge.mutate(promptedChallenge.id, {
               onSuccess: result => {
-                if (result.session) rememberRematchMicIntent(result.session.id, micOn);
+                if (!result.session) return;
+                rememberRematchMicIntent(result.session.id, micOn);
+                markRematchAnswered(result.session.id);
               },
             });
           }}
