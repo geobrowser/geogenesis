@@ -225,8 +225,9 @@ function RoomLine({
     .map(side => ({ side, count: side.total_count + (side.position === viewerPosition ? 1 : 0) }))
     .filter(({ count }) => count > 0);
   return (
-    <div className="mt-3 flex items-center gap-2" data-testid="lobby-claim-room-line">
-      <Text as="p" variant="footnote" color="grey-04" className="flex min-w-0 flex-1 items-center gap-1.5">
+    // Wraps the offer under the counts when the card is too narrow for both.
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2" data-testid="lobby-claim-room-line">
+      <Text as="p" variant="footnote" color="grey-04" className="flex items-center gap-1.5">
         <span className="shrink-0">In this room:</span>
         {counted.map(({ side, count }, index) => (
           <React.Fragment key={String(side.position)}>
