@@ -114,9 +114,8 @@ function sameBatches(a: string[][], b: string[][]) {
 }
 
 /**
- * An Explore row as the room card reads it: the tab's Geo-wide sides, plus the room's where geo-chat
- * has an entry (none means nobody in the room holds a side, or a guest). An entry's id is geo-chat's
- * claim row, which host actions need.
+ * An Explore row for the room card: Geo-wide sides, plus the room's where geo-chat has an entry.
+ * The entry's id is geo-chat's claim row, which host actions need.
  */
 export function exploreRoomClaim(entry: MatchmakingClaim, roomRow: DebateLobbyClaim | undefined): LobbyRoomClaim {
   return {
