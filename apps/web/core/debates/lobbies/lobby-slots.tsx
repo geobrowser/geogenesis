@@ -4,11 +4,7 @@ import * as React from 'react';
 
 import { createPortal } from 'react-dom';
 
-/**
- * Places in the lobby layout that parts deeper in the tree draw into: the voice controls live inside
- * the voice room's provider but show in the bottom bar, and notices stack above it without pushing
- * the page.
- */
+/** Lobby layout spots that deeper parts draw into, e.g. voice controls rendered in the bottom bar. */
 export type LobbySlotName = 'controls' | 'notices';
 
 type LobbySlotTargets = Partial<Record<LobbySlotName, HTMLElement | null>>;

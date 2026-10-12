@@ -1,6 +1,8 @@
 'use client';
 
-import type * as React from 'react';
+import * as React from 'react';
+
+import { useAppBottomInset } from '~/core/app-bottom-inset';
 
 import { Text } from '~/design-system/text';
 
@@ -42,8 +44,14 @@ export function LobbyControlBar({
   /** Toasts, stacked just above the bar whatever its height. */
   notices?: React.ReactNode;
 }) {
+  const [footer, setFooter] = React.useState<HTMLElement | null>(null);
+  const height = useElementHeight(footer);
+  // Floating chrome (the assistant launcher) and dropdown placement keep clear of the bar.
+  useAppBottomInset('lobby-control-bar', height, height > 0);
+
   return (
     <footer
+      ref={setFooter}
       className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-grey-02 bg-white px-8 py-3 md:gap-2.5 md:px-4 md:pt-2.5 md:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
       data-testid="lobby-control-bar"
     >
@@ -69,6 +77,20 @@ export function LobbyControlBar({
       </div>
     </footer>
   );
+}
+
+/** The element's border-box height, kept current as it resizes; 0 until measured. */
+function useElementHeight(element: HTMLElement | null) {
+  const [height, setHeight] = React.useState(0);
+  React.useLayoutEffect(() => {
+    if (!element) return;
+    setHeight(element.offsetHeight);
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(() => setHeight(element.offsetHeight));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [element]);
+  return height;
 }
 
 /** Raise hand / "Hand raised · Lower", for a listener who is in the lobby, with its hint. */

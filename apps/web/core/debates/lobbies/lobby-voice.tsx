@@ -620,9 +620,8 @@ function ConnectedGuestVoice({
 }
 
 /**
- * Mute, or the listening pill, and voice's status, drawn into the lobby's bottom bar. The status
- * line is for screen readers while a mic control already says it, and on a phone unless it asks
- * for a tap.
+ * Mute or the listening pill, plus voice status, in the lobby's bottom bar. The status is sr-only
+ * beside a mic control, and on a phone unless it needs a tap.
  */
 function VoiceBar({
   notice,

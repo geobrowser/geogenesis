@@ -109,6 +109,17 @@ describe('LobbyControlBar', () => {
     expect(screen.queryByText(LOBBY_CONTROL_COPY.hint)).toBeNull();
   });
 
+  it('claims its height as the app bottom inset, so floating chrome sits above it', () => {
+    const spy = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(64);
+    const { unmount } = render(
+      <LobbyControlBar controlsRef={() => undefined} showHint leave={<button type="button">Leave lobby</button>} />
+    );
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('64px');
+    unmount();
+    expect(document.documentElement.style.getPropertyValue('--app-bottom-inset')).toBe('');
+    spy.mockRestore();
+  });
+
   it('draws a guest’s banner inside the bar', () => {
     render(
       <LobbyControlBar
