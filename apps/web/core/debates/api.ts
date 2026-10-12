@@ -319,6 +319,13 @@ export type DebateOpenRounds = {
    * geo-chat that predates it, which reads as no count-in.
    */
   extend_count_in_ms?: number;
+  /**
+   * Rebuttal rounds every debate plays: rounds `1..=required_rebuttal_rounds` are appended with the
+   * opening, the rounds before the last of them run straight on, and the first Extend / End pick
+   * follows the last of them. Snapshotted per debate like the cap, and absent from a geo-chat that
+   * predates it, which reads as `0`: the opening ends on a pick, as it always did.
+   */
+  required_rebuttal_rounds?: number;
   /** The round this block describes. In `result` it is the round that just resolved. */
   round_index: number;
   phase: OpenRoundsPhase;
@@ -429,6 +436,8 @@ export type DebateRematchRequest = {
   turn_format_id: string;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
+  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  required_rebuttal_rounds?: number | null;
   created_at: string;
   expires_at: string;
 };
@@ -862,6 +871,8 @@ export type DebateRequest = {
   turn_format_id: string | null;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
+  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  required_rebuttal_rounds?: number | null;
   created_at: string;
   /** Fixed for the lifetime of the request, even as it advances between recipients. */
   expires_at: string;
