@@ -1,5 +1,7 @@
 'use client';
 
+import * as RadioGroup from '@radix-ui/react-radio-group';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -7,6 +9,7 @@ import Link from 'next/link';
 import { createPortal } from 'react-dom';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
+import { Check } from '~/design-system/icons/check';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 
@@ -163,21 +166,24 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
               <Input value={name} placeholder="Debate hour" onChange={event => setName(event.target.value)} autoFocus />
             </label>
 
-            <fieldset className="grid gap-1.5">
-              <legend className="mb-1.5">
-                <Text as="span" variant="footnoteMedium">
-                  When
-                </Text>
-              </legend>
-              <div className="flex gap-2">
-                <WhenOption checked={when === 'now'} onSelect={() => setWhen('now')}>
+            <RadioGroup.Root
+              aria-label="When"
+              value={when}
+              onValueChange={value => setWhen(value === 'later' ? 'later' : 'now')}
+              className="grid gap-1.5"
+            >
+              <Text as="span" variant="footnoteMedium">
+                When
+              </Text>
+              <div className="space-y-1 rounded-lg border border-grey-02 p-1">
+                <WhenOption value="now" selected={when === 'now'}>
                   Open now
                 </WhenOption>
-                <WhenOption checked={when === 'later'} onSelect={() => setWhen('later')}>
-                  Schedule
+                <WhenOption value="later" selected={when === 'later'}>
+                  Schedule a start time
                 </WhenOption>
               </div>
-            </fieldset>
+            </RadioGroup.Root>
 
             {when === 'later' ? (
               <div className="grid gap-1.5">
@@ -229,25 +235,23 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** One half of the Open now / Schedule choice: a radio drawn as a pill, dark when chosen. */
-function WhenOption({
-  checked,
-  onSelect,
-  children,
-}: {
-  checked: boolean;
-  onSelect: () => void;
-  children: React.ReactNode;
-}) {
+/** A row of the When choice, drawn like the framed device chooser (device-option-group.tsx). */
+function WhenOption({ value, selected, children }: { value: string; selected: boolean; children: React.ReactNode }) {
   return (
-    <label
+    <RadioGroup.Item
+      value={value}
       className={cx(
-        'flex h-7 flex-1 cursor-pointer items-center justify-center rounded-full border text-metadata transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-ctaPrimary',
-        checked ? 'border-text bg-text text-white' : 'border-grey-02 bg-white text-text hover:bg-grey-01'
+        'flex w-full items-center justify-between gap-3 rounded-md px-4 py-3 text-left text-metadata text-text outline-none',
+        selected ? 'bg-grey-01' : 'hover:bg-grey-01',
+        'focus-visible:ring-1 focus-visible:ring-text'
       )}
     >
-      <input type="radio" name="when" checked={checked} onChange={onSelect} className="sr-only" />
-      {children}
-    </label>
+      <span className="min-w-0 truncate">{children}</span>
+      {selected && (
+        <span aria-hidden="true" className="shrink-0">
+          <Check />
+        </span>
+      )}
+    </RadioGroup.Item>
   );
 }

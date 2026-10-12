@@ -9,6 +9,15 @@ vi.mock('./hooks', () => ({
 }));
 vi.mock('./lobby-analytics', () => ({ lobbyShareUrl: (id: string) => `/debate/${id}`, markLobbyEntry: vi.fn() }));
 vi.mock('../use-scroll-lock', () => ({ useScrollLock: () => {} }));
+// Radix measures the hidden input it adds to radios inside a form; jsdom has no ResizeObserver.
+vi.stubGlobal(
+  'ResizeObserver',
+  class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  }
+);
 
 const { OpenLobbyDialog, lobbyRequestFor, localTimeZone, toDateTimeLocalValue } = await import('./open-lobby-dialog');
 
@@ -44,11 +53,13 @@ describe('lobbyRequestFor', () => {
 });
 
 describe('OpenLobbyDialog', () => {
-  it('titles and describes the dialog, and offers Open now and Schedule', () => {
+  it('titles and describes the dialog, and offers Open now and Schedule a start time', () => {
     render(<OpenLobbyDialog onClose={vi.fn()} />);
     expect(screen.getByRole('dialog', { name: 'Open a debate lobby' })).toBeTruthy();
     expect(screen.getByText(/A voice room anyone can join/)).toBeTruthy();
-    expect((screen.getByRole('radio', { name: 'Open now' }) as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByRole('radiogroup', { name: 'When' })).toBeTruthy();
+    expect(screen.getByRole('radio', { name: 'Open now' }).getAttribute('aria-checked')).toBe('true');
+    expect(screen.getByRole('radio', { name: 'Schedule a start time' }).getAttribute('aria-checked')).toBe('false');
     expect(screen.queryByLabelText('Date')).toBeNull();
   });
 
@@ -56,7 +67,8 @@ describe('OpenLobbyDialog', () => {
     mocks.mutate.mockClear();
     render(<OpenLobbyDialog onClose={vi.fn()} />);
     fireEvent.change(screen.getByRole('textbox'), { target: { value: 'Hour' } });
-    fireEvent.click(screen.getByRole('radio', { name: 'Schedule' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Schedule a start time' }));
+    expect(screen.getByRole('radio', { name: 'Schedule a start time' }).getAttribute('aria-checked')).toBe('true');
 
     const zone = localTimeZone();
     expect(zone).toBeTruthy();
