@@ -225,7 +225,7 @@ describe('answering in the tab', () => {
   it('offers no answer on one the viewer is not holding up', () => {
     setup({ answerable: [request({ viewer_must_answer: false })] });
 
-    expect(screen.getByText('Waiting on their answer · Expires at start')).toBeInTheDocument();
+    expect(screen.getByText('Not confirmed until Your opponent answers · Expires at start')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Accept' })).not.toBeInTheDocument();
   });
 
@@ -359,9 +359,38 @@ describe('calling a scheduled debate off', () => {
   });
 
   it('offers no cancel on a pending request someone else proposed', () => {
-    setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-admin' })] });
+    setup({
+      answerable: [
+        request({
+          viewer_must_answer: false,
+          proposed_by_user_id: 'user-admin',
+          participants: [
+            { user_id: 'user-me', accepted: null },
+            { user_id: 'user-them', accepted: null },
+          ],
+        }),
+      ],
+    });
 
     expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel debate' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+  });
+
+  // GEO-3233: an admin match neither debater proposed; the first to accept is not stuck.
+  it('lets someone who accepted cancel or reschedule before the partner answers', async () => {
+    mocks.people = [ADA];
+    const { user } = setup({
+      answerable: [request({ viewer_must_answer: false, proposed_by_user_id: null, created_by_admin: true })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Reschedule' }));
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+    await user.click(screen.getByRole('button', { name: 'close week' }));
+
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    await user.click(screen.getByRole('button', { name: 'Cancel debate' }));
+    expect(mocks.cancel.mock.calls[0][0]).toEqual({ requestId: 'request-1' });
   });
 });
 
@@ -404,7 +433,7 @@ describe('moving a scheduled debate', () => {
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
   });
 
-  it('is not offered on a pending request, which is answered or withdrawn instead', () => {
+  it('is not offered on a request the viewer must still answer', () => {
     setup({ answerable: [request()] });
 
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
