@@ -7,11 +7,12 @@ import type { OpenRoundsRoomPhase } from './open-rounds';
 /** Past five rebuttal rounds the pips halve, so round 10 still fits beside Leave on a 320px phone. */
 const compactAfterRounds = 5;
 
-type PipKind = 'opening' | 'round' | 'next';
+type PipKind = 'opening' | 'round' | 'required' | 'next';
 
 const pipWidth: Record<PipKind, { regular: string; compact: string }> = {
   opening: { regular: 'w-5', compact: 'w-2.5' },
   round: { regular: 'w-3', compact: 'w-1.5' },
+  required: { regular: 'w-3', compact: 'w-1.5' },
   next: { regular: 'w-3', compact: 'w-1.5' },
 };
 
@@ -51,16 +52,28 @@ export function rebuttalRoundsLabel(rounds: number) {
 
 /**
  * Where an Open rounds debate is (GEO-3174): the opening, or rebuttal round N of up to the cap, one
- * pip per round run, and a dashed pip while both debaters could still unlock another.
+ * pip per round run, a grey pip for each required round still to come (GEO-3258), and a dashed pip
+ * while both debaters could still unlock another.
  *
  * `phase` is the room's phase, not the server's, so the counter moves with the room's clock. In
  * `result` its round is still the one that just resolved, so the counter only advances when the
  * next round starts, never while both picks are still on screen.
  */
-export function DebateRoundIndicator({ phase, maxRounds }: { phase: OpenRoundsRoomPhase; maxRounds: number }) {
+export function DebateRoundIndicator({
+  phase,
+  maxRounds,
+  requiredRounds = 0,
+}: {
+  phase: OpenRoundsRoomPhase;
+  maxRounds: number;
+  /** Rebuttal rounds every debate plays, from `openRoundsRequiredRebuttalRounds`. */
+  requiredRounds?: number;
+}) {
   const { roundIndex } = phase;
   const ended = phase.phase === 'finished' || (phase.phase === 'result' && phase.outcome === 'end');
-  const anotherPossible = !ended && roundIndex < maxRounds;
+  // Required rounds are certain, so they are drawn as coming rather than as possible.
+  const requiredToCome = ended ? 0 : Math.max(0, Math.min(requiredRounds, maxRounds) - roundIndex);
+  const anotherPossible = !ended && roundIndex + requiredToCome < maxRounds;
   // A finished debate has no round running, so it highlights none.
   const currentRound = phase.phase === 'finished' ? null : roundIndex;
   const compact = roundIndex > compactAfterRounds;
@@ -73,7 +86,9 @@ export function DebateRoundIndicator({ phase, maxRounds }: { phase: OpenRoundsRo
         compact ? pipWidth[kind].compact : pipWidth[kind].regular,
         kind === 'next'
           ? 'h-[7px] border-[1.5px] border-dashed border-grey-03'
-          : cx('h-1.5', round === currentRound ? 'bg-purple ring-2 ring-purple/20' : 'bg-text')
+          : kind === 'required'
+            ? 'h-1.5 bg-grey-03'
+            : cx('h-1.5', round === currentRound ? 'bg-purple ring-2 ring-purple/20' : 'bg-text')
       )}
     />
   );
@@ -91,12 +106,18 @@ export function DebateRoundIndicator({ phase, maxRounds }: { phase: OpenRoundsRo
           {roundIndex === 0
             ? 'Opening. No rebuttal rounds yet.'
             : `Round ${roundIndex} of ${maxRounds}. ${rebuttalRoundsLabel(roundIndex)} so far.`}{' '}
-          {anotherPossible ? 'Another round is possible.' : 'No more rounds.'}
+          {requiredToCome > 0 && `Round ${roundIndex + 1} is next. `}
+          {anotherPossible
+            ? requiredToCome > 0
+              ? 'More rounds are possible after it.'
+              : 'Another round is possible.'
+            : 'No more rounds.'}
         </span>
       </p>
       <RoundPipRow className="overflow-hidden">
         {pip('opening', 0)}
         {Array.from({ length: roundIndex }, (_, index) => pip('round', index + 1))}
+        {Array.from({ length: requiredToCome }, (_, index) => pip('required', roundIndex + index + 1))}
         {anotherPossible && pip('next', 'next')}
       </RoundPipRow>
     </div>
