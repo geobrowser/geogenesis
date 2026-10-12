@@ -2,7 +2,7 @@
 
 export type DebateRematchJoinIntent = {
   micOn: boolean;
-  cameraOn: boolean | null;
+  cameraOn: boolean;
 };
 
 const joinIntentBySessionId = new Map<string, DebateRematchJoinIntent>();

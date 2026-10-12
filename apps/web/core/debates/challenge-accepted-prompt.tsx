@@ -34,7 +34,7 @@ export function ChallengeAcceptedPrompt({
 
   const [initialJoinState] = React.useState(() => {
     const remembered = readRematchJoinIntent(session.id);
-    return remembered ? { micOn: remembered.micOn, cameraOn: remembered.cameraOn ?? false } : null;
+    return remembered ?? null;
   });
   const rememberChoice = React.useCallback(
     (state: { micOn: boolean; cameraOn: boolean }) => rememberRematchJoinIntent(session.id, state),

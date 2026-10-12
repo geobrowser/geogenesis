@@ -2382,14 +2382,15 @@ describe('the camera', () => {
     expect(await screen.findByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
   });
 
-  it('stays off when nothing asked about the camera', async () => {
+  it('leaves the camera off when only the microphone was chosen', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
-    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: null });
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: false });
 
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
     expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(mocks.setCameraEnabled).not.toHaveBeenCalledWith(true);
   });
 
   it('keeps the call on audio when the camera cannot open, and asks once', async () => {
