@@ -181,7 +181,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
 
             {when === 'later' ? (
               <div className="grid gap-1.5">
-                <div className="flex gap-3">
+                <div className="flex items-end gap-3">
                   <label className="grid min-w-0 flex-1 gap-1.5">
                     <Text as="span" variant="footnoteMedium">
                       Date
