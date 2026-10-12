@@ -208,6 +208,54 @@ describe('the picture survives the camera being switched off and on', () => {
   });
 });
 
+/*
+ * A card whose next screen carries voice only — the claim picker. Offering a camera there would
+ * take a choice the app cannot honour yet and preview it, which is worse than not asking.
+ */
+describe('offering the microphone alone', () => {
+  it('shows no camera control and never opens the camera', async () => {
+    mocks.permission = 'granted';
+    render(<DebateRequestMediaPreview sessionKey="debate-challenge:c1" micOnly />);
+
+    await waitFor(() =>
+      expect(mocks.ensurePreview).toHaveBeenLastCalledWith(expect.objectContaining({ audio: true, video: false }))
+    );
+    expect(screen.getByRole('button', { name: /microphone/i })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+  });
+
+  it('says nothing about a camera', async () => {
+    mocks.permission = 'granted';
+    render(<DebateRequestMediaPreview sessionKey="debate-challenge:c1" micOnly />);
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(screen.queryByText(/camera/i)).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn microphone off' }));
+
+    expect(await screen.findByText('Joining muted')).toBeInTheDocument();
+  });
+
+  it('names only the microphone when it is blocked', async () => {
+    mocks.cameraPermission = 'denied';
+    mocks.micPermission = 'denied';
+    render(<DebateRequestMediaPreview sessionKey="debate-challenge:c1" micOnly />);
+
+    expect(await screen.findByText(/^Mic is blocked for this site/)).toBeInTheDocument();
+    expect(screen.queryByText(/Camera and mic are blocked/)).toBeNull();
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+  });
+
+  it('ignores a blocked camera entirely', async () => {
+    mocks.cameraPermission = 'denied';
+    mocks.micPermission = 'granted';
+    render(<DebateRequestMediaPreview sessionKey="debate-challenge:c1" micOnly />);
+
+    expect(await screen.findByRole('button', { name: /microphone/i })).toBeInTheDocument();
+    expect(screen.queryByText(/blocked/i)).toBeNull();
+  });
+});
+
 describe('one device refused and the other allowed', () => {
   it('keeps the microphone switch when only the camera was refused', async () => {
     mocks.cameraPermission = 'denied';

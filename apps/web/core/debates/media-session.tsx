@@ -562,6 +562,11 @@ export function debateChallengeMediaSessionKey(challengeId: string) {
   return `debate-challenge:${challengeId}`;
 }
 
+/** The session a claim-picker card owns, which has a picker session but no debate yet. */
+export function debateRematchMediaSessionKey(sessionId: string) {
+  return `debate-rematch:${sessionId}`;
+}
+
 export function debateRequestMediaSessionKey(requestId: string) {
   return `debate-request:${requestId}`;
 }

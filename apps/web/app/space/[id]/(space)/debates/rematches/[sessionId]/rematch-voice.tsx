@@ -31,6 +31,7 @@ import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room-ownership';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
+import { readRematchMicIntent } from '~/core/debates/rematch-join-intent';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
@@ -49,7 +50,13 @@ import {
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
 // debate-again room preserves that live conversation. A profile challenge has no preceding call or
 // user gesture that opened the microphone; it continues to join listen-only until the user unmutes.
+/**
+ * Whether the microphone opens on arrival: a choice made on the way in wins, if there is one.
+ * Otherwise live after a debate, muted off a challenge.
+ */
 function microphoneEnabledByDefault(session: DebateRematchSession) {
+  const chosen = readRematchMicIntent(session.id);
+  if (chosen !== null) return chosen;
   return session.source_debate_id !== null;
 }
 

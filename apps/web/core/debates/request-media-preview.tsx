@@ -42,6 +42,7 @@ type DebateRequestMediaPreviewProps = {
   avatarValue?: string | null;
   retain?: React.MutableRefObject<boolean>;
   fallback?: React.ReactNode;
+  micOnly?: boolean;
 };
 
 /**
@@ -64,6 +65,7 @@ function MediaPreview({
   avatarCid,
   avatarValue,
   retain,
+  micOnly = false,
   session,
 }: Omit<DebateRequestMediaPreviewProps, 'fallback'> & { session: DebateMediaSession }) {
   const [permission, setPermission] = React.useState<DebateMediaPermissions | null>(null);
@@ -82,7 +84,10 @@ function MediaPreview({
     void readMediaPermission().then(answer => {
       if (!active) return;
       setPermission(answer);
-      setWant({ micOn: mayAutoStartPreview(answer.microphone), cameraOn: mayAutoStartPreview(answer.camera) });
+      setWant({
+        micOn: mayAutoStartPreview(answer.microphone),
+        cameraOn: !micOnly && mayAutoStartPreview(answer.camera),
+      });
     });
 
     return () => {
@@ -158,9 +163,10 @@ function MediaPreview({
     video.srcObject = session.previewStream ?? null;
   }, [session.previewStream, cameraOn]);
 
-  const cameraBlocked = permission !== null && isMediaBlocked(permission.camera);
+  // A camera that is not offered is not reported blocked either: there would be nothing to unblock.
+  const cameraBlocked = !micOnly && permission !== null && isMediaBlocked(permission.camera);
   const micBlocked = permission !== null && isMediaBlocked(permission.microphone);
-  const blocked = cameraBlocked && micBlocked;
+  const blocked = micOnly ? micBlocked : cameraBlocked && micBlocked;
 
   const toggle = (next: Partial<DebateJoinState>) => {
     if (next.micOn !== undefined && micBlocked) return;
@@ -169,7 +175,7 @@ function MediaPreview({
     setWant(current => ({ ...current, ...next }));
   };
 
-  const { summary, announcement } = describeJoinState({ micOn, cameraOn });
+  const { summary, announcement } = describeJoinState({ micOn, cameraOn }, { micOnly });
 
   const toggles = blocked ? null : (
     <div className="flex items-center justify-center gap-2">
@@ -182,7 +188,7 @@ function MediaPreview({
           <MicrophoneIcon muted={!micOn} />
         </DebateTileToggleButton>
       )}
-      {!cameraBlocked && (
+      {!micOnly && !cameraBlocked && (
         <DebateTileToggleButton
           ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
           enabled={cameraOn}
@@ -219,7 +225,9 @@ function MediaPreview({
 
       {blocked ? (
         <Text variant="footnote" color="grey-04">
-          Camera and mic are blocked for this site. Allow them in your browser&apos;s address bar to turn them on.
+          {micOnly
+            ? 'Mic is blocked for this site. Allow it in your browser\u2019s address bar to turn it on.'
+            : 'Camera and mic are blocked for this site. Allow them in your browser\u2019s address bar to turn them on.'}
         </Text>
       ) : cameraBlocked ? (
         <Text variant="footnote" color="grey-04">

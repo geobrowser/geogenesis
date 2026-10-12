@@ -6,8 +6,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
+import { clearRematchJoinIntents, hasRematchJoinChoice, rememberRematchMicIntent } from './rematch-join-intent';
 
 const mocks = vi.hoisted(() => ({
+  leaveRematchMutate: vi.fn(),
   push: vi.fn(),
   /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
   roomAtPath: null as { kind: 'debate' | 'lobby' } | null,
@@ -79,6 +81,7 @@ vi.mock('./hooks', () => ({
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
   useAcceptDebateChallenge: () => ({ mutate: mocks.acceptChallengeMutate, isPending: false, error: null }),
+  useLeaveDebateRematch: () => ({ mutate: mocks.leaveRematchMutate, isPending: false, error: null }),
   useRejectDebateChallenge: () => ({ mutate: mocks.rejectChallengeMutate, isPending: false, error: null }),
   useAbortDebate: () => ({ mutateAsync: mocks.abortMutateAsync, isPending: false }),
   useClearDebateActivity: () => mocks.clearDebateActivity,
@@ -225,6 +228,7 @@ afterEach(() => {
   cleanup();
   sessionStorage.clear();
   clearEnteringDebate();
+  clearRematchJoinIntents();
   vi.restoreAllMocks();
 });
 
@@ -564,6 +568,100 @@ describe('DebateCoordinator', () => {
 
     // Give the effect the same room to fire that the focused-tab case below needs.
     await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('records the answer given on the challenge card against the new session', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = { ...activityWithRematch('browsing'), rematch: null, challenge: pendingChallenge() };
+    mocks.acceptChallengeMutate.mockImplementation(
+      (_id: string, options?: { onSuccess?: (result: { session: { id: string } }) => void }) => {
+        options?.onSuccess?.({ session: { id: 'rematch-1' } });
+      }
+    );
+
+    render(<DebateCoordinator />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Explore claims' }));
+
+    expect(mocks.acceptChallengeMutate).toHaveBeenCalled();
+    expect(hasRematchJoinChoice('rematch-1')).toBe(true);
+  });
+
+  it('asks the sender how to join instead of moving them', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    expect(await screen.findByText('Remote speaker accepted your request')).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  it('walks them in once they choose', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    render(<DebateCoordinator />);
+    await screen.findByText('Remote speaker accepted your request');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+
+    expect(hasRematchJoinChoice('rematch-1')).toBe(true);
+  });
+
+  /*
+   * Declining tells the other person. They are waiting in the picker for someone who has decided
+   * not to come, and closing this card locally would leave them there until it expires.
+   */
+  it('leaves the session when the sender declines', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    render(<DebateCoordinator />);
+    await screen.findByText('Remote speaker accepted your request');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Decline' }));
+
+    expect(mocks.leaveRematchMutate).toHaveBeenCalled();
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  /*
+   * The person who accepted answered on the challenge card a moment earlier, so they are walked in
+   * as before rather than asked twice.
+   */
+  it('does not ask someone who has already answered', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    rememberRematchMicIntent('rematch-1', true);
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  // One tab, the same rule the routing it replaces uses: visible *and* focused.
+  it('shows the card on no tab the viewer is not looking at', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.hasAttention = false;
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
@@ -1496,6 +1594,43 @@ function upcomingRoom(overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDeba
     others_present: false,
     rematch_session_id: null,
     ...overrides,
+  };
+}
+
+/**
+ * A profile challenge's picker session, named.
+ *
+ * The plain fixture carries `participants: []`, which is not a shape production produces for a
+ * challenge — it names both people. Sessions that cannot name them fall back to routing, so a test
+ * using the empty fixture exercises that fallback rather than the card.
+ */
+function challengeRematchActivity(): DebateActivity {
+  const activity = activityWithRematch('browsing');
+  return {
+    ...activity,
+    challenge: null,
+    rematch: {
+      ...activity.rematch!,
+      source_debate_id: null,
+      participants: [
+        {
+          user_id: 'user-requester',
+          profile_space_id: 'profile-requester',
+          display_name: 'You',
+          avatar_cid: null,
+          participant_slot: 1,
+          consented_at: null,
+        },
+        {
+          user_id: 'user-recipient',
+          profile_space_id: 'profile-recipient',
+          display_name: 'Remote speaker',
+          avatar_cid: null,
+          participant_slot: 2,
+          consented_at: null,
+        },
+      ],
+    },
   };
 }
 
