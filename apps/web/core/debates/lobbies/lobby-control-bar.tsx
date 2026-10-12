@@ -61,7 +61,8 @@ export function LobbyControlBar({
       className="sticky bottom-0 z-10 flex flex-col gap-3 border-t border-grey-02 bg-white px-8 py-3 md:gap-2.5 md:px-4 md:pt-2.5 md:pb-[max(1.5rem,env(safe-area-inset-bottom))]"
       data-testid="lobby-control-bar"
     >
-      <div className="pointer-events-none absolute inset-x-4 bottom-full mb-3 flex flex-col items-center gap-2">
+      {/* Inset past the assistant launcher, which sits just above the bar at the right edge. */}
+      <div className="pointer-events-none absolute inset-x-4 bottom-full mb-3 flex flex-col items-center gap-2 pr-12">
         {notices}
       </div>
       {banner}
