@@ -9,12 +9,11 @@ const compactAfterRounds = 5;
 
 type PipKind = 'opening' | 'round' | 'required' | 'next';
 
-const pipWidth: Record<PipKind, { regular: string; compact: string }> = {
-  opening: { regular: 'w-5', compact: 'w-2.5' },
-  round: { regular: 'w-3', compact: 'w-1.5' },
-  required: { regular: 'w-3', compact: 'w-1.5' },
-  next: { regular: 'w-3', compact: 'w-1.5' },
-};
+/** The opening is drawn wider than every round after it. */
+function pipWidth(kind: PipKind, compact: boolean) {
+  if (kind === 'opening') return compact ? 'w-2.5' : 'w-5';
+  return compact ? 'w-1.5' : 'w-3';
+}
 
 /** One round's pip. `data-round-pip` is what tests read the pips by. */
 function RoundPip({ round, className }: { round: number | 'next'; className: string }) {
@@ -43,6 +42,11 @@ export function DebateRoundPips({ rounds, className }: { rounds: number; classNa
       ))}
     </RoundPipRow>
   );
+}
+
+/** "Round 1 is next.", "Rounds 1 to 2 are next." */
+function requiredRoundsToComeLabel(first: number, last: number) {
+  return first === last ? `Round ${first} is next.` : `Rounds ${first} to ${last} are next.`;
 }
 
 /** "1 rebuttal round", "3 rebuttal rounds". */
@@ -76,14 +80,14 @@ export function DebateRoundIndicator({
   const anotherPossible = !ended && roundIndex + requiredToCome < maxRounds;
   // A finished debate has no round running, so it highlights none.
   const currentRound = phase.phase === 'finished' ? null : roundIndex;
-  const compact = roundIndex > compactAfterRounds;
+  const compact = roundIndex + requiredToCome > compactAfterRounds;
 
   const pip = (kind: PipKind, round: number | 'next') => (
     <RoundPip
       key={round}
       round={round}
       className={cx(
-        compact ? pipWidth[kind].compact : pipWidth[kind].regular,
+        pipWidth(kind, compact),
         kind === 'next'
           ? 'h-[7px] border-[1.5px] border-dashed border-grey-03'
           : kind === 'required'
@@ -106,10 +110,10 @@ export function DebateRoundIndicator({
           {roundIndex === 0
             ? 'Opening. No rebuttal rounds yet.'
             : `Round ${roundIndex} of ${maxRounds}. ${rebuttalRoundsLabel(roundIndex)} so far.`}{' '}
-          {requiredToCome > 0 && `Round ${roundIndex + 1} is next. `}
+          {requiredToCome > 0 && `${requiredRoundsToComeLabel(roundIndex + 1, roundIndex + requiredToCome)} `}
           {anotherPossible
             ? requiredToCome > 0
-              ? 'More rounds are possible after it.'
+              ? 'More rounds are possible after that.'
               : 'Another round is possible.'
             : 'No more rounds.'}
         </span>

@@ -94,7 +94,7 @@ describe('DebateRoundIndicator', () => {
 
     expect(screen.getByText('Opening')).toBeInTheDocument();
     expect(
-      screen.getByText('Opening. No rebuttal rounds yet. Round 1 is next. More rounds are possible after it.')
+      screen.getByText('Opening. No rebuttal rounds yet. Round 1 is next. More rounds are possible after that.')
     ).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', 'next']);
     expect(document.querySelector('[data-round-pip="1"]')).toHaveClass('bg-grey-03');
@@ -120,5 +120,15 @@ describe('DebateRoundIndicator', () => {
     const { pips } = renderIndicator({ phase: 'finished', roundIndex: 0, isFinalRound: false }, 10, 1);
 
     expect(pips).toEqual(['0']);
+  });
+
+  it('counts every required round still to come, and keeps the row compact when there are many', () => {
+    const { pips } = renderIndicator(speaking(0), 10, 6);
+
+    expect(
+      screen.getByText('Opening. No rebuttal rounds yet. Rounds 1 to 6 are next. More rounds are possible after that.')
+    ).toBeInTheDocument();
+    expect(pips).toEqual(['0', '1', '2', '3', '4', '5', '6', 'next']);
+    expect(document.querySelector('[data-round-pip="6"]')).toHaveClass('w-1.5');
   });
 });
