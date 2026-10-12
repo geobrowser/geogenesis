@@ -73,6 +73,22 @@ export function isFinalOpenRound(openRounds: Pick<DebateOpenRounds, 'max_rebutta
   return roundIndex >= openRounds.max_rebuttal_rounds;
 }
 
+/** The rebuttal rounds that run before the first pick. `0` from a geo-chat that does not send it. */
+export function openRoundsRequiredRebuttalRounds(openRounds: Pick<DebateOpenRounds, 'required_rebuttal_rounds'>) {
+  return Math.max(0, openRounds.required_rebuttal_rounds ?? 0);
+}
+
+/**
+ * Whether a round ends on a pick. The opening and the required rebuttal rounds after it run straight
+ * on, like a fixed format's rounds, and the cap round goes straight to thanking.
+ */
+export function openRoundEndsOnPick(
+  openRounds: Pick<DebateOpenRounds, 'max_rebuttal_rounds' | 'required_rebuttal_rounds'>,
+  roundIndex: number
+) {
+  return roundIndex >= openRoundsRequiredRebuttalRounds(openRounds) && !isFinalOpenRound(openRounds, roundIndex);
+}
+
 /**
  * Whether thanking follows this turn directly. For a fixed format that is its last turn. For Open
  * rounds it is only the second turn of the cap round: every other round's last turn is followed by
@@ -112,16 +128,18 @@ export function openRoundRevealedPicks(
 }
 
 /**
- * Whether the second turn of a round is running, which every round but the cap ends on a pick, so
- * whoever speaks it has the last word before both decide (GEO-3179). The cap round's second turn
- * is the last word of the whole debate.
+ * Whether the second turn of a round is running that ends on a pick, so whoever speaks it has the
+ * last word before both decide (GEO-3179). The cap round's second turn is the last word of the whole
+ * debate. A required round runs straight into the next, so its second turn is neither.
  */
 export function openRoundLastWord(
   debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>,
   turnIndex: number | null
 ): 'round' | 'debate' | null {
   if (!isOpenRoundsDebate(debate) || turnIndex === null || turnIndex % 2 !== 1) return null;
-  return isFinalOpenRound(debate.open_rounds, openRoundIndexForTurn(turnIndex)) ? 'debate' : 'round';
+  const roundIndex = openRoundIndexForTurn(turnIndex);
+  if (isFinalOpenRound(debate.open_rounds, roundIndex)) return 'debate';
+  return openRoundEndsOnPick(debate.open_rounds, roundIndex) ? 'round' : null;
 }
 
 /**
@@ -141,8 +159,9 @@ export function debateTurnRoleForDebate(
 /**
  * What follows `turnIndex`, which ended at `turnEndsAtMs`, at `nowMs`.
  *
- * Fixed formats, the first turn of a round and the cap round's last turn answer `continue` at
- * `turnEndsAtMs`, which is exactly what the room did before Open rounds existed. Otherwise the turn
+ * Fixed formats, the first turn of a round, the last turn of the opening and of each required round,
+ * and the cap round's last turn answer `continue` at `turnEndsAtMs`, which is exactly what the room
+ * did before Open rounds existed. Otherwise the turn
  * ended a round, and the round is deciding until it resolves, then in its result window until
  * `decision_resolved_at + result_window_ms`, then thanking after an End. After an Extend the opener's
  * count-in (`extend_count_in_ms`) follows the window, and then the next round (`continue`).
@@ -161,7 +180,7 @@ export function openRoundGapAfterTurn(
 
   const openRounds = debate.open_rounds;
   const roundIndex = openRoundIndexForTurn(turnIndex);
-  if (isFinalOpenRound(openRounds, roundIndex)) return proceed;
+  if (!openRoundEndsOnPick(openRounds, roundIndex)) return proceed;
 
   const decisionDeadlineAtMs = turnEndsAtMs + openRounds.decision_window_ms;
   const deciding: OpenRoundGap = {

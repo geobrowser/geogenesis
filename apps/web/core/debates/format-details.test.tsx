@@ -47,16 +47,48 @@ describe('DebateFormatDetails', () => {
 
   // GEO-3201: the server decides the format and cap when the request is made.
   it('shows the cap a pending request carries', () => {
-    renderDetails({ formatId: 'open_rounds', openRounds: requestOpenRounds(4) });
+    renderDetails({ formatId: 'open_rounds', openRounds: requestOpenRounds({ max_rebuttal_rounds: 4 }) });
 
     expect(screen.getByText('A round happens only if you both pick Extend. Up to 4 rounds.')).toBeInTheDocument();
     expect(screen.getByText('45s')).toBeInTheDocument();
   });
 
   it('builds no Open rounds block for a request without a cap', () => {
-    expect(requestOpenRounds(null)).toBeNull();
-    expect(requestOpenRounds(undefined)).toBeNull();
-    expect(requestOpenRounds(0)).toEqual({ max_rebuttal_rounds: 0, rebuttal_turn_ms: 45_000 });
+    expect(requestOpenRounds({ max_rebuttal_rounds: null })).toBeNull();
+    expect(requestOpenRounds({})).toBeNull();
+    expect(requestOpenRounds({ max_rebuttal_rounds: 0 })).toEqual({
+      max_rebuttal_rounds: 0,
+      required_rebuttal_rounds: 0,
+      rebuttal_turn_ms: 45_000,
+    });
+  });
+
+  it('lists the required rebuttal round as turns, then offers the rest of the cap as extensions', () => {
+    const { container } = renderDetails({
+      formatId: 'open_rounds',
+      openRounds: requestOpenRounds({ max_rebuttal_rounds: 10, required_rebuttal_rounds: 1 }),
+    });
+
+    expect(screen.getByText('You make an argument')).toBeInTheDocument();
+    expect(screen.getByText('Remote speaker makes an argument')).toBeInTheDocument();
+    expect(screen.getByText('You rebut')).toBeInTheDocument();
+    expect(screen.getByText('Remote speaker rebuts')).toBeInTheDocument();
+    expect(screen.getAllByText('1m')).toHaveLength(2);
+    // Two rebuttal turns, and the dashed row's turn length.
+    expect(screen.getAllByText('45s')).toHaveLength(3);
+    expect(screen.getByText('Then extend, round by round')).toBeInTheDocument();
+    expect(screen.getByText('A round happens only if you both pick Extend. Up to 9 more rounds.')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/clos/i);
+  });
+
+  it('offers no extension when the cap is only the required rounds', () => {
+    renderDetails({
+      formatId: 'open_rounds',
+      openRounds: { max_rebuttal_rounds: 1, required_rebuttal_rounds: 1, rebuttal_turn_ms: 45_000 },
+    });
+
+    expect(screen.getByText('Remote speaker rebuts')).toBeInTheDocument();
+    expect(screen.queryByText('Then extend, round by round')).not.toBeInTheDocument();
   });
 
   // A request from an older server carries no cap; a number would be a guess.
