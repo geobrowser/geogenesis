@@ -326,6 +326,13 @@ export type DebateOpenRounds = {
    * predates it, which reads as `0`: the opening ends on a pick, as it always did.
    */
   required_rebuttal_rounds?: number;
+  /**
+   * The pause before each required round's first turn, in which the room announces the round and
+   * counts its opener in, as it does after an Extend but with no picks to reveal. Snapshotted per
+   * debate, and absent from a geo-chat that predates it, which reads as `0`: the required round
+   * starts the moment the round before it ends.
+   */
+  required_round_lead_in_ms?: number;
   /** The round this block describes. In `result` it is the round that just resolved. */
   round_index: number;
   phase: OpenRoundsPhase;

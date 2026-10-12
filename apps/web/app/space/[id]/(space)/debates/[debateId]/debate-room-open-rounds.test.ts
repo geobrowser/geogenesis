@@ -9,6 +9,7 @@ import {
   capRoundLastTurn,
   deciding,
   listening,
+  requiredRoundListening,
   revealEnd,
   revealRebut,
   roundOneSpeaking,
@@ -534,5 +535,49 @@ describe('open rounds recording window', () => {
       startAtMs: start,
       endAtMs: CAP_ROUND_ENDS_AT + 5_000,
     });
+  });
+});
+
+describe('open rounds: the lead-in to a required round (GEO-3258)', () => {
+  const withLeadIn = requiredRoundListening({ required_round_lead_in_ms: 8_000, extend_count_in_ms: 5_000 });
+
+  it('counts the opener in once, in the lead-in, rather than over the end of the opening too', () => {
+    // Bob closes the opening; Alice opens round 1.
+    expect(localTurnStartsInSeconds(withLeadIn, countdownAt(withLeadIn, at('20:01:57.000')), 1)).toBeNull();
+    // Without a lead-in the required round follows like a fixed format's next turn, counted in as before.
+    const noLeadIn = requiredRoundListening();
+    expect(localTurnStartsInSeconds(noLeadIn, countdownAt(noLeadIn, at('20:01:57.000')), 1)).toBe(3);
+
+    const inLeadIn = countdownAt(withLeadIn, at('20:02:04.000'));
+    expect(inLeadIn.openRounds).toMatchObject({ phase: 'result', leadIn: true, roundIndex: 0 });
+    expect(localTurnStartsInSeconds(withLeadIn, inLeadIn, 1)).toBe(4);
+    expect(upcomingTurnLabel(withLeadIn, inLeadIn)).toBe('Rebut in');
+  });
+
+  it('counts the opener in once when the opening ends early, during the hand-off as well', () => {
+    // Bob yields the opening's last turn at 20:01:40, with a hand-off to 20:01:45.
+    const yielded: Debate = {
+      ...withLeadIn,
+      turn_yields: [
+        {
+          turn_index: 1,
+          user_id: 'user-b',
+          participant_slot: 2,
+          yielded_at: '2026-10-06T20:01:40.000Z',
+          accepted_at: '2026-10-06T20:01:40.000Z',
+          handoff_deadline_at: '2026-10-06T20:01:45.000Z',
+        },
+      ],
+    };
+    const handoff = countdownAt(yielded, at('20:01:42.000'));
+    expect(handoff).toMatchObject({ yieldingSlot: 2, incomingSlot: 1 });
+    expect(localTurnStartsInSeconds(yielded, handoff, 1)).toBeNull();
+    // The lead-in still counts Alice in, after the hand-off.
+    expect(localTurnStartsInSeconds(yielded, countdownAt(yielded, at('20:01:50.000')), 1)).toBe(3);
+  });
+
+  it('starts round 1 when the lead-in ends', () => {
+    const countdown = countdownAt(withLeadIn, at('20:02:09.000'));
+    expect(countdown).toMatchObject({ turnIndex: 2, activeSlot: 1, remainingSeconds: 44 });
   });
 });
