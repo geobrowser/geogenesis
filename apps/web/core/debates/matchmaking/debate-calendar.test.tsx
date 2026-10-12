@@ -65,6 +65,7 @@ const mocks = vi.hoisted(() => ({
   debateSpaces: new Map<string, string[]>(),
   personalSpaceLoading: false,
   voteError: null as string | null,
+  spaceActivityUnavailable: false,
   labelRequests: [] as string[][],
   sidePanelListeners: new Set<() => void>(),
 }));
@@ -285,7 +286,7 @@ vi.mock('./use-person-facts', () => ({
     records: new Map(),
     personRecordsPending: false,
     publishableSpacesPending: false,
-    spaceActivityUnavailable: false,
+    spaceActivityUnavailable: mocks.spaceActivityUnavailable,
     debateSpacesByPerson: mocks.debateSpaces,
     activeSpaceIds: new Set(),
   }),
@@ -458,6 +459,7 @@ beforeEach(() => {
     debateSpaces: new Map(),
     personalSpaceLoading: false,
     voteError: null,
+    spaceActivityUnavailable: false,
     labelRequests: [],
     claimNames: new Map(),
     claimTopics: new Map(),
@@ -1547,6 +1549,44 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'People' }));
 
     expect(screen.queryByText(/claims can’t narrow the week/)).not.toBeInTheDocument();
+  });
+
+  it('waits for who is active where before using up the next-week jump on picks made meanwhile', () => {
+    mocks.schedulable = response([
+      free('12', 'Marco', [thursdaySix]),
+      // Lena is free only next Thursday.
+      free('14', 'Lena', [[at(15, 18), at(15, 19)]]),
+    ]);
+    // Lena is active in the space; Marco is not.
+    mocks.debateSpaces = new Map([[summary('14', '').profile_space_id, ['space1']]]);
+    mocks.spaceActivityUnavailable = true;
+    const { rerender } = render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'Pick a space' }));
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Marco' }));
+    fireEvent.click(within(panel()).getByRole('checkbox', { name: 'Lena' }));
+
+    // Unnarrowed by the space, Marco fills this week; nothing to decide on yet.
+    expect(screen.getByRole('button', { name: 'Previous week' })).toBeDisabled();
+    // Nor any reason given for Lena's absence, judged without the space it depends on.
+    expect(screen.queryByText(/Lena is free next week/)).not.toBeInTheDocument();
+
+    // Activity lands: the space leaves only Lena, who is free next week.
+    mocks.spaceActivityUnavailable = false;
+    rerender(<DebateCalendar />);
+    expect(screen.getByRole('button', { name: 'Previous week' })).toBeEnabled();
+  });
+
+  it('reports each kind of pick a phone applies at once', () => {
+    mocks.isPhone = true;
+    render(<DebateCalendar />);
+    fireEvent.click(screen.getByRole('button', { name: 'People' }));
+    const sheet = screen.getByRole('dialog', { name: 'Narrow the calendar' });
+    fireEvent.click(within(sheet).getByRole('checkbox', { name: 'Elena' }));
+    fireEvent.click(within(sheet).getByRole('switch', { name: 'Matches only' }));
+    fireEvent.click(within(sheet).getByRole('button', { name: /^Show/ }));
+
+    expect(filterEvents()).toEqual([{ filter: 'matches_only' }, { filter: 'person' }]);
   });
 
   it('keeps picks from the URL on a reload', () => {

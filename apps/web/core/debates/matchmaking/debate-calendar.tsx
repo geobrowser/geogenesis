@@ -476,6 +476,10 @@ function DebateCalendarBody({
   // The space filter narrows client-side unless the server already did, in which case its
   // membership answer stands.
   const effectiveSpaceIds = spaceActivityUnavailable && !serverNarrowed ? EMPTY_SPACE_IDS : spaceIds;
+  // Space pills picked, but who is active where has not landed, so they narrow nothing yet. The week
+  // has always drawn unnarrowed meanwhile; what is decided once — the next-week jump — and what says
+  // why someone is hidden must wait for them (review on #2770).
+  const spacesPending = spaceIds.length > 0 && spaceActivityUnavailable && !serverNarrowed;
   const inSpaces = React.useCallback(
     (person: DebatePerson) => {
       if (effectiveSpaceIds.length === 0 || serverNarrowed) return true;
@@ -707,10 +711,14 @@ function DebateCalendarBody({
     changeFilter('clear');
   };
   /** One event per change, naming which kind of pick it was. */
+  /**
+   * One event per kind of pick that changed. A desktop press changes one; a phone's "Show N people"
+   * applies a whole draft at once, and reporting only the first kind under-counted the rest.
+   */
   const changePicks = (next: CalendarPicks) => {
     if (next.matchesOnly !== picks.matchesOnly) changeFilter('matches_only');
-    else if (next.claims.join() !== picks.claims.join()) changeFilter('claim');
-    else if (next.people.join() !== picks.people.join()) changeFilter('person');
+    if (next.claims.join() !== picks.claims.join()) changeFilter('claim');
+    if (next.people.join() !== picks.people.join()) changeFilter('person');
     setPicks(next);
   };
   const togglePanel = (tab: NarrowTab) => {
@@ -864,6 +872,7 @@ function DebateCalendarBody({
     !schedulableQuery.isLoading &&
     schedulableQuery.data !== undefined &&
     !picksPending &&
+    !spacesPending &&
     judgedPicks === effectivePicks;
   React.useEffect(() => {
     if (!picksSettled || settledPicksKey.current === picksKey) return;
@@ -874,13 +883,14 @@ function DebateCalendarBody({
   // The line above the week: what is narrowing it, and any pick it is hiding. Only with something
   // picked, so the calendar with nothing picked reads exactly as it did; and not while the picks
   // still wait on their data, when the empty week under the skeleton is no result to report.
-  const narrowNote = picksPending
-    ? null
-    : narrowingSentence({
-        picks: judgedPicks,
-        shownCount: drawnUsers.size,
-        spaceNames: spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
-      });
+  const narrowNote =
+    picksPending || spacesPending
+      ? null
+      : narrowingSentence({
+          picks: judgedPicks,
+          shownCount: drawnUsers.size,
+          spaceNames: spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
+        });
   // Each picked person the week is not showing, and why: one classification, read by both the line
   // and its "Show next week" link, so the link is offered exactly when the line says that week has them.
   const hiddenPicks = React.useMemo(
@@ -901,14 +911,15 @@ function DebateCalendarBody({
       }),
     [absentName, drawnUsers, freeInWeek, include, otherWeekOffset, picks.people, profileToUser]
   );
-  const hiddenNote = picksPending
-    ? null
-    : hiddenPicksSentence({
-        hiddenPeople: hiddenPicks,
-        hiddenClaimCount: allPositionsReady ? panelRows.claims.filter(row => row.hidden).length : 0,
-        weekLabel: weekLabel(weekOffset),
-        otherWeekLabel: weekLabel(otherWeekOffset),
-      });
+  const hiddenNote =
+    picksPending || spacesPending
+      ? null
+      : hiddenPicksSentence({
+          hiddenPeople: hiddenPicks,
+          hiddenClaimCount: allPositionsReady ? panelRows.claims.filter(row => row.hidden).length : 0,
+          weekLabel: weekLabel(weekOffset),
+          otherWeekLabel: weekLabel(otherWeekOffset),
+        });
   const pickFreeOtherWeek = hiddenNote !== null && hiddenPicks.some(pick => pick.reason === 'other-week');
   const goToOtherWeek = () => goToWeek(otherWeekOffset, otherWeekOffset > weekOffset ? 'next' : 'previous');
 

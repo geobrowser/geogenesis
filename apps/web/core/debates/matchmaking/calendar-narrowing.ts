@@ -316,13 +316,6 @@ export function narrowingSentence({
 }
 
 /**
- * Why picks are not showing: the names of hidden people, and how many claims the filters hide.
- *
- * A person missing from the week on screen may be free in the calendar's other week; saying so, and
- * which, is the way forward, where "isn't free this week" alone reads as "not available" — which,
- * late in a week, is most people (GEO-3220 review).
- */
-/**
  * Why the week is not showing a picked person, checked in this order:
  *
  * - `absent`: not on the calendar at all — offline with no open times, or past a capped list.
@@ -350,6 +343,13 @@ export function hiddenPickReason({
 
 export type HiddenPick = { name: string; reason: HiddenPickReason };
 
+/**
+ * Why picks are not showing: the names of hidden people, and how many claims the filters hide.
+ *
+ * A person missing from the week on screen may be free in the calendar's other week; saying so, and
+ * which, is the way forward, where "isn't free this week" alone reads as "not available" — which,
+ * late in a week, is most people (GEO-3220 review).
+ */
 export function hiddenPicksSentence({
   hiddenPeople,
   hiddenClaimCount,

@@ -959,7 +959,11 @@ function SharedTimes({
   );
 }
 
-/** "Today 3:00 PM", "Tomorrow 9:30 AM", "Thu 6:00 PM" — the range is one week, so a weekday is unambiguous. */
+/**
+ * "Today 3:00 PM", "Tomorrow 9:30 AM", "Thu 6:00 PM", and "Thu, Oct 22 6:00 PM" a week or more out.
+ * A weekday alone names one day only within the coming week: the calendar (GEO-3220) offers two, and
+ * there next Thursday would read exactly as this one.
+ */
 export function formatSlot(iso: string, now: Date = new Date()): string {
   const at = new Date(iso);
   const time = at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
@@ -970,6 +974,9 @@ export function formatSlot(iso: string, now: Date = new Date()): string {
   );
   if (dayDiff === 0) return `Today ${time}`;
   if (dayDiff === 1) return `Tomorrow ${time}`;
+  if (dayDiff >= 7) {
+    return `${at.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })} ${time}`;
+  }
   return `${at.toLocaleDateString(undefined, { weekday: 'short' })} ${time}`;
 }
 
