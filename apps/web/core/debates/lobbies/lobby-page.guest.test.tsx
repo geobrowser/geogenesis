@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbyView } from '../api';
 
 const mocks = vi.hoisted(() => ({
+  phone: false,
   authenticated: false,
   memberLobby: undefined as DebateLobbyView | undefined,
   /** The member read failed for good, after its warm-up retries. */
@@ -33,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   refetchGuestView: vi.fn(),
 }));
 
+vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
 vi.mock('../api', async importOriginal => ({
   ...(await importOriginal<typeof import('../api')>()),
   startDebateLobbyGuest: mocks.start,
@@ -195,6 +197,7 @@ const memberView: DebateLobbyView = {
 
 beforeEach(() => {
   window.sessionStorage.clear();
+  mocks.phone = false;
   mocks.authenticated = false;
   mocks.memberLobby = undefined;
   mocks.memberError = false;
@@ -381,6 +384,21 @@ describe('DebateLobbyPage when another tab takes the session', () => {
     act(() => screen.getByRole('button', { name: 'Listen here' }).click());
     await screen.findByTestId('guest-room');
     expect(mocks.start).toHaveBeenCalledTimes(2);
+    vi.useRealTimers();
+  });
+
+  it('says so on the phone’s Claims tab too, where the people are hidden', async () => {
+    mocks.phone = true;
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    act(() => screen.getByRole('tab', { name: 'Claims' }).click());
+    expect(screen.getByText(/^Speakers ·/)).not.toBeVisible();
+
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'superseded', lease_expires_at: null });
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    expect(await screen.findByText('You’re listening in another tab.')).toBeVisible();
+    expect(screen.getByRole('button', { name: 'Listen here' })).toBeVisible();
     vi.useRealTimers();
   });
 });

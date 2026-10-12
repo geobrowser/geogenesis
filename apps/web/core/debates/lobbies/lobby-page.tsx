@@ -539,25 +539,6 @@ function LobbyRoom({
             className="flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5"
           >
             <LobbyRoomStatus state={state} onRetry={onRetry} />
-            {guestNotice ? (
-              <div className="flex flex-wrap items-center gap-2 rounded-lg border border-grey-02 bg-white px-3 py-2">
-                <div role="status" className="min-w-0 flex-1">
-                  <Text as="p" variant="footnote" color="grey-04">
-                    {guestNotice.message}
-                  </Text>
-                </div>
-                {guestNotice.retry && !authenticated ? (
-                  <HubPillButton analyticsLabel="Lobby guest retry listen" onClick={guestSession.retry}>
-                    {guestNotice.retry}
-                  </HubPillButton>
-                ) : null}
-              </div>
-            ) : guest && guestSession.state.status === 'starting' ? (
-              <Text as="p" variant="footnote" color="grey-04">
-                Connecting voice…
-              </Text>
-            ) : null}
-
             <LobbyVoiceStatesProvider value={guestVoiceStates}>
               {guestVoice ? (
                 <LobbyGuestVoice
@@ -626,6 +607,26 @@ function LobbyRoom({
                 </LobbyToast>
               ) : null}
               {moderationNotice ? <LobbyToast>{moderationNotice}</LobbyToast> : null}
+              {/* With the toasts, so a guest listening from the Claims tab sees them too. */}
+              {guestNotice ? (
+                <LobbyToast
+                  action={
+                    guestNotice.retry && !authenticated ? (
+                      <HubPillButton
+                        analyticsLabel="Lobby guest retry listen"
+                        onClick={guestSession.retry}
+                        className="border-white bg-white"
+                      >
+                        {guestNotice.retry}
+                      </HubPillButton>
+                    ) : null
+                  }
+                >
+                  {guestNotice.message}
+                </LobbyToast>
+              ) : guest && guestSession.state.status === 'starting' ? (
+                <LobbyToast>Connecting voice…</LobbyToast>
+              ) : null}
             </div>
           }
         />
