@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyView, DebateMyLobby } from '../api';
+import type { DebateLobbyMember, DebateLobbyView, DebateMyLobby } from '../api';
 import {
   clearDebateReturnDestination,
   rememberDebateReturnDestination,
@@ -10,7 +10,8 @@ import {
 } from '../debate-return-navigation';
 
 const mocks = vi.hoisted(() => ({
-  lobby: undefined as { access: DebateLobbyView['access']; viewer: { removed?: boolean } } | undefined,
+  lobby: undefined as
+    (Pick<DebateLobbyView, 'access' | 'name' | 'members'> & { viewer: { removed?: boolean } }) | undefined,
   useDebateLobby: vi.fn(),
   lobbyJoining: true,
   mine: { data: undefined as DebateMyLobby | undefined, isError: false },
@@ -29,13 +30,33 @@ vi.mock('./hooks', () => ({
 const { BackToLobbyRow, useConsumeDebateReturnDestination } = await import('./lobby-return');
 const { consumeLobbyRejoin } = await import('./step-out');
 
+const member = (id: string, stepped_out = false): DebateLobbyMember => ({
+  user_id: id,
+  profile_space_id: `space-${id}`,
+  display_name: id,
+  avatar_cid: null,
+  role: 'speaker',
+  creator: false,
+  acting_host: false,
+  on_roster_since: '2026-10-12T10:00:00Z',
+  stepped_out,
+  in_debate: stepped_out,
+});
+
+const admitted = (viewer: { removed?: boolean } = {}) => ({
+  access: { status: 'admitted' } as const,
+  name: 'Onboarding with Adam',
+  members: [member('me', true), member('ana'), member('ben'), member('cy'), member('dee')],
+  viewer,
+});
+
 const steppedOutOf = (lobbyId: string): DebateMyLobby => ({ current_lobby_id: lobbyId, stepped_out: true });
 const notInALobby: DebateMyLobby = { current_lobby_id: null, stepped_out: false };
 
 beforeEach(() => {
   clearDebateReturnDestination();
   consumeLobbyRejoin('');
-  mocks.lobby = { access: { status: 'admitted' }, viewer: {} };
+  mocks.lobby = admitted();
   mocks.useDebateLobby.mockClear();
   mocks.lobbyJoining = true;
   mocks.mine = { data: undefined, isError: false };
@@ -43,7 +64,7 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-const backButton = () => screen.queryByRole('button', { name: 'Back to the room' });
+const backButton = () => screen.queryByRole('button', { name: /^Back to Onboarding with Adam/ });
 
 describe('BackToLobbyRow', () => {
   // The case sessionStorage cannot cover: this tab never saw the lobby.
@@ -52,10 +73,17 @@ describe('BackToLobbyRow', () => {
     const onLeave = vi.fn();
     render(<BackToLobbyRow onLeave={onLeave} />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Back to the room' }));
+    fireEvent.click(backButton()!);
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(mocks.useDebateLobby).toHaveBeenCalledWith('lobby1');
     expect(consumeLobbyRejoin('lobby1')).toBe(true);
+  });
+
+  it('names the lobby and counts the people still in it, not those debating', () => {
+    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
+    render(<BackToLobbyRow onLeave={vi.fn()} />);
+    expect(backButton()?.textContent).toContain('4 here now');
+    expect(screen.getAllByRole('listitem')).toHaveLength(3);
   });
 
   it('prefers geo-chat over this tab’s record', () => {
@@ -83,7 +111,7 @@ describe('BackToLobbyRow', () => {
 
   it('is hidden once the lobby has ended', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    mocks.lobby = { access: { status: 'closed', reason: 'ended' }, viewer: {} };
+    mocks.lobby = { ...admitted(), access: { status: 'closed', reason: 'ended' } };
     render(<BackToLobbyRow onLeave={vi.fn()} />);
     expect(backButton()).toBeNull();
   });
@@ -91,7 +119,7 @@ describe('BackToLobbyRow', () => {
   // GEO-3134: a removed viewer goes back by choice, from the lobby page's Rejoin.
   it('is hidden while a host has the viewer removed', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    mocks.lobby = { access: { status: 'admitted' }, viewer: { removed: true } };
+    mocks.lobby = admitted({ removed: true });
     render(<BackToLobbyRow onLeave={vi.fn()} />);
     expect(backButton()).toBeNull();
   });

@@ -9,6 +9,8 @@ import { Text } from '~/design-system/text';
 import { consumeDebateReturnDestination, peekDebateReturnDestination } from '../debate-return-navigation';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
 import { useDebateLobby, useMyDebateLobby } from './hooks';
+import { hereNowLabel } from './lobby-format';
+import { LobbyAvatarStack } from './lobby-people';
 import { requestLobbyRejoin } from './step-out';
 
 /**
@@ -47,6 +49,9 @@ export function useConsumeDebateReturnDestination() {
   );
 }
 
+/** Faces on the way-back row; the count beside them carries the rest. */
+const BACK_AVATARS = 3;
+
 type BackToLobbyProps = { onLeave: () => void; disabled?: boolean };
 
 /**
@@ -63,25 +68,32 @@ function OpenLobbyRow({ lobbyId, onLeave, disabled = false }: BackToLobbyProps &
   // A host removed them: going back is a choice made on the lobby page, not from here.
   if (lobby?.access.status !== 'admitted' || lobby.viewer.removed) return null;
 
+  // Stepped-out members are debating elsewhere, the viewer among them.
+  const present = lobby.members.filter(member => !member.stepped_out);
+
   return (
     <>
       <div aria-hidden className="h-px w-full shrink-0 bg-divider" />
-      <div className="flex min-h-7 items-center justify-between gap-2.5">
-        <Text as="span" variant="smallTitle" color="text">
-          Lobby still open
-        </Text>
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => {
-            requestLobbyRejoin(lobbyId);
-            onLeave();
-          }}
-          className="inline-flex min-h-7 shrink-0 items-center justify-center rounded-full bg-grey-01 px-3 text-metadata text-text transition-colors hover:bg-grey-02 disabled:cursor-default disabled:opacity-50"
-        >
-          Back to the room
-        </button>
-      </div>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => {
+          requestLobbyRejoin(lobbyId);
+          onLeave();
+        }}
+        className="flex w-full items-center gap-3 rounded-lg bg-text p-3 text-left text-white transition-colors hover:bg-text/90 disabled:cursor-default disabled:opacity-50"
+        style={{ '--avatar-group-ring': 'var(--color-text)' } as React.CSSProperties}
+      >
+        <LobbyAvatarStack people={present.slice(0, BACK_AVATARS)} total={Math.min(present.length, BACK_AVATARS)} />
+        <span className="flex min-w-0 flex-col gap-0.5">
+          <Text as="span" variant="metadataMedium" color="white" className="truncate">
+            Back to {lobby.name}
+          </Text>
+          <Text as="span" variant="footnote" color="grey-02">
+            {hereNowLabel(present.length)}
+          </Text>
+        </span>
+      </button>
     </>
   );
 }

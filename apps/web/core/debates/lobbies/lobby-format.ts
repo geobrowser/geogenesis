@@ -73,6 +73,10 @@ export function hereLabel(headcount: number) {
   return `${headcount} here`;
 }
 
+export function hereNowLabel(count: number) {
+  return `${count} here now`;
+}
+
 export function debatingLabel(count: number) {
   return `${count} debating`;
 }
