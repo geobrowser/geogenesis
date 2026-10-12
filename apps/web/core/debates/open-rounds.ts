@@ -46,6 +46,11 @@ export type OpenRoundsRoomPhase =
       resolvedAtMs: number;
       /** The next round's first turn, or thanking, starts here. */
       nextPhaseStartsAtMs: number;
+      /**
+       * A required round's lead-in rather than a resolved pick: the round ended at `resolvedAtMs`,
+       * nobody picked, and the next round is announced and counted in as after an Extend.
+       */
+      leadIn?: true;
     }
   | { phase: 'finished'; roundIndex: number; isFinalRound: boolean };
 
@@ -62,6 +67,11 @@ export function isOpenRoundsDebate<T extends Pick<Debate, 'open_rounds'>>(
   debate: T
 ): debate is T & { open_rounds: DebateOpenRounds } {
   return debate.open_rounds !== undefined && debate.open_rounds !== null;
+}
+
+/** The number a round is shown with: the opening is Round 1, so the first rebuttal round is Round 2. */
+export function openRoundNumber(roundIndex: number) {
+  return roundIndex + 1;
 }
 
 /** Round `r` holds turns `2r` and `2r + 1`. */
@@ -88,6 +98,20 @@ export function openRoundEndsOnPick(
   roundIndex: number
 ) {
   return roundIndex >= openRoundsRequiredRebuttalRounds(openRounds) && !isFinalOpenRound(openRounds, roundIndex);
+}
+
+/**
+ * The pause after `turnIndex` before the next required round starts, or `0` when that round (or
+ * thanking, or a decision) follows straight on. Only the last turn of a round before the last
+ * required one has one, and only on a debate that snapshotted a lead-in.
+ */
+export function openRoundLeadInAfterTurn(debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>, turnIndex: number) {
+  if (!isOpenRoundsDebate(debate) || turnIndex % 2 !== 1) return 0;
+  if (turnIndex + 1 >= debate.turn_durations_ms.length) return 0;
+  const openRounds = debate.open_rounds;
+  const roundIndex = openRoundIndexForTurn(turnIndex);
+  if (roundIndex >= openRoundsRequiredRebuttalRounds(openRounds) || isFinalOpenRound(openRounds, roundIndex)) return 0;
+  return Math.max(0, openRounds.required_round_lead_in_ms ?? 0);
 }
 
 /**
@@ -162,8 +186,10 @@ export function debateTurnRoleForDebate(
  *
  * Fixed formats, the first turn of a round, the last turn of a round that runs straight on
  * (`openRoundEndsOnPick`) and the cap round's last turn answer `continue` at `turnEndsAtMs`, which is
- * exactly what the room did before Open rounds existed. Otherwise the turn ended a round, and the
- * round is deciding until it resolves, then in its result window until
+ * exactly what the room did before Open rounds existed; a round that runs straight on into a
+ * required round with a lead-in holds on that lead-in first, as a `result` with `leadIn` set.
+ * Otherwise the turn ended a round, and the round is deciding until it resolves, then in its result
+ * window until
  * `decision_resolved_at + result_window_ms`, then thanking after an End. After an Extend the opener's
  * count-in (`extend_count_in_ms`) follows the window, and then the next round (`continue`).
  *
@@ -181,7 +207,25 @@ export function openRoundGapAfterTurn(
 
   const openRounds = debate.open_rounds;
   const roundIndex = openRoundIndexForTurn(turnIndex);
-  if (!openRoundEndsOnPick(openRounds, roundIndex)) return proceed;
+  if (!openRoundEndsOnPick(openRounds, roundIndex)) {
+    // A required round has no pick, but may still be announced and counted in like an Extend.
+    const leadInMs = openRoundLeadInAfterTurn(debate, turnIndex);
+    if (leadInMs === 0) return proceed;
+    const nextPhaseStartsAtMs = turnEndsAtMs + leadInMs;
+    if (nowMs >= nextPhaseStartsAtMs) return { kind: 'continue', nextTurnStartsAtMs: nextPhaseStartsAtMs };
+    return {
+      kind: 'hold',
+      phase: {
+        phase: 'result',
+        roundIndex,
+        isFinalRound: false,
+        outcome: 'extend',
+        resolvedAtMs: turnEndsAtMs,
+        nextPhaseStartsAtMs,
+        leadIn: true,
+      },
+    };
+  }
 
   const decisionDeadlineAtMs = turnEndsAtMs + openRounds.decision_window_ms;
   const deciding: OpenRoundGap = {

@@ -9,7 +9,7 @@ import { Text } from '~/design-system/text';
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
 import { recordingLabelTextShadow, recordingOverlayTextShadow } from './debate-video-tile';
-import { type OpenRoundsRoomPhase, openRoundRevealedPicks } from './open-rounds';
+import { type OpenRoundsRoomPhase, openRoundNumber, openRoundRevealedPicks } from './open-rounds';
 
 /**
  * The Open rounds reveal (GEO-3179): the result window after a round resolves (`result_window_ms`,
@@ -21,6 +21,9 @@ import { type OpenRoundsRoomPhase, openRoundRevealedPicks } from './open-rounds'
  *   it. Anything else: "That's a wrap", with the picks left up so the split explains itself.
  * - `countIn`: Extend only, after the window. The opener gets the room's usual 5 s count-in, which
  *   geo-chat adds after the window as `extend_count_in_ms`.
+ *
+ * A required round's lead-in plays the same steps after the round before it, without the flip: there
+ * are no picks, so the new round is announced at once and its opener counted in.
  *
  * The flip is a share of the window rather than a fixed time, so a longer window lengthens both.
  */
@@ -39,8 +42,13 @@ function flipEndsMs(windowMs: number) {
   return Math.round(windowMs * OPEN_ROUND_FLIP_SHARE);
 }
 
-export function openRoundRevealStep(elapsedMs: number, outcome: OpenRoundPick, windowMs: number): OpenRoundRevealStep {
-  if (elapsedMs < flipEndsMs(windowMs)) return 'flip';
+export function openRoundRevealStep(
+  elapsedMs: number,
+  outcome: OpenRoundPick,
+  windowMs: number,
+  hasPicks = true
+): OpenRoundRevealStep {
+  if (hasPicks && elapsedMs < flipEndsMs(windowMs)) return 'flip';
   return outcome === 'extend' && elapsedMs >= windowMs ? 'countIn' : 'result';
 }
 
@@ -51,7 +59,12 @@ export function openRoundRevealStep(elapsedMs: number, outcome: OpenRoundPick, w
  * half a second apart. This schedules its own re-render at each step boundary instead, measured from
  * the last `elapsedMs` the room gave it.
  */
-export function useOpenRoundRevealStep(elapsedMs: number | null, outcome: OpenRoundPick | null, windowMs: number) {
+export function useOpenRoundRevealStep(
+  elapsedMs: number | null,
+  outcome: OpenRoundPick | null,
+  windowMs: number,
+  hasPicks = true
+) {
   const [reached, setReached] = React.useState<{ from: number; to: number } | null>(null);
   // The room stays mounted across rounds, and every round passes through `null` between reveals, so
   // forget the last boundary there. Otherwise a later round whose first sample lands on the same
@@ -68,7 +81,7 @@ export function useOpenRoundRevealStep(elapsedMs: number | null, outcome: OpenRo
   }, [elapsedMs, effectiveMs, windowMs]);
 
   if (effectiveMs === null || outcome === null) return null;
-  return openRoundRevealStep(effectiveMs, outcome, windowMs);
+  return openRoundRevealStep(effectiveMs, outcome, windowMs, hasPicks);
 }
 
 /**
@@ -244,14 +257,24 @@ export function useOpenRoundReveal({
   remote,
 }: OpenRoundRevealInput): OpenRoundReveal {
   const openRounds = debate.open_rounds ?? null;
-  const windowMs = openRounds?.result_window_ms ?? 0;
   const resultPhase = phase?.phase === 'result' ? phase : null;
+  const leadIn = resultPhase?.leadIn === true;
+  // A lead-in's announcement runs until the count-in, which takes the end of the pause as it does
+  // after an Extend.
+  const windowMs = leadIn
+    ? Math.max(0, resultPhase.nextPhaseStartsAtMs - resultPhase.resolvedAtMs - (openRounds?.extend_count_in_ms ?? 0))
+    : (openRounds?.result_window_ms ?? 0);
   const thankingStarted =
     openRounds !== null && effectiveStatus === 'thanking' && phase?.phase === 'finished' && remainingSeconds > 0;
   const maxReached = thankingStarted && phase.isFinalRound && elapsedMs < windowMs;
   const wrapHeld = thankingStarted && !phase.isFinalRound && elapsedMs < OPEN_ROUND_WRAP_HOLD_MS;
 
-  const timedStep = useOpenRoundRevealStep(resultPhase ? elapsedMs : null, resultPhase?.outcome ?? null, windowMs);
+  const timedStep = useOpenRoundRevealStep(
+    resultPhase ? elapsedMs : null,
+    resultPhase?.outcome ?? null,
+    windowMs,
+    !leadIn
+  );
   const step: OpenRoundRevealStep | null = wrapHeld ? 'result' : timedStep;
   const roundIndex = resultPhase?.roundIndex ?? (wrapHeld ? phase.roundIndex : null);
   const outcome = resultPhase?.outcome ?? (wrapHeld ? 'end' : null);
@@ -275,7 +298,7 @@ export function useOpenRoundReveal({
     result =
       outcome === 'extend'
         ? // The first slot opens every round, and is one of the two debaters.
-          { kind: 'round', round: roundIndex + 1, opener: localOpens ? null : remote.name }
+          { kind: 'round', round: openRoundNumber(roundIndex + 1), opener: localOpens ? null : remote.name }
         : { kind: 'wrap', note: openRoundWrapNote(localPick?.pick, { name: remote.name, pick: remotePick?.pick }) };
   }
 
@@ -337,6 +360,10 @@ function openRoundAnnouncementText({
     .join(' ');
   // Held from the flip onwards, so the region does not re-announce the picks at every step.
   if (step === 'flip' || !result) return picks;
-  if (result.kind === 'round') return `${picks} Round ${result.round}. ${openRoundOpenerLine(result.opener)}.`;
-  return `${picks} That's a wrap.${result.note ? ` ${result.note}.` : ''}`;
+  // A lead-in has no picks, so its announcement starts at the round.
+  const meaning =
+    result.kind === 'round'
+      ? `Round ${result.round}. ${openRoundOpenerLine(result.opener)}.`
+      : `That's a wrap.${result.note ? ` ${result.note}.` : ''}`;
+  return [picks, meaning].filter(Boolean).join(' ');
 }

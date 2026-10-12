@@ -98,6 +98,7 @@ import {
   openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundLastWord,
+  openRoundLeadInAfterTurn,
   openRoundsRequiredRebuttalRounds,
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
@@ -3804,6 +3805,11 @@ export function localTurnStartsInSeconds(
   if (countdown.activeSlot === localSlot) return null;
   // An undecided round has no next turn to count into (GEO-3175).
   if (countdown.openRounds?.phase === 'deciding') return null;
+  // A required round's lead-in follows this turn and counts its opener in itself, so counting them in
+  // over this turn's end as well would count twice.
+  if (countdown.openRounds?.phase === 'speaking' && openRoundLeadInAfterTurn(debate, countdown.turnIndex) > 0) {
+    return null;
+  }
 
   const nextTurnIndex = countdown.turnIndex + 1;
   if (nextTurnIndex >= debate.turn_durations_ms.length) return null;

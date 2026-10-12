@@ -9,6 +9,7 @@ import {
   capRoundLastTurn,
   deciding,
   listening,
+  requiredRoundListening,
   revealEnd,
   revealRebut,
   roundOneSpeaking,
@@ -534,5 +535,27 @@ describe('open rounds recording window', () => {
       startAtMs: start,
       endAtMs: CAP_ROUND_ENDS_AT + 5_000,
     });
+  });
+});
+
+describe('open rounds: the lead-in to a required round (GEO-3258)', () => {
+  const withLeadIn = requiredRoundListening({ required_round_lead_in_ms: 8_000, extend_count_in_ms: 5_000 });
+
+  it('counts the opener in once, in the lead-in, rather than over the end of the opening too', () => {
+    // Bob closes the opening; Alice opens round 1.
+    expect(localTurnStartsInSeconds(withLeadIn, countdownAt(withLeadIn, at('20:01:57.000')), 1)).toBeNull();
+    // Without a lead-in the required round follows like a fixed format's next turn, counted in as before.
+    const noLeadIn = requiredRoundListening();
+    expect(localTurnStartsInSeconds(noLeadIn, countdownAt(noLeadIn, at('20:01:57.000')), 1)).toBe(3);
+
+    const inLeadIn = countdownAt(withLeadIn, at('20:02:04.000'));
+    expect(inLeadIn.openRounds).toMatchObject({ phase: 'result', leadIn: true, roundIndex: 0 });
+    expect(localTurnStartsInSeconds(withLeadIn, inLeadIn, 1)).toBe(4);
+    expect(upcomingTurnLabel(withLeadIn, inLeadIn)).toBe('Rebut in');
+  });
+
+  it('starts round 1 when the lead-in ends', () => {
+    const countdown = countdownAt(withLeadIn, at('20:02:09.000'));
+    expect(countdown).toMatchObject({ turnIndex: 2, activeSlot: 1, remainingSeconds: 44 });
   });
 });
