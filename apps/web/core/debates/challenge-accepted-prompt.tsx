@@ -32,11 +32,15 @@ export function ChallengeAcceptedPrompt({
 }) {
   const titleId = React.useId();
 
-  const [initialMicOn] = React.useState(() => readRematchJoinIntent(session.id)?.micOn ?? null);
-  const rememberMic = React.useCallback(
-    (micOn: boolean) => rememberRematchJoinIntent(session.id, { micOn, cameraOn: null }),
+  const [initialJoinState] = React.useState(() => {
+    const remembered = readRematchJoinIntent(session.id);
+    return remembered ? { micOn: remembered.micOn, cameraOn: remembered.cameraOn ?? false } : null;
+  });
+  const rememberChoice = React.useCallback(
+    (state: { micOn: boolean; cameraOn: boolean }) => rememberRematchJoinIntent(session.id, state),
     [session.id]
   );
+
   const you = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
   const other = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
 
@@ -65,9 +69,8 @@ export function ChallengeAcceptedPrompt({
             sessionKey={debateRematchMediaSessionKey(session.id)}
             avatarCid={you.avatar_cid}
             avatarValue={you.profile_space_id}
-            micOnly
-            initialMicOn={initialMicOn}
-            onMicChange={rememberMic}
+            initialJoinState={initialJoinState}
+            onJoinStateChange={rememberChoice}
             fallback={<RematchParticipant participant={you} label="You" />}
           />
           <div className="relative grid w-7 place-items-center">

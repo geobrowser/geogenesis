@@ -23,7 +23,7 @@ vi.mock('./media-session', async importOriginal => ({
     previewState: 'idle',
     previewError: null,
     previewStream: null,
-    localTracksRef: { current: [{ mediaStreamTrack: { kind: 'audio' } }] },
+    localTracksRef: { current: [{ mediaStreamTrack: { kind: 'audio' } }, { mediaStreamTrack: { kind: 'video' } }] },
     ensurePreview: media.ensurePreview,
     beginSession: media.beginSession,
     releaseSession: media.releaseSession,
@@ -82,7 +82,14 @@ beforeEach(() => {
   media.beginSession.mockReset();
   media.releaseSession.mockReset();
   media.stopMedia.mockReset();
-  media.ensurePreview.mockReset().mockResolvedValue([{ mediaStreamTrack: { kind: 'audio' } }]);
+  media.ensurePreview
+    .mockReset()
+    .mockImplementation(async (options: { audio?: boolean; video?: boolean } = {}) =>
+      [
+        (options.audio ?? true) ? { mediaStreamTrack: { kind: 'audio' } } : null,
+        (options.video ?? true) ? { mediaStreamTrack: { kind: 'video' } } : null,
+      ].filter(Boolean)
+    );
   Object.defineProperty(navigator, 'permissions', {
     configurable: true,
     value: { query: async () => ({ state: 'granted' }) },
@@ -98,12 +105,31 @@ describe('ChallengeAcceptedPrompt', () => {
     expect(screen.getByText('Remote speaker accepted your request')).toBeInTheDocument();
   });
 
-  it('offers the microphone and no camera', async () => {
+  it('offers the microphone and the camera', async () => {
     renderPrompt();
 
-    expect(await screen.findByRole('button', { name: /microphone/i })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
-    expect(screen.queryByText(/camera/i)).toBeNull();
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /microphone/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /camera/i })).toBeInTheDocument();
+    });
+  });
+
+  it('records and keeps the camera choice across an unmount and remount', async () => {
+    const view = renderPrompt();
+
+    await screen.findByRole('button', { name: 'Turn camera off' });
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')?.cameraOn).toBe(true));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')?.cameraOn).toBe(false));
+
+    view.unmount();
+    media.ensurePreview.mockClear();
+    renderPrompt();
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(readRematchJoinIntent('rematch-1')?.cameraOn).toBe(false);
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
   });
 
   it('keeps a muted choice across an unmount and remount', async () => {

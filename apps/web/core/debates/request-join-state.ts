@@ -8,15 +8,7 @@ type DebateJoinStateCopy = {
   announcement: string;
 };
 
-export function describeJoinState(
-  { micOn, cameraOn }: DebateJoinState,
-  { micOnly = false }: { micOnly?: boolean } = {}
-): DebateJoinStateCopy {
-  if (micOnly) {
-    return micOn
-      ? { summary: 'Joining with mic on', announcement: 'You will join with your mic on.' }
-      : { summary: 'Joining muted', announcement: 'You will join muted.' };
-  }
+export function describeJoinState({ micOn, cameraOn }: DebateJoinState): DebateJoinStateCopy {
   if (micOn && cameraOn) {
     return { summary: 'Joining with mic and camera on', announcement: 'You will join with mic and camera on.' };
   }

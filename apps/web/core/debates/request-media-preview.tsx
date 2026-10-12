@@ -42,9 +42,8 @@ type DebateRequestMediaPreviewProps = {
   avatarValue?: string | null;
   retain?: React.MutableRefObject<boolean>;
   fallback?: React.ReactNode;
-  micOnly?: boolean;
-  initialMicOn?: boolean | null;
-  onMicChange?: (micOn: boolean) => void;
+  initialJoinState?: DebateJoinState | null;
+  onJoinStateChange?: (state: DebateJoinState) => void;
 };
 
 /**
@@ -67,20 +66,19 @@ function MediaPreview({
   avatarCid,
   avatarValue,
   retain,
-  micOnly = false,
-  initialMicOn = null,
-  onMicChange,
+  initialJoinState = null,
+  onJoinStateChange,
   session,
 }: Omit<DebateRequestMediaPreviewProps, 'fallback'> & { session: DebateMediaSession }) {
   const [permission, setPermission] = React.useState<DebateMediaPermissions | null>(null);
 
-  const [want, setWant] = React.useState<DebateJoinState>({ micOn: initialMicOn ?? false, cameraOn: false });
+  const [want, setWant] = React.useState<DebateJoinState>(initialJoinState ?? { micOn: false, cameraOn: false });
   const [missing, setMissing] = React.useState<{ mic: boolean; camera: boolean }>({ mic: false, camera: false });
   const [failure, setFailure] = React.useState<string | null>(null);
 
   const acquired = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
-  const initialMicOnRef = React.useRef(initialMicOn);
+  const initialJoinStateRef = React.useRef(initialJoinState);
 
   React.useEffect(() => {
     let active = true;
@@ -90,10 +88,10 @@ function MediaPreview({
       if (!active) return;
       setPermission(answer);
 
-      if (initialMicOnRef.current !== null) return;
+      if (initialJoinStateRef.current) return;
       setWant({
         micOn: mayAutoStartPreview(answer.microphone),
-        cameraOn: !micOnly && mayAutoStartPreview(answer.camera),
+        cameraOn: mayAutoStartPreview(answer.camera),
       });
     });
 
@@ -171,14 +169,14 @@ function MediaPreview({
   }, [session.previewStream, cameraOn]);
 
   // A camera that is not offered is not reported blocked either: there would be nothing to unblock.
-  const cameraBlocked = !micOnly && permission !== null && isMediaBlocked(permission.camera);
+  const cameraBlocked = permission !== null && isMediaBlocked(permission.camera);
   const micBlocked = permission !== null && isMediaBlocked(permission.microphone);
-  const blocked = micOnly ? micBlocked : cameraBlocked && micBlocked;
+  const blocked = cameraBlocked && micBlocked;
 
   React.useEffect(() => {
     if (permission === null) return;
-    onMicChange?.(micOn);
-  }, [micOn, onMicChange, permission]);
+    onJoinStateChange?.({ micOn, cameraOn });
+  }, [cameraOn, micOn, onJoinStateChange, permission]);
 
   const toggle = (next: Partial<DebateJoinState>) => {
     if (next.micOn !== undefined && micBlocked) return;
@@ -187,7 +185,7 @@ function MediaPreview({
     setWant(current => ({ ...current, ...next }));
   };
 
-  const { summary, announcement } = describeJoinState({ micOn, cameraOn }, { micOnly });
+  const { summary, announcement } = describeJoinState({ micOn, cameraOn });
 
   const toggles = blocked ? null : (
     <div className="flex items-center justify-center gap-2">
@@ -200,7 +198,7 @@ function MediaPreview({
           <MicrophoneIcon muted={!micOn} />
         </DebateTileToggleButton>
       )}
-      {!micOnly && !cameraBlocked && (
+      {!cameraBlocked && (
         <DebateTileToggleButton
           ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
           enabled={cameraOn}
@@ -237,9 +235,7 @@ function MediaPreview({
 
       {blocked ? (
         <Text variant="footnote" color="grey-04">
-          {micOnly
-            ? 'Mic is blocked for this site. Allow it in your browser\u2019s address bar to turn it on.'
-            : 'Camera and mic are blocked for this site. Allow them in your browser\u2019s address bar to turn them on.'}
+          Camera and mic are blocked for this site. Allow them in your browser&apos;s address bar to turn them on.
         </Text>
       ) : cameraBlocked ? (
         <Text variant="footnote" color="grey-04">
