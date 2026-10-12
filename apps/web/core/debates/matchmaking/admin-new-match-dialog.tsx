@@ -34,7 +34,7 @@ import { SegmentedControl, useMinuteClock } from './debate-calendar-controls';
 import { type ClaimMatch, matchesInSpaces } from './disagreement-counts';
 import { HubPillButton } from './hub-pill-button';
 import { offlinePerson } from './offline-person';
-import { byPairFit, fitReasonText } from './pair-fit';
+import { byPairFit, fitReasonText, withSharedTime } from './pair-fit';
 import { MatchingClaim } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
@@ -45,6 +45,7 @@ import { useSpaceFilterMenu } from './use-space-filter-selection';
 
 const SLOT_MINUTES = 30;
 const EMPTY_SPACE_IDS: string[] = [];
+const EMPTY_MATCHES: ClaimMatch[] = [];
 
 /** What became of asking someone to set their availability. */
 type PromptOutcome = 'pending' | 'sent' | 'no_email' | 'not_on_debates' | 'error';
@@ -155,11 +156,24 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   const rosterProfileIds = React.useMemo(() => rosterPeople.map(person => person.profile_space_id), [rosterPeople]);
   const fit = useAdminPairFit(first ? first.person.profile_space_id : null, rosterProfileIds);
   const freeSlots = useAdminSharedFreeSlots(first ? first.userId : null, availableIds);
-  const wanted = new Set(spaceIds.map(normId));
-  const fitRanking = first !== null && fit.available && wanted.size === 0;
+  const wanted = React.useMemo(() => new Set(spaceIds.map(normId)), [spaceIds]);
+  const narrowed = wanted.size > 0;
+  const fitRanking = first !== null && fit.available && !narrowed;
   const fitOf = (person: DebatePerson) => (first ? fit.byProfile.get(normId(person.profile_space_id)) : undefined);
-  const matchesOf = (person: DebatePerson) => matchesInSpaces(facts.matchAnalysis, person.profile_space_id, wanted);
+  // Narrowed once per analysis and filter, not per comparison: the sort reads each count often.
+  const matchesByProfile = React.useMemo(
+    () =>
+      new Map(
+        rosterPeople.map(person => [
+          normId(person.profile_space_id),
+          matchesInSpaces(facts.matchAnalysis, person.profile_space_id, wanted),
+        ])
+      ),
+    [facts.matchAnalysis, rosterPeople, wanted]
+  );
+  const matchesOf = (person: DebatePerson) => matchesByProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES;
   const matchCount = (person: DebatePerson) => matchesOf(person).length;
+  const sharedFreeSlotsOf = (person: DebatePerson) => (first ? freeSlots.get(normId(person.user_id)) : undefined);
 
   const offeredSpaces = React.useMemo(() => {
     const counts = new Map<string, number>();
@@ -186,7 +200,11 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
       [facetSpaces, facts.matchingSpaceIds]
     )
   );
+  // Whose claims are open, keyed by everything the list depends on: a new debater 1 or filter
+  // closes it rather than showing a different pair's claims under the same row.
   const [openClaims, setOpenClaims] = React.useState<string | null>(null);
+  const claimsKey = (person: DebatePerson) =>
+    [first ? normId(first.userId) : '', ...[...wanted].sort(), normId(person.user_id)].join('|');
 
   const picked = new Set([first?.userId, second?.userId].filter(Boolean).map(id => normId(id!)));
   const debatesOf = (person: DebatePerson) => facts.records.get(person.profile_space_id)?.debatesArgued ?? 0;
@@ -203,10 +221,15 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
         {
           available: fitRanking,
           fitOf,
-          sharedFreeSlotsOf: person => freeSlots.get(normId(person.user_id)),
+          sharedFreeSlotsOf,
         },
         (left, right) =>
-          (ranking ? matchCount(right) - matchCount(left) : 0) ||
+          (ranking
+            ? narrowed
+              ? withSharedTime(matchCount(right), sharedFreeSlotsOf(right)) -
+                withSharedTime(matchCount(left), sharedFreeSlotsOf(left))
+              : matchCount(right) - matchCount(left)
+            : 0) ||
           debatesOf(right) - debatesOf(left) ||
           speakerLabel(left).localeCompare(speakerLabel(right))
       )
@@ -265,14 +288,12 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
             ? fitReasonText(personFit.reason, debaterFirstName(first.person), personFit.parts.opposed)
             : null
         }
-        noSharedTime={available && fitRanking && freeSlots.get(normId(person.user_id)) === 0}
+        noSharedTime={available && (fitRanking || (ranking && narrowed)) && sharedFreeSlotsOf(person) === 0}
         record={available ? (facts.records.get(person.profile_space_id) ?? null) : null}
         matches={available && ranking ? matchesOf(person) : null}
         matchesWith={first ? debaterFirstName(first.person) : null}
-        claimsOpen={openClaims === normId(person.user_id)}
-        onClaimsToggle={() =>
-          setOpenClaims(current => (current === normId(person.user_id) ? null : normId(person.user_id)))
-        }
+        claimsOpen={openClaims === claimsKey(person)}
+        onClaimsToggle={() => setOpenClaims(current => (current === claimsKey(person) ? null : claimsKey(person)))}
         claimNamesById={facts.matchingClaimNamesById}
         claimNamesLoading={facts.matchingClaimsLoading}
         labelsById={labelsById}
@@ -318,7 +339,7 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
               : fitRanking
                 ? `Ordered by fit with ${speakerLabel(first.person)}: disagreements, shared interests and free time`
                 : ranking
-                  ? wanted.size > 0
+                  ? narrowed
                     ? `Ordered by matches with ${speakerLabel(first.person)} in the selected spaces, most first`
                     : `Ordered by matches with ${speakerLabel(first.person)}, most first`
                   : `Counting matches with ${speakerLabel(first.person)}…`}
@@ -525,7 +546,7 @@ function PersonOption({
         <button
           type="button"
           aria-expanded={claimsOpen}
-          aria-controls={claimsId}
+          aria-controls={claimsOpen ? claimsId : undefined}
           onClick={onClaimsToggle}
           className="inline-flex items-center gap-0.5 rounded-full bg-ctaTertiary px-1.5 py-0.5 font-medium text-ctaPrimary transition-opacity hover:opacity-75"
         >

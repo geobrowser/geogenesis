@@ -381,6 +381,49 @@ describe('AdminNewMatchDialog', () => {
     ).toHaveLength(1);
   });
 
+  it('still counts shared free time while spaces are selected', () => {
+    mocks.matchesByAnchor = {
+      spaceana: [
+        ['spaceraj', match(2, 'crypto')],
+        ['spaceleo', match(3, 'crypto')],
+      ],
+    };
+    mocks.debateSpacesByPerson = new Map([
+      ['spaceraj', ['crypto']],
+      ['spaceleo', ['crypto']],
+    ]);
+    mocks.freeSlots = new Map([
+      ['raj', 4],
+      ['leo', 0],
+    ]);
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Space crypto' }));
+
+    // Leo's three halve below Raj's two: a pair with no time in common can't be booked.
+    const rows = people();
+    expect(rows[0]).toHaveTextContent('Raj Mehta');
+    expect(rows[1]).toHaveTextContent('Leo Okafor');
+    expect(rows[1]).toHaveTextContent('No free time in common');
+  });
+
+  it('closes a candidate’s claims when debater 1 changes', () => {
+    mocks.matchesByAnchor = {
+      spaceana: [['spaceleo', match(4)]],
+      spaceraj: [['spaceleo', match(2)]],
+    };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: /4 matches with Ana/ }));
+    expect(screen.getByRole('list', { name: 'Matching claims: Ana and Leo' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    expect(screen.getByRole('button', { name: /2 matches with Raj/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('list', { name: /Matching claims/ })).not.toBeInTheDocument();
+  });
+
   it('sets pair fit aside while spaces are selected', () => {
     mocks.matchesByAnchor = {
       spaceana: [

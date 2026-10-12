@@ -41,9 +41,8 @@ export function analyzeMatchingClaims(
   viewerProfileSpaceId: string | null
 ): MatchingClaimsAnalysis {
   const byProfile = new Map<string, ClaimMatch[]>();
-  const countsByProfileAndSpace = new Map<string, Map<string, number>>();
   const byProfileAndSpace = new Map<string, Map<string, ClaimMatch[]>>();
-  if (!viewerProfileSpaceId) return { byProfile, countsByProfileAndSpace, byProfileAndSpace };
+  if (!viewerProfileSpaceId) return { byProfile, countsByProfileAndSpace: new Map(), byProfileAndSpace };
 
   const viewerId = normId(viewerProfileSpaceId);
   const seenClaimsByProfile = new Map<string, Set<string>>();
@@ -91,15 +90,22 @@ export function analyzeMatchingClaims(
       seenForProfileSpace.add(claimId);
       seenClaimsByProfileAndSpace.set(profileSpaceKey, seenForProfileSpace);
 
-      const bySpace = countsByProfileAndSpace.get(profileId) ?? new Map<string, number>();
-      bySpace.set(spaceId, (bySpace.get(spaceId) ?? 0) + 1);
-      countsByProfileAndSpace.set(profileId, bySpace);
-
       const listsBySpace = byProfileAndSpace.get(profileId) ?? new Map<string, ClaimMatch[]>();
-      listsBySpace.set(spaceId, [...(listsBySpace.get(spaceId) ?? []), match]);
+      const list = listsBySpace.get(spaceId) ?? [];
+      list.push(match);
+      listsBySpace.set(spaceId, list);
       byProfileAndSpace.set(profileId, listsBySpace);
     }
   }
+
+  // Counted from the lists rather than alongside them, so the Active in numbers and the claims
+  // listed under them cannot drift apart.
+  const countsByProfileAndSpace = new Map(
+    [...byProfileAndSpace].map(([profileId, listsBySpace]) => [
+      profileId,
+      new Map([...listsBySpace].map(([spaceId, list]) => [spaceId, list.length])),
+    ])
+  );
 
   return { byProfile, countsByProfileAndSpace, byProfileAndSpace };
 }
