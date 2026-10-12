@@ -2340,6 +2340,8 @@ export type DebateLobbyMember = {
   newcomer?: boolean;
   /** Their "available to debate" toggle, as the People tab reads it (GEO-3131). Absent from older geo-chat. */
   available_to_debate?: boolean;
+  /** Who moved this listener there. Only for a hosting viewer; absent from older geo-chat. */
+  moved_to_listeners?: { by: DebateLobbyPerson | null; at: string } | null;
 };
 
 /** Someone in a debate pair; the partner may be off this lobby's roster. */
@@ -2349,7 +2351,11 @@ export type DebateLobbyPairPerson = DebateLobbyPerson & { in_lobby: boolean };
  * One debate a member is in (GEO-3131): two people, or one when the partner is hidden. No debate id
  * and no claim; the claim is the members' `in_debate_subject`.
  */
-export type DebateLobbyPair = { people: DebateLobbyPairPerson[] };
+export type DebateLobbyPair = {
+  people: DebateLobbyPairPerson[];
+  /** `null` before it starts and for a hidden debate; absent from older geo-chat. `rounds` is `null` for open rounds. */
+  progress?: { round: number | null; rounds: number | null; recording: boolean } | null;
+};
 
 export type DebateLobbyDebateSubject =
   { phase: 'choosing_claim' } | { phase: 'on_claim'; claim_entity_id: string; claim_name: string; space_id: string };
@@ -2498,6 +2504,11 @@ export type DebateLobbyClaims = {
   source: 'room' | 'recent';
   /** Most disagreeing pairs first. */
   claims: DebateLobbyClaim[];
+  /**
+   * On how many claims the viewer and each other member disagree; the viewer has no entry. `null`
+   * for a guest; absent from older geo-chat.
+   */
+  disagreements?: { user_id: string; claims: number }[] | null;
 };
 
 /**

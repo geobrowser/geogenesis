@@ -1,4 +1,5 @@
 import {
+  type DebateLobbyClaims,
   type DebateLobbyMember,
   type DebateLobbyMemberAction,
   type DebateLobbyModerationAction,
@@ -102,6 +103,13 @@ export const STATUS_LABEL: Record<LobbyMemberStatus, string> = {
   chatting: 'Just chatting',
 };
 
+/** One word or two, for a phone's narrow tile. */
+export const SHORT_STATUS_LABEL: Record<LobbyMemberStatus, string> = {
+  in_debate: 'In a debate',
+  looking: 'Looking',
+  chatting: 'Just chatting',
+};
+
 /**
  * In a debate, else Looking to debate by the availability toggle, else Just chatting. `available`
  * stands in for the roster's flag; `null` when there is neither, from a geo-chat that predates it.
@@ -118,6 +126,18 @@ export function memberStatus(
 /** "Ana vs. Ben"; a pair whose partner is hidden reads as the one name. */
 export function pairLabel(pair: DebateLobbyPair) {
   return pair.people.map(personName).join(' vs. ');
+}
+
+/** "round 2 of 3", "round 2" for open rounds; `null` before the first round or without progress. */
+export function pairRoundLabel(progress: DebateLobbyPair['progress']) {
+  if (!progress || progress.round === null) return null;
+  return progress.rounds === null ? `round ${progress.round}` : `round ${progress.round} of ${progress.rounds}`;
+}
+
+/** How many claims the viewer and `userId` disagree on; `null` for none, unknown, or the viewer. */
+export function disagreementCount(disagreements: DebateLobbyClaims['disagreements'], userId: string): number | null {
+  const entry = disagreements?.find(row => dashlessId(row.user_id) === dashlessId(userId));
+  return entry && entry.claims > 0 ? entry.claims : null;
 }
 
 /** What the pair is debating, from its first lobby member's roster row. */

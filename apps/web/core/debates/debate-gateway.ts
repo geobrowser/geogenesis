@@ -548,13 +548,14 @@ export class DebateGatewayClient {
         if (identifiers.lobby_id) this.queueAccountQuery('lobby', dashlessId(identifiers.lobby_id));
         break;
       // GEO-3131. Sent to the lobby's present members.
-      // `sections: ["claims"]` means only the In this room list changed.
+      // `sections: ["claims"]` means only the In this room list changed; `["people"]`, only the view
+      // (a pair's round or recording).
       case 'debate.lobby_changed': {
         if (!identifiers.lobby_id) break;
         const lobbyId = dashlessId(identifiers.lobby_id);
-        const claimsOnly = identifiers.sections?.length === 1 && identifiers.sections[0] === 'claims';
-        if (!claimsOnly) this.queueAccountQuery('lobby', lobbyId);
-        this.queueAccountQuery('lobby-claims', lobbyId);
+        const only = identifiers.sections?.length === 1 ? identifiers.sections[0] : null;
+        if (only !== 'claims') this.queueAccountQuery('lobby', lobbyId);
+        if (only !== 'people') this.queueAccountQuery('lobby-claims', lobbyId);
         break;
       }
       // GEO-3135. Full state to the roster: replaces the cached copy when newer, never refetches.
