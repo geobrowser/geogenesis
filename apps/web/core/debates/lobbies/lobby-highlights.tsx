@@ -5,7 +5,6 @@ import * as React from 'react';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Ellipsis } from '~/design-system/icons/ellipsis';
-import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
 import {
@@ -33,6 +32,7 @@ import {
   listedHighlights,
   viewerRoomVotePosition,
 } from './lobby-highlights-state';
+import { LobbyPopup } from './lobby-popup';
 import { LobbyClaimRequest, LobbyRoomClaims, lobbyRoomClaimFrom } from './lobby-room-claims';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
@@ -218,12 +218,10 @@ function LobbyClaimHostMenu({
   const [open, setOpen] = React.useState(false);
 
   return (
-    <Menu
+    <LobbyPopup
       open={open}
       onOpenChange={setOpen}
-      asChild
-      align="end"
-      className="max-w-[260px]"
+      title="Claim options"
       trigger={
         <button
           type="button"
@@ -235,11 +233,8 @@ function LobbyClaimHostMenu({
         </button>
       }
     >
-      {/* Remounted on each open, so a confirm or error from last time does not linger. */}
-      {open ? (
-        <LobbyClaimHostActions lobbyId={lobbyId} claim={claim} state={state} onDone={() => setOpen(false)} />
-      ) : null}
-    </Menu>
+      <LobbyClaimHostActions lobbyId={lobbyId} claim={claim} state={state} onDone={() => setOpen(false)} />
+    </LobbyPopup>
   );
 }
 
