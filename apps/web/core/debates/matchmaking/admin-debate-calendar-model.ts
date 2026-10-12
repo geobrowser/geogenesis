@@ -217,12 +217,15 @@ export function timeIn(at: number, timezone: string | undefined): string {
   }
 }
 
-/** ` (next day)` or ` (day before)` when `at` falls on another date in `timezone` than for the viewer. */
-export function dayShift(at: number, timezone: string | undefined): string {
+/**
+ * ` (next day)` or ` (day before)` when `at` falls on another date in `timezone` than in `fromZone`,
+ * the zone the times around it are drawn in: the viewer's own when not given.
+ */
+export function dayShift(at: number, timezone: string | undefined, fromZone?: string): string {
   if (!timezone) return '';
   try {
     const theirs = new Date(at).toLocaleDateString('en-CA', { timeZone: timezone });
-    const ours = new Date(at).toLocaleDateString('en-CA');
+    const ours = new Date(at).toLocaleDateString('en-CA', { timeZone: fromZone });
     if (theirs === ours) return '';
     return theirs > ours ? ' (next day)' : ' (day before)';
   } catch {

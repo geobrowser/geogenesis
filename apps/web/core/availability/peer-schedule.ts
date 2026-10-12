@@ -202,6 +202,14 @@ export function zonedWallClockInstant(wallAsUtc: number, zone: string | undefine
 }
 
 /**
+ * {@link zonedParts} for a zone as stored, with the same fallback as {@link zonedWallClockInstant}:
+ * the date (`2026-10-06`) and minutes past midnight an instant reads as in `zone`.
+ */
+export function zonedClock(instant: Date | number, zone: string | undefined): ZonedParts {
+  return zonedParts(new Date(instant), usableZone(zone));
+}
+
+/**
  * The instant a wall clock in `zone` names, with the wall clock given as if it were UTC.
  *
  * Tried with the zone's offset a day either side, since no zone changes offset twice in two days.

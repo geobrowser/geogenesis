@@ -11,6 +11,7 @@ import {
   type AdminScheduledDebater,
   adminScheduleOverlaps,
   createAdminScheduledDebate,
+  getScheduleOverlaps,
   listAdminDebateSchedules,
   sendAdminAvailabilityPrompt,
 } from '../api';
@@ -29,6 +30,8 @@ const adminKeys = {
   debaters: (accountKey: string | null) => ['debates', 'admin-debaters', accountKey] as const,
   overlap: (accountKey: string | null, of: string, other: string) =>
     ['debates', 'admin-overlap', of, other, accountKey] as const,
+  availability: (accountKey: string | null, userId: string) =>
+    ['debates', 'admin-availability', userId, accountKey] as const,
 };
 
 /**
@@ -87,6 +90,38 @@ export function useAdminPairOverlap(firstUserId: string | null, secondUserId: st
         signal
       ),
     enabled: authenticated && Boolean(firstUserId && secondUserId),
+  });
+}
+
+/**
+ * One debater's own free half-hours over the next two weeks (GEO-3231), so New match can draw each
+ * person's availability beside the times they share.
+ *
+ * Read through the pair endpoint any debater uses, with the admin as the viewer: its `their_slots`
+ * is the other person's whole fortnight, booked debates already taken out, and is never capped.
+ * The admin's own week only annotates it, and is ignored. It refuses an admin's own id (a schedule
+ * cannot be matched against itself), which reads here as an error for that one row.
+ */
+export function useAdminDebaterAvailability(userId: string | null) {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: adminKeys.availability(accountKey, userId ?? ''),
+    queryFn: async ({ signal }) => {
+      const response = await getScheduleOverlaps(
+        userId!,
+        { days: ADMIN_MATCH_DAYS },
+        getPrivyIdentityToken,
+        accountKey,
+        signal
+      );
+      return {
+        timezone: response.with_timezone || null,
+        // Absent only on geo-chat builds before #134; read as nothing known rather than nothing free.
+        slots: response.their_slots ?? null,
+      };
+    },
+    enabled: authenticated && Boolean(userId),
   });
 }
 

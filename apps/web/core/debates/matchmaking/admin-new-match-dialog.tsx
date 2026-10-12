@@ -23,10 +23,25 @@ import { DebaterFace, POSITIVE_TEXT_CLASS, debaterFirstName } from './admin-deba
 import {
   ADMIN_MATCH_DAYS,
   useAdminAvailabilityPrompt,
+  useAdminDebaterAvailability,
   useAdminDebaters,
   useAdminPairOverlap,
   useCreateAdminMatch,
 } from './admin-hooks';
+import {
+  GMT,
+  browserZone,
+  dateIn,
+  dateLabels,
+  instantAt,
+  minutesIn,
+  readAdminMatchZone,
+  saveAdminMatchZone,
+  wallTime,
+  zoneDays,
+  zoneLabel,
+} from './admin-match-zone';
+import { AdminPairAvailability } from './admin-pair-availability';
 import { useAdminPairFit, useAdminSharedFreeSlots } from './admin-pair-fit';
 import { SegmentedControl, useMinuteClock } from './debate-calendar-controls';
 import { HubPillButton } from './hub-pill-button';
@@ -94,6 +109,11 @@ type Props = {
  *   why ("Disagrees with Ana on ..."); when it is not, the order is exactly the matches order.
  * - **Recommended** offers the half-hours both are free; **Pick any time** is the override, kept a
  *   separate mode so nobody drifts into it. Every time shows both debaters' own clocks.
+ * - **Both people's availability** sits above the time picker (GEO-3231), so a thin or empty
+ *   overlap shows how close they are and which way to stretch.
+ * - **Every time is in one zone the admin picks** (GEO-3231): their own, GMT, or either debater's,
+ *   remembered between openings. Only an instant is sent, so each invite is still in its
+ *   debater's own zone.
  */
 export function AdminNewMatchDialog({ open, onOpenChange, openerRef, onSent }: Props) {
   return (
@@ -135,6 +155,12 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   };
 
   const debatersQuery = useAdminDebaters(true);
+  const [zone, setZoneState] = React.useState(readAdminMatchZone);
+  const setZone = (next: string) => {
+    setZoneState(next);
+    saveAdminMatchZone(next);
+  };
+  const zoneOf = (userId: string) => debatersQuery.timezoneByUser.get(normId(userId));
   const availableIds = React.useMemo(
     () => [...new Set((debatersQuery.data ?? []).map(debater => normId(debater.user_id)))],
     [debatersQuery.data]
@@ -351,6 +377,9 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
           key={`${first?.userId ?? ''}-${second?.userId ?? ''}`}
           first={first}
           second={second}
+          zone={zone}
+          onZoneChange={setZone}
+          zoneOf={zoneOf}
           prompts={prompts}
           onChoose={setChosen}
           onRequestBoth={() => first && second && void requestAvailability([first.userId, second.userId])}
@@ -365,13 +394,19 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
                 {speakerLabel(first.person)} vs {speakerLabel(second.person)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
-                {new Date(chosen.start).toLocaleDateString(undefined, {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })}{' '}
-                · {timeIn(chosen.start, undefined)} – {timeIn(chosen.start + SLOT_MINUTES * 60_000, undefined)} your
-                time
+                {dateLabels(dateIn(chosen.start, zone)).full} · {timeIn(chosen.start, zone)} –{' '}
+                {timeIn(chosen.start + SLOT_MINUTES * 60_000, zone)} {zoneLabel(zone, chosen.start)}
+              </Text>
+              <Text as="p" variant="footnote" color="grey-04">
+                {[first, second]
+                  .map(({ userId, person }) => {
+                    const theirs = zoneOf(userId);
+                    return theirs
+                      ? `${debaterFirstName(person)} ${timeIn(chosen.start, theirs)} in ${zoneCity(theirs)}${dayShift(chosen.start, theirs, zone)}`
+                      : null;
+                  })
+                  .filter(Boolean)
+                  .join(' · ')}
               </Text>
               {chosen.outside ? (
                 <Text as="p" variant="footnote" className="text-purple">
@@ -594,63 +629,59 @@ function PersonOption({
   );
 }
 
-/** The next fourteen local midnights, today first: the days a match can be booked on. */
-function bookableDays(): Date[] {
-  const today = new Date();
-  return Array.from(
-    { length: ADMIN_MATCH_DAYS },
-    (_, index) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + index)
-  );
-}
-
-/**
- * `minutes` past midnight on `day`, by the wall clock. Built from parts rather than by adding
- * milliseconds, which lands an hour off on a day the clocks change.
- */
-function atMinutes(day: Date, minutes: number): number {
-  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes).getTime();
-}
-
-function dayHeading(day: Date) {
-  return day.toDateString() === new Date().toDateString()
-    ? 'Today'
-    : day.toLocaleDateString(undefined, { weekday: 'short' });
-}
-
 const MODE_OPTIONS = [
   { value: 'recommended', label: 'Recommended' },
   { value: 'any', label: 'Pick any time' },
 ] as const;
 
 /**
- * Choose a time: Recommended (the half-hours both are free) or Pick any time (the override). Every
- * time is the admin's, with each debater's own clock under it once their zone is known.
+ * Choose a time: Recommended (the half-hours both are free) or Pick any time (the override), under
+ * both people's availability. Every time is in the zone the admin picked, with each debater's own
+ * clock under it once their zone is known.
  */
 function TimePicker({
   first,
   second,
+  zone,
+  onZoneChange,
+  zoneOf,
   prompts,
   onChoose,
   onRequestBoth,
 }: {
   first: Picked | null;
   second: Picked | null;
+  zone: string;
+  onZoneChange: (zone: string) => void;
+  /** A debater's zone from the roster, for whenever the overlap has not said. */
+  zoneOf: (userId: string) => string | undefined;
   prompts: ReadonlyMap<string, PromptOutcome>;
   onChoose: (choice: Choice | null) => void;
   onRequestBoth: () => void;
 }) {
   const [mode, setMode] = React.useState<'recommended' | 'any'>('recommended');
   const [selected, setSelected] = React.useState<number | null>(null);
-  const days = React.useMemo(bookableDays, []);
+  // Counted in the picked zone: in GMT, an admin west of it can still be on yesterday.
+  const days = React.useMemo(() => zoneDays(Date.now(), zone, ADMIN_MATCH_DAYS), [zone]);
   const [anyDay, setAnyDay] = React.useState(1);
   const [anyMinutes, setAnyMinutes] = React.useState(17 * 60);
 
   // Ticks each minute, so a picked time that passes while the dialog is open stops being sendable.
   const now = useMinuteClock();
   const overlap = useAdminPairOverlap(first?.userId ?? null, second?.userId ?? null);
+  const firstAvailability = useAdminDebaterAvailability(first && second ? first.userId : null);
+  const secondAvailability = useAdminDebaterAvailability(first && second ? second.userId : null);
   const candidate = overlap.data?.candidates[0];
-  const firstZone = overlap.data?.viewer_timezone || undefined;
-  const secondZone = candidate?.with_timezone || undefined;
+  const firstZone =
+    overlap.data?.viewer_timezone ||
+    firstAvailability.data?.timezone ||
+    (first ? zoneOf(first.userId) : undefined) ||
+    undefined;
+  const secondZone =
+    candidate?.with_timezone ||
+    secondAvailability.data?.timezone ||
+    (second ? zoneOf(second.userId) : undefined) ||
+    undefined;
   const slots = React.useMemo(
     () => (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > now),
     [candidate, now]
@@ -660,7 +691,7 @@ function TimePicker({
   // full; until then the override says nothing rather than flagging every time it is shown.
   const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
 
-  const anyStart = days[anyDay] ? atMinutes(days[anyDay], anyMinutes) : null;
+  const anyStart = days[anyDay] ? instantAt(days[anyDay], anyMinutes, zone) : null;
   React.useEffect(() => {
     if (mode === 'recommended')
       onChoose(selected !== null && selected > now ? { start: selected, outside: false } : null);
@@ -672,18 +703,57 @@ function TimePicker({
       );
   }, [anyStart, mode, mutual, now, onChoose, overlapKnown, selected]);
 
+  const zoneName = zoneLabel(zone);
+  const zoneOptions = [
+    { value: browserZone(), label: `Your time · ${zoneLabel(browserZone())}` },
+    { value: GMT, label: 'GMT' },
+    ...(first && firstZone
+      ? [{ value: firstZone, label: `${debaterFirstName(first.person)}’s time · ${zoneLabel(firstZone)}` }]
+      : []),
+    ...(second && secondZone
+      ? [{ value: secondZone, label: `${debaterFirstName(second.person)}’s time · ${zoneLabel(secondZone)}` }]
+      : []),
+    // A zone kept from an earlier match, whoever's it was.
+    { value: zone, label: zoneName },
+  ].filter((option, index, all) => all.findIndex(other => other.value === option.value) === index);
+
+  const zonePicker = (
+    <label className="flex items-center gap-2">
+      <Text as="span" variant="footnote" color="grey-04">
+        Time zone
+      </Text>
+      <select
+        value={zone}
+        onChange={event => onZoneChange(event.currentTarget.value)}
+        className="h-8 max-w-[16rem] rounded px-2 text-metadata shadow-inner shadow-grey-02"
+      >
+        {zoneOptions.map(option => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+
   const box = (children: React.ReactNode) => (
-    <div className="flex min-h-[28rem] min-w-0 flex-col gap-3 rounded-xl border border-grey-02 p-3.5 md:min-h-0">
+    <div className="flex min-h-[28rem] min-w-0 flex-col gap-3 overflow-y-auto rounded-xl border border-grey-02 p-3.5 md:min-h-0">
       {children}
+    </div>
+  );
+  const heading = (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <Text as="p" variant="metadataMedium">
+        Choose a time
+      </Text>
+      {zonePicker}
     </div>
   );
 
   if (!first || !second) {
     return box(
       <>
-        <Text as="p" variant="metadataMedium">
-          Choose a time
-        </Text>
+        {heading}
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
           <Text as="p" variant="metadata" color="grey-04">
             Pick two debaters to see when they&rsquo;re both free.
@@ -702,6 +772,21 @@ function TimePicker({
     { name: a, zone: firstZone },
     { name: b, zone: secondZone },
   ].filter((clock): clock is { name: string; zone: string } => clock.zone !== undefined);
+
+  // A half-hour picked off the availability strip: a shared one is a recommendation, anything else
+  // the override, so the mode always says which kind of time it is.
+  const pickFromStrip = (start: number) => {
+    if (mutual.has(start)) {
+      setMode('recommended');
+      setSelected(start);
+      return;
+    }
+    const day = days.indexOf(dateIn(start, zone));
+    if (day < 0) return;
+    setMode('any');
+    setAnyDay(day);
+    setAnyMinutes(minutesIn(start, zone));
+  };
 
   let body: React.ReactNode;
   if (mode === 'recommended') {
@@ -780,55 +865,55 @@ function TimePicker({
       body = (
         <>
           <Text as="p" variant="footnote" color="grey-04">
-            Half-hours they&rsquo;re both free. The large time is yours; under it, each debater&rsquo;s own.
+            Half-hours they&rsquo;re both free. The large time is {zoneName}; under it, each debater&rsquo;s own.
           </Text>
           <div className="grid auto-cols-[minmax(7rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1">
             {days
-              .map(day => ({
-                day,
-                starts: slots.filter(start => new Date(start).toDateString() === day.toDateString()),
-              }))
+              .map(day => ({ day, starts: slots.filter(start => dateIn(start, zone) === day) }))
               .filter(({ starts }) => starts.length > 0)
-              .map(({ day, starts }) => (
-                <section
-                  key={day.getTime()}
-                  role="group"
-                  aria-label={day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-                  className="flex flex-col gap-2 rounded-lg border border-grey-02 p-2"
-                >
-                  <div className="flex flex-col">
-                    <Text as="span" variant="metadataMedium">
-                      {dayHeading(day)}
-                    </Text>
-                    <Text as="span" variant="footnote" color="grey-04">
-                      {day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </Text>
-                  </div>
-                  {starts.map(start => (
-                    <button
-                      key={start}
-                      type="button"
-                      aria-pressed={selected === start}
-                      aria-label={[
-                        timeIn(start, undefined),
-                        ...theirClocks.map(({ name, zone }) => `${name} ${timeIn(start, zone)}`),
-                      ].join(', ')}
-                      onClick={() => setSelected(current => (current === start ? null : start))}
-                      className={cx(
-                        'rounded-md border px-2 py-1 text-left tabular-nums transition-colors',
-                        selected === start ? SELECTED_SLOT : cx(MUTUAL_SLOT, 'hover:border-text')
-                      )}
-                    >
-                      <span className="block text-footnoteMedium">{timeIn(start, undefined)}</span>
-                      {theirClocks.map(({ name, zone }) => (
-                        <span key={name} className="block text-footnote whitespace-nowrap opacity-70">
-                          {name} {timeIn(start, zone)}
-                        </span>
-                      ))}
-                    </button>
-                  ))}
-                </section>
-              ))}
+              .map(({ day, starts }) => {
+                const labels = dateLabels(day);
+                return (
+                  <section
+                    key={day}
+                    role="group"
+                    aria-label={labels.longWeekday}
+                    className="flex flex-col gap-2 rounded-lg border border-grey-02 p-2"
+                  >
+                    <div className="flex flex-col">
+                      <Text as="span" variant="metadataMedium">
+                        {day === days[0] ? 'Today' : labels.weekday}
+                      </Text>
+                      <Text as="span" variant="footnote" color="grey-04">
+                        {labels.monthDay}
+                      </Text>
+                    </div>
+                    {starts.map(start => (
+                      <button
+                        key={start}
+                        type="button"
+                        aria-pressed={selected === start}
+                        aria-label={[
+                          `${timeIn(start, zone)} ${zoneName}`,
+                          ...theirClocks.map(({ name, zone: theirs }) => `${name} ${timeIn(start, theirs)}`),
+                        ].join(', ')}
+                        onClick={() => setSelected(current => (current === start ? null : start))}
+                        className={cx(
+                          'rounded-md border px-2 py-1 text-left tabular-nums transition-colors',
+                          selected === start ? SELECTED_SLOT : cx(MUTUAL_SLOT, 'hover:border-text')
+                        )}
+                      >
+                        <span className="block text-footnoteMedium">{timeIn(start, zone)}</span>
+                        {theirClocks.map(({ name, zone: theirs }) => (
+                          <span key={name} className="block text-footnote whitespace-nowrap opacity-70">
+                            {name} {timeIn(start, theirs)}
+                          </span>
+                        ))}
+                      </button>
+                    ))}
+                  </section>
+                );
+              })}
           </div>
         </>
       );
@@ -853,15 +938,15 @@ function TimePicker({
               className="h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02"
             >
               {days.map((day, index) => (
-                <option key={day.getTime()} value={index}>
-                  {day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                <option key={day} value={index}>
+                  {dateLabels(day).full}
                 </option>
               ))}
             </select>
           </label>
           <label className="flex flex-col gap-1">
             <Text as="span" variant="footnote" color="grey-04">
-              Starts (your time)
+              Starts ({zoneName})
             </Text>
             <select
               value={anyMinutes}
@@ -870,7 +955,7 @@ function TimePicker({
             >
               {Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES).map(minutes => (
                 <option key={minutes} value={minutes}>
-                  {timeIn(atMinutes(days[0], minutes), undefined)}
+                  {wallTime(minutes)}
                 </option>
               ))}
             </select>
@@ -886,7 +971,7 @@ function TimePicker({
         ) : null}
         {anyStart !== null && future && theirClocks.length > 0 ? (
           <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
-            {theirClocks.map(({ name, zone }) => (
+            {theirClocks.map(({ name, zone: theirs }) => (
               <div
                 key={name}
                 className={cx(
@@ -898,8 +983,8 @@ function TimePicker({
                   {name}
                 </Text>
                 <Text as="span" variant="metadata">
-                  {timeIn(anyStart, zone)} in {zoneCity(zone)}
-                  {dayShift(anyStart, zone)}
+                  {timeIn(anyStart, theirs)} in {zoneCity(theirs)}
+                  {dayShift(anyStart, theirs, zone)}
                 </Text>
               </div>
             ))}
@@ -924,10 +1009,30 @@ function TimePicker({
 
   return box(
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Text as="p" variant="metadataMedium">
-          Choose a time
-        </Text>
+      {heading}
+      <AdminPairAvailability
+        days={days}
+        zone={zone}
+        zoneName={zoneName}
+        now={now}
+        first={{
+          name: a,
+          slots: firstAvailability.data?.slots ?? null,
+          pending: firstAvailability.isPending,
+          error: Boolean(firstAvailability.error),
+          onRetry: () => void firstAvailability.refetch(),
+        }}
+        second={{
+          name: b,
+          slots: secondAvailability.data?.slots ?? null,
+          pending: secondAvailability.isPending,
+          error: Boolean(secondAvailability.error),
+          onRetry: () => void secondAvailability.refetch(),
+        }}
+        selected={mode === 'recommended' ? selected : anyStart}
+        onPick={pickFromStrip}
+      />
+      <div className="border-t border-grey-02 pt-3">
         <SegmentedControl label="How to pick a time" options={MODE_OPTIONS} value={mode} onChange={setMode} />
       </div>
       {body}

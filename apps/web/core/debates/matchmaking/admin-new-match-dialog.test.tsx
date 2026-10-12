@@ -22,6 +22,8 @@ const mocks = vi.hoisted(() => ({
   fitByAnchor: {} as Record<string, [string, unknown][] | null>,
   fitAnchors: [] as (string | null)[],
   freeSlots: new Map<string, number>(),
+  // GEO-3231: each debater's own free windows, by user id.
+  availability: {} as Record<string, { start: string; end: string; viewer_free: boolean }[]>,
 }));
 
 vi.mock('./admin-hooks', () => ({
@@ -40,8 +42,17 @@ vi.mock('./admin-hooks', () => ({
           isPending: false,
           error: null,
           refetch: mocks.refetchDebaters,
-          timezoneByUser: new Map(),
+          timezoneByUser: new Map(mocks.debaters.map(debater => [debater.user_id, debater.timezone])),
         },
+  useAdminDebaterAvailability: (userId: string | null) =>
+    userId
+      ? {
+          data: { timezone: null, slots: mocks.availability[userId] ?? [] },
+          isPending: false,
+          error: null,
+          refetch: vi.fn(),
+        }
+      : { isPending: false, error: null, refetch: vi.fn() },
   useAdminPairOverlap: (first: string | null, second: string | null) =>
     first && second
       ? { data: mocks.overlap, isPending: mocks.overlap === undefined, error: null, refetch: vi.fn() }
@@ -168,10 +179,12 @@ beforeEach(() => {
     fitByAnchor: {},
     fitAnchors: [],
     freeSlots: new Map(),
+    availability: {},
     matchesKnown: true,
     debatersError: null,
   });
   mocks.refetchDebaters.mockReset();
+  window.localStorage.clear();
   mocks.create.mockReset();
   mocks.prompt.mockReset();
 });
@@ -417,7 +430,7 @@ describe('AdminNewMatchDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '0' } });
-    fireEvent.change(screen.getByRole('combobox', { name: 'Starts (your time)' }), {
+    fireEvent.change(screen.getByRole('combobox', { name: /^Starts/ }), {
       target: { value: String(10 * 60) },
     });
     expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
@@ -427,6 +440,93 @@ describe('AdminNewMatchDialog', () => {
       vi.advanceTimersByTime(60_000);
     });
     expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
+  });
+
+  it('shows both debaters’ availability, whose is whose, and where it overlaps', () => {
+    mocks.availability = {
+      ana: [{ start: at(7, 9), end: at(7, 11), viewer_free: false }],
+      raj: [
+        { start: at(7, 10), end: at(7, 12), viewer_free: false },
+        { start: at(8, 14), end: at(8, 15), viewer_free: false },
+      ],
+    };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    const strip = screen.getByRole('region', { name: /^Availability in / });
+    expect(within(strip).getByText('Ana free')).toBeInTheDocument();
+    expect(within(strip).getByText('Raj free')).toBeInTheDocument();
+    expect(
+      within(strip).getByText(
+        /Wednesday, October 7: Ana free 9:00 AM–11:00 AM; Raj free 10:00 AM–12:00 PM; both free 10:00 AM–11:00 AM/
+      )
+    ).toBeInTheDocument();
+    expect(
+      within(strip).getByText(/Thursday, October 8: Ana not free; Raj free 2:00 PM–3:00 PM; never both free/)
+    ).toBeInTheDocument();
+  });
+
+  it('picks a half-hour straight off the availability strip', () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    // A shared half-hour is a recommendation.
+    fireEvent.click(document.querySelector(`[data-start="${Date.parse(at(7, 9))}"]`)!);
+    expect(screen.getByRole('radio', { name: 'Recommended' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('button', { pressed: true, name: /^9:00/ })).toBeInTheDocument();
+
+    // Anything else is the override, on that day at that time.
+    fireEvent.click(document.querySelector(`[data-start="${Date.parse(at(8, 14))}"]`)!);
+    expect(screen.getByRole('radio', { name: 'Pick any time' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByRole('combobox', { name: /^Starts/ })).toHaveValue(String(14 * 60));
+    fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+    expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe(at(8, 14));
+  });
+
+  it('remembers the time zone picked for next time', () => {
+    renderDialog();
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time zone' }), { target: { value: 'UTC' } });
+    cleanup();
+
+    renderDialog();
+    expect(screen.getByRole('combobox', { name: 'Time zone' })).toHaveValue('UTC');
+  });
+
+  describe('for an admin west of GMT who books in GMT', () => {
+    const originalTz = process.env.TZ;
+    beforeEach(() => {
+      process.env.TZ = 'America/Los_Angeles';
+      // 9:20 AM in Los Angeles, already 4:20 PM in GMT.
+      vi.setSystemTime(new Date('2026-10-06T16:20:00Z'));
+    });
+    afterEach(() => {
+      process.env.TZ = originalTz;
+    });
+
+    it('books 15:00 GMT as that instant, and shows each debater it in their own time', () => {
+      renderDialog();
+      fireEvent.change(screen.getByRole('combobox', { name: 'Time zone' }), { target: { value: 'UTC' } });
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+      fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+
+      // Days and times are counted in GMT: today there is still the 6th, the first offered.
+      const day = screen.getByRole('combobox', { name: 'Day' });
+      expect(within(day).getAllByRole('option')[0]).toHaveTextContent('Tue, Oct 6');
+      fireEvent.change(day, { target: { value: '1' } });
+      fireEvent.change(screen.getByRole('combobox', { name: 'Starts (GMT)' }), {
+        target: { value: String(15 * 60) },
+      });
+
+      expect(screen.getByText(/Wed, Oct 7 · 3:00 PM – 3:30 PM GMT/)).toBeInTheDocument();
+      expect(screen.getByText('Ana 5:00 PM in Madrid · Raj 8:30 PM in Kolkata')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+      // Only the instant is sent, so each invite is rendered in its debater's own zone.
+      expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-07T15:00:00.000Z');
+    });
   });
 
   it('keeps Send invites off until two debaters and a time are picked', () => {
