@@ -100,7 +100,17 @@ function OwnDebateRow({
 }) {
   const { open } = useDebatesHub();
   const name = opponentName(debate.opponentUserId);
-  const state = debate.state === 'booked' ? 'booked' : debate.state === 'asked' ? 'asked you' : 'requested';
+  // A pending match the Geo team arranged says so, whoever has answered so far (GEO-3229).
+  const state =
+    debate.state === 'booked'
+      ? 'booked'
+      : debate.arrangedByAdmin
+        ? debate.state === 'asked'
+          ? 'invited by the Geo team'
+          : 'arranged by the Geo team'
+        : debate.state === 'asked'
+          ? 'asked you'
+          : 'requested';
   return (
     <li className="-mx-4 flex items-center justify-between gap-3 border-b border-grey-02 bg-grey-01 px-4 py-2.5">
       <div className="flex min-w-0 flex-col gap-0.5">

@@ -358,6 +358,48 @@ describe('calling a scheduled debate off', () => {
     expect(screen.queryByRole('button', { name: 'Cancel request' })).not.toBeInTheDocument();
   });
 
+  // GEO-3229: a match the Geo team arranged must not read as the other debater having asked.
+  it('says the Geo team arranged a pending match, before and after the viewer accepts', () => {
+    setup({
+      answerable: [
+        request({ request_id: 'asked', created_by_admin: true, proposed_by_user_id: null }),
+        request({
+          request_id: 'accepted',
+          created_by_admin: true,
+          proposed_by_user_id: null,
+          viewer_must_answer: false,
+        }),
+      ],
+    });
+
+    expect(screen.getAllByText('Arranged by the Geo team')).toHaveLength(2);
+  });
+
+  it('says which debater proposed a moved time on a Geo-arranged match, and nothing on a peer request', () => {
+    setup({
+      answerable: [
+        request({
+          request_id: 'theirs',
+          created_by_admin: true,
+          reschedule_count: 1,
+          proposed_by_user_id: 'user-them',
+        }),
+        request({
+          request_id: 'mine',
+          created_by_admin: true,
+          reschedule_count: 1,
+          proposed_by_user_id: 'user-me',
+          viewer_must_answer: false,
+        }),
+        request({ request_id: 'peer' }),
+      ],
+    });
+
+    expect(screen.getAllByText(/proposed this time/)).toHaveLength(2);
+    expect(screen.getByText('Arranged by the Geo team · You proposed this time')).toBeInTheDocument();
+    expect(screen.getAllByText(/Arranged by the Geo team/)).toHaveLength(2);
+  });
+
   it('offers no cancel on a pending request someone else proposed', () => {
     setup({
       answerable: [

@@ -548,12 +548,20 @@ function DebateBlock({
 }) {
   const { open } = useDebatesHub();
   const name = opponentName(debate.opponentUserId);
+  // A match the Geo team arranged says so while it is pending, whoever has answered so far, so it
+  // does not read as the other debater having asked (GEO-3229).
+  const pendingLead =
+    debate.state === 'asked'
+      ? debate.arrangedByAdmin
+        ? 'Geo team invite'
+        : 'Asked'
+      : debate.arrangedByAdmin
+        ? 'Arranged by the Geo team'
+        : 'Requested';
   const label =
     debate.state === 'booked'
       ? `Booked${name ? ` · Debate with ${name}` : ''}`
-      : debate.state === 'asked'
-        ? `Asked${name ? ` · ${name}` : ''}`
-        : `Requested${name ? ` · ${name}` : ''}`;
+      : `${pendingLead}${name ? ` · ${name}` : ''}`;
   return (
     <button
       type="button"
