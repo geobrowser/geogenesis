@@ -57,20 +57,20 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   const [rescheduling, setRescheduling] = React.useState<Rescheduling | null>(null);
   const rescheduleOpenerRef = React.useRef<HTMLElement | null>(null);
 
-  const openReschedule = (
-    opener: HTMLElement,
-    requestId: string,
-    opponentUserId: string,
-    entry: Rescheduling['entry']
-  ) => {
-    rescheduleOpenerRef.current = opener;
-    setRescheduling({
-      requestId,
-      opponentUserId,
-      opponentName: lookUp(opponentUserId)?.display_name ?? null,
-      entry,
-    });
-  };
+  // Both kinds of card move their request the same way; only the button that asked differs. Null
+  // when there is no request to move or no week to move it on.
+  const reschedulerFor = (requestId: string | null, opponentUserId: string | null, entry: ScheduleEntry) =>
+    requestId && opponentUserId
+      ? (opener: HTMLElement) => {
+          rescheduleOpenerRef.current = opener;
+          setRescheduling({
+            requestId,
+            opponentUserId,
+            opponentName: lookUp(opponentUserId)?.display_name ?? null,
+            entry,
+          });
+        }
+      : null;
 
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
@@ -104,11 +104,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               scheduledEndAt={scheduledEndAt}
               opponent={lookUp(opponentUserId)}
               viewer={viewer}
-              onReschedule={
-                requestId && opponentUserId
-                  ? opener => openReschedule(opener, requestId, opponentUserId, 'requests_reschedule')
-                  : null
-              }
+              onReschedule={reschedulerFor(requestId, opponentUserId, 'requests_reschedule')}
             />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
@@ -131,11 +127,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
                   viewerId={viewerId}
                   busy={respond.isPending}
                   onAnswer={answer}
-                  onChooseTime={
-                    opponentUserId
-                      ? opener => openReschedule(opener, request.request_id, opponentUserId, 'requests_new_time')
-                      : null
-                  }
+                  onReschedule={reschedulerFor(request.request_id, opponentUserId, 'requests_new_time')}
                 />
               );
             })}
@@ -164,12 +156,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 }
 
 /** A debate being moved: whose week to open, the request it moves, and which button asked. */
-type Rescheduling = {
-  requestId: string;
-  opponentUserId: string;
-  opponentName: string | null;
-  entry: Extract<ScheduleEntry, 'requests_reschedule' | 'requests_new_time'>;
-};
+type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null; entry: ScheduleEntry };
 
 /**
  * What this tab has to show. Shared with the tab itself, which needs it for its empty state; both
@@ -342,7 +329,7 @@ function ScheduledRow({
   viewerId,
   busy,
   onAnswer,
-  onChooseTime,
+  onReschedule,
   ref,
 }: {
   /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
@@ -354,7 +341,7 @@ function ScheduledRow({
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
   /** Opens the other debater's week to propose another time. Null when they are not known. */
-  onChooseTime: ((opener: HTMLElement) => void) | null;
+  onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
   const expiry = useScheduledExpiry(request.scheduled_start_at);
   // While pending, only whoever proposed the current time may withdraw it; the other side declines.
@@ -396,12 +383,12 @@ function ScheduledRow({
             >
               Accept
             </HubPillButton>
-            {onChooseTime && (
+            {onReschedule && (
               <HubPillButton
                 className="col-span-2"
-                analyticsLabel="Debate hub Choose different time"
-                analyticsIntent="choose_different_time"
-                onClick={event => onChooseTime(event.currentTarget)}
+                analyticsLabel="Debate hub Reschedule scheduled request"
+                analyticsIntent="reschedule_scheduled_request"
+                onClick={event => onReschedule(event.currentTarget)}
                 disabled={busy}
               >
                 Choose different time

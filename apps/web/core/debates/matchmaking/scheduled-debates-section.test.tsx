@@ -404,10 +404,11 @@ describe('moving a scheduled debate', () => {
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
   });
 
-  it('is not offered on a pending request, which is answered or withdrawn instead', () => {
+  it('is not offered on a pending request, which offers "Choose different time" instead', () => {
     setup({ answerable: [request()] });
 
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
   });
 });
 
