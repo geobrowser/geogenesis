@@ -38,6 +38,10 @@ const calibre = localFont({
     },
   ],
   variable: '--font-calibre',
+  // Not preloaded: on slow mobile the four weights (~135KB) share bandwidth with the
+  // render-blocking main stylesheet and delay first paint. The fallback is metric-adjusted, so the
+  // swap barely shifts layout.
+  preload: false,
 });
 
 const geistMedium = localFont({
