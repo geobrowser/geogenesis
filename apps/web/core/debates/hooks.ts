@@ -1232,8 +1232,12 @@ export function useCreateDebateRematchRequest(sessionId: string) {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'claim', target_id: request.claim_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request => getContext({ target_type: 'claim', target_id: request.claim_id, request_path: 'rematch' }),
+    undefined,
+    result => (result.request ? { request_id: dashlessId(result.request.id) } : {})
   );
 }
 
@@ -1263,8 +1267,15 @@ export function useAcceptDebateRematchRequest() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
-  return useObservedMutation(mutation, 'join_debate', requestId =>
-    getContext({ target_type: 'debate_request', target_id: requestId })
+  return useObservedMutation(
+    mutation,
+    'join_debate',
+    requestId => getContext({ target_type: 'debate_request', target_id: requestId }),
+    undefined,
+    result => ({
+      ...(result.debate ? { debate_id: dashlessId(result.debate.id) } : {}),
+      ...(result.session ? { rematch_session_id: dashlessId(result.session.id) } : {}),
+    })
   );
 }
 
@@ -1356,8 +1367,17 @@ export function useCreateDebateChallenge() {
       }
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'space', target_id: request.recipient_profile_space_id })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request =>
+      getContext({
+        target_type: 'space',
+        target_id: request.recipient_profile_space_id,
+        request_path: 'specific_person',
+      }),
+    undefined,
+    challenge => ({ request_id: dashlessId(challenge.id) })
   );
 }
 
@@ -1375,8 +1395,13 @@ export function useAcceptDebateChallenge() {
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });
     },
   });
-  return useObservedMutation(mutation, 'join_debate', challengeId =>
-    getContext({ target_type: 'debate_challenge', target_id: challengeId })
+  // A challenge accepted opens a rematch session, where the pair picks a claim; the debate comes later.
+  return useObservedMutation(
+    mutation,
+    'join_debate',
+    challengeId => getContext({ target_type: 'debate_challenge', target_id: challengeId }),
+    undefined,
+    result => (result.session ? { rematch_session_id: dashlessId(result.session.id) } : {})
   );
 }
 

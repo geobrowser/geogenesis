@@ -4,7 +4,9 @@ import * as React from 'react';
 
 import { Text } from '~/design-system/text';
 
+import { DebateRequestSurface } from './debate-request-surface';
 import { useCreateDebateChallenge, useDebateProfile } from './hooks';
+import { debateActionAnalyticsAttributes } from './matchmaking/hub-analytics';
 
 /**
  * Challenges the owner of a personal space to a debate with no claim attached.
@@ -12,6 +14,15 @@ import { useCreateDebateChallenge, useDebateProfile } from './hooks';
  * available and neither side is mid-flow. `DebateCoordinator` owns the request dialog.
  */
 export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
+  // Outside the button, so the challenge hook inside reads it (GEO-3244).
+  return (
+    <DebateRequestSurface surface="profile">
+      <ProfileDebateButtonInner spaceId={spaceId} />
+    </DebateRequestSurface>
+  );
+}
+
+function ProfileDebateButtonInner({ spaceId }: { spaceId: string }) {
   const profileQuery = useDebateProfile(spaceId);
   const createChallenge = useCreateDebateChallenge();
 
@@ -25,6 +36,7 @@ export function ProfileDebateButton({ spaceId }: { spaceId: string }) {
         type="button"
         onClick={() => createChallenge.mutate({ recipient_profile_space_id: spaceId })}
         disabled={createChallenge.isPending}
+        {...debateActionAnalyticsAttributes('profile', 'Request debate', 'start_debate')}
         // nowrap for the same reason as HubPillButton: `h-7` is fixed, and this sits at the end of
         // the profile name row, so a long name squeezes it until the label wraps out of the pill.
         // `shrink-0` does not help here — the wrapper is `flex-col`, so it governs height, not width.

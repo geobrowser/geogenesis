@@ -9,11 +9,11 @@ import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_N
 import { Text } from '~/design-system/text';
 
 import type { DebateParticipantSummary, ParticipantSlot } from './api';
+import { DebateDialogShell } from './debate-dialog-shell';
 import { DebateFormatDetails, type DebateFormatOpenRounds } from './format-details';
 import { DebateFormatSelector } from './format-selector';
 import type { DebateFormatId } from './formats';
 import { speakerLabel } from './playback-utils';
-import { useScrollLock } from './use-scroll-lock';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
   participant_slot: ParticipantSlot;
@@ -77,7 +77,6 @@ export function DebateRequestDialog({
   formatAction,
   overflowMenu,
 }: DebateRequestDialogProps) {
-  const titleId = React.useId();
   const turnParticipants = React.useMemo(
     () => [...participants].sort((a, b) => a.participant_slot - b.participant_slot),
     [participants]
@@ -92,90 +91,14 @@ export function DebateRequestDialog({
   const firstParticipant = positionParticipants[0];
   const secondParticipant = positionParticipants[1] ?? firstParticipant;
 
-  useScrollLock();
-
   if (!firstParticipant || !secondParticipant) return null;
 
   return (
-    <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid max-h-[calc(100dvh-2rem)] w-[min(370px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg bg-bg p-5 text-text shadow-card"
-      >
-        <header className="min-w-0 text-center">
-          {eyebrow ?? (
-            <Text as="div" variant="metadata" color="text">
-              Debate request
-            </Text>
-          )}
-          <h2 id={titleId} className="mt-3 text-cardEntityTitle leading-[1.375rem]">
-            {claim}
-          </h2>
-        </header>
-
-        <div className="min-h-0 overflow-y-auto pr-1">
-          <div className="relative grid grid-cols-[1fr_auto_1fr] items-center rounded-lg bg-white py-5">
-            {overflowMenu ? <div className="absolute top-2 right-2">{overflowMenu}</div> : null}
-            <ParticipantSummary participant={firstParticipant} currentUserId={currentUserId} />
-            <div className="relative grid w-16 place-items-center">
-              <span
-                aria-hidden="true"
-                className="absolute top-1/2 left-1/2 h-14 w-px -translate-x-1/2 -translate-y-1/2 bg-divider"
-              />
-              <span className="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-tag text-text">
-                VS
-              </span>
-            </div>
-            <ParticipantSummary participant={secondParticipant} currentUserId={currentUserId} />
-          </div>
-
-          <section className="mt-4 overflow-hidden rounded-lg border border-grey-02 bg-white">
-            <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
-              <Text as="h3" variant="metadata" color="text">
-                Debate format
-              </Text>
-              {formatAction && (
-                <button
-                  type="button"
-                  onClick={formatAction.onClick}
-                  disabled={busy}
-                  className="text-metadata text-grey-04 underline transition-colors hover:text-text disabled:opacity-50"
-                >
-                  {formatAction.label}
-                </button>
-              )}
-              {formatSelector && (
-                <DebateFormatSelector
-                  value={formatSelector.value}
-                  selectedFormatId={formatSelector.selectedFormatId}
-                  canChoose
-                  disabled={busy}
-                  onChange={formatSelector.onChange}
-                  name={formatSelector.name}
-                  className="w-[min(260px,100%)]"
-                />
-              )}
-            </div>
-            <div className="px-1 pb-1">
-              <DebateFormatDetails
-                formatId={formatId}
-                openRounds={openRounds}
-                participants={turnParticipants}
-                currentUserId={currentUserId}
-              />
-            </div>
-          </section>
-
-          {error && (
-            <Text as="p" variant="body" color="red-01" className="mt-3">
-              {error}
-            </Text>
-          )}
-        </div>
-
-        <footer className="grid gap-5">
+    <DebateDialogShell
+      eyebrow={eyebrow}
+      title={claim}
+      footer={
+        <>
           {actionsLayout === 'split' ? (
             <div className="grid grid-cols-2 gap-2">
               <button
@@ -205,9 +128,67 @@ export function DebateRequestDialog({
               </button>
             </>
           )}
-        </footer>
+        </>
+      }
+    >
+      <div className="relative grid grid-cols-[1fr_auto_1fr] items-center rounded-lg bg-white py-5">
+        {overflowMenu ? <div className="absolute top-2 right-2">{overflowMenu}</div> : null}
+        <ParticipantSummary participant={firstParticipant} currentUserId={currentUserId} />
+        <div className="relative grid w-16 place-items-center">
+          <span
+            aria-hidden="true"
+            className="absolute top-1/2 left-1/2 h-14 w-px -translate-x-1/2 -translate-y-1/2 bg-divider"
+          />
+          <span className="relative grid h-7 w-7 place-items-center rounded-full border border-divider bg-white text-tag text-text">
+            VS
+          </span>
+        </div>
+        <ParticipantSummary participant={secondParticipant} currentUserId={currentUserId} />
+      </div>
+
+      <section className="mt-4 overflow-hidden rounded-lg border border-grey-02 bg-white">
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
+          <Text as="h3" variant="metadata" color="text">
+            Debate format
+          </Text>
+          {formatAction && (
+            <button
+              type="button"
+              onClick={formatAction.onClick}
+              disabled={busy}
+              className="text-metadata text-grey-04 underline transition-colors hover:text-text disabled:opacity-50"
+            >
+              {formatAction.label}
+            </button>
+          )}
+          {formatSelector && (
+            <DebateFormatSelector
+              value={formatSelector.value}
+              selectedFormatId={formatSelector.selectedFormatId}
+              canChoose
+              disabled={busy}
+              onChange={formatSelector.onChange}
+              name={formatSelector.name}
+              className="w-[min(260px,100%)]"
+            />
+          )}
+        </div>
+        <div className="px-1 pb-1">
+          <DebateFormatDetails
+            formatId={formatId}
+            openRounds={openRounds}
+            participants={turnParticipants}
+            currentUserId={currentUserId}
+          />
+        </div>
       </section>
-    </div>
+
+      {error && (
+        <Text as="p" variant="body" color="red-01" className="mt-3">
+          {error}
+        </Text>
+      )}
+    </DebateDialogShell>
   );
 }
 

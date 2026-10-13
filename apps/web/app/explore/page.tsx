@@ -3,6 +3,7 @@ import { preload } from 'react-dom';
 
 import { resolveMemberSpaceFromWalletSafe } from '~/core/browse/resolve-member-space-from-wallet';
 import { WALLET_ADDRESS } from '~/core/cookie';
+import { DebateRequestSurface } from '~/core/debates/debate-request-surface';
 import { fetchExploreSidePanelData } from '~/core/explore/fetch-explore-side-panel-data';
 import { type FeaturedSpace, fetchFeaturedSpacesShared } from '~/core/io/subgraph/fetch-featured-spaces';
 
@@ -21,8 +22,7 @@ export default async function ExploreRoutePage() {
   const wallet = (await cookies()).get(WALLET_ADDRESS)?.value;
   // A signed-in reader's Best request carries an identity token while interleaving is on, and a
   // preload can't send one, so the feed's fetch would ignore it and the request would run twice.
-  const bestSendsIdentityToken =
-    wallet !== undefined && process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
+  const bestSendsIdentityToken = wallet !== undefined && process.env.NEXT_PUBLIC_FEED_INTERLEAVING_ENABLED === 'true';
   if (process.env.NEXT_PUBLIC_FOR_YOU_ENABLED !== 'true' && !bestSendsIdentityToken) {
     preload(BEST_FEED_PRELOAD_HREF, { as: 'fetch', crossOrigin: 'use-credentials' });
   }
@@ -41,14 +41,18 @@ export default async function ExploreRoutePage() {
     featuredSpacesPromise,
   });
 
+  // Requests sent from Explore's cards (GEO-3244). At the page, not on the card: the claim card is
+  // reused in the debates panel, which names its own surface.
   return (
-    <ExplorePage
-      featuredSpaces={sidePanel.featuredSpaces}
-      featuredRankings={sidePanel.featuredRankings}
-      pendingMembershipSpaceIds={sidePanel.pendingMembershipSpaceIds}
-      memberOrEditorSpaceIds={sidePanel.memberOrEditorSpaceIds}
-      communityCalls={sidePanel.communityCalls}
-      signedIn={Boolean(wallet)}
-    />
+    <DebateRequestSurface surface="explore_card">
+      <ExplorePage
+        featuredSpaces={sidePanel.featuredSpaces}
+        featuredRankings={sidePanel.featuredRankings}
+        pendingMembershipSpaceIds={sidePanel.pendingMembershipSpaceIds}
+        memberOrEditorSpaceIds={sidePanel.memberOrEditorSpaceIds}
+        communityCalls={sidePanel.communityCalls}
+        signedIn={Boolean(wallet)}
+      />
+    </DebateRequestSurface>
   );
 }

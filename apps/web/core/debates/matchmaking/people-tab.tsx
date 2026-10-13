@@ -569,6 +569,7 @@ export function PersonRow({
   analyticsSurface = 'hub',
   pick,
   openProfileInSidePanel = false,
+  hideSeeTimes = false,
 }: {
   person: DebatePerson;
   /** Distinct claims on which this person and the viewer hold comparable, opposite positions. */
@@ -619,6 +620,11 @@ export function PersonRow({
    * page that is itself the work — the calendar — stays put behind it.
    */
   openProfileInSidePanel?: boolean;
+  /**
+   * Leaves out the clock beside an online person's Debate now: the claim popup (GEO-3244) lists who
+   * can be asked now, and offers booking a time as its own choice.
+   */
+  hideSeeTimes?: boolean;
   onSeeTimes: (
     peer: { userId: string; name: string },
     opener: HTMLElement | null,
@@ -768,7 +774,7 @@ export function PersonRow({
             is next free. Gating it on the same reasons would hide it at the moment it earns its
             place. Signed out it opens Privy like the pill does, because the endpoint behind it is
             viewer-scoped and would only 401. */}
-        {!offersSchedule && (
+        {!offersSchedule && !hideSeeTimes && (
           <button
             type="button"
             // Every row carries this control, so the visible label alone leaves a screen reader or

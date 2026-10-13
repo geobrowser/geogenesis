@@ -24,6 +24,7 @@ import {
   acceptDebateRequest,
   blockDebateUser,
   createDebateRequest,
+  dashlessId,
   dismissDebateRequest,
   isAccountWarmingUp,
   listDebateBlocks,
@@ -413,8 +414,14 @@ export function useCreateDebateRequest() {
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
-  return useObservedMutation(mutation, 'start_debate', request =>
-    getContext({ target_type: 'claim', target_id: request.claim_entity_id })
+  // Ids dashless, as geo-chat and the warehouse write them (GEO-3244).
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    request =>
+      getContext({ target_type: 'claim', target_id: request.claim_entity_id, request_path: 'first_available' }),
+    undefined,
+    created => ({ request_id: dashlessId(created.id) })
   );
 }
 
@@ -475,8 +482,13 @@ export function useAcceptDebateRequest() {
       void invalidateDebatesOutsideRematchClaims(queryClient);
     },
   });
-  return useObservedMutation(mutation, 'join_debate', request =>
-    getContext({ target_type: 'debate_request', target_id: request.requestId })
+  // The debate the accept created, so a request can be followed to the debate it produced (GEO-3244).
+  return useObservedMutation(
+    mutation,
+    'join_debate',
+    request => getContext({ target_type: 'debate_request', target_id: request.requestId }),
+    undefined,
+    result => (result.debate ? { debate_id: dashlessId(result.debate.id) } : {})
   );
 }
 

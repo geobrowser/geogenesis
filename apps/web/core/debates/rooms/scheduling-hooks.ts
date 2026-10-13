@@ -21,6 +21,7 @@ import {
   type ScheduledDebateResponseResult,
   cancelScheduledDebate,
   createScheduledDebate,
+  dashlessId,
   listAdminScheduledDebates,
   listScheduledDebates,
   rescheduleScheduledDebate,
@@ -149,8 +150,13 @@ export function useCreateScheduledDebate() {
   });
   // The canonical action (GEO-3073), beside the instant challenge's `start_debate`. A geo-chat user
   // is all a booking knows about the other side, which also keeps these apart from challenges.
-  return useObservedMutation(mutation, 'start_debate', ({ opponentUserId }) =>
-    getContext({ target_type: 'debate_user', target_id: opponentUserId })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    ({ opponentUserId }) =>
+      getContext({ target_type: 'debate_user', target_id: opponentUserId, request_path: 'scheduled' }),
+    undefined,
+    created => ({ request_id: dashlessId(created.request_id) })
   );
 }
 

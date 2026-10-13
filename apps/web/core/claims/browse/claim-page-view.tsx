@@ -15,6 +15,7 @@ import {
   trustedIndexedPosition,
   useBackfillReadinessForHeldPosition,
 } from '~/core/debates/backfill-readiness-for-held-position';
+import { DebateRequestSurface } from '~/core/debates/debate-request-surface';
 import { useDebateClaims } from '~/core/debates/hooks';
 import { useClaimPositionControl } from '~/core/debates/matchmaking/matchmaking-claim-card';
 import { useComments } from '~/core/hooks/use-comments';
@@ -303,7 +304,13 @@ export function ClaimPageView({
               <div
                 className={cx('col-start-1 mt-4 claim-card-narrow:mt-0', hasChipsRow ? 'row-start-3' : 'row-start-2')}
               >
-                <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
+                <ClaimPositionSection
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  claimName={entity.name ?? null}
+                  state={state}
+                  row={row}
+                />
               </div>
 
               {/* From the title's row down, so the share lines up with the claim's first line rather
@@ -650,11 +657,14 @@ function ClaimOverviewTab({
 function ClaimPositionSection({
   entityId,
   spaceId,
+  claimName,
   state,
   row,
 }: {
   entityId: string;
   spaceId: string;
+  /** The claim's text, for the debate popup's title. */
+  claimName: string | null;
   /**
    * The page's one derivation, passed down rather than repeated.
    *
@@ -680,6 +690,7 @@ function ClaimPositionSection({
   });
   const indexedPosition = trustedIndexedPosition(state.summary, control.isResponsePending);
   useBackfillReadinessForHeldPosition({ readiness: row, entityId, spaceId, indexedPosition });
+  const inSidePanel = useEntitySidePanelActiveTab() !== null;
   // The same number the thread's composers move: an explanation published here is a comment on this
   // claim, and the heading's aggregate counts it.
   const adjustActivityTotal = useAdjustActivityTotal(entityId);
@@ -718,17 +729,21 @@ function ClaimPositionSection({
        * does: taking a side and being offered a debate on it are one sequence, and the offer only
        * exists because of the side directly above it. Reading it beside the title asked the reader
        * to connect two things a screen apart. */}
-      <ClaimEndSlot
-        claimId={entityId}
-        spaceId={spaceId}
-        activeDebate={row?.active_debate}
-        variant="block"
-        // The offer rests on the side set by the pills directly above it, so it moves when they do.
-        // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
-        viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
-        indexedViewerPosition={indexedPosition}
-        className="mt-2"
-      />
+      {/* The page and the side panel are different places to send a request from (GEO-3244). */}
+      <DebateRequestSurface surface={inSidePanel ? 'claim_side_panel' : 'claim_page'}>
+        <ClaimEndSlot
+          claimId={entityId}
+          spaceId={spaceId}
+          claimName={claimName}
+          activeDebate={row?.active_debate}
+          variant="block"
+          // The offer rests on the side set by the pills directly above it, so it moves when they do.
+          // `undefined` while the reads are out, so "not known yet" cannot read as "holds none".
+          viewerPosition={isResponseKindResolved && isViewerResponseResolved ? control.viewerPosition : undefined}
+          indexedViewerPosition={indexedPosition}
+          className="mt-2"
+        />
+      </DebateRequestSurface>
     </section>
   );
 }

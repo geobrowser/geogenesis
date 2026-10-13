@@ -12,6 +12,7 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember } from '../api';
+import { DebateRequestSurface } from '../debate-request-surface';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
@@ -125,15 +126,17 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   useMatchmakingScope(waitingOutside);
 
   return (
-    <LobbyGuestProvider value={guest}>
-      <LobbyAccess
-        lobby={lobby}
-        failed={(guest ? guestQuery : lobbyQuery).isError}
-        onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
-        presence={presence}
-        guestSession={guestSession}
-      />
-    </LobbyGuestProvider>
+    <DebateRequestSurface surface="lobby">
+      <LobbyGuestProvider value={guest}>
+        <LobbyAccess
+          lobby={lobby}
+          failed={(guest ? guestQuery : lobbyQuery).isError}
+          onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
+          presence={presence}
+          guestSession={guestSession}
+        />
+      </LobbyGuestProvider>
+    </DebateRequestSurface>
   );
 }
 

@@ -1,5 +1,8 @@
-/** `calendar` is the full-screen week everyone's free time is drawn on (GEO-3152). */
-export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'calendar' | 'lobby';
+/**
+ * `calendar` is the full-screen week everyone's free time is drawn on (GEO-3152). `claim-popup` is
+ * the claim's "now or later?" popup (GEO-3244), whose person rows are the People tab's own.
+ */
+export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'calendar' | 'lobby' | 'claim-popup';
 /**
  * Surfaces with actions but no filters. The last four are availability and scheduling's own
  * dialogs and prompts, which open from the hub and from outside it alike.
@@ -10,7 +13,11 @@ export type DebateActionAnalyticsSurface =
   | 'schedule-editor'
   | 'peer-availability'
   | 'availability-link'
-  | 'room-join-prompt';
+  | 'room-join-prompt'
+  /** The claim page's and side panel's Request debate button and the popup's own controls (GEO-3244). */
+  | 'claim'
+  /** A person's profile: its Request debate button (GEO-3244). */
+  | 'profile';
 
 const ACTION_SURFACE_ANALYTICS = {
   hub: {
@@ -53,6 +60,18 @@ const ACTION_SURFACE_ANALYTICS = {
     labelPrefix: 'Debate lobby',
     actionIntent: 'debate_lobby_action',
   },
+  'claim-popup': {
+    labelPrefix: 'Claim popup',
+    actionIntent: 'claim_popup_action',
+  },
+  claim: {
+    labelPrefix: 'Claim',
+    actionIntent: 'claim_debate_action',
+  },
+  profile: {
+    labelPrefix: 'Profile',
+    actionIntent: 'profile_action',
+  },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 
 const FILTER_INTENTS = {
@@ -61,6 +80,7 @@ const FILTER_INTENTS = {
   'profile-debates': 'filter_profile_debates',
   calendar: 'filter_debate_calendar',
   lobby: 'filter_debate_lobby',
+  'claim-popup': 'filter_claim_popup',
 } as const satisfies Record<DebateAnalyticsSurface, string>;
 
 /**
