@@ -12,9 +12,10 @@ import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember } from '../api';
+import { DebateRequestSurface } from '../debate-request-surface';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
-import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
+import { debateActionAnalyticsAttributes, hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
@@ -125,15 +126,17 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   useMatchmakingScope(waitingOutside);
 
   return (
-    <LobbyGuestProvider value={guest}>
-      <LobbyAccess
-        lobby={lobby}
-        failed={(guest ? guestQuery : lobbyQuery).isError}
-        onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
-        presence={presence}
-        guestSession={guestSession}
-      />
-    </LobbyGuestProvider>
+    <DebateRequestSurface surface="lobby">
+      <LobbyGuestProvider value={guest}>
+        <LobbyAccess
+          lobby={lobby}
+          failed={(guest ? guestQuery : lobbyQuery).isError}
+          onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
+          presence={presence}
+          guestSession={guestSession}
+        />
+      </LobbyGuestProvider>
+    </DebateRequestSurface>
   );
 }
 
@@ -342,6 +345,7 @@ function AdmittedLobby({
             <Link
               href={debateRoomPath(state.otherLobbyId)}
               onClick={() => state.otherLobbyId && markLobbyEntry(state.otherLobbyId, 'other_lobby')}
+              {...debateActionAnalyticsAttributes('lobby', 'Back to my lobby', 'join_lobby')}
               className={hubPillClassName('secondary')}
             >
               Back to my lobby
@@ -411,6 +415,7 @@ function MovedToOtherLobby({
           <Link
             href={debateRoomPath(otherLobbyId)}
             onClick={() => markLobbyEntry(otherLobbyId, 'other_lobby')}
+            {...debateActionAnalyticsAttributes('lobby', 'Go to that lobby', 'join_lobby')}
             className={hubPillClassName('primary')}
           >
             Go to that lobby

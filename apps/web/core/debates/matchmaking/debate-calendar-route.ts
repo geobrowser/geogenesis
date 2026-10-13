@@ -1,3 +1,4 @@
+import { type DebateRequestSurface, parseDebateRequestSurface } from '~/core/action-context';
 import { normId } from '~/core/utils/norm-id';
 
 import { type CalendarPicks, claimPickKey, splitClaimPickKey } from './calendar-narrowing';
@@ -28,11 +29,24 @@ export const CALENDAR_PEOPLE_PARAM = 'people';
 export const CALENDAR_CLAIMS_PARAM = 'claims';
 export const CALENDAR_MATCHES_PARAM = 'matches';
 
+/**
+ * A calendar opened from a claim's Request debate (GEO-3244): the surface the flow began on, and the
+ * button it began from, so a booking made here is counted against that offer. Analytics only.
+ */
+export const CALENDAR_ORIGIN_PARAM = 'origin';
+export const CALENDAR_OPPORTUNITY_PARAM = 'opportunity';
+
+export type CalendarAttribution = { origin: DebateRequestSurface; opportunityId: string | null };
+
 /** The calendar's link, from the hub on `from`: the page's whole URL, query and fragment included. */
-export function calendarHref(from: string | null, picks?: CalendarPicks): string {
+export function calendarHref(from: string | null, picks?: CalendarPicks, attribution?: CalendarAttribution): string {
   const params = new URLSearchParams();
   if (from && from.split(/[?#]/, 1)[0] !== CALENDAR_PATH) params.set(CALENDAR_FROM_PARAM, from);
   if (picks) writeCalendarPicks(params, picks);
+  if (attribution) {
+    params.set(CALENDAR_ORIGIN_PARAM, attribution.origin);
+    if (attribution.opportunityId) params.set(CALENDAR_OPPORTUNITY_PARAM, attribution.opportunityId);
+  }
   const query = params.toString();
   return query ? `${CALENDAR_PATH}?${query}` : CALENDAR_PATH;
 }
@@ -79,4 +93,17 @@ export function writeCalendarPicks(params: URLSearchParams, picks: CalendarPicks
   if (picks.matchesOnly) params.set(CALENDAR_MATCHES_PARAM, '1');
   else params.delete(CALENDAR_MATCHES_PARAM);
   return params;
+}
+
+/**
+ * Where a flow that reached the calendar began, from the URL. An opportunity id is kept only beside
+ * a known origin and in a UUID's shape, so a hand-edited link cannot attribute bookings to anything.
+ */
+export function readCalendarAttribution(
+  params: Pick<URLSearchParams, 'get'> | null | undefined
+): CalendarAttribution | null {
+  const origin = parseDebateRequestSurface(params?.get(CALENDAR_ORIGIN_PARAM));
+  if (!origin) return null;
+  const opportunity = params?.get(CALENDAR_OPPORTUNITY_PARAM) ?? null;
+  return { origin, opportunityId: opportunity && isPersonId(opportunity) ? opportunity : null };
 }

@@ -178,6 +178,9 @@ describe('scheduling analytics', () => {
       mode: 'request',
       entry: 'people_time',
       request_id: 'req-1',
+      request_surface: null,
+      origin_surface: null,
+      opportunity_id: null,
       viewer_is_free: true,
       lead_time_minutes: 180,
     });

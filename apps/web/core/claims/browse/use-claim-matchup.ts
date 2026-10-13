@@ -10,7 +10,7 @@ import {
   notifyClaimResponseIndexed,
 } from '~/core/debates/api';
 import { readinessQueryPrefixes } from '~/core/debates/claim-response-indexed-notifier';
-import { useDebateActivity, useGeoChatAuth } from '~/core/debates/hooks';
+import { useDebateActivity, useGeoChatAuth, useUpdateDebateAvailability } from '~/core/debates/hooks';
 import { useCreateDebateRequest, useDebateRequests, useMatchmakingMatches } from '~/core/debates/matchmaking/hooks';
 import { ID } from '~/core/id';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
@@ -81,6 +81,7 @@ export function useClaimMatchup({
   const requestsQuery = useDebateRequests(enabled);
   const { data: activity } = useDebateActivity(enabled);
   const createRequest = useCreateDebateRequest();
+  const updateAvailability = useUpdateDebateAvailability();
   const recoverFromMissingIntent = useMissingIntentRecovery({
     claimId,
     spaceId,
@@ -98,15 +99,27 @@ export function useClaimMatchup({
         candidate => ID.equals(candidate.claim.claim_entity_id, claimId) && ID.equals(candidate.claim.space_id, spaceId)
       ) ?? null);
 
-  const blockedReason = claimRequestBlockedReason(activity, requestsQuery.data);
+  // Being marked unavailable does not block the press: geo-chat refuses to seat a requester who is
+  // not available when the other side accepts, so sending switches the viewer on first (GEO-3244)
+  // rather than asking them to find the switch. Only the open request still blocks.
+  const unavailable = activity?.available_to_debate === false;
+  const blockedReason = claimRequestBlockedReason(
+    activity ? { ...activity, available_to_debate: true } : activity,
+    requestsQuery.data
+  );
+  const send = () =>
+    createRequest.mutate({ space_id: spaceId, claim_entity_id: claimId }, { onError: recoverFromMissingIntent });
 
   return {
     match,
     blockedReason,
-    isRequesting: createRequest.isPending,
-    requestError: debateRequestErrorMessage(createRequest.error, viewerPosition),
-    request: () =>
-      createRequest.mutate({ space_id: spaceId, claim_entity_id: claimId }, { onError: recoverFromMissingIntent }),
+    /** Sending will switch the viewer to available first. */
+    switchesAvailability: unavailable,
+    isRequesting: createRequest.isPending || updateAvailability.isPending,
+    requestError: updateAvailability.error
+      ? 'Could not switch you to available. Try again.'
+      : debateRequestErrorMessage(createRequest.error, viewerPosition),
+    request: () => (unavailable ? updateAvailability.mutate(true, { onSuccess: send }) : send()),
   };
 }
 

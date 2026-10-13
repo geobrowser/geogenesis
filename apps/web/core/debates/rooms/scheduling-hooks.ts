@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
-import { useActionContext } from '~/core/action-context-provider';
+import { useActionContext, useActionScope } from '~/core/action-context-provider';
 import { snapshotAnalyticsRevision } from '~/core/analytics-operations';
 import {
   type ScheduledRequestAnalytics,
@@ -21,6 +21,7 @@ import {
   type ScheduledDebateResponseResult,
   cancelScheduledDebate,
   createScheduledDebate,
+  dashlessId,
   listAdminScheduledDebates,
   listScheduledDebates,
   rescheduleScheduledDebate,
@@ -118,6 +119,7 @@ function isAdminRefusal(error: unknown) {
 
 export function useCreateScheduledDebate() {
   const getContext = useActionContext('debate_matchmaking', 'entity', '');
+  const scope = useActionScope();
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -139,7 +141,7 @@ export function useCreateScheduledDebate() {
     onMutate: snapshotAnalyticsRevision,
     onSuccess: (request, { startsAt, analytics }, isCurrent) => {
       if (isCurrent()) {
-        debateScheduledRequestSent({ mode: 'request', requestId: request.request_id, startsAt, analytics });
+        debateScheduledRequestSent({ mode: 'request', requestId: request.request_id, startsAt, analytics, scope });
       }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },
@@ -149,13 +151,19 @@ export function useCreateScheduledDebate() {
   });
   // The canonical action (GEO-3073), beside the instant challenge's `start_debate`. A geo-chat user
   // is all a booking knows about the other side, which also keeps these apart from challenges.
-  return useObservedMutation(mutation, 'start_debate', ({ opponentUserId }) =>
-    getContext({ target_type: 'debate_user', target_id: opponentUserId })
+  return useObservedMutation(
+    mutation,
+    'start_debate',
+    ({ opponentUserId }) =>
+      getContext({ target_type: 'debate_user', target_id: opponentUserId, request_path: 'scheduled' }),
+    undefined,
+    created => ({ request_id: dashlessId(created.request_id) })
   );
 }
 
 /** Moves an existing request to a new time: "Choose different time" in the scheduling emails. */
 export function useRescheduleScheduledDebate() {
+  const scope = useActionScope();
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -170,7 +178,7 @@ export function useRescheduleScheduledDebate() {
     onMutate: snapshotAnalyticsRevision,
     onSuccess: (request, { startsAt, analytics }, isCurrent) => {
       if (isCurrent()) {
-        debateScheduledRequestSent({ mode: 'reschedule', requestId: request.request_id, startsAt, analytics });
+        debateScheduledRequestSent({ mode: 'reschedule', requestId: request.request_id, startsAt, analytics, scope });
       }
     },
     onError: (error, { analytics }, isCurrent) => {

@@ -12,33 +12,61 @@ export const rankingFeature = {
   exposure_rule: 'foreground-control-50pct-1s-v1',
 };
 
-export function createRankingOpportunity(rankingId: string) {
+/**
+ * One chance to act, shown to someone: an `opportunity_id` that the attempt and the completion carry
+ * too, so "offered → pressed → done" joins up. `eligibility` reports whether it could be taken, once
+ * per change. Ranking's compose box and the claim page's Request debate button (GEO-3244) are two.
+ */
+export function createActionOpportunity({
+  actionKind,
+  targetType,
+  targetId,
+  properties,
+}: {
+  actionKind: string;
+  targetType: string;
+  targetId: string;
+  /** Sent with every event about this opportunity, such as where it was shown. */
+  properties?: Record<string, unknown>;
+}) {
   const instance = crypto.randomUUID();
   const context = { opportunity_id: instance, presentation_instance_id: instance };
+  const extra = properties ?? {};
   let state = '';
-  let visibleSince: number | null = null;
-  let exposed = false;
   const emit = (name: AnalyticsEventName, properties: Record<string, unknown>) => {
     try {
-      capture(name, { ...properties, ...context, measurement_version: 'growth-v2' });
+      capture(name, { ...extra, ...properties, ...context, measurement_version: 'growth-v2' });
     } catch {
       /* Optional telemetry. */
     }
   };
   return {
     context,
+    emit,
     eligibility(eligibility: OpportunityEligibility, reason: string) {
       const next = `${eligibility}:${reason}`;
       if (state === next) return;
       state = next;
       emit('action_opportunity', {
-        action_kind: 'ranking',
-        target_type: 'ranking',
-        target_id: rankingId,
+        action_kind: actionKind,
+        target_type: targetType,
+        target_id: targetId,
         eligibility,
         eligibility_reason: reason,
       });
     },
+  };
+}
+
+export function createRankingOpportunity(rankingId: string) {
+  const opportunity = createActionOpportunity({ actionKind: 'ranking', targetType: 'ranking', targetId: rankingId });
+  const instance = opportunity.context.opportunity_id;
+  let visibleSince: number | null = null;
+  let exposed = false;
+  const emit = opportunity.emit;
+  return {
+    context: opportunity.context,
+    eligibility: opportunity.eligibility,
     visibility(now: number, visible: boolean) {
       if (!visible) {
         visibleSince = null;

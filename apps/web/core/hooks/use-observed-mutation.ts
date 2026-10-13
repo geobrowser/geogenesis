@@ -15,20 +15,25 @@ export function useObservedMutation<TData, TError, TVariables, TContext>(
   action: ActionKind,
   getContext: (variables: TVariables) => ActionContext,
   /** A failure the mutation resolves with rather than throws; see `runObservedAction`. */
-  failureOf?: (data: TData) => OperationFailureCode | null
+  failureOf?: (data: TData) => OperationFailureCode | null,
+  /** What the result adds to the completion, such as the id it created; see `runObservedAction`. */
+  resultProperties?: (data: TData) => Record<string, unknown>
 ): UseMutationResult<TData, TError, TVariables, TContext> {
   const { mutateAsync: execute } = mutation;
   const latestContext = useRef(getContext);
   latestContext.current = getContext;
   const latestFailureOf = useRef(failureOf);
   latestFailureOf.current = failureOf;
+  const latestResultProperties = useRef(resultProperties);
+  latestResultProperties.current = resultProperties;
   const mutateAsync = useCallback<typeof execute>(
     (variables, options) =>
       runObservedAction(
         action,
         latestContext.current(variables),
         () => execute(variables, options),
-        data => (latestFailureOf.current ? latestFailureOf.current(data) : null)
+        data => (latestFailureOf.current ? latestFailureOf.current(data) : null),
+        data => latestResultProperties.current?.(data) ?? {}
       ),
     [action, execute]
   );

@@ -7,6 +7,7 @@ import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_N
 import { Text } from '~/design-system/text';
 
 import type { DebateChallenge, DebateParticipantSummary } from './api';
+import { debateActionAnalyticsAttributes } from './matchmaking/hub-analytics';
 import { useScrollLock } from './use-scroll-lock';
 
 type DebateChallengeDialogProps = {
@@ -86,11 +87,18 @@ export function DebateChallengeDialog({
               type="button"
               onClick={onNotNow}
               disabled={busy}
+              {...debateActionAnalyticsAttributes('challenge-popup', 'Not now', 'defer_debate_request')}
               className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
             >
               Not now
             </button>
-            <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+            <button
+              type="button"
+              onClick={onAccept}
+              disabled={busy}
+              {...debateActionAnalyticsAttributes('challenge-popup', 'Explore claims', 'join_debate')}
+              className={DIALOG_ACTION_BUTTON_CLASS_NAME}
+            >
               Explore claims
             </button>
           </div>
@@ -98,6 +106,7 @@ export function DebateChallengeDialog({
             type="button"
             onClick={onReject}
             disabled={busy}
+            {...debateActionAnalyticsAttributes('challenge-popup', 'Reject request', 'decline_debate')}
             className="mx-auto -mt-3 px-4 py-1 text-metadata text-grey-04 underline hover:text-text disabled:opacity-50"
           >
             Reject request

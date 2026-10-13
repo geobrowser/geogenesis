@@ -20,6 +20,7 @@ import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-avail
 
 import { type DebatePerson, type ScheduledDebateRequest } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
+import { DebateRequestSurface } from '../debate-request-surface';
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth } from '../hooks';
 import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
@@ -76,7 +77,12 @@ import {
   weekDays,
   weekStart,
 } from './debate-calendar-model';
-import { CALENDAR_FROM_PARAM, CALENDAR_PATH, CALENDAR_VIEW_PARAM } from './debate-calendar-route';
+import {
+  CALENDAR_FROM_PARAM,
+  CALENDAR_PATH,
+  CALENDAR_VIEW_PARAM,
+  readCalendarAttribution,
+} from './debate-calendar-route';
 import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch } from './disagreement-counts';
@@ -174,7 +180,10 @@ export function DebateCalendar() {
 
   // Once per visit, when what it reports is known: signed out, or signed in with the viewer's own
   // schedule read. Fired before that, `viewer_has_schedule` would be a guess.
-  const openedFrom: CalendarOpenedFrom = from && safeInternalHref(from) ? 'hub' : 'direct';
+  // Read once: the panel rewrites the query as picks change, and attribution is about the arrival.
+  const [attribution] = React.useState(() => readCalendarAttribution(searchParams));
+  const fromClaim = attribution?.origin === 'claim_page' || attribution?.origin === 'claim_side_panel';
+  const openedFrom: CalendarOpenedFrom = fromClaim ? 'claim' : from && safeInternalHref(from) ? 'hub' : 'direct';
   const reportedOpen = React.useRef(false);
   const scheduleSettled = !authenticated || schedule.data !== undefined || schedule.isError;
   React.useEffect(() => {
@@ -187,46 +196,48 @@ export function DebateCalendar() {
   }, [authenticated, openedFrom, ready, schedule.isError, schedule.isSet, scheduleSettled]);
 
   return (
-    <div className="flex w-full flex-col">
-      <header className="flex flex-wrap items-center justify-between gap-3 border-b border-grey-02 px-6 pt-4 pb-3 md:px-4">
-        <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
-          Debate calendar
-        </Text>
-        <HubHeaderControls analyticsSurface="calendar" scheduleButtonRef={scheduleButtonRef}>
-          {admin.isAdmin ? <CalendarViewSwitch view={view} onChange={changeView} /> : null}
-        </HubHeaderControls>
-      </header>
+    <DebateRequestSurface surface="calendar" origin={attribution?.origin} opportunityId={attribution?.opportunityId}>
+      <div className="flex w-full flex-col">
+        <header className="flex flex-wrap items-center justify-between gap-3 border-b border-grey-02 px-6 pt-4 pb-3 md:px-4">
+          <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
+            Debate calendar
+          </Text>
+          <HubHeaderControls analyticsSurface="calendar" scheduleButtonRef={scheduleButtonRef}>
+            {admin.isAdmin ? <CalendarViewSwitch view={view} onChange={changeView} /> : null}
+          </HubHeaderControls>
+        </header>
 
-      {!ready ? (
-        <div className="px-6 py-6 md:px-4">
-          <CalendarWeekSkeleton />
-        </div>
-      ) : !authenticated ? (
-        <HubMessage
-          action={
-            <HubPillButton analyticsSurface="calendar" variant="primary" onClick={() => promptSignIn()}>
-              Sign in
-            </HubPillButton>
-          }
-        >
-          Sign in to see who&rsquo;s free to debate this week and book a time.
-        </HubMessage>
-      ) : requestedView === 'debates' && admin.isAdminPending ? (
-        // A link to the admin view waits to learn whether it may open, rather than flashing the other.
-        <div className="px-6 py-6 md:px-4">
-          <CalendarWeekSkeleton />
-        </div>
-      ) : view === 'debates' ? (
-        <AdminDebatesBody isPhone={isPhone} admin={admin} />
-      ) : (
-        <DebateCalendarBody
-          isPhone={isPhone}
-          viewerHasSchedule={viewerHasSchedule}
-          schedule={schedule}
-          scheduleButtonRef={scheduleButtonRef}
-        />
-      )}
-    </div>
+        {!ready ? (
+          <div className="px-6 py-6 md:px-4">
+            <CalendarWeekSkeleton />
+          </div>
+        ) : !authenticated ? (
+          <HubMessage
+            action={
+              <HubPillButton analyticsSurface="calendar" variant="primary" onClick={() => promptSignIn()}>
+                Sign in
+              </HubPillButton>
+            }
+          >
+            Sign in to see who&rsquo;s free to debate this week and book a time.
+          </HubMessage>
+        ) : requestedView === 'debates' && admin.isAdminPending ? (
+          // A link to the admin view waits to learn whether it may open, rather than flashing the other.
+          <div className="px-6 py-6 md:px-4">
+            <CalendarWeekSkeleton />
+          </div>
+        ) : view === 'debates' ? (
+          <AdminDebatesBody isPhone={isPhone} admin={admin} />
+        ) : (
+          <DebateCalendarBody
+            isPhone={isPhone}
+            viewerHasSchedule={viewerHasSchedule}
+            schedule={schedule}
+            scheduleButtonRef={scheduleButtonRef}
+          />
+        )}
+      </div>
+    </DebateRequestSurface>
   );
 }
 

@@ -15,8 +15,8 @@ import { capture } from '~/core/analytics';
  * and the collector rejects values it does not expect there.
  */
 
-/** Where the screen was reached from. */
-export type CalendarOpenedFrom = 'hub' | 'direct';
+/** Where the screen was reached from. `claim`: a claim's Request debate (GEO-3244). */
+export type CalendarOpenedFrom = 'hub' | 'claim' | 'direct';
 
 export function calendarOpened({
   openedFrom,

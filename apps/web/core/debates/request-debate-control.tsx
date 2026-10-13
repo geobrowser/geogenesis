@@ -50,6 +50,7 @@ export function RequestDebateControl({
   requestError,
   note,
   variant = 'inline',
+  analytics,
   className,
 }: {
   onRequest: () => void;
@@ -71,6 +72,8 @@ export function RequestDebateControl({
    * thing you do after taking a side — so it takes their full width and their height.
    */
   variant?: 'inline' | 'block';
+  /** Click attributes, e.g. `debateActionAnalyticsAttributes(...)`. */
+  analytics?: Record<string, string>;
   className?: string;
 }) {
   const base = claimSlotPillClass(variant);
@@ -82,6 +85,7 @@ export function RequestDebateControl({
       onClick={onRequest}
       disabled={disabled || isRequesting || pending}
       aria-busy={isRequesting || pending ? true : undefined}
+      {...analytics}
       className={cx(
         base,
         // Filled dark, not red. In this product red is Dispute — it fills the negative pill an

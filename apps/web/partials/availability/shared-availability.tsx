@@ -6,6 +6,7 @@ import { NOT_A_PERSON_MESSAGE, toAvailability } from '~/core/availability/availa
 import { debateAvailabilityLinkOpened } from '~/core/availability/schedule-analytics';
 import { useAvailabilityDeepLink } from '~/core/availability/use-availability-deep-link';
 import { isDebateProfileMissing } from '~/core/debates/api';
+import { DebateRequestSurface } from '~/core/debates/debate-request-surface';
 import { useDebateProfile, useGeoChatAuth } from '~/core/debates/hooks';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { useDisagreementCount } from '~/core/debates/matchmaking/use-disagreement-count';
@@ -205,16 +206,18 @@ export function SharedAvailabilityModal({
   })();
 
   return (
-    <PeerAvailabilityBookingModal
-      open={open && !signingIn}
-      userId={person?.user_id ?? ''}
-      peerName={name}
-      rescheduleRequestId={rescheduleRequestId}
-      entry={rescheduleRequestId ? 'reschedule_link' : 'availability_link'}
-      disagreementCount={disagreementCount}
-      onClose={onClose}
-    >
-      {notice}
-    </PeerAvailabilityBookingModal>
+    <DebateRequestSurface surface="availability_link">
+      <PeerAvailabilityBookingModal
+        open={open && !signingIn}
+        userId={person?.user_id ?? ''}
+        peerName={name}
+        rescheduleRequestId={rescheduleRequestId}
+        entry={rescheduleRequestId ? 'reschedule_link' : 'availability_link'}
+        disagreementCount={disagreementCount}
+        onClose={onClose}
+      >
+        {notice}
+      </PeerAvailabilityBookingModal>
+    </DebateRequestSurface>
   );
 }

@@ -18,7 +18,28 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('next/navigation', () => ({ usePathname: () => mocks.pathname }));
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({ useSpacesByIds: () => mocks.spaces }));
-vi.mock('./hooks', () => ({ useDebateRematchClaims: () => ({ data: mocks.data }) }));
+vi.mock('./hooks', () => ({
+  useDebateRematchClaims: () => ({ data: mocks.data }),
+  // The claim page's own offer (GEO-3244) draws until the picker's context registers.
+  useDebateActivity: () => ({ data: undefined }),
+  useRejectDebateChallenge: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock('./matchmaking/hooks', () => ({
+  useDebateRequests: () => ({ data: undefined }),
+  useWithdrawDebateRequest: () => ({ mutate: vi.fn(), isPending: false }),
+}));
+vi.mock('./matchmaking/use-claim-opponents', () => ({
+  useClaimOpponents: () => ({
+    status: 'none',
+    online: [],
+    askableCount: 0,
+    withFreeTime: new Set(),
+    slotsByUser: new Map(),
+  }),
+}));
+vi.mock('./matchmaking/use-live-request-block', () => ({
+  useLiveRequestBlock: () => ({ outboundChallenge: null, blockedReason: null, buttonsDisabled: false }),
+}));
 vi.mock('~/core/hooks/use-entity-vote', () => ({ useEntityResponseIndexingSnapshot: () => mocks.indexing }));
 vi.mock('~/core/claims/browse/use-claim-matchup', () => ({ useClaimMatchup: mocks.matchmaking }));
 

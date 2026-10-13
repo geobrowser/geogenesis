@@ -186,7 +186,9 @@ export function DebatesHubPanel() {
   // way out. The desktop aside is non-modal, so its toggle stays reachable and the design's
   // header stands.
   const body = (
-    <ActionContextProvider value={{ overlay: 'debates_hub_sheet', component: 'debate_matchmaking' }}>
+    <ActionContextProvider
+      value={{ overlay: 'debates_hub_sheet', component: 'debate_matchmaking', request_surface: 'hub_panel' }}
+    >
       <DebatesHubSurface activeTab={activeTab} onTabChange={setTab} onClose={isMobile ? close : undefined} />
     </ActionContextProvider>
   );

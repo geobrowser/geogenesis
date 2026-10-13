@@ -53,6 +53,43 @@ export type ActionKind =
   | 'assistant_message'
   | 'assistant_option'
   | 'create_space';
+/**
+ * Where a debate request was sent from (GEO-3244), named by the surface itself rather than inferred
+ * from the page: the claim page and the side panel showing the same claim are different surfaces.
+ */
+export type DebateRequestSurface =
+  | 'explore_card'
+  | 'claim_page'
+  | 'claim_side_panel'
+  | 'hub_panel'
+  | 'hub_fullscreen'
+  | 'calendar'
+  | 'profile'
+  | 'lobby'
+  | 'rematch_page'
+  | 'availability_link';
+
+const SURFACES: readonly DebateRequestSurface[] = [
+  'explore_card',
+  'claim_page',
+  'claim_side_panel',
+  'hub_panel',
+  'hub_fullscreen',
+  'calendar',
+  'profile',
+  'lobby',
+  'rematch_page',
+  'availability_link',
+];
+
+/** A surface named in a URL, or null for anything else: a hand-edited link cannot name a new one. */
+export function parseDebateRequestSurface(value: string | null | undefined): DebateRequestSurface | null {
+  return SURFACES.find(surface => surface === value) ?? null;
+}
+
+/** Which flow sent a debate request: geo-chat picks the opponent, a person is asked, a time is booked, or a pair goes again. */
+export type DebateRequestPath = 'first_available' | 'specific_person' | 'scheduled' | 'rematch';
+
 export type ActionContext = {
   component: ActionComponent;
   page_path: string;
@@ -90,6 +127,15 @@ export type ActionContext = {
   feed_slot?: 'fresh';
   /** GEO-3234. How many cards this visitor had already seen were hidden from this card's page. */
   feed_seen_hidden?: number;
+  /** GEO-3244. Debate requests: the surface sending it, the flow, and where the flow began if elsewhere. */
+  request_surface?: DebateRequestSurface;
+  request_path?: DebateRequestPath;
+  origin_surface?: DebateRequestSurface;
+  /**
+   * GEO-3244. The opportunity (a button shown) this action was taken from. Present, it makes the
+   * action emit `action_attempted` as well, so shown → attempted → completed join on one id.
+   */
+  opportunity_id?: string;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -118,6 +164,10 @@ export const ACTION_CONTEXT_FIELDS = [
   'feed_exploration',
   'feed_slot',
   'feed_seen_hidden',
+  'request_surface',
+  'request_path',
+  'origin_surface',
+  'opportunity_id',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',

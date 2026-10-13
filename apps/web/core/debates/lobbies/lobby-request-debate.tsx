@@ -5,6 +5,7 @@ import { Text } from '~/design-system/text';
 import { type DebateLobbyMember, GeoChatRequestError, dashlessId } from '../api';
 import { useCreateDebateChallenge, useDebateActivity, useRejectDebateChallenge } from '../hooks';
 import { useDebateRequests } from '../matchmaking/hooks';
+import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { useLiveRequestBlock } from '../matchmaking/use-live-request-block';
 import { sameId } from '../rooms/room-presence';
@@ -61,7 +62,7 @@ function GuestRequestDebate({ member }: { member: DebateLobbyMember }) {
       variant="primary"
       aria-label={`Request a debate with ${name}`}
       analyticsLabel="Lobby guest request debate"
-      analyticsIntent="start_debate"
+      analyticsSurface="lobby"
       onClick={() => handoff(() => request(member))}
       className={WIDE_PILL}
     >
@@ -95,6 +96,7 @@ function MemberRequestDebate({ lobbyId, member }: { lobbyId: string; member: Deb
             type="button"
             onClick={() => cancelChallenge.mutate(outboundChallenge.id)}
             disabled={cancelChallenge.isPending}
+            {...debateActionAnalyticsAttributes('lobby', 'Cancel request', 'cancel_debate_request')}
             className="text-text underline transition-colors hover:text-grey-04 disabled:opacity-50"
           >
             {cancelChallenge.isPending ? 'Cancelling…' : 'Cancel request'}
@@ -105,7 +107,8 @@ function MemberRequestDebate({ lobbyId, member }: { lobbyId: string; member: Deb
           variant="primary"
           aria-label={`Request a debate with ${name}`}
           analyticsLabel="Lobby request debate"
-          analyticsIntent="start_debate"
+          // The lobby's own intent, as every other surface's Request debate has (GEO-3244).
+          analyticsSurface="lobby"
           disabled={buttonsDisabled}
           title={buttonsDisabled ? (blockedReason ?? 'You have a debate request awaiting a reply.') : undefined}
           pending={createChallenge.isPending}

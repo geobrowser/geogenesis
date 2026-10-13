@@ -2,6 +2,7 @@ import * as React from 'react';
 
 import type { Metadata } from 'next';
 
+import { DebateRequestSurface } from '~/core/debates/debate-request-surface';
 import { HubSkeleton } from '~/core/debates/matchmaking/hub-states';
 import { DebatesHubWorkspace } from '~/core/debates/matchmaking/hub-workspace';
 
@@ -16,7 +17,9 @@ export const metadata: Metadata = {
 export default function MatchmakingRoutePage() {
   return (
     <React.Suspense fallback={<WorkspaceLoading />}>
-      <DebatesHubWorkspace />
+      <DebateRequestSurface surface="hub_fullscreen">
+        <DebatesHubWorkspace />
+      </DebateRequestSurface>
     </React.Suspense>
   );
 }

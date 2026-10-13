@@ -158,4 +158,28 @@ describe('DebateRequestDialog', () => {
     expect(document.body.style.overflow).toBe('');
     expect(document.documentElement.style.overflow).toBe('');
   });
+
+  it('labels its buttons for the host, whatever they read while pending (GEO-3244)', () => {
+    render(
+      <DebateRequestDialog
+        claim="The protocol should ship debates"
+        participants={participants}
+        currentUserId="user-local"
+        formatId="standard"
+        busy={false}
+        error={null}
+        acceptLabel="Joining…"
+        rejectLabel="Decline"
+        actionsLayout="split"
+        formatAction={{ label: 'Dismiss forever', onClick: vi.fn() }}
+        analytics={{ surface: 'ready-prompt', accept: 'Join', reject: 'Decline', formatAction: 'Dismiss forever' }}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+    const label = (name: string) => screen.getByRole('button', { name }).getAttribute('data-geo-analytics-label');
+    expect(label('Joining…')).toBe('Debate ready prompt Join');
+    expect(label('Decline')).toBe('Debate ready prompt Decline');
+    expect(label('Dismiss forever')).toBe('Debate ready prompt Dismiss forever');
+  });
 });

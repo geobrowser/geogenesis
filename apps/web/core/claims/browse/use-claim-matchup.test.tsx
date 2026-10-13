@@ -22,6 +22,7 @@ vi.mock('~/core/debates/api', async importOriginal => ({
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
+  useUpdateDebateAvailability: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useDebateActivity: () => ({ data: undefined }),
   useGeoChatAuth: () => ({ accountKey: 'account-1', getPrivyIdentityToken: () => Promise.resolve('token') }),
 }));

@@ -1,3 +1,4 @@
+import type { ActionScope } from '~/core/action-context';
 import { capture } from '~/core/analytics';
 import { geoChatErrorProperties } from '~/core/debates/api';
 
@@ -49,7 +50,9 @@ export type ScheduleEntry =
   /** A time beside someone who disagrees with the viewer, in the calendar's Claims panel (GEO-3220). */
   | 'calendar_claim_match'
   /** A row's chips or Schedule in the calendar's People panel (GEO-3220). */
-  | 'calendar_people_panel';
+  | 'calendar_people_panel'
+  /** Schedule on an away person in a claim's Debate now popup (GEO-3244). */
+  | 'claim_popup';
 
 /** Which control opened the viewer's own schedule editor. */
 export type ScheduleEditorSurface =
@@ -133,12 +136,15 @@ export function debateScheduledRequestSent({
   requestId,
   startsAt,
   analytics,
+  scope,
   now = Date.now(),
 }: {
   mode: RequestMode;
   requestId: string;
   startsAt: Date;
   analytics?: ScheduledRequestAnalytics;
+  /** Where it was sent from, and where the flow began if elsewhere (GEO-3244). */
+  scope?: Pick<ActionScope, 'request_surface' | 'origin_surface' | 'opportunity_id'>;
   now?: number;
 }) {
   capture('debate_scheduled_request_sent', {
@@ -147,6 +153,9 @@ export function debateScheduledRequestSent({
     request_id: requestId,
     viewer_is_free: analytics?.viewerIsFree ?? null,
     lead_time_minutes: Math.max(0, Math.round((startsAt.getTime() - now) / 60_000)),
+    request_surface: scope?.request_surface ?? null,
+    origin_surface: scope?.origin_surface ?? null,
+    opportunity_id: scope?.opportunity_id ?? null,
   });
 }
 

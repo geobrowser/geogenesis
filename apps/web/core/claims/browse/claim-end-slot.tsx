@@ -9,12 +9,25 @@ import cx from 'classnames';
 // gating exists to avoid.
 import Link from 'next/link';
 
-import type { Debate } from '~/core/debates/api';
+import { type DebateRequestSurface } from '~/core/action-context';
+import { ActionContextProvider, useActionScope } from '~/core/action-context-provider';
+import { createActionOpportunity } from '~/core/analytics-opportunities';
+import type { Debate, MatchmakingMatch } from '~/core/debates/api';
 import { debatePath } from '~/core/debates/debate-routes';
+import { useDebateActivity, useRejectDebateChallenge } from '~/core/debates/hooks';
+import { claimPickKey } from '~/core/debates/matchmaking/calendar-narrowing';
+import { calendarHref } from '~/core/debates/matchmaking/debate-calendar-route';
+import { useDebateRequests, useWithdrawDebateRequest } from '~/core/debates/matchmaking/hooks';
+import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
+import { useClaimOpponents } from '~/core/debates/matchmaking/use-claim-opponents';
+import { useLiveRequestBlock } from '~/core/debates/matchmaking/use-live-request-block';
 import { RematchClaimEndSlot } from '~/core/debates/rematch-claim-end-slot';
 import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { RequestDebateControl, claimSlotPillClass } from '~/core/debates/request-debate-control';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { ID } from '~/core/id';
 
+import { ClaimDebatePopup } from './claim-debate-popup';
 import { useClaimMatchup } from './use-claim-matchup';
 
 /**
@@ -40,12 +53,17 @@ import { useClaimMatchup } from './use-claim-matchup';
  * Request outranks live because it is the only one that needs the viewer: a live debate is still
  * there a second later, whereas a match evaporates when either party is taken.
  */
-export function ClaimEndSlot(props: React.ComponentProps<typeof MatchmakingClaimEndSlot>) {
+export function ClaimEndSlot(props: ClaimEndSlotProps) {
   // Every claim opened beside the picker belongs to that pair, including related claims.
   // An unavailable rematch must never fall back to requesting a different matchmaking opponent.
   const context = useRematchPanelContext();
-  return context ? <RematchClaimEndSlot {...props} context={context} /> : <MatchmakingClaimEndSlot {...props} />;
+  if (context) return <RematchClaimEndSlot {...props} context={context} />;
+  // The claim page and its side panel offer more than a feed card can (GEO-3244): booking a time
+  // when nobody is live, and a choice of who to ask when someone is.
+  return props.variant === 'block' ? <ClaimDebateOffer {...props} /> : <MatchmakingClaimEndSlot {...props} />;
 }
+
+type ClaimEndSlotProps = React.ComponentProps<typeof MatchmakingClaimEndSlot>;
 
 function MatchmakingClaimEndSlot({
   claimId,
@@ -109,6 +127,8 @@ function MatchmakingClaimEndSlot({
    * the continuation of that row rather than a control that wandered in.
    */
   variant?: 'inline' | 'block';
+  /** The claim's text, for the popup's title. Only the block variant opens one. */
+  claimName?: string | null;
   className?: string;
 }) {
   const { match, blockedReason, isRequesting, requestError, request } = useClaimMatchup({
@@ -136,9 +156,7 @@ function MatchmakingClaimEndSlot({
   //
   // Only a positive contradiction withdraws it. Both readings have to be known and they have to
   // disagree — an unknown local side, or a match that names none, leaves the offer alone.
-  const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
-  const contradictsViewerSide =
-    matchedSide !== null && matchedSide !== undefined && viewerPosition !== undefined && matchedSide !== viewerPosition;
+  const contradictsViewerSide = matchContradictsSide(match, viewerPosition);
 
   // A match is otherwise derived from the same `debate_claim_readiness` rows
   // `create_debate_request_as` reads, so nothing further about the position belongs here — a check
@@ -157,6 +175,7 @@ function MatchmakingClaimEndSlot({
         blockedReason={blockedReason}
         requestError={requestError}
         variant={variant}
+        analytics={debateActionAnalyticsAttributes('claim', 'Request debate', 'start_debate')}
         className={className}
       />
     );
@@ -183,6 +202,211 @@ function MatchmakingClaimEndSlot({
   if (variant === 'block') return null;
 
   return <span className={cx('h-5 shrink-0', className)} aria-hidden />;
+}
+
+/** Whether a match was computed for a side the viewer has since left. See `MatchmakingClaimEndSlot`. */
+function matchContradictsSide(match: MatchmakingMatch | null, viewerPosition: boolean | null | undefined): boolean {
+  const matchedSide = match ? (match.viewer_response?.position ?? match.viewer_position) : null;
+  return (
+    matchedSide !== null && matchedSide !== undefined && viewerPosition !== undefined && matchedSide !== viewerPosition
+  );
+}
+
+/**
+ * The claim page's and side panel's offer (GEO-3244): one Request debate, in two looks.
+ *
+ *   1. Filled       — someone on the other side can be asked now: a live match, or anyone online.
+ *                     Opens the "now or later?" popup.
+ *   2. Watch live   — a debate is running on this claim.
+ *   3. Outlined     — nobody is live, but someone on the other side has free time in the next two
+ *                     weeks. Opens the calendar filtered to them.
+ *   4. Nothing.
+ *
+ * Watch live outranks the outlined look because a running debate ends soon and free time does not.
+ * Under it, a pending request on this claim or an invite sent from here keeps a status line with
+ * its Withdraw, so the claim says a request is out after the popup closes.
+ *
+ * The button's showing is an `action_opportunity`, and its id is in scope for everything sent from
+ * it — the popup, or a calendar opened from it — so offer, press and request join up.
+ */
+function ClaimDebateOffer(props: ClaimEndSlotProps) {
+  const scope = useActionScope();
+  const surface = scope.request_surface ?? 'claim_page';
+  const opportunity = React.useMemo(
+    () =>
+      createActionOpportunity({
+        actionKind: 'start_debate',
+        targetType: 'claim',
+        targetId: props.claimId,
+        properties: { request_surface: surface },
+      }),
+    [props.claimId, surface]
+  );
+  return (
+    <ActionContextProvider value={opportunity.context}>
+      <ClaimDebateOfferBody {...props} surface={surface} opportunity={opportunity} />
+    </ActionContextProvider>
+  );
+}
+
+function ClaimDebateOfferBody({
+  claimId,
+  spaceId,
+  claimName = null,
+  activeDebate,
+  enabled = true,
+  viewerPosition,
+  indexedViewerPosition,
+  className,
+  surface,
+  opportunity,
+}: ClaimEndSlotProps & {
+  surface: DebateRequestSurface;
+  opportunity: ReturnType<typeof createActionOpportunity>;
+}) {
+  const { closeSidePanel } = useEntitySidePanel();
+  const matchup = useClaimMatchup({ claimId, spaceId, enabled, viewerPosition, indexedViewerPosition });
+  const opponents = useClaimOpponents({ claimId, spaceId, viewerPosition, enabled });
+  const { data: activity } = useDebateActivity(enabled);
+  const { data: requests } = useDebateRequests(enabled);
+  const live = useLiveRequestBlock(activity, requests);
+  const [open, setOpen] = React.useState(false);
+  const [challengeIds, setChallengeIds] = React.useState<ReadonlySet<string>>(() => new Set());
+
+  const liveMatch = Boolean(matchup.match) && !matchContradictsSide(matchup.match, viewerPosition);
+  const look =
+    liveMatch || opponents.askableCount > 0
+      ? 'filled'
+      : activeDebate
+        ? 'watch'
+        : opponents.withFreeTime.size > 0
+          ? 'outline'
+          : null;
+
+  React.useEffect(() => {
+    if (look === 'filled' || look === 'outline') {
+      opportunity.eligibility('eligible', look === 'filled' ? 'live' : 'scheduled');
+    }
+  }, [look, opportunity]);
+
+  const outbound = requests?.outbound ?? activity?.outbound_request ?? null;
+  const outboundRequest =
+    outbound && ID.equals(outbound.claim.claim_entity_id, claimId) && ID.equals(outbound.claim.space_id, spaceId)
+      ? outbound
+      : null;
+  // An invite carries no claim, so only one sent from this claim's popup is this claim's to show.
+  const outboundChallenge = live.outboundChallenge;
+  const sentChallenge = outboundChallenge && challengeIds.has(outboundChallenge.id) ? outboundChallenge : null;
+  React.useEffect(() => {
+    if (open && outboundChallenge)
+      setChallengeIds(ids => (ids.has(outboundChallenge.id) ? ids : new Set(ids).add(outboundChallenge.id)));
+  }, [open, outboundChallenge]);
+
+  // `from` is left out: the calendar reads it only to say it was opened from the hub, and the
+  // origin below says this one was opened from a claim.
+  const calendarLink =
+    opponents.withFreeTime.size > 0
+      ? calendarHref(
+          null,
+          { people: [], claims: [claimPickKey(spaceId, claimId)], matchesOnly: true },
+          { origin: surface, opportunityId: opportunity.context.opportunity_id }
+        )
+      : null;
+  const schedule = calendarLink
+    ? {
+        href: calendarLink,
+        onNavigate: () => {
+          setOpen(false);
+          // The calendar is a page of its own; a panel left open would cover it.
+          if (surface === 'claim_side_panel') closeSidePanel();
+        },
+      }
+    : undefined;
+  const closePopup = React.useCallback(() => setOpen(false), []);
+
+  const status = outboundRequest ? (
+    <StatusLine label="Request sent" kind={{ request: outboundRequest.id }} />
+  ) : sentChallenge ? (
+    <StatusLine label="Invite sent" kind={{ challenge: sentChallenge.id }} />
+  ) : null;
+
+  if (!look && !status) return null;
+
+  return (
+    <div className={cx('flex flex-col gap-1', className)}>
+      {look === 'filled' ? (
+        <RequestDebateControl
+          onRequest={() => setOpen(true)}
+          variant="block"
+          analytics={debateActionAnalyticsAttributes('claim', 'Request debate', 'start_debate')}
+        />
+      ) : look === 'watch' && activeDebate ? (
+        <WatchLiveLink activeDebate={activeDebate} spaceId={spaceId} variant="block" />
+      ) : look === 'outline' && schedule ? (
+        <Link
+          href={schedule.href}
+          onClick={schedule.onNavigate}
+          {...debateActionAnalyticsAttributes('claim', 'Request debate', 'open_debate_calendar')}
+          // The filled offer's shape at a lower weight: it books a time rather than asking now.
+          className={cx(claimSlotPillClass('block'), 'border border-text text-text hover:bg-text/5')}
+        >
+          Request debate
+        </Link>
+      ) : null}
+      {status}
+      {open && typeof viewerPosition === 'boolean' ? (
+        <ClaimDebatePopup
+          claimName={claimName}
+          viewerPosition={viewerPosition}
+          opponents={opponents}
+          liveMatch={liveMatch}
+          blockedReason={matchup.blockedReason}
+          isRequesting={matchup.isRequesting}
+          requestError={matchup.requestError}
+          switchesAvailability={matchup.switchesAvailability}
+          onRequest={matchup.request}
+          rowsDisabled={live.buttonsDisabled}
+          rowsDisabledReason={
+            live.blockedReason ?? (outboundChallenge ? 'You have a debate request awaiting a reply.' : null)
+          }
+          activity={activity}
+          outboundRequest={outboundRequest}
+          outboundChallenge={outboundChallenge}
+          schedule={schedule}
+          onClose={closePopup}
+        />
+      ) : null}
+    </div>
+  );
+}
+
+/** "Request sent · Awaiting response · Withdraw" under the claim's button. */
+function StatusLine({ label, kind }: { label: string; kind: { request: string } | { challenge: string } }) {
+  const withdraw = useWithdrawDebateRequest();
+  const cancel = useRejectDebateChallenge();
+  const isRequest = 'request' in kind;
+  const busy = isRequest ? withdraw.isPending : cancel.isPending;
+  return (
+    <span className="flex items-center justify-center gap-2 text-footnote text-grey-04">
+      <span>{label}</span>
+      <span aria-hidden>·</span>
+      <span>Awaiting response</span>
+      <span aria-hidden>·</span>
+      <button
+        type="button"
+        disabled={busy}
+        onClick={() => ('request' in kind ? withdraw.mutate(kind.request) : cancel.mutate(kind.challenge))}
+        {...debateActionAnalyticsAttributes(
+          'claim',
+          isRequest ? 'status withdraw' : 'status cancel',
+          isRequest ? 'withdraw_debate_request' : 'cancel_debate_request'
+        )}
+        className="shrink-0 text-text underline transition-colors hover:text-grey-04 disabled:opacity-50"
+      >
+        {isRequest ? (busy ? 'Withdrawing…' : 'Withdraw') : busy ? 'Cancelling…' : 'Cancel request'}
+      </button>
+    </span>
+  );
 }
 
 /** "Watch live": the room where a debate on this claim is running, or the space's feed. */

@@ -84,7 +84,29 @@ const CANONICAL_OUTCOME_FIELDS = new Set([
   'queue_wait_ms',
   'queue_depth',
   'failure_code',
+  // GEO-3244: the debate request a send created, and what an accept led to.
+  'request_id',
+  'debate_id',
+  'rematch_session_id',
 ]);
+
+/** Actions an `opportunity_id` in scope is an offer of: the claim page's Request debate (GEO-3244). */
+const OPPORTUNITY_ACTIONS = new Set<ActionKind>(['start_debate']);
+
+/**
+ * A refusal the server answered with: its own code, such as geo-chat's `recipient_away`, for a
+ * request the server received and declined. Such a request did not execute, so it is a failure,
+ * not an unknown — counting it as unknown made a blocked request read as a network error (GEO-3244).
+ *
+ * Read structurally rather than by class, so this module stays free of any one client's imports:
+ * an error carrying a string `code` and a 4xx `status`. Only the code is kept, never the message.
+ */
+export function serverRefusalCode(error: unknown): string | null {
+  if (typeof error !== 'object' || error === null) return null;
+  const { code, status } = error as { code?: unknown; status?: unknown };
+  if (typeof code !== 'string' || !code) return null;
+  return typeof status === 'number' && status >= 400 && status < 500 ? code : null;
+}
 
 /**
  * Taken when an asynchronous action starts. The returned check is false once the analytics identity
@@ -164,10 +186,13 @@ export function observeOperation(
     succeeded(properties: Record<string, unknown> = {}) {
       complete('succeeded', properties);
     },
-    /** `metrics` is numbers only, so no provider text or payload can reach analytics. */
-    failed(code: OperationFailureCode, metrics?: Record<string, number>) {
+    /**
+     * `metrics` is numbers only, so no provider text or payload can reach analytics. `refusalCode`
+     * names the server's own reason on the completion; the legacy failure events keep `code`.
+     */
+    failed(code: OperationFailureCode, metrics?: Record<string, number>, refusalCode?: string) {
       if (completed) return;
-      complete(code === 'unknown' ? 'unknown' : 'failed', { ...metrics, failure_code: code });
+      complete(code === 'unknown' ? 'unknown' : 'failed', { ...metrics, failure_code: refusalCode ?? code });
       if (['vote', 'ranking', 'publish'].includes(action))
         emit(code === 'unknown' ? 'action_outcome_unknown' : 'action_failed', code, {
           ...metrics,
@@ -193,17 +218,31 @@ export async function runObservedAction<T>(
   action: ActionKind,
   context: ActionContext,
   run: () => Promise<T>,
-  failureOf?: (result: T) => OperationFailureCode | null
+  failureOf?: (result: T) => OperationFailureCode | null,
+  /** What the result says about the outcome, such as the id it created; canonical fields only. */
+  resultProperties?: (result: T) => Record<string, unknown>
 ): Promise<T> {
-  const operation = observeOperation(action, context.target_type, context.target_id, undefined, context);
+  // An action taken from an opportunity is also an attempt at it (GEO-3244). Only the action the
+  // opportunity offers: a scope carries its id to everything inside, and the collector checks
+  // `action_attempted`'s kind, so accepting an invite on a calendar opened from an offer is not one.
+  const opportunity =
+    context.opportunity_id && OPPORTUNITY_ACTIONS.has(action)
+      ? {
+          opportunity_id: context.opportunity_id,
+          presentation_instance_id: context.presentation_instance_id ?? context.opportunity_id,
+        }
+      : undefined;
+  const operation = observeOperation(action, context.target_type, context.target_id, opportunity, context);
   try {
     const result = await run();
     const failure = failureOf?.(result) ?? null;
     if (failure) operation.failed(failure);
-    else operation.succeeded();
+    else operation.succeeded(resultProperties?.(result));
     return result;
   } catch (error) {
-    operation.failed(classifyOperationFailure(error));
+    const refusal = serverRefusalCode(error);
+    if (refusal) operation.failed('rejected', undefined, refusal);
+    else operation.failed(classifyOperationFailure(error));
     throw error;
   }
 }
