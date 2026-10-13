@@ -264,8 +264,40 @@ describe('AdminNewMatchDialog', () => {
     const sam = people()[0];
     expect(sam).toHaveTextContent('Sam Patel');
     expect(sam).toHaveTextContent('No availability set');
-    expect(within(sam).queryByRole('button', { name: /Select/ })).not.toBeInTheDocument();
+    expect(within(sam).getByRole('button', { name: 'Select Sam Patel' })).toBeInTheDocument();
     expect(within(sam).getByRole('button', { name: 'Request availability from Sam Patel' })).toBeInTheDocument();
+  });
+
+  it('matches someone with no availability at any time, flagged Off-hours', async () => {
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    // What geo-chat answers measured from someone with no schedule: no shared time, no zone.
+    mocks.overlap = {
+      viewer_timezone: '',
+      viewer_has_schedule: false,
+      candidates: [{ with: 'ana', both_have_schedules: false, with_timezone: '', slots: [], truncated: false }],
+    };
+    mocks.prompt.mockResolvedValueOnce({ sent: true, outcome: 'sent' });
+    const { rerender } = renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    // Nothing to recommend, so the override is where it starts.
+    expect(screen.getByRole('radio', { name: 'Pick any time' })).toBeChecked();
+    expect(screen.getByText('Sam hasn’t set availability.')).toBeInTheDocument();
+    expect(screen.getAllByText(/Not a time they.re both free/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ firstUserId: 'sam', secondUserId: 'ana' });
+
+    // Recommended says why it has nothing, and asks only the one without availability.
+    fireEvent.click(screen.getByRole('radio', { name: 'Recommended' }));
+    expect(screen.getByText(/Sam hasn.t set availability, so there.s no shared time/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Request availability' }));
+    });
+    expect(mocks.prompt.mock.calls.map(([userId]) => userId)).toEqual(['sam']);
+    expect(screen.getByText('Asked Sam')).toBeInTheDocument();
   });
 
   it('says whether the availability request went out', async () => {

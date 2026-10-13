@@ -109,8 +109,10 @@ type Props = {
  * other. One page rather than the ticket's four-step rail.
  *
  * - **Search covers everyone.** Everyone with availability is listed from the start; anyone else is
- *   found by name through Geo search. Only people with availability can be picked. Everyone else
- *   gets Request availability, which emails them, and says so when there is no email on file.
+ *   found by name through Geo search. Anyone can be picked: a match with someone who has set no
+ *   availability is booked at any time, flagged Off-hours, so an admin who has agreed a time with
+ *   them elsewhere can book it here. They also get Request availability, which emails them, and
+ *   says so when there is no email on file.
  * - **Once debater 1 is picked**, the list reorders by matches with them, the People tab's order
  *   measured from that person instead of the viewer. When gaia's pair fit is available (GEO-3224)
  *   it orders by fit instead, halved for anyone with no free time in common, and each row says
@@ -151,7 +153,8 @@ export function AdminNewMatchDialog({ open, onOpenChange, openerRef, onSent }: P
   );
 }
 
-type Picked = { userId: string; person: DebatePerson };
+/** A debater picked, and whether they have set availability, which decides how a time is chosen. */
+type Picked = { userId: string; person: DebatePerson; hasAvailability: boolean };
 
 function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note: string) => void }) {
   const [first, setFirst] = React.useState<Picked | null>(null);
@@ -305,7 +308,7 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   };
 
   const pick = (person: DebatePerson) => {
-    const next = { userId: person.user_id, person };
+    const next = { userId: person.user_id, person, hasAvailability: isAvailable.has(normId(person.user_id)) };
     if (!first) setFirst(next);
     else setSecond(next);
     search.onQueryChange('');
@@ -431,7 +434,7 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
           zoneOf={zoneOf}
           prompts={prompts}
           onChoose={setChosen}
-          onRequestBoth={() => first && second && void requestAvailability([first.userId, second.userId])}
+          onRequest={userIds => void requestAvailability(userIds)}
         />
       </div>
 
@@ -624,20 +627,22 @@ function PersonOption({
       )
     ) : null;
 
-  let action: React.ReactNode;
+  const select = (
+    <HubPillButton
+      analyticsSurface="calendar"
+      analyticsLabel="New match Select"
+      aria-label={`Select ${name}`}
+      onClick={onPick}
+    >
+      Select
+    </HubPillButton>
+  );
+  // Without availability they can still be picked; asking them to set it sits under Select.
+  let request: React.ReactNode = null;
   if (available) {
-    action = (
-      <HubPillButton
-        analyticsSurface="calendar"
-        analyticsLabel="New match Select"
-        aria-label={`Select ${name}`}
-        onClick={onPick}
-      >
-        Select
-      </HubPillButton>
-    );
+    request = null;
   } else if (prompt && prompt !== 'pending' && !isRetryable(prompt)) {
-    action = (
+    request = (
       <Text
         as="span"
         variant="footnote"
@@ -647,7 +652,7 @@ function PersonOption({
       </Text>
     );
   } else if (isRetryable(prompt)) {
-    action = (
+    request = (
       <HubPillButton
         analyticsSurface="calendar"
         analyticsLabel="New match Retry availability request"
@@ -658,7 +663,7 @@ function PersonOption({
       </HubPillButton>
     );
   } else {
-    action = (
+    request = (
       <HubPillButton
         analyticsSurface="calendar"
         analyticsLabel="New match Request availability"
@@ -671,6 +676,14 @@ function PersonOption({
       </HubPillButton>
     );
   }
+  const action = request ? (
+    <div className="flex flex-col items-end gap-1.5">
+      {select}
+      {request}
+    </div>
+  ) : (
+    select
+  );
 
   return (
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
@@ -687,7 +700,7 @@ function PersonOption({
         ) : null}
         {available ? null : (
           <Text as="span" variant="footnote" color="grey-04">
-            No availability set. Can&rsquo;t be matched until they set it.
+            No availability set. Pick any time to match them.
           </Text>
         )}
         {isRetryable(prompt) ? (
@@ -744,7 +757,7 @@ function TimePicker({
   zoneOf,
   prompts,
   onChoose,
-  onRequestBoth,
+  onRequest,
 }: {
   first: Picked | null;
   second: Picked | null;
@@ -754,9 +767,12 @@ function TimePicker({
   zoneOf: (userId: string) => string | undefined;
   prompts: ReadonlyMap<string, PromptOutcome>;
   onChoose: (choice: Choice | null) => void;
-  onRequestBoth: () => void;
+  /** Asks these people to set or widen their availability. */
+  onRequest: (userIds: string[]) => void;
 }) {
-  const [mode, setMode] = React.useState<'recommended' | 'any'>('recommended');
+  // Without availability on both sides there is nothing to recommend, so the override is the start.
+  const unset = [first, second].filter((person): person is Picked => person !== null && !person.hasAvailability);
+  const [mode, setMode] = React.useState<'recommended' | 'any'>(unset.length > 0 ? 'any' : 'recommended');
   const [selected, setSelected] = React.useState<number | null>(null);
   // Counted in the picked zone: in GMT, an admin west of it can still be on yesterday.
   const days = React.useMemo(() => zoneDays(Date.now(), zone, ADMIN_MATCH_DAYS), [zone]);
@@ -863,7 +879,7 @@ function TimePicker({
             Pick two debaters to see when they&rsquo;re both free.
           </Text>
           <Text as="p" variant="footnote" color="grey-04">
-            Only people who have set availability can be picked. For anyone else, use Request availability.
+            Anyone without availability can still be picked, at any time you choose.
           </Text>
         </div>
       </>
@@ -908,6 +924,15 @@ function TimePicker({
           </HubPillButton>
         </div>
       );
+    } else if (unset.length > 0) {
+      body = (
+        <UnsetAvailability
+          names={unset.map(person => debaterFirstName(person.person))}
+          outcomes={unset.map(person => prompts.get(normId(person.userId)))}
+          onPickAny={() => setMode('any')}
+          onRequest={() => onRequest(unset.map(person => person.userId))}
+        />
+      );
     } else if (slots.length === 0) {
       const outcomes = [first, second].map(person => prompts.get(normId(person.userId)));
       const asking = outcomes.includes('pending');
@@ -942,7 +967,7 @@ function TimePicker({
                   <HubPillButton
                     analyticsSurface="calendar"
                     analyticsLabel="New match Retry ask both"
-                    onClick={onRequestBoth}
+                    onClick={() => onRequest([first.userId, second.userId])}
                   >
                     Retry
                   </HubPillButton>
@@ -954,7 +979,7 @@ function TimePicker({
                 analyticsLabel="New match Ask both to widen availability"
                 pending={asking}
                 pendingLabel="Sending…"
-                onClick={onRequestBoth}
+                onClick={() => onRequest([first.userId, second.userId])}
               >
                 Ask both to widen availability
               </HubPillButton>
@@ -1124,6 +1149,7 @@ function TimePicker({
           name: a,
           // Absent only on geo-chat builds before #134: nothing known, rather than nothing free.
           slots: firstAvailability.data?.their_slots ?? null,
+          unset: !first.hasAvailability,
           knownFrom: knownFrom(firstAvailability),
           pending: firstAvailability.isPending,
           error: Boolean(firstAvailability.error),
@@ -1132,6 +1158,7 @@ function TimePicker({
         second={{
           name: b,
           slots: secondAvailability.data?.their_slots ?? null,
+          unset: !second.hasAvailability,
           knownFrom: knownFrom(secondAvailability),
           pending: secondAvailability.isPending,
           error: Boolean(secondAvailability.error),
@@ -1145,6 +1172,75 @@ function TimePicker({
       </div>
       {body}
     </>
+  );
+}
+
+/**
+ * Recommended with someone who has set no availability: there is no shared time to offer, so it
+ * points at Pick any time and offers to ask them to set it.
+ */
+function UnsetAvailability({
+  names,
+  outcomes,
+  onPickAny,
+  onRequest,
+}: {
+  names: string[];
+  outcomes: (PromptOutcome | undefined)[];
+  onPickAny: () => void;
+  onRequest: () => void;
+}) {
+  const asking = outcomes.includes('pending');
+  const answered = outcomes.every(outcome => outcome !== undefined && outcome !== 'pending');
+  const retry = outcomes.some(isRetryable);
+  const who = names.length > 1 ? `${names[0]} and ${names[1]} haven’t` : `${names[0]} hasn’t`;
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <Text as="p" variant="metadataMedium">
+        {who} set availability, so there&rsquo;s no shared time to recommend.
+      </Text>
+      <Text as="p" variant="footnote" color="grey-04">
+        Pick any time to book it anyway. The invite is flagged and the calendar tags it Off-hours.
+      </Text>
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <HubPillButton analyticsSurface="calendar" analyticsLabel="New match Pick any time" onClick={onPickAny}>
+          Pick any time
+        </HubPillButton>
+        {answered && !asking ? (
+          <>
+            <div className="flex flex-col gap-0.5">
+              {names.map((name, index) => {
+                const outcome = outcomes[index] as Exclude<PromptOutcome, 'pending'>;
+                return (
+                  <Text key={index} as="span" variant="footnote" color="grey-04">
+                    {outcome === 'sent' ? `Asked ${name}` : `${name}: ${PROMPT_LABELS[outcome]}`}
+                  </Text>
+                );
+              })}
+            </div>
+            {retry ? (
+              <HubPillButton
+                analyticsSurface="calendar"
+                analyticsLabel="New match Retry request unset"
+                onClick={onRequest}
+              >
+                Retry
+              </HubPillButton>
+            ) : null}
+          </>
+        ) : (
+          <HubPillButton
+            analyticsSurface="calendar"
+            analyticsLabel="New match Request availability unset"
+            pending={asking}
+            pendingLabel="Sending…"
+            onClick={onRequest}
+          >
+            Request availability
+          </HubPillButton>
+        )}
+      </div>
+    </div>
   );
 }
 

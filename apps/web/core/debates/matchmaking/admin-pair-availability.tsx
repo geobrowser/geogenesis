@@ -35,6 +35,8 @@ export type DebaterAvailability = {
   name: string;
   /** Their free windows; `null` while unknown. */
   slots: AnnotatedSlot[] | null;
+  /** They have never set availability, so an empty row means that rather than fully booked. */
+  unset?: boolean;
   /**
    * Where their answer starts. geo-chat walks their fortnight from their own midnight on the UTC
    * date, so for anyone west of GMT the rest of their evening is not in it: before this, a time is
@@ -135,6 +137,10 @@ export function AdminPairAvailability({
         ) : person.pending ? (
           <Text key={index} as="p" variant="footnote" color="grey-04">
             Loading {person.name}&rsquo;s availability…
+          </Text>
+        ) : person.unset ? (
+          <Text key={index} as="p" variant="footnote" color="grey-04">
+            {person.name} hasn&rsquo;t set availability.
           </Text>
         ) : null
       )}
