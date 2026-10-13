@@ -31,7 +31,6 @@ const mocks = vi.hoisted(() => ({
   playerToggle: vi.fn(),
   /** What `usePageSettled` answers. The real one is covered in `use-page-settled.test.ts`. */
   pageSettled: true,
-  stills: { slot1: null, slot2: null } as { slot1: string | null; slot2: string | null },
   /** Draw a stand-in end card inside the player: its controls, and a popover portalled out of it. */
   withEndCard: false,
   endCardVote: vi.fn(),
@@ -52,7 +51,6 @@ vi.mock('~/core/state/feature-flags', () => ({}));
 vi.mock('~/core/debates/hooks', () => ({
   useDebate: () => mocks.debateQuery,
   useDebateMedia: () => mocks.mediaQuery,
-  useDebateSpeakerStills: () => mocks.stills,
 }));
 
 vi.mock('~/core/hooks/use-page-settled', () => ({
@@ -88,13 +86,11 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
       debate,
       active,
       releaseMedia,
-      stills,
       reducedOverlays,
     }: {
       debate: Debate;
       active: boolean;
       releaseMedia?: boolean;
-      stills?: { slot1: string | null; slot2: string | null } | null;
       reducedOverlays?: boolean;
     }) => (
       <>
@@ -104,7 +100,6 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
           data-debate={debate.id}
           data-active={active}
           data-release-media={releaseMedia ? 'true' : 'false'}
-          data-still-1={stills?.slot1 ?? ''}
           data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
           onClick={mocks.playerToggle}
         />
@@ -226,7 +221,6 @@ beforeEach(() => {
   mocks.mediaQuery = { data: undefined, isError: false };
   mocks.withEndCard = false;
   mocks.pageSettled = true;
-  mocks.stills = { slot1: null, slot2: null };
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -413,16 +407,6 @@ describe('DebateExploreFeedCard', () => {
     mocks.pageSettled = true;
     view.rerenderCard();
     expect(screen.getByTestId('player').getAttribute('data-release-media')).toBe('false');
-  });
-
-  it("hands the debaters' stills to the player as its posters", () => {
-    mocks.debateQuery = { data: watchableDebate(), isError: false };
-    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
-    mocks.stills = { slot1: 'https://stills.example/1.jpg', slot2: null };
-    renderCard();
-    intersectAll(0.7);
-
-    expect(screen.getByTestId('player').getAttribute('data-still-1')).toBe('https://stills.example/1.jpg');
   });
 
   it('requests playback before a player interaction', () => {

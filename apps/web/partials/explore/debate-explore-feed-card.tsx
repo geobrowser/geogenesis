@@ -10,7 +10,7 @@ import { DebateInteractionBar } from '~/core/debates/browse/debate-interaction-b
 import { DebateShareDialog } from '~/core/debates/browse/share-dialog';
 import { useDebateShareAction } from '~/core/debates/browse/use-debate-share-action';
 import { useDebatePlaybackAllowed } from '~/core/debates/debate-playback-gate';
-import { useDebate, useDebateMedia, useDebateSpeakerStills } from '~/core/debates/hooks';
+import { useDebate, useDebateMedia } from '~/core/debates/hooks';
 import { openRebuttalRoundCount } from '~/core/debates/open-rounds';
 import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-utils';
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
@@ -212,11 +212,12 @@ export function DebateExploreFeedCard({
   const readyDebate = debate != null && watchable && processed ? debate : null;
 
   // Recordings are the heaviest thing on this page (two files per card, several MB each) and the
-  // feed's own content is what the viewer came for. Until the page has settled the cards show their
-  // stills and hold the recordings detached, so the first paint is not competing with them for the
-  // network. After that this changes nothing: the active card attaches and starts as it always did.
+  // feed's own content is what the viewer came for. Until the page has settled the cards hold the
+  // recordings detached, so the first paint is not competing with them for the network. After that
+  // this changes nothing: the active card attaches and starts as it always did. No poster is drawn
+  // meanwhile: a still would have to be presigned client-side after hydration and then won LCP on
+  // slow connections, ~20s later than the card's own text.
   const pageSettled = usePageSettled();
-  const stills = useDebateSpeakerStills(debateId, mediaQuery.data?.artifacts, nearViewport && watchable);
 
   /**
    * Whether this card is carrying a debate's resources at all.
@@ -409,7 +410,6 @@ export function DebateExploreFeedCard({
               debate={readyDebate}
               active={active && playbackAllowed}
               releaseMedia={!pageSettled}
-              stills={stills}
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
             />
@@ -469,14 +469,12 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
   active,
   releaseMedia,
-  stills,
   reducedOverlays,
   onOpenClaims,
 }: {
   debate: Debate;
   active: boolean;
   releaseMedia: boolean;
-  stills: { slot1: string | null; slot2: string | null };
   reducedOverlays: boolean;
   onOpenClaims: () => void;
 }) {
@@ -486,7 +484,6 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
       active={active}
       preload
       releaseMedia={releaseMedia}
-      stills={stills}
       reducedOverlays={reducedOverlays}
       onOpenClaims={onOpenClaims}
     />
