@@ -1,0 +1,130 @@
+import { act, cleanup, renderHook, waitFor } from '@testing-library/react';
+
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import type { DebateLobbyGuestSession } from '../api';
+
+const mocks = vi.hoisted(() => ({
+  start: vi.fn(),
+  heartbeat: vi.fn(),
+  leave: vi.fn(async () => undefined),
+  acquire: vi.fn(),
+  release: vi.fn(),
+  elsewhere: vi.fn(),
+  lost: new Set<() => void>(),
+}));
+
+vi.mock('../api', async importOriginal => ({
+  ...(await importOriginal<typeof import('../api')>()),
+  startDebateLobbyGuest: mocks.start,
+  sendDebateLobbyGuestHeartbeat: mocks.heartbeat,
+  leaveDebateLobbyGuest: mocks.leave,
+}));
+
+vi.mock('./lobby-guest-tab-lock', () => ({
+  acquireGuestTabLock: mocks.acquire,
+  releaseGuestTabLock: mocks.release,
+  isGuestListeningElsewhere: mocks.elsewhere,
+  onGuestTabLockLost: (listener: () => void) => {
+    mocks.lost.add(listener);
+    return () => mocks.lost.delete(listener);
+  },
+}));
+
+const { GeoChatRequestError } = await import('../api');
+const { useLobbyGuestSession } = await import('./lobby-guest-hooks');
+
+function session(admission = 1): DebateLobbyGuestSession {
+  return {
+    guest_id: 'guest1',
+    guest_secret: 'secret-1',
+    admission,
+    lease_expires_at: '2026-10-09T12:01:30Z',
+    heartbeat_interval_seconds: 20,
+    voice: {
+      token: 'token-1',
+      url: 'wss://lk',
+      room_name: 'geo-lobby-1',
+      can_publish: false,
+      start_muted: false,
+      expires_at: '2026-10-09T12:01:00Z',
+    },
+  };
+}
+
+const LISTEN = { listen: true, signedIn: false, member: 'pending' as const };
+const renderSession = () => renderHook(() => useLobbyGuestSession('lobby1', LISTEN));
+
+beforeEach(() => {
+  window.localStorage.clear();
+  mocks.start.mockReset().mockResolvedValue(session());
+  mocks.heartbeat.mockReset().mockResolvedValue({ alive: true, reason: null, lease_expires_at: 'x' });
+  mocks.leave.mockClear();
+  mocks.acquire.mockReset().mockResolvedValue(true);
+  mocks.release.mockReset();
+  mocks.elsewhere.mockReset().mockResolvedValue(true);
+  mocks.lost.clear();
+});
+
+afterEach(() => {
+  cleanup();
+});
+
+describe('useLobbyGuestSession across tabs', () => {
+  it('waits on a press while another tab listens, then takes listening over', async () => {
+    mocks.acquire.mockResolvedValueOnce(false);
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('superseded'));
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(result.current.otherTabListening).toBe(true);
+
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    expect(mocks.acquire).toHaveBeenLastCalledWith({ steal: true });
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('says nobody listens once the other tab closed, and still waits on a press', async () => {
+    mocks.acquire.mockResolvedValueOnce(false);
+    mocks.elsewhere.mockResolvedValue(false);
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.otherTabListening).toBe(false));
+    expect(result.current.state.status).toBe('superseded');
+    expect(mocks.start).not.toHaveBeenCalled();
+  });
+
+  it('stops and leaves its own admission when another tab takes listening, without starting again', async () => {
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+
+    act(() => mocks.lost.forEach(listener => listener()));
+    expect(result.current.state.status).toBe('superseded');
+    expect(mocks.leave).toHaveBeenCalledWith('lobby1', { guest_secret: 'secret-1', admission: 1 }, true);
+    await act(async () => undefined);
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+    expect(mocks.release).toHaveBeenCalled();
+  });
+
+  it('keeps the lock while refused, and lets it go once removed', async () => {
+    mocks.start.mockRejectedValueOnce(new GeoChatRequestError('full', 'guest_cap_reached', 409, null, { limit: 50 }));
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('refused'));
+    expect(mocks.release).not.toHaveBeenCalled();
+
+    mocks.start.mockRejectedValueOnce(new GeoChatRequestError('removed', 'lobby_guest_removed', 403));
+    act(() => result.current.retry());
+    await waitFor(() => expect(result.current.state.status).toBe('removed'));
+    expect(mocks.release).toHaveBeenCalled();
+  });
+
+  it('lets the lock go on unmount and at once on pagehide', async () => {
+    const { result, unmount } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    act(() => {
+      window.dispatchEvent(new Event('pagehide'));
+    });
+    expect(mocks.release).toHaveBeenCalledWith({ now: true });
+    unmount();
+    expect(mocks.release).toHaveBeenLastCalledWith();
+  });
+});

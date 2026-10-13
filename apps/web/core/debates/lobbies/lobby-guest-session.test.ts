@@ -134,6 +134,22 @@ describe('guest session transitions', () => {
     expect(transition(superseded, { type: 'memberJoined' }, inn)).toEqual({ next: released, commands: [] });
   });
 
+  it('steps aside for another tab, leaving only its own admission', () => {
+    expect(run(listening, { type: 'elsewhere' })).toEqual({
+      next: superseded,
+      commands: [{ type: 'leave', secret: 's1', admission: 1 }],
+    });
+    for (const state of [idle, starting, refused]) {
+      expect(run(state, { type: 'elsewhere' })).toEqual({
+        next: { status: 'superseded', attempt: state.attempt },
+        commands: [],
+      });
+    }
+    for (const state of [handingOver, released, removed, ended, superseded]) {
+      expect(run(state, { type: 'elsewhere' }).next).toBe(state);
+    }
+  });
+
   it('a released session stays released', () => {
     const events: GuestSessionEvent[] = [
       { type: 'start' },
