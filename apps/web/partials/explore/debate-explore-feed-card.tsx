@@ -16,6 +16,7 @@ import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-ut
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
+import { useCoveredByMobileSheet } from '~/core/hooks/use-covered-by-mobile-sheet';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
@@ -192,6 +193,9 @@ export function DebateExploreFeedCard({
   // is this one's turn. A card that is allowed but scrolled away still stops,
   // because its own judgement above is unchanged.
   const playbackAllowed = useDebatePlaybackAllowed(debateId);
+  // On a phone the side panel (and the other sheets) covers the feed. Cards behind it pause rather
+  // than keep decoding under it; cards inside it, like a profile's Activity gallery, still play.
+  const coveredBySheet = useCoveredByMobileSheet();
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -399,7 +403,7 @@ export function DebateExploreFeedCard({
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
               debate={readyDebate}
-              active={active && playbackAllowed}
+              active={active && playbackAllowed && !coveredBySheet}
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
             />

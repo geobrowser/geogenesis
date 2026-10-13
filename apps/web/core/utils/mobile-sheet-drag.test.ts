@@ -4,9 +4,11 @@ import {
   type MobileSheetSnap,
   attachMobileSheetGestures,
   canStartMobileSheetGesture,
+  isAnyMobileSheetOpen,
   lockMobileSheetDocumentOverscroll,
   resolveMobileSheetRelease,
   shouldClaimMobileSheetGesture,
+  subscribeMobileSheetOpen,
 } from './mobile-sheet-drag';
 
 function createSheet(initialScrollTop = 0) {
@@ -162,6 +164,23 @@ describe('lockMobileSheetDocumentOverscroll', () => {
     releaseSecond();
     expect(document.documentElement.hasAttribute('data-mobile-sheet-open')).toBe(false);
     expect(document.body.hasAttribute('data-mobile-sheet-open')).toBe(false);
+  });
+
+  it('tells subscribers when the first sheet opens and the last one closes', () => {
+    const listener = vi.fn();
+    const unsubscribe = subscribeMobileSheetOpen(listener);
+
+    const releaseFirst = lockMobileSheetDocumentOverscroll();
+    expect(isAnyMobileSheetOpen()).toBe(true);
+    const releaseSecond = lockMobileSheetDocumentOverscroll();
+    releaseFirst();
+    expect(isAnyMobileSheetOpen()).toBe(true);
+    releaseSecond();
+    expect(isAnyMobileSheetOpen()).toBe(false);
+
+    // Only the open/closed transitions, not every stacked sheet.
+    expect(listener).toHaveBeenCalledTimes(2);
+    unsubscribe();
   });
 
   it('allows cleanup to be called more than once without unlocking another sheet', () => {

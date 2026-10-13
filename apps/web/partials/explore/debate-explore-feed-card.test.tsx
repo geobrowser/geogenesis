@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate } from '~/core/debates/api';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { InsideMobileSheet } from '~/core/hooks/use-covered-by-mobile-sheet';
+import { lockMobileSheetDocumentOverscroll } from '~/core/utils/mobile-sheet-drag';
 import { NavUtils } from '~/core/utils/utils';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
@@ -381,6 +383,47 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.4);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  describe('while a mobile sheet is open over the feed', () => {
+    function renderPlaying(wrap?: (card: React.ReactElement) => React.ReactElement) {
+      mocks.debateQuery = { data: watchableDebate(), isError: false };
+      mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+      const card = <CardHarness props={{}} />;
+      render(wrap ? wrap(card) : card);
+      intersectAll(0.7);
+      return () => screen.getByTestId('player').getAttribute('data-active');
+    }
+
+    it('pauses the cards behind the sheet and resumes them when it closes', () => {
+      const playerActive = renderPlaying();
+      expect(playerActive()).toBe('true');
+
+      let closeSheet = () => {};
+      act(() => {
+        closeSheet = lockMobileSheetDocumentOverscroll();
+      });
+      try {
+        expect(playerActive()).toBe('false');
+      } finally {
+        act(() => closeSheet());
+      }
+      expect(playerActive()).toBe('true');
+    });
+
+    it('keeps playing a card inside the sheet, like a profile Activity gallery', () => {
+      const playerActive = renderPlaying(card => <InsideMobileSheet>{card}</InsideMobileSheet>);
+
+      let closeSheet = () => {};
+      act(() => {
+        closeSheet = lockMobileSheetDocumentOverscroll();
+      });
+      try {
+        expect(playerActive()).toBe('true');
+      } finally {
+        act(() => closeSheet());
+      }
+    });
   });
 
   it('requests playback before a player interaction', () => {

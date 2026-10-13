@@ -20,6 +20,22 @@ const MOBILE_SHEET_FLING_VELOCITY_PX_PER_SECOND = 420;
 export type MobileSheetSnap = 'peek' | 'full';
 
 let documentOverscrollLockCount = 0;
+const openListeners = new Set<() => void>();
+
+/** Whether any mobile sheet is open. Every sheet holds the overscroll lock while it is. */
+export function isAnyMobileSheetOpen(): boolean {
+  return documentOverscrollLockCount > 0;
+}
+
+/** Notified when the first sheet opens and when the last one closes. */
+export function subscribeMobileSheetOpen(listener: () => void): () => void {
+  openListeners.add(listener);
+  return () => openListeners.delete(listener);
+}
+
+function notifyOpenChange() {
+  openListeners.forEach(listener => listener());
+}
 
 /**
  * Prevents browser overscroll gestures while any mobile sheet is open. The reference count keeps
@@ -31,6 +47,7 @@ export function lockMobileSheetDocumentOverscroll(): () => void {
   documentOverscrollLockCount += 1;
   documentElement.setAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE, '');
   body.setAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE, '');
+  if (documentOverscrollLockCount === 1) notifyOpenChange();
 
   let released = false;
   return () => {
@@ -41,6 +58,7 @@ export function lockMobileSheetDocumentOverscroll(): () => void {
     if (documentOverscrollLockCount === 0) {
       documentElement.removeAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE);
       body.removeAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE);
+      notifyOpenChange();
     }
   };
 }

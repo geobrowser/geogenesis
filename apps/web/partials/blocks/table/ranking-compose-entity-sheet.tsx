@@ -7,6 +7,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 import { createPortal } from 'react-dom';
 
+import { InsideMobileSheet } from '~/core/hooks/use-covered-by-mobile-sheet';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { MOBILE_SHEET_ENTRANCE_SPRING, useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
@@ -131,19 +132,21 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
           >
             {isMobile ? <MobileSheetGrabHandle /> : null}
 
-            <EntitySidePanelPopoverPortalProvider>
-              <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-                <EntitySidePanelSurface
-                  entityId={target.entityId}
-                  requestedSpaceId={target.spaceId}
-                  openedWithMainViewEditing={false}
-                  previewImageUrl={target.previewImageUrl}
-                  previewName={target.previewName}
-                  previewDescription={target.previewDescription}
-                  onClose={onClose}
-                />
-              </div>
-            </EntitySidePanelPopoverPortalProvider>
+            <InsideMobileSheet>
+              <EntitySidePanelPopoverPortalProvider>
+                <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <EntitySidePanelSurface
+                    entityId={target.entityId}
+                    requestedSpaceId={target.spaceId}
+                    openedWithMainViewEditing={false}
+                    previewImageUrl={target.previewImageUrl}
+                    previewName={target.previewName}
+                    previewDescription={target.previewDescription}
+                    onClose={onClose}
+                  />
+                </div>
+              </EntitySidePanelPopoverPortalProvider>
+            </InsideMobileSheet>
           </motion.div>
         </motion.div>
       ) : null}
