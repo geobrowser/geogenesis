@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { SLOT_MINUTES } from '~/core/availability/blocks';
+import { windowStart } from '~/core/availability/peer-schedule';
 import { useSearch } from '~/core/hooks/use-search';
 import { normId } from '~/core/utils/norm-id';
 import { getViewerTimeZone } from '~/core/utils/utils';
@@ -41,6 +42,7 @@ import {
   wallTime,
   zoneDays,
   zoneLabel,
+  zoneName,
 } from './admin-match-zone';
 import { AdminPairAvailability } from './admin-pair-availability';
 import { useAdminPairFit, useAdminSharedFreeSlots } from './admin-pair-fit';
@@ -668,6 +670,9 @@ function TimePicker({
   const days = React.useMemo(() => zoneDays(Date.now(), zone, ADMIN_MATCH_DAYS), [zone]);
   const [anyDay, setAnyDay] = React.useState(1);
   const [anyMinutes, setAnyMinutes] = React.useState(17 * 60);
+  // The exact instant when a time came off the strip. Day and minutes name a wall clock, which the
+  // hour the clocks go back names twice; read back, it would always be the earlier of the two.
+  const [anyExact, setAnyExact] = React.useState<number | null>(null);
 
   // Ticks each minute, so a picked time that passes while the dialog is open stops being sendable.
   const now = useMinuteClock();
@@ -687,7 +692,7 @@ function TimePicker({
   // full; until then the override says nothing rather than flagging every time it is shown.
   const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
 
-  const anyStart = days[anyDay] ? instantAt(days[anyDay], anyMinutes, zone) : null;
+  const anyStart = anyExact ?? (days[anyDay] ? instantAt(days[anyDay], anyMinutes, zone) : null);
   React.useEffect(() => {
     if (mode === 'recommended')
       onChoose(selected !== null && selected > now ? { start: selected, outside: false } : null);
@@ -699,18 +704,19 @@ function TimePicker({
       );
   }, [anyStart, mode, mutual, now, onChoose, overlapKnown, selected]);
 
-  const zoneName = zoneLabel(zone);
+  // The zone alone wherever a label spans the fortnight; a single time carries its own offset.
+  const zoneTitle = zoneName(zone);
   const zoneOptions = [
-    { value: getViewerTimeZone(), label: `Your time · ${zoneLabel(getViewerTimeZone())}` },
+    { value: getViewerTimeZone(), label: `Your time · ${zoneName(getViewerTimeZone())}` },
     { value: GMT, label: 'GMT' },
     ...(first && firstZone
-      ? [{ value: firstZone, label: `${debaterFirstName(first.person)}’s time · ${zoneLabel(firstZone)}` }]
+      ? [{ value: firstZone, label: `${debaterFirstName(first.person)}’s time · ${zoneName(firstZone)}` }]
       : []),
     ...(second && secondZone
-      ? [{ value: secondZone, label: `${debaterFirstName(second.person)}’s time · ${zoneLabel(secondZone)}` }]
+      ? [{ value: secondZone, label: `${debaterFirstName(second.person)}’s time · ${zoneName(secondZone)}` }]
       : []),
     // A zone kept from an earlier match, whoever's it was.
-    { value: zone, label: zoneName },
+    { value: zone, label: zoneTitle },
   ].filter((option, index, all) => all.findIndex(other => other.value === option.value) === index);
 
   const zonePicker = (
@@ -782,6 +788,7 @@ function TimePicker({
     setMode('any');
     setAnyDay(day);
     setAnyMinutes(minutesIn(start, zone));
+    setAnyExact(start);
   };
 
   let body: React.ReactNode;
@@ -861,7 +868,7 @@ function TimePicker({
       body = (
         <>
           <Text as="p" variant="footnote" color="grey-04">
-            Half-hours they&rsquo;re both free. The large time is {zoneName}; under it, each debater&rsquo;s own.
+            Half-hours they&rsquo;re both free. The large time is {zoneTitle}; under it, each debater&rsquo;s own.
           </Text>
           <div className="grid auto-cols-[minmax(7rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1">
             {days
@@ -890,7 +897,7 @@ function TimePicker({
                         type="button"
                         aria-pressed={selected === start}
                         aria-label={[
-                          `${timeIn(start, zone)} ${zoneName}`,
+                          `${timeIn(start, zone)} ${zoneLabel(zone, start)}`,
                           ...theirClocks.map(({ name, zone: theirs }) => `${name} ${timeIn(start, theirs)}`),
                         ].join(', ')}
                         onClick={() => setSelected(current => (current === start ? null : start))}
@@ -930,7 +937,10 @@ function TimePicker({
             </Text>
             <select
               value={anyDay}
-              onChange={event => setAnyDay(Number(event.currentTarget.value))}
+              onChange={event => {
+                setAnyDay(Number(event.currentTarget.value));
+                setAnyExact(null);
+              }}
               className={NATIVE_SELECT_CLASS}
             >
               {days.map((day, index) => (
@@ -942,11 +952,14 @@ function TimePicker({
           </label>
           <label className="flex flex-col gap-1">
             <Text as="span" variant="footnote" color="grey-04">
-              Starts ({zoneName})
+              Starts ({zoneTitle})
             </Text>
             <select
               value={anyMinutes}
-              onChange={event => setAnyMinutes(Number(event.currentTarget.value))}
+              onChange={event => {
+                setAnyMinutes(Number(event.currentTarget.value));
+                setAnyExact(null);
+              }}
               className={NATIVE_SELECT_CLASS}
             >
               {Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES).map(minutes => (
@@ -1009,12 +1022,13 @@ function TimePicker({
       <AdminPairAvailability
         days={days}
         zone={zone}
-        zoneName={zoneName}
+        zoneName={zoneTitle}
         now={now}
         first={{
           name: a,
           // Absent only on geo-chat builds before #134: nothing known, rather than nothing free.
           slots: firstAvailability.data?.their_slots ?? null,
+          knownFrom: knownFrom(firstAvailability),
           pending: firstAvailability.isPending,
           error: Boolean(firstAvailability.error),
           onRetry: () => void firstAvailability.refetch(),
@@ -1022,6 +1036,7 @@ function TimePicker({
         second={{
           name: b,
           slots: secondAvailability.data?.their_slots ?? null,
+          knownFrom: knownFrom(secondAvailability),
           pending: secondAvailability.isPending,
           error: Boolean(secondAvailability.error),
           onRetry: () => void secondAvailability.refetch(),
@@ -1035,4 +1050,10 @@ function TimePicker({
       {body}
     </>
   );
+}
+
+/** Where geo-chat's answer for one debater starts: their midnight on the UTC date it answered on. */
+function knownFrom(availability: ReturnType<typeof useAdminDebaterAvailability>): number | null {
+  if (!availability.data) return null;
+  return windowStart(new Date(availability.dataUpdatedAt), availability.data.with_timezone).getTime();
 }

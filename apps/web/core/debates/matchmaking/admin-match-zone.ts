@@ -1,4 +1,4 @@
-import { addDays, isoDate } from '~/core/availability/blocks';
+import { SLOT_MINUTES, addDays, isoDate } from '~/core/availability/blocks';
 import { dayLabels, zonedClock, zonedWallClockInstant } from '~/core/availability/peer-schedule';
 import { isValidTimeZone, tzAbbreviation } from '~/core/utils/schedule';
 import { getViewerTimeZone } from '~/core/utils/utils';
@@ -39,10 +39,18 @@ export function saveAdminMatchZone(zone: string): void {
   }
 }
 
-/** `GMT`, or `Madrid (GMT+2)`: what the zone is called beside every time drawn in it. */
-export function zoneLabel(zone: string, at: number = Date.now()): string {
-  if (zone === GMT || zone === 'Etc/UTC' || zone === 'GMT') return 'GMT';
-  return `${zoneCity(zone)} (${tzAbbreviation(zone, at)})`;
+/**
+ * `GMT`, or `Madrid`: the zone alone, for whatever spans the fortnight. Two weeks can cross a clock
+ * change, so no single offset is true of all of it.
+ */
+export function zoneName(zone: string): string {
+  return zone === GMT || zone === 'Etc/UTC' || zone === 'GMT' ? 'GMT' : zoneCity(zone);
+}
+
+/** `GMT`, or `Madrid (GMT+2)`: the zone as it is at `at`, beside a time drawn in it. */
+export function zoneLabel(zone: string, at: number): string {
+  const name = zoneName(zone);
+  return name === 'GMT' ? name : `${name} (${tzAbbreviation(zone, at)})`;
 }
 
 /** `2026-10-06`: the date `at` falls on in `zone`. */
@@ -70,6 +78,21 @@ export function zoneDays(now: number, zone: string, count: number): string[] {
 export function instantAt(date: string, minutes: number, zone: string): number {
   const [year, month, day] = date.split('-').map(Number);
   return zonedWallClockInstant(Date.UTC(year, month - 1, day, 0, minutes), zone).getTime();
+}
+
+/**
+ * Every half-hour start from midnight on `date` in `zone` to the next midnight, as instants: 48 on
+ * most days, 50 the day the clocks go back (the repeated hour comes twice) and 46 the day they go
+ * forward. Stepping wall clocks instead would draw the repeated hour once and the skipped one as
+ * copies of the hour after it.
+ */
+export function halfHoursOf(date: string, zone: string): number[] {
+  const [year, month, day] = date.split('-').map(Number);
+  const next = isoDate(addDays(new Date(year, month - 1, day, 12), 1));
+  const end = instantAt(next, 0, zone);
+  const starts: number[] = [];
+  for (let start = instantAt(date, 0, zone); start < end; start += SLOT_MINUTES * 60_000) starts.push(start);
+  return starts;
 }
 
 /** The peer week's `Tue` and `Oct 6` for a date, plus the two forms New match also needs. */

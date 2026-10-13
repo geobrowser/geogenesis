@@ -188,7 +188,7 @@ function dayColumns(now: Date, viewerZone: string | undefined, peerZone: string 
 }
 
 /** Midnight in `zone` on the UTC date, where the server's walk begins. */
-function windowStart(now: Date, zone: string | undefined): Date {
+export function windowStart(now: Date, zone: string | undefined): Date {
   const [year, month, day] = zonedParts(now, 'UTC').date.split('-').map(Number);
   return wallClockInstant(Date.UTC(year, month - 1, day), zone);
 }

@@ -47,7 +47,11 @@ vi.mock('./admin-hooks', () => ({
   useAdminDebaterAvailability: (userId: string | null) =>
     userId
       ? {
-          data: { with_timezone: '', their_slots: mocks.availability[userId] ?? [] },
+          data: {
+            with_timezone: mocks.debaters.find(debater => debater.user_id === userId)?.timezone ?? '',
+            their_slots: mocks.availability[userId] ?? [],
+          },
+          dataUpdatedAt: Date.now(),
           isPending: false,
           error: null,
           refetch: vi.fn(),
@@ -493,6 +497,70 @@ describe('AdminNewMatchDialog', () => {
 
     renderDialog();
     expect(screen.getByRole('combobox', { name: 'Time zone' })).toHaveValue('UTC');
+  });
+
+  describe('across a clock change', () => {
+    const ZONE_KEY = 'geogenesis.debates.admin-match-zone.v1';
+    const ms = (iso: string) => Date.parse(iso);
+    const cell = (iso: string) => document.querySelector<HTMLElement>(`[data-start="${ms(iso)}"]`);
+
+    beforeEach(() => {
+      // In London, summer time ends at 2:00 AM on Sunday 25 October: 1:00–2:00 AM happens twice.
+      vi.setSystemTime(new Date('2026-10-20T09:00:00Z'));
+      window.localStorage.setItem(ZONE_KEY, 'Europe/London');
+    });
+
+    it('names each time’s offset as it is then, not as it is today', () => {
+      (mocks.overlap as { candidates: { slots: unknown[] }[] }).candidates[0].slots = [
+        { start: '2026-10-27T10:00:00Z', end: '2026-10-27T10:30:00Z' },
+      ];
+      renderDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+      // Today London is GMT+1; on the 27th it is GMT again.
+      expect(screen.getByRole('button', { name: /^10:00 AM London \(GMT\),/ })).toBeInTheDocument();
+      expect(cell('2026-10-27T10:00:00Z')).toHaveAttribute('title', expect.stringContaining('London (GMT) ·'));
+      expect(cell('2026-10-20T10:00:00Z')).toHaveAttribute('title', expect.stringContaining('London (GMT+1) ·'));
+      // What spans the fortnight names the zone alone.
+      expect(screen.getByRole('region', { name: 'Availability in London' })).toBeInTheDocument();
+    });
+
+    it('draws the repeated hour twice, so time in its second pass can be seen and picked', () => {
+      mocks.availability = {
+        raj: [{ start: '2026-10-25T01:00:00Z', end: '2026-10-25T01:30:00Z', viewer_free: false }],
+      };
+      renderDialog();
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+      // 1:00 AM BST (00:00Z) and 1:00 AM GMT (01:00Z) are both on the strip.
+      expect(cell('2026-10-25T00:00:00Z')).not.toBeNull();
+      expect(cell('2026-10-25T01:00:00Z')).not.toBeNull();
+      expect(screen.getByText(/Sunday, October 25: .*Raj free 1:00 AM–1:30 AM;/)).toBeInTheDocument();
+      expect(screen.getByText(/Clocks go back an hour/)).toBeInTheDocument();
+
+      fireEvent.click(cell('2026-10-25T01:00:00Z')!);
+      fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+      expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-25T01:00:00.000Z');
+    });
+  });
+
+  it('says a debater’s availability is not known yet, rather than not free, before their window opens', () => {
+    // 2:00 AM GMT on the 7th is still 7:00 PM on the 6th in Los Angeles. geo-chat's fortnight
+    // starts at their midnight on the UTC date, so nothing before 7:00 AM GMT is known for Ana.
+    vi.setSystemTime(new Date('2026-10-07T02:00:00Z'));
+    mocks.debaters[0].timezone = 'America/Los_Angeles';
+    mocks.availability = { ana: [{ start: '2026-10-07T15:00:00Z', end: '2026-10-07T16:00:00Z', viewer_free: false }] };
+    window.localStorage.setItem('geogenesis.debates.admin-match-zone.v1', 'UTC');
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    expect(
+      screen.getByText(/Wednesday, October 7: Ana not known before 7:00 AM, free 3:00 PM–4:00 PM; Raj not free;/)
+    ).toBeInTheDocument();
+    expect(within(screen.getByRole('list', { name: 'Legend' })).getByText('Not known yet')).toBeInTheDocument();
   });
 
   describe('for an admin west of GMT who books in GMT', () => {
