@@ -2421,6 +2421,51 @@ describe('the camera', () => {
     expect(await screen.findByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
   });
 
+  /*
+   * A choice made here outlives the page.
+   *
+   * The header seeds itself from the remembered choice, so leaving and coming back used to hand
+   * back whatever the card chose and undo what was decided in the call. Coming back is ordinary:
+   * routing a participant into their own live session is what the coordinator does.
+   */
+  it('remembers a camera switched off here, not the one the card chose', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+
+    const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera off' }));
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(false));
+
+    // Away, and back.
+    view.unmount();
+    mocks.setCameraEnabled.mockClear();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(mocks.setCameraEnabled).not.toHaveBeenCalledWith(true);
+  });
+
+  it('remembers a mic muted here, off a challenge', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: false });
+
+    const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    fireEvent.click(await screen.findByRole('button', { name: 'Mute microphone' }));
+    await waitFor(() => expect(mocks.setMicrophoneEnabled).toHaveBeenLastCalledWith(false));
+
+    // Away, and back.
+    view.unmount();
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    // `audio` is what LiveKit replays on connect, so it is what the next call actually joins with.
+    // The button's own label follows the live room, which this harness holds still.
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
+  });
+
   it('leaves the camera off when only the microphone was chosen', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
     rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: false });

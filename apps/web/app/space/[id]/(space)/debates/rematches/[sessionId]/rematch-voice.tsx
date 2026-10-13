@@ -33,7 +33,7 @@ import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
-import { readRematchJoinIntent } from '~/core/debates/rematch-join-intent';
+import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
@@ -419,6 +419,10 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     micSettledRef.current = true;
     setMicIntent(enabled);
   }, []);
+
+  React.useEffect(() => {
+    rememberRematchJoinIntent(session.id, { micOn: micIntent, cameraOn: cameraIntent });
+  }, [cameraIntent, micIntent, session.id]);
 
   // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Off a room
   // there is no join event to key on and the dock stays muted, per GEO-2838.
