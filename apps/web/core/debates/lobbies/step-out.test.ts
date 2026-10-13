@@ -74,6 +74,7 @@ describe('every debate entry steps out of a lobby', () => {
   const allowed = new Set([
     'core/debates/lobbies/lobbies-card.tsx',
     'core/debates/lobbies/lobby-page.tsx',
+    'core/debates/lobbies/lobby-state-cards.tsx',
     'core/debates/lobbies/open-lobby-dialog.tsx',
     'core/claims/browse/claim-end-slot.tsx',
     'app/debate/[roomId]/room-page-client.tsx',

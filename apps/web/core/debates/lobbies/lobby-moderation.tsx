@@ -3,15 +3,12 @@
 import * as React from 'react';
 
 import cx from 'classnames';
-import Link from 'next/link';
-
-import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyPerson } from '../api';
-import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
+import { HubPillButton } from '../matchmaking/hub-pill-button';
 import {
   lobbyTimeLabel,
   moderationErrorMessage,
@@ -24,6 +21,7 @@ import {
 } from './lobby-format';
 import { guestCountLabel } from './lobby-guest';
 import { LobbyPersonName } from './lobby-people';
+import { FindDebateLink } from './lobby-state-cards';
 import type { LobbyMemberViewer, MemberLobbyPageView } from './lobby-view';
 import { useLobbyBans, useLobbyModerationLog, useModerateLobbyMember, useRemoveLobbyGuests } from './moderation-hooks';
 
@@ -334,9 +332,7 @@ export function LobbyRemovedNotice({ onRejoin, unbanned = false }: { onRejoin: (
           <HubPillButton variant="primary" analyticsLabel="Lobby rejoin after removal" onClick={onRejoin}>
             Rejoin
           </HubPillButton>
-          <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
-            Find a debate
-          </Link>
+          <FindDebateLink />
         </div>
       </div>
     </div>

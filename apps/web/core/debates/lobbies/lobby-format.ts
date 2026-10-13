@@ -7,6 +7,7 @@ import {
   type DebateLobbyPair,
   type DebateLobbyPerson,
   type DebateLobbyRole,
+  type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
   dashlessId,
@@ -62,12 +63,43 @@ export function lobbyScheduleLabel(
   return `${starts} · opens ${opens}`;
 }
 
-/** "Opens Tue 17:50 · starts Tue 18:00", for the lobby page before the door opens. */
-export function notYetOpenLabel(lobby: { starts_at: string; opens_at: string }, now: number = Date.now()) {
-  const opens = lobbyTimeLabel(lobby.opens_at, now);
-  const starts = lobbyTimeLabel(lobby.starts_at, now);
-  if (!opens || !starts) return 'Opens soon';
-  return `Opens ${opens} · starts ${starts}`;
+/** "Tue 6 Oct, 18:00": the date block on the page before the door opens. Local time. */
+export function lobbyDateLabel(iso: string) {
+  const at = new Date(iso);
+  if (Number.isNaN(at.getTime())) return null;
+  const date = at.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' });
+  return `${date}, ${at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
+}
+
+/** "in 20 min" within the hour, else "today", "tomorrow" or "in 2 days" by local calendar day; "soon" once due. */
+export function untilLabel(iso: string, now: number) {
+  const at = Date.parse(iso);
+  if (Number.isNaN(at) || at <= now) return 'soon';
+  if (at - now < 3_600_000) return `in ${Math.ceil((at - now) / 60_000)} min`;
+  // Rounded: a daylight saving change makes a calendar day 23 or 25 hours.
+  const days = Math.round((startOfLocalDay(at) - startOfLocalDay(now)) / 86_400_000);
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  return `in ${days} days`;
+}
+
+function startOfLocalDay(ms: number) {
+  const day = new Date(ms);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
+}
+
+/** "Opens at 17:50 · in 2 days", for the lobby page before the door opens. */
+export function notYetOpenLabel(lobby: { opens_at: string }, now: number) {
+  const opensAt = new Date(lobby.opens_at);
+  if (Number.isNaN(opensAt.getTime())) return 'Opens soon';
+  const opens = opensAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  return `Opens at ${opens} · ${untilLabel(lobby.opens_at, now)}`;
+}
+
+/** "Tue 18:00" for a lobby still to open, "open now" for one already open. */
+export function nextLobbyTimeLabel(lobby: Pick<DebateLobbySummary, 'open' | 'starts_at'>, now: number = Date.now()) {
+  return lobby.open ? 'open now' : lobbyTimeLabel(lobby.starts_at, now);
 }
 
 /**
@@ -186,6 +218,43 @@ export function hostAfterChange(
 ) {
   if (seen === undefined || !lobby.hosts_changed_at || lobby.hosts_changed_at === seen) return null;
   return lobby.members.find(member => member.acting_host) ?? lobby.members.find(isHosting) ?? null;
+}
+
+/**
+ * The host the page last saw who is now off the roster, for "X left. Y is now hosting.". `null`
+ * when they are still here (stepped out, say) or the page never saw a host.
+ */
+export function hostWhoLeft<T extends Pick<DebateLobbyPerson, 'user_id'>>(
+  lastHosts: T[],
+  lobby: Pick<DebateLobbyView, 'members'>
+): T | null {
+  return lastHosts.find(host => !lobby.members.some(member => sameUser(member, host))) ?? null;
+}
+
+/**
+ * Nobody else is in: no other member and no guest. `guest_count` counts live guest sessions, so a
+ * guest's own counts once it has started (`ownGuestSession`); without a count a guest is not alone.
+ */
+export function isAlone(
+  lobby: Pick<DebateLobbyView, 'members' | 'guest_count'>,
+  viewerId: string | null,
+  guest: boolean,
+  ownGuestSession = false
+): boolean {
+  if (guest) {
+    return (
+      lobby.members.length === 0 && lobby.guest_count !== undefined && lobby.guest_count <= Number(ownGuestSession)
+    );
+  }
+  if (!viewerId || (lobby.guest_count ?? 0) > 0) return false;
+  return lobby.members.every(member => dashlessId(member.user_id) === dashlessId(viewerId));
+}
+
+export function handoffLabel(
+  host: Pick<DebateLobbyPerson, 'display_name'>,
+  left: Pick<DebateLobbyPerson, 'display_name'> | null
+) {
+  return left ? `${personName(left)} left. ${personName(host)} is now hosting.` : `${personName(host)} is now hosting.`;
 }
 
 /** The join was refused because the viewer is in another open lobby. */
@@ -333,6 +402,11 @@ export function inDebateLabel(subject: DebateLobbyMember['in_debate_subject']) {
   if (subject?.phase === 'on_claim' && subject.claim_name.trim())
     return `In a debate on “${subject.claim_name.trim()}”`;
   return 'In a debate';
+}
+
+/** In the person card, where Request would be. */
+export function inDebateRequestLabel(member: Pick<DebateLobbyPerson, 'display_name'>) {
+  return `${personName(member)} is in a debate. You can request them when they’re back.`;
 }
 
 /** "Moved to listeners by Priya", or without a name when geo-chat has none. */
