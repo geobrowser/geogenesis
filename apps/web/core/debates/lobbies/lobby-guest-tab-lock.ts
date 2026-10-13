@@ -1,10 +1,8 @@
 'use client';
 
 /**
- * One listening tab per browser, across lobbies: a Web Lock held by the tab whose guest session
- * plays. A tab that cannot get it waits on a press, never on the lock, so a reload of the
- * listening tab takes it back first. Without Web Locks every tab may listen; the shared secret
- * still keeps one place per lobby.
+ * One listening guest tab per browser: a Web Lock held by the tab that plays. Other tabs wait on a
+ * press, never queue on the lock, so a reload of the listening tab takes it back first.
  */
 const LOCK_NAME = 'geo.debates.lobby-guest-listening';
 
@@ -52,7 +50,7 @@ function request(manager: LockManagerLike, options: LockOptions): Promise<boolea
       .then(
         () => undefined,
         () => {
-          // Rejected: another tab stole the lock from this request.
+          // Another tab stole the lock from this request.
           resolve(false);
           if (holderSeq !== seq) return;
           held = false;
