@@ -69,6 +69,7 @@ import {
   NO_LOBBY_VOICE,
   useLobbyVoiceStates,
 } from './lobby-voice';
+import { useMinuteNow } from './use-minute-now';
 
 const HANDOFF_NOTICE_MS = 8_000;
 const NO_MODERATION = { last_moderation: null };
@@ -237,6 +238,8 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
   // Nobody is connected before it opens, so `viewer.hosting` is false; a stored host may still cancel.
   const canCancel = lobby.viewer.role === 'host';
 
+  // Ticks so the countdown moves; passed in so the compiler sees it change.
+  const now = useMinuteNow();
   const hosts = listedHosts(useListedLobbies(), lobby.lobby_id);
   const hostedBy = hostsLabel(hosts);
   const date = lobbyDateLabel(lobby.starts_at);
@@ -268,7 +271,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
             </Text>
           ) : null}
           <Text as="p" variant="metadata" color="grey-04">
-            {notYetOpenLabel(lobby)}
+            {notYetOpenLabel(lobby, now)}
           </Text>
         </div>
         {lobby.reminder_count > 0 ? (

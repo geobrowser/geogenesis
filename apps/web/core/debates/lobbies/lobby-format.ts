@@ -72,7 +72,7 @@ export function lobbyDateLabel(iso: string) {
 }
 
 /** "in 20 min" within the hour, else "today", "tomorrow" or "in 2 days" by local calendar day; "soon" once due. */
-export function untilLabel(iso: string, now: number = Date.now()) {
+export function untilLabel(iso: string, now: number) {
   const at = Date.parse(iso);
   if (Number.isNaN(at) || at <= now) return 'soon';
   if (at - now < 3_600_000) return `in ${Math.ceil((at - now) / 60_000)} min`;
@@ -90,7 +90,7 @@ function startOfLocalDay(ms: number) {
 }
 
 /** "Opens at 17:50 · in 2 days", for the lobby page before the door opens. */
-export function notYetOpenLabel(lobby: { opens_at: string }, now: number = Date.now()) {
+export function notYetOpenLabel(lobby: { opens_at: string }, now: number) {
   const opensAt = new Date(lobby.opens_at);
   if (Number.isNaN(opensAt.getTime())) return 'Opens soon';
   const opens = opensAt.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
