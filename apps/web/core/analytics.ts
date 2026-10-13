@@ -134,6 +134,33 @@ declare global {
 
 const appName = 'genesis';
 const analyticsScriptSrc = '/geo-analytics-3bf139473e17.js';
+
+/**
+ * Amplitude autocapture, as `true` would enable it, minus "[Amplitude] Viewport Content Updated".
+ *
+ * That tracker (`elementInteractions.viewportContentUpdated`, on by default) keeps every element it
+ * has seen enter the viewport in a map it only clears when Amplitude decides the page ended: a full
+ * navigation or unload. In this app most movement never ends a page (the side panel, its tabs,
+ * feeds), so each card that scrolls into view stays in that map forever with its whole subtree:
+ * ~2,400 DOM nodes per profile tab switch, until the tab runs out of memory.
+ *
+ * Every other feature is listed explicitly because an object turns off anything it leaves out
+ * that `true` would have turned on (network tracking, web vitals, frustration interactions).
+ */
+const amplitudeAutocapture = {
+  attribution: true,
+  fileDownloads: true,
+  formInteractions: true,
+  pageViews: true,
+  sessions: true,
+  pageUrlEnrichment: true,
+  webVitals: true,
+  frustrationInteractions: true,
+  networkTracking: true,
+  // `{ enabled: false }`, not `false`: the SDK only converts a bare `false` when it arrives through
+  // remote config. Locally it spreads it into `{ exposureDuration: 150 }`, which leaves it on.
+  elementInteractions: { viewportContentUpdated: { enabled: false } },
+};
 const collectorUrl = 'https://c.geobrowser.io';
 
 let internalAccount = false;
@@ -176,6 +203,7 @@ export function initAnalytics() {
     environment: analyticsEnvironment(hostname),
     autoPageViews: false,
     autoRouteTracking: false,
+    amplitudeAutocapture,
   };
   window.GeoAnalyticsConfig = window.lyticsConfig;
 

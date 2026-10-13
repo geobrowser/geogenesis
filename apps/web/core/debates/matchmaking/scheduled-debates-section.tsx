@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import {
   type DebateParticipantSummary,
   GeoChatRequestError,
@@ -56,6 +57,21 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   const [rescheduling, setRescheduling] = React.useState<Rescheduling | null>(null);
   const rescheduleOpenerRef = React.useRef<HTMLElement | null>(null);
 
+  // Both kinds of card move their request the same way; only the button that asked differs. Null
+  // when there is no request to move or no week to move it on.
+  const reschedulerFor = (requestId: string | null, opponentUserId: string | null, entry: ScheduleEntry) =>
+    requestId && opponentUserId
+      ? (opener: HTMLElement) => {
+          rescheduleOpenerRef.current = opener;
+          setRescheduling({
+            requestId,
+            opponentUserId,
+            opponentName: lookUp(opponentUserId)?.display_name ?? null,
+            entry,
+          });
+        }
+      : null;
+
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
@@ -88,18 +104,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               scheduledEndAt={scheduledEndAt}
               opponent={lookUp(opponentUserId)}
               viewer={viewer}
-              onReschedule={
-                requestId && opponentUserId
-                  ? opener => {
-                      rescheduleOpenerRef.current = opener;
-                      setRescheduling({
-                        requestId,
-                        opponentUserId,
-                        opponentName: lookUp(opponentUserId)?.display_name ?? null,
-                      });
-                    }
-                  : null
-              }
+              onReschedule={reschedulerFor(requestId, opponentUserId, 'requests_reschedule')}
             />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
@@ -111,27 +116,26 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
           {requestsError && <ReadFailed>Could not read your scheduled debates: {requestsError.message}</ReadFailed>}
           {/* The instant cards' list, so one that expires folds away the way theirs do. */}
           <HubCardList>
-            {answerable.map(request => (
-              <ScheduledRow
-                key={request.request_id}
-                request={request}
-                opponent={lookUp(opponentOf(request, viewerId))}
-                viewer={viewer}
-                viewerId={viewerId}
-                busy={respond.isPending}
-                onAnswer={answer}
-                onReschedule={opener => {
-                  const opponentUserId = opponentOf(request, viewerId);
-                  if (!opponentUserId) return;
-                  rescheduleOpenerRef.current = opener;
-                  setRescheduling({
-                    requestId: request.request_id,
+            {answerable.map(request => {
+              const opponentUserId = opponentOf(request, viewerId);
+              return (
+                <ScheduledRow
+                  key={request.request_id}
+                  request={request}
+                  opponent={lookUp(opponentUserId)}
+                  viewer={viewer}
+                  viewerId={viewerId}
+                  busy={respond.isPending}
+                  onAnswer={answer}
+                  onReschedule={reschedulerFor(
+                    request.request_id,
                     opponentUserId,
-                    opponentName: lookUp(opponentUserId)?.display_name ?? null,
-                  });
-                }}
-              />
-            ))}
+                    // "Choose different time" on an unanswered invite; Reschedule once accepted.
+                    request.viewer_must_answer ? 'requests_new_time' : 'requests_reschedule'
+                  )}
+                />
+              );
+            })}
           </HubCardList>
           {conflict && (
             <Text as="p" variant="footnote" color="red-01">
@@ -148,7 +152,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
         userId={rescheduling?.opponentUserId ?? ''}
         peerName={rescheduling?.opponentName}
         rescheduleRequestId={rescheduling?.requestId ?? null}
-        entry="requests_reschedule"
+        entry={rescheduling?.entry ?? null}
         openerRef={rescheduleOpenerRef}
         onClose={() => setRescheduling(null)}
       />
@@ -156,8 +160,8 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   );
 }
 
-/** An accepted debate being moved: whose week to open, and the request it moves. */
-type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null };
+/** A debate being moved: whose week to open, the request it moves, and which button asked. */
+type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null; entry: ScheduleEntry };
 
 /**
  * What this tab has to show. Shared with the tab itself, which needs it for its empty state; both
@@ -341,8 +345,8 @@ function ScheduledRow({
   viewerId: string | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
-  /** Opens the other debater's week to propose a new time for this request. */
-  onReschedule: (opener: HTMLElement) => void;
+  /** Opens the other debater's week to propose a new time for this request. Null when they are not known. */
+  onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
   const expiry = useScheduledExpiry(request.scheduled_start_at);
   // Whoever proposed the current time may withdraw it, and so may anyone who has already accepted
@@ -371,6 +375,8 @@ function ScheduledRow({
       actions={
         request.viewer_must_answer ? (
           // Decline first, Accept primary on the right: the order every other request card uses.
+          // Under them, the scheduling email's third answer in its words (GEO-3232): a time that
+          // does not suit is moved, and the other side asked again, rather than declined.
           <div className="grid grid-cols-2 gap-2">
             {/* Labelled apart from the instant request cards' Accept and Decline, which would
                 otherwise share their labels and could not be told from these in the data. */}
@@ -391,11 +397,22 @@ function ScheduledRow({
             >
               Accept
             </HubPillButton>
+            {onReschedule && (
+              <HubPillButton
+                className="col-span-2"
+                analyticsLabel="Debate hub Choose different time for scheduled request"
+                analyticsIntent="choose_different_time_scheduled_request"
+                onClick={event => onReschedule(event.currentTarget)}
+                disabled={busy}
+              >
+                Choose different time
+              </HubPillButton>
+            )}
           </div>
         ) : (
           withdrawable && (
             <div className="flex flex-col gap-2">
-              {viewerAccepted && (
+              {viewerAccepted && onReschedule && (
                 <HubPillButton
                   className="w-full"
                   analyticsLabel="Debate hub Reschedule scheduled request"

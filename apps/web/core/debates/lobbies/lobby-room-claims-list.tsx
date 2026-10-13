@@ -36,6 +36,11 @@ export type LobbyRoomClaim = {
   readiness: MatchmakingReadiness;
   positions: LobbyRoomSide[];
   activeDebate?: Debate | boolean | null;
+  /**
+   * Explore only, where `positions` are counted across Geo: the room's sides (others only), drawn as a
+   * line under the card with the offer, or null when nobody in the room holds a side.
+   */
+  roomSides?: LobbyRoomSide[] | null;
 };
 
 /** What the card offers, given the side the viewer holds now. */
@@ -81,13 +86,16 @@ export function LobbyRoomClaimsList({
   );
 }
 
-function LobbyRoomClaimCard({
+export function LobbyRoomClaimCard({
   entry,
+  answersReady,
   renderOffer,
   renderHeader,
   renderMenu,
 }: {
   entry: LobbyRoomClaim;
+  /** The host's own `MatchmakingClaimCard.answersReady`, where it has one. */
+  answersReady?: boolean;
   renderOffer: (offer: LobbyRoomOffer) => React.ReactNode;
   renderHeader?: (entry: LobbyRoomClaim) => React.ReactNode;
   renderMenu?: (entry: LobbyRoomClaim) => React.ReactNode;
@@ -129,7 +137,9 @@ function LobbyRoomClaimCard({
     spaceId: claim.space_id,
     indexedPosition,
   });
-  const opposing = roomSideOpposing(entry.positions, viewerPosition);
+  const explore = entry.roomSides !== undefined;
+  const roomSides = explore ? entry.roomSides : entry.positions;
+  const opposing = roomSides ? roomSideOpposing(roomSides, viewerPosition) : null;
   const requestableCount = opposing?.requestable_count ?? 0;
   const offer =
     viewerPosition !== null && requestableCount > 0
@@ -142,8 +152,11 @@ function LobbyRoomClaimCard({
         })
       : null;
   const menu = renderMenu?.(entry);
-  const action =
-    offer ?? (entry.activeDebate ? <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} /> : null);
+  const watch = entry.activeDebate ? (
+    <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
+  ) : null;
+  // On Explore the offer rides on the room line.
+  const action = explore ? watch : (offer ?? watch);
 
   return (
     <MatchmakingClaimCard
@@ -152,6 +165,7 @@ function LobbyRoomClaimCard({
       positions={entry.positions}
       readiness={entry.readiness}
       activeDebate={entry.activeDebate}
+      answersReady={answersReady}
       answersMayComeFromIndex
       allowsSignedOutVotes={guest}
       header={renderHeader?.(entry)}
@@ -168,7 +182,13 @@ function LobbyRoomClaimCard({
         )
       }
       footer={
-        opposing && opposing.participants.length > 0 ? <DisagreeingInRoom people={opposing.participants} /> : undefined
+        explore ? (
+          entry.roomSides ? (
+            <RoomLine sides={entry.roomSides} viewerPosition={viewerPosition} offer={offer} />
+          ) : undefined
+        ) : opposing && opposing.participants.length > 0 ? (
+          <DisagreeingInRoom people={opposing.participants} />
+        ) : undefined
       }
     />
   );
@@ -183,16 +203,62 @@ export function roomSideOpposing(positions: LobbyRoomSide[], viewerPosition: boo
 function DisagreeingInRoom({ people }: { people: DebateParticipantSummary[] }) {
   return (
     <div className="mt-3 flex items-center gap-2" data-testid="lobby-claim-disagreeing">
-      <span className="flex -space-x-1.5">
-        {people.slice(0, FACES_SHOWN).map(person => (
-          <span key={person.user_id} className="size-5 overflow-hidden rounded-full ring-2 ring-white">
-            <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} alt={personName(person)} size={20} />
-          </span>
-        ))}
-      </span>
+      <RoomFaces people={people} />
       <Text as="p" variant="footnote" color="grey-04" ellipsize>
         Disagrees with you: {hostsLabel(people)}
       </Text>
     </div>
+  );
+}
+
+/** "In this room: 2 agree · 1 disagrees", the viewer counted on their side, with the offer at the end. */
+function RoomLine({
+  sides,
+  viewerPosition,
+  offer,
+}: {
+  sides: LobbyRoomSide[];
+  viewerPosition: boolean | null;
+  offer: React.ReactNode;
+}) {
+  const counted = sides
+    .map(side => ({ side, count: side.total_count + (side.position === viewerPosition ? 1 : 0) }))
+    .filter(({ count }) => count > 0);
+  return (
+    // Wraps the offer under the counts when the card is too narrow for both.
+    <div className="mt-3 flex flex-wrap items-center justify-between gap-2" data-testid="lobby-claim-room-line">
+      <Text as="p" variant="footnote" color="grey-04" className="flex items-center gap-1.5">
+        <span className="shrink-0">In this room:</span>
+        {counted.map(({ side, count }, index) => (
+          <React.Fragment key={String(side.position)}>
+            {index > 0 ? <span aria-hidden>·</span> : null}
+            <RoomFaces people={side.participants} />
+            <span className="shrink-0">
+              {count} {roomSideVerb(side.position_label, count)}
+            </span>
+          </React.Fragment>
+        ))}
+      </Text>
+      {offer}
+    </div>
+  );
+}
+
+/** "agree" for several, "agrees" for one. */
+export function roomSideVerb(label: string, count: number) {
+  const verb = label.toLowerCase();
+  return count === 1 ? `${verb}s` : verb;
+}
+
+function RoomFaces({ people }: { people: DebateParticipantSummary[] }) {
+  if (people.length === 0) return null;
+  return (
+    <span className="flex shrink-0 -space-x-1.5">
+      {people.slice(0, FACES_SHOWN).map(person => (
+        <span key={person.user_id} className="size-5 overflow-hidden rounded-full ring-2 ring-white">
+          <Avatar avatarUrl={person.avatar_cid} value={person.profile_space_id} alt={personName(person)} size={20} />
+        </span>
+      ))}
+    </span>
   );
 }

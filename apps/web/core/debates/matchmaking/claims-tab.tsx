@@ -73,6 +73,10 @@ import {
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
   debatesHubPositionsTopicIdsAtom,
+  lobbyExploreSearchAtom,
+  lobbyExploreSpaceIdsAtom,
+  lobbyExploreSpaceSeedSpentAtom,
+  lobbyExploreTopicIdsAtom,
 } from '~/atoms';
 
 /**
@@ -139,6 +143,9 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  */
 export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
+/** Every list the tab draws: the hub's, plus the debate lobby's Explore tab (`lobbyExplore`). */
+export type ClaimsListVariant = ClaimsTabVariant | 'lobbyExplore';
+
 /** Every value the `list` param may name, for validating one that arrived from outside. */
 export const CLAIMS_TAB_VARIANTS: readonly ClaimsTabVariant[] = ['explore', 'lobby', 'positions'];
 
@@ -204,10 +211,33 @@ export const VARIANT_ATOMS = {
     search: debatesHubLobbySearchAtom,
     seedSpent: debatesHubLobbySpaceSeedSpentAtom,
   },
-} as const;
+  lobbyExplore: {
+    spaceIds: lobbyExploreSpaceIdsAtom,
+    topicIds: lobbyExploreTopicIdsAtom,
+    search: lobbyExploreSearchAtom,
+    seedSpent: lobbyExploreSpaceSeedSpentAtom,
+  },
+} as const satisfies Record<ClaimsListVariant, unknown>;
+
+/**
+ * Where each list reports, and whether it hides the viewer's answered claims. `lobbyExplore` reads the
+ * Debate tag like `explore`, but its cards offer requests only on a side taken, so it keeps them.
+ */
+const LIST_SURFACE: Record<ClaimsListVariant, { analyticsSurface: DebateAnalyticsSurface; hidesAnswered: boolean }> = {
+  explore: { analyticsSurface: 'hub', hidesAnswered: true },
+  lobby: { analyticsSurface: 'hub', hidesAnswered: true },
+  positions: { analyticsSurface: 'hub', hidesAnswered: true },
+  lobbyExplore: { analyticsSurface: 'lobby', hidesAnswered: false },
+};
+
+/** What the tab would hand its own card, for a host drawing the card itself. */
+export type ClaimCardDefaults = { answersReady: boolean; allowsSignedOutVotes: boolean };
 
 export function ClaimsTab({
   variant = 'explore',
+  renderClaim,
+  onVisibleClaims,
+  stickyTopClassName,
   trailing,
   warm = false,
   onSettledEmpty,
@@ -215,7 +245,13 @@ export function ClaimsTab({
   layout = 'panel',
   scopePicker,
 }: {
-  variant?: ClaimsTabVariant;
+  variant?: ClaimsListVariant;
+  /** Draws each claim in place of the default card, for a host with its own offer (the lobby). */
+  renderClaim?: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
+  /** The claims on screen, after each change. */
+  onVisibleClaims?: (entries: MatchmakingClaim[]) => void;
+  /** Where the pinned controls stop, for a host scrolling the page under a fixed bar. */
+  stickyTopClassName?: string;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
   /**
@@ -254,6 +290,7 @@ export function ClaimsTab({
 } = {}) {
   const isLobby = variant === 'lobby';
   const atoms = VARIANT_ATOMS[variant];
+  const { analyticsSurface, hidesAnswered } = LIST_SURFACE[variant];
   const workspace = layout === 'workspace';
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
@@ -436,7 +473,7 @@ export function ClaimsTab({
   // stored preference rather than on anything about the answers, so the query does not change when
   // they land.
   const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
-  const excludesAnswered = graphSourced && !isLobby && authenticated && hideMyPositions;
+  const excludesAnswered = graphSourced && !isLobby && hidesAnswered && authenticated && hideMyPositions;
   const excludeAnsweredBy = excludesAnswered ? personalSpaceId : null;
   // Until the account's space is known there is no telling which claims to leave out, and asking
   // without it would draw the answered ones and then take them back.
@@ -724,7 +761,7 @@ export function ClaimsTab({
   // Signed out there are no positions to hide — geo-chat answers every `viewer_response` null for
   // a viewer it has no account for — so the collapse is a no-op and the switch is a control that
   // cannot do anything. Both go, rather than leaving one drawn over the other's nothing.
-  const hidesMyPositions = authenticated && hideMyPositions;
+  const hidesMyPositions = hidesAnswered && authenticated && hideMyPositions;
 
   /**
    * And not when the answers cannot be had at all, which is a different thing from not having them
@@ -908,6 +945,10 @@ export function ClaimsTab({
   const collapsedEverything = visibleClaims.length === 0 && (claims.length > 0 || excludedEverything);
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
+  React.useEffect(() => {
+    onVisibleClaims?.(visibleClaims);
+  }, [onVisibleClaims, visibleClaims]);
+
   // Reported once, and only from a settled, unnarrowed, working, *finished* list. Every one of
   // those matters: mid-load every list is empty, an error is not an answer about the corpus, a
   // filtered empty list is the viewer's own question rather than a dead end to be moved out of —
@@ -1030,7 +1071,7 @@ export function ClaimsTab({
         />
       }
     >
-      <HubStickyControls workspaceStickyOffset={workspace}>
+      <HubStickyControls workspaceStickyOffset={workspace} topClassName={stickyTopClassName}>
         {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
             and the only evidence was on another tab. It rides inside the sticky block rather than
@@ -1047,7 +1088,7 @@ export function ClaimsTab({
         />
 
         <SpaceTopicFilters
-          analyticsSurface="hub"
+          analyticsSurface={analyticsSurface}
           leading={scopePicker}
           menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
@@ -1068,8 +1109,12 @@ export function ClaimsTab({
           trailing={
             isLobby ? (
               trailing
-            ) : filter === 'mine' || !authenticated ? null : (
-              <HideMyPositionsSwitch analyticsSurface="hub" checked={hideMyPositions} onChange={setHideMyPositions} />
+            ) : filter === 'mine' || !authenticated || !hidesAnswered ? null : (
+              <HideMyPositionsSwitch
+                analyticsSurface={analyticsSurface}
+                checked={hideMyPositions}
+                onChange={setHideMyPositions}
+              />
             )
           }
         />
@@ -1077,7 +1122,7 @@ export function ClaimsTab({
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
-          analyticsSurface="hub"
+          analyticsSurface={analyticsSurface}
           // Plus the answers, where the list hides some of them. Drawing before they land shows a
           // screenful the tab is about to take back — see `answersSettled`.
           isLoading={
@@ -1175,23 +1220,33 @@ export function ClaimsTab({
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
           <HubCardList>
-            {visibleClaims.map(entry => (
-              <MatchmakingClaimCard
-                key={claimRowKey(entry)}
-                claim={entry.claim}
-                positions={entry.positions}
-                readiness={entry}
-                activeDebate={entry.active_debate}
-                // The paged list is geo-chat's own, so every row carries its kind already; only the
-                // tagged list has to wait for one — and only for the space this claim is in.
-                answersReady={taggedAnswersReadyFor(entry)}
-                // And where it cannot, the indexed read answers for the side, the same way the main
-                // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
-                // unpressable while those cards went on working.
-                answersMayComeFromIndex
-                allowsSignedOutVotes={!authenticated}
-              />
-            ))}
+            {visibleClaims.map(entry =>
+              renderClaim ? (
+                React.cloneElement(
+                  renderClaim(entry, {
+                    answersReady: taggedAnswersReadyFor(entry),
+                    allowsSignedOutVotes: !authenticated,
+                  }),
+                  { key: claimRowKey(entry) }
+                )
+              ) : (
+                <MatchmakingClaimCard
+                  key={claimRowKey(entry)}
+                  claim={entry.claim}
+                  positions={entry.positions}
+                  readiness={entry}
+                  activeDebate={entry.active_debate}
+                  // The paged list is geo-chat's own, so every row carries its kind already; only the
+                  // tagged list has to wait for one — and only for the space this claim is in.
+                  answersReady={taggedAnswersReadyFor(entry)}
+                  // And where it cannot, the indexed read answers for the side, the same way the main
+                  // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
+                  // unpressable while those cards went on working.
+                  answersMayComeFromIndex
+                  allowsSignedOutVotes={!authenticated}
+                />
+              )
+            )}
           </HubCardList>
         </HubQueryState>
         {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
@@ -1262,15 +1317,17 @@ export function HubListColumns({
 export function HubStickyControls({
   children,
   workspaceStickyOffset = false,
+  topClassName,
 }: {
   children: React.ReactNode;
   workspaceStickyOffset?: boolean;
+  topClassName?: string;
 }) {
   return (
     <div
       className={cx(
         'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
-        workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0'
+        topClassName ?? (workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0')
       )}
     >
       {children}

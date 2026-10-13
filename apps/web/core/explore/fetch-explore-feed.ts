@@ -101,6 +101,12 @@ export type ExploreFeedResult = {
    * visitor has already seen down the page. The same for every visitor, so the page stays cacheable.
    */
   seenDemotion?: SeenDemotionPageConfig;
+  /**
+   * GEO-3234. Only while seen hiding is on: up to one page of the rows that follow this page in the
+   * same Best window, so the browser can fill a slot whose card it hides without a second request.
+   * The next page serves them again; the browser skips anything it already showed.
+   */
+  reserve?: ExploreFeedItem[];
 };
 
 /**
@@ -1251,8 +1257,20 @@ export async function fetchExploreFeed(args: {
       : nextWindowCursor;
   const feed: FeedDescriptor | undefined = merged ? { name: 'best', version: freshVersion } : window.feed;
 
+  // GEO-3234. The rest of this window, capped at a page, for the browser to fill from. Never a fresh
+  // card: those hold their own positions.
+  const reserveRows =
+    args.markPlayableLeads && window.feed?.name === 'best'
+      ? ordered
+          .slice(windowOffset + slice.length, windowOffset + slice.length + pageSize)
+          .filter(row => row.ranking?.slot !== 'fresh')
+          .map(row => (leadIds?.has(normId(row.entityId)) ? { ...row, playableLead: true } : row))
+      : [];
+  const withMeta = await attachMeta([...slice, ...reserveRows]);
+
   return {
-    items: await attachMeta(slice),
+    items: withMeta.slice(0, slice.length),
+    ...(reserveRows.length > 0 ? { reserve: withMeta.slice(slice.length) } : {}),
     ...(feed ? { feed } : {}),
     nextCursor,
   };

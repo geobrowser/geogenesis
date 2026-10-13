@@ -47,7 +47,7 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     renderCard({ roundIndex: 1, remainingSeconds: 8 });
 
     expect(screen.getByRole('region', { name: 'Keep debating?' })).toBeInTheDocument();
-    expect(screen.getByText('Pick in secret. Two Extends unlock Round 2.')).toBeInTheDocument();
+    expect(screen.getByText('Pick in secret. Two Extends unlock Round 3.')).toBeInTheDocument();
     expect(extend()).toHaveAccessibleName(/\+45s each/);
     expect(end()).toHaveAccessibleName(/Ends here/);
     expect(extend()).toHaveAttribute('aria-pressed', 'false');

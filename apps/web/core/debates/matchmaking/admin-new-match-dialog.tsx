@@ -6,9 +6,14 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { SLOT_MINUTES } from '~/core/availability/blocks';
+import { windowStart } from '~/core/availability/peer-schedule';
 import { useSearch } from '~/core/hooks/use-search';
+import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
+import { getViewerTimeZone } from '~/core/utils/utils';
 
+import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
@@ -23,15 +28,33 @@ import { DebaterFace, POSITIVE_TEXT_CLASS, debaterFirstName } from './admin-deba
 import {
   ADMIN_MATCH_DAYS,
   useAdminAvailabilityPrompt,
+  useAdminDebaterAvailability,
   useAdminDebaters,
   useAdminPairOverlap,
   useCreateAdminMatch,
 } from './admin-hooks';
+import {
+  GMT,
+  dateIn,
+  dateLabels,
+  instantAt,
+  minutesIn,
+  readAdminMatchZone,
+  saveAdminMatchZone,
+  spanIn,
+  wallTime,
+  zoneDays,
+  zoneLabel,
+  zoneName,
+} from './admin-match-zone';
+import { AdminPairAvailability } from './admin-pair-availability';
 import { useAdminPairFit, useAdminSharedFreeSlots } from './admin-pair-fit';
 import { SegmentedControl, useMinuteClock } from './debate-calendar-controls';
+import { type ClaimMatch, matchesInSpaces } from './disagreement-counts';
 import { HubPillButton } from './hub-pill-button';
 import { offlinePerson } from './offline-person';
-import { byPairFit, fitReasonText } from './pair-fit';
+import { byPairFit, fitReasonText, withSharedTime } from './pair-fit';
+import { MatchingClaim } from './person-disagreements';
 import type { PersonRecord } from './person-record';
 import { PersonRecordLine } from './person-record-line';
 import { SpaceFilterPills } from './space-filter-pills';
@@ -39,8 +62,8 @@ import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { usePersonFacts } from './use-person-facts';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 
-const SLOT_MINUTES = 30;
 const EMPTY_SPACE_IDS: string[] = [];
+const EMPTY_MATCHES: ClaimMatch[] = [];
 
 /** What became of asking someone to set their availability. */
 type PromptOutcome =
@@ -92,8 +115,17 @@ type Props = {
  *   measured from that person instead of the viewer. When gaia's pair fit is available (GEO-3224)
  *   it orders by fit instead, halved for anyone with no free time in common, and each row says
  *   why ("Disagrees with Ana on ..."); when it is not, the order is exactly the matches order.
+ * - **Each count opens its claims** (GEO-3230): the claims the pair holds opposite positions on, and
+ *   each one's side. With spaces selected, the count, the list and the order cover those spaces
+ *   alone, and gaia's fit stands aside: it scores the pair across every space, so it would rank and
+ *   explain a pair by disagreements the admin has filtered out.
  * - **Recommended** offers the half-hours both are free; **Pick any time** is the override, kept a
  *   separate mode so nobody drifts into it. Every time shows both debaters' own clocks.
+ * - **Both people's availability** sits above the time picker (GEO-3231), so a thin or empty
+ *   overlap shows how close they are and which way to stretch.
+ * - **Every time is in one zone the admin picks** (GEO-3231): their own, GMT, or either debater's,
+ *   remembered between openings. Only an instant is sent, so each invite is still in its
+ *   debater's own zone.
  */
 export function AdminNewMatchDialog({ open, onOpenChange, openerRef, onSent }: Props) {
   return (
@@ -135,6 +167,12 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   };
 
   const debatersQuery = useAdminDebaters(true);
+  const [zone, setZoneState] = React.useState(readAdminMatchZone);
+  const setZone = (next: string) => {
+    setZoneState(next);
+    saveAdminMatchZone(next);
+  };
+  const zoneOf = (userId: string) => debatersQuery.timezoneByUser.get(normId(userId));
   const availableIds = React.useMemo(
     () => [...new Set((debatersQuery.data ?? []).map(debater => normId(debater.user_id)))],
     [debatersQuery.data]
@@ -168,10 +206,24 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   const rosterProfileIds = React.useMemo(() => rosterPeople.map(person => person.profile_space_id), [rosterPeople]);
   const fit = useAdminPairFit(first ? first.person.profile_space_id : null, rosterProfileIds);
   const freeSlots = useAdminSharedFreeSlots(first ? first.userId : null, availableIds);
-  const fitRanking = first !== null && fit.available;
+  const wanted = React.useMemo(() => new Set(spaceIds.map(normId)), [spaceIds]);
+  const narrowed = wanted.size > 0;
+  const fitRanking = first !== null && fit.available && !narrowed;
   const fitOf = (person: DebatePerson) => (first ? fit.byProfile.get(normId(person.profile_space_id)) : undefined);
-  const matchCount = (person: DebatePerson) =>
-    facts.matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0;
+  // Narrowed once per analysis and filter, not per comparison: the sort reads each count often.
+  const matchesByProfile = React.useMemo(
+    () =>
+      new Map(
+        rosterPeople.map(person => [
+          normId(person.profile_space_id),
+          matchesInSpaces(facts.matchAnalysis, person.profile_space_id, wanted),
+        ])
+      ),
+    [facts.matchAnalysis, rosterPeople, wanted]
+  );
+  const matchesOf = (person: DebatePerson) => matchesByProfile.get(normId(person.profile_space_id)) ?? EMPTY_MATCHES;
+  const matchCount = (person: DebatePerson) => matchesOf(person).length;
+  const sharedFreeSlotsOf = (person: DebatePerson) => (first ? freeSlots.get(normId(person.user_id)) : undefined);
 
   const offeredSpaces = React.useMemo(() => {
     const counts = new Map<string, number>();
@@ -192,8 +244,19 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
     seedSpent: true,
   });
 
+  const { labelsById } = useSpaceLabels(
+    React.useMemo(
+      () => [...new Set([...facetSpaces.map(space => space.id), ...facts.matchingSpaceIds])],
+      [facetSpaces, facts.matchingSpaceIds]
+    )
+  );
+  // Whose claims are open, keyed by everything the list depends on: a new debater 1 or filter
+  // closes it rather than showing a different pair's claims under the same row.
+  const [openClaims, setOpenClaims] = React.useState<string | null>(null);
+  const claimsKey = (person: DebatePerson) =>
+    [first ? normId(first.userId) : '', ...[...wanted].sort(), normId(person.user_id)].join('|');
+
   const picked = new Set([first?.userId, second?.userId].filter(Boolean).map(id => normId(id!)));
-  const wanted = new Set(spaceIds.map(normId));
   const debatesOf = (person: DebatePerson) => facts.records.get(person.profile_space_id)?.debatesArgued ?? 0;
   const listedRoster = rosterPeople
     .filter(person => !picked.has(normId(person.user_id)))
@@ -208,10 +271,15 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
         {
           available: fitRanking,
           fitOf,
-          sharedFreeSlotsOf: person => freeSlots.get(normId(person.user_id)),
+          sharedFreeSlotsOf,
         },
         (left, right) =>
-          (ranking ? matchCount(right) - matchCount(left) : 0) ||
+          (ranking
+            ? narrowed
+              ? withSharedTime(matchCount(right), sharedFreeSlotsOf(right)) -
+                withSharedTime(matchCount(left), sharedFreeSlotsOf(left))
+              : matchCount(right) - matchCount(left)
+            : 0) ||
           debatesOf(right) - debatesOf(left) ||
           speakerLabel(left).localeCompare(speakerLabel(right))
       )
@@ -271,10 +339,15 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
             ? fitReasonText(personFit.reason, debaterFirstName(first.person), personFit.parts.opposed)
             : null
         }
-        noSharedTime={available && fitRanking && freeSlots.get(normId(person.user_id)) === 0}
+        noSharedTime={available && (fitRanking || (ranking && narrowed)) && sharedFreeSlotsOf(person) === 0}
         record={available ? (facts.records.get(person.profile_space_id) ?? null) : null}
-        matches={available && ranking ? matchCount(person) : null}
+        matches={available && ranking ? matchesOf(person) : null}
         matchesWith={first ? debaterFirstName(first.person) : null}
+        claimsOpen={openClaims === claimsKey(person)}
+        onClaimsToggle={() => setOpenClaims(current => (current === claimsKey(person) ? null : claimsKey(person)))}
+        claimNamesById={facts.matchingClaimNamesById}
+        claimNamesLoading={facts.matchingClaimsLoading}
+        labelsById={labelsById}
         prompt={prompts.get(normId(person.user_id))}
         onPick={() => pick(person)}
         onRequest={() => void requestAvailability([person.user_id])}
@@ -317,7 +390,9 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
               : fitRanking
                 ? `Ordered by fit with ${speakerLabel(first.person)}: disagreements, shared interests and free time`
                 : ranking
-                  ? `Ordered by matches with ${speakerLabel(first.person)}, most first`
+                  ? narrowed
+                    ? `Ordered by matches with ${speakerLabel(first.person)} in the selected spaces, most first`
+                    : `Ordered by matches with ${speakerLabel(first.person)}, most first`
                   : `Counting matches with ${speakerLabel(first.person)}…`}
           </Text>
           <ul aria-label="People" className="min-h-0 flex-1 overflow-y-auto border-t border-grey-02">
@@ -351,6 +426,9 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
           key={`${first?.userId ?? ''}-${second?.userId ?? ''}`}
           first={first}
           second={second}
+          zone={zone}
+          onZoneChange={setZone}
+          zoneOf={zoneOf}
           prompts={prompts}
           onChoose={setChosen}
           onRequestBoth={() => first && second && void requestAvailability([first.userId, second.userId])}
@@ -365,13 +443,19 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
                 {speakerLabel(first.person)} vs {speakerLabel(second.person)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
-                {new Date(chosen.start).toLocaleDateString(undefined, {
-                  weekday: 'short',
-                  month: 'short',
-                  day: 'numeric',
-                })}{' '}
-                · {timeIn(chosen.start, undefined)} – {timeIn(chosen.start + SLOT_MINUTES * 60_000, undefined)} your
-                time
+                {dateLabels(dateIn(chosen.start, zone)).full} ·{' '}
+                {spanIn(chosen.start, chosen.start + SLOT_MINUTES * 60_000, zone)}
+              </Text>
+              <Text as="p" variant="footnote" color="grey-04">
+                {[first, second]
+                  .map(({ userId, person }) => {
+                    const theirs = zoneOf(userId);
+                    return theirs
+                      ? `${debaterFirstName(person)} ${timeIn(chosen.start, theirs)} in ${zoneCity(theirs)}${dayShift(chosen.start, theirs, zone)}`
+                      : null;
+                  })
+                  .filter(Boolean)
+                  .join(' · ')}
               </Text>
               {chosen.outside ? (
                 <Text as="p" variant="footnote" className="text-purple">
@@ -484,6 +568,11 @@ function PersonOption({
   record,
   matches,
   matchesWith,
+  claimsOpen,
+  onClaimsToggle,
+  claimNamesById,
+  claimNamesLoading,
+  labelsById,
   fitReason,
   noSharedTime,
   prompt,
@@ -497,24 +586,42 @@ function PersonOption({
   /** Pair fit is ranking and they share no free half-hour with debater 1. */
   noSharedTime: boolean;
   record: PersonRecord | null;
-  /** Matches with debater 1, once known; null hides the count. */
-  matches: number | null;
+  /** Matches with debater 1, once known and narrowed to the selected spaces; null hides the count. */
+  matches: ClaimMatch[] | null;
   matchesWith: string | null;
+  /** Whether the claims behind the count are listed under the row. */
+  claimsOpen: boolean;
+  onClaimsToggle: () => void;
+  claimNamesById: ReadonlyMap<string, string | null>;
+  claimNamesLoading: boolean;
+  labelsById: Map<string, SpaceLabel>;
   prompt: PromptOutcome | undefined;
   onPick: () => void;
   onRequest: () => void;
 }) {
   const name = speakerLabel(person);
+  const count = matches?.length ?? 0;
+  const claimsId = React.useId();
+  const matchText = `${count} ${count === 1 ? 'match' : 'matches'} with ${matchesWith}`;
+  // A count with claims behind it opens them; zero has nothing to open, and reads as no match.
   const matchPill =
     matches !== null && matchesWith ? (
-      <span
-        className={cx(
-          'rounded-full px-1.5 py-0.5 font-medium',
-          matches > 0 ? 'bg-ctaTertiary text-ctaPrimary' : 'bg-grey-01 text-grey-04'
-        )}
-      >
-        {matches} {matches === 1 ? 'match' : 'matches'} with {matchesWith}
-      </span>
+      count > 0 ? (
+        <button
+          type="button"
+          aria-expanded={claimsOpen}
+          aria-controls={claimsOpen ? claimsId : undefined}
+          onClick={onClaimsToggle}
+          className="inline-flex items-center gap-0.5 rounded-full bg-ctaTertiary px-1.5 py-0.5 font-medium text-ctaPrimary transition-opacity hover:opacity-75"
+        >
+          {matchText}
+          <span className={cx('transition-transform', claimsOpen && 'rotate-180')} aria-hidden>
+            <ChevronDownSmall />
+          </span>
+        </button>
+      ) : (
+        <span className="rounded-full bg-grey-01 px-1.5 py-0.5 font-medium text-grey-04">{matchText}</span>
+      )
     ) : null;
 
   let action: React.ReactNode;
@@ -590,32 +697,34 @@ function PersonOption({
         ) : null}
       </div>
       {action}
+      {matches && matchesWith && count > 0 && claimsOpen ? (
+        <ul
+          id={claimsId}
+          aria-label={`Matching claims: ${matchesWith} and ${debaterFirstName(person)}`}
+          className="col-span-2 col-start-2 mt-2 overflow-hidden rounded-lg border border-grey-02"
+        >
+          {matches.map(match => (
+            <li key={normId(match.claimId)} className="border-t border-grey-02 first:border-t-0">
+              <MatchingClaim
+                match={match}
+                viewerName={matchesWith}
+                personName={debaterFirstName(person)}
+                claimNamesById={claimNamesById}
+                claimNamesLoading={claimNamesLoading}
+                labelsById={labelsById}
+                newTab
+                className="px-3 py-2.5"
+              />
+            </li>
+          ))}
+        </ul>
+      ) : null}
     </li>
   );
 }
 
-/** The next fourteen local midnights, today first: the days a match can be booked on. */
-function bookableDays(): Date[] {
-  const today = new Date();
-  return Array.from(
-    { length: ADMIN_MATCH_DAYS },
-    (_, index) => new Date(today.getFullYear(), today.getMonth(), today.getDate() + index)
-  );
-}
-
-/**
- * `minutes` past midnight on `day`, by the wall clock. Built from parts rather than by adding
- * milliseconds, which lands an hour off on a day the clocks change.
- */
-function atMinutes(day: Date, minutes: number): number {
-  return new Date(day.getFullYear(), day.getMonth(), day.getDate(), 0, minutes).getTime();
-}
-
-function dayHeading(day: Date) {
-  return day.toDateString() === new Date().toDateString()
-    ? 'Today'
-    : day.toLocaleDateString(undefined, { weekday: 'short' });
-}
+/** The dialog's native dropdowns: day, start and zone, kept native so a long list scrolls as the OS draws it. */
+const NATIVE_SELECT_CLASS = 'h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02';
 
 const MODE_OPTIONS = [
   { value: 'recommended', label: 'Recommended' },
@@ -623,34 +732,53 @@ const MODE_OPTIONS = [
 ] as const;
 
 /**
- * Choose a time: Recommended (the half-hours both are free) or Pick any time (the override). Every
- * time is the admin's, with each debater's own clock under it once their zone is known.
+ * Choose a time: Recommended (the half-hours both are free) or Pick any time (the override), under
+ * both people's availability. Every time is in the zone the admin picked, with each debater's own
+ * clock under it once their zone is known.
  */
 function TimePicker({
   first,
   second,
+  zone,
+  onZoneChange,
+  zoneOf,
   prompts,
   onChoose,
   onRequestBoth,
 }: {
   first: Picked | null;
   second: Picked | null;
+  zone: string;
+  onZoneChange: (zone: string) => void;
+  /** A debater's zone from the roster of everyone with availability. */
+  zoneOf: (userId: string) => string | undefined;
   prompts: ReadonlyMap<string, PromptOutcome>;
   onChoose: (choice: Choice | null) => void;
   onRequestBoth: () => void;
 }) {
   const [mode, setMode] = React.useState<'recommended' | 'any'>('recommended');
   const [selected, setSelected] = React.useState<number | null>(null);
-  const days = React.useMemo(bookableDays, []);
-  const [anyDay, setAnyDay] = React.useState(1);
-  const [anyMinutes, setAnyMinutes] = React.useState(17 * 60);
+  // Counted in the picked zone: in GMT, an admin west of it can still be on yesterday.
+  const days = React.useMemo(() => zoneDays(Date.now(), zone, ADMIN_MATCH_DAYS), [zone]);
+  // The override is an instant, like a recommended pick, and its Day and Starts are read from it in
+  // the zone shown. So a zone change keeps the time and moves the dropdowns to it, and a pick in the
+  // second pass of the hour the clocks go back stays there rather than being read back as the first.
+  const [anyAt, setAnyAt] = React.useState(() => instantAt(days[1], 17 * 60, zone));
+  const anyDay = days.indexOf(dateIn(anyAt, zone));
+  const anyMinutes = minutesIn(anyAt, zone);
+  const anyMinuteOptions = [
+    ...new Set([...Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES), anyMinutes]),
+  ].sort((left, right) => left - right);
 
   // Ticks each minute, so a picked time that passes while the dialog is open stops being sendable.
   const now = useMinuteClock();
   const overlap = useAdminPairOverlap(first?.userId ?? null, second?.userId ?? null);
+  const firstAvailability = useAdminDebaterAvailability(first && second ? first.userId : null);
+  const secondAvailability = useAdminDebaterAvailability(first && second ? second.userId : null);
   const candidate = overlap.data?.candidates[0];
-  const firstZone = overlap.data?.viewer_timezone || undefined;
-  const secondZone = candidate?.with_timezone || undefined;
+  // The roster's zone, the one the footer shows too; the overlap's only for anyone it lacks.
+  const firstZone = (first && zoneOf(first.userId)) || overlap.data?.viewer_timezone || undefined;
+  const secondZone = (second && zoneOf(second.userId)) || candidate?.with_timezone || undefined;
   const slots = React.useMemo(
     () => (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > now),
     [candidate, now]
@@ -660,30 +788,76 @@ function TimePicker({
   // full; until then the override says nothing rather than flagging every time it is shown.
   const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
 
-  const anyStart = days[anyDay] ? atMinutes(days[anyDay], anyMinutes) : null;
+  // A time off the days shown, where a zone change can push either kind of pick, is no choice at
+  // all: neither its chip nor its strip cell is on screen to say what would be sent.
+  const shownDays = React.useMemo(() => new Set(days), [days]);
+  const onShownDay = React.useCallback((start: number) => shownDays.has(dateIn(start, zone)), [shownDays, zone]);
+  const anyStart = onShownDay(anyAt) ? anyAt : null;
   React.useEffect(() => {
     if (mode === 'recommended')
-      onChoose(selected !== null && selected > now ? { start: selected, outside: false } : null);
+      onChoose(
+        selected !== null && selected > now && onShownDay(selected) ? { start: selected, outside: false } : null
+      );
     else
       onChoose(
         anyStart !== null && anyStart > now
           ? { start: anyStart, outside: overlapKnown ? !mutual.has(anyStart) : null }
           : null
       );
-  }, [anyStart, mode, mutual, now, onChoose, overlapKnown, selected]);
+  }, [anyStart, mode, mutual, now, onChoose, onShownDay, overlapKnown, selected]);
+
+  // The zone alone wherever a label spans the fortnight; a single time carries its own offset.
+  const zoneTitle = zoneName(zone);
+  const zoneOptions = [
+    { value: getViewerTimeZone(), label: `Your time · ${zoneName(getViewerTimeZone())}` },
+    { value: GMT, label: 'GMT' },
+    ...(first && firstZone
+      ? [{ value: firstZone, label: `${debaterFirstName(first.person)}’s time · ${zoneName(firstZone)}` }]
+      : []),
+    ...(second && secondZone
+      ? [{ value: secondZone, label: `${debaterFirstName(second.person)}’s time · ${zoneName(secondZone)}` }]
+      : []),
+    // A zone kept from an earlier match, whoever's it was.
+    { value: zone, label: zoneTitle },
+  ].filter((option, index, all) => all.findIndex(other => other.value === option.value) === index);
+
+  const zonePicker = (
+    <label className="flex items-center gap-2">
+      <Text as="span" variant="footnote" color="grey-04">
+        Time zone
+      </Text>
+      <select
+        value={zone}
+        onChange={event => onZoneChange(event.currentTarget.value)}
+        className={cx(NATIVE_SELECT_CLASS, 'max-w-[16rem]')}
+      >
+        {zoneOptions.map(option => (
+          <option key={option.value} value={option.value}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
 
   const box = (children: React.ReactNode) => (
-    <div className="flex min-h-[28rem] min-w-0 flex-col gap-3 rounded-xl border border-grey-02 p-3.5 md:min-h-0">
+    <div className="flex min-h-[28rem] min-w-0 flex-col gap-3 overflow-y-auto rounded-xl border border-grey-02 p-3.5 md:min-h-0">
       {children}
+    </div>
+  );
+  const heading = (
+    <div className="flex flex-wrap items-center justify-between gap-2">
+      <Text as="p" variant="metadataMedium">
+        Choose a time
+      </Text>
+      {zonePicker}
     </div>
   );
 
   if (!first || !second) {
     return box(
       <>
-        <Text as="p" variant="metadataMedium">
-          Choose a time
-        </Text>
+        {heading}
         <div className="flex flex-1 flex-col items-center justify-center gap-2 p-6 text-center">
           <Text as="p" variant="metadata" color="grey-04">
             Pick two debaters to see when they&rsquo;re both free.
@@ -702,6 +876,18 @@ function TimePicker({
     { name: a, zone: firstZone },
     { name: b, zone: secondZone },
   ].filter((clock): clock is { name: string; zone: string } => clock.zone !== undefined);
+
+  // A half-hour picked off the availability strip: a shared one is a recommendation, anything else
+  // the override, so the mode always says which kind of time it is.
+  const pickFromStrip = (start: number) => {
+    if (mutual.has(start)) {
+      setMode('recommended');
+      setSelected(start);
+      return;
+    }
+    setMode('any');
+    setAnyAt(start);
+  };
 
   let body: React.ReactNode;
   if (mode === 'recommended') {
@@ -780,55 +966,55 @@ function TimePicker({
       body = (
         <>
           <Text as="p" variant="footnote" color="grey-04">
-            Half-hours they&rsquo;re both free. The large time is yours; under it, each debater&rsquo;s own.
+            Half-hours they&rsquo;re both free. The large time is {zoneTitle}; under it, each debater&rsquo;s own.
           </Text>
           <div className="grid auto-cols-[minmax(7rem,1fr)] grid-flow-col gap-2 overflow-x-auto pb-1">
             {days
-              .map(day => ({
-                day,
-                starts: slots.filter(start => new Date(start).toDateString() === day.toDateString()),
-              }))
+              .map(day => ({ day, starts: slots.filter(start => dateIn(start, zone) === day) }))
               .filter(({ starts }) => starts.length > 0)
-              .map(({ day, starts }) => (
-                <section
-                  key={day.getTime()}
-                  role="group"
-                  aria-label={day.toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' })}
-                  className="flex flex-col gap-2 rounded-lg border border-grey-02 p-2"
-                >
-                  <div className="flex flex-col">
-                    <Text as="span" variant="metadataMedium">
-                      {dayHeading(day)}
-                    </Text>
-                    <Text as="span" variant="footnote" color="grey-04">
-                      {day.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
-                    </Text>
-                  </div>
-                  {starts.map(start => (
-                    <button
-                      key={start}
-                      type="button"
-                      aria-pressed={selected === start}
-                      aria-label={[
-                        timeIn(start, undefined),
-                        ...theirClocks.map(({ name, zone }) => `${name} ${timeIn(start, zone)}`),
-                      ].join(', ')}
-                      onClick={() => setSelected(current => (current === start ? null : start))}
-                      className={cx(
-                        'rounded-md border px-2 py-1 text-left tabular-nums transition-colors',
-                        selected === start ? SELECTED_SLOT : cx(MUTUAL_SLOT, 'hover:border-text')
-                      )}
-                    >
-                      <span className="block text-footnoteMedium">{timeIn(start, undefined)}</span>
-                      {theirClocks.map(({ name, zone }) => (
-                        <span key={name} className="block text-footnote whitespace-nowrap opacity-70">
-                          {name} {timeIn(start, zone)}
-                        </span>
-                      ))}
-                    </button>
-                  ))}
-                </section>
-              ))}
+              .map(({ day, starts }) => {
+                const labels = dateLabels(day);
+                return (
+                  <section
+                    key={day}
+                    role="group"
+                    aria-label={labels.long}
+                    className="flex flex-col gap-2 rounded-lg border border-grey-02 p-2"
+                  >
+                    <div className="flex flex-col">
+                      <Text as="span" variant="metadataMedium">
+                        {day === days[0] ? 'Today' : labels.weekday}
+                      </Text>
+                      <Text as="span" variant="footnote" color="grey-04">
+                        {labels.monthDay}
+                      </Text>
+                    </div>
+                    {starts.map(start => (
+                      <button
+                        key={start}
+                        type="button"
+                        aria-pressed={selected === start}
+                        aria-label={[
+                          `${timeIn(start, zone)} ${zoneLabel(zone, start)}`,
+                          ...theirClocks.map(({ name, zone: theirs }) => `${name} ${timeIn(start, theirs)}`),
+                        ].join(', ')}
+                        onClick={() => setSelected(current => (current === start ? null : start))}
+                        className={cx(
+                          'rounded-md border px-2 py-1 text-left tabular-nums transition-colors',
+                          selected === start ? SELECTED_SLOT : cx(MUTUAL_SLOT, 'hover:border-text')
+                        )}
+                      >
+                        <span className="block text-footnoteMedium">{timeIn(start, zone)}</span>
+                        {theirClocks.map(({ name, zone: theirs }) => (
+                          <span key={name} className="block text-footnote whitespace-nowrap opacity-70">
+                            {name} {timeIn(start, theirs)}
+                          </span>
+                        ))}
+                      </button>
+                    ))}
+                  </section>
+                );
+              })}
           </div>
         </>
       );
@@ -849,28 +1035,32 @@ function TimePicker({
             </Text>
             <select
               value={anyDay}
-              onChange={event => setAnyDay(Number(event.currentTarget.value))}
-              className="h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02"
+              onChange={event => setAnyAt(instantAt(days[Number(event.currentTarget.value)], anyMinutes, zone))}
+              className={NATIVE_SELECT_CLASS}
             >
+              {anyDay < 0 ? <option value={-1}>Pick a day</option> : null}
               {days.map((day, index) => (
-                <option key={day.getTime()} value={index}>
-                  {day.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                <option key={day} value={index}>
+                  {dateLabels(day).full}
                 </option>
               ))}
             </select>
           </label>
           <label className="flex flex-col gap-1">
             <Text as="span" variant="footnote" color="grey-04">
-              Starts (your time)
+              Starts ({zoneTitle})
             </Text>
             <select
               value={anyMinutes}
-              onChange={event => setAnyMinutes(Number(event.currentTarget.value))}
-              className="h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02"
+              onChange={event =>
+                setAnyAt(instantAt(days[Math.max(anyDay, 0)], Number(event.currentTarget.value), zone))
+              }
+              className={NATIVE_SELECT_CLASS}
             >
-              {Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES).map(minutes => (
+              {/* With the half-hour it was picked on, should a zone with a :15 or :45 offset be shown. */}
+              {anyMinuteOptions.map(minutes => (
                 <option key={minutes} value={minutes}>
-                  {timeIn(atMinutes(days[0], minutes), undefined)}
+                  {wallTime(minutes)}
                 </option>
               ))}
             </select>
@@ -886,7 +1076,7 @@ function TimePicker({
         ) : null}
         {anyStart !== null && future && theirClocks.length > 0 ? (
           <div className="grid grid-cols-[repeat(auto-fit,minmax(12rem,1fr))] gap-2">
-            {theirClocks.map(({ name, zone }) => (
+            {theirClocks.map(({ name, zone: theirs }) => (
               <div
                 key={name}
                 className={cx(
@@ -898,8 +1088,8 @@ function TimePicker({
                   {name}
                 </Text>
                 <Text as="span" variant="metadata">
-                  {timeIn(anyStart, zone)} in {zoneCity(zone)}
-                  {dayShift(anyStart, zone)}
+                  {timeIn(anyStart, theirs)} in {zoneCity(theirs)}
+                  {dayShift(anyStart, theirs, zone)}
                 </Text>
               </div>
             ))}
@@ -924,13 +1114,42 @@ function TimePicker({
 
   return box(
     <>
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <Text as="p" variant="metadataMedium">
-          Choose a time
-        </Text>
+      {heading}
+      <AdminPairAvailability
+        days={days}
+        zone={zone}
+        zoneName={zoneTitle}
+        now={now}
+        first={{
+          name: a,
+          // Absent only on geo-chat builds before #134: nothing known, rather than nothing free.
+          slots: firstAvailability.data?.their_slots ?? null,
+          knownFrom: knownFrom(firstAvailability),
+          pending: firstAvailability.isPending,
+          error: Boolean(firstAvailability.error),
+          onRetry: () => void firstAvailability.refetch(),
+        }}
+        second={{
+          name: b,
+          slots: secondAvailability.data?.their_slots ?? null,
+          knownFrom: knownFrom(secondAvailability),
+          pending: secondAvailability.isPending,
+          error: Boolean(secondAvailability.error),
+          onRetry: () => void secondAvailability.refetch(),
+        }}
+        selected={mode === 'recommended' ? selected : anyStart}
+        onPick={pickFromStrip}
+      />
+      <div className="border-t border-grey-02 pt-3">
         <SegmentedControl label="How to pick a time" options={MODE_OPTIONS} value={mode} onChange={setMode} />
       </div>
       {body}
     </>
   );
+}
+
+/** Where geo-chat's answer for one debater starts: their midnight on the UTC date it answered on. */
+function knownFrom(availability: ReturnType<typeof useAdminDebaterAvailability>): number | null {
+  if (!availability.data) return null;
+  return windowStart(new Date(availability.dataUpdatedAt), availability.data.with_timezone).getTime();
 }

@@ -8,6 +8,7 @@ import Link from 'next/link';
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { NavUtils } from '~/core/utils/utils';
 
+import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
@@ -31,8 +32,18 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
-import { hostAfterChange, lobbyErrorMessage, notYetOpenLabel, remindedLabel } from './lobby-format';
-import { LobbyGuestBanner } from './lobby-guest';
+import {
+  hostAfterChange,
+  hostWhoLeft,
+  hostsLabel,
+  isAlone,
+  isHosting,
+  lobbyDateLabel,
+  lobbyErrorMessage,
+  notYetOpenLabel,
+  remindedLabel,
+} from './lobby-format';
+import { LOBBY_GUEST_COPY, LobbyGuestBanner } from './lobby-guest';
 import {
   LobbyGuestProvider,
   type LobbyMemberPath,
@@ -42,12 +53,21 @@ import {
 } from './lobby-guest-hooks';
 import { LobbyHeader } from './lobby-header';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
+import { usePreOpenHosts } from './lobby-host-lobbies';
 import { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
-import { type LobbyGuestNotice, LobbyNotices, LobbyToast } from './lobby-notices';
+import { type LobbyGuestNotice, type LobbyHandoffNotice, LobbyNotices, LobbyToast } from './lobby-notices';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LobbyPeople } from './lobby-roster';
 import { LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
+import {
+  FindDebateLink,
+  LOBBY_STATE_COPY,
+  LobbyBannedCard,
+  LobbyCardFrame,
+  LobbyClosedCard,
+  LobbyEmptyRoom,
+} from './lobby-state-cards';
 import { type LobbyPageView, isMemberView, lobbyViewForGuest, lobbyViewForMember } from './lobby-view';
 import {
   LobbyGuestVoice,
@@ -57,19 +77,16 @@ import {
   NO_LOBBY_VOICE,
   useLobbyVoiceStates,
 } from './lobby-voice';
+import { useMinuteNow } from './use-minute-now';
 
 const HANDOFF_NOTICE_MS = 8_000;
 const NO_MODERATION = { last_moderation: null };
 
 export const LOBBY_COPY = {
-  unavailable: 'Lobbies are not available right now.',
-  banned: 'You can’t join this lobby.',
-  bannedFrom: (name: string) => `A host has blocked you from ${name}.`,
-  ended: 'This lobby has ended.',
-  closed: 'This lobby has closed.',
-  findDebate: 'Find a debate',
-  otherLobby: 'You’re in another lobby. Joining this one leaves it.',
-  removed: 'You were removed from this lobby.',
+  leaveOther: (name: string | null) => (name ? `Leave ${name}?` : 'Leave your other lobby?'),
+  oneLobby: (name: string) => `You can be in one lobby at a time. Joining ${name} will leave it.`,
+  scheduled: 'Debate lobby · scheduled',
+  guestBeforeOpen: 'No account? You can still join and listen when it opens.',
   steppedOut: 'You stepped out to debate. You’re still on the roster.',
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
   guestRemoved: 'A host removed you from this lobby.',
@@ -78,12 +95,9 @@ export const LOBBY_COPY = {
   guestListeningOff: 'Listening without an account has been turned off for this lobby. Create an account to join.',
 } as const;
 
-/** `/debate/{id}` when the room is a lobby and `lobbyJoining` is off. */
-export function LobbiesUnavailable() {
-  return <LobbyNotice action={findDebateAction}>{LOBBY_COPY.unavailable}</LobbyNotice>;
-}
+export { LobbiesUnavailable } from './lobby-state-cards';
 
-const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_COPY.findDebate };
+const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_STATE_COPY.findDebate };
 
 /**
  * The lobby page (GEO-3131). Signed out, drawn from the guest view, listening only (GEO-3129).
@@ -188,28 +202,22 @@ function LobbyAccess({
 
   switch (lobby.access.status) {
     case 'banned':
+      return <LobbyBannedCard name={lobby.name} />;
+    case 'closed':
       return (
-        <LobbyNotice action={findDebateAction}>
-          {LOBBY_COPY.banned} {LOBBY_COPY.bannedFrom(lobby.name)}
-        </LobbyNotice>
+        <LobbyClosedCard
+          lobby={lobby}
+          ended={lobby.access.reason === 'ended'}
+          after={
+            // Hosts can still look up who was banned and what was done.
+            isMemberView(lobby) && lobby.viewer.role === 'host' ? (
+              <div className="w-full max-w-xl">
+                <LobbyHostLists lobby={lobby} />
+              </div>
+            ) : null
+          }
+        />
       );
-    case 'closed': {
-      const notice = (
-        <LobbyNotice action={findDebateAction}>
-          {lobby.access.reason === 'ended' ? LOBBY_COPY.ended : LOBBY_COPY.closed}
-        </LobbyNotice>
-      );
-      // Hosts can still look up who was banned and what was done.
-      if (!isMemberView(lobby) || lobby.viewer.role !== 'host') return notice;
-      return (
-        <>
-          {notice}
-          <div className="mx-auto w-full max-w-xl px-4 pb-8">
-            <LobbyHostLists lobby={lobby} />
-          </div>
-        </>
-      );
-    }
     case 'not_yet_open':
       return <NotYetOpen lobby={lobby} />;
     case 'admitted':
@@ -237,16 +245,43 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
   // Nobody is connected before it opens, so `viewer.hosting` is false; a stored host may still cancel.
   const canCancel = lobby.viewer.role === 'host';
 
+  // Ticks so the countdown moves; passed in so the compiler sees it change.
+  const now = useMinuteNow();
+  const hosts = usePreOpenHosts(lobby);
+  const hostedBy = hostsLabel(hosts);
+  const date = lobbyDateLabel(lobby.starts_at);
+
   return (
-    <LobbyShell>
+    <LobbyCardFrame className="max-w-[480px] gap-4 p-6" data-testid="debate-lobby">
+      <Text as="p" variant="footnoteMedium" color="grey-04">
+        {LOBBY_COPY.scheduled}
+      </Text>
       <LobbyTitle lobby={lobby} />
-      <Text as="p" variant="metadata" color="text">
-        {notYetOpenLabel(lobby)}
-      </Text>
-      <Text as="p" variant="footnote" color="grey-04">
-        {remindedLabel(lobby.reminder_count)}
-      </Text>
-      {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} /> : null}
+      {hostedBy ? (
+        <div className="flex items-center gap-2.5">
+          <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
+            <Avatar avatarUrl={hosts[0]!.avatar_cid} value={hosts[0]!.profile_space_id} alt="" size={24} />
+          </span>
+          <Text as="span" variant="metadata" color="grey-04">
+            Hosted by {hostedBy}
+          </Text>
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-1 rounded-xl bg-grey-01 p-3">
+        {date ? (
+          <Text as="p" variant="smallTitle">
+            {date}
+          </Text>
+        ) : null}
+        <Text as="p" variant="metadata" color="grey-04">
+          {notYetOpenLabel(lobby, now)}
+        </Text>
+      </div>
+      {lobby.reminder_count > 0 ? (
+        <Text as="p" variant="metadata" color="grey-04">
+          {remindedLabel(lobby.reminder_count)}
+        </Text>
+      ) : null}
       <div className="flex flex-wrap gap-2">
         {guest ? null : (
           <HubPillButton
@@ -259,9 +294,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
             {reminded ? 'Reminded' : 'Remind me'}
           </HubPillButton>
         )}
-        <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
-          {LOBBY_COPY.findDebate}
-        </Link>
+        <FindDebateLink />
         {canCancel ? (
           confirmingCancel ? (
             <>
@@ -295,7 +328,13 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
           {lobbyErrorMessage(reminder.error, 'Could not update your reminder. Try again.')}
         </Text>
       ) : null}
-    </LobbyShell>
+      {guest ? (
+        <LobbyGuestBanner
+          lobbyId={lobby.lobby_id}
+          message={{ title: LOBBY_COPY.guestBeforeOpen, detail: LOBBY_GUEST_COPY.notListening }}
+        />
+      ) : null}
+    </LobbyCardFrame>
   );
 }
 
@@ -320,35 +359,16 @@ function AdmittedLobby({
         />
       );
     }
-    return <LobbyNotice action={findDebateAction}>{LOBBY_COPY[state.reason]}</LobbyNotice>;
+    return state.reason === 'banned' ? <LobbyBannedCard name={lobby.name} /> : <LobbyClosedCard lobby={lobby} ended />;
   }
 
   if (state.status === 'confirm_leave_other') {
     return (
-      <LobbyShell>
-        <LobbyTitle lobby={lobby} />
-        <Text as="p" variant="metadata">
-          {LOBBY_COPY.otherLobby}
-        </Text>
-        <div className="flex flex-wrap gap-2">
-          <HubPillButton
-            variant="primary"
-            analyticsLabel="Lobby join leaving other"
-            onClick={() => void join(true, state.rejoin ?? false)}
-          >
-            Join this lobby
-          </HubPillButton>
-          {state.otherLobbyId ? (
-            <Link
-              href={debateRoomPath(state.otherLobbyId)}
-              onClick={() => state.otherLobbyId && markLobbyEntry(state.otherLobbyId, 'other_lobby')}
-              className={hubPillClassName('secondary')}
-            >
-              Back to my lobby
-            </Link>
-          ) : null}
-        </div>
-      </LobbyShell>
+      <ConfirmLeaveOtherLobby
+        lobby={lobby}
+        otherLobbyId={state.otherLobbyId}
+        onJoin={() => void join(true, state.rejoin ?? false)}
+      />
     );
   }
 
@@ -366,9 +386,7 @@ function AdmittedLobby({
           <HubPillButton variant="primary" analyticsLabel="Lobby rejoin" onClick={() => void join(false)}>
             Rejoin
           </HubPillButton>
-          <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
-            {LOBBY_COPY.findDebate}
-          </Link>
+          <FindDebateLink />
         </div>
       </LobbyShell>
     );
@@ -385,6 +403,43 @@ function AdmittedLobby({
         guestSession={guestSession}
       />
     </LobbyQueuedRequestProvider>
+  );
+}
+
+/** Joining here would leave the lobby the viewer is in; asks first. */
+function ConfirmLeaveOtherLobby({
+  lobby,
+  otherLobbyId,
+  onJoin,
+}: {
+  lobby: LobbyPageView;
+  otherLobbyId: string | null;
+  onJoin: () => void;
+}) {
+  const other = useDebateLobby(otherLobbyId ?? '', otherLobbyId !== null).data;
+
+  return (
+    <LobbyShell>
+      <Text as="h1" variant="smallTitle">
+        {LOBBY_COPY.leaveOther(other?.name ?? null)}
+      </Text>
+      <Text as="p" variant="metadata" color="grey-04">
+        {LOBBY_COPY.oneLobby(lobby.name)}
+      </Text>
+      <div className="flex flex-wrap gap-2">
+        {/* Stay goes back to the other lobby when there is one to go to. */}
+        <Link
+          href={otherLobbyId ? debateRoomPath(otherLobbyId) : NavUtils.toExplore()}
+          onClick={() => otherLobbyId && markLobbyEntry(otherLobbyId, 'other_lobby')}
+          className={hubPillClassName('secondary')}
+        >
+          Stay
+        </Link>
+        <HubPillButton variant="primary" analyticsLabel="Lobby join leaving other" onClick={onJoin}>
+          Leave and join
+        </HubPillButton>
+      </div>
+    </LobbyShell>
   );
 }
 
@@ -502,10 +557,13 @@ function LobbyRoom({
   const tabIds = useTabIds();
   const onPeopleTab = !phone || !showClaims || tab === 'people';
   const onClaimsTab = !phone || tab === 'claims';
+  const alone = showClaims && isAlone(lobby, guest ? null : currentUserId, guest, guestVoice !== null);
 
-  const people = (
-    <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
-  );
+  // The empty-room block stands in for an empty roster's own line.
+  const people =
+    alone && lobby.members.length === 0 ? null : (
+      <LobbyPeople lobby={lobby} viewerId={currentUserId} ownAvailable={ownAvailable} disagreements={disagreements} />
+    );
   const availability = guest ? null : <HubHeaderControls analyticsSurface="lobby" />;
   const handControl =
     memberLobby &&
@@ -544,6 +602,7 @@ function LobbyRoom({
             className="flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5"
           >
             <LobbyRoomStatus state={state} onRetry={onRetry} />
+            {alone ? <LobbyEmptyRoom lobby={lobby} signedIn={!guest} /> : null}
             <LobbyVoiceStatesProvider value={guestVoiceStates}>
               {guestVoice ? (
                 <LobbyGuestVoice
@@ -740,15 +799,19 @@ function LobbyRoomStatus({ state, onRetry }: { state: LobbyPresenceState; onRetr
   return null;
 }
 
-/** "X is hosting now" for a few seconds after hosting changes hands. */
+/** "X left. Y is now hosting." for a few seconds after hosting changes hands. */
 export function useHandoffNotice(lobby: Pick<LobbyPageView, 'hosts_changed_at' | 'members'>) {
   const seenRef = React.useRef<string | null | undefined>(undefined);
-  const [notice, setNotice] = React.useState<DebateLobbyMember | null>(null);
+  // The last hosts seen; the views between a host leaving and the handoff have none.
+  const lastHostsRef = React.useRef<DebateLobbyMember[]>([]);
+  const [notice, setNotice] = React.useState<LobbyHandoffNotice | null>(null);
 
   React.useEffect(() => {
     const next = hostAfterChange(seenRef.current, lobby);
     seenRef.current = lobby.hosts_changed_at;
-    if (next) setNotice(next);
+    if (next) setNotice({ host: next, left: hostWhoLeft(lastHostsRef.current, lobby) });
+    const hosts = lobby.members.filter(isHosting);
+    if (hosts.length > 0) lastHostsRef.current = hosts;
   }, [lobby]);
 
   // Keyed on the notice, so a later roster change cannot cancel the clear.

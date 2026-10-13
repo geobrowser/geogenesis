@@ -5237,7 +5237,7 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(indicator()).toHaveAttribute('data-debate-round-indicator', '1'));
       expect(
-        screen.getByText('Round 1 of 10. 1 rebuttal round so far. Another round is possible.')
+        screen.getByText('Round 2 of 11. 1 rebuttal round so far. Another round is possible.')
       ).toBeInTheDocument();
     });
 
@@ -5401,7 +5401,7 @@ describe('DebateRoomPageClient', () => {
 
       rerenderAt(view, '20:02:05.700', openRoundsRevealRebut());
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'round'));
-      expect(result()?.textContent).toBe('Round1You open');
+      expect(result()?.textContent).toBe('Round2You open');
       expect(document.querySelector('[data-debate-round-indicator]')).toHaveAttribute(
         'data-debate-round-indicator',
         '1'
@@ -5411,9 +5411,9 @@ describe('DebateRoomPageClient', () => {
       expect(chips('remote')).toHaveAttribute('data-tile-chips', 'hidden');
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
 
-      // With no count-in from geo-chat, "Round 1" holds to the end of the window.
+      // With no count-in from geo-chat, "Round 2" holds to the end of the window.
       rerenderAt(view, '20:02:06.900', openRoundsRevealRebut());
-      expect(result()?.textContent).toBe('Round1You open');
+      expect(result()?.textContent).toBe('Round2You open');
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
 
@@ -5454,7 +5454,7 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:09.000'));
       await renderLiveDebate(revealRebutWithCountIn());
 
-      await waitFor(() => expect(result()).toHaveTextContent('Round1Alice opens'));
+      await waitFor(() => expect(result()).toHaveTextContent('Round2Alice opens'));
       expect(screen.queryByText('Rebut in')).not.toBeInTheDocument();
     });
 

@@ -188,7 +188,7 @@ function dayColumns(now: Date, viewerZone: string | undefined, peerZone: string 
 }
 
 /** Midnight in `zone` on the UTC date, where the server's walk begins. */
-function windowStart(now: Date, zone: string | undefined): Date {
+export function windowStart(now: Date, zone: string | undefined): Date {
   const [year, month, day] = zonedParts(now, 'UTC').date.split('-').map(Number);
   return wallClockInstant(Date.UTC(year, month - 1, day), zone);
 }
@@ -199,6 +199,14 @@ function windowStart(now: Date, zone: string | undefined): Date {
  */
 export function zonedWallClockInstant(wallAsUtc: number, zone: string | undefined): Date {
   return wallClockInstant(wallAsUtc, usableZone(zone));
+}
+
+/**
+ * {@link zonedParts} for a zone as stored, with the same fallback as {@link zonedWallClockInstant}:
+ * the date (`2026-10-06`) and minutes past midnight an instant reads as in `zone`.
+ */
+export function zonedClock(instant: Date | number, zone: string | undefined): ZonedParts {
+  return zonedParts(new Date(instant), usableZone(zone));
 }
 
 /**
@@ -224,7 +232,8 @@ function zoneOffsetMinutes(instant: Date, zone: string | undefined): number {
   return wallMinutes(zonedParts(instant, zone)) - wallMinutes(zonedParts(instant, 'UTC'));
 }
 
-function dayLabels(date: string) {
+/** `Tue` and `Oct 6` for an ISO date: it is already a calendar date, so the same in every zone. */
+export function dayLabels(date: string) {
   const [year, month, day] = date.split('-').map(Number);
   const local = new Date(year, month - 1, day, 12);
   return {

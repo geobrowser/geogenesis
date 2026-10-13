@@ -705,7 +705,7 @@ export function useSaveDebateSchedule({ surface }: { surface: ScheduleEditorSurf
  * The only data access behind that view. One request: the response carries their week, the
  * viewer's own flag per slot, and `viewer_has_schedule`, so nothing else has to be read.
  */
-export function usePeerSchedule(peerUserId: string | null) {
+export function usePeerSchedule(peerUserId: string | null, days: number = PEER_SCHEDULE_DAYS) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
   // Viewer-scoped and authenticated, so nothing to ask signed out or without a peer. A closed
   // dialog that stays mounted passes an empty id, not null.
@@ -713,15 +713,9 @@ export function usePeerSchedule(peerUserId: string | null) {
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
-    queryKey: debateQueryKeys.peerSchedule(accountKey, peerUserId ?? '', PEER_SCHEDULE_DAYS),
+    queryKey: debateQueryKeys.peerSchedule(accountKey, peerUserId ?? '', days),
     queryFn: ({ signal }) =>
-      getScheduleOverlaps(
-        peerUserId as string,
-        { days: PEER_SCHEDULE_DAYS },
-        getPrivyIdentityToken,
-        accountKey,
-        signal
-      ),
+      getScheduleOverlaps(peerUserId as string, { days }, getPrivyIdentityToken, accountKey, signal),
     enabled,
   });
 

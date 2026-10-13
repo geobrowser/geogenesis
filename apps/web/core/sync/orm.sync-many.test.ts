@@ -156,6 +156,22 @@ describe('E.syncMany pagination', () => {
     expect(result.remote).toHaveLength(ids.length);
   });
 
+  it('sends one request for the same id set asked for in a different order, or with repeats', async () => {
+    vi.mocked(getBatchEntities).mockImplementation((batchIds: string[]) =>
+      Effect.succeed(batchIds.map(id => makeEntity(id, `Entity ${id}`)))
+    );
+
+    const [first, second] = await Promise.all([
+      E.syncMany({ store, cache, where: { id: { in: ['c', 'a', 'b'] } }, first: 3 }),
+      E.syncMany({ store, cache, where: { id: { in: ['b', 'c', 'a', 'a'] } }, first: 4 }),
+    ]);
+
+    expect(vi.mocked(getBatchEntities)).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(getBatchEntities).mock.calls[0][0]).toEqual(['a', 'b', 'c']);
+    expect(first.merged.map(e => e.id)).toEqual(['c', 'a', 'b']);
+    expect(second.merged.map(e => e.id)).toEqual(['b', 'c', 'a', 'a']);
+  });
+
   it.each([
     ['regular queries', {}],
     ['collection id queries', { id: { in: ['entity-a'] } }],

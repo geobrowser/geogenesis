@@ -217,14 +217,20 @@ export function timeIn(at: number, timezone: string | undefined): string {
   }
 }
 
-/** ` (next day)` or ` (day before)` when `at` falls on another date in `timezone` than for the viewer. */
-export function dayShift(at: number, timezone: string | undefined): string {
+/**
+ * ` (next day)` or ` (day before)` when `at` falls on another date in `timezone` than in `fromZone`,
+ * the zone the times around it are drawn in: the viewer's own when not given. Zones up to 26 hours
+ * apart (Kiritimati and Pago Pago) can be two dates apart, which says so.
+ */
+export function dayShift(at: number, timezone: string | undefined, fromZone?: string): string {
   if (!timezone) return '';
   try {
     const theirs = new Date(at).toLocaleDateString('en-CA', { timeZone: timezone });
-    const ours = new Date(at).toLocaleDateString('en-CA');
-    if (theirs === ours) return '';
-    return theirs > ours ? ' (next day)' : ' (day before)';
+    const ours = new Date(at).toLocaleDateString('en-CA', { timeZone: fromZone });
+    const days = (Date.parse(theirs) - Date.parse(ours)) / 86_400_000;
+    if (days === 0) return '';
+    if (Math.abs(days) === 1) return days > 0 ? ' (next day)' : ' (day before)';
+    return ` (${Math.abs(days)} days ${days > 0 ? 'after' : 'before'})`;
   } catch {
     return '';
   }

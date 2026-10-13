@@ -626,7 +626,7 @@ function Legend({ peerName, showMutual }: { peerName: string; showMutual: boolea
   );
 }
 
-function LegendItem({ swatch, children }: { swatch: string; children: React.ReactNode }) {
+export function LegendItem({ swatch, children }: { swatch: string; children: React.ReactNode }) {
   return (
     <li className="flex items-center gap-1.5">
       <span aria-hidden className={cx('h-3 w-5 shrink-0 rounded-sm border', swatch)} />

@@ -7,7 +7,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbyMember } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
-import { movedToListenersLabel, personName } from './lobby-format';
+import { inDebateRequestLabel, movedToListenersLabel, personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyMemberActions, hasMemberActions } from './lobby-member-actions';
 import { LobbyPersonName } from './lobby-people';
@@ -125,6 +125,10 @@ export function LobbyPersonCard({
         <div className="px-1.5 pb-1.5">
           <LobbyRequestDebate lobbyId={lobby.lobby_id} member={member} />
         </div>
+      ) : member.in_debate && !isSelf ? (
+        <Text as="p" variant="footnote" color="grey-04" className="px-1.5 pb-1.5">
+          {inDebateRequestLabel(member)}
+        </Text>
       ) : null}
       {hostControls ? (
         <>
