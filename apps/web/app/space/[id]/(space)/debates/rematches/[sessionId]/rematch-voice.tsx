@@ -49,20 +49,20 @@ import {
   RematchPairHeader,
 } from './rematch-pair-header';
 
-// A pair arriving from a recorded debate was already speaking with the microphone open, so the
-// debate-again room preserves that live conversation. A profile challenge has no preceding call or
-// user gesture that opened the microphone; it continues to join listen-only until the user unmutes.
 /**
- * Whether the microphone opens on arrival: a choice made on the way in wins, if there is one.
- * Otherwise live after a debate, muted off a challenge.
- */
-/**
- * Whether the camera opens on arrival. Off unless chosen on the way in — unasked counts as off.
+ * Whether the camera opens on arrival. Off unless it was chosen already — unasked counts as off.
  */
 function cameraEnabledByDefault(session: DebateRematchSession) {
   return readRematchJoinIntent(session.id)?.cameraOn ?? false;
 }
 
+// A pair arriving from a recorded debate was already speaking with the microphone open, so the
+// debate-again room preserves that live conversation. A profile challenge has no preceding call or
+// user gesture that opened the microphone; it continues to join listen-only until the user unmutes.
+/**
+ * Whether the microphone opens on arrival: a choice already made wins, if there is one. Otherwise
+ * live after a debate, muted off a challenge.
+ */
 function microphoneEnabledByDefault(session: DebateRematchSession) {
   const chosen = readRematchJoinIntent(session.id);
   if (chosen) return chosen.micOn;
