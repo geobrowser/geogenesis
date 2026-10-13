@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   SETTLE_IDLE_TIMEOUT_MS,
+  SETTLE_LCP_QUIET_MS,
   SETTLE_MAX_WAIT_MS,
   resetPageSettledForTests,
   usePageSettled,
@@ -45,6 +46,10 @@ describe('usePageSettled', () => {
     act(() => {
       vi.advanceTimersByTime(250);
     });
+    expect(result.current).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(SETTLE_LCP_QUIET_MS);
+    });
     expect(result.current).toBe(true);
   });
 
@@ -60,7 +65,39 @@ describe('usePageSettled', () => {
       window.dispatchEvent(new Event('load'));
     });
     expect(requestIdleCallback).toHaveBeenCalledWith(expect.any(Function), { timeout: SETTLE_IDLE_TIMEOUT_MS });
+    expect(result.current).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(SETTLE_LCP_QUIET_MS);
+    });
     expect(result.current).toBe(true);
+  });
+
+  it('keeps waiting while new largest-contentful-paint candidates arrive', () => {
+    setReadyState('complete');
+    let notify: (list: { getEntries: () => { startTime: number }[] }) => void = () => {};
+    class FakeObserver {
+      constructor(callback: typeof notify) {
+        notify = callback;
+      }
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('PerformanceObserver', FakeObserver);
+    const { result } = renderHook(() => usePageSettled());
+    act(() => {
+      vi.advanceTimersByTime(300);
+    });
+    // A candidate lands just before the quiet window would have closed.
+    act(() => {
+      notify({ getEntries: () => [{ startTime: performance.now() + SETTLE_LCP_QUIET_MS - 100 }] });
+      vi.advanceTimersByTime(SETTLE_LCP_QUIET_MS);
+    });
+    expect(result.current).toBe(false);
+    act(() => {
+      vi.advanceTimersByTime(SETTLE_LCP_QUIET_MS);
+    });
+    expect(result.current).toBe(true);
+    vi.unstubAllGlobals();
   });
 
   it('settles on the first touch, wheel or key before the page has loaded', () => {
@@ -94,7 +131,7 @@ describe('usePageSettled', () => {
     setReadyState('complete');
     const first = renderHook(() => usePageSettled());
     act(() => {
-      vi.advanceTimersByTime(250);
+      vi.advanceTimersByTime(250 + SETTLE_LCP_QUIET_MS);
     });
     expect(first.result.current).toBe(true);
     first.unmount();
