@@ -36,7 +36,7 @@ export type DebaterAvailability = {
   /** Their free windows; `null` while unknown. */
   slots: AnnotatedSlot[] | null;
   /** They have never set availability, so an empty row means that rather than fully booked. */
-  unset?: boolean;
+  unset: boolean;
   /**
    * Where their answer starts. geo-chat walks their fortnight from their own midnight on the UTC
    * date, so for anyone west of GMT the rest of their evening is not in it: before this, a time is

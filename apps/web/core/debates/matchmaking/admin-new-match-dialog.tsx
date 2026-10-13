@@ -208,7 +208,9 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   const ranking = first !== null && facts.matchesKnown;
   const rosterProfileIds = React.useMemo(() => rosterPeople.map(person => person.profile_space_id), [rosterPeople]);
   const fit = useAdminPairFit(first ? first.person.profile_space_id : null, rosterProfileIds);
-  const freeSlots = useAdminSharedFreeSlots(first ? first.userId : null, availableIds);
+  // Measured from someone with no schedule, everyone would share no time with them, and every row
+  // would say so: unknown instead, which costs nobody anything in the order.
+  const freeSlots = useAdminSharedFreeSlots(first?.hasAvailability ? first.userId : null, availableIds);
   const wanted = React.useMemo(() => new Set(spaceIds.map(normId)), [spaceIds]);
   const narrowed = wanted.size > 0;
   const fitRanking = first !== null && fit.available && !narrowed;
@@ -638,51 +640,13 @@ function PersonOption({
     </HubPillButton>
   );
   // Without availability they can still be picked; asking them to set it sits under Select.
-  let request: React.ReactNode = null;
-  if (available) {
-    request = null;
-  } else if (prompt && prompt !== 'pending' && !isRetryable(prompt)) {
-    request = (
-      <Text
-        as="span"
-        variant="footnote"
-        className={cx('max-w-[14rem] pt-1.5 text-right', prompt === 'sent' ? POSITIVE_TEXT_CLASS : 'text-grey-04')}
-      >
-        {PROMPT_LABELS[prompt]}
-      </Text>
-    );
-  } else if (isRetryable(prompt)) {
-    request = (
-      <HubPillButton
-        analyticsSurface="calendar"
-        analyticsLabel="New match Retry availability request"
-        aria-label={`Retry requesting availability from ${name}`}
-        onClick={onRequest}
-      >
-        Retry
-      </HubPillButton>
-    );
-  } else {
-    request = (
-      <HubPillButton
-        analyticsSurface="calendar"
-        analyticsLabel="New match Request availability"
-        aria-label={`Request availability from ${name}`}
-        pending={prompt === 'pending'}
-        pendingLabel="Sending…"
-        onClick={onRequest}
-      >
-        Request availability
-      </HubPillButton>
-    );
-  }
-  const action = request ? (
+  const action = available ? (
+    select
+  ) : (
     <div className="flex flex-col items-end gap-1.5">
       {select}
-      {request}
+      <RequestAvailabilityAction name={name} prompt={prompt} onRequest={onRequest} />
     </div>
-  ) : (
-    select
   );
 
   return (
@@ -733,6 +697,53 @@ function PersonOption({
         </ul>
       ) : null}
     </li>
+  );
+}
+
+/** Request availability for one person, or what became of asking them. */
+function RequestAvailabilityAction({
+  name,
+  prompt,
+  onRequest,
+}: {
+  name: string;
+  prompt: PromptOutcome | undefined;
+  onRequest: () => void;
+}) {
+  if (prompt && prompt !== 'pending' && !isRetryable(prompt)) {
+    return (
+      <Text
+        as="span"
+        variant="footnote"
+        className={cx('max-w-[14rem] pt-1.5 text-right', prompt === 'sent' ? POSITIVE_TEXT_CLASS : 'text-grey-04')}
+      >
+        {PROMPT_LABELS[prompt]}
+      </Text>
+    );
+  }
+  if (isRetryable(prompt)) {
+    return (
+      <HubPillButton
+        analyticsSurface="calendar"
+        analyticsLabel="New match Retry availability request"
+        aria-label={`Retry requesting availability from ${name}`}
+        onClick={onRequest}
+      >
+        Retry
+      </HubPillButton>
+    );
+  }
+  return (
+    <HubPillButton
+      analyticsSurface="calendar"
+      analyticsLabel="New match Request availability"
+      aria-label={`Request availability from ${name}`}
+      pending={prompt === 'pending'}
+      pendingLabel="Sending…"
+      onClick={onRequest}
+    >
+      Request availability
+    </HubPillButton>
   );
 }
 
@@ -926,66 +937,34 @@ function TimePicker({
       );
     } else if (unset.length > 0) {
       body = (
-        <UnsetAvailability
-          names={unset.map(person => debaterFirstName(person.person))}
-          outcomes={unset.map(person => prompts.get(normId(person.userId)))}
+        <NoSharedTime
+          title={`${unset.map(person => debaterFirstName(person.person)).join(' and ')} ${unset.length > 1 ? 'haven’t' : 'hasn’t'} set availability, so there’s no shared time to recommend.`}
+          note="Pick any time to book it anyway. The invite is flagged and the calendar tags it Off-hours."
+          asked={unset}
+          prompts={prompts}
+          request={{
+            label: 'Request availability',
+            analyticsLabel: 'New match Request availability unset',
+            retryAnalyticsLabel: 'New match Retry request unset',
+          }}
           onPickAny={() => setMode('any')}
-          onRequest={() => onRequest(unset.map(person => person.userId))}
+          onRequest={onRequest}
         />
       );
     } else if (slots.length === 0) {
-      const outcomes = [first, second].map(person => prompts.get(normId(person.userId)));
-      const asking = outcomes.includes('pending');
-      const answered = outcomes.every(outcome => outcome !== undefined && outcome !== 'pending');
-      const retry = outcomes.some(isRetryable);
       body = (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-          <Text as="p" variant="metadataMedium">
-            {a} and {b} have both set availability, but it never overlaps in the next two weeks.
-          </Text>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <HubPillButton
-              analyticsSurface="calendar"
-              analyticsLabel="New match Pick any time"
-              onClick={() => setMode('any')}
-            >
-              Pick any time
-            </HubPillButton>
-            {answered && !asking ? (
-              <>
-                <div className="flex flex-col gap-0.5">
-                  {[a, b].map((name, index) => {
-                    const outcome = outcomes[index] as Exclude<PromptOutcome, 'pending'>;
-                    return (
-                      <Text key={index} as="span" variant="footnote" color="grey-04">
-                        {outcome === 'sent' ? `Asked ${name}` : `${name}: ${PROMPT_LABELS[outcome]}`}
-                      </Text>
-                    );
-                  })}
-                </div>
-                {retry ? (
-                  <HubPillButton
-                    analyticsSurface="calendar"
-                    analyticsLabel="New match Retry ask both"
-                    onClick={() => onRequest([first.userId, second.userId])}
-                  >
-                    Retry
-                  </HubPillButton>
-                ) : null}
-              </>
-            ) : (
-              <HubPillButton
-                analyticsSurface="calendar"
-                analyticsLabel="New match Ask both to widen availability"
-                pending={asking}
-                pendingLabel="Sending…"
-                onClick={() => onRequest([first.userId, second.userId])}
-              >
-                Ask both to widen availability
-              </HubPillButton>
-            )}
-          </div>
-        </div>
+        <NoSharedTime
+          title={`${a} and ${b} have both set availability, but it never overlaps in the next two weeks.`}
+          asked={[first, second]}
+          prompts={prompts}
+          request={{
+            label: 'Ask both to widen availability',
+            analyticsLabel: 'New match Ask both to widen availability',
+            retryAnalyticsLabel: 'New match Retry ask both',
+          }}
+          onPickAny={() => setMode('any')}
+          onRequest={onRequest}
+        />
       );
     } else {
       body = (
@@ -1176,32 +1155,42 @@ function TimePicker({
 }
 
 /**
- * Recommended with someone who has set no availability: there is no shared time to offer, so it
- * points at Pick any time and offers to ask them to set it.
+ * Recommended with nothing to recommend: one of them has set no availability, or theirs never
+ * overlaps. Points at Pick any time, and asks `asked` to set or widen theirs, then says what became
+ * of each request.
  */
-function UnsetAvailability({
-  names,
-  outcomes,
+function NoSharedTime({
+  title,
+  note,
+  asked,
+  prompts,
+  request,
   onPickAny,
   onRequest,
 }: {
-  names: string[];
-  outcomes: (PromptOutcome | undefined)[];
+  title: string;
+  note?: string;
+  asked: Picked[];
+  prompts: ReadonlyMap<string, PromptOutcome>;
+  request: { label: string; analyticsLabel: string; retryAnalyticsLabel: string };
   onPickAny: () => void;
-  onRequest: () => void;
+  onRequest: (userIds: string[]) => void;
 }) {
+  const outcomes = asked.map(person => prompts.get(normId(person.userId)));
   const asking = outcomes.includes('pending');
   const answered = outcomes.every(outcome => outcome !== undefined && outcome !== 'pending');
   const retry = outcomes.some(isRetryable);
-  const who = names.length > 1 ? `${names[0]} and ${names[1]} haven’t` : `${names[0]} hasn’t`;
+  const ask = () => onRequest(asked.map(person => person.userId));
   return (
     <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
       <Text as="p" variant="metadataMedium">
-        {who} set availability, so there&rsquo;s no shared time to recommend.
+        {title}
       </Text>
-      <Text as="p" variant="footnote" color="grey-04">
-        Pick any time to book it anyway. The invite is flagged and the calendar tags it Off-hours.
-      </Text>
+      {note ? (
+        <Text as="p" variant="footnote" color="grey-04">
+          {note}
+        </Text>
+      ) : null}
       <div className="flex flex-wrap items-center justify-center gap-2">
         <HubPillButton analyticsSurface="calendar" analyticsLabel="New match Pick any time" onClick={onPickAny}>
           Pick any time
@@ -1209,21 +1198,18 @@ function UnsetAvailability({
         {answered && !asking ? (
           <>
             <div className="flex flex-col gap-0.5">
-              {names.map((name, index) => {
+              {asked.map((person, index) => {
+                const name = debaterFirstName(person.person);
                 const outcome = outcomes[index] as Exclude<PromptOutcome, 'pending'>;
                 return (
-                  <Text key={index} as="span" variant="footnote" color="grey-04">
+                  <Text key={person.userId} as="span" variant="footnote" color="grey-04">
                     {outcome === 'sent' ? `Asked ${name}` : `${name}: ${PROMPT_LABELS[outcome]}`}
                   </Text>
                 );
               })}
             </div>
             {retry ? (
-              <HubPillButton
-                analyticsSurface="calendar"
-                analyticsLabel="New match Retry request unset"
-                onClick={onRequest}
-              >
+              <HubPillButton analyticsSurface="calendar" analyticsLabel={request.retryAnalyticsLabel} onClick={ask}>
                 Retry
               </HubPillButton>
             ) : null}
@@ -1231,12 +1217,12 @@ function UnsetAvailability({
         ) : (
           <HubPillButton
             analyticsSurface="calendar"
-            analyticsLabel="New match Request availability unset"
+            analyticsLabel={request.analyticsLabel}
             pending={asking}
             pendingLabel="Sending…"
-            onClick={onRequest}
+            onClick={ask}
           >
-            Request availability
+            {request.label}
           </HubPillButton>
         )}
       </div>

@@ -300,6 +300,22 @@ describe('AdminNewMatchDialog', () => {
     expect(screen.getByText('Asked Sam')).toBeInTheDocument();
   });
 
+  it('leaves shared free time unknown, not zero, when debater 1 has no availability', () => {
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    mocks.fitByAnchor = { spacesam: [['spaceraj', fitItem('raj', 0.5, null)]] };
+    mocks.freeSlots = new Map([
+      ['ana', 0],
+      ['raj', 0],
+      ['leo', 0],
+    ]);
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+
+    expect(screen.getByText(/Ordered by fit with Sam Patel/)).toBeInTheDocument();
+    expect(screen.queryByText(/No free time in common/)).not.toBeInTheDocument();
+  });
+
   it('says whether the availability request went out', async () => {
     mocks.searchQuery = 'sam';
     mocks.searchResults = [{ id: 'sam' }];
