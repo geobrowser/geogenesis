@@ -668,11 +668,15 @@ function TimePicker({
   const [selected, setSelected] = React.useState<number | null>(null);
   // Counted in the picked zone: in GMT, an admin west of it can still be on yesterday.
   const days = React.useMemo(() => zoneDays(Date.now(), zone, ADMIN_MATCH_DAYS), [zone]);
-  const [anyDay, setAnyDay] = React.useState(1);
-  const [anyMinutes, setAnyMinutes] = React.useState(17 * 60);
-  // The exact instant when a time came off the strip. Day and minutes name a wall clock, which the
-  // hour the clocks go back names twice; read back, it would always be the earlier of the two.
-  const [anyExact, setAnyExact] = React.useState<number | null>(null);
+  // The override is an instant, like a recommended pick, and its Day and Starts are read from it in
+  // the zone shown. So a zone change keeps the time and moves the dropdowns to it, and a pick in the
+  // second pass of the hour the clocks go back stays there rather than being read back as the first.
+  const [anyAt, setAnyAt] = React.useState(() => instantAt(days[1], 17 * 60, zone));
+  const anyDay = days.indexOf(dateIn(anyAt, zone));
+  const anyMinutes = minutesIn(anyAt, zone);
+  const anyMinuteOptions = [
+    ...new Set([...Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES), anyMinutes]),
+  ].sort((left, right) => left - right);
 
   // Ticks each minute, so a picked time that passes while the dialog is open stops being sendable.
   const now = useMinuteClock();
@@ -692,7 +696,8 @@ function TimePicker({
   // full; until then the override says nothing rather than flagging every time it is shown.
   const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
 
-  const anyStart = anyExact ?? (days[anyDay] ? instantAt(days[anyDay], anyMinutes, zone) : null);
+  // Off the end of the days a zone change can push it to, it is no choice at all.
+  const anyStart = anyDay >= 0 ? anyAt : null;
   React.useEffect(() => {
     if (mode === 'recommended')
       onChoose(selected !== null && selected > now ? { start: selected, outside: false } : null);
@@ -783,12 +788,8 @@ function TimePicker({
       setSelected(start);
       return;
     }
-    const day = days.indexOf(dateIn(start, zone));
-    if (day < 0) return;
     setMode('any');
-    setAnyDay(day);
-    setAnyMinutes(minutesIn(start, zone));
-    setAnyExact(start);
+    setAnyAt(start);
   };
 
   let body: React.ReactNode;
@@ -937,12 +938,10 @@ function TimePicker({
             </Text>
             <select
               value={anyDay}
-              onChange={event => {
-                setAnyDay(Number(event.currentTarget.value));
-                setAnyExact(null);
-              }}
+              onChange={event => setAnyAt(instantAt(days[Number(event.currentTarget.value)], anyMinutes, zone))}
               className={NATIVE_SELECT_CLASS}
             >
+              {anyDay < 0 ? <option value={-1}>Pick a day</option> : null}
               {days.map((day, index) => (
                 <option key={day} value={index}>
                   {dateLabels(day).full}
@@ -956,13 +955,13 @@ function TimePicker({
             </Text>
             <select
               value={anyMinutes}
-              onChange={event => {
-                setAnyMinutes(Number(event.currentTarget.value));
-                setAnyExact(null);
-              }}
+              onChange={event =>
+                setAnyAt(instantAt(days[Math.max(anyDay, 0)], Number(event.currentTarget.value), zone))
+              }
               className={NATIVE_SELECT_CLASS}
             >
-              {Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES).map(minutes => (
+              {/* With the half-hour it was picked on, should a zone with a :15 or :45 offset be shown. */}
+              {anyMinuteOptions.map(minutes => (
                 <option key={minutes} value={minutes}>
                   {wallTime(minutes)}
                 </option>

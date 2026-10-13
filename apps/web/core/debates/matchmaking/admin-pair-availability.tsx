@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { SLOT_MINUTES } from '~/core/availability/blocks';
 import { slotStarts } from '~/core/availability/peer-schedule';
+import { tzAbbreviation } from '~/core/utils/schedule';
 
 import { Text } from '~/design-system/text';
 
@@ -154,12 +155,7 @@ export function AdminPairAvailability({
         <ul className="flex flex-col gap-1">
           {rows.map(({ date, cells }) => {
             const labels = dateLabels(date);
-            const clockChange =
-              cells.length > HALF_HOURS_PER_DAY
-                ? { mark: '+1h', note: 'Clocks go back an hour: this day is 25 hours.' }
-                : cells.length < HALF_HOURS_PER_DAY
-                  ? { mark: '−1h', note: 'Clocks go forward an hour: this day is 23 hours.' }
-                  : null;
+            const clockChange = clockChangeOf(cells.length);
             return (
               <li key={date} className="grid grid-cols-[4.5rem_minmax(0,1fr)] items-center gap-2">
                 <Text as="span" variant="footnote" color="grey-04" className="truncate">
@@ -171,7 +167,9 @@ export function AdminPairAvailability({
                   ) : null}
                 </Text>
                 <span className="sr-only">
-                  {[daySummary(labels.long, cells, first, second, zone), clockChange?.note].filter(Boolean).join(' ')}
+                  {[daySummary(labels.long, cells, first, second, zone, clockChange !== null), clockChange?.note]
+                    .filter(Boolean)
+                    .join(' ')}
                 </span>
                 {/* One column per real half-hour, so the day the clocks change is a column longer or shorter. */}
                 <div
@@ -259,12 +257,40 @@ function runs(cells: Cell[], matches: (cell: Cell) => boolean): { from: number; 
   return found;
 }
 
-/** `9:00 AM–12:00 PM, 3:00 PM–5:00 PM`, as wall clocks in `zone`. */
-function rangesText(found: { from: number; to: number }[], zone: string): string {
-  return found.map(({ from, to }) => `${timeIn(from, zone)}–${timeIn(to, zone)}`).join(', ');
+/** `9:00 AM–12:00 PM, 3:00 PM–5:00 PM`, each end written by `at`. */
+function rangesText(found: { from: number; to: number }[], at: (instant: number) => string): string {
+  return found.map(({ from, to }) => `${at(from)}–${at(to)}`).join(', ');
 }
 
-function daySummary(day: string, cells: Cell[], first: DebaterAvailability, second: DebaterAvailability, zone: string) {
+/**
+ * What the day's clock change is, from how many real half-hours it has: none on a normal day, an
+ * hour on most changes, half an hour on Lord Howe Island's.
+ */
+function clockChangeOf(halfHours: number): { mark: string; note: string } | null {
+  const minutes = (halfHours - HALF_HOURS_PER_DAY) * SLOT_MINUTES;
+  if (minutes === 0) return null;
+  const size = Math.abs(minutes);
+  const amount = size === 60 ? 'an hour' : size % 60 === 0 ? `${size / 60} hours` : `${size} minutes`;
+  return {
+    mark: `${minutes > 0 ? '+' : '−'}${size % 60 === 0 ? `${size / 60}h` : `${size}m`}`,
+    note: `Clocks go ${minutes > 0 ? 'back' : 'forward'} ${amount}: this day is ${24 + minutes / 60} hours.`,
+  };
+}
+
+/**
+ * The day in words, the only account of it assistive tech gets. On a day the clocks change each end
+ * carries its offset, since the repeated hour's two passes would otherwise read the same.
+ */
+function daySummary(
+  day: string,
+  cells: Cell[],
+  first: DebaterAvailability,
+  second: DebaterAvailability,
+  zone: string,
+  clocksChange: boolean
+) {
+  const at = (instant: number) =>
+    clocksChange ? `${timeIn(instant, zone)} ${tzAbbreviation(zone, instant)}` : timeIn(instant, zone);
   const side = (person: DebaterAvailability, of: (cell: Cell) => Side) => {
     const unknown = runs(cells, cell => of(cell) === null);
     if (unknown.length === 1 && unknown[0].from === cells[0].start && unknown[0].to === cells.at(-1)!.end)
@@ -272,13 +298,11 @@ function daySummary(day: string, cells: Cell[], first: DebaterAvailability, seco
     const parts: string[] = [
       // Only ever the start of their window, so one run from midnight.
       ...unknown.map(({ from, to }) =>
-        from === cells[0].start
-          ? `not known before ${timeIn(to, zone)}`
-          : `not known ${rangesText([{ from, to }], zone)}`
+        from === cells[0].start ? `not known before ${at(to)}` : `not known ${rangesText([{ from, to }], at)}`
       ),
     ];
     const free = runs(cells, cell => of(cell) === true);
-    if (free.length > 0) parts.push(`free ${rangesText(free, zone)}`);
+    if (free.length > 0) parts.push(`free ${rangesText(free, at)}`);
     return `${person.name} ${parts.length > 0 ? parts.join(', ') : 'not free'}`;
   };
   const both = runs(cells, cell => cell.first === true && cell.second === true);
@@ -286,6 +310,6 @@ function daySummary(day: string, cells: Cell[], first: DebaterAvailability, seco
     `${day}:`,
     `${side(first, cell => cell.first)};`,
     `${side(second, cell => cell.second)};`,
-    both.length > 0 ? `both free ${rangesText(both, zone)}` : 'never both free',
+    both.length > 0 ? `both free ${rangesText(both, at)}` : 'never both free',
   ].join(' ');
 }

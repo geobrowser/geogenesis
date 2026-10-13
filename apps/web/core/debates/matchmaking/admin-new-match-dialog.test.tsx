@@ -537,12 +537,65 @@ describe('AdminNewMatchDialog', () => {
       // 1:00 AM BST (00:00Z) and 1:00 AM GMT (01:00Z) are both on the strip.
       expect(cell('2026-10-25T00:00:00Z')).not.toBeNull();
       expect(cell('2026-10-25T01:00:00Z')).not.toBeNull();
-      expect(screen.getByText(/Sunday, October 25: .*Raj free 1:00 AM–1:30 AM;/)).toBeInTheDocument();
+      // Read aloud with each end's offset, since 1:00 AM happens twice that night.
+      expect(screen.getByText(/Sunday, October 25: .*Raj free 1:00 AM GMT–1:30 AM GMT;/)).toBeInTheDocument();
       expect(screen.getByText(/Clocks go back an hour/)).toBeInTheDocument();
 
       fireEvent.click(cell('2026-10-25T01:00:00Z')!);
       fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
       expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-25T01:00:00.000Z');
+    });
+  });
+
+  it('marks a half-hour clock change as half an hour', () => {
+    // Lord Howe Island moves its clocks by 30 minutes; on 4 October 2026 they go forward.
+    vi.setSystemTime(new Date('2026-09-28T00:00:00Z'));
+    window.localStorage.setItem('geogenesis.debates.admin-match-zone.v1', 'Australia/Lord_Howe');
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    expect(screen.getByText(/Clocks go forward 30 minutes: this day is 23\.5 hours\./)).toBeInTheDocument();
+    expect(screen.getByText('−30m')).toBeInTheDocument();
+  });
+
+  describe('changing the time zone with Pick any time open', () => {
+    beforeEach(() => {
+      vi.setSystemTime(new Date('2026-10-06T09:20:00Z'));
+      window.localStorage.setItem('geogenesis.debates.admin-match-zone.v1', 'UTC');
+    });
+
+    const pickBoth = () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    };
+    const switchToMadrid = () =>
+      fireEvent.change(screen.getByRole('combobox', { name: 'Time zone' }), { target: { value: 'Europe/Madrid' } });
+
+    it('keeps a time chosen from the dropdowns, and shows it in the new zone', () => {
+      renderDialog();
+      pickBoth();
+      fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+      fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '1' } });
+      fireEvent.change(screen.getByRole('combobox', { name: 'Starts (GMT)' }), { target: { value: String(15 * 60) } });
+
+      switchToMadrid();
+      expect(screen.getByRole('combobox', { name: 'Starts (Madrid)' })).toHaveValue(String(17 * 60));
+      expect(screen.getByText(/Wed, Oct 7 · 5:00 PM – 5:30 PM Madrid \(GMT\+2\)/)).toBeInTheDocument();
+      fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+      expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-07T15:00:00.000Z');
+    });
+
+    it('keeps a time picked off the strip, and moves the dropdowns to match', () => {
+      renderDialog();
+      pickBoth();
+      fireEvent.click(document.querySelector(`[data-start="${Date.parse('2026-10-08T14:00:00Z')}"]`)!);
+      expect(screen.getByRole('combobox', { name: 'Starts (GMT)' })).toHaveValue(String(14 * 60));
+
+      switchToMadrid();
+      expect(screen.getByRole('combobox', { name: 'Starts (Madrid)' })).toHaveValue(String(16 * 60));
+      fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+      expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-08T14:00:00.000Z');
     });
   });
 
