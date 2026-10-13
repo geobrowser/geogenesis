@@ -603,6 +603,40 @@ describe('DebateFeedPlayer media release (GEO-2963)', () => {
   });
 });
 
+describe('DebateFeedPlayer stills', () => {
+  const stills = { slot1: 'https://stills.test/1.jpg', slot2: 'https://stills.test/2.jpg' };
+
+  it("draws each debater's still in place of the Loading text while the recordings are released", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active releaseMedia stills={stills} />);
+
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(container.textContent).not.toContain('Loading…');
+    expect(Array.from(container.querySelectorAll('img')).map(img => img.getAttribute('src'))).toEqual([
+      stills.slot1,
+      stills.slot2,
+    ]);
+  });
+
+  it('keeps each still under its video, which paints over it', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active stills={stills} />);
+
+    expect(container.querySelectorAll('video')).toHaveLength(2);
+    expect(container.querySelectorAll('img')).toHaveLength(2);
+    for (const video of Array.from(container.querySelectorAll('video'))) {
+      expect(video.className).toContain('relative');
+    }
+  });
+
+  it('shows Loading… as before when a debate has no stills', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active releaseMedia />);
+
+    expect(container.textContent?.match(/Loading…/g)).toHaveLength(2);
+  });
+});
+
 describe('DebateFeedPlayer releaseMedia (GEO-3067)', () => {
   it('releases both videos while held back and re-attaches the same URLs on return', () => {
     const load = vi.mocked(HTMLMediaElement.prototype.load);

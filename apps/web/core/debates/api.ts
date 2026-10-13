@@ -111,6 +111,9 @@ export type DebateMediaArtifactKind =
   | 'preview_image'
   | 'social_video'
   | 'social_preview_image'
+  /** One debater's still frame, per slot. A poster for that debater's tile. */
+  | 'speaker_still_slot_1'
+  | 'speaker_still_slot_2'
   | 'transcript_json'
   | 'subtitle_srt'
   | 'subtitle_vtt'

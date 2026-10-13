@@ -27,6 +27,7 @@ import {
   type Debate,
   type DebateActivity,
   type DebateClaimsResponse,
+  type DebateMediaArtifactKind,
   type DebateMediaArtifactUrlRequest,
   type DebateMediaProcessRequest,
   type DebateMediaResponse,
@@ -1504,6 +1505,60 @@ export function useDebateMedia(debateId: string, enabled: boolean) {
       ),
     enabled,
   });
+}
+
+/** Presigned stills expire in about fifteen minutes; reuse one for ten and drop it a little after. */
+const SPEAKER_STILL_STALE_MS = 10 * 60 * 1000;
+
+/**
+ * A still per debater, to stand in for each tile until its recording has a frame to draw.
+ *
+ * Each is one small presign round trip and one image. Resolves to `null` for a slot whose media job
+ * wrote no still (anything rendered before geo-chat learned to produce them), and the tile then
+ * keeps its plain background, as it did before this existed. The artifact list is read off the
+ * media response the card already holds, so a debate without stills makes no request at all.
+ *
+ * Failures are swallowed into `null`: a poster is decoration, and its absence must never be what
+ * blocks or errors a card.
+ */
+export function useDebateSpeakerStills(
+  debateId: string,
+  artifacts: DebateMediaResponse['artifacts'] | undefined,
+  enabled: boolean
+): { slot1: string | null; slot2: string | null } {
+  const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
+  const has = (kind: DebateMediaArtifactKind) => artifacts?.some(artifact => artifact.kind === kind) ?? false;
+
+  const still = (slot: 1 | 2) => {
+    const kind: DebateMediaArtifactKind = slot === 1 ? 'speaker_still_slot_1' : 'speaker_still_slot_2';
+    return {
+      ...debateQueryNetworkOptions,
+      queryKey: ['debates', 'speaker-still', debateId, slot] as const,
+      queryFn: async () => {
+        try {
+          const { upload } = await getDebateMediaArtifactUrl(
+            debateId,
+            { kind },
+            authenticated ? getPrivyIdentityToken : undefined,
+            authenticated ? accountKey : null
+          );
+          return upload.url;
+        } catch {
+          return null;
+        }
+      },
+      enabled: enabled && has(kind),
+      staleTime: SPEAKER_STILL_STALE_MS,
+      gcTime: SPEAKER_STILL_STALE_MS + 60_000,
+      refetchOnWindowFocus: false,
+    };
+  };
+
+  const [one, two] = useQueries({ queries: [still(1), still(2)] });
+  const slot1 = one.data ?? null;
+  const slot2 = two.data ?? null;
+  // Stable between renders: the card's video subtree is memoized and takes this as a prop.
+  return React.useMemo(() => ({ slot1, slot2 }), [slot1, slot2]);
 }
 
 /** How often the "From this debate" source asks again while extraction may still be writing. */

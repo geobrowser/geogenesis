@@ -90,6 +90,12 @@ type DebateFeedPlayerProps = {
    */
   buffer?: boolean;
   /**
+   * A still per debater, drawn under each tile's video. It is what the card shows while the
+   * recordings are not attached or have no frame yet, so a card that is waiting on its video is
+   * not a grey box. Absent slots keep the plain background.
+   */
+  stills?: { slot1: string | null; slot2: string | null } | null;
+  /**
    * Opens the claims panel — the same panel the claims pill under the player opens. The end card
    * offers it as See all; without it, See all is simply not drawn.
    */
@@ -122,6 +128,7 @@ export function DebateFeedPlayer({
   preload = false,
   releaseMedia = false,
   buffer = false,
+  stills = null,
   reducedOverlays = false,
   onOpenClaims,
   onPlaybackRequest,
@@ -637,6 +644,7 @@ export function DebateFeedPlayer({
           byline={bylineFor(slot1Participant)}
           src={slot1Src}
           videoRef={slot1VideoRef}
+          stillUrl={stills?.slot1 ?? null}
           buffer={active || buffer}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 1}
@@ -701,6 +709,7 @@ export function DebateFeedPlayer({
           byline={bylineFor(slot2Participant)}
           src={slot2Src}
           videoRef={slot2VideoRef}
+          stillUrl={stills?.slot2 ?? null}
           buffer={active || buffer}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 2}
@@ -875,6 +884,7 @@ function DebaterVideo({
   byline,
   src,
   videoRef,
+  stillUrl = null,
   buffer = false,
   concealed = false,
   audible,
@@ -901,6 +911,8 @@ function DebaterVideo({
   byline: string | null;
   src: string | null;
   videoRef: React.RefObject<HTMLVideoElement | null>;
+  /** This debater's still, drawn beneath the video and left showing until the video fades in over it. */
+  stillUrl?: string | null;
   /** Ask the browser to buffer this recording rather than stop at its header. See the player's `buffer`. */
   buffer?: boolean;
   /**
@@ -1179,12 +1191,26 @@ function DebaterVideo({
     >
       {/* Clicking anywhere on the video toggles pause/play. */}
       <button type="button" aria-label="Pause or play" onClick={onToggle} className="absolute inset-0 z-0">
+        {/* Under the video rather than instead of it: the video is concealed (opacity-0) until both
+            tiles have a frame, and without media attached there is no video at all. The still is
+            what the tile shows in both windows. It stays mounted afterwards — the opaque video sits
+            over it, and unmounting would flash the background through the fade. */}
+        {stillUrl ? (
+          <img
+            src={stillUrl}
+            alt=""
+            aria-hidden="true"
+            decoding="async"
+            draggable={false}
+            className="absolute inset-0 h-full w-full object-cover"
+          />
+        ) : null}
         {src ? (
           <video
             ref={videoRef}
             // Both tiles fade in together, and only once both have a frame — see `concealed`.
             className={cx(
-              'h-full w-full object-cover transition-opacity duration-200',
+              'relative h-full w-full object-cover transition-opacity duration-200',
               concealed ? 'opacity-0' : 'opacity-100'
             )}
             playsInline
@@ -1204,7 +1230,10 @@ function DebaterVideo({
             onTimeUpdate={onPlaybackTick}
           />
         ) : (
-          <div className="grid h-full place-items-center bg-bg text-grey-04">Loading…</div>
+          // With a still behind it the tile is already a picture, and text would only sit on one.
+          <div className={stillUrl ? 'h-full' : 'grid h-full place-items-center bg-bg text-grey-04'}>
+            {stillUrl ? null : 'Loading…'}
+          </div>
         )}
       </button>
 
