@@ -49,17 +49,22 @@ export function useLobbyGuestSignIn(lobbyId: string) {
 }
 
 const promptedKey = (lobbyId: string) => `geo.debates.lobby-sign-in-prompted.${dashlessId(lobbyId)}`;
+/** This page load's claims, so the deep link and the page still agree when storage is unavailable. */
+const promptedThisLoad = new Set<string>();
 
 /**
  * Records that this tab has opened the account prompt for a lobby; true only the first time. Shared
  * with the sign-in deep link, so a visitor it already prompted is not prompted again on arrival.
  */
 export function claimLobbySignInPrompt(lobbyId: string) {
+  const key = promptedKey(lobbyId);
+  if (promptedThisLoad.has(key)) return false;
+  promptedThisLoad.add(key);
   try {
-    if (window.sessionStorage.getItem(promptedKey(lobbyId))) return false;
-    window.sessionStorage.setItem(promptedKey(lobbyId), '1');
+    if (window.sessionStorage.getItem(key)) return false;
+    window.sessionStorage.setItem(key, '1');
   } catch {
-    // Without storage it asks once per visit rather than once per tab.
+    // Without storage it asks once per page load rather than once per tab.
   }
   return true;
 }

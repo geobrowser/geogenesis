@@ -86,11 +86,27 @@ describe('useLobbySignInPrompt', () => {
     mocks.search = new URLSearchParams('modal=signin&via=lobby');
     const { rerender } = renderHook(() => useLobbySignInPrompt('lobby-g', true));
     expect(mocks.signIn).not.toHaveBeenCalled();
-    expect(claimLobbySignInPrompt('lobby-g')).toBe(true);
-    window.sessionStorage.clear();
+    expect(window.sessionStorage.length).toBe(0);
 
     mocks.search = new URLSearchParams();
     rerender();
     expect(mocks.signIn).toHaveBeenCalledTimes(1);
+  });
+
+  // Callers still share the record, so the deep link and the page do not both open it.
+  it('still claims once per lobby when storage is unavailable', () => {
+    const storage = Object.getOwnPropertyDescriptor(window, 'sessionStorage');
+    Object.defineProperty(window, 'sessionStorage', {
+      configurable: true,
+      get: () => {
+        throw new Error('blocked');
+      },
+    });
+    try {
+      expect(claimLobbySignInPrompt('lobby-h')).toBe(true);
+      expect(claimLobbySignInPrompt('lobby-h')).toBe(false);
+    } finally {
+      if (storage) Object.defineProperty(window, 'sessionStorage', storage);
+    }
   });
 });

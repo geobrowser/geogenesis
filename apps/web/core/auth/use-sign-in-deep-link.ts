@@ -65,8 +65,9 @@ export function useSignInDeepLink() {
       // Already signed in: the link has done its job by landing them here, and a login dialog over
       // a live session is noise. The trigger is cleared either way.
       if (authenticated) return;
-      // The lobby page would otherwise open a second prompt on top of this one (GEO-3270).
-      if (lobbyId) claimLobbySignInPrompt(lobbyId);
+      // The lobby page would otherwise open a second prompt after this one (GEO-3270). Any room:
+      // a bare lobby link's fallback notice signs in as `room`, and the lobby can load after.
+      if (roomId) claimLobbySignInPrompt(roomId);
       openSignIn();
     },
   });

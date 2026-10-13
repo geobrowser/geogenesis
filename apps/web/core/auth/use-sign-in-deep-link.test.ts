@@ -75,4 +75,14 @@ describe('useSignInDeepLink', () => {
     expect(mocks.openSignIn).toHaveBeenCalledTimes(1);
     expect(claimLobbySignInPrompt(LOBBY)).toBe(false);
   });
+
+  // A bare lobby link's fallback notice signs in as `via=room`; the lobby page may still load after.
+  it('records the prompt for a room link without the lobby attribution too', () => {
+    window.history.replaceState(null, '', `/debate/${LOBBY}`);
+    mocks.via = 'room';
+    renderHook(() => useSignInDeepLink());
+    mocks.run?.();
+
+    expect(claimLobbySignInPrompt(LOBBY)).toBe(false);
+  });
 });
