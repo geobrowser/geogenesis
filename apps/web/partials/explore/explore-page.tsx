@@ -132,9 +132,10 @@ export function ExplorePage({
       <ExploreEmailCapturePopup />
       <main className="min-w-0 pt-2">
         <div className="mx-auto w-full max-w-[880px]">
-          {/* A live lobby comes first: it is happening now, and the welcome note will keep. */}
-          <ExploreLiveLobbiesBanner />
           <ExploreWelcomeBanner />
+          {/* Under the welcome note, which a first-time visitor needs to read before a lobby means
+              anything to them; it is dismissed for good, and the lobby banner then leads. */}
+          <ExploreLiveLobbiesBanner />
         </div>
         {forYouEnabled ? (
           <ExploreForYouFeed signedIn={signedIn} />

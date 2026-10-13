@@ -111,7 +111,16 @@ const REMINDER_FAILED = 'Could not update your reminder. Try again.';
  * One lobby: Live or its time, its name, who is there, and Join or Remind me. Shared by this card
  * and the Debate button's hover list; `entry` says which.
  */
-export function LobbyRow({ lobby, entry = 'side_panel' }: { lobby: DebateLobbySummary; entry?: LobbyEntry }) {
+export function LobbyRow({
+  lobby,
+  entry = 'side_panel',
+  showLiveMark = true,
+}: {
+  lobby: DebateLobbySummary;
+  entry?: LobbyEntry;
+  /** Off where the heading already says every row is live, as the Debate button's hover list does. */
+  showLiveMark?: boolean;
+}) {
   const reminder = useDebateLobbyReminder();
   const hosts = hostsLabel(lobby.hosts);
   const schedule = lobbyScheduleLabel(lobby);
@@ -123,12 +132,14 @@ export function LobbyRow({ lobby, entry = 'side_panel' }: { lobby: DebateLobbySu
   return (
     <li className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0" data-testid="lobby-row">
       {lobby.open ? (
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-green" />
-          <Text as="span" variant="footnoteMedium" color="text">
-            Live
-          </Text>
-        </span>
+        showLiveMark ? (
+          <span className="inline-flex items-center gap-1.5">
+            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-green" />
+            <Text as="span" variant="footnoteMedium" color="text">
+              Live
+            </Text>
+          </span>
+        ) : null
       ) : schedule ? (
         <Text as="p" variant="footnoteMedium" color="grey-04">
           {schedule}

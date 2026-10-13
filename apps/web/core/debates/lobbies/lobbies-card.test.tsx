@@ -20,7 +20,7 @@ vi.mock('./lobby-people', () => ({
 }));
 vi.mock('./open-lobby-dialog', () => ({ OpenLobbyDialog: () => null }));
 
-const { LiveLobbiesCard } = await import('./lobbies-card');
+const { LiveLobbiesCard, LobbyRow } = await import('./lobbies-card');
 
 const host = { user_id: 'u1', profile_space_id: 's1', display_name: 'Adam', avatar_cid: null };
 
@@ -81,5 +81,20 @@ describe('LiveLobbiesCard rows', () => {
     expect(text).toContain('Hosted by Adam · 6 reminded');
     expect(row().getByRole('button', { name: 'Remind me' })).toBeTruthy();
     expect(row().queryByTestId('avatar-stack')).toBeNull();
+  });
+});
+
+// GEO-3268. The Debate button's hover list heads every row "Live" once, so the rows drop their own.
+describe('LobbyRow without its Live line', () => {
+  it('keeps the name, counts and Join', () => {
+    render(
+      <ul>
+        <LobbyRow lobby={summary({})} entry="nav" showLiveMark={false} />
+      </ul>
+    );
+
+    expect(row().queryByText('Live')).toBeNull();
+    expect(row().getByText('Onboarding with Adam')).toBeTruthy();
+    expect(row().getByRole('link', { name: 'Join' })).toBeTruthy();
   });
 });

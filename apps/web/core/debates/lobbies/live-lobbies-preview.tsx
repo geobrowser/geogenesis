@@ -81,12 +81,19 @@ export function LiveLobbiesPreview({
           data-testid="live-lobbies-preview"
         >
           <section aria-label="Live debate lobbies" className="flex flex-col gap-3">
-            <Text as="h3" variant="footnoteMedium" color="text">
-              Live debate lobbies
-            </Text>
+            {/* One heading says they are all live, so the rows leave out their own Live line. */}
+            <span className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="size-1.5 shrink-0 animate-pulse-strong rounded-full bg-green motion-reduce:animate-none"
+              />
+              <Text as="h3" variant="footnoteMedium" color="text">
+                {lobbies.length > 1 ? `${lobbies.length} live debate lobbies` : 'Live debate lobby'}
+              </Text>
+            </span>
             <ul className="flex flex-col divide-y divide-grey-02">
               {lobbies.map(lobby => (
-                <LobbyRow key={lobby.lobby_id} lobby={lobby} entry="nav" />
+                <LobbyRow key={lobby.lobby_id} lobby={lobby} entry="nav" showLiveMark={false} />
               ))}
             </ul>
           </section>
