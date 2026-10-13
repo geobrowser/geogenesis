@@ -5,7 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbyView } from '../api';
+import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbySummary, DebateLobbyView } from '../api';
 
 const mocks = vi.hoisted(() => ({
   phone: false,
@@ -32,6 +32,9 @@ const mocks = vi.hoisted(() => ({
   /** When the guest view was last read; `refetchGuestView` moves it to now. */
   guestViewAt: 0,
   refetchGuestView: vi.fn(),
+  /** The signed-in lobbies list. */
+  lobbies: [] as DebateLobbySummary[],
+  userId: null as string | null,
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
@@ -73,6 +76,7 @@ vi.mock('./hooks', () => ({
     };
   },
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false }),
+  useDebateLobbies: (enabled: boolean) => ({ data: enabled ? { lobbies: mocks.lobbies } : undefined }),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }));
 vi.mock('./lobby-guest-hooks', async importOriginal => ({
@@ -149,7 +153,7 @@ vi.mock('./lobby-queued-request', () => ({
 }));
 vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn() }));
 vi.mock('../matchmaking/hooks', () => ({ useMatchmakingScope: vi.fn() }));
-vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => null }));
+vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.userId }));
 
 const { DebateLobbyPage, memberPath } = await import('./lobby-page');
 const { readGuestSecret } = await import('./lobby-guest-secret');
@@ -209,6 +213,8 @@ beforeEach(() => {
   mocks.presenceAdmitted = [];
   mocks.activityEnabled = [];
   mocks.guestViewAt = 0;
+  mocks.lobbies = [];
+  mocks.userId = null;
   mocks.refetchGuestView.mockReset().mockImplementation(async () => {
     mocks.guestViewAt = Date.now() + 1;
   });
@@ -529,7 +535,7 @@ describe('DebateLobbyPage when guests are turned off mid-session', () => {
     mocks.guestView = { ...mocks.guestView!, lobby: { ...lobbyFields, access: { status: 'closed', reason: 'ended' } } };
     rerender(<DebateLobbyPage lobbyId="lobby1" />);
 
-    expect(await screen.findByText('This lobby has ended.')).toBeInTheDocument();
+    expect(await screen.findByText('This lobby has ended')).toBeInTheDocument();
     expect(screen.queryByText(/has been turned off/)).not.toBeInTheDocument();
   });
 });
@@ -629,5 +635,116 @@ describe('DebateLobbyPage banner and the guest room connection', () => {
     act(() => mocks.onGuestRemoved?.());
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(2));
     expect(mocks.start).toHaveBeenLastCalledWith('lobby1', { guest_secret: 'secret-1' });
+  });
+});
+
+describe('DebateLobbyPage state screens', () => {
+  const adamPerson = { user_id: 'adam', profile_space_id: 'space-adam', display_name: 'Adam', avatar_cid: null };
+  const listed = (overrides: Partial<DebateLobbySummary>): DebateLobbySummary => ({
+    lobby_id: 'lobby1',
+    name: 'Onboarding with Adam',
+    scheduled: true,
+    starts_at: '2099-10-06T18:00:00Z',
+    opens_at: '2099-10-06T17:50:00Z',
+    open: false,
+    hosts: [adamPerson],
+    headcount: 0,
+    avatars: [],
+    debating_count: 0,
+    reminder_count: 0,
+    viewer_reminded: false,
+    viewer_on_roster: false,
+    ...overrides,
+  });
+  const notYetOpen = {
+    ...lobbyFields,
+    scheduled: true,
+    starts_at: '2099-10-06T18:00:00Z',
+    opens_at: '2099-10-06T17:50:00Z',
+    access: { status: 'not_yet_open' as const, opens_at: '2099-10-06T17:50:00Z' },
+    members: [],
+    reminder_count: 3,
+  };
+
+  it('tells a visitor before opening that they can listen once it opens', () => {
+    mocks.guestView = { lobby: notYetOpen, claims: null, highlights: null };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByText('Debate lobby · scheduled')).toBeInTheDocument();
+    expect(screen.getByText(/^Opens at .* · in \d+ days$/)).toBeInTheDocument();
+    expect(screen.getByText('No account? You can still join and listen when it opens.')).toBeInTheDocument();
+    expect(screen.queryByText(/speak, vote and debate/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remind me' })).not.toBeInTheDocument();
+    // The lobbies list is members only, so a visitor gets no host line.
+    expect(screen.queryByText(/Hosted by/)).not.toBeInTheDocument();
+  });
+
+  it('names the host from the lobbies list before it opens', () => {
+    mocks.authenticated = true;
+    mocks.memberLobby = { ...memberView, ...notYetOpen, viewer: { ...memberView.viewer, connected: false } };
+    mocks.lobbies = [listed({})];
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByText('Hosted by Adam')).toBeInTheDocument();
+    expect(screen.getByText('3 reminded')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remind me' })).toBeInTheDocument();
+    expect(screen.queryByText(/No account/)).not.toBeInTheDocument();
+  });
+
+  it('points an ended lobby at the host’s next one, with Remind me', () => {
+    mocks.authenticated = true;
+    mocks.memberLobby = { ...memberView, access: { status: 'closed', reason: 'ended' }, members: [] };
+    mocks.lobbies = [listed({ lobby_id: 'next', name: 'Tuesday debate hour' })];
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('heading', { name: 'This lobby has ended' })).toBeInTheDocument();
+    expect(screen.getByText(/^Adam’s next lobby: Tuesday debate hour, .+\.$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Remind me' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Find a debate' })).toBeInTheDocument();
+  });
+
+  it('shows an ended lobby with only Find a debate when the host has nothing next', () => {
+    mocks.authenticated = true;
+    mocks.memberLobby = { ...memberView, access: { status: 'closed', reason: 'ended' }, members: [] };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.queryByText(/next lobby/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Remind me' })).not.toBeInTheDocument();
+  });
+
+  it('titles the banned card', () => {
+    mocks.authenticated = true;
+    mocks.memberLobby = { ...memberView, access: { status: 'banned' }, members: [] };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('heading', { name: 'You can’t join this lobby' })).toBeInTheDocument();
+    expect(screen.getByText('A host has blocked you from Onboarding with Adam.')).toBeInTheDocument();
+  });
+
+  it('shows the first one in an empty lobby what to do, with the next lobby and the People tab', () => {
+    mocks.authenticated = true;
+    mocks.userId = 'adam';
+    mocks.presenceStatus = 'joined';
+    mocks.memberLobby = { ...memberView, guest_count: 0 };
+    mocks.lobbies = [listed({ lobby_id: 'next', name: 'Tuesday debate hour' })];
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    const empty = screen.getByTestId('lobby-empty-room');
+    expect(empty).toHaveTextContent('Nobody’s here right now.');
+    expect(empty).toHaveTextContent('Tuesday debate hour');
+    expect(screen.getByRole('link', { name: 'See who’s free this week' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('modalTarget=people')
+    );
+  });
+
+  it('shows no empty state once someone else is in', () => {
+    mocks.authenticated = true;
+    mocks.userId = 'priya';
+    mocks.presenceStatus = 'joined';
+    mocks.memberLobby = { ...memberView, guest_count: 0 };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.queryByTestId('lobby-empty-room')).not.toBeInTheDocument();
   });
 });
