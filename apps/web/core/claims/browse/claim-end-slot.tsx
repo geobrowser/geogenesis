@@ -363,6 +363,7 @@ function ClaimDebateOfferBody({
           blockedReason={matchup.blockedReason}
           isRequesting={matchup.isRequesting}
           requestError={matchup.requestError}
+          switchesAvailability={matchup.switchesAvailability}
           onRequest={matchup.request}
           rowsDisabled={live.buttonsDisabled}
           rowsDisabledReason={

@@ -15,7 +15,13 @@ const mocks = vi.hoisted(() => ({
   request: vi.fn(),
   withdraw: vi.fn(),
   cancel: vi.fn(),
-  matchup: {} as { match: unknown; blockedReason?: string; isRequesting: boolean; requestError: string | null },
+  matchup: {} as {
+    match: unknown;
+    blockedReason?: string;
+    isRequesting: boolean;
+    requestError: string | null;
+    switchesAvailability?: boolean;
+  },
   opponents: {} as ClaimOpponents,
   activity: undefined as DebateActivity | undefined,
   outbound: null as DebateRequest | null,
@@ -238,32 +244,42 @@ describe('the claim page Request debate', () => {
   });
 });
 
-describe('the now-or-later popup', () => {
+describe('the debate popup', () => {
   function open() {
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
     return screen.getByRole('dialog');
   }
 
-  it('asks now or later first when someone has free time', () => {
+  it('offers First available, the people online and scheduling on one screen', () => {
     mocks.opponents = opponents({ online: [person('dis'), person('dat')], withFreeTime: new Set(['later']) });
     render(<View />);
     const dialog = open();
     expect(within(dialog).getByText('Debate this claim')).toBeInTheDocument();
     expect(within(dialog).getByText('2 people who disagree are online')).toBeInTheDocument();
+    expect(within(dialog).getByText('First available')).toBeInTheDocument();
+    expect(within(dialog).getByText('dis')).toBeInTheDocument();
+    expect(within(dialog).getByText('dat')).toBeInTheDocument();
     expect(within(dialog).getByText('1 person who disagrees has free time')).toBeInTheDocument();
     const later = within(dialog).getByRole('link', { name: /Schedule for later/ });
     expect(later).toHaveAttribute('data-geo-analytics-label', 'Claim Schedule later');
-    fireEvent.click(within(dialog).getByRole('button', { name: /Debate now/ }));
-    expect(within(screen.getByRole('dialog')).getByText('First available')).toBeInTheDocument();
-    expect(within(screen.getByRole('dialog')).getByRole('button', { name: '‹ Back' })).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: '‹ Back' })).toBeNull();
   });
 
-  it('opens straight on Debate now, with no Back, when nobody has free time', () => {
+  it('leaves scheduling out when nobody on the other side has free time', () => {
     mocks.opponents = opponents({ online: [person('dis')] });
     render(<View />);
     const dialog = open();
     expect(within(dialog).getByText('First available')).toBeInTheDocument();
-    expect(within(dialog).queryByRole('button', { name: '‹ Back' })).toBeNull();
+    expect(within(dialog).queryByRole('link', { name: /Schedule for later/ })).toBeNull();
+  });
+
+  it('says First available will switch an unavailable viewer on', () => {
+    mocks.matchup = { ...mocks.matchup, match: { claim: {}, viewer_position: true }, switchesAvailability: true };
+    mocks.opponents = opponents({ online: [person('dis')] });
+    render(<View />);
+    const dialog = open();
+    expect(within(dialog).getByText('You’ll show as available to debate.')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Request debate' })).toBeEnabled();
   });
 
   it('holds First available back without a live match, but still lists people to ask', () => {
@@ -295,10 +311,8 @@ describe('the now-or-later popup', () => {
     mocks.live = { outboundChallenge: null, blockedReason: 'You already have an open request.', buttonsDisabled: true };
     mocks.opponents = opponents({ online: [person('dis')], withFreeTime: new Set(['later']) });
     render(<View />);
-    const choose = open();
-    expect(within(choose).getByRole('link', { name: /Schedule for later/ })).toBeInTheDocument();
-    fireEvent.click(within(choose).getByRole('button', { name: /Debate now/ }));
-    const now = screen.getByRole('dialog');
+    const now = open();
+    expect(within(now).getByRole('link', { name: /Schedule for later/ })).toBeInTheDocument();
     expect(within(now).getByText('Withdraw your open request to send another.')).toBeInTheDocument();
     expect(within(now).getByRole('button', { name: 'Request debate' })).toBeDisabled();
     expect(within(now).getByRole('button', { name: 'Debate now' })).toBeDisabled();
@@ -308,14 +322,14 @@ describe('the now-or-later popup', () => {
   it('says so when everyone on the other side has left', () => {
     mocks.matchup = { ...mocks.matchup, match: { claim: {}, viewer_position: true } };
     render(<View />);
-    expect(within(open()).getByText('Everyone on the other side just left.')).toBeInTheDocument();
+    expect(within(open()).getByText('Nobody else on the other side is online right now.')).toBeInTheDocument();
   });
 
   it('shows the request once sent, and says when it ends without a debate', () => {
     mocks.matchup = { ...mocks.matchup, match: { claim: {}, viewer_position: true } };
     mocks.opponents = opponents({ online: [person('dis')], withFreeTime: new Set(['later']) });
     const view = render(<View />);
-    fireEvent.click(within(open()).getByRole('button', { name: /Debate now/ }));
+    open();
 
     mocks.outbound = outboundRequest();
     view.rerender(<View />);

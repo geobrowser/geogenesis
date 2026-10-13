@@ -289,6 +289,7 @@ vi.mock('~/core/debates/lobbies/lobby-return', async () => {
 });
 
 vi.mock('~/core/debates/hooks', () => ({
+  useUpdateDebateAvailability: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   useDebateRematch: () => ({ data: mocks.session, isLoading: mocks.sessionLoading, error: null }),
   useDebateExtractedClaims: (debateId: string, enabled: boolean) => {
     mocks.extractedClaimsAskedFor.push({ debateId, enabled });

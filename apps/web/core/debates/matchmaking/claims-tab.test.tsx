@@ -276,6 +276,7 @@ vi.mock('~/core/claims/browse/claim-response-summary', () => ({
 }));
 
 vi.mock('../hooks', () => ({
+  useUpdateDebateAvailability: () => ({ mutate: vi.fn(), isPending: false, error: null }),
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),

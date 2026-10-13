@@ -23,6 +23,7 @@ const mocks = vi.hoisted(() => ({
   matches: [] as MatchmakingMatch[],
   outbound: null as unknown,
   createRequestMutate: vi.fn(),
+  updateAvailability: vi.fn(),
   submitResponse: vi.fn(),
   indexing: { status: 'idle', pending: null, runId: null } as {
     status: 'idle' | 'reconciling' | 'delayed' | 'indexed';
@@ -59,6 +60,7 @@ vi.mock('../claim-picker-page', () => ({
 }));
 
 vi.mock('../hooks', () => ({
+  useUpdateDebateAvailability: () => ({ mutate: mocks.updateAvailability, isPending: false, error: null }),
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.
   useDebateSchedule: () => ({ blocks: [], isSet: false }),
@@ -209,6 +211,7 @@ beforeEach(() => {
   mocks.matches = [match()];
   mocks.outbound = null;
   mocks.createRequestMutate.mockReset();
+  mocks.updateAvailability.mockReset();
   mocks.submitResponse.mockReset();
   mocks.indexing = { status: 'idle', pending: null, runId: null };
   mocks.resetIndexing.mockReset();
@@ -359,19 +362,24 @@ describe('MatchesList', () => {
     expect(screen.getByText('Claim unavailable')).toBeInTheDocument();
   });
 
-  // A request you send while marked unavailable could not be answered, so the design keeps the
-  // action visible and explains the disabled state on hover without adding a line to every card.
-  it('cannot request a debate while the viewer is unavailable', async () => {
+  // geo-chat will not seat a requester who is unavailable when the other side accepts, so a press
+  // while unavailable switches the viewer on first, then sends (GEO-3244), rather than leaving a
+  // disabled button and a tooltip pointing at the switch.
+  it('switches an unavailable viewer on, then sends the request', () => {
     mocks.availableToDebate = false;
     render(<MatchesList onTabChange={vi.fn()} />);
 
     const request = screen.getByRole('button', { name: 'Request debate' });
-    expect(request).toBeDisabled();
-    expect(screen.queryByText('Switch yourself to available to send a request.')).not.toBeInTheDocument();
+    expect(request).toBeEnabled();
+    fireEvent.click(request);
 
-    await userEvent.hover(request.parentElement!);
-
-    expect(await screen.findByRole('tooltip')).toHaveTextContent('Switch yourself to available to send a request.');
+    expect(mocks.createRequestMutate).not.toHaveBeenCalled();
+    expect(mocks.updateAvailability).toHaveBeenCalledWith(
+      true,
+      expect.objectContaining({ onSuccess: expect.any(Function) })
+    );
+    mocks.updateAvailability.mock.calls[0]![1].onSuccess();
+    expect(mocks.createRequestMutate).toHaveBeenCalledTimes(1);
   });
 
   it('requests a debate on the claim and blocks a second concurrent request', () => {

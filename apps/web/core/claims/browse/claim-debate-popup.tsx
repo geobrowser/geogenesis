@@ -24,6 +24,8 @@ import { speakerLabel } from '~/core/debates/playback-utils';
 import { useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 
+import { Calendar } from '~/design-system/icons/calendar';
+import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Close } from '~/design-system/icons/close';
 import { Text } from '~/design-system/text';
 
@@ -32,16 +34,16 @@ import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-avail
 const SURFACE = 'claim-popup';
 const EMPTY_SPACE_IDS: string[] = [];
 
-type Screen = 'choose' | 'now' | 'sent' | 'ended';
+type Screen = 'debate' | 'sent' | 'ended';
 
 type Booking = { userId: string; name: string; disagreementCount: number | null };
 
 /**
- * The claim page's "now or later?" popup (GEO-3244), opened by a filled Request debate.
+ * The claim page's debate popup (GEO-3244), opened by a filled Request debate.
  *
- * Choose: Debate now, or Schedule for later when someone on the other side has free time. Without
- * any, it opens on Debate now, with no Back. Debate now offers First available — the claim request
- * geo-chat matches — and a row per person on the other side who is online, each asked directly.
+ * One screen, so debating now is two presses from the claim: First available — the claim request
+ * geo-chat matches — then a row per person on the other side who is online, each asked directly,
+ * and Schedule for later pinned under them when someone on the other side has free time.
  *
  * Once a request or an invite goes out, the popup shows it, with its Withdraw, until the viewer
  * moves on. If it ends without a debate, it says so and offers scheduling instead. A debate that
@@ -55,6 +57,7 @@ export function ClaimDebatePopup({
   blockedReason,
   isRequesting,
   requestError,
+  switchesAvailability,
   onRequest,
   rowsDisabled,
   rowsDisabledReason,
@@ -73,6 +76,8 @@ export function ClaimDebatePopup({
   blockedReason: string | null | undefined;
   isRequesting: boolean;
   requestError: string | null;
+  /** First available will switch the viewer to available before sending. */
+  switchesAvailability: boolean;
   onRequest: () => void;
   /** Whether the rows' Debate now is held back, and why: the People tab's rule. */
   rowsDisabled: boolean;
@@ -86,7 +91,7 @@ export function ClaimDebatePopup({
   schedule?: { href: string; onNavigate: () => void };
   onClose: () => void;
 }) {
-  const [screen, setScreen] = React.useState<Screen>(schedule ? 'choose' : 'now');
+  const [screen, setScreen] = React.useState<Screen>('debate');
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const [sent, setSent] = React.useState<{ kind: 'request'; id: string } | { kind: 'challenge'; id: string } | null>(
     null
@@ -95,7 +100,7 @@ export function ClaimDebatePopup({
   // What was already out when the popup opened, so only a send from here moves it to Sent.
   const [baseline] = React.useState(() => ({ request: outboundRequest?.id, challenge: outboundChallenge?.id }));
   React.useEffect(() => {
-    if (screen !== 'now') return;
+    if (screen !== 'debate') return;
     if (outboundRequest && outboundRequest.id !== baseline.request) {
       setSent({ kind: 'request', id: outboundRequest.id });
       setScreen('sent');
@@ -145,44 +150,6 @@ export function ClaimDebatePopup({
         disagreementCount={booking.disagreementCount}
         onClose={() => setBooking(null)}
       />
-    );
-  }
-
-  if (screen === 'choose') {
-    return (
-      <DebateDialogShell
-        eyebrow={<Eyebrow>Debate this claim</Eyebrow>}
-        title={claimName ?? 'This claim'}
-        headerEnd={close}
-        onClose={onClose}
-        footer={
-          <div className="flex justify-center">
-            <HubPillButton analyticsSurface={SURFACE} analyticsLabel="Claim popup cancel" onClick={onClose}>
-              Cancel
-            </HubPillButton>
-          </div>
-        }
-      >
-        <div className="grid gap-2">
-          <OptionCard
-            title="Debate now"
-            detail={onlineSummary(opponents.online, opposing, liveMatch)}
-            hint="First available, or pick someone"
-            analytics={debateActionAnalyticsAttributes('claim', 'Debate now', 'start_debate')}
-            onClick={() => setScreen('now')}
-          />
-          {schedule ? (
-            <OptionCard
-              title="Schedule for later"
-              detail={peopleCount(opponents.withFreeTime.size, opposing, ['has free time', 'have free time'])}
-              hint="Opens the calendar, filtered to them"
-              analytics={debateActionAnalyticsAttributes('claim', 'Schedule later', 'open_debate_calendar')}
-              href={schedule.href}
-              onClick={schedule.onNavigate}
-            />
-          ) : null}
-        </div>
-      </DebateDialogShell>
     );
   }
 
@@ -256,32 +223,75 @@ export function ClaimDebatePopup({
 
   return (
     <DebateDialogShell
-      eyebrow={<Eyebrow>Debate now</Eyebrow>}
+      eyebrow={<Eyebrow>Debate this claim</Eyebrow>}
       title={claimName ?? 'This claim'}
-      headerStart={
-        schedule ? (
-          <button
-            type="button"
-            onClick={() => setScreen('choose')}
-            {...debateActionAnalyticsAttributes(SURFACE, 'back')}
-            className="text-metadata text-grey-04 transition-colors hover:text-text"
-          >
-            ‹ Back
-          </button>
-        ) : null
-      }
       headerEnd={close}
       onClose={onClose}
+      footer={
+        // Pinned under the list, so the other way to debate never scrolls out of sight.
+        <div className="grid gap-3">
+          {schedule ? (
+            <Link
+              href={schedule.href}
+              onClick={schedule.onNavigate}
+              {...debateActionAnalyticsAttributes('claim', 'Schedule later', 'open_debate_calendar')}
+              className={cx(
+                'flex items-center gap-3 rounded-lg border border-grey-02 bg-white p-3 transition-colors hover:border-text',
+                'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple'
+              )}
+            >
+              <span className="grid size-8 shrink-0 place-items-center rounded-full bg-grey-01 text-text" aria-hidden>
+                <Calendar />
+              </span>
+              <span className="grid min-w-0 flex-1 gap-0.5">
+                <Text as="span" variant="metadataMedium">
+                  Schedule for later
+                </Text>
+                <Text as="span" variant="footnote" color="grey-04">
+                  {peopleCount(opponents.withFreeTime.size, opposing, ['has free time', 'have free time'])}
+                </Text>
+              </span>
+              <span className="shrink-0 text-grey-04" aria-hidden>
+                <ChevronRight />
+              </span>
+            </Link>
+          ) : null}
+          <Text as="p" variant="footnote" color="grey-04" className="text-center">
+            {rowsDisabled && rowsDisabledReason
+              ? `${rowsDisabledReason}${schedule ? ' Scheduling still works.' : ''}`
+              : 'Asking one person sends a general invite. They pick the claim when they accept.'}
+          </Text>
+        </div>
+      }
     >
-      <div className="grid gap-4">
-        <div className="flex items-center justify-between gap-3 rounded-lg border border-grey-02 p-3">
-          <div className="min-w-0">
+      <section className="grid gap-3">
+        <div className="flex items-baseline justify-between gap-2">
+          <Text as="h3" variant="metadataMedium">
+            Debate now
+          </Text>
+          <Text as="span" variant="footnote" color="grey-04" className="truncate">
+            {onlineSummary(opponents.online, opposing, liveMatch)}
+          </Text>
+        </div>
+
+        <div
+          className={cx(
+            'flex items-center justify-between gap-3 rounded-lg border p-3',
+            firstAvailableReason ? 'border-grey-02 bg-grey-01' : 'border-text bg-white'
+          )}
+        >
+          <div className="grid min-w-0 gap-0.5">
             <Text as="p" variant="metadataMedium">
               First available
             </Text>
             <Text as="p" variant="footnote" color="grey-04">
-              {firstAvailableReason ?? 'Whoever on the other side is ready first'}
+              {firstAvailableReason ?? `Whoever ${opposing}s and is ready first`}
             </Text>
+            {switchesAvailability && !firstAvailableReason ? (
+              <Text as="p" variant="footnote" color="grey-04">
+                You&rsquo;ll show as available to debate.
+              </Text>
+            ) : null}
             {requestError ? (
               <p role="alert" className="text-footnote text-red-01">
                 {requestError}
@@ -307,13 +317,7 @@ export function ClaimDebatePopup({
           disabledReason={rowsDisabledReason}
           onSchedule={setBooking}
         />
-
-        <Text as="p" variant="footnote" color="grey-04" className="text-center">
-          {rowsDisabled && rowsDisabledReason
-            ? `${rowsDisabledReason} Scheduling still works.`
-            : 'Asking one person sends a general invite. They pick the claim when they accept.'}
-        </Text>
-      </div>
+      </section>
     </DebateDialogShell>
   );
 }
@@ -351,14 +355,14 @@ function ClaimOpponentRows({
   if (opponents.online.length === 0) {
     return (
       <Text as="p" variant="metadata" color="grey-04" className="text-center">
-        Everyone on the other side just left.
+        Nobody else on the other side is online right now.
       </Text>
     );
   }
 
   return (
-    <section>
-      <Text as="h3" variant="metadataMedium">
+    <div>
+      <Text as="p" variant="footnote" color="grey-04">
         Or ask someone
       </Text>
       <ul>
@@ -395,7 +399,7 @@ function ClaimOpponentRows({
         })}
       </ul>
       <div ref={setPortal} />
-    </section>
+    </div>
   );
 }
 
@@ -404,50 +408,6 @@ function Eyebrow({ children }: { children: React.ReactNode }) {
     <Text as="div" variant="metadata" color="text">
       {children}
     </Text>
-  );
-}
-
-function OptionCard({
-  title,
-  detail,
-  hint,
-  analytics,
-  href,
-  onClick,
-}: {
-  title: string;
-  detail: string;
-  hint: string;
-  analytics: Record<string, string>;
-  /** Navigates rather than changing screen: a real link, so it opens in a new tab too. */
-  href?: string;
-  onClick: () => void;
-}) {
-  const className = cx(
-    'grid gap-0.5 rounded-lg border border-grey-02 p-3 text-left transition-colors hover:border-text',
-    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple'
-  );
-  const body = (
-    <>
-      <Text as="span" variant="metadataMedium">
-        {title}
-      </Text>
-      <Text as="span" variant="footnote" color="text">
-        {detail}
-      </Text>
-      <Text as="span" variant="footnote" color="grey-04">
-        {hint}
-      </Text>
-    </>
-  );
-  return href ? (
-    <Link href={href} onClick={onClick} {...analytics} className={className}>
-      {body}
-    </Link>
-  ) : (
-    <button type="button" onClick={onClick} {...analytics} className={className}>
-      {body}
-    </button>
   );
 }
 
