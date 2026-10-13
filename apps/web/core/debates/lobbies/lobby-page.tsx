@@ -32,7 +32,6 @@ import {
 import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
-import { LOBBY_CLAIMS_SCROLL_ATTRIBUTE } from './lobby-claims-scroll';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
 import {
   hostAfterChange,
@@ -588,6 +587,7 @@ function LobbyRoom({
   // under a fixed header and bar; scrolling the page would carry the speakers off with the claims.
   // A phone shows one tab at a time and keeps scrolling the page.
   const columns = showClaims && !phone;
+  const columnScroll = columns && 'overflow-y-auto overscroll-contain';
 
   return (
     <LobbySlotsProvider value={slots.targets}>
@@ -610,10 +610,7 @@ function LobbyRoom({
               ? { role: 'tabpanel', id: tabIds.people.panel, 'aria-labelledby': tabIds.people.tab }
               : { 'aria-label': 'People in the lobby' })}
             hidden={!onPeopleTab}
-            className={cx(
-              'flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5',
-              columns && 'overflow-y-auto overscroll-contain'
-            )}
+            className={cx('flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5', columnScroll)}
           >
             <LobbyRoomStatus state={state} onRetry={onRetry} />
             {alone ? <LobbyEmptyRoom lobby={lobby} signedIn={!guest} /> : null}
@@ -656,12 +653,12 @@ function LobbyRoom({
                 ? { role: 'tabpanel', id: tabIds.claims.panel, 'aria-labelledby': tabIds.claims.tab }
                 : { 'aria-label': 'Claims in the room' })}
               hidden={!onClaimsTab}
-              // Its lists page and read cards against this box rather than the viewport. Only while
-              // it scrolls: a box that does not would hold every row in range at once.
-              {...(columns ? { [LOBBY_CLAIMS_SCROLL_ATTRIBUTE]: '' } : {})}
+              // Its lists page and read cards against this box (`HUB_SCROLL_SELECTOR`). Only while it
+              // scrolls: a box that does not would hold every row in range at once.
+              data-debates-hub-scroll={columns ? '' : undefined}
               className={cx(
                 'flex min-w-0 flex-col gap-3 border-l border-grey-02 px-4 py-5 md:border-l-0 md:py-3',
-                columns && 'overflow-y-auto overscroll-contain'
+                columnScroll
               )}
             >
               <LobbyClaimsArea lobby={lobby} />

@@ -26,10 +26,8 @@ export function useNearViewport({
   rootMargin?: string;
   sticky?: boolean;
   /**
-   * The scroll container to measure against, found from the element, for a list in a box that
-   * scrolls on its own. `rootMargin` expands the root, so against the viewport it buys nothing
-   * there: the box clips the element until it has been scrolled to. A selector that matches nothing
-   * falls back to the viewport.
+   * The scroll container to measure against, found from the element, as in
+   * `useInfiniteScrollSentinel`. A selector that matches nothing falls back to the viewport.
    */
   rootSelector?: string;
 } = {}) {
