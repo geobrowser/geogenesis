@@ -97,6 +97,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
+  const localPreviewWantRef = React.useRef<{ audio: boolean; video: boolean } | null>(null);
   const audioOutputSelectionPromiseRef = React.useRef<Promise<void> | null>(null);
   const selectedAudioInputIdRef = React.useRef('');
   const selectedAudioOutputIdRef = React.useRef(systemDefaultAudioOutput.deviceId);
@@ -111,6 +112,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     localTracksRef.current = [];
     localMediaStreamRef.current = null;
     localPreviewPromiseRef.current = null;
+    localPreviewWantRef.current = null;
     audioOutputSelectionPromiseRef.current = null;
     setPreviewStreamState(null);
     setPreviewState('requesting');
@@ -217,6 +219,14 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       if (!activeSessionKeyRef.current) return [];
       const wantAudio = options.audio ?? true;
       const wantVideo = options.video ?? true;
+
+      if (localPreviewPromiseRef.current) {
+        const inFlight = localPreviewWantRef.current;
+        const sameKinds = inFlight !== null && inFlight.audio === wantAudio && inFlight.video === wantVideo;
+        if (!options.forceRestart && sameKinds) return localPreviewPromiseRef.current;
+        await localPreviewPromiseRef.current.catch(() => undefined);
+      }
+
       const liveKinds = new Set(localTracksRef.current.map(track => track.mediaStreamTrack.kind));
       const hasLivePreview = localTracksRef.current.length > 0 && localMediaStreamRef.current !== null;
       const haveEveryWantedKind = (!wantAudio || liveKinds.has('audio')) && (!wantVideo || liveKinds.has('video'));
@@ -239,11 +249,6 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         if (kind === 'video') return wantVideo && !opening.video;
         return false;
       });
-      if (localPreviewPromiseRef.current) {
-        if (!options.forceRestart) return localPreviewPromiseRef.current;
-        await localPreviewPromiseRef.current.catch(() => undefined);
-      }
-
       setPreviewError(null);
       setPreviewBusy(true);
 
@@ -308,6 +313,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         return tracks;
       })();
       localPreviewPromiseRef.current = previewPromise;
+      localPreviewWantRef.current = { audio: wantAudio, video: wantVideo };
       try {
         return await previewPromise;
       } catch (error) {
@@ -324,7 +330,10 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         }
         throw error;
       } finally {
-        if (localPreviewPromiseRef.current === previewPromise) localPreviewPromiseRef.current = null;
+        if (localPreviewPromiseRef.current === previewPromise) {
+          localPreviewPromiseRef.current = null;
+          localPreviewWantRef.current = null;
+        }
       }
     },
     [refreshMediaDevices]

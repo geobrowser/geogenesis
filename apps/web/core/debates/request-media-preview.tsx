@@ -102,7 +102,7 @@ function MediaPreview({
     }
 
     void session
-      .ensurePreview({ audio: want.micOn, video: want.cameraOn, forceRestart: true })
+      .ensurePreview({ audio: want.micOn, video: want.cameraOn })
       .then(tracks => {
         if (!active) return;
         const kinds = new Set(tracks.map(track => track.mediaStreamTrack.kind));
