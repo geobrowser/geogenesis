@@ -610,8 +610,8 @@ describe('AdminNewMatchDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '0' } });
-    fireEvent.change(screen.getByRole('combobox', { name: /^Starts/ }), {
-      target: { value: String(10 * 60) },
+    fireEvent.change(screen.getByLabelText(/^Starts/), {
+      target: { value: '10:00' },
     });
     expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
 
@@ -620,6 +620,41 @@ describe('AdminNewMatchDialog', () => {
       vi.advanceTimersByTime(60_000);
     });
     expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
+  });
+
+  it('books a custom start off the half-hour, and says whether they are free for all of it', () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '1' } });
+
+    // 9:45–10:15 runs past their shared 9:00–10:00.
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:45' } });
+    expect(screen.getAllByText(/Not a time they.re both free/).length).toBeGreaterThan(0);
+
+    // 9:15–9:45 is inside it, though geo-chat still flags anything off their half-hours.
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:15' } });
+    expect(screen.getByLabelText(/^Starts/)).toHaveValue('09:15');
+    expect(screen.getAllByText(/They.re both free then, but it isn.t one of their half-hours/).length).toBe(2);
+    expect(screen.queryByText(/Not a time they.re both free/)).not.toBeInTheDocument();
+
+    // Clearing the field keeps the last whole time rather than sending nothing or midnight.
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+    expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe(at(7, 9, 15));
+  });
+
+  it('counts a shared half-hour already under way when a custom start falls inside it', () => {
+    vi.setSystemTime(new Date(2026, 9, 7, 9, 10));
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:15' } });
+
+    expect(screen.getAllByText(/They.re both free then, but it isn.t one of their half-hours/).length).toBe(2);
   });
 
   it('shows both debaters’ availability, whose is whose, and where it overlaps', () => {
@@ -660,7 +695,7 @@ describe('AdminNewMatchDialog', () => {
     // Anything else is the override, on that day at that time.
     fireEvent.click(document.querySelector(`[data-start="${Date.parse(at(8, 14))}"]`)!);
     expect(screen.getByRole('radio', { name: 'Pick any time' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('combobox', { name: /^Starts/ })).toHaveValue(String(14 * 60));
+    expect(screen.getByLabelText(/^Starts/)).toHaveValue('14:00');
     fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
     expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe(at(8, 14));
   });
@@ -785,10 +820,10 @@ describe('AdminNewMatchDialog', () => {
       pickBoth();
       fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
       fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '1' } });
-      fireEvent.change(screen.getByRole('combobox', { name: 'Starts (GMT)' }), { target: { value: String(15 * 60) } });
+      fireEvent.change(screen.getByLabelText('Starts (GMT)'), { target: { value: '15:00' } });
 
       switchToMadrid();
-      expect(screen.getByRole('combobox', { name: 'Starts (Madrid)' })).toHaveValue(String(17 * 60));
+      expect(screen.getByLabelText('Starts (Madrid)')).toHaveValue('17:00');
       expect(screen.getByText(/Wed, Oct 7 · 5:00 PM – 5:30 PM Madrid \(GMT\+2\)/)).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
       expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-07T15:00:00.000Z');
@@ -798,10 +833,10 @@ describe('AdminNewMatchDialog', () => {
       renderDialog();
       pickBoth();
       fireEvent.click(document.querySelector(`[data-start="${Date.parse('2026-10-08T14:00:00Z')}"]`)!);
-      expect(screen.getByRole('combobox', { name: 'Starts (GMT)' })).toHaveValue(String(14 * 60));
+      expect(screen.getByLabelText('Starts (GMT)')).toHaveValue('14:00');
 
       switchToMadrid();
-      expect(screen.getByRole('combobox', { name: 'Starts (Madrid)' })).toHaveValue(String(16 * 60));
+      expect(screen.getByLabelText('Starts (Madrid)')).toHaveValue('16:00');
       fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
       expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-08T14:00:00.000Z');
     });
@@ -846,8 +881,8 @@ describe('AdminNewMatchDialog', () => {
       const day = screen.getByRole('combobox', { name: 'Day' });
       expect(within(day).getAllByRole('option')[0]).toHaveTextContent('Tue, Oct 6');
       fireEvent.change(day, { target: { value: '1' } });
-      fireEvent.change(screen.getByRole('combobox', { name: 'Starts (GMT)' }), {
-        target: { value: String(15 * 60) },
+      fireEvent.change(screen.getByLabelText('Starts (GMT)'), {
+        target: { value: '15:00' },
       });
 
       expect(screen.getByText(/Wed, Oct 7 · 3:00 PM – 3:30 PM GMT/)).toBeInTheDocument();
