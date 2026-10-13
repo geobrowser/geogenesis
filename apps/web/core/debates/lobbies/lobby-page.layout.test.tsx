@@ -75,7 +75,13 @@ vi.mock('./lobby-voice', async () => {
     ),
   };
 });
-vi.mock('./lobby-claims-area', () => ({ LobbyClaimsArea: () => <div data-testid="claims" /> }));
+// Reports the scroll root its lists' observers would be handed, which is all the page decides.
+vi.mock('./lobby-claims-area', async () => {
+  const { useHubScrollSelector } = await import('../matchmaking/hub-scroll');
+  return {
+    LobbyClaimsArea: () => <div data-testid="claims" data-scroll-root={useHubScrollSelector() ?? 'viewport'} />,
+  };
+});
 vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: undefined }) }));
 vi.mock('./lobby-highlights-hooks', () => ({
   useLobbyHighlights: (_id: string, enabled: boolean) => {
@@ -213,6 +219,25 @@ describe('DebateLobbyPage layout on desktop', () => {
     expect(claims).toHaveClass('overflow-y-auto');
     // The Claims tab's paging sentinel and the cards measure against the column through this.
     expect(claims).toHaveAttribute('data-debates-hub-scroll');
+  });
+});
+
+describe('DebateLobbyPage across the phone breakpoint', () => {
+  // The claims stay mounted when a window is resized or a tablet rotated across it, so their
+  // observers only measure against the right box if the selector they are handed changes with it.
+  it('hands the claims lists the column while it scrolls, and the viewport once it does not', () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    const claims = screen.getByTestId('claims');
+    expect(claims).toHaveAttribute('data-scroll-root', '[data-debates-hub-scroll]');
+
+    mocks.phone = true;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByTestId('claims')).toBe(claims);
+    expect(claims).toHaveAttribute('data-scroll-root', 'viewport');
+
+    mocks.phone = false;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(claims).toHaveAttribute('data-scroll-root', '[data-debates-hub-scroll]');
   });
 });
 

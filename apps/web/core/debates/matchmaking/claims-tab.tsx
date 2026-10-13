@@ -48,7 +48,7 @@ import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
-import { HUB_SCROLL_SELECTOR } from './hub-scroll';
+import { useHubScrollSelector } from './hub-scroll';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -1019,6 +1019,7 @@ export function ClaimsTab({
     hasNextPage &&
     ((graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage) || answersInFlight);
 
+  const hubScrollSelector = useHubScrollSelector();
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: mayFetchAhead,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
@@ -1027,7 +1028,7 @@ export function ClaimsTab({
     // any of it can be shown. Starting the next page a screenful or two early is what keeps that
     // from reading as a list that stops every time you reach the bottom.
     rootMargin: '1200px',
-    rootSelector: HUB_SCROLL_SELECTOR,
+    rootSelector: hubScrollSelector,
   });
 
   /**

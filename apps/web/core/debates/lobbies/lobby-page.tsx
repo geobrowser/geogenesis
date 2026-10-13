@@ -19,6 +19,7 @@ import { useMatchmakingScope } from '../matchmaking/hooks';
 import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import {
@@ -653,15 +654,18 @@ function LobbyRoom({
                 ? { role: 'tabpanel', id: tabIds.claims.panel, 'aria-labelledby': tabIds.claims.tab }
                 : { 'aria-label': 'Claims in the room' })}
               hidden={!onClaimsTab}
-              // Its lists page and read cards against this box (`HUB_SCROLL_SELECTOR`). Only while it
-              // scrolls: a box that does not would hold every row in range at once.
+              // Its lists page and read cards against this box, only while it scrolls: a box that does
+              // not would hold every row in range at once. The provider rebuilds their observers when
+              // the breakpoint flips it, as the claims stay mounted across that.
               data-debates-hub-scroll={columns ? '' : undefined}
               className={cx(
                 'flex min-w-0 flex-col gap-3 border-l border-grey-02 px-4 py-5 md:border-l-0 md:py-3',
                 columnScroll
               )}
             >
-              <LobbyClaimsArea lobby={lobby} />
+              <HubScrollSelectorProvider value={columns ? HUB_SCROLL_SELECTOR : undefined}>
+                <LobbyClaimsArea lobby={lobby} />
+              </HubScrollSelectorProvider>
             </motion.aside>
           ) : null}
         </div>

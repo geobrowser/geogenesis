@@ -146,3 +146,28 @@ describe('useNearViewport root', () => {
     expect(observeInside('[data-elsewhere]').options?.root).toBeNull();
   });
 });
+
+describe('useNearViewport root changes', () => {
+  // A box can scroll in one layout and not another, with the list mounted across the change. The
+  // observer fixed its root when it was built, so a new selector has to build a new one.
+  it('rebuilds the observer against the new root when the selector changes', () => {
+    const panel = document.createElement('div');
+    panel.setAttribute('data-panel', '');
+    const target = document.createElement('div');
+    panel.appendChild(target);
+    const hook = renderHook(({ rootSelector }) => useNearViewport({ rootSelector }), {
+      initialProps: { rootSelector: '[data-panel]' as string | undefined },
+    });
+    act(() => hook.result.current.ref(target));
+    const first = observers.at(-1)!;
+    expect(first.options?.root).toBe(panel);
+
+    hook.rerender({ rootSelector: undefined });
+
+    expect(first.disconnect).toHaveBeenCalled();
+    const second = observers.at(-1)!;
+    expect(second).not.toBe(first);
+    expect(second.options?.root).toBeNull();
+    expect(second.element).toBe(target);
+  });
+});

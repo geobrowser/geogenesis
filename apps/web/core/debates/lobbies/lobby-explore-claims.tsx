@@ -8,7 +8,7 @@ import { normId } from '~/core/utils/norm-id';
 import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { type ClaimCardDefaults, ClaimsTab } from '../matchmaking/claims-tab';
-import { HUB_SCROLL_SELECTOR } from '../matchmaking/hub-scroll';
+import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import {
   exploreRoomClaimBatches,
   useLobbyExploreRoomClaims,
@@ -96,7 +96,8 @@ function NearViewport({
   /** The list's popLayout measures the row through this. */
   ref?: React.Ref<HTMLDivElement>;
 }) {
-  const { ref, nearViewport } = useNearViewport({ sticky: false, rootSelector: HUB_SCROLL_SELECTOR });
+  const hubScrollSelector = useHubScrollSelector();
+  const { ref, nearViewport } = useNearViewport({ sticky: false, rootSelector: hubScrollSelector });
   // Paired, as `onNear` counts cards per id.
   React.useEffect(() => {
     if (!nearViewport) return;

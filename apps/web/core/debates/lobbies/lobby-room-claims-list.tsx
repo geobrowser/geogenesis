@@ -20,7 +20,7 @@ import type {
 } from '../api';
 import { trustedIndexedPosition, useBackfillReadinessForHeldPosition } from '../backfill-readiness-for-held-position';
 import { HubCardList } from '../matchmaking/hub-motion';
-import { HUB_SCROLL_SELECTOR } from '../matchmaking/hub-scroll';
+import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import { MatchmakingClaimCard, isResolvableClaim } from '../matchmaking/matchmaking-claim-card';
 import { hostsLabel, personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
@@ -105,7 +105,8 @@ export function LobbyRoomClaimCard({
   // A guest's vote is kept on the device until they save it with an account (GEO-3214).
   const guest = useIsLobbyGuest();
   // The card holds its own response reads until it is near the viewport; this one follows it.
-  const { ref, nearViewport } = useNearViewport({ rootSelector: HUB_SCROLL_SELECTOR });
+  const hubScrollSelector = useHubScrollSelector();
+  const { ref, nearViewport } = useNearViewport({ rootSelector: hubScrollSelector });
   const indexing = useEntityResponseIndexingSnapshot({
     entityId: claim.claim_entity_id,
     entityName: claim.claim,
