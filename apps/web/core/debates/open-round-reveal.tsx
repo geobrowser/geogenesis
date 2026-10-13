@@ -84,6 +84,13 @@ export function useOpenRoundRevealStep(
   return openRoundRevealStep(effectiveMs, outcome, windowMs, hasPicks);
 }
 
+/** What each pick reads as, and its card's colour once it flips. A missing pick is neither choice. */
+const PICK_FACES: Record<OpenRoundPick | 'none', { word: string; surface: string }> = {
+  extend: { word: 'Extend', surface: 'bg-purple' },
+  end: { word: 'End', surface: 'bg-text' },
+  none: { word: 'No pick', surface: 'bg-grey-04' },
+};
+
 /**
  * One debater's pick, as a card over their tile that flips once, on mount, from their name to the
  * pick. A missing pick flips to "No pick" on grey rather than to either choice: it goes with the
@@ -101,7 +108,7 @@ export function OpenRoundPickReveal({
   pick: OpenRoundPick | null;
   placement?: 'center' | 'raised' | 'lowered';
 }) {
-  const word = pick === 'extend' ? 'Extend' : pick === 'end' ? 'End' : 'No pick';
+  const face = PICK_FACES[pick ?? 'none'];
   return (
     <div
       aria-hidden="true"
@@ -120,13 +127,13 @@ export function OpenRoundPickReveal({
         <div
           className={cx(
             'absolute inset-0 flex rotate-y-180 flex-col items-center justify-center rounded-lg px-2 text-white shadow-[0_10px_30px_rgba(0,0,0,0.35)] backface-hidden',
-            pick === 'extend' ? 'bg-purple' : pick === 'end' ? 'bg-text' : 'bg-grey-04'
+            face.surface
           )}
         >
           <span className="max-w-full truncate text-[0.6875rem] leading-[0.8125rem] font-medium tracking-[0.06em] uppercase opacity-80">
             {name}
           </span>
-          <span className="text-[1.375rem] leading-6 font-bold tracking-[0.04em] uppercase">{word}</span>
+          <span className="text-[1.375rem] leading-6 font-bold tracking-[0.04em] uppercase">{face.word}</span>
         </div>
       </div>
     </div>
@@ -355,8 +362,9 @@ function openRoundAnnouncementText({
 }) {
   if (result?.kind === 'max') return `That's the max: ${rebuttalRoundsLabel(result.rounds)}.`;
   if (step === null) return '';
+  // Mid-sentence, so a missing pick is lower case.
   const said = (entry: OpenRoundRevealedPick | null) =>
-    entry === null ? null : entry.pick === null ? 'no pick' : entry.pick === 'extend' ? 'Extend' : 'End';
+    entry === null ? null : entry.pick === null ? 'no pick' : PICK_FACES[entry.pick].word;
   const picks = [
     said(localPick) && `You: ${said(localPick)}.`,
     said(remote.pick) && `${remote.name}: ${said(remote.pick)}.`,
