@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { renderHook } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -228,15 +228,41 @@ describe('useDebateEndCard', () => {
     expect(result.current.carousel.entitiesByClaimId.get('s1')).toEqual({ id: 's1' });
   });
 
-  it('works out the next debate on the same latch as the numbers', () => {
+  it('holds the next-debate lookup back until shortly before the debate ends, or the card shows', () => {
+    vi.useFakeTimers();
+    try {
+      const timed = { ...debate, turn_durations_ms: [60_000, 60_000] };
+      const { rerender } = render(
+        ({ enabled, shown }: { enabled: boolean; shown: boolean }) => useDebateEndCard(timed, enabled, shown),
+        { enabled: true, shown: false }
+      );
+      expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: false });
+
+      act(() => {
+        vi.advanceTimersByTime(60_000);
+      });
+      expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: false });
+
+      act(() => {
+        vi.advanceTimersByTime(20_000);
+      });
+      expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
+
+      // Scrolled away with the card on screen: still live, so the suggestion doesn't vanish either.
+      rerender({ enabled: false, shown: true });
+      expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('works out the next debate at once when the card shows before the clock is up', () => {
     const { rerender } = render(
       ({ enabled, shown }: { enabled: boolean; shown: boolean }) => useDebateEndCard(debate, enabled, shown),
       { enabled: true, shown: false }
     );
-    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
-
-    // Scrolled away with the card on screen: still live, so the suggestion doesn't vanish either.
-    rerender({ enabled: false, shown: true });
+    expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: false });
+    rerender({ enabled: true, shown: true });
     expect(mocks.nextDebateCalls.at(-1)).toEqual({ live: true });
   });
 
