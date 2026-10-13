@@ -64,9 +64,9 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
 
 /**
  * The side panel list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount:
- * patches stop while the panel is closed.
+ * patches stop while the panel is closed. With `staleTime`, reloaded on mount only once that old.
  */
-export function useDebateLobbies(enabled = true) {
+export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: number } = {}) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
@@ -74,7 +74,7 @@ export function useDebateLobbies(enabled = true) {
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && ready && authenticated,
-    refetchOnMount: 'always',
+    ...(staleTime === undefined ? { refetchOnMount: 'always' as const } : { staleTime }),
   });
 }
 

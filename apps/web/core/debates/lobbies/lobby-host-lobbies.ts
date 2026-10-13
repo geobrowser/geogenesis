@@ -44,10 +44,16 @@ export function usePreOpenHosts(lobby: { lobby_id: string }): DebateLobbyPerson[
   return listedHosts(useListedLobbies(), lobby.lobby_id);
 }
 
-/** The lobbies list, signed in only: geo-chat answers it for members alone. */
+/**
+ * The lobbies list, signed in only: geo-chat answers it for members alone. Inside a lobby only
+ * `debate.my_lobby_changed` refreshes it, so a mount refetches once the copy is a minute old
+ * rather than every time a card mounts.
+ */
 export function useListedLobbies() {
   const guest = useIsLobbyGuest();
-  return useDebateLobbies(!guest).data?.lobbies ?? NO_LOBBIES;
+  return useDebateLobbies(!guest, { staleTime: LISTED_LOBBIES_STALE_MS }).data?.lobbies ?? NO_LOBBIES;
 }
+
+const LISTED_LOBBIES_STALE_MS = 60_000;
 
 const NO_LOBBIES: DebateLobbySummary[] = [];
