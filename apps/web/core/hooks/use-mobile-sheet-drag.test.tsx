@@ -1,9 +1,9 @@
-import { act, render } from '@testing-library/react';
+import { act, cleanup, render } from '@testing-library/react';
 
 import * as React from 'react';
 
 import type { MotionValue } from 'framer-motion';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 
@@ -11,14 +11,39 @@ import { useMobileSheetDrag } from './use-mobile-sheet-drag';
 
 const PEEK = 200;
 
-function Sheet({ topRef, open = true }: { topRef: { current: MotionValue<number> | null }; open?: boolean }) {
-  const { setOverlayElement, sheetStyle } = useMobileSheetDrag({ enabled: open, onDismiss: () => {}, peekTopPx: PEEK });
+const mocks = vi.hoisted(() => ({ reducedMotion: false }));
+
+vi.mock('framer-motion', async importOriginal => ({
+  ...(await importOriginal<typeof import('framer-motion')>()),
+  useReducedMotion: () => mocks.reducedMotion,
+}));
+
+afterEach(() => {
+  cleanup();
+  mocks.reducedMotion = false;
+  vi.restoreAllMocks();
+});
+
+function Sheet({
+  topRef,
+  open = true,
+  onDismiss = () => {},
+}: {
+  topRef: { current: MotionValue<number> | null };
+  open?: boolean;
+  onDismiss?: () => void;
+}) {
+  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
+    enabled: open,
+    onDismiss,
+    peekTopPx: PEEK,
+  });
   topRef.current = sheetStyle.top;
   // Like the real sheets, the surface only exists while open; the hook outlives it.
   if (!open) return null;
   return (
     <div ref={setOverlayElement}>
-      <MobileSheetSurface sheetStyle={sheetStyle}>
+      <MobileSheetSurface sheetStyle={sheetStyle} sheet={sheet}>
         <div data-mobile-sheet-scroll>
           <span data-testid="content" />
         </div>
@@ -27,7 +52,7 @@ function Sheet({ topRef, open = true }: { topRef: { current: MotionValue<number>
   );
 }
 
-function touch(type: 'touchstart' | 'touchmove' | 'touchend', target: Element, clientY?: number) {
+function touch(type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel', target: Element, clientY?: number) {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'touches', {
     value: clientY === undefined ? [] : [{ clientX: 20, clientY, identifier: 1, target }],
@@ -53,5 +78,87 @@ describe('useMobileSheetDrag', () => {
     // The sheet follows the finger from its visible edge (500), not from `top` (200).
     expect(topRef.current?.get()).toBe(PEEK + 300 - 100);
     act(() => touch('touchend', content));
+  });
+
+  describe('releases and interruptions', () => {
+    /** Opens a sheet resting as a container, whose surface reports where `top` puts it. */
+    function openSheet(onDismiss = vi.fn()) {
+      const topRef: { current: MotionValue<number> | null } = { current: null };
+      const view = render(<Sheet topRef={topRef} onDismiss={onDismiss} />);
+      const surface = view.container.querySelector<HTMLElement>('[data-mobile-sheet-surface]');
+      if (!surface) throw new Error('Missing surface');
+      surface.getBoundingClientRect = () => ({ top: topRef.current?.get() ?? 0 }) as DOMRect;
+      const top = () => topRef.current?.get() ?? NaN;
+      return { ...view, top, content: view.getByTestId('content'), onDismiss };
+    }
+
+    /** A slow drag, 100ms between moves, so the release reads as a placement, not a fling. */
+    function slowDrag(content: Element, from: number, to: number, end: 'touchend' | 'touchcancel' = 'touchend') {
+      let clock = 0;
+      const now = vi.spyOn(performance, 'now').mockImplementation(() => clock);
+      act(() => {
+        touch('touchstart', content, from);
+        for (let step = 1; step <= 4; step++) {
+          clock += 100;
+          touch('touchmove', content, from + ((to - from) * step) / 4);
+        }
+        clock += 100;
+        touch(end, content);
+      });
+      now.mockRestore();
+    }
+
+    const settle = (ms = 900) => act(() => new Promise(resolve => setTimeout(resolve, ms)));
+
+    it('settles full screen after a long upward drag', async () => {
+      const sheet = openSheet();
+      slowDrag(sheet.content, 600, 450);
+      await settle();
+      expect(sheet.top()).toBeCloseTo(0, 0);
+    });
+
+    it('springs back to the container after a short drag', async () => {
+      const sheet = openSheet();
+      slowDrag(sheet.content, 600, 570);
+      await settle();
+      expect(sheet.top()).toBeCloseTo(PEEK, 0);
+    });
+
+    it('slides off the screen before closing when pulled down far enough', async () => {
+      const sheet = openSheet();
+      slowDrag(sheet.content, 400, 520);
+      expect(sheet.onDismiss).not.toHaveBeenCalled();
+      await settle(400);
+      expect(sheet.onDismiss).toHaveBeenCalledTimes(1);
+      expect(sheet.top()).toBe(window.innerHeight);
+    });
+
+    it('returns to where it started when the drag is interrupted', async () => {
+      const sheet = openSheet();
+      // Far enough to expand if it were released, but the OS cancels it instead.
+      slowDrag(sheet.content, 600, 450, 'touchcancel');
+      await settle();
+      expect(sheet.top()).toBeCloseTo(PEEK, 0);
+    });
+
+    it('reopens as a container after closing from full screen', async () => {
+      const topRef: { current: MotionValue<number> | null } = { current: null };
+      const { rerender } = render(<Sheet topRef={topRef} />);
+      act(() => topRef.current?.jump(0));
+
+      rerender(<Sheet topRef={topRef} open={false} />);
+      rerender(<Sheet topRef={topRef} />);
+
+      expect(topRef.current?.get()).toBe(PEEK);
+    });
+
+    it('snaps without animating when the viewer prefers reduced motion', async () => {
+      mocks.reducedMotion = true;
+      const sheet = openSheet();
+      slowDrag(sheet.content, 600, 450);
+      // One frame, not a spring's worth.
+      await settle(50);
+      expect(sheet.top()).toBe(0);
+    });
   });
 });
