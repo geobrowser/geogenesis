@@ -29,6 +29,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import type { ClaimCardVariant } from '~/partials/explore/claim-explore-feed-card';
 import { ExploreFeedCard } from '~/partials/explore/explore-feed-card';
 
+import { entityFeedQueryKey } from './entity-feed-query-key';
 import { ExploreTypeFilterMenu } from './explore-type-filter-menu';
 
 function LoadingSkeleton() {
@@ -440,22 +441,19 @@ export function EntityFeed({
   // sign-in and leave "Join space" buttons stuck for a few seconds.
   const { smartAccount } = useSmartAccount();
   const smartAccountAddress = smartAccount?.account.address ?? null;
-  // Keyed on what is actually sent: two Best feeds differing only in a hidden range are the same
-  // request, and caching them apart would refetch on a change the viewer never made.
   const isForYou = sort === 'for-you';
   const requestedFollowedTopicIds = isForYou ? (followedTopicIds ?? []) : [];
-  const queryKey = [
+  const queryKey = entityFeedQueryKey({
     apiEndpoint,
     sort,
-    requestedTime,
+    time: requestedTime,
     spaceIdsKey,
     typeIdsKey,
     topicIdsKey,
     fixedParamsKey,
     smartAccountAddress,
-    // Only on For you, so every other sort's key, and so its cache, is unchanged.
-    ...(isForYou ? [requestedFollowedTopicIds.join(',')] : []),
-  ];
+    followedTopicIdsKey: requestedFollowedTopicIds.join(','),
+  });
 
   // Only where the server can use it, so no other page waits on Privy for a token: For you, and
   // Best while interleaving is on (GEO-3144), which needs to know who is reading.
