@@ -9,7 +9,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbySummary } from '../api';
+import { type DebateLobbySummary, GeoChatRequestError } from '../api';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbyReminder } from './hooks';
@@ -171,8 +171,11 @@ function NextLobbyAction({
 
 type LobbyReminder = ReturnType<typeof useDebateLobbyReminder>;
 
+const isAlreadyOpen = (error: unknown) => error instanceof GeoChatRequestError && error.code === 'lobby_already_open';
+
 function ReminderError({ reminder }: { reminder: LobbyReminder }) {
-  if (!reminder.isError) return null;
+  // The lobby opened since the list was read; the refetched row swaps the button to Join.
+  if (!reminder.isError || isAlreadyOpen(reminder.error)) return null;
   return (
     <Text as="p" variant="footnote" color="red-01">
       {lobbyErrorMessage(reminder.error, REMINDER_FAILED)}

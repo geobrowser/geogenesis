@@ -1,5 +1,5 @@
 import { type DebateLobbyPerson, type DebateLobbySummary, dashlessId } from '../api';
-import { useDebateLobbies } from './hooks';
+import { useDebateLobbies, useRefetchAtOpening } from './hooks';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 
 /**
@@ -45,12 +45,25 @@ export function usePreOpenHosts(lobby: { lobby_id: string }): DebateLobbyPerson[
 }
 
 /**
- * The lobbies list, signed in only. Inside a lobby only `debate.my_lobby_changed` refreshes it,
- * so a mount refetches once the copy is a minute old.
+ * The lobbies list, signed in only. Inside a lobby only `debate.my_lobby_changed` refreshes it, so
+ * a mount refetches once the copy is a minute old, and the list refetches when a listed lobby opens.
  */
 export function useListedLobbies() {
   const guest = useIsLobbyGuest();
-  return useDebateLobbies(!guest, { staleTime: LISTED_LOBBIES_STALE_MS }).data?.lobbies ?? NO_LOBBIES;
+  const query = useDebateLobbies(!guest, { staleTime: LISTED_LOBBIES_STALE_MS });
+  const lobbies = query.data?.lobbies ?? NO_LOBBIES;
+  useRefetchAtOpening(query, soonestOpening(lobbies));
+  return lobbies;
+}
+
+/** The earliest `opens_at` among listed lobbies not open yet. */
+export function soonestOpening(lobbies: DebateLobbySummary[]): string | null {
+  let soonest: string | null = null;
+  for (const row of lobbies) {
+    if (row.open || Number.isNaN(Date.parse(row.opens_at))) continue;
+    if (!soonest || Date.parse(row.opens_at) < Date.parse(soonest)) soonest = row.opens_at;
+  }
+  return soonest;
 }
 
 const LISTED_LOBBIES_STALE_MS = 60_000;

@@ -2,9 +2,9 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary } from '../api';
 
-vi.mock('./hooks', () => ({ useDebateLobbies: vi.fn() }));
+vi.mock('./hooks', () => ({ useDebateLobbies: vi.fn(), useRefetchAtOpening: vi.fn() }));
 
-const { listedHosts, nextLobbyByHost } = await import('./lobby-host-lobbies');
+const { listedHosts, nextLobbyByHost, soonestOpening } = await import('./lobby-host-lobbies');
 
 const adam = { user_id: 'aaaa-1', profile_space_id: 's1', display_name: 'Adam', avatar_cid: null };
 const priya = { user_id: 'bbbb-2', profile_space_id: 's2', display_name: 'Priya', avatar_cid: null };
@@ -56,5 +56,21 @@ describe('nextLobbyByHost', () => {
 
   it('finds nothing without a creator', () => {
     expect(nextLobbyByHost([summary({})], null, ended)).toBeNull();
+  });
+});
+
+describe('soonestOpening', () => {
+  it('is the earliest opens_at among lobbies not open yet', () => {
+    const lobbies = [
+      summary({ lobby_id: 'a', open: true, opens_at: '2026-10-20T08:00:00Z' }),
+      summary({ lobby_id: 'b', opens_at: '2026-10-21T17:50:00Z' }),
+      summary({ lobby_id: 'c', opens_at: '2026-10-20T17:50:00Z' }),
+    ];
+    expect(soonestOpening(lobbies)).toBe('2026-10-20T17:50:00Z');
+  });
+
+  it('is null when every listed lobby is open', () => {
+    expect(soonestOpening([summary({ open: true })])).toBeNull();
+    expect(soonestOpening([])).toBeNull();
   });
 });

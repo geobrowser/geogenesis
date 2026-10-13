@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -112,7 +112,16 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
   });
 
   const access = query.data?.access;
-  const opensAt = access?.status === 'not_yet_open' ? access.opens_at : null;
+  useRefetchAtOpening(query, access?.status === 'not_yet_open' ? access.opens_at : null);
+
+  return query;
+}
+
+/** Refetches `query` just after `opensAt`, and again after each refetch that leaves it unchanged. */
+export function useRefetchAtOpening(
+  query: Pick<UseQueryResult, 'refetch' | 'dataUpdatedAt' | 'errorUpdatedAt'>,
+  opensAt: string | null
+) {
   const { refetch, dataUpdatedAt, errorUpdatedAt } = query;
   React.useEffect(() => {
     if (!opensAt) return;
@@ -123,8 +132,6 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
     return () => clearTimeout(timeout);
     // Reschedules after a refetch that still says not yet open, or that failed.
   }, [dataUpdatedAt, errorUpdatedAt, opensAt, refetch]);
-
-  return query;
 }
 
 /** Writes a returned view into the lobby's cache entry and marks the list stale. */

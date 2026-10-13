@@ -76,6 +76,7 @@ vi.mock('./hooks', () => ({
     };
   },
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false }),
+  useRefetchAtOpening: vi.fn(),
   useDebateLobbies: (enabled: boolean) => ({ data: enabled ? { lobbies: mocks.lobbies } : undefined }),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }));
