@@ -97,7 +97,7 @@ describe('useNearViewport', () => {
   it('tracks both entry and exit when sticky mode is disabled', () => {
     const { result, record, target } = renderObservedHook({ rootMargin: '400px', sticky: false });
 
-    expect(record.options).toEqual({ rootMargin: '400px' });
+    expect(record.options).toEqual({ root: null, rootMargin: '400px' });
     notify(record, target, true);
     expect(result.current.nearViewport).toBe(true);
 
@@ -122,5 +122,27 @@ describe('useNearViewport', () => {
     const { result } = renderHook(() => useNearViewport());
 
     expect(result.current.nearViewport).toBe(true);
+  });
+});
+
+describe('useNearViewport root', () => {
+  function observeInside(rootSelector: string) {
+    const panel = document.createElement('div');
+    panel.setAttribute('data-panel', '');
+    const target = document.createElement('div');
+    panel.appendChild(target);
+    const hook = renderHook(() => useNearViewport({ rootSelector }));
+    act(() => hook.result.current.ref(target));
+    return { panel, options: observers.at(-1)?.options };
+  }
+
+  it('measures against the scroll box the selector finds around the element', () => {
+    const { panel, options } = observeInside('[data-panel]');
+    expect(options?.root).toBe(panel);
+    expect(options?.rootMargin).toBe('800px');
+  });
+
+  it('falls back to the viewport when nothing around the element matches', () => {
+    expect(observeInside('[data-elsewhere]').options?.root).toBeNull();
   });
 });
