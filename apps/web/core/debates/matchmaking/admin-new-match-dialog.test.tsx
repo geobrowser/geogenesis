@@ -28,6 +28,7 @@ const mocks = vi.hoisted(() => ({
   // A debater's zone as their own read answers it, where it differs from the roster's: empty is no
   // schedule. Stands in for a roster that is stale, capped or failed to load.
   readZones: {} as Record<string, string>,
+  overlapError: null as Error | null,
 }));
 
 const readZone = (userId: string) =>
@@ -64,7 +65,12 @@ vi.mock('./admin-hooks', () => ({
       : { isPending: false, error: null, refetch: vi.fn() },
   useAdminPairOverlap: (first: string | null, second: string | null) =>
     first && second
-      ? { data: mocks.overlap, isPending: mocks.overlap === undefined, error: null, refetch: vi.fn() }
+      ? {
+          data: mocks.overlap,
+          isPending: mocks.overlap === undefined && !mocks.overlapError,
+          error: mocks.overlapError,
+          refetch: vi.fn(),
+        }
       : { isPending: false },
   useCreateAdminMatch: () => ({ mutate: mocks.create, isPending: false, error: null }),
   useAdminAvailabilityPrompt: () => ({ mutateAsync: mocks.prompt }),
@@ -239,6 +245,7 @@ beforeEach(() => {
     freeSlots: new Map(),
     availability: {},
     readZones: {},
+    overlapError: null,
     matchesKnown: true,
     debatersError: null,
   });
@@ -398,6 +405,25 @@ describe('AdminNewMatchDialog', () => {
 
     expect(screen.getByText('Not a time they’re both free.')).toBeInTheDocument();
     expect(screen.queryByText(/Checking whether they.re both free then/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['loading', null],
+    ['failed', new Error('down')],
+  ])('says who is unset in Recommended while the overlap is %s', (_state, error) => {
+    mocks.overlap = undefined;
+    mocks.overlapError = error;
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    const { rerender } = renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Recommended' }));
+
+    expect(screen.getByText(/Sam hasn.t set availability, so there.s no shared time/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request availability' })).toBeInTheDocument();
+    expect(screen.queryByText(/Finding times|Couldn.t load their shared times/)).not.toBeInTheDocument();
   });
 
   it('shows a debater’s zone from their own read when it has changed since the roster', () => {

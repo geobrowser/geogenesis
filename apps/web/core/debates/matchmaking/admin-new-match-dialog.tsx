@@ -953,7 +953,25 @@ function TimePicker({
 
   let body: React.ReactNode;
   if (mode === 'recommended') {
-    if (overlap.isPending) {
+    // Someone known to be unset shares no time whatever the overlap says, so its loading and errors
+    // do not stand between the admin and asking them.
+    if (unset.length > 0) {
+      body = (
+        <NoSharedTime
+          title={`${unset.map(person => debaterFirstName(person.person)).join(' and ')} ${unset.length > 1 ? 'haven’t' : 'hasn’t'} set availability, so there’s no shared time to recommend.`}
+          note="Pick any time to book it anyway. The invite is flagged and the calendar tags it Off-hours."
+          asked={unset}
+          prompts={prompts}
+          request={{
+            label: 'Request availability',
+            analyticsLabel: 'New match Request availability unset',
+            retryAnalyticsLabel: 'New match Retry request unset',
+          }}
+          onPickAny={() => setMode('any')}
+          onRequest={onRequest}
+        />
+      );
+    } else if (overlap.isPending) {
       body = (
         <Text as="p" variant="metadata" color="grey-04">
           Finding times they&rsquo;re both free…
@@ -969,22 +987,6 @@ function TimePicker({
             Try again
           </HubPillButton>
         </div>
-      );
-    } else if (unset.length > 0) {
-      body = (
-        <NoSharedTime
-          title={`${unset.map(person => debaterFirstName(person.person)).join(' and ')} ${unset.length > 1 ? 'haven’t' : 'hasn’t'} set availability, so there’s no shared time to recommend.`}
-          note="Pick any time to book it anyway. The invite is flagged and the calendar tags it Off-hours."
-          asked={unset}
-          prompts={prompts}
-          request={{
-            label: 'Request availability',
-            analyticsLabel: 'New match Request availability unset',
-            retryAnalyticsLabel: 'New match Retry request unset',
-          }}
-          onPickAny={() => setMode('any')}
-          onRequest={onRequest}
-        />
       );
     } else if (slots.length === 0) {
       body = (
