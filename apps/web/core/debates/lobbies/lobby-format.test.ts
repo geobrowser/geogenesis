@@ -5,11 +5,16 @@ import {
   debatingCount,
   debatingLabel,
   disagreementCount,
+  handoffLabel,
   hereNowLabel,
   hostAfterChange,
+  hostWhoLeft,
   hostsLabel,
   inDebateLabel,
+  inDebateRequestLabel,
+  isAlone,
   isAlreadyInAnotherLobby,
+  lobbyDateLabel,
   lobbyErrorMessage,
   lobbyHeadcount,
   lobbyScheduleLabel,
@@ -19,6 +24,7 @@ import {
   moderationErrorMessage,
   moderationLogLabel,
   moderationNoticeText,
+  nextLobbyTimeLabel,
   notYetOpenLabel,
   otherLobbyIdFrom,
   pairLabel,
@@ -28,6 +34,7 @@ import {
   raisedHands,
   rosterOrder,
   sinceLabel,
+  untilLabel,
 } from './lobby-format';
 
 function member(userId: string, role: DebateLobbyRole, actingHost = false): DebateLobbyMember {
@@ -87,7 +94,7 @@ describe('lobby times', () => {
     expect(lobbyScheduleLabel(lobby, now)).toBe(`${time(starts)} · opens ${time(opens)}`);
     expect(lobbyScheduleLabel({ ...lobby, open: true }, now)).toBeNull();
     expect(lobbyScheduleLabel({ ...lobby, scheduled: false }, now)).toBeNull();
-    expect(notYetOpenLabel(lobby, now)).toBe(`Opens ${time(opens)} · starts ${time(starts)}`);
+    expect(notYetOpenLabel(lobby, now)).toBe(`Opens at ${time(opens)} · today`);
   });
 });
 
@@ -400,5 +407,73 @@ describe('disagreementCount', () => {
     expect(disagreementCount(rows, 'gh')).toBeNull();
     expect(disagreementCount(null, 'abcd')).toBeNull();
     expect(disagreementCount(undefined, 'abcd')).toBeNull();
+  });
+});
+
+describe('state screen labels', () => {
+  const now = Date.parse('2026-10-05T10:00:00Z');
+
+  it('counts down in minutes within the hour, then by local calendar day', () => {
+    const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).toISOString();
+    const evening = new Date(2026, 9, 5, 22, 0).getTime();
+    expect(untilLabel(at(5, 22, 20), evening)).toBe('in 20 min');
+    expect(untilLabel(at(5, 23, 59), evening)).toBe('today');
+    // Past midnight is tomorrow, though under 24 hours away.
+    expect(untilLabel(at(6, 0, 30), evening)).toBe('tomorrow');
+    expect(untilLabel(at(6, 23, 59), evening)).toBe('tomorrow');
+    // 36 hours away, but the day after tomorrow only from late evening.
+    expect(untilLabel(at(7, 10), evening)).toBe('in 2 days');
+    const morning = new Date(2026, 9, 5, 8, 0).getTime();
+    expect(untilLabel(at(6, 20), morning)).toBe('tomorrow');
+    expect(untilLabel(at(7, 0, 0), morning)).toBe('in 2 days');
+    expect(untilLabel(at(5, 7), morning)).toBe('soon');
+    expect(untilLabel('nope', morning)).toBe('soon');
+  });
+
+  it('writes the date block with weekday, day, month and time', () => {
+    const at = new Date(2026, 9, 6, 18, 0);
+    const label = lobbyDateLabel(at.toISOString());
+    expect(label).toContain(at.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }));
+    expect(label).toContain(at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }));
+    expect(lobbyDateLabel('nope')).toBeNull();
+  });
+
+  it('says open now for a next lobby already open', () => {
+    expect(nextLobbyTimeLabel({ open: true, starts_at: '2026-10-05T09:00:00Z' }, now)).toBe('open now');
+    expect(nextLobbyTimeLabel({ open: false, starts_at: '2026-10-05T09:00:00Z' }, now)).not.toBe('open now');
+  });
+
+  it('names the host who left a handoff, when the page saw them go', () => {
+    const lobby = { members: [member('b', 'speaker', true)] };
+    expect(hostWhoLeft([member('a', 'host')], lobby)?.user_id).toBe('a');
+    expect(hostWhoLeft([member('b', 'host')], lobby)).toBeNull();
+    expect(hostWhoLeft([], lobby)).toBeNull();
+    expect(handoffLabel({ display_name: 'Priya' }, { display_name: 'Adam' })).toBe('Adam left. Priya is now hosting.');
+    expect(handoffLabel({ display_name: 'Priya' }, null)).toBe('Priya is now hosting.');
+  });
+
+  it('tells the viewer when someone in a debate can be requested', () => {
+    expect(inDebateRequestLabel({ display_name: 'Leo' })).toBe(
+      'Leo is in a debate. You can request them when they’re back.'
+    );
+  });
+});
+
+describe('isAlone', () => {
+  it('is the viewer alone on the roster with no guests', () => {
+    expect(isAlone({ members: [member('a-1', 'host')], guest_count: 0 }, 'a1', false)).toBe(true);
+    expect(isAlone({ members: [member('a1', 'host')], guest_count: 1 }, 'a1', false)).toBe(false);
+    expect(isAlone({ members: [member('a1', 'host'), member('b1', 'speaker')] }, 'a1', false)).toBe(false);
+    expect(isAlone({ members: [member('a1', 'host')] }, null, false)).toBe(false);
+  });
+
+  it('counts other guests, and the guest’s own session once it has started', () => {
+    expect(isAlone({ members: [], guest_count: 0 }, null, true)).toBe(true);
+    expect(isAlone({ members: [], guest_count: 1 }, null, true, true)).toBe(true);
+    expect(isAlone({ members: [], guest_count: 1 }, null, true, false)).toBe(false);
+    expect(isAlone({ members: [], guest_count: 2 }, null, true, true)).toBe(false);
+    expect(isAlone({ members: [member('a1', 'host')], guest_count: 0 }, null, true)).toBe(false);
+    // An older geo-chat sends no count: not alone.
+    expect(isAlone({ members: [] }, null, true)).toBe(false);
   });
 });

@@ -91,7 +91,7 @@ const NUMERIC_FIELDS: { key: keyof LabResponse['bounds']; label: string; hint: s
 ];
 
 const SEEN_FIELDS: { key: 'minViews' | 'days'; label: string; hint: string }[] = [
-  { key: 'minViews', label: 'After N views', hint: 'N: a card shown this many times moves down' },
+  { key: 'minViews', label: 'After N views', hint: 'N: a card shown this many times is hidden' },
   { key: 'days', label: 'Within D days', hint: 'D: counting views from the last D days' },
 ];
 
@@ -266,12 +266,14 @@ export function RankingLab() {
         </div>
 
         <Text as="h3" variant="bodySemibold">
-          Seen demotion
+          Seen hiding
         </Text>
         <Text variant="metadata" color="grey-04">
-          In each visitor&apos;s browser: a card shown to them N or more times in the last D days, without a click,
-          moves below the unseen cards of its type on its page. The lead debate and fresh cards keep their places. Not
-          shown in the preview, which has no visitor. Live: {state?.config.seenDemotion.enabled ? 'on' : 'off'}.
+          In each visitor&apos;s browser: a card shown to them N or more times in the last D days, without a click, is
+          hidden, and the gap is filled from further down Best with a card of the same type (no extra request). Debates
+          are hidden only while an unseen one remains; the lead debate prefers the newest unseen one. Fresh cards keep
+          their places. Not shown in the preview, which has no visitor. Live:{' '}
+          {state?.config.seenDemotion.enabled ? 'on' : 'off'}.
         </Text>
         <label className="flex items-center gap-2">
           <input
@@ -279,7 +281,7 @@ export function RankingLab() {
             checked={draft.seenDemotion.enabled}
             onChange={event => setSeen({ enabled: event.target.checked })}
           />
-          <Text variant="body">Seen demotion enabled</Text>
+          <Text variant="body">Seen hiding enabled</Text>
         </label>
         <div className="sm:grid-cols-4 grid grid-cols-2 gap-3">
           {SEEN_FIELDS.map(field => (

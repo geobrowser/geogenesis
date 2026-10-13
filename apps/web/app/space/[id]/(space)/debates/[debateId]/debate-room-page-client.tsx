@@ -94,6 +94,7 @@ import {
   type OpenRoundsRoomPhase,
   debateThankingStartsAtMs,
   debateTurnRoleForDebate,
+  isBetweenOpenRounds,
   isDebatesLastTurn,
   openRebuttalRoundCount,
   openRoundGapAfterTurn,
@@ -713,6 +714,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
     stillSpeaking: localSpeakingRef.current,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
+    betweenRounds: isBetweenOpenRounds(countdown.openRounds),
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
@@ -3078,8 +3080,7 @@ function DebateRecordingModal({
     countdown.effectiveStatus !== 'thanking' &&
     countdown.activeSlot === null &&
     countdown.yieldingSlot === null &&
-    !openRoundDeciding &&
-    countdown.openRounds?.phase !== 'result'
+    !isBetweenOpenRounds(countdown.openRounds)
       ? countdownRing
       : null;
   const localCountdown = localEndingTurn

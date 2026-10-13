@@ -40,7 +40,7 @@ const ITEM = {
   entityId: 'e1',
   spaceId: 'space',
   types: [],
-  ranking: { version: 'best-1+seen.1', seenDemoted: true },
+  ranking: { version: 'best-1+seen.2', seenHidden: 3 },
 } as unknown as ExploreFeedItem;
 
 function mount() {
@@ -53,7 +53,7 @@ function mount() {
   );
 }
 
-it('records a view when the card is shown, with the demotion marker on the impression', () => {
+it('records a view when the card is shown, with the hidden-count marker on the impression', () => {
   const { container } = mount();
   const article = container.querySelector('article')!;
   act(() =>
@@ -65,7 +65,7 @@ it('records a view when the card is shown, with the demotion marker on the impre
 
   expect(store.recordImpression).toHaveBeenCalledWith('e1', expect.any(String));
   const impression = capture.mock.calls.find(([event]) => event === 'component_impression')!;
-  expect(impression[1]).toMatchObject({ feed_version: 'best-1+seen.1', feed_seen_demoted: true });
+  expect(impression[1]).toMatchObject({ feed_version: 'best-1+seen.2', feed_seen_hidden: 3 });
 });
 
 it('records engagement on any click inside the card', () => {

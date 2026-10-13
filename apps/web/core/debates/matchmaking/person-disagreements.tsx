@@ -25,6 +25,8 @@ export function PersonMatches({
   claimNamesLoading,
   labelsById,
   popoverPortal,
+  triggerAttributes,
+  hideWhenDetached = true,
 }: {
   personName: string;
   matches: ClaimMatch[];
@@ -32,6 +34,10 @@ export function PersonMatches({
   claimNamesLoading: boolean;
   labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
+  /** Analytics attributes for the trigger, where its surface labels its own clicks (GEO-3220). */
+  triggerAttributes?: Readonly<Record<`data-${string}`, string>>;
+  /** Off when the row sits inside another popover; see `PersonRow`'s `hidePopoversWhenDetached`. */
+  hideWhenDetached?: boolean;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
   const count = matches.length;
@@ -43,6 +49,7 @@ export function PersonMatches({
         <button
           type="button"
           aria-label={`View ${count} matching ${count === 1 ? 'claim' : 'claims'} with ${personName}`}
+          {...triggerAttributes}
           className="inline-flex items-center gap-1 whitespace-nowrap text-purple transition-opacity hover:opacity-75 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-purple"
         >
           <span className="tabular-nums">{count}</span> {count === 1 ? 'match' : 'matches'}
@@ -56,7 +63,7 @@ export function PersonMatches({
             align="start"
             sideOffset={8}
             collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-            hideWhenDetached
+            hideWhenDetached={hideWhenDetached}
             aria-label={`Matching claims with ${personName}`}
             onOpenAutoFocus={event => {
               event.preventDefault();
@@ -154,7 +161,7 @@ export const MatchingClaim = React.forwardRef<
  * the map means the entity loaded successfully, so only that case earns the "Untitled" fallback;
  * a settled lookup with no entity covers both a failed batch and a successfully missing entity.
  */
-function claimName(
+export function claimName(
   claimId: string,
   claimNamesById: ReadonlyMap<string, string | null>,
   claimNamesLoading: boolean

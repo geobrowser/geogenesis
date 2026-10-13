@@ -73,8 +73,8 @@ export type FeedItemRanking = {
    */
   slot?: 'fresh';
   /**
-   * GEO-3234. Set in the browser on a card seen demotion moved down (or would have, had nothing
-   * unseen been below it). The page's version then ends `+seen.<n>`.
+   * GEO-3234. Set in the browser: how many already-seen cards were hidden from this card's page. The
+   * page's cards' version then ends `+seen.<n>`.
    */
-  seenDemoted?: boolean;
+  seenHidden?: number;
 };

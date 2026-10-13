@@ -12,7 +12,7 @@ import type { DebateLobbySummary } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
+import { useDebateLobbies, useDebateLobbyReminder, useLobbyReminderError } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
 import {
   debatingLabel,
@@ -89,6 +89,7 @@ const REMINDER_FAILED = 'Could not update your reminder. Try again.';
 
 function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
   const reminder = useDebateLobbyReminder();
+  const reminderError = useLobbyReminderError(reminder, lobby);
   const hosts = hostsLabel(lobby.hosts);
   const schedule = lobbyScheduleLabel(lobby);
 
@@ -155,9 +156,9 @@ function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
           {hostedBy}
         </Text>
       ) : null}
-      {reminder.isError ? (
+      {reminderError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, REMINDER_FAILED)}
+          {lobbyErrorMessage(reminderError, REMINDER_FAILED)}
         </Text>
       ) : null}
     </li>

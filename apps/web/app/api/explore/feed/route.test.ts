@@ -83,6 +83,23 @@ describe('GET /api/explore/feed', () => {
       expect(response.headers.get('cache-control')).toBeNull();
     });
 
+    it('forwards the reserve with a Best page while on, and drops it otherwise', async () => {
+      mocks.freshState.mockResolvedValue({ config: SEEN_ON, revision: 5, updatedAt: null, updatedBy: null });
+      mocks.fetchFeed.mockResolvedValue({ ...bestPage, reserve: [{ entityId: 'a' }] });
+      expect((await (await GET(new Request('https://example.com/api/explore/feed?sort=best'))).json()).reserve).toEqual(
+        [{ entityId: 'a' }]
+      );
+
+      mocks.fetchFeed.mockResolvedValue({
+        ...bestPage,
+        feed: { name: 'interleaved', version: 'interleave(a,b)' },
+        reserve: [{ entityId: 'a' }],
+      });
+      expect(
+        (await (await GET(new Request('https://example.com/api/explore/feed?sort=best'))).json()).reserve
+      ).toBeUndefined();
+    });
+
     it('leaves the page exactly as it was while off', async () => {
       mocks.fetchFeed.mockResolvedValue(bestPage);
 
