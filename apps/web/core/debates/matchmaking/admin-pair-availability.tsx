@@ -188,7 +188,7 @@ export function AdminPairAvailability({
                     <span
                       key={index}
                       data-start={cell.start}
-                      title={cellTitle(cell, first.name, second.name, zone)}
+                      title={cellTitle(cell, first, second, zone)}
                       className={cx(
                         'relative flex flex-col bg-white',
                         cell.start <= now ? 'opacity-30' : 'cursor-pointer hover:brightness-90',
@@ -240,13 +240,20 @@ function sideLook(side: Side, free: string) {
   return side === null ? UNKNOWN : side ? free : null;
 }
 
-function cellTitle(cell: Cell, firstName: string, secondName: string, zone: string) {
-  const sideText = (name: string, side: Side) =>
-    side === null ? `${name} not known yet` : side ? `${name} free` : `${name} busy`;
+/** Someone with no availability set, said so: their empty row is not a fully booked one. */
+const unsetText = (person: DebaterAvailability) => `${person.name} hasn’t set availability`;
+
+function cellTitle(cell: Cell, first: DebaterAvailability, second: DebaterAvailability, zone: string) {
+  const sideText = (person: DebaterAvailability, side: Side) =>
+    person.unset
+      ? unsetText(person)
+      : side === null
+        ? `${person.name} not known yet`
+        : side
+          ? `${person.name} free`
+          : `${person.name} busy`;
   const who =
-    cell.first && cell.second
-      ? 'Both free'
-      : `${sideText(firstName, cell.first)}, ${sideText(secondName, cell.second)}`;
+    cell.first && cell.second ? 'Both free' : `${sideText(first, cell.first)}, ${sideText(second, cell.second)}`;
   // Each time with the offset it has then: a fortnight can cross a clock change.
   return `${timeIn(cell.start, zone)} ${zoneLabel(zone, cell.start)} · ${who}`;
 }
@@ -298,6 +305,7 @@ function daySummary(
   const at = (instant: number) =>
     clocksChange ? `${timeIn(instant, zone)} ${tzAbbreviation(zone, instant)}` : timeIn(instant, zone);
   const side = (person: DebaterAvailability, of: (cell: Cell) => Side) => {
+    if (person.unset) return unsetText(person);
     const unknown = runs(cells, cell => of(cell) === null);
     if (unknown.length === 1 && unknown[0].from === cells[0].start && unknown[0].to === cells.at(-1)!.end)
       return `${person.name} not known`;

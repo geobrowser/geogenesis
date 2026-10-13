@@ -55,7 +55,7 @@ vi.mock('./admin-hooks', () => ({
     userId
       ? {
           data: { with_timezone: readZone(userId), their_slots: mocks.availability[userId] ?? [] },
-          schedule: { peerHasSchedule: Boolean(readZone(userId)) },
+          schedule: { peerHasSchedule: Boolean(readZone(userId)), peerTimezone: readZone(userId) },
           dataUpdatedAt: Date.now(),
           isPending: false,
           error: null,
@@ -291,6 +291,12 @@ describe('AdminNewMatchDialog', () => {
     // Nothing to recommend, so the override is where it starts.
     expect(screen.getByRole('radio', { name: 'Pick any time' })).toBeChecked();
     expect(screen.getByText('Sam hasn’t set availability.')).toBeInTheDocument();
+    // Assistive tech and the hover title hear the same, not a fully booked fortnight.
+    const strip = screen.getByRole('region', { name: /^Availability in / });
+    expect(within(strip).getAllByText(/Sam hasn’t set availability; Ana/).length).toBeGreaterThan(0);
+    expect(within(strip).queryByText(/Sam not free/)).not.toBeInTheDocument();
+    expect(strip.querySelector('[title*="Sam busy"]')).toBeNull();
+    expect(strip.querySelector('[title*="Sam hasn’t set availability"]')).not.toBeNull();
     expect(screen.getAllByText(/Not a time they.re both free/).length).toBeGreaterThan(0);
     fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
     expect(mocks.create.mock.calls[0][0]).toMatchObject({ firstUserId: 'sam', secondUserId: 'ana' });
@@ -333,6 +339,11 @@ describe('AdminNewMatchDialog', () => {
     expect(
       screen.getAllByRole('button', { pressed: false }).some(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))
     ).toBe(true);
+    // Their zone came from their own read, so the footer gives their clock as well as Ana's.
+    fireEvent.click(
+      screen.getAllByRole('button', { pressed: false }).find(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))!
+    );
+    expect(screen.getByText(/Sam .* in New York.* · Ana .* in Madrid/)).toBeInTheDocument();
   });
 
   it('says someone has no availability when their own read says so, whatever the roster had', () => {

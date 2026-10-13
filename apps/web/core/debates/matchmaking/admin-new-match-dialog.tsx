@@ -92,6 +92,9 @@ const SETTLED_PROMPTS: ReadonlySet<PromptOutcome> = new Set([
 
 const isRetryable = (outcome: PromptOutcome | undefined) => outcome !== undefined && !SETTLED_PROMPTS.has(outcome);
 
+/** One debater's own availability read. */
+type AvailabilityRead = ReturnType<typeof useAdminDebaterAvailability>;
+
 /** A time picked, and whether it is outside their availability: `null` until their overlap is known. */
 type Choice = { start: number; outside: boolean | null };
 
@@ -178,7 +181,18 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
     setZoneState(next);
     saveAdminMatchZone(next);
   };
-  const zoneOf = (userId: string) => debatersQuery.timezoneByUser.get(normId(userId));
+  // Each debater's own read: whether they have a schedule, and their zone, either of which the
+  // roster can miss. Read here so the time picker and the footer agree on both.
+  const firstAvailability = useAdminDebaterAvailability(first && second ? first.userId : null);
+  const secondAvailability = useAdminDebaterAvailability(first && second ? second.userId : null);
+  const zoneOf = (userId: string) => {
+    const read = [
+      [first, firstAvailability],
+      [second, secondAvailability],
+    ] as const;
+    const own = read.find(([picked]) => picked && normId(picked.userId) === normId(userId))?.[1];
+    return debatersQuery.timezoneByUser.get(normId(userId)) || own?.schedule?.peerTimezone || undefined;
+  };
   const availableIds = React.useMemo(
     () => [...new Set((debatersQuery.data ?? []).map(debater => normId(debater.user_id)))],
     [debatersQuery.data]
@@ -435,6 +449,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
           zone={zone}
           onZoneChange={setZone}
           zoneOf={zoneOf}
+          firstAvailability={firstAvailability}
+          secondAvailability={secondAvailability}
           prompts={prompts}
           onChoose={setChosen}
           onRequest={userIds => void requestAvailability(userIds)}
@@ -767,6 +783,8 @@ function TimePicker({
   zone,
   onZoneChange,
   zoneOf,
+  firstAvailability,
+  secondAvailability,
   prompts,
   onChoose,
   onRequest,
@@ -775,8 +793,10 @@ function TimePicker({
   second: Picked | null;
   zone: string;
   onZoneChange: (zone: string) => void;
-  /** A debater's zone from the roster of everyone with availability. */
+  /** A debater's zone: the roster's, or their own read's for anyone the roster missed. */
   zoneOf: (userId: string) => string | undefined;
+  firstAvailability: AvailabilityRead;
+  secondAvailability: AvailabilityRead;
   prompts: ReadonlyMap<string, PromptOutcome>;
   onChoose: (choice: Choice | null) => void;
   /** Asks these people to set or widen their availability. */
@@ -800,8 +820,6 @@ function TimePicker({
   // Ticks each minute, so a picked time that passes while the dialog is open stops being sendable.
   const now = useMinuteClock();
   const overlap = useAdminPairOverlap(first?.userId ?? null, second?.userId ?? null);
-  const firstAvailability = useAdminDebaterAvailability(first && second ? first.userId : null);
-  const secondAvailability = useAdminDebaterAvailability(first && second ? second.userId : null);
   // Who has set no availability: each one's own read once it answers, the roster's guess before.
   const firstUnset = !(firstAvailability.schedule?.peerHasSchedule ?? first?.hasAvailability);
   const secondUnset = !(secondAvailability.schedule?.peerHasSchedule ?? second?.hasAvailability);
@@ -811,7 +829,7 @@ function TimePicker({
   // Without availability on both sides there is nothing to recommend, so the override is the start.
   const mode = pickedMode ?? (unset.length > 0 ? 'any' : 'recommended');
   const candidate = overlap.data?.candidates[0];
-  // The roster's zone, the one the footer shows too; the overlap's only for anyone it lacks.
+  // The zone the footer shows too; the overlap's only while their own read is still loading.
   const firstZone = (first && zoneOf(first.userId)) || overlap.data?.viewer_timezone || undefined;
   const secondZone = (second && zoneOf(second.userId)) || candidate?.with_timezone || undefined;
   const slots = React.useMemo(
@@ -1239,7 +1257,7 @@ function NoSharedTime({
 }
 
 /** Where geo-chat's answer for one debater starts: their midnight on the UTC date it answered on. */
-function knownFrom(availability: ReturnType<typeof useAdminDebaterAvailability>): number | null {
+function knownFrom(availability: AvailabilityRead): number | null {
   if (!availability.data) return null;
   return windowStart(new Date(availability.dataUpdatedAt), availability.data.with_timezone).getTime();
 }
