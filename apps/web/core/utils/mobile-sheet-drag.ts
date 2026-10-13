@@ -30,7 +30,9 @@ export function isAnyMobileSheetOpen(): boolean {
 /** Notified when the first sheet opens and when the last one closes. */
 export function subscribeMobileSheetOpen(listener: () => void): () => void {
   openListeners.add(listener);
-  return () => openListeners.delete(listener);
+  return () => {
+    openListeners.delete(listener);
+  };
 }
 
 function notifyOpenChange() {

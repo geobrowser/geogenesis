@@ -16,10 +16,10 @@ import { hasProcessedVideo, isWatchableDebate } from '~/core/debates/playback-ut
 import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-claims';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
-import { useCoveredByMobileSheet } from '~/core/hooks/use-covered-by-mobile-sheet';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
+import { useCoveredByMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FullscreenLink } from '~/design-system/fullscreen-link';

@@ -5,8 +5,8 @@ import type * as React from 'react';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 
-import { InsideMobileSheet } from '~/core/hooks/use-covered-by-mobile-sheet';
 import { MOBILE_SHEET_ENTRANCE_SPRING, type MobileSheetStyle } from '~/core/hooks/use-mobile-sheet-drag';
+import { InsideMobileSheet } from '~/core/state/mobile-sheet-cover';
 
 import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 

@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate } from '~/core/debates/api';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
-import { InsideMobileSheet } from '~/core/hooks/use-covered-by-mobile-sheet';
+import { InsideMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { lockMobileSheetDocumentOverscroll } from '~/core/utils/mobile-sheet-drag';
 import { NavUtils } from '~/core/utils/utils';
 

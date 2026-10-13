@@ -7,10 +7,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { useSetAtom } from 'jotai';
 import { createPortal } from 'react-dom';
 
-import { InsideMobileSheet } from '~/core/hooks/use-covered-by-mobile-sheet';
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { MOBILE_SHEET_ENTRANCE_SPRING, useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
+import { InsideMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 
 import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
