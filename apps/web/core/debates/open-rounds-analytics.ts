@@ -29,8 +29,9 @@ export type ResolvedOpenRound = {
 };
 
 /**
- * A round that resolved with a missing pick timed out, whatever the other pick was: the missing one
- * counted as End. Otherwise two different picks are a split.
+ * A round that resolved with a missing pick timed out, whatever the other pick was and whichever
+ * way it went: a missing pick next to an Extend extends, next to an End or another missing pick it
+ * ends. Otherwise two different picks are a split.
  */
 export function openRoundPickSplit(round: Pick<ResolvedOpenRound, 'resolution' | 'picks'>): OpenRoundPickSplit {
   const picks = round.picks.map(entry => entry.pick);

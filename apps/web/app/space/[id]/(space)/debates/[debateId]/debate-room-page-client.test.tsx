@@ -5255,6 +5255,36 @@ describe('DebateRoomPageClient', () => {
 
   // GEO-3178. After every round but the cap, both debaters pick Extend or End on a card over the
   // tiles. Picks are blind until the reveal.
+  describe('open rounds microphones between rounds', () => {
+    beforeEach(() => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    });
+
+    it('opens the listener’s microphone for the pick, and closes it again when the next round starts', async () => {
+      const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+      mocks.createLocalTracks.mockResolvedValue([
+        audioTrack,
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ]);
+      // Alice listens while Bob closes the opening.
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
+      const view = await renderLiveDebate(openRoundsListening());
+      await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+
+      rerenderAt(view, '20:02:03.000', openRoundsDeciding());
+      await waitFor(() => expect(document.querySelector('[data-open-round-pick-card]')).not.toBeNull());
+      await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+
+      // Through the reveal and count-in too.
+      rerenderAt(view, '20:02:05.000', openRoundsRevealRebut());
+      await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+
+      // Round 2: Alice opens it, then Bob takes the second turn and her mic closes.
+      rerenderAt(view, '20:03:20.000', openRoundsRoundOneSpeaking());
+      await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+    });
+  });
+
   describe('open rounds pick card (GEO-3178)', () => {
     const pickCard = () => screen.queryByRole('region', { name: /Keep debating\?|Locked in/ });
 
@@ -5502,7 +5532,8 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(reveal('remote')).toHaveAttribute('data-open-round-reveal', 'none'));
       expect(reveal('remote')).toHaveTextContent('No pick');
-      expect(reveal('remote')).toHaveTextContent('End');
+      // A missing pick is neither choice; this payload ended because geo-chat counted it as End.
+      expect(reveal('remote')).not.toHaveTextContent(/\bEnd\b/);
 
       rerenderAt(view, '20:02:12.800', openRoundsTimedOut());
       await waitFor(() => expect(result()).toHaveTextContent("Bob didn't pick in time"));

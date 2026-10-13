@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { SLOT_MINUTES } from '~/core/availability/blocks';
+import { SLOT_MINUTES, formatTime24, parseTime24 } from '~/core/availability/blocks';
 import { windowStart } from '~/core/availability/peer-schedule';
 import { useSearch } from '~/core/hooks/use-search';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -42,7 +42,6 @@ import {
   readAdminMatchZone,
   saveAdminMatchZone,
   spanIn,
-  wallTime,
   zoneDays,
   zoneLabel,
   zoneName,
@@ -50,6 +49,7 @@ import {
 import { AdminPairAvailability } from './admin-pair-availability';
 import { useAdminPairFit, useAdminSharedFreeSlots } from './admin-pair-fit';
 import { SegmentedControl, useMinuteClock } from './debate-calendar-controls';
+import { SLOT_MS } from './debate-calendar-model';
 import { type ClaimMatch, matchesInSpaces } from './disagreement-counts';
 import { HubPillButton } from './hub-pill-button';
 import { offlinePerson } from './offline-person';
@@ -92,8 +92,15 @@ const SETTLED_PROMPTS: ReadonlySet<PromptOutcome> = new Set([
 
 const isRetryable = (outcome: PromptOutcome | undefined) => outcome !== undefined && !SETTLED_PROMPTS.has(outcome);
 
-/** A time picked, and whether it is outside their availability: `null` until their overlap is known. */
-type Choice = { start: number; outside: boolean | null };
+/** One debater's own availability read. */
+type AvailabilityRead = ReturnType<typeof useAdminDebaterAvailability>;
+
+/**
+ * A time picked, and whether it is outside their availability: `null` until their overlap is known.
+ * geo-chat calls any start that isn't one of their shared half-hours outside, so `freeOffGrid` marks
+ * a custom start, like 9:15, whose whole half-hour they're both free for all the same.
+ */
+type Choice = { start: number; outside: boolean | null; freeOffGrid?: boolean };
 
 type Props = {
   open: boolean;
@@ -109,8 +116,10 @@ type Props = {
  * other. One page rather than the ticket's four-step rail.
  *
  * - **Search covers everyone.** Everyone with availability is listed from the start; anyone else is
- *   found by name through Geo search. Only people with availability can be picked. Everyone else
- *   gets Request availability, which emails them, and says so when there is no email on file.
+ *   found by name through Geo search. Anyone can be picked: a match with someone who has set no
+ *   availability is booked at any time, flagged Off-hours, so an admin who has agreed a time with
+ *   them elsewhere can book it here. They also get Request availability, which emails them, and
+ *   says so when there is no email on file.
  * - **Once debater 1 is picked**, the list reorders by matches with them, the People tab's order
  *   measured from that person instead of the viewer. When gaia's pair fit is available (GEO-3224)
  *   it orders by fit instead, halved for anyone with no free time in common, and each row says
@@ -151,7 +160,11 @@ export function AdminNewMatchDialog({ open, onOpenChange, openerRef, onSent }: P
   );
 }
 
-type Picked = { userId: string; person: DebatePerson };
+/**
+ * A debater picked, and whether the roster had them with availability: a guess, the roster being a
+ * cached, capped list that may not have loaded, which their own read replaces once it answers.
+ */
+type Picked = { userId: string; person: DebatePerson; hasAvailability: boolean };
 
 function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note: string) => void }) {
   const [first, setFirst] = React.useState<Picked | null>(null);
@@ -172,7 +185,21 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
     setZoneState(next);
     saveAdminMatchZone(next);
   };
-  const zoneOf = (userId: string) => debatersQuery.timezoneByUser.get(normId(userId));
+  // Each debater's own read: whether they have a schedule, and their zone, either of which the
+  // roster can miss. Read here so the time picker and the footer agree on both.
+  const firstAvailability = useAdminDebaterAvailability(first && second ? first.userId : null);
+  const secondAvailability = useAdminDebaterAvailability(first && second ? second.userId : null);
+  const zoneOf = (userId: string) => {
+    const read = [
+      [first, firstAvailability],
+      [second, secondAvailability],
+    ] as const;
+    const own = read.find(([picked]) => picked && normId(picked.userId) === normId(userId))?.[1];
+    // Their own read decides once it answers, an empty zone (no schedule) included: the roster can
+    // be a minute old. The roster only stands in until then.
+    if (own?.schedule) return own.schedule.peerTimezone || undefined;
+    return debatersQuery.timezoneByUser.get(normId(userId));
+  };
   const availableIds = React.useMemo(
     () => [...new Set((debatersQuery.data ?? []).map(debater => normId(debater.user_id)))],
     [debatersQuery.data]
@@ -305,7 +332,7 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   };
 
   const pick = (person: DebatePerson) => {
-    const next = { userId: person.user_id, person };
+    const next = { userId: person.user_id, person, hasAvailability: isAvailable.has(normId(person.user_id)) };
     if (!first) setFirst(next);
     else setSecond(next);
     search.onQueryChange('');
@@ -429,9 +456,11 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
           zone={zone}
           onZoneChange={setZone}
           zoneOf={zoneOf}
+          firstAvailability={firstAvailability}
+          secondAvailability={secondAvailability}
           prompts={prompts}
           onChoose={setChosen}
-          onRequestBoth={() => first && second && void requestAvailability([first.userId, second.userId])}
+          onRequest={userIds => void requestAvailability(userIds)}
         />
       </div>
 
@@ -443,8 +472,7 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
                 {speakerLabel(first.person)} vs {speakerLabel(second.person)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
-                {dateLabels(dateIn(chosen.start, zone)).full} ·{' '}
-                {spanIn(chosen.start, chosen.start + SLOT_MINUTES * 60_000, zone)}
+                {dateLabels(dateIn(chosen.start, zone)).full} · {spanIn(chosen.start, chosen.start + SLOT_MS, zone)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
                 {[first, second]
@@ -459,7 +487,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
               </Text>
               {chosen.outside ? (
                 <Text as="p" variant="footnote" className="text-purple">
-                  Not a time they&rsquo;re both free. The invite is flagged, and the calendar tags it Off-hours.
+                  {chosen.freeOffGrid ? FREE_OFF_GRID : NOT_BOTH_FREE} The invite is flagged, and the calendar tags it
+                  Off-hours.
                 </Text>
               ) : null}
             </>
@@ -624,53 +653,25 @@ function PersonOption({
       )
     ) : null;
 
-  let action: React.ReactNode;
-  if (available) {
-    action = (
-      <HubPillButton
-        analyticsSurface="calendar"
-        analyticsLabel="New match Select"
-        aria-label={`Select ${name}`}
-        onClick={onPick}
-      >
-        Select
-      </HubPillButton>
-    );
-  } else if (prompt && prompt !== 'pending' && !isRetryable(prompt)) {
-    action = (
-      <Text
-        as="span"
-        variant="footnote"
-        className={cx('max-w-[14rem] pt-1.5 text-right', prompt === 'sent' ? POSITIVE_TEXT_CLASS : 'text-grey-04')}
-      >
-        {PROMPT_LABELS[prompt]}
-      </Text>
-    );
-  } else if (isRetryable(prompt)) {
-    action = (
-      <HubPillButton
-        analyticsSurface="calendar"
-        analyticsLabel="New match Retry availability request"
-        aria-label={`Retry requesting availability from ${name}`}
-        onClick={onRequest}
-      >
-        Retry
-      </HubPillButton>
-    );
-  } else {
-    action = (
-      <HubPillButton
-        analyticsSurface="calendar"
-        analyticsLabel="New match Request availability"
-        aria-label={`Request availability from ${name}`}
-        pending={prompt === 'pending'}
-        pendingLabel="Sending…"
-        onClick={onRequest}
-      >
-        Request availability
-      </HubPillButton>
-    );
-  }
+  const select = (
+    <HubPillButton
+      analyticsSurface="calendar"
+      analyticsLabel="New match Select"
+      aria-label={`Select ${name}`}
+      onClick={onPick}
+    >
+      Select
+    </HubPillButton>
+  );
+  // Without availability they can still be picked; asking them to set it sits under Select.
+  const action = available ? (
+    select
+  ) : (
+    <div className="flex flex-col items-end gap-1.5">
+      {select}
+      <RequestAvailabilityAction name={name} prompt={prompt} onRequest={onRequest} />
+    </div>
+  );
 
   return (
     <li className="grid grid-cols-[2rem_minmax(0,1fr)_auto] items-start gap-x-2.5 border-b border-grey-02 py-2.5 last:border-b-0">
@@ -687,7 +688,7 @@ function PersonOption({
         ) : null}
         {available ? null : (
           <Text as="span" variant="footnote" color="grey-04">
-            No availability set. Can&rsquo;t be matched until they set it.
+            No availability set. Pick any time to match them.
           </Text>
         )}
         {isRetryable(prompt) ? (
@@ -723,8 +724,59 @@ function PersonOption({
   );
 }
 
-/** The dialog's native dropdowns: day, start and zone, kept native so a long list scrolls as the OS draws it. */
-const NATIVE_SELECT_CLASS = 'h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02';
+/** Request availability for one person, or what became of asking them. */
+function RequestAvailabilityAction({
+  name,
+  prompt,
+  onRequest,
+}: {
+  name: string;
+  prompt: PromptOutcome | undefined;
+  onRequest: () => void;
+}) {
+  if (prompt && prompt !== 'pending' && !isRetryable(prompt)) {
+    return (
+      <Text
+        as="span"
+        variant="footnote"
+        className={cx('max-w-[14rem] pt-1.5 text-right', prompt === 'sent' ? POSITIVE_TEXT_CLASS : 'text-grey-04')}
+      >
+        {PROMPT_LABELS[prompt]}
+      </Text>
+    );
+  }
+  if (isRetryable(prompt)) {
+    return (
+      <HubPillButton
+        analyticsSurface="calendar"
+        analyticsLabel="New match Retry availability request"
+        aria-label={`Retry requesting availability from ${name}`}
+        onClick={onRequest}
+      >
+        Retry
+      </HubPillButton>
+    );
+  }
+  return (
+    <HubPillButton
+      analyticsSurface="calendar"
+      analyticsLabel="New match Request availability"
+      aria-label={`Request availability from ${name}`}
+      pending={prompt === 'pending'}
+      pendingLabel="Sending…"
+      onClick={onRequest}
+    >
+      Request availability
+    </HubPillButton>
+  );
+}
+
+/** The dialog's native fields: the day and zone dropdowns, kept native so a long list scrolls as the OS draws it, and the start time. */
+const NATIVE_FIELD_CLASS = 'h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02';
+
+// Why a picked time is flagged Off-hours, in the picker and again beside Send invites.
+const NOT_BOTH_FREE = 'Not a time they’re both free.';
+const FREE_OFF_GRID = 'They’re both free then, but it isn’t one of their half-hours.';
 
 const MODE_OPTIONS = [
   { value: 'recommended', label: 'Recommended' },
@@ -742,21 +794,27 @@ function TimePicker({
   zone,
   onZoneChange,
   zoneOf,
+  firstAvailability,
+  secondAvailability,
   prompts,
   onChoose,
-  onRequestBoth,
+  onRequest,
 }: {
   first: Picked | null;
   second: Picked | null;
   zone: string;
   onZoneChange: (zone: string) => void;
-  /** A debater's zone from the roster of everyone with availability. */
+  /** A debater's zone: the roster's, or their own read's for anyone the roster missed. */
   zoneOf: (userId: string) => string | undefined;
+  firstAvailability: AvailabilityRead;
+  secondAvailability: AvailabilityRead;
   prompts: ReadonlyMap<string, PromptOutcome>;
   onChoose: (choice: Choice | null) => void;
-  onRequestBoth: () => void;
+  /** Asks these people to set or widen their availability. */
+  onRequest: (userIds: string[]) => void;
 }) {
-  const [mode, setMode] = React.useState<'recommended' | 'any'>('recommended');
+  // Null until the admin picks a mode: until then it follows what is known about their availability.
+  const [pickedMode, setMode] = React.useState<'recommended' | 'any' | null>(null);
   const [selected, setSelected] = React.useState<number | null>(null);
   // Counted in the picked zone: in GMT, an admin west of it can still be on yesterday.
   const days = React.useMemo(() => zoneDays(Date.now(), zone, ADMIN_MATCH_DAYS), [zone]);
@@ -766,33 +824,53 @@ function TimePicker({
   const [anyAt, setAnyAt] = React.useState(() => instantAt(days[1], 17 * 60, zone));
   const anyDay = days.indexOf(dateIn(anyAt, zone));
   const anyMinutes = minutesIn(anyAt, zone);
-  const anyMinuteOptions = [
-    ...new Set([...Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES), anyMinutes]),
-  ].sort((left, right) => left - right);
 
   // Ticks each minute, so a picked time that passes while the dialog is open stops being sendable.
   const now = useMinuteClock();
   const overlap = useAdminPairOverlap(first?.userId ?? null, second?.userId ?? null);
-  const firstAvailability = useAdminDebaterAvailability(first && second ? first.userId : null);
-  const secondAvailability = useAdminDebaterAvailability(first && second ? second.userId : null);
-  const candidate = overlap.data?.candidates[0];
-  // The roster's zone, the one the footer shows too; the overlap's only for anyone it lacks.
-  const firstZone = (first && zoneOf(first.userId)) || overlap.data?.viewer_timezone || undefined;
-  const secondZone = (second && zoneOf(second.userId)) || candidate?.with_timezone || undefined;
-  const slots = React.useMemo(
-    () => (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > now),
-    [candidate, now]
+  // Who has set no availability: each one's own read once it answers, the roster's guess before.
+  const firstUnset = !(firstAvailability.schedule?.peerHasSchedule ?? first?.hasAvailability);
+  const secondUnset = !(secondAvailability.schedule?.peerHasSchedule ?? second?.hasAvailability);
+  const unset = [first && firstUnset ? first : null, second && secondUnset ? second : null].filter(
+    (person): person is Picked => person !== null
   );
+  // Without availability on both sides there is nothing to recommend, so the override is the start.
+  const mode = pickedMode ?? (unset.length > 0 ? 'any' : 'recommended');
+  const candidate = overlap.data?.candidates[0];
+  // The zone the footer shows too; the overlap's only while their own read has not answered.
+  const zoneFor = (picked: Picked | null, read: AvailabilityRead, fromOverlap: string | undefined) =>
+    picked ? (zoneOf(picked.userId) ?? (read.schedule ? undefined : fromOverlap || undefined)) : undefined;
+  const firstZone = zoneFor(first, firstAvailability, overlap.data?.viewer_timezone);
+  const secondZone = zoneFor(second, secondAvailability, candidate?.with_timezone);
+  // With either of them unset no time is shared, whatever an overlap read before they cleared their
+  // schedule still holds: geo-chat flags the invite Off-hours, so the picker must say so too.
+  const anyUnset = unset.length > 0;
+  // Every shared half-hour's start, past ones included, which a custom start can sit inside.
+  const sharedStarts = React.useMemo(
+    () => (anyUnset ? [] : (candidate?.slots ?? []).map(slot => Date.parse(slot.start))),
+    [anyUnset, candidate]
+  );
+  const slots = React.useMemo(() => sharedStarts.filter(start => start > now), [now, sharedStarts]);
   const mutual = React.useMemo(() => new Set(slots), [slots]);
   // Whether a time is outside their availability is only known once the overlap has answered in
-  // full; until then the override says nothing rather than flagging every time it is shown.
-  const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
+  // full, or once either is known to be unset; until then the override says nothing rather than
+  // flagging every time it is shown.
+  const overlapKnown = anyUnset || (overlap.data !== undefined && !candidate?.truncated);
 
   // A time off the days shown, where a zone change can push either kind of pick, is no choice at
   // all: neither its chip nor its strip cell is on screen to say what would be sent.
   const shownDays = React.useMemo(() => new Set(days), [days]);
   const onShownDay = React.useCallback((start: number) => shownDays.has(dateIn(start, zone)), [shownDays, zone]);
   const anyStart = onShownDay(anyAt) ? anyAt : null;
+  const anyInside = anyStart !== null && mutual.has(anyStart);
+  // A custom start like 9:15 is never a shared half-hour, but they're free for all of it when it
+  // starts and ends inside shared half-hours, which tile their free time with no gaps. Every shared
+  // half-hour counts here, the one already under way included: 9:15 sits in 9:00's.
+  const anyFreeOffGrid =
+    overlapKnown &&
+    anyStart !== null &&
+    !anyInside &&
+    [anyStart, anyStart + SLOT_MS - 1].every(at => sharedStarts.some(start => start <= at && at < start + SLOT_MS));
   React.useEffect(() => {
     if (mode === 'recommended')
       onChoose(
@@ -801,10 +879,14 @@ function TimePicker({
     else
       onChoose(
         anyStart !== null && anyStart > now
-          ? { start: anyStart, outside: overlapKnown ? !mutual.has(anyStart) : null }
+          ? {
+              start: anyStart,
+              outside: overlapKnown ? !anyInside : null,
+              freeOffGrid: anyFreeOffGrid,
+            }
           : null
       );
-  }, [anyStart, mode, mutual, now, onChoose, onShownDay, overlapKnown, selected]);
+  }, [anyFreeOffGrid, anyInside, anyStart, mode, now, onChoose, onShownDay, overlapKnown, selected]);
 
   // The zone alone wherever a label spans the fortnight; a single time carries its own offset.
   const zoneTitle = zoneName(zone);
@@ -829,7 +911,7 @@ function TimePicker({
       <select
         value={zone}
         onChange={event => onZoneChange(event.currentTarget.value)}
-        className={cx(NATIVE_SELECT_CLASS, 'max-w-[16rem]')}
+        className={cx(NATIVE_FIELD_CLASS, 'max-w-[16rem]')}
       >
         {zoneOptions.map(option => (
           <option key={option.value} value={option.value}>
@@ -863,7 +945,7 @@ function TimePicker({
             Pick two debaters to see when they&rsquo;re both free.
           </Text>
           <Text as="p" variant="footnote" color="grey-04">
-            Only people who have set availability can be picked. For anyone else, use Request availability.
+            Anyone without availability can still be picked, at any time you choose.
           </Text>
         </div>
       </>
@@ -891,7 +973,25 @@ function TimePicker({
 
   let body: React.ReactNode;
   if (mode === 'recommended') {
-    if (overlap.isPending) {
+    // Someone known to be unset shares no time whatever the overlap says, so its loading and errors
+    // do not stand between the admin and asking them.
+    if (unset.length > 0) {
+      body = (
+        <NoSharedTime
+          title={`${unset.map(person => debaterFirstName(person.person)).join(' and ')} ${unset.length > 1 ? 'haven’t' : 'hasn’t'} set availability, so there’s no shared time to recommend.`}
+          note="Pick any time to book it anyway. The invite is flagged and the calendar tags it Off-hours."
+          asked={unset}
+          prompts={prompts}
+          request={{
+            label: 'Request availability',
+            analyticsLabel: 'New match Request availability unset',
+            retryAnalyticsLabel: 'New match Retry request unset',
+          }}
+          onPickAny={() => setMode('any')}
+          onRequest={onRequest}
+        />
+      );
+    } else if (overlap.isPending) {
       body = (
         <Text as="p" variant="metadata" color="grey-04">
           Finding times they&rsquo;re both free…
@@ -909,58 +1009,19 @@ function TimePicker({
         </div>
       );
     } else if (slots.length === 0) {
-      const outcomes = [first, second].map(person => prompts.get(normId(person.userId)));
-      const asking = outcomes.includes('pending');
-      const answered = outcomes.every(outcome => outcome !== undefined && outcome !== 'pending');
-      const retry = outcomes.some(isRetryable);
       body = (
-        <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
-          <Text as="p" variant="metadataMedium">
-            {a} and {b} have both set availability, but it never overlaps in the next two weeks.
-          </Text>
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <HubPillButton
-              analyticsSurface="calendar"
-              analyticsLabel="New match Pick any time"
-              onClick={() => setMode('any')}
-            >
-              Pick any time
-            </HubPillButton>
-            {answered && !asking ? (
-              <>
-                <div className="flex flex-col gap-0.5">
-                  {[a, b].map((name, index) => {
-                    const outcome = outcomes[index] as Exclude<PromptOutcome, 'pending'>;
-                    return (
-                      <Text key={index} as="span" variant="footnote" color="grey-04">
-                        {outcome === 'sent' ? `Asked ${name}` : `${name}: ${PROMPT_LABELS[outcome]}`}
-                      </Text>
-                    );
-                  })}
-                </div>
-                {retry ? (
-                  <HubPillButton
-                    analyticsSurface="calendar"
-                    analyticsLabel="New match Retry ask both"
-                    onClick={onRequestBoth}
-                  >
-                    Retry
-                  </HubPillButton>
-                ) : null}
-              </>
-            ) : (
-              <HubPillButton
-                analyticsSurface="calendar"
-                analyticsLabel="New match Ask both to widen availability"
-                pending={asking}
-                pendingLabel="Sending…"
-                onClick={onRequestBoth}
-              >
-                Ask both to widen availability
-              </HubPillButton>
-            )}
-          </div>
-        </div>
+        <NoSharedTime
+          title={`${a} and ${b} have both set availability, but it never overlaps in the next two weeks.`}
+          asked={[first, second]}
+          prompts={prompts}
+          request={{
+            label: 'Ask both to widen availability',
+            analyticsLabel: 'New match Ask both to widen availability',
+            retryAnalyticsLabel: 'New match Retry ask both',
+          }}
+          onPickAny={() => setMode('any')}
+          onRequest={onRequest}
+        />
       );
     } else {
       body = (
@@ -1020,7 +1081,6 @@ function TimePicker({
       );
     }
   } else {
-    const inside = anyStart !== null && mutual.has(anyStart);
     const future = anyStart !== null && anyStart > now;
     body = (
       <>
@@ -1036,7 +1096,7 @@ function TimePicker({
             <select
               value={anyDay}
               onChange={event => setAnyAt(instantAt(days[Number(event.currentTarget.value)], anyMinutes, zone))}
-              className={NATIVE_SELECT_CLASS}
+              className={NATIVE_FIELD_CLASS}
             >
               {anyDay < 0 ? <option value={-1}>Pick a day</option> : null}
               {days.map((day, index) => (
@@ -1050,20 +1110,19 @@ function TimePicker({
             <Text as="span" variant="footnote" color="grey-04">
               Starts ({zoneTitle})
             </Text>
-            <select
-              value={anyMinutes}
-              onChange={event =>
-                setAnyAt(instantAt(days[Math.max(anyDay, 0)], Number(event.currentTarget.value), zone))
-              }
-              className={NATIVE_SELECT_CLASS}
-            >
-              {/* With the half-hour it was picked on, should a zone with a :15 or :45 offset be shown. */}
-              {anyMinuteOptions.map(minutes => (
-                <option key={minutes} value={minutes}>
-                  {wallTime(minutes)}
-                </option>
-              ))}
-            </select>
+            {/* Any minute, typed or picked, rather than a list of half-hours to scroll through. */}
+            <input
+              type="time"
+              step={60}
+              required
+              value={formatTime24(anyMinutes)}
+              // Cleared, it reads ''; keep the last whole time rather than booking midnight.
+              onChange={event => {
+                const { value } = event.currentTarget;
+                if (value) setAnyAt(instantAt(days[Math.max(anyDay, 0)], parseTime24(value), zone));
+              }}
+              className={NATIVE_FIELD_CLASS}
+            />
           </label>
           <Text as="span" variant="footnote" color="grey-04" className="pb-2.5">
             {SLOT_MINUTES} minutes
@@ -1081,7 +1140,7 @@ function TimePicker({
                 key={name}
                 className={cx(
                   'flex flex-col gap-0.5 rounded-lg border px-3 py-2.5',
-                  !overlapKnown || inside ? 'border-grey-02' : 'border-purple bg-purple/10'
+                  !overlapKnown || anyInside ? 'border-grey-02' : 'border-purple bg-purple/10'
                 )}
               >
                 <Text as="span" variant="metadataMedium">
@@ -1099,13 +1158,15 @@ function TimePicker({
           <Text
             as="p"
             variant="footnote"
-            className={!overlapKnown ? 'text-grey-04' : inside ? 'text-grey-04' : 'text-purple'}
+            className={!overlapKnown ? 'text-grey-04' : anyInside ? 'text-grey-04' : 'text-purple'}
           >
             {!overlapKnown
               ? 'Checking whether they’re both free then…'
-              : inside
+              : anyInside
                 ? 'They’re both free then.'
-                : 'Not a time they’re both free.'}
+                : anyFreeOffGrid
+                  ? `${FREE_OFF_GRID} It’s flagged Off-hours.`
+                  : NOT_BOTH_FREE}
           </Text>
         ) : null}
       </>
@@ -1124,6 +1185,7 @@ function TimePicker({
           name: a,
           // Absent only on geo-chat builds before #134: nothing known, rather than nothing free.
           slots: firstAvailability.data?.their_slots ?? null,
+          unset: firstUnset,
           knownFrom: knownFrom(firstAvailability),
           pending: firstAvailability.isPending,
           error: Boolean(firstAvailability.error),
@@ -1132,6 +1194,7 @@ function TimePicker({
         second={{
           name: b,
           slots: secondAvailability.data?.their_slots ?? null,
+          unset: secondUnset,
           knownFrom: knownFrom(secondAvailability),
           pending: secondAvailability.isPending,
           error: Boolean(secondAvailability.error),
@@ -1148,8 +1211,84 @@ function TimePicker({
   );
 }
 
+/**
+ * Recommended with nothing to recommend: one of them has set no availability, or theirs never
+ * overlaps. Points at Pick any time, and asks `asked` to set or widen theirs, then says what became
+ * of each request.
+ */
+function NoSharedTime({
+  title,
+  note,
+  asked,
+  prompts,
+  request,
+  onPickAny,
+  onRequest,
+}: {
+  title: string;
+  note?: string;
+  asked: Picked[];
+  prompts: ReadonlyMap<string, PromptOutcome>;
+  request: { label: string; analyticsLabel: string; retryAnalyticsLabel: string };
+  onPickAny: () => void;
+  onRequest: (userIds: string[]) => void;
+}) {
+  const outcomes = asked.map(person => prompts.get(normId(person.userId)));
+  const asking = outcomes.includes('pending');
+  const answered = outcomes.every(outcome => outcome !== undefined && outcome !== 'pending');
+  const retry = outcomes.some(isRetryable);
+  const ask = () => onRequest(asked.map(person => person.userId));
+  return (
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+      <Text as="p" variant="metadataMedium">
+        {title}
+      </Text>
+      {note ? (
+        <Text as="p" variant="footnote" color="grey-04">
+          {note}
+        </Text>
+      ) : null}
+      <div className="flex flex-wrap items-center justify-center gap-2">
+        <HubPillButton analyticsSurface="calendar" analyticsLabel="New match Pick any time" onClick={onPickAny}>
+          Pick any time
+        </HubPillButton>
+        {answered && !asking ? (
+          <>
+            <div className="flex flex-col gap-0.5">
+              {asked.map((person, index) => {
+                const name = debaterFirstName(person.person);
+                const outcome = outcomes[index] as Exclude<PromptOutcome, 'pending'>;
+                return (
+                  <Text key={person.userId} as="span" variant="footnote" color="grey-04">
+                    {outcome === 'sent' ? `Asked ${name}` : `${name}: ${PROMPT_LABELS[outcome]}`}
+                  </Text>
+                );
+              })}
+            </div>
+            {retry ? (
+              <HubPillButton analyticsSurface="calendar" analyticsLabel={request.retryAnalyticsLabel} onClick={ask}>
+                Retry
+              </HubPillButton>
+            ) : null}
+          </>
+        ) : (
+          <HubPillButton
+            analyticsSurface="calendar"
+            analyticsLabel={request.analyticsLabel}
+            pending={asking}
+            pendingLabel="Sending…"
+            onClick={ask}
+          >
+            {request.label}
+          </HubPillButton>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /** Where geo-chat's answer for one debater starts: their midnight on the UTC date it answered on. */
-function knownFrom(availability: ReturnType<typeof useAdminDebaterAvailability>): number | null {
+function knownFrom(availability: AvailabilityRead): number | null {
   if (!availability.data) return null;
   return windowStart(new Date(availability.dataUpdatedAt), availability.data.with_timezone).getTime();
 }

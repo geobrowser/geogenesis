@@ -154,7 +154,7 @@ function TurnRow({
   );
 }
 
-/** The dashed row: rebuttal rounds that happen only if both debaters pick Extend. */
+/** The dashed row: rebuttal rounds that happen when one debater picks Extend and neither picks End. */
 function OpenRoundsRebuttalRow({
   rebuttalTurnMs,
   extendableRounds,
@@ -183,7 +183,7 @@ function OpenRoundsRebuttalRow({
           Then extend, round by round
         </Text>
         <Text as="div" variant="metadata" color="grey-04">
-          A round happens only if you both pick Extend.{cap}
+          A round happens if one of you picks Extend and neither picks End.{cap}
         </Text>
       </div>
     </div>

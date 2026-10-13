@@ -30,7 +30,9 @@ describe('DebateFormatDetails', () => {
     expect(screen.getAllByText('1m')).toHaveLength(2);
     expect(screen.getByText('45s')).toBeInTheDocument();
     expect(screen.getByText('Then extend, round by round')).toBeInTheDocument();
-    expect(screen.getByText('A round happens only if you both pick Extend. Up to 3 rounds.')).toBeInTheDocument();
+    expect(
+      screen.getByText('A round happens if one of you picks Extend and neither picks End. Up to 3 rounds.')
+    ).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/clos/i);
   });
 
@@ -41,7 +43,9 @@ describe('DebateFormatDetails', () => {
     });
 
     expect(screen.getByText('30s')).toBeInTheDocument();
-    expect(screen.getByText('A round happens only if you both pick Extend. Up to 10 rounds.')).toBeInTheDocument();
+    expect(
+      screen.getByText('A round happens if one of you picks Extend and neither picks End. Up to 10 rounds.')
+    ).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/clos/i);
   });
 
@@ -49,7 +53,9 @@ describe('DebateFormatDetails', () => {
   it('shows the cap a pending request carries', () => {
     renderDetails({ formatId: 'open_rounds', openRounds: requestOpenRounds({ max_rebuttal_rounds: 4 }) });
 
-    expect(screen.getByText('A round happens only if you both pick Extend. Up to 4 rounds.')).toBeInTheDocument();
+    expect(
+      screen.getByText('A round happens if one of you picks Extend and neither picks End. Up to 4 rounds.')
+    ).toBeInTheDocument();
     expect(screen.getByText('45s')).toBeInTheDocument();
   });
 
@@ -77,7 +83,9 @@ describe('DebateFormatDetails', () => {
     // Two rebuttal turns, and the dashed row's turn length.
     expect(screen.getAllByText('45s')).toHaveLength(3);
     expect(screen.getByText('Then extend, round by round')).toBeInTheDocument();
-    expect(screen.getByText('A round happens only if you both pick Extend. Up to 9 more rounds.')).toBeInTheDocument();
+    expect(
+      screen.getByText('A round happens if one of you picks Extend and neither picks End. Up to 9 more rounds.')
+    ).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/clos/i);
   });
 
@@ -95,7 +103,7 @@ describe('DebateFormatDetails', () => {
   it('names no cap for an Open rounds request without one', () => {
     const { container } = renderDetails({ formatId: 'open_rounds' });
 
-    expect(screen.getByText('A round happens only if you both pick Extend.')).toBeInTheDocument();
+    expect(screen.getByText('A round happens if one of you picks Extend and neither picks End.')).toBeInTheDocument();
     expect(container.textContent).not.toMatch(/Up to/);
     expect(container.textContent).not.toMatch(/clos/i);
   });

@@ -103,7 +103,7 @@ export function OpenRoundPickCard({
           <Text as="p" variant="footnote" color="grey-04" className="mt-1">
             {selectedPick
               ? 'You can change it until the reveal.'
-              : `Pick in secret. Two Extends unlock Round ${openRoundNumber(roundIndex + 1)}.`}
+              : `Pick in secret. An Extend unlocks Round ${openRoundNumber(roundIndex + 1)} unless either of you picks End.`}
           </Text>
         </div>
         <PickCountdown remainingSeconds={remainingSeconds} progress={progress} />
