@@ -5,7 +5,7 @@ import type * as React from 'react';
 import cx from 'classnames';
 import { motion } from 'framer-motion';
 
-import type { MobileSheetStyle } from '~/core/hooks/use-mobile-sheet-drag';
+import { MOBILE_SHEET_ENTRANCE_SPRING, type MobileSheetStyle } from '~/core/hooks/use-mobile-sheet-drag';
 
 import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
 
@@ -29,7 +29,7 @@ export function MobileSheetSurface({ sheetStyle, className, children, ...props }
       data-mobile-sheet-surface
       initial={{ y: '100%' }}
       animate={{ y: 0 }}
-      transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+      transition={MOBILE_SHEET_ENTRANCE_SPRING}
       className={cx(
         'shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white',
         className

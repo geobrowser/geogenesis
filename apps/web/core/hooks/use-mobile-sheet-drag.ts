@@ -19,6 +19,14 @@ const DISMISS_TWEEN = { type: 'tween', ease: 'easeIn', duration: 0.18 } as const
 const INSTANT = { duration: 0 } as const;
 const PEEK_CORNER_RADIUS_PX = 16;
 
+/**
+ * The slide-up entrance for a sheet surface. `velocity: 0` matters: the surface's `y` is the
+ * hook's long-lived motion value, and framer seeds a spring with that value's tracked velocity, so
+ * the jump to the starting offset on mount read as a hard downward kick and the sheet overshot
+ * ~145px past its resting place.
+ */
+export const MOBILE_SHEET_ENTRANCE_SPRING = { type: 'spring', damping: 30, stiffness: 320, velocity: 0 } as const;
+
 export type MobileSheetStyle = {
   top: MotionValue<number>;
   /** Driven by the surface's slide-up entrance. */

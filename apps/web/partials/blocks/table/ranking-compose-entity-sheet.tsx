@@ -8,7 +8,7 @@ import { useSetAtom } from 'jotai';
 import { createPortal } from 'react-dom';
 
 import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
-import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
+import { MOBILE_SHEET_ENTRANCE_SPRING, useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 import { hideMainPageScrollbars } from '~/core/utils/hide-main-scrollbars';
 
@@ -119,7 +119,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
             initial={isMobile ? { y: '100%' } : { x: '100%' }}
             animate={isMobile ? { y: 0 } : { x: 0 }}
             exit={isMobile ? { y: '100%' } : { x: '100%' }}
-            transition={{ type: 'spring', damping: 30, stiffness: 320 }}
+            transition={MOBILE_SHEET_ENTRANCE_SPRING}
             className={cx(
               'shadow-2xl absolute z-1 flex flex-col overflow-hidden bg-white',
               isMobile
