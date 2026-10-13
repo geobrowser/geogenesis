@@ -103,6 +103,19 @@ describe('reading only near the viewport', () => {
     act(() => result.current.onNear(hex(3), false));
     expect(result.current.active).toEqual([batches[2]]);
   });
+
+  it('keeps a batch while another card for the same claim is still in range', () => {
+    const { result } = renderHook(() => useNearExploreBatches(batches));
+
+    // One claim tagged in two spaces: two cards, one id.
+    act(() => result.current.onNear(hex(3), true));
+    act(() => result.current.onNear(hex(3), true));
+    act(() => result.current.onNear(hex(3), false));
+    expect(result.current.active).toEqual([batches[1]]);
+
+    act(() => result.current.onNear(hex(3), false));
+    expect(result.current.active).toEqual([]);
+  });
 });
 
 describe('namedRoomClaims', () => {

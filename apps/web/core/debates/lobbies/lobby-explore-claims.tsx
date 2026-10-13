@@ -94,8 +94,10 @@ function NearViewport({
   ref?: React.Ref<HTMLDivElement>;
 }) {
   const { ref, nearViewport } = useNearViewport({ sticky: false });
+  // Paired, as `onNear` counts cards per id.
   React.useEffect(() => {
-    onNear(claimEntityId, nearViewport);
+    if (!nearViewport) return;
+    onNear(claimEntityId, true);
     return () => onNear(claimEntityId, false);
   }, [claimEntityId, nearViewport, onNear]);
   const setRef = React.useCallback(

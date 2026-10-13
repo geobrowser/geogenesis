@@ -36,7 +36,8 @@ export function exploreRoomClaimBatches(entries: readonly { claim: { claim_entit
  * the list is scrolled. `onNear` takes a claim entity id as a card enters or leaves range.
  */
 export function useNearExploreBatches(batches: string[][]) {
-  const nearRef = React.useRef(new Set<string>());
+  // Counted per card: one claim tagged in two spaces is two cards with one id.
+  const nearRef = React.useRef(new Map<string, number>());
   const [activeKey, setActiveKey] = React.useState('');
 
   const sync = React.useCallback(() => setActiveKey(nearBatchIndexes(batches, nearRef.current).join(',')), [batches]);
@@ -44,9 +45,11 @@ export function useNearExploreBatches(batches: string[][]) {
 
   const onNear = React.useCallback(
     (claimEntityId: string, isNear: boolean) => {
+      const near = nearRef.current;
       const id = normId(claimEntityId);
-      if (isNear) nearRef.current.add(id);
-      else nearRef.current.delete(id);
+      const count = (near.get(id) ?? 0) + (isNear ? 1 : -1);
+      if (count > 0) near.set(id, count);
+      else near.delete(id);
       sync();
     },
     [sync]
@@ -65,7 +68,7 @@ export function useNearExploreBatches(batches: string[][]) {
   return { active, onNear };
 }
 
-export function nearBatchIndexes(batches: string[][], near: ReadonlySet<string>) {
+export function nearBatchIndexes(batches: string[][], near: { has(id: string): boolean }) {
   return batches.flatMap((batch, index) => (batch.some(id => near.has(id)) ? [index] : []));
 }
 
