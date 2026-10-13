@@ -71,16 +71,22 @@ export function lobbyDateLabel(iso: string) {
   return `${date}, ${at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`;
 }
 
-/** "in 20 min", "in 3 hours", "in 2 days"; "soon" once due. */
+/** "in 20 min" within the hour, else "today", "tomorrow" or "in 2 days" by local calendar day; "soon" once due. */
 export function untilLabel(iso: string, now: number = Date.now()) {
-  const ms = Date.parse(iso) - now;
-  if (Number.isNaN(ms) || ms <= 0) return 'soon';
-  const minutes = Math.ceil(ms / 60_000);
-  if (minutes < 60) return `in ${minutes} min`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return hours === 1 ? 'in 1 hour' : `in ${hours} hours`;
-  const days = Math.round(hours / 24);
-  return days === 1 ? 'in 1 day' : `in ${days} days`;
+  const at = Date.parse(iso);
+  if (Number.isNaN(at) || at <= now) return 'soon';
+  if (at - now < 3_600_000) return `in ${Math.ceil((at - now) / 60_000)} min`;
+  // Rounded: a daylight saving change makes a calendar day 23 or 25 hours.
+  const days = Math.round((startOfLocalDay(at) - startOfLocalDay(now)) / 86_400_000);
+  if (days === 0) return 'today';
+  if (days === 1) return 'tomorrow';
+  return `in ${days} days`;
+}
+
+function startOfLocalDay(ms: number) {
+  const day = new Date(ms);
+  day.setHours(0, 0, 0, 0);
+  return day.getTime();
 }
 
 /** "Opens at 17:50 · in 2 days", for the lobby page before the door opens. */

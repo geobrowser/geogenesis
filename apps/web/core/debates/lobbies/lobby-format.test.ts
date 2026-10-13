@@ -93,7 +93,7 @@ describe('lobby times', () => {
     expect(lobbyScheduleLabel(lobby, now)).toBe(`${time(starts)} · opens ${time(opens)}`);
     expect(lobbyScheduleLabel({ ...lobby, open: true }, now)).toBeNull();
     expect(lobbyScheduleLabel({ ...lobby, scheduled: false }, now)).toBeNull();
-    expect(notYetOpenLabel(lobby, now)).toMatch(new RegExp(`^Opens at ${time(opens)} · in `));
+    expect(notYetOpenLabel(lobby, now)).toBe(`Opens at ${time(opens)} · today`);
   });
 });
 
@@ -412,14 +412,21 @@ describe('disagreementCount', () => {
 describe('state screen labels', () => {
   const now = Date.parse('2026-10-05T10:00:00Z');
 
-  it('counts down to the opening in minutes, hours, then days', () => {
-    expect(untilLabel('2026-10-05T10:20:00Z', now)).toBe('in 20 min');
-    expect(untilLabel('2026-10-05T11:00:00Z', now)).toBe('in 1 hour');
-    expect(untilLabel('2026-10-05T15:00:00Z', now)).toBe('in 5 hours');
-    expect(untilLabel('2026-10-06T10:00:00Z', now)).toBe('in 1 day');
-    expect(untilLabel('2026-10-07T09:00:00Z', now)).toBe('in 2 days');
-    expect(untilLabel('2026-10-05T09:00:00Z', now)).toBe('soon');
-    expect(untilLabel('nope', now)).toBe('soon');
+  it('counts down in minutes within the hour, then by local calendar day', () => {
+    const at = (day: number, hour: number, minute = 0) => new Date(2026, 9, day, hour, minute).toISOString();
+    const evening = new Date(2026, 9, 5, 22, 0).getTime();
+    expect(untilLabel(at(5, 22, 20), evening)).toBe('in 20 min');
+    expect(untilLabel(at(5, 23, 59), evening)).toBe('today');
+    // Past midnight is tomorrow, though under 24 hours away.
+    expect(untilLabel(at(6, 0, 30), evening)).toBe('tomorrow');
+    expect(untilLabel(at(6, 23, 59), evening)).toBe('tomorrow');
+    // 36 hours away, but the day after tomorrow only from late evening.
+    expect(untilLabel(at(7, 10), evening)).toBe('in 2 days');
+    const morning = new Date(2026, 9, 5, 8, 0).getTime();
+    expect(untilLabel(at(6, 20), morning)).toBe('tomorrow');
+    expect(untilLabel(at(7, 0, 0), morning)).toBe('in 2 days');
+    expect(untilLabel(at(5, 7), morning)).toBe('soon');
+    expect(untilLabel('nope', morning)).toBe('soon');
   });
 
   it('writes the date block with weekday, day, month and time', () => {
