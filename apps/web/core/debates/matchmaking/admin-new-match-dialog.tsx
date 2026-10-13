@@ -191,7 +191,10 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
       [second, secondAvailability],
     ] as const;
     const own = read.find(([picked]) => picked && normId(picked.userId) === normId(userId))?.[1];
-    return debatersQuery.timezoneByUser.get(normId(userId)) || own?.schedule?.peerTimezone || undefined;
+    // Their own read decides once it answers, an empty zone (no schedule) included: the roster can
+    // be a minute old. The roster only stands in until then.
+    if (own?.schedule) return own.schedule.peerTimezone || undefined;
+    return debatersQuery.timezoneByUser.get(normId(userId));
   };
   const availableIds = React.useMemo(
     () => [...new Set((debatersQuery.data ?? []).map(debater => normId(debater.user_id)))],
@@ -829,9 +832,11 @@ function TimePicker({
   // Without availability on both sides there is nothing to recommend, so the override is the start.
   const mode = pickedMode ?? (unset.length > 0 ? 'any' : 'recommended');
   const candidate = overlap.data?.candidates[0];
-  // The zone the footer shows too; the overlap's only while their own read is still loading.
-  const firstZone = (first && zoneOf(first.userId)) || overlap.data?.viewer_timezone || undefined;
-  const secondZone = (second && zoneOf(second.userId)) || candidate?.with_timezone || undefined;
+  // The zone the footer shows too; the overlap's only while their own read has not answered.
+  const zoneFor = (picked: Picked | null, read: AvailabilityRead, fromOverlap: string | undefined) =>
+    picked ? (zoneOf(picked.userId) ?? (read.schedule ? undefined : fromOverlap || undefined)) : undefined;
+  const firstZone = zoneFor(first, firstAvailability, overlap.data?.viewer_timezone);
+  const secondZone = zoneFor(second, secondAvailability, candidate?.with_timezone);
   const slots = React.useMemo(
     () => (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > now),
     [candidate, now]

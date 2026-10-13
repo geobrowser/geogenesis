@@ -347,12 +347,15 @@ describe('AdminNewMatchDialog', () => {
   });
 
   it('says someone has no availability when their own read says so, whatever the roster had', () => {
-    // Raj was in the roster, then cleared his schedule.
+    // Raj was in the roster, then cleared his schedule. The roster, and a pair overlap read before
+    // he did, still carry his old zone.
     mocks.readZones = { raj: '' };
     mocks.overlap = {
       viewer_timezone: 'Europe/Madrid',
       viewer_has_schedule: true,
-      candidates: [{ with: 'raj', both_have_schedules: false, with_timezone: '', slots: [], truncated: false }],
+      candidates: [
+        { with: 'raj', both_have_schedules: false, with_timezone: 'Asia/Kolkata', slots: [], truncated: false },
+      ],
     };
     renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
@@ -360,9 +363,26 @@ describe('AdminNewMatchDialog', () => {
 
     expect(screen.getByRole('radio', { name: 'Pick any time' })).toBeChecked();
     expect(screen.getByText('Raj hasn’t set availability.')).toBeInTheDocument();
+    // The roster's zone for him is a minute old: his own read, with none, decides.
+    expect(screen.getByText(/Ana .* in Madrid/)).toBeInTheDocument();
+    expect(screen.queryByText(/in Kolkata/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Raj’s time/ })).not.toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: 'Recommended' }));
     expect(screen.getByText(/Raj hasn.t set availability, so there.s no shared time/)).toBeInTheDocument();
     expect(screen.queryByText(/never overlaps/)).not.toBeInTheDocument();
+  });
+
+  it('shows a debater’s zone from their own read when it has changed since the roster', () => {
+    mocks.readZones = { raj: 'Asia/Tokyo' };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(
+      screen.getAllByRole('button', { pressed: false }).find(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))!
+    );
+
+    expect(screen.getByText(/Raj .* in Tokyo/)).toBeInTheDocument();
+    expect(screen.queryByText(/in Kolkata/)).not.toBeInTheDocument();
   });
 
   it('says whether the availability request went out', async () => {
