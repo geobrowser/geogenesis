@@ -14,8 +14,8 @@ import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
-import type { ExploreFeedItem, ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
-import { applySeenDemotion } from '~/core/explore/seen-demotion/demote-seen';
+import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
 import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
 import { seenStore } from '~/core/explore/seen-demotion/seen-store';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -508,22 +508,16 @@ export function EntityFeed({
   const [mountedAtSec] = React.useState(() => Math.floor(Date.now() / 1000));
 
   const items = React.useMemo(() => {
-    const pages = data?.pages ?? [];
-    const flat: ExploreFeedItem[] = [];
-    for (const [index, p] of pages.entries()) {
-      // GEO-3234. Each Best page reordered for this visitor on its own, so paging is untouched.
-      const config = readSeenDemotionPageConfig(p.seenDemotion);
-      flat.push(
-        ...(config
-          ? applySeenDemotion(p.items, {
-              config,
-              snapshot: seenStore().snapshot(),
-              firstPage: index === 0,
-              nowSec: mountedAtSec,
-            })
-          : p.items)
-      );
-    }
+    // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
+    // each page's reserve, nothing shown twice. Pages without the config pass through.
+    const flat = composeSeenPages(
+      (data?.pages ?? []).map(p => ({
+        items: p.items,
+        reserve: p.reserve,
+        config: readSeenDemotionPageConfig(p.seenDemotion),
+      })),
+      { snapshot: seenStore().snapshot(), nowSec: mountedAtSec }
+    );
     if (!isForYou) return flat;
     // For you pages two streams that overlap, so an item served from one can come back later from
     // the other. The first appearance stays.
