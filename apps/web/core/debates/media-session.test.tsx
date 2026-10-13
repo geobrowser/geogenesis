@@ -422,6 +422,34 @@ describe('DebateMediaSessionProvider overlapping requests', () => {
     await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
   });
 
+  it('opens nothing for a session released while it waited', async () => {
+    mocks.enumerateDevices.mockResolvedValue([
+      { deviceId: 'mic-1', groupId: 'audio', kind: 'audioinput', label: 'Studio mic' },
+    ]);
+    let release!: (tracks: unknown[]) => void;
+    const pending = new Promise<unknown[]>(resolve => {
+      release = resolve;
+    });
+    mocks.createLocalTracks.mockReturnValueOnce(pending).mockResolvedValue([]);
+
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure mic only' }));
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Release match' }));
+
+    release([{ mediaStreamTrack: { kind: 'audio' }, stop: vi.fn() }]);
+    await waitFor(() => expect(screen.getByTestId('session-key')).toHaveTextContent('none'));
+
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+  });
+
   it('shares one refusal between two requests for the same kinds', async () => {
     mocks.enumerateDevices.mockResolvedValue([
       { deviceId: 'mic-1', groupId: 'audio', kind: 'audioinput', label: 'Studio mic' },

@@ -225,6 +225,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         const sameKinds = inFlight !== null && inFlight.audio === wantAudio && inFlight.video === wantVideo;
         if (!options.forceRestart && sameKinds) return localPreviewPromiseRef.current;
         await localPreviewPromiseRef.current.catch(() => undefined);
+        if (!activeSessionKeyRef.current) return [];
       }
 
       const liveKinds = new Set(localTracksRef.current.map(track => track.mediaStreamTrack.kind));
