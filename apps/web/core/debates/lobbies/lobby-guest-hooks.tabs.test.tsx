@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
   acquire: vi.fn(),
   release: vi.fn(),
   elsewhere: vi.fn(),
+  otherLobby: null as string | null,
   lost: new Set<() => void>(),
 }));
 
@@ -25,6 +26,7 @@ vi.mock('./lobby-guest-tab-lock', () => ({
   acquireGuestTabLock: mocks.acquire,
   releaseGuestTabLock: mocks.release,
   isGuestListeningElsewhere: mocks.elsewhere,
+  lobbyListeningElsewhere: () => mocks.otherLobby,
   onGuestTabLockLost: (listener: () => void) => {
     mocks.lost.add(listener);
     return () => mocks.lost.delete(listener);
@@ -71,6 +73,7 @@ beforeEach(() => {
   mocks.release.mockReset();
   mocks.elsewhere.mockReset().mockResolvedValue(true);
   mocks.lost.clear();
+  mocks.otherLobby = null;
 });
 
 afterEach(() => {
@@ -88,7 +91,7 @@ describe('useLobbyGuestSession across tabs', () => {
 
     act(() => result.current.retry());
     await waitFor(() => expect(result.current.state.status).toBe('listening'));
-    expect(mocks.acquire).toHaveBeenLastCalledWith({ steal: true });
+    expect(mocks.acquire).toHaveBeenLastCalledWith({ steal: true, lobbyId: 'lobby1' });
     expect(mocks.start).toHaveBeenCalledTimes(1);
   });
 
@@ -101,7 +104,8 @@ describe('useLobbyGuestSession across tabs', () => {
     expect(mocks.start).not.toHaveBeenCalled();
   });
 
-  it('stops and leaves its own admission when another tab takes listening, without starting again', async () => {
+  it('stops and leaves its own admission when a tab on another lobby takes listening, without starting again', async () => {
+    mocks.otherLobby = 'lobby2';
     const { result } = renderSession();
     await waitFor(() => expect(result.current.state.status).toBe('listening'));
 
@@ -111,6 +115,19 @@ describe('useLobbyGuestSession across tabs', () => {
     await act(async () => undefined);
     expect(mocks.start).toHaveBeenCalledTimes(1);
     expect(mocks.release).toHaveBeenCalled();
+  });
+
+  it('stops without a leave when a tab on this lobby takes listening, and records the lobby on a press', async () => {
+    const { result } = renderSession();
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    mocks.otherLobby = 'lobby1';
+
+    act(() => mocks.lost.forEach(listener => listener()));
+    expect(result.current.state.status).toBe('superseded');
+    expect(mocks.leave).not.toHaveBeenCalled();
+
+    act(() => result.current.retry());
+    expect(mocks.acquire).toHaveBeenLastCalledWith({ steal: true, lobbyId: 'lobby1' });
   });
 
   it('keeps the lock while refused, and lets it go once removed', async () => {

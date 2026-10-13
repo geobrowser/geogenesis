@@ -134,19 +134,27 @@ describe('guest session transitions', () => {
     expect(transition(superseded, { type: 'memberJoined' }, inn)).toEqual({ next: released, commands: [] });
   });
 
-  it('steps aside for another tab, leaving only its own admission', () => {
-    expect(run(listening, { type: 'elsewhere' })).toEqual({
+  it('steps aside for a tab on another lobby, leaving its own admission', () => {
+    expect(run(listening, { type: 'elsewhere', sameLobby: false })).toEqual({
       next: superseded,
       commands: [{ type: 'leave', secret: 's1', admission: 1 }],
     });
+  });
+
+  // A leave landing before the other tab's start would end the session and cost the place.
+  it('steps aside for a tab on this lobby without a leave', () => {
+    expect(run(listening, { type: 'elsewhere', sameLobby: true })).toEqual({ next: superseded, commands: [] });
+  });
+
+  it('steps aside before listening, and not once done', () => {
     for (const state of [idle, starting, refused]) {
-      expect(run(state, { type: 'elsewhere' })).toEqual({
+      expect(run(state, { type: 'elsewhere', sameLobby: false })).toEqual({
         next: { status: 'superseded', attempt: state.attempt },
         commands: [],
       });
     }
     for (const state of [handingOver, released, removed, ended, superseded]) {
-      expect(run(state, { type: 'elsewhere' }).next).toBe(state);
+      expect(run(state, { type: 'elsewhere', sameLobby: false }).next).toBe(state);
     }
   });
 

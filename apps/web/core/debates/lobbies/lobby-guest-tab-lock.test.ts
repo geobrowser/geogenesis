@@ -41,6 +41,7 @@ async function openTab() {
 const tick = () => new Promise(resolve => setTimeout(resolve, 0));
 
 beforeEach(() => {
+  window.localStorage.clear();
   browser = fakeLockManager();
   vi.stubGlobal('navigator', { locks: browser.manager });
 });
@@ -76,6 +77,15 @@ describe('guest tab lock', () => {
     await tick();
     expect(lost).toHaveBeenCalledTimes(1);
     await expect(first.isGuestListeningElsewhere()).resolves.toBe(true);
+  });
+
+  it('records the holder’s lobby on a grant and before a steal', async () => {
+    const first = await openTab();
+    await first.acquireGuestTabLock({ lobbyId: 'lobby1' });
+    expect(first.lobbyListeningElsewhere()).toBe('lobby1');
+    const second = await openTab();
+    await second.acquireGuestTabLock({ steal: true, lobbyId: 'lobby2' });
+    expect(first.lobbyListeningElsewhere()).toBe('lobby2');
   });
 
   it('keeps the lock through a release and a remount in the same tick', async () => {

@@ -26,6 +26,7 @@ import {
 import {
   acquireGuestTabLock,
   isGuestListeningElsewhere,
+  lobbyListeningElsewhere,
   onGuestTabLockLost,
   releaseGuestTabLock,
 } from './lobby-guest-tab-lock';
@@ -150,8 +151,10 @@ export function useLobbyGuestSession(
     const run = () => {
       if (document.visibilityState === 'hidden') return;
       document.removeEventListener('visibilitychange', run);
-      void acquireGuestTabLock().then(held => {
-        if (!cancelled && stateRef.current.status === 'idle') return send({ type: held ? 'start' : 'elsewhere' });
+      void acquireGuestTabLock({ lobbyId: id }).then(held => {
+        if (!cancelled && stateRef.current.status === 'idle') {
+          return send(held ? { type: 'start' } : { type: 'elsewhere', sameLobby: false });
+        }
         if (!held) return;
         // Granted after this run was dropped: a tick later, a re-run has started on it or nobody needs it.
         setTimeout(() => {
@@ -165,9 +168,13 @@ export function useLobbyGuestSession(
       cancelled = true;
       document.removeEventListener('visibilitychange', run);
     };
-  }, [listen, send, signedIn, status]);
+  }, [id, listen, send, signedIn, status]);
 
-  React.useEffect(() => onGuestTabLockLost(() => send({ type: 'elsewhere' })), [send]);
+  const elsewhere = React.useCallback(() => {
+    const other = lobbyListeningElsewhere();
+    send({ type: 'elsewhere', sameLobby: other !== null && dashlessId(other) === id });
+  }, [id, send]);
+  React.useEffect(() => onGuestTabLockLost(elsewhere), [elsewhere]);
 
   // Only a tab that listens, or may retry, keeps the lock.
   const releasable = status === 'superseded' || status === 'removed' || status === 'ended' || status === 'released';
@@ -300,7 +307,7 @@ export function useLobbyGuestSession(
     };
     const restore = (event: PageTransitionEvent) => {
       if (!event.persisted || stateRef.current.status !== 'listening') return;
-      void acquireGuestTabLock().then(held => send({ type: held ? 'restart' : 'elsewhere' }));
+      void acquireGuestTabLock({ lobbyId: id }).then(held => (held ? send({ type: 'restart' }) : elsewhere()));
     };
     window.addEventListener('pagehide', hide);
     window.addEventListener('pageshow', restore);
@@ -311,14 +318,14 @@ export function useLobbyGuestSession(
       leave();
       releaseGuestTabLock();
     };
-  }, [runCommand, send]);
+  }, [elsewhere, id, runCommand, send]);
 
   return {
     state,
     /** After a refusal, or to take listening from another tab. Not once signed in. */
     retry: React.useCallback(() => {
-      void acquireGuestTabLock({ steal: true }).then(() => send({ type: 'start' }));
-    }, [send]),
+      void acquireGuestTabLock({ steal: true, lobbyId: id }).then(() => send({ type: 'start' }));
+    }, [id, send]),
     /** Waiting on a press: another tab in this browser listens now. */
     otherTabListening,
     /** A fresh token for a full reconnect, on the same guest. */

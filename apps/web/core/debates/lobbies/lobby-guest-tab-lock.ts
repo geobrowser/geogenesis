@@ -5,6 +5,8 @@
  * press, never queue on the lock, so a reload of the listening tab takes it back first.
  */
 const LOCK_NAME = 'geo.debates.lobby-guest-listening';
+/** The lobby of the tab holding the lock, read by a tab that lost it. */
+const LOBBY_KEY = 'geo.debates.lobby-guest-listening-lobby';
 
 type LockManagerLike = Pick<LockManager, 'request' | 'query'>;
 
@@ -25,13 +27,22 @@ let requestSeq = 0;
 let holderSeq = 0;
 const lostListeners = new Set<() => void>();
 
+function recordLobby(lobbyId: string | undefined) {
+  if (!lobbyId) return;
+  try {
+    window.localStorage.setItem(LOBBY_KEY, lobbyId);
+  } catch {
+    // A tab that loses the lock then leaves its session, as for another lobby.
+  }
+}
+
 function cancelRelease() {
   if (releaseTimer === null) return;
   clearTimeout(releaseTimer);
   releaseTimer = null;
 }
 
-function request(manager: LockManagerLike, options: LockOptions): Promise<boolean> {
+function request(manager: LockManagerLike, options: LockOptions, lobbyId: string | undefined): Promise<boolean> {
   const seq = ++requestSeq;
   return new Promise<boolean>(resolve => {
     manager
@@ -42,6 +53,7 @@ function request(manager: LockManagerLike, options: LockOptions): Promise<boolea
         }
         held = true;
         holderSeq = seq;
+        recordLobby(lobbyId);
         resolve(true);
         return new Promise<void>(done => {
           releaseHeld = done;
@@ -62,15 +74,17 @@ function request(manager: LockManagerLike, options: LockOptions): Promise<boolea
 }
 
 /**
- * Takes the lock if no tab holds it. `steal` takes it from the tab that does, for a visitor's
- * press. Resolves whether this tab holds it.
+ * Takes the lock for `lobbyId` if no tab holds it. `steal` takes it from the tab that does, for a
+ * visitor's press. Resolves whether this tab holds it.
  */
-export function acquireGuestTabLock({ steal = false }: { steal?: boolean } = {}): Promise<boolean> {
+export function acquireGuestTabLock({ steal = false, lobbyId }: { steal?: boolean; lobbyId?: string } = {}) {
   cancelRelease();
   const manager = lockManager();
+  // Before a steal, so the tab losing the lock reads it; and when this tab already holds it.
+  if (steal || held) recordLobby(lobbyId);
   if (!manager || held) return Promise.resolve(true);
   if (pending && !steal) return pending;
-  const attempt = request(manager, steal ? { steal: true } : { ifAvailable: true }).finally(() => {
+  const attempt = request(manager, steal ? { steal: true } : { ifAvailable: true }, lobbyId).finally(() => {
     if (pending === attempt) pending = null;
   });
   pending = attempt;
@@ -94,6 +108,15 @@ export function releaseGuestTabLock({ now = false }: { now?: boolean } = {}) {
   cancelRelease();
   if (now) release();
   else releaseTimer = setTimeout(release, 0);
+}
+
+/** The lobby of the tab that holds the lock, or null when unknown. */
+export function lobbyListeningElsewhere(): string | null {
+  try {
+    return window.localStorage.getItem(LOBBY_KEY);
+  } catch {
+    return null;
+  }
 }
 
 /** Called when another tab takes the lock from this one. */

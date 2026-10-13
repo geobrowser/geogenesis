@@ -28,8 +28,8 @@ export type GuestSessionEvent =
   | { type: 'removed' }
   | { type: 'ended' }
   | { type: 'superseded' }
-  /** Another tab in this browser listens, or took listening from this one. */
-  | { type: 'elsewhere' }
+  /** Another tab in this browser listens, or took listening from this one; `sameLobby` when it's this lobby. */
+  | { type: 'elsewhere'; sameLobby: boolean }
   /** The lease lapsed, or the room needs a fresh token: start again on the same secret. */
   | { type: 'restart' }
   | { type: 'memberJoined' }
@@ -119,10 +119,13 @@ export function transition(
         : stay(state);
 
     case 'elsewhere':
-      // Leaves its own admission: a no-op once the other tab's start supersedes it, and the place
-      // to free when the other tab listens to another lobby.
+      // Another lobby: free this place. This lobby: no leave, which could land before the other
+      // tab's start and end the session; that start supersedes this admission.
       if (state.status === 'listening') {
-        return { next: { status: 'superseded', attempt: state.attempt }, commands: [leaveFor(state.session)] };
+        return {
+          next: { status: 'superseded', attempt: state.attempt },
+          commands: event.sameLobby ? [] : [leaveFor(state.session)],
+        };
       }
       return state.status === 'idle' || state.status === 'starting' || state.status === 'refused'
         ? { next: { status: 'superseded', attempt: state.attempt }, commands: [] }
