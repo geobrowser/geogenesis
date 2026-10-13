@@ -25,6 +25,7 @@ export function PersonMatches({
   claimNamesLoading,
   labelsById,
   popoverPortal,
+  hideWhenDetached = true,
 }: {
   personName: string;
   matches: ClaimMatch[];
@@ -32,6 +33,8 @@ export function PersonMatches({
   claimNamesLoading: boolean;
   labelsById: Map<string, SpaceLabel>;
   popoverPortal: HTMLElement | null;
+  /** Off when the row sits inside another popover; see `PersonRow`'s `hidePopoversWhenDetached`. */
+  hideWhenDetached?: boolean;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
   const count = matches.length;
@@ -56,7 +59,7 @@ export function PersonMatches({
             align="start"
             sideOffset={8}
             collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-            hideWhenDetached
+            hideWhenDetached={hideWhenDetached}
             aria-label={`Matching claims with ${personName}`}
             onOpenAutoFocus={event => {
               event.preventDefault();

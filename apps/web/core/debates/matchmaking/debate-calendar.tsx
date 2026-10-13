@@ -487,6 +487,7 @@ function DebateCalendarBody({
           spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
           labelsById={labelsById}
           popoverPortal={popoverPortal}
+          hidePopoversWhenDetached={false}
           disabled={buttonsDisabled}
           disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
           onSeeTimes={(_peer, opener, rowEntry, initialStart) => openBooking(userKey, opener, rowEntry, initialStart)}

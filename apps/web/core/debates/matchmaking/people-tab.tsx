@@ -554,6 +554,7 @@ export function PersonRow({
   spaceIds,
   labelsById,
   popoverPortal,
+  hidePopoversWhenDetached = true,
   disabled,
   disabledReason,
   onRequireSignIn,
@@ -589,6 +590,13 @@ export function PersonRow({
   labelsById: Map<string, SpaceLabel>;
   /** Shared across the list so every row's popup clears the debates panel without one portal each. */
   popoverPortal: HTMLElement | null;
+  /**
+   * Whether the row's matches and spaces popovers vanish once their trigger scrolls out of view.
+   * The calendar turns it off: its rows sit inside the hour and hover popovers, whose transformed
+   * wrappers throw off Radix's measurement, so it reports every trigger detached and the dropdown
+   * never shows.
+   */
+  hidePopoversWhenDetached?: boolean;
   disabled: boolean;
   /** Only surfaced on hover, so it explains the greyed-out button without repeating the card. */
   disabledReason: string;
@@ -627,6 +635,7 @@ export function PersonRow({
         debatesBySpace={record?.debatesBySpace}
         matchesBySpace={matchesBySpace}
         popoverPortal={popoverPortal}
+        hideWhenDetached={hidePopoversWhenDetached}
       />
     ) : null;
   const match =
@@ -638,6 +647,7 @@ export function PersonRow({
         claimNamesLoading={claimNamesLoading}
         labelsById={labelsById}
         popoverPortal={popoverPortal}
+        hideWhenDetached={hidePopoversWhenDetached}
       />
     ) : null;
 

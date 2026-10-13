@@ -54,6 +54,7 @@ export function PersonSpaceIcons({
   debatesBySpace,
   matchesBySpace,
   popoverPortal,
+  hideWhenDetached = true,
 }: {
   spaceIds: string[];
   labelsById: Map<string, SpaceLabel>;
@@ -62,6 +63,8 @@ export function PersonSpaceIcons({
   /** Viewer-relative opposing claims. Absent when there is no signed-in comparison to make. */
   matchesBySpace?: ReadonlyMap<string, number>;
   popoverPortal: HTMLElement | null;
+  /** Off when the row sits inside another popover; see `PersonRow`'s `hidePopoversWhenDetached`. */
+  hideWhenDetached?: boolean;
 }) {
   const orderedSpaceIds = React.useMemo(() => orderPersonSpaces(spaceIds, debatesBySpace), [spaceIds, debatesBySpace]);
   const firstSpaceLinkRef = React.useRef<HTMLAnchorElement>(null);
@@ -98,7 +101,7 @@ export function PersonSpaceIcons({
               align="start"
               sideOffset={8}
               collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-              hideWhenDetached
+              hideWhenDetached={hideWhenDetached}
               aria-label="Active in"
               onOpenAutoFocus={event => {
                 event.preventDefault();
