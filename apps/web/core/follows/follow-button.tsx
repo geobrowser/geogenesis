@@ -36,8 +36,9 @@ const BASE_CLASS =
  * - `compact`: a card's action row, a list row, the side panel.
  * - `page`: a topic header's only action — the black pill until followed, then the white one,
  *   because the press is done and no longer needs asking for.
- * - `secondary`: the same size, white throughout, beside a black pill that is the page's main
- *   action (a profile's Request debate).
+ * - `secondary`: the same size as `page`, but white until followed, beside a black pill that is the
+ *   page's main action (a profile's Request debate). Followed, it fills grey-01, the same settled
+ *   state the compact pill takes.
  * - `overlay`: over video, at the height, type and fill of the Agree / Disagree chip beside it.
  */
 const VARIANT_CLASS: Record<

@@ -13,7 +13,7 @@ import { PERMISSIONLESS_ACTIONS, SpaceRegistryAbi } from '~/core/utils/contracts
 
 import type { FollowedTopicRelation } from './follow-ops';
 import type { InterestedTopicRow } from './interested';
-import { useFollowTopics } from './use-follow-topics';
+import { useFollowEntities, useFollowTopics } from './use-follow-topics';
 
 const mocks = vi.hoisted(() => ({
   makeProposal: vi.fn(),
@@ -323,5 +323,54 @@ describe('useFollowTopics with NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED (GEO-3158)'
     expect(ok).toBe(true);
     expect(mocks.makeProposal).not.toHaveBeenCalled();
     expect(sentActions()).toEqual([{ to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.UNINTERESTED, entity: TOPIC_A }]);
+  });
+});
+
+describe('useFollowEntities on a person (GEO-3236)', () => {
+  const PERSON = '44444444444444444444444444444444';
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mocks.personalSpaceId = SPACE;
+    mocks.sendUserOperation.mockResolvedValue(undefined);
+  });
+
+  function setupPerson(interested: InterestedTopicRow[] = []) {
+    mocks.fetchInterestedTopics.mockResolvedValue(interested);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useFollowEntities({ kind: 'person' }), { wrapper });
+    const cachedInterested = () => client.getQueryData<InterestedTopicRow[]>(interestedTopicsQueryKey(SPACE));
+    return { result, cachedInterested };
+  }
+
+  it('writes an Interested on their personal space, never a Following relation, with the flag off', async () => {
+    const { result, cachedInterested } = setupPerson();
+
+    let ok = false;
+    await act(async () => {
+      ok = await result.current.follow([{ id: PERSON, name: 'Ada Okafor' }]);
+    });
+
+    expect(ok).toBe(true);
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(mocks.fetchFollowedTopics).not.toHaveBeenCalled();
+    expect(sentActions()).toEqual([{ to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.INTERESTED, entity: PERSON }]);
+    // The cache knows it is a person, so it stays out of the followed topics For you reads.
+    expect(cachedInterested()).toEqual([{ objectId: PERSON, spaceId: SPACE, kind: 'person' }]);
+  });
+
+  it('clears the Interested to unfollow, with the flag off', async () => {
+    const { result, cachedInterested } = setupPerson([{ objectId: PERSON, spaceId: SPACE, kind: 'person' }]);
+
+    await act(async () => {
+      await result.current.unfollow([PERSON]);
+    });
+
+    expect(mocks.makeProposal).not.toHaveBeenCalled();
+    expect(sentActions()).toEqual([{ to: `0x${SPACE}`, action: PERMISSIONLESS_ACTIONS.UNINTERESTED, entity: PERSON }]);
+    expect(cachedInterested()).toEqual([]);
   });
 });

@@ -18,14 +18,17 @@ const loadIsPersonalSpace = createBatchLoader<boolean>({
 /**
  * Whether a space is someone's personal space. Cached per space, and batched: a feed asks this of
  * every card in one commit, and those asks go out together rather than one request per space.
- * `undefined` until known. A space's type never changes, so the answer is kept for good.
+ * `undefined` until known. A space's type never changes, so the answer is kept for the session.
  */
 export function useIsPersonalSpace(spaceId: string, { enabled = true }: { enabled?: boolean } = {}) {
   const id = normId(spaceId);
   const { data } = useQuery({
     queryKey: ['is-personal-space', id],
     queryFn: () => loadIsPersonalSpace(id),
+    // Never refetched and never dropped: `staleTime` alone still lets an unmounted card's entry be
+    // garbage-collected, and the next card from that space would ask again.
     staleTime: Infinity,
+    gcTime: Infinity,
     enabled: enabled && id.length > 0,
   });
   return data;
