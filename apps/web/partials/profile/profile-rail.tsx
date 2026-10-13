@@ -661,16 +661,16 @@ type FollowListEntry = {
 export function FollowersRow({ spaceId }: { spaceId: string }) {
   const followers = usePersonFollowers(spaceId);
   const ids = followers?.ids ?? EMPTY_IDS;
-  const { spacesById, isLoading: isLoadingSpaces } = useSpacesByIds(ids);
+  const { spaceFor, isLoading: isLoadingSpaces } = usePeopleSpaces(ids);
 
   const entries = React.useMemo(
-    () => ids.map(id => personEntry(id, spacesById)).sort((a, b) => a.name.localeCompare(b.name)),
-    [ids, spacesById]
+    () => ids.map(id => personEntry(id, spaceFor)).sort((a, b) => a.name.localeCompare(b.name)),
+    [ids, spaceFor]
   );
 
   if (!followers) return <FollowRowSkeleton label="Followers" />;
   if (followers.count === 0) return null;
-  if (isLoadingSpaces && spacesById.size === 0) return <FollowRowSkeleton label="Followers" />;
+  if (isLoadingSpaces) return <FollowRowSkeleton label="Followers" />;
 
   return (
     <FollowListRow
@@ -700,9 +700,8 @@ export function FollowingRow({ spaceId }: { spaceId: string }) {
   const ids = React.useMemo(() => [...followedIds], [followedIds]);
   const personIds = React.useMemo(() => ids.filter(id => kinds.get(id) === 'person'), [ids, kinds]);
   const topicIds = React.useMemo(() => ids.filter(id => kinds.get(id) !== 'person'), [ids, kinds]);
-  // Names and faces only: what each id is comes from the follow itself, never from this map, which
-  // holds the previous id set's spaces while a new one loads.
-  const { spacesById, isLoading: isLoadingSpaces } = useSpacesByIds(personIds);
+  // Names and faces only: what each id is comes from the follow itself.
+  const { spaceFor, isLoading: isLoadingSpaces } = usePeopleSpaces(personIds);
   const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(topicIds);
   // The list is Interested follows, so each kind unfollows as one, whatever the flag says.
   const topicFollows = useFollowEntities({ kind: 'topic', interestedOnly: true });
@@ -713,7 +712,7 @@ export function FollowingRow({ spaceId }: { spaceId: string }) {
     () =>
       ids
         .map((id): FollowListEntry => {
-          if (kinds.get(id) === 'person') return personEntry(id, spacesById);
+          if (kinds.get(id) === 'person') return personEntry(id, spaceFor);
           const meta = metadata.get(id);
           // The topic's own space. A follow carries none of its own: the space it was cast in is
           // the follower's.
@@ -727,11 +726,11 @@ export function FollowingRow({ spaceId }: { spaceId: string }) {
           };
         })
         .sort((a, b) => a.name.localeCompare(b.name)),
-    [ids, kinds, spacesById, metadata]
+    [ids, kinds, spaceFor, metadata]
   );
 
   if (!isLoading && ids.length === 0) return null;
-  if (isLoading || (personIds.length > 0 && isLoadingSpaces && spacesById.size === 0) || isLoadingMetadata) {
+  if (isLoading || isLoadingSpaces || isLoadingMetadata) {
     return <FollowRowSkeleton label="Following" />;
   }
 
@@ -762,8 +761,26 @@ export function FollowingRow({ spaceId }: { spaceId: string }) {
 
 const EMPTY_IDS: string[] = [];
 
-function personEntry(id: string, spacesById: Map<string, Space>): FollowListEntry {
-  const space = spacesById.get(id) ?? [...spacesById.values()].find(candidate => normId(candidate.id) === id);
+/**
+ * The personal spaces behind a list of people, for their names and faces.
+ *
+ * `useSpacesByIds` holds the previous id set's map while a new one loads (`keepPreviousData`), and
+ * reports neither loading nor anything wrong. So this is loading exactly while someone asked for is
+ * not in the map yet: a list that grew waits for its new names rather than drawing "Untitled
+ * person", and a list that shrank, every name already in hand, draws at once.
+ */
+function usePeopleSpaces(ids: readonly string[]) {
+  const { spacesById, isLoading, isPlaceholderData } = useSpacesByIds([...ids]);
+  const spaceFor = React.useCallback(
+    (id: string) => spacesById.get(id) ?? [...spacesById.values()].find(space => normId(space.id) === id),
+    [spacesById]
+  );
+  const missing = ids.some(id => !spaceFor(id));
+  return { spaceFor, isLoading: missing && (isLoading || isPlaceholderData) };
+}
+
+function personEntry(id: string, spaceFor: (id: string) => Space | undefined): FollowListEntry {
+  const space = spaceFor(id);
   return {
     id,
     kind: 'person',

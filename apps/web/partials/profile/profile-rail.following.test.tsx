@@ -32,6 +32,10 @@ const mocks = vi.hoisted(() => ({
   /** Personal spaces the space lookup knows, by id: these follows are people. */
   spaces: new Map<string, { id: string; entity: { name: string; image: string | null } }>(),
   followers: null as { count: number; ids: string[] } | null,
+  /** The space lookup is holding a previous id set's map (`keepPreviousData`). */
+  spacesPlaceholder: false,
+  /** Followed ids the follow itself marks as people, whether or not the lookup has them yet. */
+  personIds: [] as string[],
 }));
 
 vi.mock('~/core/hooks/use-personal-space-id', () => ({
@@ -41,12 +45,19 @@ vi.mock('~/core/topics/use-followed-topics', () => ({
   // What each id is comes with the follow; here a followed id the space lookup knows is a person.
   useFollowedInterests: () => ({
     ids: new Set(mocks.topicIds),
-    kinds: new Map(mocks.topicIds.map(id => [id, mocks.spaces.has(id) ? 'person' : 'topic'])),
+    kinds: new Map(
+      mocks.topicIds.map(id => [id, mocks.spaces.has(id) || mocks.personIds.includes(id) ? 'person' : 'topic'])
+    ),
     isLoading: mocks.isLoading,
   }),
 }));
 vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
-  useSpacesByIds: () => ({ spaces: [], spacesById: mocks.spaces, isLoading: false, isPlaceholderData: false }),
+  useSpacesByIds: () => ({
+    spaces: [],
+    spacesById: mocks.spaces,
+    isLoading: false,
+    isPlaceholderData: mocks.spacesPlaceholder,
+  }),
 }));
 vi.mock('~/core/follows/person-follow-counts', () => ({
   usePersonFollowers: () => mocks.followers,
@@ -102,6 +113,8 @@ beforeEach(() => {
   mocks.pending = new Set();
   mocks.spaces = new Map();
   mocks.followers = null;
+  mocks.spacesPlaceholder = false;
+  mocks.personIds = [];
 });
 
 afterEach(cleanup);
@@ -336,5 +349,41 @@ describe('Followers row (GEO-3236)', () => {
 
     expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual(['Ada Okafor', 'Zed Lee']);
     expect(screen.getByRole('link', { name: /Zed Lee/ })).toHaveAttribute('href', `/space/${ZED_SPACE}`);
+  });
+});
+
+describe('follow rows while the space lookup holds an older map', () => {
+  it('waits for a new follower rather than naming them "Untitled person"', () => {
+    // Followers grew by ZED; the lookup still holds the map from before, with only ADA.
+    mocks.followers = { count: 2, ids: [ADA_SPACE, ZED_SPACE] };
+    mocks.spaces.set(ADA_SPACE, { id: ADA_SPACE, entity: { name: 'Ada Okafor', image: null } });
+    mocks.spacesPlaceholder = true;
+    render(<FollowersRow spaceId={OWNER_SPACE} />);
+
+    expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+    expect(screen.queryByLabelText(/Followers:/)).toBeNull();
+  });
+
+  it('waits for a newly followed person in the Following list too', () => {
+    mocks.topicIds = [ADA_SPACE, ZED_SPACE];
+    // ZED is a person, per the follow, but not in the held-over map yet.
+    mocks.spaces.set(ADA_SPACE, { id: ADA_SPACE, entity: { name: 'Ada Okafor', image: null } });
+    mocks.spacesPlaceholder = true;
+    // The follow says ZED is a person even though the map doesn't know them yet.
+    mocks.personIds = [ZED_SPACE];
+    renderFollowing();
+
+    expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
+  });
+
+  it('draws a list that shrank at once, every name already in hand', () => {
+    // An unfollow: the held-over map still has everyone left.
+    mocks.followers = { count: 1, ids: [ADA_SPACE] };
+    mocks.spaces.set(ADA_SPACE, { id: ADA_SPACE, entity: { name: 'Ada Okafor', image: null } });
+    mocks.spaces.set(ZED_SPACE, { id: ZED_SPACE, entity: { name: 'Zed Lee', image: null } });
+    mocks.spacesPlaceholder = true;
+    render(<FollowersRow spaceId={OWNER_SPACE} />);
+
+    expect(screen.getByLabelText('Followers: 1 follower')).toBeInTheDocument();
   });
 });
