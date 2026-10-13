@@ -7,6 +7,8 @@ type SwitchProps = {
   checked: boolean;
   onChange: (next: boolean) => void;
   analyticsSurface: DebateAnalyticsSurface;
+  disabled?: boolean;
+  title?: string;
 };
 
 /**
@@ -16,9 +18,16 @@ type SwitchProps = {
  * below: the label is what identifies the setting to a viewer and to a test. The hub's Lobby is the
  * one surface left drawing it — the debate-again flow made matches a tab of their own (GEO-3148).
  */
-export function MatchesOnlySwitch({ checked, onChange, analyticsSurface }: SwitchProps) {
+export function MatchesOnlySwitch({ checked, onChange, analyticsSurface, disabled, title }: SwitchProps) {
   return (
-    <FilterSwitch label="Matches only" checked={checked} onChange={onChange} analyticsSurface={analyticsSurface} />
+    <FilterSwitch
+      label="Matches only"
+      checked={checked}
+      onChange={onChange}
+      analyticsSurface={analyticsSurface}
+      disabled={disabled}
+      title={title}
+    />
   );
 }
 
