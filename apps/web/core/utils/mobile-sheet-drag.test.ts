@@ -327,6 +327,31 @@ describe('attachMobileSheetGestures', () => {
     gestures.detach();
   });
 
+  it('reports no fling when the finger holds still before lifting', () => {
+    const sheet = createSheet();
+    const gestures = attach(sheet, 'peek', 200);
+    const now = vi.spyOn(performance, 'now');
+
+    now.mockReturnValue(0);
+    touchEvent('touchstart', sheet.target('content'), 400);
+    // A quick 50px pull: short of the 72px dismiss threshold, but fast enough to read as a fling.
+    for (const [time, y] of [
+      [0, 410],
+      [16, 425],
+      [32, 440],
+      [48, 450],
+    ]) {
+      now.mockReturnValue(time);
+      touchEvent('touchmove', sheet.target('content'), y);
+    }
+    now.mockReturnValue(400);
+    touchEvent('touchend', sheet.target('content'));
+
+    expect(gestures.onDragEnd).toHaveBeenCalledWith(250, 0);
+    now.mockRestore();
+    gestures.detach();
+  });
+
   it('never hands a horizontal swipe to the sheet', () => {
     const sheet = createSheet();
     const gestures = attach(sheet, 'full', 0);

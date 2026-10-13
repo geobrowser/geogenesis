@@ -255,7 +255,9 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
     if (active?.decided !== 'sheet') return;
     const last = active.samples[active.samples.length - 1];
     const raw = active.anchorTop + (last.y - active.anchorY);
-    callbacks.onDragEnd(Math.max(0, raw), releaseVelocity(active.samples));
+    // The lift itself is a sample: a finger held still before lifting has no velocity left.
+    const samples = [...active.samples, { time: performance.now(), y: last.y }];
+    callbacks.onDragEnd(Math.max(0, raw), releaseVelocity(samples));
   };
 
   const handleTouchStart = (event: TouchEvent) => {
