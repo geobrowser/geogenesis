@@ -58,6 +58,8 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
   const borderRadius = useTransform(top, value => Math.min(value, PEEK_CORNER_RADIUS_PX));
   const reduceMotion = useReducedMotion();
   const [overlayElement, setOverlayElement] = React.useState<HTMLElement | null>(null);
+  // This sheet's place in the stack of open sheets, and the mark on what it renders.
+  const [sheet] = React.useState(() => Symbol('mobile sheet'));
 
   const snapRef = React.useRef<MobileSheetSnap>('peek');
   const scrolledSinceFullRef = React.useRef(false);
@@ -95,8 +97,8 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
 
   React.useLayoutEffect(() => {
     if (!enabled) return;
-    return lockMobileSheetDocumentOverscroll();
-  }, [enabled]);
+    return lockMobileSheetDocumentOverscroll(sheet);
+  }, [enabled, sheet]);
 
   React.useEffect(() => {
     if (!enabled || !overlayElement) return;
@@ -147,5 +149,5 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     borderTopLeftRadius: borderRadius,
     borderTopRightRadius: borderRadius,
   };
-  return { setOverlayElement, sheetStyle };
+  return { setOverlayElement, sheetStyle, sheet };
 }

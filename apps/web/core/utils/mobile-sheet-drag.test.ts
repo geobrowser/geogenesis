@@ -4,7 +4,7 @@ import {
   type MobileSheetSnap,
   attachMobileSheetGestures,
   canStartMobileSheetGesture,
-  isAnyMobileSheetOpen,
+  getTopMobileSheet,
   lockMobileSheetDocumentOverscroll,
   resolveMobileSheetRelease,
   shouldClaimMobileSheetGesture,
@@ -166,20 +166,25 @@ describe('lockMobileSheetDocumentOverscroll', () => {
     expect(document.body.hasAttribute('data-mobile-sheet-open')).toBe(false);
   });
 
-  it('tells subscribers when the first sheet opens and the last one closes', () => {
+  it('tracks which sheet is on top and tells subscribers only when that changes', () => {
     const listener = vi.fn();
     const unsubscribe = subscribeMobileSheetOpen(listener);
+    const bottom = Symbol('bottom');
+    const top = Symbol('top');
 
-    const releaseFirst = lockMobileSheetDocumentOverscroll();
-    expect(isAnyMobileSheetOpen()).toBe(true);
-    const releaseSecond = lockMobileSheetDocumentOverscroll();
-    releaseFirst();
-    expect(isAnyMobileSheetOpen()).toBe(true);
-    releaseSecond();
-    expect(isAnyMobileSheetOpen()).toBe(false);
+    const releaseBottom = lockMobileSheetDocumentOverscroll(bottom);
+    expect(getTopMobileSheet()).toBe(bottom);
+    const releaseTop = lockMobileSheetDocumentOverscroll(top);
+    expect(getTopMobileSheet()).toBe(top);
 
-    // Only the open/closed transitions, not every stacked sheet.
-    expect(listener).toHaveBeenCalledTimes(2);
+    // Closing the one underneath leaves the top where it is.
+    releaseBottom();
+    expect(getTopMobileSheet()).toBe(top);
+    releaseTop();
+    expect(getTopMobileSheet()).toBe(null);
+
+    // bottom opens, top opens, top closes: three changes; the bottom closing under it is not one.
+    expect(listener).toHaveBeenCalledTimes(3);
     unsubscribe();
   });
 
@@ -330,6 +335,37 @@ describe('attachMobileSheetGestures', () => {
     gestures.detach();
   });
 
+  it('lets a 1px jitter at the top of a full-screen scroll stay a scroll', () => {
+    const sheet = createSheet();
+    const gestures = attach(sheet, 'full', 0);
+
+    // Starting to scroll the content up; the content has not moved off its top yet.
+    touchEvent('touchstart', sheet.target('content'), 400);
+    touchEvent('touchmove', sheet.target('content'), 390);
+    const jitter = touchEvent('touchmove', sheet.target('content'), 391);
+    const scroll = touchEvent('touchmove', sheet.target('content'), 370);
+    touchEvent('touchend', sheet.target('content'));
+
+    expect(jitter.defaultPrevented).toBe(false);
+    expect(scroll.defaultPrevented).toBe(false);
+    expect(gestures.onDragEnd).not.toHaveBeenCalled();
+    gestures.detach();
+  });
+
+  it('does not watch the window for a handle press it refused', () => {
+    const sheet = createSheet();
+    const gestures = attach(sheet, 'peek', 200, { canStart: () => false });
+    const addListener = vi.spyOn(window, 'addEventListener');
+
+    const press = new Event('pointerdown', { bubbles: true, cancelable: true });
+    Object.assign(press, { pointerType: 'mouse', pointerId: 7, button: 0, clientX: 20, clientY: 200 });
+    sheet.target('handle-child').dispatchEvent(press);
+
+    expect(addListener).not.toHaveBeenCalled();
+    addListener.mockRestore();
+    gestures.detach();
+  });
+
   it('ignores new gestures while the sheet is on its way out', () => {
     const sheet = createSheet();
     // A drag would stop the dismiss animation, whose promise then never settles: the sheet would
@@ -433,6 +469,24 @@ describe('attachMobileSheetGestures', () => {
     touchEvent('touchend', item);
 
     expect(up.defaultPrevented).toBe(true);
+    gestures.detach();
+  });
+
+  it("still moves the sheet when the browser won't let a move be cancelled", () => {
+    // Chrome Android sends non-cancelable touchmoves once a native scroll has started, which is
+    // exactly when a full-screen scroll hands over at the top.
+    const sheet = createSheet();
+    const gestures = attach(sheet, 'peek', 200);
+
+    touchEvent('touchstart', sheet.target('content'), 400);
+    const move = new Event('touchmove', { bubbles: true, cancelable: false }) as TouchEvent;
+    Object.defineProperty(move, 'touches', { value: [{ clientX: 20, clientY: 300, identifier: 1 }] });
+    expect(() => sheet.target('content').dispatchEvent(move)).not.toThrow();
+    touchEvent('touchend', sheet.target('content'));
+
+    expect(move.defaultPrevented).toBe(false);
+    expect(gestures.getTop()).toBe(100);
+    expect(gestures.onDragEnd).toHaveBeenCalledWith(100, expect.any(Number));
     gestures.detach();
   });
 

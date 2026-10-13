@@ -45,7 +45,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
 
   const [portalTarget, setPortalTarget] = React.useState<HTMLElement | null>(null);
 
-  const { setOverlayElement, sheetStyle } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
     enabled: isMobile && Boolean(target),
     onDismiss: onClose,
     peekTopPx: ENTITY_SHEET_TOP_OFFSET_PX,
@@ -132,7 +132,7 @@ export function RankingComposeEntitySheet({ target, onClose }: Props) {
           >
             {isMobile ? <MobileSheetGrabHandle /> : null}
 
-            <InsideMobileSheet>
+            <InsideMobileSheet sheet={sheet}>
               <EntitySidePanelPopoverPortalProvider>
                 <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
                   <EntitySidePanelSurface

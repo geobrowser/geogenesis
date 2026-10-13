@@ -19,15 +19,16 @@ const MOBILE_SHEET_FLING_VELOCITY_PX_PER_SECOND = 420;
  */
 export type MobileSheetSnap = 'peek' | 'full';
 
-let documentOverscrollLockCount = 0;
+/** Open sheets, bottom to top. Every sheet holds the overscroll lock while it is open. */
+const openSheets: symbol[] = [];
 const openListeners = new Set<() => void>();
 
-/** Whether any mobile sheet is open. Every sheet holds the overscroll lock while it is. */
-export function isAnyMobileSheetOpen(): boolean {
-  return documentOverscrollLockCount > 0;
+/** The sheet on top, or null when none is open. */
+export function getTopMobileSheet(): symbol | null {
+  return openSheets.at(-1) ?? null;
 }
 
-/** Notified when the first sheet opens and when the last one closes. */
+/** Notified whenever the top sheet changes: one opens, or the top one closes. */
 export function subscribeMobileSheetOpen(listener: () => void): () => void {
   openListeners.add(listener);
   return () => {
@@ -40,28 +41,30 @@ function notifyOpenChange() {
 }
 
 /**
- * Prevents browser overscroll gestures while any mobile sheet is open. The reference count keeps
- * the lock in place when sheets are stacked and makes each caller's cleanup idempotent.
+ * Prevents browser overscroll gestures while any mobile sheet is open, and records `sheet` as the
+ * top one. The lock stays in place until every stacked sheet releases it, and each caller's
+ * cleanup is idempotent.
  */
-export function lockMobileSheetDocumentOverscroll(): () => void {
+export function lockMobileSheetDocumentOverscroll(sheet: symbol = Symbol('mobile sheet')): () => void {
   const { documentElement, body } = document;
 
-  documentOverscrollLockCount += 1;
+  openSheets.push(sheet);
   documentElement.setAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE, '');
   body.setAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE, '');
-  if (documentOverscrollLockCount === 1) notifyOpenChange();
+  notifyOpenChange();
 
   let released = false;
   return () => {
     if (released) return;
     released = true;
-    documentOverscrollLockCount = Math.max(0, documentOverscrollLockCount - 1);
+    const wasTop = getTopMobileSheet() === sheet;
+    openSheets.splice(openSheets.lastIndexOf(sheet), 1);
 
-    if (documentOverscrollLockCount === 0) {
+    if (openSheets.length === 0) {
       documentElement.removeAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE);
       body.removeAttribute(MOBILE_SHEET_OPEN_ATTRIBUTE);
-      notifyOpenChange();
     }
+    if (wasTop) notifyOpenChange();
   };
 }
 
@@ -271,9 +274,15 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
     if (active.decided === 'horizontal') return false;
 
     if (active.decided === 'native') {
-      const pullingDown = y > active.anchorY;
-      active.anchorY = y;
-      if (!pullingDown || callbacks.getSnap() !== 'full' || contentScrollTop(root) > 0) return false;
+      // Hand over only after a real pull: the same slop of downward travel, measured from the highest
+      // point the finger reached with the content at its top. A 1px reversal while a scroll gets
+      // going would otherwise take the gesture and stop the scroll until the finger lifts.
+      if (callbacks.getSnap() !== 'full' || contentScrollTop(root) > 0) {
+        active.anchorY = y;
+        return false;
+      }
+      active.anchorY = Math.min(active.anchorY, y);
+      if (y - active.anchorY < GESTURE_SLOP_PX) return false;
       claim(active, y, performance.now());
     }
 
@@ -346,6 +355,7 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
     if (event.pointerType !== 'mouse' || event.button !== 0) return;
     if (!(event.target instanceof Element) || !event.target.closest(MOBILE_SHEET_DRAG_HANDLE_SELECTOR)) return;
     begin(event.pointerId, event.target, event.clientX, event.clientY);
+    if (!gesture) return;
     window.addEventListener('pointermove', handleMouseMove);
     window.addEventListener('pointerup', handleMouseUp);
     window.addEventListener('pointercancel', handleMouseCancel);

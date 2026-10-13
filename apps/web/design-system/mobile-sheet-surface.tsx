@@ -17,6 +17,8 @@ type Props = Omit<
   children: React.ReactNode;
   /** From `useMobileSheetDrag`: sets the sheet's height and corner radius as it moves. */
   sheetStyle: MobileSheetStyle;
+  /** From `useMobileSheetDrag`: marks the content as this sheet's, so it isn't covered by it. */
+  sheet: symbol;
 };
 
 /**
@@ -24,7 +26,7 @@ type Props = Omit<
  * pinned to the bottom of the viewport so `useMobileSheetDrag` can size it. Render it inside the
  * fixed overlay whose element is passed to the hook's `setOverlayElement`.
  */
-export function MobileSheetSurface({ sheetStyle, className, children, ...props }: Props) {
+export function MobileSheetSurface({ sheetStyle, sheet, className, children, ...props }: Props) {
   return (
     <motion.div
       data-mobile-sheet-surface
@@ -39,7 +41,7 @@ export function MobileSheetSurface({ sheetStyle, className, children, ...props }
       {...props}
     >
       <MobileSheetGrabHandle />
-      <InsideMobileSheet>{children}</InsideMobileSheet>
+      <InsideMobileSheet sheet={sheet}>{children}</InsideMobileSheet>
     </motion.div>
   );
 }

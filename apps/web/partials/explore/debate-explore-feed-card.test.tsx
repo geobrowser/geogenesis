@@ -435,6 +435,38 @@ describe('DebateExploreFeedCard', () => {
       expect(releaseMedia()).toBe('false');
     });
 
+    it('detaches a card inside a sheet once another sheet opens on top of it', () => {
+      const profilePanel = Symbol('profile panel');
+      const rankingSheet = Symbol('ranking sheet');
+      mocks.debateQuery = { data: watchableDebate(), isError: false };
+      mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+      render(
+        <InsideMobileSheet sheet={profilePanel}>
+          <CardHarness props={{}} />
+        </InsideMobileSheet>
+      );
+      intersectAll(0.7);
+      const releaseMedia = () => screen.getByTestId('player').getAttribute('data-release-media');
+
+      const closes: (() => void)[] = [];
+      try {
+        act(() => {
+          closes.push(lockMobileSheetDocumentOverscroll(profilePanel));
+        });
+        expect(releaseMedia()).toBe('false');
+
+        act(() => {
+          closes.push(lockMobileSheetDocumentOverscroll(rankingSheet));
+        });
+        expect(releaseMedia()).toBe('true');
+
+        act(() => closes.pop()?.());
+        expect(releaseMedia()).toBe('false');
+      } finally {
+        act(() => closes.forEach(close => close()));
+      }
+    });
+
     it('on a phone, detaches a card scrolled off screen while it waits in the look-ahead band', () => {
       mocks.isMobileLayout = true;
       const releaseMedia = renderOnScreen();
@@ -483,11 +515,12 @@ describe('DebateExploreFeedCard', () => {
     });
 
     it('keeps playing a card inside the sheet, like a profile Activity gallery', () => {
-      const playerActive = renderPlaying(card => <InsideMobileSheet>{card}</InsideMobileSheet>);
+      const sheet = Symbol('sheet');
+      const playerActive = renderPlaying(card => <InsideMobileSheet sheet={sheet}>{card}</InsideMobileSheet>);
 
       let closeSheet = () => {};
       act(() => {
-        closeSheet = lockMobileSheetDocumentOverscroll();
+        closeSheet = lockMobileSheetDocumentOverscroll(sheet);
       });
       try {
         expect(playerActive()).toBe('true');

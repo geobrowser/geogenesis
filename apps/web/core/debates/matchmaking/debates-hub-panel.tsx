@@ -94,7 +94,7 @@ function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHu
 export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
-  const { setOverlayElement, sheetStyle } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
     enabled: isMobile && isOpen,
     onDismiss: close,
     peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
@@ -216,6 +216,7 @@ export function DebatesHubPanel() {
             aria-modal="true"
             aria-label="Debates"
             sheetStyle={sheetStyle}
+            sheet={sheet}
           >
             {body}
           </MobileSheetSurface>
