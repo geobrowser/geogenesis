@@ -601,6 +601,9 @@ describe('DebateLobbyPage guest banner', () => {
 
 // The banner follows the guest room's own connection, not whether a token exists.
 describe('DebateLobbyPage banner and the guest room connection', () => {
+  // The room can show before the heartbeat effect runs; a removal sent then finds no `checkNow` target.
+  const heartbeatArmed = () => act(async () => {});
+
   const states = (connected: boolean) => ({ speaking: new Set<string>(), micOn: new Set<string>(), connected });
 
   it('invites while connecting, says listening once connected, and stops when it fails or drops', async () => {
@@ -622,6 +625,7 @@ describe('DebateLobbyPage banner and the guest room connection', () => {
   it('a removed room asks the session at once; superseded steps aside', async () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
     await screen.findByTestId('guest-room');
+    await heartbeatArmed();
     expect(mocks.heartbeat).not.toHaveBeenCalled();
 
     mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'superseded', lease_expires_at: null });
@@ -634,6 +638,7 @@ describe('DebateLobbyPage banner and the guest room connection', () => {
   it('a removed room whose session is still this tab’s reconnects on the same secret', async () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
     await screen.findByTestId('guest-room');
+    await heartbeatArmed();
     act(() => mocks.onGuestRemoved?.());
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(2));
     expect(mocks.start).toHaveBeenLastCalledWith('lobby1', { guest_secret: 'secret-1' });
