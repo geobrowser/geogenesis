@@ -35,14 +35,15 @@ import {
 } from './admin-hooks';
 import {
   GMT,
+  clockValue,
   dateIn,
   dateLabels,
   instantAt,
   minutesIn,
+  minutesOfClock,
   readAdminMatchZone,
   saveAdminMatchZone,
   spanIn,
-  wallTime,
   zoneDays,
   zoneLabel,
   zoneName,
@@ -92,8 +93,12 @@ const SETTLED_PROMPTS: ReadonlySet<PromptOutcome> = new Set([
 
 const isRetryable = (outcome: PromptOutcome | undefined) => outcome !== undefined && !SETTLED_PROMPTS.has(outcome);
 
-/** A time picked, and whether it is outside their availability: `null` until their overlap is known. */
-type Choice = { start: number; outside: boolean | null };
+/**
+ * A time picked, and whether it is outside their availability: `null` until their overlap is known.
+ * geo-chat calls any start that isn't one of their shared half-hours outside, so `freeOffGrid` marks
+ * a custom start, like 9:15, whose whole half-hour they're both free for all the same.
+ */
+type Choice = { start: number; outside: boolean | null; freeOffGrid?: boolean };
 
 type Props = {
   open: boolean;
@@ -459,7 +464,10 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
               </Text>
               {chosen.outside ? (
                 <Text as="p" variant="footnote" className="text-purple">
-                  Not a time they&rsquo;re both free. The invite is flagged, and the calendar tags it Off-hours.
+                  {chosen.freeOffGrid
+                    ? 'They’re both free then, but it isn’t one of their half-hours.'
+                    : 'Not a time they’re both free.'}{' '}
+                  The invite is flagged, and the calendar tags it Off-hours.
                 </Text>
               ) : null}
             </>
@@ -766,9 +774,6 @@ function TimePicker({
   const [anyAt, setAnyAt] = React.useState(() => instantAt(days[1], 17 * 60, zone));
   const anyDay = days.indexOf(dateIn(anyAt, zone));
   const anyMinutes = minutesIn(anyAt, zone);
-  const anyMinuteOptions = [
-    ...new Set([...Array.from({ length: (24 * 60) / SLOT_MINUTES }, (_, index) => index * SLOT_MINUTES), anyMinutes]),
-  ].sort((left, right) => left - right);
 
   // Ticks each minute, so a picked time that passes while the dialog is open stops being sendable.
   const now = useMinuteClock();
@@ -784,6 +789,15 @@ function TimePicker({
     [candidate, now]
   );
   const mutual = React.useMemo(() => new Set(slots), [slots]);
+  // A custom start like 9:15 is never a shared half-hour, but they're free for all of it when it
+  // starts and ends inside shared half-hours, which tile their free time with no gaps.
+  const freeThroughout = React.useCallback(
+    (start: number) =>
+      [start, start + SLOT_MINUTES * 60_000 - 1].every(at =>
+        slots.some(slot => slot <= at && at < slot + SLOT_MINUTES * 60_000)
+      ),
+    [slots]
+  );
   // Whether a time is outside their availability is only known once the overlap has answered in
   // full; until then the override says nothing rather than flagging every time it is shown.
   const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
@@ -801,10 +815,14 @@ function TimePicker({
     else
       onChoose(
         anyStart !== null && anyStart > now
-          ? { start: anyStart, outside: overlapKnown ? !mutual.has(anyStart) : null }
+          ? {
+              start: anyStart,
+              outside: overlapKnown ? !mutual.has(anyStart) : null,
+              freeOffGrid: overlapKnown && !mutual.has(anyStart) && freeThroughout(anyStart),
+            }
           : null
       );
-  }, [anyStart, mode, mutual, now, onChoose, onShownDay, overlapKnown, selected]);
+  }, [anyStart, freeThroughout, mode, mutual, now, onChoose, onShownDay, overlapKnown, selected]);
 
   // The zone alone wherever a label spans the fortnight; a single time carries its own offset.
   const zoneTitle = zoneName(zone);
@@ -1021,6 +1039,7 @@ function TimePicker({
     }
   } else {
     const inside = anyStart !== null && mutual.has(anyStart);
+    const freeOffGrid = anyStart !== null && !inside && freeThroughout(anyStart);
     const future = anyStart !== null && anyStart > now;
     body = (
       <>
@@ -1050,20 +1069,18 @@ function TimePicker({
             <Text as="span" variant="footnote" color="grey-04">
               Starts ({zoneTitle})
             </Text>
-            <select
-              value={anyMinutes}
-              onChange={event =>
-                setAnyAt(instantAt(days[Math.max(anyDay, 0)], Number(event.currentTarget.value), zone))
-              }
+            {/* Any minute, typed or picked, rather than a list of half-hours to scroll through. */}
+            <input
+              type="time"
+              step={60}
+              required
+              value={clockValue(anyMinutes)}
+              onChange={event => {
+                const minutes = minutesOfClock(event.currentTarget.value);
+                if (minutes !== null) setAnyAt(instantAt(days[Math.max(anyDay, 0)], minutes, zone));
+              }}
               className={NATIVE_SELECT_CLASS}
-            >
-              {/* With the half-hour it was picked on, should a zone with a :15 or :45 offset be shown. */}
-              {anyMinuteOptions.map(minutes => (
-                <option key={minutes} value={minutes}>
-                  {wallTime(minutes)}
-                </option>
-              ))}
-            </select>
+            />
           </label>
           <Text as="span" variant="footnote" color="grey-04" className="pb-2.5">
             {SLOT_MINUTES} minutes
@@ -1105,7 +1122,9 @@ function TimePicker({
               ? 'Checking whether they’re both free then…'
               : inside
                 ? 'They’re both free then.'
-                : 'Not a time they’re both free.'}
+                : freeOffGrid
+                  ? 'They’re both free then, but it isn’t one of their half-hours, so it’s flagged Off-hours.'
+                  : 'Not a time they’re both free.'}
           </Text>
         ) : null}
       </>
