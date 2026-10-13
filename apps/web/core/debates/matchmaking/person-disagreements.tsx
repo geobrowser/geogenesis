@@ -26,6 +26,7 @@ export function PersonMatches({
   labelsById,
   popoverPortal,
   triggerAttributes,
+  hideWhenDetached = true,
 }: {
   personName: string;
   matches: ClaimMatch[];
@@ -35,6 +36,8 @@ export function PersonMatches({
   popoverPortal: HTMLElement | null;
   /** Analytics attributes for the trigger, where its surface labels its own clicks (GEO-3220). */
   triggerAttributes?: Readonly<Record<`data-${string}`, string>>;
+  /** Off when the row sits inside another popover; see `PersonRow`'s `hidePopoversWhenDetached`. */
+  hideWhenDetached?: boolean;
 }) {
   const firstClaimRef = React.useRef<HTMLAnchorElement>(null);
   const count = matches.length;
@@ -60,7 +63,7 @@ export function PersonMatches({
             align="start"
             sideOffset={8}
             collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-            hideWhenDetached
+            hideWhenDetached={hideWhenDetached}
             aria-label={`Matching claims with ${personName}`}
             onOpenAutoFocus={event => {
               event.preventDefault();
