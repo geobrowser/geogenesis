@@ -9,10 +9,10 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbySummary, GeoChatRequestError } from '../api';
+import type { DebateLobbySummary } from '../api';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbyReminder } from './hooks';
+import { useDebateLobbyReminder, useLobbyReminderError } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
 import { lobbyErrorMessage, nextLobbyTimeLabel, personName } from './lobby-format';
 import { nextLobbyByHost, useListedLobbies } from './lobby-host-lobbies';
@@ -129,7 +129,7 @@ export function LobbyClosedCard({
           {LOBBY_STATE_COPY.nextLobby(personName(next.host), next.lobby.name, time)}
         </Text>
       ) : null}
-      <ReminderError reminder={reminder} />
+      {next ? <ReminderError reminder={reminder} lobby={next.lobby} /> : null}
     </LobbyStateCard>
   );
 }
@@ -171,14 +171,12 @@ function NextLobbyAction({
 
 type LobbyReminder = ReturnType<typeof useDebateLobbyReminder>;
 
-const isAlreadyOpen = (error: unknown) => error instanceof GeoChatRequestError && error.code === 'lobby_already_open';
-
-function ReminderError({ reminder }: { reminder: LobbyReminder }) {
-  // The lobby opened since the list was read; the refetched row swaps the button to Join.
-  if (!reminder.isError || isAlreadyOpen(reminder.error)) return null;
+function ReminderError({ reminder, lobby }: { reminder: LobbyReminder; lobby: DebateLobbySummary }) {
+  const error = useLobbyReminderError(reminder, lobby);
+  if (!error) return null;
   return (
     <Text as="p" variant="footnote" color="red-01">
-      {lobbyErrorMessage(reminder.error, REMINDER_FAILED)}
+      {lobbyErrorMessage(error, REMINDER_FAILED)}
     </Text>
   );
 }
@@ -237,7 +235,7 @@ function NextLobbyCard({ lobby }: { lobby: DebateLobbySummary }) {
         </div>
         <NextLobbyAction lobby={lobby} reminder={reminder} />
       </div>
-      <ReminderError reminder={reminder} />
+      <ReminderError reminder={reminder} lobby={lobby} />
     </div>
   );
 }

@@ -39,6 +39,7 @@ vi.mock('./hooks', () => ({
     voiceAwayAt: null,
   }),
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false }),
+  useLobbyReminderError: () => null,
   useRefetchAtOpening: vi.fn(),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }));

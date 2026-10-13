@@ -180,6 +180,26 @@ export function useDebateLobbyReminder() {
   });
 }
 
+/**
+ * The reminder failure to show beside `lobby`: only one asked for this lobby, while it is still to
+ * open. A 409 `lobby_already_open` shows nothing; the refetched list swaps in Join.
+ */
+export function useLobbyReminderError(
+  reminder: ReturnType<typeof useDebateLobbyReminder>,
+  lobby: { lobby_id: string; open: boolean }
+): unknown {
+  const id = dashlessId(lobby.lobby_id);
+  const { reset } = reminder;
+  // Clears when another lobby takes this one's place.
+  React.useEffect(() => reset, [id, reset]);
+
+  if (!reminder.isError || lobby.open) return null;
+  if (!reminder.variables || dashlessId(reminder.variables.lobbyId) !== id) return null;
+  const error = reminder.error;
+  if (error instanceof GeoChatRequestError && error.code === 'lobby_already_open') return null;
+  return error;
+}
+
 export function useEndDebateLobby(lobbyId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();

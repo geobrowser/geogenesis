@@ -99,4 +99,43 @@ describe('LobbyClosedCard next lobby', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Remind me' }));
     expect(await screen.findByText('Could not update your reminder. Try again.')).toBeTruthy();
   });
+
+  // The error belongs to the lobby asked about, not to whatever the refreshed list suggests next.
+  describe('after a failed Remind me', () => {
+    async function failOnA(opensAt: string) {
+      api.setDebateLobbyReminder.mockRejectedValue(new Error('network'));
+      renderCard();
+      fireEvent.click(await screen.findByRole('button', { name: 'Remind me' }));
+      expect(await screen.findByText('Could not update your reminder. Try again.')).toBeTruthy();
+      expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(Date.parse(opensAt) - Date.now() + 2_000);
+      });
+    }
+
+    it('drops the error once the refresh shows that lobby open', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const opensAt = new Date(Date.now() + 60_000).toISOString();
+      api.listDebateLobbies
+        .mockResolvedValueOnce({ lobbies: [summary({ opens_at: opensAt })] })
+        .mockResolvedValue({ lobbies: [summary({ opens_at: opensAt, open: true })] });
+      await failOnA(opensAt);
+
+      expect(await screen.findByRole('link', { name: 'Join' })).toBeTruthy();
+      expect(screen.queryByText('Could not update your reminder. Try again.')).toBeNull();
+    });
+
+    it('drops the error when the refresh suggests another lobby', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const opensAt = new Date(Date.now() + 60_000).toISOString();
+      api.listDebateLobbies
+        .mockResolvedValueOnce({ lobbies: [summary({ opens_at: opensAt })] })
+        .mockResolvedValue({ lobbies: [summary({ lobby_id: 'next2', name: 'Later hour' })] });
+      await failOnA(opensAt);
+
+      expect(await screen.findByText(/Later hour/)).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Remind me' })).toBeTruthy();
+      expect(screen.queryByText('Could not update your reminder. Try again.')).toBeNull();
+    });
+  });
 });
