@@ -69,6 +69,14 @@ export function isOpenRoundsDebate<T extends Pick<Debate, 'open_rounds'>>(
   return debate.open_rounds !== undefined && debate.open_rounds !== null;
 }
 
+/**
+ * Whether the room is between two Open rounds: picking, or showing the result, count-in or a
+ * required round's lead-in. Nobody holds a turn then.
+ */
+export function isBetweenOpenRounds(phase: OpenRoundsRoomPhase | null | undefined) {
+  return phase?.phase === 'deciding' || phase?.phase === 'result';
+}
+
 /** The number a round is shown with: the opening is Round 1, so the first rebuttal round is Round 2. */
 export function openRoundNumber(roundIndex: number) {
   return roundIndex + 1;
