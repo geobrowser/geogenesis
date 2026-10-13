@@ -677,8 +677,15 @@ describe('DebateLobbyPage state screens', () => {
     expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remind me' })).not.toBeInTheDocument();
-    // The lobbies list is members only, so a visitor gets no host line.
+    // Without the view's hosts (older geo-chat) a visitor gets no host line: the list is members only.
     expect(screen.queryByText(/Hosted by/)).not.toBeInTheDocument();
+  });
+
+  it('names the host to a visitor from the view’s hosts', () => {
+    mocks.guestView = { lobby: { ...notYetOpen, hosts: [adamPerson] }, claims: null, highlights: null };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByText('Hosted by Adam')).toBeInTheDocument();
   });
 
   it('says the account is setting up for a guest who signs in before it opens', () => {

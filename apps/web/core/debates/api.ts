@@ -2428,6 +2428,11 @@ export type DebateLobbyView = {
   /** Moves when the acting host changes. */
   hosts_changed_at: string | null;
   reminder_count: number;
+  /**
+   * Who runs the lobby, present or not: the creator first, the acting host last. Empty for a banned
+   * viewer. Absent from older geo-chat.
+   */
+  hosts?: DebateLobbyPerson[];
   /** The roster, stepped-out members included, longest there first. Empty for a banned viewer. */
   members: DebateLobbyMember[];
   /** One per debate a member is in, in roster order (GEO-3131). Absent from older geo-chat. */

@@ -1,10 +1,13 @@
+import { renderHook } from '@testing-library/react';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary } from '../api';
 
 vi.mock('./hooks', () => ({ useDebateLobbies: vi.fn(), useRefetchAtOpening: vi.fn() }));
 
-const { listedHosts, nextLobbyByHost, soonestOpening } = await import('./lobby-host-lobbies');
+const { useDebateLobbies } = await import('./hooks');
+const { listedHosts, nextLobbyByHost, soonestOpening, usePreOpenHosts } = await import('./lobby-host-lobbies');
 
 const adam = { user_id: 'aaaa-1', profile_space_id: 's1', display_name: 'Adam', avatar_cid: null };
 const priya = { user_id: 'bbbb-2', profile_space_id: 's2', display_name: 'Priya', avatar_cid: null };
@@ -72,5 +75,32 @@ describe('soonestOpening', () => {
   it('is null when every listed lobby is open', () => {
     expect(soonestOpening([summary({ open: true })])).toBeNull();
     expect(soonestOpening([])).toBeNull();
+  });
+});
+
+describe('usePreOpenHosts', () => {
+  const listedQuery = (lobbies: DebateLobbySummary[]) =>
+    vi
+      .mocked(useDebateLobbies)
+      .mockReturnValue({ data: { lobbies } } as unknown as ReturnType<typeof useDebateLobbies>);
+
+  it('reads the view’s hosts and leaves the list off', () => {
+    listedQuery([summary({ hosts: [priya] })]);
+    const { result } = renderHook(() => usePreOpenHosts({ lobby_id: 'lobby1', hosts: [adam] }));
+    expect(result.current).toEqual([adam]);
+    expect(vi.mocked(useDebateLobbies).mock.lastCall?.[0]).toBe(false);
+  });
+
+  it('keeps an empty hosts list: geo-chat says nobody hosts', () => {
+    listedQuery([summary({ hosts: [priya] })]);
+    const { result } = renderHook(() => usePreOpenHosts({ lobby_id: 'lobby1', hosts: [] }));
+    expect(result.current).toEqual([]);
+  });
+
+  it('falls back to the list row when older geo-chat leaves hosts out', () => {
+    listedQuery([summary({ hosts: [priya] })]);
+    const { result } = renderHook(() => usePreOpenHosts({ lobby_id: 'lobby1' }));
+    expect(result.current).toEqual([priya]);
+    expect(vi.mocked(useDebateLobbies).mock.lastCall?.[0]).toBe(true);
   });
 });

@@ -37,22 +37,25 @@ function isSooner(a: DebateLobbySummary, b: DebateLobbySummary) {
 }
 
 /**
- * Who hosts a lobby that has not opened. `LobbyView` carries no hosts yet, so this reads the list
- * row; once it does, this hook is the one place to switch.
+ * Who hosts a lobby that has not opened: the view's `hosts`, an empty list included. Older geo-chat
+ * leaves it out, so this falls back to the list row.
  */
-export function usePreOpenHosts(lobby: { lobby_id: string }): DebateLobbyPerson[] {
-  return listedHosts(useListedLobbies(), lobby.lobby_id);
+export function usePreOpenHosts(lobby: { lobby_id: string; hosts?: DebateLobbyPerson[] }): DebateLobbyPerson[] {
+  const listed = useListedLobbies(lobby.hosts === undefined);
+  return lobby.hosts ?? listedHosts(listed, lobby.lobby_id);
 }
 
 /**
  * The lobbies list, signed in only. Inside a lobby only `debate.my_lobby_changed` refreshes it, so
  * a mount refetches once the copy is a minute old, and the list refetches when a listed lobby opens.
  */
-export function useListedLobbies() {
+export function useListedLobbies(enabled = true) {
   const guest = useIsLobbyGuest();
-  const query = useDebateLobbies(!guest, { staleTime: LISTED_LOBBIES_STALE_MS });
+  const on = enabled && !guest;
+  const query = useDebateLobbies(on, { staleTime: LISTED_LOBBIES_STALE_MS });
   const lobbies = query.data?.lobbies ?? NO_LOBBIES;
-  useRefetchAtOpening(query, soonestOpening(lobbies));
+  // `refetch` ignores `enabled`.
+  useRefetchAtOpening(query, on ? soonestOpening(lobbies) : null);
   return lobbies;
 }
 
