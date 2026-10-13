@@ -9,6 +9,7 @@ import { Text } from '~/design-system/text';
 
 import type { OpenRoundPick } from './api';
 import { DebateRoomOverlayCard } from './debate-room-overlay-card';
+import { openRoundNumber } from './open-rounds';
 import { COUNTDOWN_WARNING_COLOR } from './recording-countdown-ring';
 
 export type OpenRoundPickContext = {
@@ -102,7 +103,7 @@ export function OpenRoundPickCard({
           <Text as="p" variant="footnote" color="grey-04" className="mt-1">
             {selectedPick
               ? 'You can change it until the reveal.'
-              : `Pick in secret. Two Extends unlock Round ${roundIndex + 1}.`}
+              : `Pick in secret. Two Extends unlock Round ${openRoundNumber(roundIndex + 1)}.`}
           </Text>
         </div>
         <PickCountdown remainingSeconds={remainingSeconds} progress={progress} />

@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { OpenRoundsRoomPhase } from './open-rounds';
+import { type OpenRoundsRoomPhase, openRoundNumber } from './open-rounds';
 
 /** Past five rebuttal rounds the pips halve, so round 10 still fits beside Leave on a 320px phone. */
 const compactAfterRounds = 5;
@@ -55,7 +55,8 @@ export function rebuttalRoundsLabel(rounds: number) {
 }
 
 /**
- * Where an Open rounds debate is (GEO-3174): the opening, or rebuttal round N of up to the cap, one
+ * Where an Open rounds debate is (GEO-3174): the opening, or round N of up to the cap, numbered from
+ * the opening as Round 1 (`openRoundNumber`), so the cap of rebuttal rounds reads one higher. One
  * pip per round run, a grey pip for each required round still to come (GEO-3258), and a dashed pip
  * while both debaters could still unlock another.
  *
@@ -101,16 +102,20 @@ export function DebateRoundIndicator({
     <div data-debate-round-indicator={roundIndex} className="flex min-w-0 items-center gap-2">
       <p className="text-metadataMedium whitespace-nowrap text-text">
         <span aria-hidden="true">
-          {roundIndex === 0 ? 'Opening' : `Round ${roundIndex}`}
+          {roundIndex === 0 ? 'Opening' : `Round ${openRoundNumber(roundIndex)}`}
           {roundIndex > 0 && (
-            <span className="font-normal text-grey-04"> {roundIndex >= maxRounds ? '· last' : `of ${maxRounds}`}</span>
+            <span className="font-normal text-grey-04">
+              {' '}
+              {roundIndex >= maxRounds ? '· last' : `of ${openRoundNumber(maxRounds)}`}
+            </span>
           )}
         </span>
         <span className="sr-only">
           {roundIndex === 0
             ? 'Opening. No rebuttal rounds yet.'
-            : `Round ${roundIndex} of ${maxRounds}. ${rebuttalRoundsLabel(roundIndex)} so far.`}{' '}
-          {requiredToCome > 0 && `${requiredRoundsToComeLabel(roundIndex + 1, roundIndex + requiredToCome)} `}
+            : `Round ${openRoundNumber(roundIndex)} of ${openRoundNumber(maxRounds)}. ${rebuttalRoundsLabel(roundIndex)} so far.`}{' '}
+          {requiredToCome > 0 &&
+            `${requiredRoundsToComeLabel(openRoundNumber(roundIndex + 1), openRoundNumber(roundIndex + requiredToCome))} `}
           {anotherPossible
             ? requiredToCome > 0
               ? 'More rounds are possible after that.'

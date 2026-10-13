@@ -10,6 +10,7 @@ import {
   openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundLastWord,
+  openRoundLeadInAfterTurn,
   openRoundRevealedPicks,
   openRoundsRoomPhase,
 } from './open-rounds';
@@ -19,6 +20,7 @@ import {
   capRoundLastTurn,
   deciding,
   listening,
+  requiredRoundListening,
   revealEnd,
   revealRebut,
   roundOneSpeaking,
@@ -366,23 +368,9 @@ describe('open rounds: a required rebuttal round before the first pick', () => {
   const openingEnd = at('20:02:00.000');
   const roundOneEnd = at('20:03:30.000');
 
-  function requiredRound(overrides: { max_rebuttal_rounds?: number } = {}): Debate {
-    const debate = listening();
-    return {
-      ...debate,
-      turn_durations_ms: [60_000, 60_000, 45_000, 45_000],
-      open_rounds: {
-        ...debate.open_rounds!,
-        required_rebuttal_rounds: 1,
-        turn_roles: ['opening', 'opening', 'rebuttal', 'rebuttal'],
-        ...overrides,
-      },
-    };
-  }
-
   it('runs the opening straight into round 1, however late, with no decision', () => {
     for (const nowMs of [openingEnd, at('20:02:30.000'), at('20:05:00.000')]) {
-      expect(openRoundGapAfterTurn(requiredRound(), 1, openingEnd, nowMs)).toEqual({
+      expect(openRoundGapAfterTurn(requiredRoundListening(), 1, openingEnd, nowMs)).toEqual({
         kind: 'continue',
         nextTurnStartsAtMs: openingEnd,
       });
@@ -390,23 +378,65 @@ describe('open rounds: a required rebuttal round before the first pick', () => {
   });
 
   it('decides after the required round, the first round that ends on a pick', () => {
-    expect(openRoundGapAfterTurn(requiredRound(), 3, roundOneEnd, at('20:03:31.000'))).toMatchObject({
+    expect(openRoundGapAfterTurn(requiredRoundListening(), 3, roundOneEnd, at('20:03:31.000'))).toMatchObject({
       kind: 'hold',
       phase: { phase: 'deciding', roundIndex: 1, decisionDeadlineAtMs: at('20:03:40.000') },
     });
-    expect(debateThankingStartsAtMs(requiredRound(), start, naturalTurnEnd)).toBeNull();
+    expect(debateThankingStartsAtMs(requiredRoundListening(), start, naturalTurnEnd)).toBeNull();
   });
 
   it('gives the last word to the round that ends on a pick, not the opening', () => {
-    expect(openRoundLastWord(requiredRound(), 1)).toBeNull();
-    expect(openRoundLastWord(requiredRound(), 3)).toBe('round');
-    expect(debateTurnRoleForDebate(requiredRound(), 2)).toBe('rebuttal');
+    expect(openRoundLastWord(requiredRoundListening(), 1)).toBeNull();
+    expect(openRoundLastWord(requiredRoundListening(), 3)).toBe('round');
+    expect(debateTurnRoleForDebate(requiredRoundListening(), 2)).toBe('rebuttal');
   });
 
   it('ends at the required round when the cap is no higher', () => {
-    const capped = requiredRound({ max_rebuttal_rounds: 1 });
+    const capped = requiredRoundListening({ max_rebuttal_rounds: 1 });
     expect(openRoundLastWord(capped, 3)).toBe('debate');
     expect(isDebatesLastTurn(capped, 3)).toBe(true);
     expect(debateThankingStartsAtMs(capped, start, naturalTurnEnd)).toBe(roundOneEnd);
+  });
+});
+
+describe('open rounds: the lead-in to a required round', () => {
+  const openingEnd = at('20:02:00.000');
+  const withLeadIn = () => requiredRoundListening({ required_round_lead_in_ms: 8_000, extend_count_in_ms: 5_000 });
+
+  it('pauses only after the round before the last required one', () => {
+    expect(openRoundLeadInAfterTurn(withLeadIn(), 1)).toBe(8_000);
+    expect(openRoundLeadInAfterTurn(withLeadIn(), 0)).toBe(0);
+    // Round 1 ends on the first pick, so a decision follows it, not a lead-in.
+    expect(openRoundLeadInAfterTurn(withLeadIn(), 3)).toBe(0);
+    // A geo-chat without the lead-in starts the required round at once, as before.
+    expect(openRoundLeadInAfterTurn(requiredRoundListening(), 1)).toBe(0);
+  });
+
+  it('holds on the lead-in as a result with no picks, then starts round 1 when it ends', () => {
+    expect(openRoundGapAfterTurn(withLeadIn(), 1, openingEnd, at('20:02:03.000'))).toEqual({
+      kind: 'hold',
+      phase: {
+        phase: 'result',
+        roundIndex: 0,
+        isFinalRound: false,
+        outcome: 'extend',
+        resolvedAtMs: openingEnd,
+        nextPhaseStartsAtMs: at('20:02:08.000'),
+        leadIn: true,
+      },
+    });
+    expect(openRoundGapAfterTurn(withLeadIn(), 1, openingEnd, at('20:02:08.000'))).toEqual({
+      kind: 'continue',
+      nextTurnStartsAtMs: at('20:02:08.000'),
+    });
+  });
+
+  it('moves every later turn by the lead-in', () => {
+    const debate = withLeadIn();
+    // Round 1 runs 20:02:08 to 20:03:38, then decides.
+    expect(openRoundGapAfterTurn(debate, 3, at('20:03:38.000'), at('20:03:39.000'))).toMatchObject({
+      kind: 'hold',
+      phase: { phase: 'deciding', roundIndex: 1, decisionDeadlineAtMs: at('20:03:48.000') },
+    });
   });
 });
