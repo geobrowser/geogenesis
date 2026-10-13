@@ -372,6 +372,34 @@ describe('AdminNewMatchDialog', () => {
     expect(screen.queryByText(/never overlaps/)).not.toBeInTheDocument();
   });
 
+  it('flags every time Off-hours once someone is unset, whatever a stale overlap still offers', () => {
+    // Raj cleared his schedule after this pair's overlap was read, so it still offers his old slots.
+    mocks.readZones = { raj: '' };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    // A once-shared half-hour off the strip is an override, not a recommendation.
+    fireEvent.click(document.querySelector(`[data-start="${Date.parse(at(7, 9))}"]`)!);
+    expect(screen.getByRole('radio', { name: 'Pick any time' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Not a time they’re both free.')).toBeInTheDocument();
+    expect(screen.queryByText('They’re both free then.')).not.toBeInTheDocument();
+    expect(screen.getByText(/The invite is flagged, and the calendar tags it Off-hours/)).toBeInTheDocument();
+  });
+
+  it('flags a time Off-hours straight away when someone is unset, without waiting for the overlap', () => {
+    mocks.overlap = undefined;
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    const { rerender } = renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    expect(screen.getByText('Not a time they’re both free.')).toBeInTheDocument();
+    expect(screen.queryByText(/Checking whether they.re both free then/)).not.toBeInTheDocument();
+  });
+
   it('shows a debater’s zone from their own read when it has changed since the roster', () => {
     mocks.readZones = { raj: 'Asia/Tokyo' };
     renderDialog();

@@ -837,14 +837,18 @@ function TimePicker({
     picked ? (zoneOf(picked.userId) ?? (read.schedule ? undefined : fromOverlap || undefined)) : undefined;
   const firstZone = zoneFor(first, firstAvailability, overlap.data?.viewer_timezone);
   const secondZone = zoneFor(second, secondAvailability, candidate?.with_timezone);
+  // With either of them unset no time is shared, whatever an overlap read before they cleared their
+  // schedule still holds: geo-chat flags the invite Off-hours, so the picker must say so too.
+  const anyUnset = unset.length > 0;
   const slots = React.useMemo(
-    () => (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > now),
-    [candidate, now]
+    () => (anyUnset ? [] : (candidate?.slots ?? []).map(slot => Date.parse(slot.start)).filter(start => start > now)),
+    [anyUnset, candidate, now]
   );
   const mutual = React.useMemo(() => new Set(slots), [slots]);
   // Whether a time is outside their availability is only known once the overlap has answered in
-  // full; until then the override says nothing rather than flagging every time it is shown.
-  const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
+  // full, or once either is known to be unset; until then the override says nothing rather than
+  // flagging every time it is shown.
+  const overlapKnown = anyUnset || (overlap.data !== undefined && !candidate?.truncated);
 
   // A time off the days shown, where a zone change can push either kind of pick, is no choice at
   // all: neither its chip nor its strip cell is on screen to say what would be sent.
