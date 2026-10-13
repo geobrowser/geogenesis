@@ -45,15 +45,33 @@ export function lockMobileSheetDocumentOverscroll(): () => void {
   };
 }
 
+/** The sheet's sliding surface inside its overlay root. */
+export function getMobileSheetSurface(root: HTMLElement): HTMLElement | null {
+  return root.querySelector<HTMLElement>(MOBILE_SHEET_SURFACE_SELECTOR);
+}
+
+/**
+ * Whether `target` sits in a vertically scrollable list nested inside the sheet's content (a long
+ * menu, say). Swipes there belong to that list; the sheet's own scroll area doesn't count.
+ */
+function isInNestedVerticalScroller(target: Element, surface: HTMLElement): boolean {
+  for (let el: Element | null = target; el && el !== surface; el = el.parentElement) {
+    if (!(el instanceof HTMLElement) || el.matches(MOBILE_SHEET_SCROLL_SELECTOR)) continue;
+    const { overflowY } = getComputedStyle(el);
+    if ((overflowY === 'auto' || overflowY === 'scroll') && el.scrollHeight > el.clientHeight + 1) return true;
+  }
+  return false;
+}
+
 /** Whether a gesture starting on `target` may move the sheet at all, once it proves vertical. */
 export function canStartMobileSheetGesture(target: EventTarget | null, root: HTMLElement): boolean {
   if (!(target instanceof Element)) return false;
 
-  const surface = root.querySelector<HTMLElement>(MOBILE_SHEET_SURFACE_SELECTOR);
+  const surface = getMobileSheetSurface(root);
   if (!surface?.contains(target)) return false;
 
   if (target.closest(MOBILE_SHEET_DRAG_HANDLE_SELECTOR)) return true;
-  return !target.closest(NO_SHEET_GESTURE_SELECTOR);
+  return !target.closest(NO_SHEET_GESTURE_SELECTOR) && !isInNestedVerticalScroller(target, surface);
 }
 
 /**
@@ -138,6 +156,7 @@ type ActiveGesture = {
   onHandle: boolean;
   startX: number;
   startY: number;
+  startTime: number;
   decided: 'pending' | 'sheet' | 'native' | 'horizontal';
   /** Pointer Y and sheet top when the sheet claimed the gesture, which can be mid-scroll. */
   anchorY: number;
@@ -182,6 +201,7 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
       onHandle: target instanceof Element && Boolean(target.closest(MOBILE_SHEET_DRAG_HANDLE_SELECTOR)),
       startX: x,
       startY: y,
+      startTime: performance.now(),
       decided: 'pending',
       anchorY: y,
       anchorTop: 0,
@@ -189,12 +209,13 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
     };
   };
 
-  const claim = (active: ActiveGesture, y: number) => {
+  const claim = (active: ActiveGesture, y: number, time: number) => {
     active.decided = 'sheet';
+    // First, so the sheet can settle anything in flight before its position is read.
+    callbacks.onDragStart();
     active.anchorY = y;
     active.anchorTop = callbacks.getTop();
-    active.samples = [{ time: performance.now(), y }];
-    callbacks.onDragStart();
+    active.samples = [{ time, y }];
   };
 
   /** Returns true when the sheet owns this move and the browser default must be cancelled. */
@@ -222,8 +243,9 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
         active.anchorY = y;
         return false;
       }
-      // Measured from touch-down so the slop distance still moves the sheet.
-      claim(active, active.startY);
+      // Measured from touch-down, in distance and time, so the slop still moves the sheet and the
+      // first move doesn't read as a fling.
+      claim(active, active.startY, active.startTime);
     }
 
     if (active.decided === 'horizontal') return false;
@@ -232,7 +254,7 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
       const pullingDown = y > active.anchorY;
       active.anchorY = y;
       if (!pullingDown || callbacks.getSnap() !== 'full' || contentScrollTop(root) > 0) return false;
-      claim(active, y);
+      claim(active, y, performance.now());
     }
 
     active.samples.push({ time: performance.now(), y });

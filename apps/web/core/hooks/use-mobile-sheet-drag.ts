@@ -7,6 +7,7 @@ import { type MotionValue, animate, useMotionValue, useReducedMotion, useTransfo
 import {
   type MobileSheetSnap,
   attachMobileSheetGestures,
+  getMobileSheetSurface,
   lockMobileSheetDocumentOverscroll,
   resolveMobileSheetRelease,
   watchMobileSheetContentScroll,
@@ -20,6 +21,8 @@ const PEEK_CORNER_RADIUS_PX = 16;
 
 export type MobileSheetStyle = {
   top: MotionValue<number>;
+  /** Driven by the surface's slide-up entrance. */
+  y: MotionValue<number>;
   borderTopLeftRadius: MotionValue<number>;
   borderTopRightRadius: MotionValue<number>;
 };
@@ -42,6 +45,7 @@ type Options = {
  */
 export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
   const top = useMotionValue(peekTopPx);
+  const y = useMotionValue(0);
   // Square corners only once the sheet reaches the top of the screen.
   const borderRadius = useTransform(top, value => Math.min(value, PEEK_CORNER_RADIUS_PX));
   const reduceMotion = useReducedMotion();
@@ -95,7 +99,16 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
       canStart: () => !dismissingRef.current,
       getSnap: () => snapRef.current,
       getTop: () => top.get(),
-      onDragStart: () => top.stop(),
+      onDragStart: () => {
+        top.stop();
+        // A drag during the slide-up entrance takes over from where the sheet visibly is: stop the
+        // transform and move what is left of it into `top`, which is what the drag drives.
+        const visibleTop = getMobileSheetSurface(overlayElement)?.getBoundingClientRect().top;
+        if (visibleTop === undefined || Math.abs(visibleTop - top.get()) < 0.5) return;
+        y.stop();
+        y.jump(0);
+        top.jump(visibleTop);
+      },
       onDragMove: next => top.set(next),
       onDragEnd: (releaseTop, velocityY) => {
         const next = resolveMobileSheetRelease({
@@ -118,8 +131,13 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
       detachGestures();
       stopWatchingScroll();
     };
-  }, [dismiss, enabled, overlayElement, peekTopPx, settle, top]);
+  }, [dismiss, enabled, overlayElement, peekTopPx, settle, top, y]);
 
-  const sheetStyle: MobileSheetStyle = { top, borderTopLeftRadius: borderRadius, borderTopRightRadius: borderRadius };
+  const sheetStyle: MobileSheetStyle = {
+    top,
+    y,
+    borderTopLeftRadius: borderRadius,
+    borderTopRightRadius: borderRadius,
+  };
   return { setOverlayElement, sheetStyle };
 }

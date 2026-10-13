@@ -352,6 +352,71 @@ describe('attachMobileSheetGestures', () => {
     gestures.detach();
   });
 
+  it('measures fling speed from touch-down, not from when the sheet claimed the drag', () => {
+    const sheet = createSheet();
+    const gestures = attach(sheet, 'peek', 200);
+    const now = vi.spyOn(performance, 'now');
+
+    now.mockReturnValue(0);
+    touchEvent('touchstart', sheet.target('content'), 400);
+    // Tap jitter: 5px in 16ms, lifted at 24ms. That's ~208 px/s, well under a fling.
+    now.mockReturnValue(16);
+    touchEvent('touchmove', sheet.target('content'), 395);
+    now.mockReturnValue(24);
+    touchEvent('touchend', sheet.target('content'));
+
+    const [, velocityY] = gestures.onDragEnd.mock.calls[0];
+    expect(Math.round(velocityY)).toBe(-208);
+    now.mockRestore();
+    gestures.detach();
+  });
+
+  it('leaves swipes inside a nested scrolling list to the list', () => {
+    const sheet = createSheet();
+    const list = document.createElement('ul');
+    list.style.overflowY = 'auto';
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 600 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 180 });
+    const item = document.createElement('li');
+    list.append(item);
+    sheet.target('content').append(list);
+    const gestures = attach(sheet, 'full', 0);
+
+    // Pulling down at the top of the sheet content, inside the list: the list scrolls, not the sheet.
+    touchEvent('touchstart', item, 300);
+    const down = touchEvent('touchmove', item, 380);
+    touchEvent('touchend', item);
+
+    gestures.setSnap('peek');
+    touchEvent('touchstart', item, 300);
+    const up = touchEvent('touchmove', item, 220);
+    touchEvent('touchend', item);
+
+    expect(down.defaultPrevented).toBe(false);
+    expect(up.defaultPrevented).toBe(false);
+    expect(gestures.onDragEnd).not.toHaveBeenCalled();
+    gestures.detach();
+  });
+
+  it('still lets a list that does not overflow move the sheet', () => {
+    const sheet = createSheet();
+    const list = document.createElement('ul');
+    list.style.overflowY = 'auto';
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 180 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 180 });
+    const item = document.createElement('li');
+    list.append(item);
+    sheet.target('content').append(list);
+    const gestures = attach(sheet, 'peek', 200);
+
+    touchEvent('touchstart', item, 300);
+    const up = touchEvent('touchmove', item, 220);
+    touchEvent('touchend', item);
+
+    expect(up.defaultPrevented).toBe(true);
+    gestures.detach();
+  });
+
   it('never hands a horizontal swipe to the sheet', () => {
     const sheet = createSheet();
     const gestures = attach(sheet, 'full', 0);
