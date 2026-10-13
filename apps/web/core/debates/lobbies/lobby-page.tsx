@@ -42,7 +42,7 @@ import {
   notYetOpenLabel,
   remindedLabel,
 } from './lobby-format';
-import { LobbyGuestBanner } from './lobby-guest';
+import { LOBBY_GUEST_COPY, LobbyGuestBanner } from './lobby-guest';
 import {
   LobbyGuestProvider,
   type LobbyMemberPath,
@@ -325,9 +325,10 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
           </Text>
         ) : null}
         {guest ? (
-          <Text as="p" variant="footnote" color="grey-04">
-            {LOBBY_COPY.guestBeforeOpen}
-          </Text>
+          <LobbyGuestBanner
+            lobbyId={lobby.lobby_id}
+            message={{ title: LOBBY_COPY.guestBeforeOpen, detail: LOBBY_GUEST_COPY.notListening }}
+          />
         ) : null}
       </div>
     </div>

@@ -673,10 +673,21 @@ describe('DebateLobbyPage state screens', () => {
     expect(screen.getByText('Debate lobby · scheduled')).toBeInTheDocument();
     expect(screen.getByText(/^Opens at .* · in \d+ days$/)).toBeInTheDocument();
     expect(screen.getByText('No account? You can still join and listen when it opens.')).toBeInTheDocument();
-    expect(screen.queryByText(/speak, vote and debate/)).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Remind me' })).not.toBeInTheDocument();
     // The lobbies list is members only, so a visitor gets no host line.
     expect(screen.queryByText(/Hosted by/)).not.toBeInTheDocument();
+  });
+
+  it('says the account is setting up for a guest who signs in before it opens', () => {
+    mocks.guestView = { lobby: notYetOpen, claims: null, highlights: null };
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    mocks.authenticated = true;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByText('Setting up your account…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create account' })).not.toBeInTheDocument();
   });
 
   it('names the host from the lobbies list before it opens', () => {
