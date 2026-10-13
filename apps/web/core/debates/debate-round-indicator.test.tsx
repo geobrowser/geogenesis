@@ -42,9 +42,9 @@ describe('DebateRoundIndicator', () => {
   it('shows round N of the cap, one pip per round run, and highlights the current one', () => {
     const { pips } = renderIndicator(speaking(4));
 
-    expect(screen.getByText('Round 4')).toBeInTheDocument();
-    expect(screen.getByText('of 10')).toBeInTheDocument();
-    expect(screen.getByText('Round 4 of 10. 4 rebuttal rounds so far. Another round is possible.')).toBeInTheDocument();
+    expect(screen.getByText('Round 5')).toBeInTheDocument();
+    expect(screen.getByText('of 11')).toBeInTheDocument();
+    expect(screen.getByText('Round 5 of 11. 4 rebuttal rounds so far. Another round is possible.')).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', '2', '3', '4', 'next']);
     expect(document.querySelector('[data-round-pip="4"]')).toHaveClass('bg-purple');
     expect(document.querySelector('[data-round-pip="3"]')).not.toHaveClass('bg-purple');
@@ -53,15 +53,15 @@ describe('DebateRoundIndicator', () => {
   it('reads the cap from the debate rather than assuming 10', () => {
     renderIndicator(speaking(2), 3);
 
-    expect(screen.getByText('of 3')).toBeInTheDocument();
+    expect(screen.getByText('of 4')).toBeInTheDocument();
   });
 
   it('marks the cap round as the last, with no further round possible and compact pips', () => {
     const { pips } = renderIndicator(speaking(10));
 
-    expect(screen.getByText('Round 10')).toBeInTheDocument();
+    expect(screen.getByText('Round 11')).toBeInTheDocument();
     expect(screen.getByText('· last')).toBeInTheDocument();
-    expect(screen.getByText('Round 10 of 10. 10 rebuttal rounds so far. No more rounds.')).toBeInTheDocument();
+    expect(screen.getByText('Round 11 of 11. 10 rebuttal rounds so far. No more rounds.')).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', '10']);
     // Halved past five rounds so round 10 fits beside Leave on a phone.
     expect(document.querySelector('[data-round-pip="10"]')).toHaveClass('w-1.5');
@@ -71,7 +71,7 @@ describe('DebateRoundIndicator', () => {
   it('keeps the resolved round during its reveal, and drops the next pip once it resolves End', () => {
     const { pips } = renderIndicator(result(2, 'end'));
 
-    expect(screen.getByText('Round 2')).toBeInTheDocument();
+    expect(screen.getByText('Round 3')).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', '2']);
   });
 
@@ -94,7 +94,7 @@ describe('DebateRoundIndicator', () => {
 
     expect(screen.getByText('Opening')).toBeInTheDocument();
     expect(
-      screen.getByText('Opening. No rebuttal rounds yet. Round 1 is next. More rounds are possible after that.')
+      screen.getByText('Opening. No rebuttal rounds yet. Round 2 is next. More rounds are possible after that.')
     ).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', 'next']);
     expect(document.querySelector('[data-round-pip="1"]')).toHaveClass('bg-grey-03');
@@ -104,7 +104,7 @@ describe('DebateRoundIndicator', () => {
   it('draws the required round as played once it runs', () => {
     const { pips } = renderIndicator(speaking(1), 10, 1);
 
-    expect(screen.getByText('Round 1 of 10. 1 rebuttal round so far. Another round is possible.')).toBeInTheDocument();
+    expect(screen.getByText('Round 2 of 11. 1 rebuttal round so far. Another round is possible.')).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', 'next']);
     expect(document.querySelector('[data-round-pip="1"]')).toHaveClass('bg-purple');
   });
@@ -112,7 +112,7 @@ describe('DebateRoundIndicator', () => {
   it('offers no further round when the cap is only the required rounds', () => {
     const { pips } = renderIndicator(speaking(0), 1, 1);
 
-    expect(screen.getByText('Opening. No rebuttal rounds yet. Round 1 is next. No more rounds.')).toBeInTheDocument();
+    expect(screen.getByText('Opening. No rebuttal rounds yet. Round 2 is next. No more rounds.')).toBeInTheDocument();
     expect(pips).toEqual(['0', '1']);
   });
 
@@ -126,7 +126,7 @@ describe('DebateRoundIndicator', () => {
     const { pips } = renderIndicator(speaking(0), 10, 6);
 
     expect(
-      screen.getByText('Opening. No rebuttal rounds yet. Rounds 1 to 6 are next. More rounds are possible after that.')
+      screen.getByText('Opening. No rebuttal rounds yet. Rounds 2 to 7 are next. More rounds are possible after that.')
     ).toBeInTheDocument();
     expect(pips).toEqual(['0', '1', '2', '3', '4', '5', '6', 'next']);
     expect(document.querySelector('[data-round-pip="6"]')).toHaveClass('w-1.5');

@@ -11,7 +11,7 @@ import {
   useOpenRoundReveal,
   useOpenRoundRevealStep,
 } from './open-round-reveal';
-import { revealEnd, revealRebut, timedOut } from './open-rounds-fixtures';
+import { requiredRoundListening, revealEnd, revealRebut, timedOut } from './open-rounds-fixtures';
 
 afterEach(() => {
   cleanup();
@@ -30,6 +30,11 @@ describe('openRoundRevealStep', () => {
     expect(openRoundRevealStep(2_999, 'extend', 3_000)).toBe('result');
     expect(openRoundRevealStep(3_000, 'extend', 3_000)).toBe('countIn');
     expect(openRoundRevealStep(7_999, 'extend', 3_000)).toBe('countIn');
+  });
+
+  it('skips the flip when there are no picks to turn, as in a lead-in', () => {
+    expect(openRoundRevealStep(0, 'extend', 3_000, false)).toBe('result');
+    expect(openRoundRevealStep(3_000, 'extend', 3_000, false)).toBe('countIn');
   });
 
   it('stretches the flip with a longer window', () => {
@@ -186,7 +191,7 @@ describe('useOpenRoundReveal', () => {
 
   it('announces the new round to its opener as "You", and moves the counter to it', () => {
     const current = reveal({ elapsedMs: 2_000 });
-    expect(current.result).toEqual({ kind: 'round', round: 1, opener: null });
+    expect(current.result).toEqual({ kind: 'round', round: 2, opener: null });
     expect(current.localPick).toBeNull();
     expect(current.chipsHidden).toBe(true);
     expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
@@ -195,14 +200,14 @@ describe('useOpenRoundReveal', () => {
   it('names the opener to the other debater, and keeps it up through the count-in', () => {
     const current = reveal({ elapsedMs: 4_000, localSlot: 2, remote: { slot: 1, name: 'Alice' } });
     expect(current.step).toBe('countIn');
-    expect(current.result).toEqual({ kind: 'round', round: 1, opener: 'Alice' });
+    expect(current.result).toEqual({ kind: 'round', round: 2, opener: 'Alice' });
   });
 
   it("keeps the opener's announcement up while a stale payload has not brought the new round yet", () => {
     // Resolved Extend, but this payload predates the next round's turns: the room holds on the result.
     const stale = { ...revealRebut(), turn_durations_ms: [60_000, 60_000] };
     const current = reveal({ debate: stale, elapsedMs: 4_000, remainingSeconds: 0 });
-    expect(current.result).toEqual({ kind: 'round', round: 1, opener: null });
+    expect(current.result).toEqual({ kind: 'round', round: 2, opener: null });
     expect(current.chipsHidden).toBe(true);
     expect(current.holdsCountIn).toBe(true);
   });
@@ -253,5 +258,35 @@ describe('useOpenRoundReveal', () => {
     expect(current.result).toBeNull();
     expect(current.holdsEndCard).toBe(false);
     expect(current.holdsCountIn).toBe(false);
+  });
+
+  describe('the lead-in to a required round (GEO-3258)', () => {
+    const leadIn = {
+      phase: 'result' as const,
+      roundIndex: 0,
+      isFinalRound: false as const,
+      outcome: 'extend' as const,
+      resolvedAtMs: 0,
+      nextPhaseStartsAtMs: 8_000,
+      leadIn: true as const,
+    };
+    const debate = requiredRoundListening({ required_round_lead_in_ms: 8_000, extend_count_in_ms: 5_000 });
+
+    it('announces Round 2 at once, with no picks to turn', () => {
+      const current = reveal({ debate, phase: leadIn, elapsedMs: 0 });
+      expect(current.step).toBe('result');
+      expect(current.result).toEqual({ kind: 'round', round: 2, opener: null });
+      expect(current.localPick).toBeNull();
+      expect(current.remotePick).toBeNull();
+      expect(current.announcement).toBe('Round 2. You open.');
+      expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
+    });
+
+    it('counts the opener in for the end of the pause, while the other debater keeps the announcement', () => {
+      expect(reveal({ debate, phase: leadIn, elapsedMs: 3_000 })).toMatchObject({ step: 'countIn', result: null });
+      expect(
+        reveal({ debate, phase: leadIn, elapsedMs: 3_000, localSlot: 2, remote: { slot: 1, name: 'Alice' } }).result
+      ).toEqual({ kind: 'round', round: 2, opener: 'Alice' });
+    });
   });
 });

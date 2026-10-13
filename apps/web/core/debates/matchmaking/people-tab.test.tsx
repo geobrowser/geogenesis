@@ -209,7 +209,22 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: () => mocks.promptSignIn,
 }));
 
-const { PeopleTab } = await import('./people-tab');
+const { PeopleTab, formatSlot } = await import('./people-tab');
+
+describe('formatSlot', () => {
+  // Wednesday 7 Oct 2026, 10:00 local.
+  const now = new Date(2026, 9, 7, 10, 0);
+  const slot = (day: number) => new Date(2026, 9, day, 18, 0).toISOString();
+
+  it('names a day by weekday within the coming week, and adds the date beyond it', () => {
+    expect(formatSlot(slot(7), now)).toMatch(/^Today /);
+    expect(formatSlot(slot(8), now)).toMatch(/^Tomorrow /);
+    expect(formatSlot(slot(9), now)).not.toMatch(/9/);
+    // Next Thursday is not this one: the calendar offers two weeks (GEO-3220).
+    expect(formatSlot(slot(15), now)).toContain('15');
+    expect(formatSlot(slot(15), now)).not.toBe(formatSlot(slot(8), now).replace('Tomorrow', 'Thu'));
+  });
+});
 const { PERSON_SPACE_ICON_CAP } = await import('./person-space-icons');
 
 /** A real space id shape. `profile-user-them` is not one, and the profile link is gated on it. */
@@ -443,6 +458,10 @@ describe('PeopleTab', () => {
 
     expect(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' })).toHaveTextContent('2 matches');
     expect(screen.queryByRole('button', { name: /View 0 matching claims/ })).not.toBeInTheDocument();
+    // The hub's trigger keeps the unlabelled click it had; only the calendar labels its own (GEO-3220).
+    expect(screen.getByRole('button', { name: 'View 2 matching claims with Arturas' })).not.toHaveAttribute(
+      'data-geo-analytics-label'
+    );
   });
 
   it('uses singular copy for one matching claim', () => {
@@ -1352,6 +1371,7 @@ describe('PeopleTab filters', () => {
     expect(row).not.toHaveTextContent('Active in…');
 
     const trigger = within(row).getByRole('button', { name: 'View 2 active spaces' });
+    expect(trigger).not.toHaveAttribute('data-geo-analytics-label');
     fireEvent.click(trigger);
 
     const list = await screen.findByRole('list', { name: 'Active spaces' });

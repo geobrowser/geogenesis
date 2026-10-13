@@ -475,10 +475,60 @@ describe('moving a scheduled debate', () => {
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
   });
 
-  it('is not offered on a request the viewer must still answer', () => {
+  it('is not offered on a request the viewer must still answer, which offers "Choose different time"', () => {
     setup({ answerable: [request()] });
 
     expect(screen.queryByRole('button', { name: 'Reschedule' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Choose different time' })).toBeInTheDocument();
+  });
+});
+
+// The scheduling email's third answer to an invite (GEO-3232), in its words: the same move, on the
+// same week, so the other side is asked to accept the new time.
+describe('choosing a different time for an invite', () => {
+  it("opens the other debater's week to move the invite, beside Decline and Accept", async () => {
+    mocks.people = [ADA];
+    const { user } = setup({ answerable: [request()] });
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Choose different time' }));
+
+    expect(screen.getByLabelText('week of')).toHaveTextContent('user-them');
+    expect(screen.getByLabelText('week name')).toHaveTextContent('Ada');
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+    expect(screen.getByLabelText('entry')).toHaveTextContent('requests_new_time');
+    expect(mocks.respond).not.toHaveBeenCalled();
+  });
+
+  it('is offered on an admin-arranged invite, on the other debater’s week', async () => {
+    const { user } = setup({
+      answerable: [request({ invited_by_user_id: null, created_by_admin: true, proposed_by_user_id: 'user-admin' })],
+    });
+
+    await user.click(screen.getByRole('button', { name: 'Choose different time' }));
+
+    expect(screen.getByLabelText('week of')).toHaveTextContent('user-them');
+    expect(screen.getByLabelText('moving')).toHaveTextContent('request-1');
+  });
+
+  // Moving it accepts the new time on the viewer's behalf, so the card then waits on the other side
+  // and offers the accepted request's Reschedule (GEO-3233) instead.
+  it('is not offered once the invite is waiting on the other side', () => {
+    mocks.people = [ADA];
+    setup({ answerable: [request({ viewer_must_answer: false, proposed_by_user_id: 'user-me' })] });
+
+    expect(screen.queryByRole('button', { name: 'Choose different time' })).not.toBeInTheDocument();
+    expect(screen.getByText(/Not confirmed until Ada answers/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reschedule' })).toBeInTheDocument();
+  });
+
+  it('is not offered while the other debater is not known', () => {
+    setup({ answerable: [request({ participants: [{ user_id: 'user-me', accepted: null }] })] });
+
+    expect(screen.queryByRole('button', { name: 'Choose different time' })).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Accept' })).toBeInTheDocument();
   });
 });
 

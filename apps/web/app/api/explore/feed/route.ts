@@ -125,10 +125,12 @@ export async function GET(request: Request) {
     const items = feed
       ? result.items.map(item => (item.ranking ? item : { ...item, ranking: { version: feed.version } }))
       : result.items;
+    // Plain Best only: For you and an interleaving experiment are left alone, as with the fresh slot.
+    const seenApplies = seenDemotion !== null && feed?.name === 'best' && !personalized;
+    const { reserve, ...rest } = result;
     const body = {
-      ...result,
-      // Plain Best only: For you and an interleaving experiment are left alone, as with the fresh slot.
-      ...(seenDemotion && feed?.name === 'best' && !personalized ? { seenDemotion } : {}),
+      ...rest,
+      ...(seenApplies ? { seenDemotion, ...(reserve ? { reserve } : {}) } : {}),
       items,
       nextCursor: personalized ? encodePersonalizedCursor(asOf, result.nextCursor) : result.nextCursor,
     };

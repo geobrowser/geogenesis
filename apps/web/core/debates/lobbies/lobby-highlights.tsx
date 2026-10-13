@@ -206,7 +206,7 @@ export function RoomVoteTally({ tally }: { tally: DebateLobbyRoomVote['tally'] }
 }
 
 /** Highlight and room vote controls on one claim. Rendered for hosts only. */
-function LobbyClaimHostMenu({
+export function LobbyClaimHostMenu({
   lobbyId,
   claim,
   state,

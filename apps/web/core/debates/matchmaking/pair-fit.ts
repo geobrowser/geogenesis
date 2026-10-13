@@ -45,7 +45,14 @@ export const NO_SHARED_TIME_FACTOR = 0.5;
  * score (an excluded account, or one past the cap) ranks as 0.
  */
 export function combinedFit(fit: PairFitItem | undefined, sharedFreeSlots: number | undefined): number {
-  const score = fit?.score ?? 0;
+  return withSharedTime(fit?.score ?? 0, sharedFreeSlots);
+}
+
+/**
+ * Any ranking score, times NO_SHARED_TIME_FACTOR when the pair's overlap is known and empty: what
+ * fit does to gaia's score, and New match's space-narrowed order (GEO-3230) does to a match count.
+ */
+export function withSharedTime(score: number, sharedFreeSlots: number | undefined): number {
   return sharedFreeSlots === 0 ? score * NO_SHARED_TIME_FACTOR : score;
 }
 

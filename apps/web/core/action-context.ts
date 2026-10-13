@@ -91,8 +91,8 @@ export type ActionContext = {
   feed_experiment_id?: string;
   feed_exploration?: boolean;
   feed_slot?: 'fresh';
-  /** GEO-3234. The card was moved down because this visitor had already seen it. */
-  feed_seen_demoted?: boolean;
+  /** GEO-3234. How many cards this visitor had already seen were hidden from this card's page. */
+  feed_seen_hidden?: number;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -120,7 +120,7 @@ export const ACTION_CONTEXT_FIELDS = [
   'feed_experiment_id',
   'feed_exploration',
   'feed_slot',
-  'feed_seen_demoted',
+  'feed_seen_hidden',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',
