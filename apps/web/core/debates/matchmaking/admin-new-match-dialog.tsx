@@ -6,7 +6,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { SLOT_MINUTES } from '~/core/availability/blocks';
+import { SLOT_MINUTES, formatTime24, parseTime24 } from '~/core/availability/blocks';
 import { windowStart } from '~/core/availability/peer-schedule';
 import { useSearch } from '~/core/hooks/use-search';
 import { type SpaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
@@ -35,12 +35,10 @@ import {
 } from './admin-hooks';
 import {
   GMT,
-  clockValue,
   dateIn,
   dateLabels,
   instantAt,
   minutesIn,
-  minutesOfClock,
   readAdminMatchZone,
   saveAdminMatchZone,
   spanIn,
@@ -51,6 +49,7 @@ import {
 import { AdminPairAvailability } from './admin-pair-availability';
 import { useAdminPairFit, useAdminSharedFreeSlots } from './admin-pair-fit';
 import { SegmentedControl, useMinuteClock } from './debate-calendar-controls';
+import { SLOT_MS } from './debate-calendar-model';
 import { type ClaimMatch, matchesInSpaces } from './disagreement-counts';
 import { HubPillButton } from './hub-pill-button';
 import { offlinePerson } from './offline-person';
@@ -448,8 +447,7 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
                 {speakerLabel(first.person)} vs {speakerLabel(second.person)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
-                {dateLabels(dateIn(chosen.start, zone)).full} ·{' '}
-                {spanIn(chosen.start, chosen.start + SLOT_MINUTES * 60_000, zone)}
+                {dateLabels(dateIn(chosen.start, zone)).full} · {spanIn(chosen.start, chosen.start + SLOT_MS, zone)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
                 {[first, second]
@@ -464,10 +462,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
               </Text>
               {chosen.outside ? (
                 <Text as="p" variant="footnote" className="text-purple">
-                  {chosen.freeOffGrid
-                    ? 'They’re both free then, but it isn’t one of their half-hours.'
-                    : 'Not a time they’re both free.'}{' '}
-                  The invite is flagged, and the calendar tags it Off-hours.
+                  {chosen.freeOffGrid ? FREE_OFF_GRID : NOT_BOTH_FREE} The invite is flagged, and the calendar tags it
+                  Off-hours.
                 </Text>
               ) : null}
             </>
@@ -731,8 +727,12 @@ function PersonOption({
   );
 }
 
-/** The dialog's native dropdowns: day, start and zone, kept native so a long list scrolls as the OS draws it. */
-const NATIVE_SELECT_CLASS = 'h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02';
+/** The dialog's native fields: the day and zone dropdowns, kept native so a long list scrolls as the OS draws it, and the start time. */
+const NATIVE_FIELD_CLASS = 'h-9 rounded px-2.5 text-metadata shadow-inner shadow-grey-02';
+
+// Why a picked time is flagged Off-hours, in the picker and again beside Send invites.
+const NOT_BOTH_FREE = 'Not a time they’re both free.';
+const FREE_OFF_GRID = 'They’re both free then, but it isn’t one of their half-hours.';
 
 const MODE_OPTIONS = [
   { value: 'recommended', label: 'Recommended' },
@@ -789,15 +789,6 @@ function TimePicker({
     [candidate, now]
   );
   const mutual = React.useMemo(() => new Set(slots), [slots]);
-  // A custom start like 9:15 is never a shared half-hour, but they're free for all of it when it
-  // starts and ends inside shared half-hours, which tile their free time with no gaps.
-  const freeThroughout = React.useCallback(
-    (start: number) =>
-      [start, start + SLOT_MINUTES * 60_000 - 1].every(at =>
-        slots.some(slot => slot <= at && at < slot + SLOT_MINUTES * 60_000)
-      ),
-    [slots]
-  );
   // Whether a time is outside their availability is only known once the overlap has answered in
   // full; until then the override says nothing rather than flagging every time it is shown.
   const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
@@ -807,6 +798,17 @@ function TimePicker({
   const shownDays = React.useMemo(() => new Set(days), [days]);
   const onShownDay = React.useCallback((start: number) => shownDays.has(dateIn(start, zone)), [shownDays, zone]);
   const anyStart = onShownDay(anyAt) ? anyAt : null;
+  const anyInside = anyStart !== null && mutual.has(anyStart);
+  // A custom start like 9:15 is never a shared half-hour, but they're free for all of it when it
+  // starts and ends inside shared half-hours, which tile their free time with no gaps. Every shared
+  // half-hour counts here, the one already under way included: 9:15 sits in 9:00's.
+  const anyFreeOffGrid =
+    overlapKnown &&
+    anyStart !== null &&
+    !anyInside &&
+    [anyStart, anyStart + SLOT_MS - 1].every(at =>
+      (candidate?.slots ?? []).some(slot => Date.parse(slot.start) <= at && at < Date.parse(slot.start) + SLOT_MS)
+    );
   React.useEffect(() => {
     if (mode === 'recommended')
       onChoose(
@@ -817,12 +819,12 @@ function TimePicker({
         anyStart !== null && anyStart > now
           ? {
               start: anyStart,
-              outside: overlapKnown ? !mutual.has(anyStart) : null,
-              freeOffGrid: overlapKnown && !mutual.has(anyStart) && freeThroughout(anyStart),
+              outside: overlapKnown ? !anyInside : null,
+              freeOffGrid: anyFreeOffGrid,
             }
           : null
       );
-  }, [anyStart, freeThroughout, mode, mutual, now, onChoose, onShownDay, overlapKnown, selected]);
+  }, [anyFreeOffGrid, anyInside, anyStart, mode, now, onChoose, onShownDay, overlapKnown, selected]);
 
   // The zone alone wherever a label spans the fortnight; a single time carries its own offset.
   const zoneTitle = zoneName(zone);
@@ -847,7 +849,7 @@ function TimePicker({
       <select
         value={zone}
         onChange={event => onZoneChange(event.currentTarget.value)}
-        className={cx(NATIVE_SELECT_CLASS, 'max-w-[16rem]')}
+        className={cx(NATIVE_FIELD_CLASS, 'max-w-[16rem]')}
       >
         {zoneOptions.map(option => (
           <option key={option.value} value={option.value}>
@@ -1038,8 +1040,6 @@ function TimePicker({
       );
     }
   } else {
-    const inside = anyStart !== null && mutual.has(anyStart);
-    const freeOffGrid = anyStart !== null && !inside && freeThroughout(anyStart);
     const future = anyStart !== null && anyStart > now;
     body = (
       <>
@@ -1055,7 +1055,7 @@ function TimePicker({
             <select
               value={anyDay}
               onChange={event => setAnyAt(instantAt(days[Number(event.currentTarget.value)], anyMinutes, zone))}
-              className={NATIVE_SELECT_CLASS}
+              className={NATIVE_FIELD_CLASS}
             >
               {anyDay < 0 ? <option value={-1}>Pick a day</option> : null}
               {days.map((day, index) => (
@@ -1074,12 +1074,13 @@ function TimePicker({
               type="time"
               step={60}
               required
-              value={clockValue(anyMinutes)}
+              value={formatTime24(anyMinutes)}
+              // Cleared, it reads ''; keep the last whole time rather than booking midnight.
               onChange={event => {
-                const minutes = minutesOfClock(event.currentTarget.value);
-                if (minutes !== null) setAnyAt(instantAt(days[Math.max(anyDay, 0)], minutes, zone));
+                const { value } = event.currentTarget;
+                if (value) setAnyAt(instantAt(days[Math.max(anyDay, 0)], parseTime24(value), zone));
               }}
-              className={NATIVE_SELECT_CLASS}
+              className={NATIVE_FIELD_CLASS}
             />
           </label>
           <Text as="span" variant="footnote" color="grey-04" className="pb-2.5">
@@ -1098,7 +1099,7 @@ function TimePicker({
                 key={name}
                 className={cx(
                   'flex flex-col gap-0.5 rounded-lg border px-3 py-2.5',
-                  !overlapKnown || inside ? 'border-grey-02' : 'border-purple bg-purple/10'
+                  !overlapKnown || anyInside ? 'border-grey-02' : 'border-purple bg-purple/10'
                 )}
               >
                 <Text as="span" variant="metadataMedium">
@@ -1116,15 +1117,15 @@ function TimePicker({
           <Text
             as="p"
             variant="footnote"
-            className={!overlapKnown ? 'text-grey-04' : inside ? 'text-grey-04' : 'text-purple'}
+            className={!overlapKnown ? 'text-grey-04' : anyInside ? 'text-grey-04' : 'text-purple'}
           >
             {!overlapKnown
               ? 'Checking whether they’re both free then…'
-              : inside
+              : anyInside
                 ? 'They’re both free then.'
-                : freeOffGrid
-                  ? 'They’re both free then, but it isn’t one of their half-hours, so it’s flagged Off-hours.'
-                  : 'Not a time they’re both free.'}
+                : anyFreeOffGrid
+                  ? `${FREE_OFF_GRID} It’s flagged Off-hours.`
+                  : NOT_BOTH_FREE}
           </Text>
         ) : null}
       </>

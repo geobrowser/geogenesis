@@ -645,6 +645,18 @@ describe('AdminNewMatchDialog', () => {
     expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe(at(7, 9, 15));
   });
 
+  it('counts a shared half-hour already under way when a custom start falls inside it', () => {
+    vi.setSystemTime(new Date(2026, 9, 7, 9, 10));
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:15' } });
+
+    expect(screen.getAllByText(/They.re both free then, but it isn.t one of their half-hours/).length).toBe(2);
+  });
+
   it('shows both debaters’ availability, whose is whose, and where it overlaps', () => {
     mocks.availability = {
       ana: [{ start: at(7, 9), end: at(7, 11), viewer_free: false }],

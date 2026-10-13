@@ -122,16 +122,3 @@ export function dateLabels(date: string) {
     }),
   };
 }
-
-/** Minutes past midnight as a time input's `HH:MM` value. */
-export function clockValue(minutes: number): string {
-  return `${String(Math.floor(minutes / 60)).padStart(2, '0')}:${String(minutes % 60).padStart(2, '0')}`;
-}
-
-/** A time input's `HH:MM` value as minutes past midnight: `null` while it's cleared or half typed. */
-export function minutesOfClock(value: string): number | null {
-  const match = /^(\d{2}):(\d{2})/.exec(value);
-  if (!match) return null;
-  const [hours, minutes] = [Number(match[1]), Number(match[2])];
-  return hours < 24 && minutes < 60 ? hours * 60 + minutes : null;
-}
