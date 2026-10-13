@@ -5,6 +5,7 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateParticipantSummary } from '../api';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import {
   type LobbyRoomClaim,
   LobbyRoomClaimCard,
@@ -15,6 +16,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   backfill: vi.fn(),
+  rootSelectors: [] as (string | undefined)[],
   indexed: null as 'positive' | 'negative' | null,
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
@@ -22,6 +24,17 @@ const mocks = vi.hoisted(() => ({
     runId: string | null;
   },
 }));
+
+// Passes through to the real hook, recording the scroll root each card asks to be measured against.
+vi.mock('~/core/hooks/use-near-viewport', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/hooks/use-near-viewport')>();
+  return {
+    useNearViewport: (options?: Parameters<typeof actual.useNearViewport>[0]) => {
+      mocks.rootSelectors.push(options?.rootSelector);
+      return actual.useNearViewport(options);
+    },
+  };
+});
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.snapshot,
@@ -64,6 +77,7 @@ afterEach(() => {
   cleanup();
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
   mocks.indexed = null;
+  mocks.rootSelectors = [];
 });
 
 function person(name: string): DebateParticipantSummary {
@@ -101,6 +115,23 @@ function entry(viewerPosition: boolean | null, positions: LobbyRoomSide[]): Lobb
 const renderOffer = ({ viewerPosition, requestableCount }: LobbyRoomOffer) => (
   <button type="button">{`Request ${viewerPosition ? 'as agree' : 'as disagree'} (${requestableCount})`}</button>
 );
+
+// The lobby's claims column scrolls only on a desktop, and the card stays mounted across the
+// breakpoint, so it has to follow the selector it is handed rather than assume the hub's.
+describe('LobbyRoomClaimCard scroll root', () => {
+  it('measures against the scroll box the provider names, and the viewport when it names none', () => {
+    const card = (selector: string | undefined) => (
+      <HubScrollSelectorProvider value={selector}>
+        <LobbyRoomClaimCard entry={entry(true, [side(true, [], 0), side(false, [], 0)])} renderOffer={renderOffer} />
+      </HubScrollSelectorProvider>
+    );
+    const { rerender } = render(card(HUB_SCROLL_SELECTOR));
+    expect(mocks.rootSelectors.at(-1)).toBe(HUB_SCROLL_SELECTOR);
+
+    rerender(card(undefined));
+    expect(mocks.rootSelectors.at(-1)).toBeUndefined();
+  });
+});
 
 describe('LobbyRoomClaimsList', () => {
   it('offers a request and names who disagrees when someone on the other side can be asked', () => {

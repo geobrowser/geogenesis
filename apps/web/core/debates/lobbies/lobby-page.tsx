@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
@@ -18,6 +19,7 @@ import { useMatchmakingScope } from '../matchmaking/hooks';
 import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import {
@@ -582,16 +584,26 @@ function LobbyRoom({
     </HubPillButton>
   );
 
+  // On a desktop the people and the claims sit side by side, so each column scrolls on its own
+  // under a fixed header and bar; scrolling the page would carry the speakers off with the claims.
+  // A phone shows one tab at a time and keeps scrolling the page.
+  const columns = showClaims && !phone;
+  const columnScroll = columns && 'overflow-y-auto overscroll-contain';
+
   return (
     <LobbySlotsProvider value={slots.targets}>
-      <div className="flex min-h-[calc(100dvh-2.75rem)] flex-col" data-testid="debate-lobby">
+      <div
+        className={cx('flex flex-col', columns ? 'h-[calc(100dvh-2.75rem)]' : 'min-h-[calc(100dvh-2.75rem)]')}
+        data-testid="debate-lobby"
+      >
         <LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />
         {tabbed ? <LobbyPhoneTabs ids={tabIds} tab={tab} onTab={setTab} claimsMark={claimsMark} /> : null}
 
         <div
           className={cx(
             'flex-1',
-            showClaims && !phone && 'grid grid-cols-[minmax(0,1fr)_minmax(320px,420px)] items-stretch'
+            columns &&
+              'grid min-h-0 grid-cols-[minmax(0,1fr)_minmax(320px,420px)] grid-rows-[minmax(0,1fr)] items-stretch'
           )}
         >
           <section
@@ -599,7 +611,7 @@ function LobbyRoom({
               ? { role: 'tabpanel', id: tabIds.people.panel, 'aria-labelledby': tabIds.people.tab }
               : { 'aria-label': 'People in the lobby' })}
             hidden={!onPeopleTab}
-            className="flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5"
+            className={cx('flex min-w-0 flex-col gap-5 px-8 py-5 md:gap-3.5 md:px-4 md:py-3.5', columnScroll)}
           >
             <LobbyRoomStatus state={state} onRetry={onRetry} />
             {alone ? <LobbyEmptyRoom lobby={lobby} signedIn={!guest} /> : null}
@@ -635,15 +647,26 @@ function LobbyRoom({
           </section>
 
           {showClaims ? (
-            <aside
+            <motion.aside
+              // Framer measures its layout animations (the tab underline, Explore's list) through it.
+              layoutScroll
               {...(tabbed
                 ? { role: 'tabpanel', id: tabIds.claims.panel, 'aria-labelledby': tabIds.claims.tab }
                 : { 'aria-label': 'Claims in the room' })}
               hidden={!onClaimsTab}
-              className="flex min-w-0 flex-col gap-3 border-l border-grey-02 px-4 py-5 md:border-l-0 md:py-3"
+              // Its lists page and read cards against this box, only while it scrolls: a box that does
+              // not would hold every row in range at once. The provider rebuilds their observers when
+              // the breakpoint flips it, as the claims stay mounted across that.
+              data-debates-hub-scroll={columns ? '' : undefined}
+              className={cx(
+                'flex min-w-0 flex-col gap-3 border-l border-grey-02 px-4 py-5 md:border-l-0 md:py-3',
+                columnScroll
+              )}
             >
-              <LobbyClaimsArea lobby={lobby} />
-            </aside>
+              <HubScrollSelectorProvider value={columns ? HUB_SCROLL_SELECTOR : undefined}>
+                <LobbyClaimsArea lobby={lobby} />
+              </HubScrollSelectorProvider>
+            </motion.aside>
           ) : null}
         </div>
 

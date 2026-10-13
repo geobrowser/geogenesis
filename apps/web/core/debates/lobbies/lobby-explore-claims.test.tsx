@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import type { ClaimCardDefaults } from '../matchmaking/claims-tab';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { LobbyExploreClaims, exploreRoomClaim, hasDebateClaimRow } from './lobby-explore-claims';
 import type { LobbyRoomClaim, LobbyRoomOffer } from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
@@ -16,7 +17,18 @@ const mocks = vi.hoisted(() => ({
   roomRows: [] as DebateLobbyClaim[],
   requestLobbyIds: [] as string[],
   batches: [] as string[][],
+  rootSelectors: [] as (string | undefined)[],
 }));
+// Passes through to the real hook, recording the scroll root each card asks to be measured against.
+vi.mock('~/core/hooks/use-near-viewport', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/hooks/use-near-viewport')>();
+  return {
+    useNearViewport: (options?: Parameters<typeof actual.useNearViewport>[0]) => {
+      mocks.rootSelectors.push(options?.rootSelector);
+      return actual.useNearViewport(options);
+    },
+  };
+});
 
 // The tab draws whatever the lobby hands it, one card per entry.
 vi.mock('../matchmaking/claims-tab', () => ({
@@ -142,6 +154,7 @@ afterEach(() => {
   mocks.roomRows = [];
   mocks.requestLobbyIds = [];
   mocks.batches = [];
+  mocks.rootSelectors = [];
 });
 
 describe('exploreRoomClaim', () => {
@@ -172,6 +185,22 @@ describe('hasDebateClaimRow', () => {
 });
 
 describe('LobbyExploreClaims', () => {
+  // The lobby's claims column scrolls only on a desktop, and Explore stays mounted across the
+  // breakpoint, so its cards have to follow the selector they are handed rather than assume one.
+  it('measures its cards against the scroll box the provider names, and the viewport when it names none', () => {
+    mocks.entries = [exploreEntry('row-1', ENTITY)];
+    const explore = (selector: string | undefined) => (
+      <HubScrollSelectorProvider value={selector}>
+        <LobbyExploreClaims lobby={lobby(false)} />
+      </HubScrollSelectorProvider>
+    );
+    const { rerender } = render(explore(HUB_SCROLL_SELECTOR));
+    expect(mocks.rootSelectors.at(-1)).toBe(HUB_SCROLL_SELECTOR);
+
+    rerender(explore(undefined));
+    expect(mocks.rootSelectors.at(-1)).toBeUndefined();
+  });
+
   it('offers a lobby-scoped request only where someone in the room is requestable', () => {
     mocks.entries = [exploreEntry('row-1', ENTITY), exploreEntry('row-2', ENTITY_2)];
     mocks.roomRows = [roomRow('row-1', ENTITY, 1)];

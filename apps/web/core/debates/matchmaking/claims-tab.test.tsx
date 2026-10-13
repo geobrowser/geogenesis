@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
 import {
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
@@ -98,6 +99,8 @@ const mocks = vi.hoisted(() => ({
   hasNextPage: false,
   fetchNextPage: vi.fn(),
   observed: [] as Element[],
+  /** The root each observed element was measured against, `null` for the viewport. */
+  roots: new Map<Element, Element | null>(),
   triggers: [] as (() => void)[],
   /** Scrolls everything observed into view. Null-safe so a test with nothing observed still reads. */
   trigger: () => mocks.triggers.forEach(fire => fire()),
@@ -657,6 +660,7 @@ beforeEach(() => {
   mocks.spacesLoading = false;
   mocks.fetchNextPage.mockReset();
   mocks.observed = [];
+  mocks.roots = new Map();
   // Cleared with them: a trigger left over from the previous test still closes over that test's
   // observer, so a case where nothing is observed could "scroll" a sentinel that isn't there.
   mocks.triggers = [];
@@ -669,9 +673,13 @@ beforeEach(() => {
   vi.stubGlobal(
     'IntersectionObserver',
     class {
-      constructor(private readonly callback: IntersectionObserverCallback) {}
+      constructor(
+        private readonly callback: IntersectionObserverCallback,
+        private readonly options?: IntersectionObserverInit
+      ) {}
       observe(element: Element) {
         mocks.observed.push(element);
+        mocks.roots.set(element, (this.options?.root as Element | null | undefined) ?? null);
         mocks.triggers.push(() =>
           this.callback([{ isIntersecting: true, target: element } as IntersectionObserverEntry], this as never)
         );
@@ -733,6 +741,26 @@ describe('ClaimsTab', () => {
     act(() => mocks.trigger());
 
     expect(mocks.fetchNextPage).toHaveBeenCalled();
+  });
+
+  // The lobby's claims column scrolls only on a desktop, and stays mounted across the breakpoint.
+  // The sentinel pages against whatever box the provider names, and is rebuilt when that changes.
+  it('pages against the scroll box the provider names, and the viewport when it names none', async () => {
+    mocks.hasNextPage = true;
+    const inPanel = (selector: string | undefined) => (
+      <div data-debates-hub-scroll>
+        <HubScrollSelectorProvider value={selector}>
+          <ClaimsTab variant="positions" />
+        </HubScrollSelectorProvider>
+      </div>
+    );
+    const view = renderMine(inPanel(HUB_SCROLL_SELECTOR));
+    await showIndexedClaims();
+    const sentinelRoot = () => mocks.roots.get(screen.getByTestId('claims-scroll-sentinel'));
+    expect(sentinelRoot()).toBe(view.container.querySelector(HUB_SCROLL_SELECTOR));
+
+    view.rerender(inPanel(undefined));
+    await waitFor(() => expect(sentinelRoot()).toBeNull());
   });
 
   it('places no sentinel once the last page has arrived', async () => {

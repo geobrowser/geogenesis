@@ -8,6 +8,7 @@ import { normId } from '~/core/utils/norm-id';
 import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { type ClaimCardDefaults, ClaimsTab } from '../matchmaking/claims-tab';
+import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import {
   exploreRoomClaimBatches,
   useLobbyExploreRoomClaims,
@@ -66,15 +67,17 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     [hosting, onNear, renderMenu, renderOffer, roomRows]
   );
 
-  // The tab pads its own controls and list, inside the claims pane's padding. The page scrolls under
-  // the navbar (`sticky top-0 h-11`), so the controls pin below it.
+  // The tab pads its own controls and list, inside the claims pane's padding. On a desktop the pane
+  // scrolls on its own, and sticky offsets count from inside its `py-5`, so `-top-5` pins the
+  // controls flush with its top edge; on a phone the page scrolls under the navbar
+  // (`sticky top-0 h-11`), so they pin below that.
   return (
     <div className="-mx-4">
       <ClaimsTab
         variant="lobbyExplore"
         renderClaim={renderClaim}
         onVisibleClaims={onVisibleClaims}
-        stickyTopClassName="top-11"
+        stickyTopClassName="-top-5 md:top-11"
       />
     </div>
   );
@@ -93,7 +96,8 @@ function NearViewport({
   /** The list's popLayout measures the row through this. */
   ref?: React.Ref<HTMLDivElement>;
 }) {
-  const { ref, nearViewport } = useNearViewport({ sticky: false });
+  const hubScrollSelector = useHubScrollSelector();
+  const { ref, nearViewport } = useNearViewport({ sticky: false, rootSelector: hubScrollSelector });
   // Paired, as `onNear` counts cards per id.
   React.useEffect(() => {
     if (!nearViewport) return;
