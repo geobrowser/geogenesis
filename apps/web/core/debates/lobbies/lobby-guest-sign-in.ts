@@ -3,6 +3,8 @@
 import * as React from 'react';
 
 import type { AnalyticsProperties } from '~/core/analytics';
+import { SIGN_IN_MODAL } from '~/core/auth/sign-in-deep-link';
+import { useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { type PrivySignInCallOptions, usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
@@ -66,11 +68,15 @@ export function claimLobbySignInPrompt(lobbyId: string) {
  * GEO-3270. A visitor without an account can do nothing in a lobby yet, so the account prompt opens
  * as they arrive rather than behind a notice. Once per lobby per tab, so closing it and reloading
  * does not put it back; the guest banner's Log in and Create account open it again.
+ *
+ * Held while the URL carries the sign-in link, which opens its own prompt once Privy is ready and
+ * claims the lobby's as it does; nothing orders that effect before this one.
  */
 export function useLobbySignInPrompt(lobbyId: string, open: boolean) {
   const signIn = useLobbyGuestSignIn(lobbyId);
+  const signInLink = useDeepLinkParams(SIGN_IN_MODAL);
   useEffectOnceWhen(
-    open,
+    open && !signInLink.requested,
     () => {
       if (claimLobbySignInPrompt(lobbyId)) signIn({ component: 'lobby_sign_in_prompt', auth_trigger: 'page_load' });
     },

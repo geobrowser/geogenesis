@@ -5,6 +5,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   signIn: vi.fn(),
   options: undefined as { redirectTo?: string; analytics?: () => Record<string, unknown> } | undefined,
+  search: new URLSearchParams(),
+}));
+
+vi.mock('next/navigation', () => ({
+  usePathname: () => '/debate/lobbyg',
+  useSearchParams: () => mocks.search,
 }));
 
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
@@ -19,6 +25,7 @@ const { claimLobbySignInPrompt, useLobbySignInPrompt } = await import('./lobby-g
 beforeEach(() => {
   window.sessionStorage.clear();
   mocks.signIn.mockReset();
+  mocks.search = new URLSearchParams();
 });
 
 afterEach(() => cleanup());
@@ -72,5 +79,18 @@ describe('useLobbySignInPrompt', () => {
     renderHook(() => useLobbySignInPrompt('lobby-f', true));
 
     expect(mocks.signIn).not.toHaveBeenCalled();
+  });
+
+  // The link opens its own prompt once Privy is ready; which effect runs first is not fixed.
+  it('waits while the sign-in link is in the URL, without using up the lobby’s prompt', () => {
+    mocks.search = new URLSearchParams('modal=signin&via=lobby');
+    const { rerender } = renderHook(() => useLobbySignInPrompt('lobby-g', true));
+    expect(mocks.signIn).not.toHaveBeenCalled();
+    expect(claimLobbySignInPrompt('lobby-g')).toBe(true);
+    window.sessionStorage.clear();
+
+    mocks.search = new URLSearchParams();
+    rerender();
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
   });
 });
