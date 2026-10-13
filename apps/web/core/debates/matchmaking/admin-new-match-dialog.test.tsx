@@ -25,7 +25,13 @@ const mocks = vi.hoisted(() => ({
   freeSlots: new Map<string, number>(),
   // GEO-3231: each debater's own free windows, by user id.
   availability: {} as Record<string, { start: string; end: string; viewer_free: boolean }[]>,
+  // A debater's zone as their own read answers it, where it differs from the roster's: empty is no
+  // schedule. Stands in for a roster that is stale, capped or failed to load.
+  readZones: {} as Record<string, string>,
 }));
+
+const readZone = (userId: string) =>
+  mocks.readZones[userId] ?? mocks.debaters.find(debater => debater.user_id === userId)?.timezone ?? '';
 
 vi.mock('./admin-hooks', () => ({
   ADMIN_MATCH_DAYS: 14,
@@ -48,10 +54,8 @@ vi.mock('./admin-hooks', () => ({
   useAdminDebaterAvailability: (userId: string | null) =>
     userId
       ? {
-          data: {
-            with_timezone: mocks.debaters.find(debater => debater.user_id === userId)?.timezone ?? '',
-            their_slots: mocks.availability[userId] ?? [],
-          },
+          data: { with_timezone: readZone(userId), their_slots: mocks.availability[userId] ?? [] },
+          schedule: { peerHasSchedule: Boolean(readZone(userId)) },
           dataUpdatedAt: Date.now(),
           isPending: false,
           error: null,
@@ -234,6 +238,7 @@ beforeEach(() => {
     fitAnchors: [],
     freeSlots: new Map(),
     availability: {},
+    readZones: {},
     matchesKnown: true,
     debatersError: null,
   });
@@ -300,20 +305,53 @@ describe('AdminNewMatchDialog', () => {
     expect(screen.getByText('Asked Sam')).toBeInTheDocument();
   });
 
-  it('leaves shared free time unknown, not zero, when debater 1 has no availability', () => {
+  it('recommends shared times for someone the roster missed, once their own read has a schedule', () => {
+    // Sam is found by search only, as when the roster is stale, capped or failed to load.
     mocks.searchQuery = 'sam';
     mocks.searchResults = [{ id: 'sam' }];
-    mocks.fitByAnchor = { spacesam: [['spaceraj', fitItem('raj', 0.5, null)]] };
-    mocks.freeSlots = new Map([
-      ['ana', 0],
-      ['raj', 0],
-      ['leo', 0],
-    ]);
-    renderDialog();
+    mocks.readZones = { sam: 'America/New_York' };
+    mocks.overlap = {
+      viewer_timezone: 'America/New_York',
+      viewer_has_schedule: true,
+      candidates: [
+        {
+          with: 'ana',
+          both_have_schedules: true,
+          with_timezone: 'Europe/Madrid',
+          slots: [{ start: at(7, 9), end: at(7, 9, 30) }],
+          truncated: false,
+        },
+      ],
+    };
+    const { rerender } = renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
 
-    expect(screen.getByText(/Ordered by fit with Sam Patel/)).toBeInTheDocument();
-    expect(screen.queryByText(/No free time in common/)).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Recommended' })).toBeChecked();
+    expect(screen.queryByText(/hasn.t set availability/)).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { pressed: false }).some(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))
+    ).toBe(true);
+  });
+
+  it('says someone has no availability when their own read says so, whatever the roster had', () => {
+    // Raj was in the roster, then cleared his schedule.
+    mocks.readZones = { raj: '' };
+    mocks.overlap = {
+      viewer_timezone: 'Europe/Madrid',
+      viewer_has_schedule: true,
+      candidates: [{ with: 'raj', both_have_schedules: false, with_timezone: '', slots: [], truncated: false }],
+    };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    expect(screen.getByRole('radio', { name: 'Pick any time' })).toBeChecked();
+    expect(screen.getByText('Raj hasn’t set availability.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Recommended' }));
+    expect(screen.getByText(/Raj hasn.t set availability, so there.s no shared time/)).toBeInTheDocument();
+    expect(screen.queryByText(/never overlaps/)).not.toBeInTheDocument();
   });
 
   it('says whether the availability request went out', async () => {

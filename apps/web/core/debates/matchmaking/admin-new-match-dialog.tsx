@@ -153,7 +153,10 @@ export function AdminNewMatchDialog({ open, onOpenChange, openerRef, onSent }: P
   );
 }
 
-/** A debater picked, and whether they have set availability, which decides how a time is chosen. */
+/**
+ * A debater picked, and whether the roster had them with availability: a guess, the roster being a
+ * cached, capped list that may not have loaded, which their own read replaces once it answers.
+ */
 type Picked = { userId: string; person: DebatePerson; hasAvailability: boolean };
 
 function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note: string) => void }) {
@@ -208,9 +211,7 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
   const ranking = first !== null && facts.matchesKnown;
   const rosterProfileIds = React.useMemo(() => rosterPeople.map(person => person.profile_space_id), [rosterPeople]);
   const fit = useAdminPairFit(first ? first.person.profile_space_id : null, rosterProfileIds);
-  // Measured from someone with no schedule, everyone would share no time with them, and every row
-  // would say so: unknown instead, which costs nobody anything in the order.
-  const freeSlots = useAdminSharedFreeSlots(first?.hasAvailability ? first.userId : null, availableIds);
+  const freeSlots = useAdminSharedFreeSlots(first ? first.userId : null, availableIds);
   const wanted = React.useMemo(() => new Set(spaceIds.map(normId)), [spaceIds]);
   const narrowed = wanted.size > 0;
   const fitRanking = first !== null && fit.available && !narrowed;
@@ -781,9 +782,8 @@ function TimePicker({
   /** Asks these people to set or widen their availability. */
   onRequest: (userIds: string[]) => void;
 }) {
-  // Without availability on both sides there is nothing to recommend, so the override is the start.
-  const unset = [first, second].filter((person): person is Picked => person !== null && !person.hasAvailability);
-  const [mode, setMode] = React.useState<'recommended' | 'any'>(unset.length > 0 ? 'any' : 'recommended');
+  // Null until the admin picks a mode: until then it follows what is known about their availability.
+  const [pickedMode, setMode] = React.useState<'recommended' | 'any' | null>(null);
   const [selected, setSelected] = React.useState<number | null>(null);
   // Counted in the picked zone: in GMT, an admin west of it can still be on yesterday.
   const days = React.useMemo(() => zoneDays(Date.now(), zone, ADMIN_MATCH_DAYS), [zone]);
@@ -802,6 +802,14 @@ function TimePicker({
   const overlap = useAdminPairOverlap(first?.userId ?? null, second?.userId ?? null);
   const firstAvailability = useAdminDebaterAvailability(first && second ? first.userId : null);
   const secondAvailability = useAdminDebaterAvailability(first && second ? second.userId : null);
+  // Who has set no availability: each one's own read once it answers, the roster's guess before.
+  const firstUnset = !(firstAvailability.schedule?.peerHasSchedule ?? first?.hasAvailability);
+  const secondUnset = !(secondAvailability.schedule?.peerHasSchedule ?? second?.hasAvailability);
+  const unset = [first && firstUnset ? first : null, second && secondUnset ? second : null].filter(
+    (person): person is Picked => person !== null
+  );
+  // Without availability on both sides there is nothing to recommend, so the override is the start.
+  const mode = pickedMode ?? (unset.length > 0 ? 'any' : 'recommended');
   const candidate = overlap.data?.candidates[0];
   // The roster's zone, the one the footer shows too; the overlap's only for anyone it lacks.
   const firstZone = (first && zoneOf(first.userId)) || overlap.data?.viewer_timezone || undefined;
@@ -1128,7 +1136,7 @@ function TimePicker({
           name: a,
           // Absent only on geo-chat builds before #134: nothing known, rather than nothing free.
           slots: firstAvailability.data?.their_slots ?? null,
-          unset: !first.hasAvailability,
+          unset: firstUnset,
           knownFrom: knownFrom(firstAvailability),
           pending: firstAvailability.isPending,
           error: Boolean(firstAvailability.error),
@@ -1137,7 +1145,7 @@ function TimePicker({
         second={{
           name: b,
           slots: secondAvailability.data?.their_slots ?? null,
-          unset: !second.hasAvailability,
+          unset: secondUnset,
           knownFrom: knownFrom(secondAvailability),
           pending: secondAvailability.isPending,
           error: Boolean(secondAvailability.error),
