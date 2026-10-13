@@ -53,6 +53,17 @@ export function zoneLabel(zone: string, at: number): string {
   return name === 'GMT' ? name : `${name} (${tzAbbreviation(zone, at)})`;
 }
 
+/**
+ * `3:00 PM – 3:30 PM GMT`: a span in `zone`, named once. Where the clocks change inside it, each
+ * end gets its own offset: `1:30 AM London (GMT+1) – 1:00 AM London (GMT)`.
+ */
+export function spanIn(start: number, end: number, zone: string): string {
+  const [from, to] = [zoneLabel(zone, start), zoneLabel(zone, end)];
+  return from === to
+    ? `${timeIn(start, zone)} – ${timeIn(end, zone)} ${from}`
+    : `${timeIn(start, zone)} ${from} – ${timeIn(end, zone)} ${to}`;
+}
+
 /** `2026-10-06`: the date `at` falls on in `zone`. */
 export function dateIn(at: number, zone: string): string {
   return zonedClock(at, zone).date;

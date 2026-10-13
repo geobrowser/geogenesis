@@ -559,6 +559,39 @@ describe('AdminNewMatchDialog', () => {
     expect(screen.getByText('−30m')).toBeInTheDocument();
   });
 
+  it('gives each end of a slot the offset it has, when the clocks change inside it', () => {
+    // 1:30 AM BST on 25 October ends at 1:00 AM GMT: summer time ends at 2:00 AM BST.
+    vi.setSystemTime(new Date('2026-10-20T09:00:00Z'));
+    window.localStorage.setItem('geogenesis.debates.admin-match-zone.v1', 'Europe/London');
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(document.querySelector(`[data-start="${Date.parse('2026-10-25T00:30:00Z')}"]`)!);
+
+    expect(screen.getByText(/Sun, Oct 25 · 1:30 AM London \(GMT\+1\) – 1:00 AM London \(GMT\)$/)).toBeInTheDocument();
+  });
+
+  it('drops a recommended time a zone change moves off the days shown', () => {
+    // 10:00 PM on the 19th in Kiritimati, the last day shown there, is the 19th's small hours in
+    // Los Angeles: a day past the last one shown.
+    vi.setSystemTime(new Date('2026-10-06T00:00:00Z'));
+    window.localStorage.setItem('geogenesis.debates.admin-match-zone.v1', 'Pacific/Kiritimati');
+    mocks.debaters[0].timezone = 'America/Los_Angeles';
+    (mocks.overlap as { candidates: { slots: unknown[] }[] }).candidates[0].slots = [
+      { start: '2026-10-19T08:00:00Z', end: '2026-10-19T08:30:00Z' },
+    ];
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(screen.getByRole('button', { name: /^10:00 PM Kiritimati/ }));
+    expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Time zone' }), {
+      target: { value: 'America/Los_Angeles' },
+    });
+    expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
+  });
+
   describe('changing the time zone with Pick any time open', () => {
     beforeEach(() => {
       vi.setSystemTime(new Date('2026-10-06T09:20:00Z'));

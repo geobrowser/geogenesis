@@ -39,6 +39,7 @@ import {
   minutesIn,
   readAdminMatchZone,
   saveAdminMatchZone,
+  spanIn,
   wallTime,
   zoneDays,
   zoneLabel,
@@ -396,8 +397,8 @@ function NewMatchBody({ onClose, onSent }: { onClose: () => void; onSent: (note:
                 {speakerLabel(first.person)} vs {speakerLabel(second.person)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
-                {dateLabels(dateIn(chosen.start, zone)).full} · {timeIn(chosen.start, zone)} –{' '}
-                {timeIn(chosen.start + SLOT_MINUTES * 60_000, zone)} {zoneLabel(zone, chosen.start)}
+                {dateLabels(dateIn(chosen.start, zone)).full} ·{' '}
+                {spanIn(chosen.start, chosen.start + SLOT_MINUTES * 60_000, zone)}
               </Text>
               <Text as="p" variant="footnote" color="grey-04">
                 {[first, second]
@@ -696,18 +697,23 @@ function TimePicker({
   // full; until then the override says nothing rather than flagging every time it is shown.
   const overlapKnown = overlap.data !== undefined && !candidate?.truncated;
 
-  // Off the end of the days a zone change can push it to, it is no choice at all.
-  const anyStart = anyDay >= 0 ? anyAt : null;
+  // A time off the days shown, where a zone change can push either kind of pick, is no choice at
+  // all: neither its chip nor its strip cell is on screen to say what would be sent.
+  const shownDays = React.useMemo(() => new Set(days), [days]);
+  const onShownDay = React.useCallback((start: number) => shownDays.has(dateIn(start, zone)), [shownDays, zone]);
+  const anyStart = onShownDay(anyAt) ? anyAt : null;
   React.useEffect(() => {
     if (mode === 'recommended')
-      onChoose(selected !== null && selected > now ? { start: selected, outside: false } : null);
+      onChoose(
+        selected !== null && selected > now && onShownDay(selected) ? { start: selected, outside: false } : null
+      );
     else
       onChoose(
         anyStart !== null && anyStart > now
           ? { start: anyStart, outside: overlapKnown ? !mutual.has(anyStart) : null }
           : null
       );
-  }, [anyStart, mode, mutual, now, onChoose, overlapKnown, selected]);
+  }, [anyStart, mode, mutual, now, onChoose, onShownDay, overlapKnown, selected]);
 
   // The zone alone wherever a label spans the fortnight; a single time carries its own offset.
   const zoneTitle = zoneName(zone);
