@@ -98,6 +98,8 @@ import {
   openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundLastWord,
+  openRoundLeadInAfterTurn,
+  openRoundsRequiredRebuttalRounds,
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
 import { captureOpenRoundPickSet, useOpenRoundsOutcomeAnalytics } from '~/core/debates/open-rounds-analytics';
@@ -3246,6 +3248,7 @@ function DebateRecordingModal({
               // Once the new round is announced, the counter moves to it.
               phase={reveal.announcedRoundPhase ?? countdown.openRounds}
               maxRounds={debate.open_rounds.max_rebuttal_rounds}
+              requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
             />
           )}
           <RecordingCircleButton
@@ -3796,6 +3799,11 @@ export function localTurnStartsInSeconds(
   }
 
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
+  // A required round's lead-in follows this turn and counts its opener in itself, so counting them in
+  // over this turn's end as well, or over its hand-off when it ends early, would count twice.
+  if (countdown.openRounds?.phase === 'speaking' && openRoundLeadInAfterTurn(debate, countdown.turnIndex) > 0) {
+    return null;
+  }
   if (countdown.yieldingSlot !== null) {
     return countdown.incomingSlot === localSlot ? countdown.remainingSeconds : null;
   }

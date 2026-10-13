@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   searchResults: [] as { id: string }[],
   overlap: undefined as unknown,
   matchesByAnchor: {} as Record<string, [string, unknown[]][]>,
+  debateSpacesByPerson: new Map<string, string[]>(),
   matchesKnown: true,
   anchors: [] as (string | null | undefined)[],
   create: vi.fn(),
@@ -77,18 +78,58 @@ vi.mock('./use-person-facts', () => ({
       matchesKnown: Boolean(anchorProfileSpaceId) && mocks.matchesKnown,
       matchAnalysis: {
         byProfile: new Map(anchorProfileSpaceId ? (mocks.matchesByAnchor[anchorProfileSpaceId] ?? []) : []),
+        byProfileAndSpace: new Map(
+          (anchorProfileSpaceId ? (mocks.matchesByAnchor[anchorProfileSpaceId] ?? []) : []).map(([profile, list]) => {
+            const bySpace = new Map<string, unknown[]>();
+            for (const item of list as { spaceId: string }[])
+              bySpace.set(item.spaceId, [...(bySpace.get(item.spaceId) ?? []), item]);
+            return [profile, bySpace];
+          })
+        ),
       },
+      matchingSpaceIds: [],
+      matchingClaimNamesById: new Map([
+        ['claim0', 'Nuclear is green'],
+        ['claim1', 'Bitcoin is money'],
+      ]),
+      matchingClaimsLoading: false,
       records: new Map(),
-      debateSpacesByPerson: new Map(),
+      debateSpacesByPerson: mocks.debateSpacesByPerson,
       spaceActivityUnavailable: false,
       publishableSpacesPending: false,
       personRecordsPending: false,
     };
   },
 }));
-vi.mock('./space-filter-pills', () => ({ SpaceFilterPills: () => null }));
+// One pill per space, toggling it the way the real menu does.
+vi.mock('./space-filter-pills', () => ({
+  SpaceFilterPills: ({ onSpaceToggle }: { onSpaceToggle: (spaceId: string) => void }) => (
+    <>
+      {['crypto', 'energy'].map(spaceId => (
+        <button key={spaceId} type="button" onClick={() => onSpaceToggle(spaceId)}>
+          Space {spaceId}
+        </button>
+      ))}
+    </>
+  ),
+}));
 vi.mock('./use-space-filter-selection', () => ({
-  useSpaceFilterMenu: () => ({ facetSpaces: [], onSpaceToggle: vi.fn(), onSpacesClear: vi.fn() }),
+  useSpaceFilterMenu: ({ spaceIds, setSpaceIds }: { spaceIds: string[]; setSpaceIds: (next: string[]) => void }) => ({
+    facetSpaces: [],
+    onSpaceToggle: (spaceId: string) =>
+      setSpaceIds(spaceIds.includes(spaceId) ? spaceIds.filter(id => id !== spaceId) : [...spaceIds, spaceId]),
+    onSpacesClear: vi.fn(),
+  }),
+}));
+vi.mock('~/core/hooks/use-space-labels', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/hooks/use-space-labels')>()),
+  useSpaceLabels: () => ({ labelsById: new Map() }),
+}));
+vi.mock('./person-space-icons', () => ({ PersonSpaceIcon: () => null }));
+vi.mock('~/design-system/prefetch-link', () => ({
+  PrefetchLink: ({ children, prefetch: _prefetch, ...props }: React.ComponentProps<'a'> & { prefetch?: boolean }) => (
+    <a {...props}>{children}</a>
+  ),
 }));
 vi.mock('./person-record-line', () => ({
   PersonRecordLine: ({ match }: { match?: React.ReactNode }) => <>{match}</>,
@@ -116,7 +157,14 @@ const fitItem = (userId: string, score: number, reason: unknown) => ({
   disagreeing: (reason as { kind?: string } | null)?.kind === 'disagree',
   reason,
 });
-const match = (n: number) => Array.from({ length: n }, (_, index) => ({ claimId: `claim-${index}` }));
+const match = (n: number, spaceId = 'energy') =>
+  Array.from({ length: n }, (_, index) => ({
+    claimId: `claim-${index}`,
+    spaceId,
+    responseKind: 'stance',
+    viewerPosition: true,
+    personPosition: false,
+  }));
 
 function renderDialog(onSent = vi.fn()) {
   const view = render(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={onSent} />);
@@ -164,6 +212,7 @@ beforeEach(() => {
         ['spaceleo', match(4)],
       ],
     },
+    debateSpacesByPerson: new Map(),
     anchors: [],
     fitByAnchor: {},
     fitAnchors: [],
@@ -211,7 +260,42 @@ describe('AdminNewMatchDialog', () => {
       fireEvent.click(screen.getByRole('button', { name: 'Request availability from Sam Patel' }));
     });
     expect(mocks.prompt).toHaveBeenCalledWith('sam');
-    expect(screen.getByText('No email on file')).toBeInTheDocument();
+    expect(screen.getByText(/No email on file/)).toBeInTheDocument();
+  });
+
+  it.each([
+    ['disabled_by_preference', /Email turned off by them/],
+    ['channel_off', /Email delivery is off/],
+  ])('settles on %s without offering a resend', async (outcome, text) => {
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    mocks.prompt.mockResolvedValueOnce({ sent: false, outcome });
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Request availability from Sam Patel' }));
+    });
+    expect(screen.getByText(text)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry|Request availability/ })).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['failed', /Email failed to send/],
+    ['rate_limited', /too many emails to them this hour/],
+  ])('offers Retry after %s, and stops once it is sent', async (outcome, text) => {
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    mocks.prompt.mockResolvedValueOnce({ sent: false, outcome }).mockResolvedValueOnce({ sent: true, outcome: 'sent' });
+    renderDialog();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Request availability from Sam Patel' }));
+    });
+    expect(screen.getByText(text)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Retry requesting availability from Sam Patel' }));
+    });
+    expect(mocks.prompt).toHaveBeenCalledTimes(2);
+    expect(screen.getByText('Request sent')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Retry/ })).not.toBeInTheDocument();
   });
 
   it('ranks everyone by matches with debater 1 once picked', () => {
@@ -278,6 +362,132 @@ describe('AdminNewMatchDialog', () => {
     expect(screen.queryByText(/Disagrees with|Shares Ana|No free time in common/)).not.toBeInTheDocument();
   });
 
+  it('lists the claims behind a count, with each debater’s side', () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    const toggle = screen.getByRole('button', { name: /4 matches with Ana/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+
+    const claims = screen.getByRole('list', { name: 'Matching claims: Ana and Leo' });
+    const items = within(claims).getAllByRole('listitem');
+    expect(items).toHaveLength(4);
+    expect(items[0]).toHaveTextContent('Nuclear is green');
+    expect(items[0]).toHaveTextContent(/Ana:\s*Agree/);
+    expect(items[0]).toHaveTextContent(/Leo:\s*Disagree/);
+    // A new tab, so following a claim never loses the match being built.
+    expect(within(items[0]).getByRole('link')).toHaveAttribute('target', '_blank');
+
+    fireEvent.click(toggle);
+    expect(screen.queryByRole('list', { name: /Matching claims/ })).not.toBeInTheDocument();
+  });
+
+  it('narrows the counts, the claims and the order to the selected spaces', () => {
+    mocks.matchesByAnchor = {
+      spaceana: [
+        ['spaceraj', match(1, 'crypto')],
+        ['spaceleo', match(4, 'energy')],
+      ],
+    };
+    mocks.debateSpacesByPerson = new Map([
+      ['spaceraj', ['crypto', 'energy']],
+      ['spaceleo', ['crypto', 'energy']],
+    ]);
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    expect(people()[0]).toHaveTextContent('Leo Okafor');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Space crypto' }));
+
+    expect(screen.getByText('Ordered by matches with Ana Ruiz in the selected spaces, most first')).toBeInTheDocument();
+    const rows = people();
+    expect(rows[0]).toHaveTextContent('Raj Mehta');
+    expect(rows[0]).toHaveTextContent('1 match with Ana');
+    // Four matches overall, none in Crypto: zero, and nothing to open.
+    expect(rows[1]).toHaveTextContent('Leo Okafor');
+    expect(rows[1]).toHaveTextContent('0 matches with Ana');
+    expect(within(rows[1]).queryByRole('button', { name: /matches with Ana/ })).not.toBeInTheDocument();
+
+    fireEvent.click(within(rows[0]).getByRole('button', { name: /1 match with Ana/ }));
+    expect(
+      within(screen.getByRole('list', { name: 'Matching claims: Ana and Raj' })).getAllByRole('listitem')
+    ).toHaveLength(1);
+  });
+
+  it('still counts shared free time while spaces are selected', () => {
+    mocks.matchesByAnchor = {
+      spaceana: [
+        ['spaceraj', match(2, 'crypto')],
+        ['spaceleo', match(3, 'crypto')],
+      ],
+    };
+    mocks.debateSpacesByPerson = new Map([
+      ['spaceraj', ['crypto']],
+      ['spaceleo', ['crypto']],
+    ]);
+    mocks.freeSlots = new Map([
+      ['raj', 4],
+      ['leo', 0],
+    ]);
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Space crypto' }));
+
+    // Leo's three halve below Raj's two: a pair with no time in common can't be booked.
+    const rows = people();
+    expect(rows[0]).toHaveTextContent('Raj Mehta');
+    expect(rows[1]).toHaveTextContent('Leo Okafor');
+    expect(rows[1]).toHaveTextContent('No free time in common');
+  });
+
+  it('closes a candidate’s claims when debater 1 changes', () => {
+    mocks.matchesByAnchor = {
+      spaceana: [['spaceleo', match(4)]],
+      spaceraj: [['spaceleo', match(2)]],
+    };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: /4 matches with Ana/ }));
+    expect(screen.getByRole('list', { name: 'Matching claims: Ana and Leo' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    expect(screen.getByRole('button', { name: /2 matches with Raj/ })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('list', { name: /Matching claims/ })).not.toBeInTheDocument();
+  });
+
+  it('sets pair fit aside while spaces are selected', () => {
+    mocks.matchesByAnchor = {
+      spaceana: [
+        ['spaceraj', match(1, 'crypto')],
+        ['spaceleo', match(4, 'energy')],
+      ],
+    };
+    mocks.debateSpacesByPerson = new Map([
+      ['spaceraj', ['crypto']],
+      ['spaceleo', ['crypto']],
+    ]);
+    mocks.fitByAnchor = {
+      spaceana: [
+        ['spaceleo', fitItem('spaceleo', 0.9, { kind: 'disagree', claimId: 'claim-0', name: 'Nuclear is green' })],
+        ['spaceraj', fitItem('spaceraj', 0.1, null)],
+      ],
+    };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    expect(people()[0]).toHaveTextContent('Leo Okafor');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Space crypto' }));
+
+    // gaia scores the pair across every space; Leo's fit is a disagreement filtered out here.
+    expect(people()[0]).toHaveTextContent('Raj Mehta');
+    expect(screen.queryByText(/Disagrees with Ana/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Ordered by fit/)).not.toBeInTheDocument();
+  });
+
   it('offers their shared half-hours with both clocks, and sends the invites for the one picked', () => {
     const { onSent } = renderDialog();
     fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
@@ -332,7 +542,8 @@ describe('AdminNewMatchDialog', () => {
       fireEvent.click(ask);
     });
     expect(mocks.prompt.mock.calls.map(([userId]) => userId)).toEqual(['ana', 'raj']);
-    expect(screen.getByText('Asked Ana · Raj: No email on file')).toBeInTheDocument();
+    expect(screen.getByText('Asked Ana')).toBeInTheDocument();
+    expect(screen.getByText(/Raj: No email on file/)).toBeInTheDocument();
   });
 
   it('flags nothing in Pick any time until their shared times are known', () => {

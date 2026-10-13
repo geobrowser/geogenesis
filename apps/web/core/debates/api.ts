@@ -319,6 +319,20 @@ export type DebateOpenRounds = {
    * geo-chat that predates it, which reads as no count-in.
    */
   extend_count_in_ms?: number;
+  /**
+   * Rebuttal rounds every debate plays: rounds `1..=required_rebuttal_rounds` are appended with the
+   * opening, the rounds before the last of them run straight on, and the first Extend / End pick
+   * follows the last of them. Snapshotted per debate like the cap, and absent from a geo-chat that
+   * predates it, which reads as `0`: the opening ends on a pick, as it always did.
+   */
+  required_rebuttal_rounds?: number;
+  /**
+   * The pause before each required round's first turn, in which the room announces the round and
+   * counts its opener in, as it does after an Extend but with no picks to reveal. Snapshotted per
+   * debate, and absent from a geo-chat that predates it, which reads as `0`: the required round
+   * starts the moment the round before it ends.
+   */
+  required_round_lead_in_ms?: number;
   /** The round this block describes. In `result` it is the round that just resolved. */
   round_index: number;
   phase: OpenRoundsPhase;
@@ -429,6 +443,8 @@ export type DebateRematchRequest = {
   turn_format_id: string;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
+  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  required_rebuttal_rounds?: number | null;
   created_at: string;
   expires_at: string;
 };
@@ -862,6 +878,8 @@ export type DebateRequest = {
   turn_format_id: string | null;
   /** The Open rounds cap decided when the request was made (GEO-3201). Present only for `open_rounds`. */
   max_rebuttal_rounds?: number | null;
+  /** The rebuttal rounds that run before the first pick, decided with the cap. Absent reads as `0`. */
+  required_rebuttal_rounds?: number | null;
   created_at: string;
   /** Fixed for the lifetime of the request, even as it advances between recipients. */
   expires_at: string;
@@ -2052,8 +2070,19 @@ export type ScheduledDebateRequest = {
   outside_availability?: boolean;
 };
 
+/** An admin asking the viewer to add availability (GEO-3228); it lapses once they add some. */
+export type AvailabilityRequest = {
+  /** `no_availability`: nothing set yet. `more_times`: set, but it overlaps with nobody. */
+  kind: 'no_availability' | 'more_times';
+  requested_by_name: string | null;
+  requested_at: string;
+  expires_at: string;
+};
+
 export type ScheduledDebateRequestsResponse = {
   requests: ScheduledDebateRequest[];
+  /** Absent from a geo-chat that predates it. */
+  availability_requests?: AvailabilityRequest[];
 };
 
 /** Accepting can fail without being an error: the slot went while you were deciding. */
@@ -2194,8 +2223,19 @@ export async function createAdminScheduledDebate(
   });
 }
 
-/** `sent: false` means they have no email on file, so nothing went out. */
-export type AdminAvailabilityPromptResponse = { sent: boolean };
+/** What became of the email, as geo-notifications decided it. `no_email` is only for no address on file. */
+export type AvailabilityPromptOutcome =
+  'sent' | 'disabled_by_preference' | 'rate_limited' | 'channel_off' | 'failed' | 'no_email';
+
+/**
+ * `outcome` is absent from a geo-chat that predates GEO-3228, which answered `sent` alone. The person
+ * can also see the request on their Requests tab whatever happened to the email.
+ */
+export type AdminAvailabilityPromptResponse = {
+  sent: boolean;
+  outcome?: AvailabilityPromptOutcome;
+  variant?: 'no_availability' | 'more_times';
+};
 
 /** Emails someone asking them to set their availability (GEO-2942). Admins only. */
 export async function sendAdminAvailabilityPrompt(
