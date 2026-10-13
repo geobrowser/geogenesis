@@ -36,12 +36,16 @@ const mocks = vi.hoisted(() => ({
   endCardVote: vi.fn(),
   endCardReplay: vi.fn(),
   portalledClick: vi.fn(),
+  isMobileLayout: false,
 }));
+
+vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobileLayout }));
 
 type ObserverRecord = {
   callback: IntersectionObserverCallback;
   elements: Set<Element>;
   instance: IntersectionObserver;
+  options?: IntersectionObserverInit;
 };
 
 let observers: ObserverRecord[] = [];
@@ -81,10 +85,12 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
     DebateFeedPlayer: ({
       debate,
       active,
+      releaseMedia,
       reducedOverlays,
     }: {
       debate: Debate;
       active: boolean;
+      releaseMedia?: boolean;
       reducedOverlays?: boolean;
     }) => (
       <>
@@ -93,6 +99,7 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
           data-testid="player"
           data-debate={debate.id}
           data-active={active}
+          data-release-media={releaseMedia ? 'true' : 'false'}
           data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
           onClick={mocks.playerToggle}
         />
@@ -213,6 +220,7 @@ beforeEach(() => {
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
   mocks.withEndCard = false;
+  mocks.isMobileLayout = false;
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -221,8 +229,8 @@ beforeEach(() => {
     readonly thresholds = [0.6];
     private readonly record: ObserverRecord;
 
-    constructor(callback: IntersectionObserverCallback) {
-      this.record = { callback, elements: new Set(), instance: this };
+    constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+      this.record = { callback, elements: new Set(), instance: this, options };
       observers.push(this.record);
     }
 
@@ -255,6 +263,23 @@ afterEach(() => {
 function intersectAll(ratio: number) {
   act(() => {
     for (const record of observers) {
+      for (const element of record.elements) {
+        record.callback(
+          [{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
+          record.instance
+        );
+      }
+    }
+  });
+}
+
+/**
+ * Only the card's own on-screen observer, leaving the near-viewport window (`rootMargin`) where it
+ * is: a card scrolled just off screen is still in the look-ahead band and keeps its player mounted.
+ */
+function intersectOnScreen(ratio: number) {
+  act(() => {
+    for (const record of observers.filter(candidate => !candidate.options?.rootMargin)) {
       for (const element of record.elements) {
         record.callback(
           [{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
@@ -383,6 +408,52 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.4);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  describe('releasing media nobody can see', () => {
+    function renderOnScreen() {
+      mocks.debateQuery = { data: watchableDebate(), isError: false };
+      mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+      renderCard();
+      intersectAll(0.7);
+      return () => screen.getByTestId('player').getAttribute('data-release-media');
+    }
+
+    it('detaches the recordings behind an open sheet and reattaches them when it closes', () => {
+      const releaseMedia = renderOnScreen();
+      expect(releaseMedia()).toBe('false');
+
+      let closeSheet = () => {};
+      act(() => {
+        closeSheet = lockMobileSheetDocumentOverscroll();
+      });
+      try {
+        expect(releaseMedia()).toBe('true');
+      } finally {
+        act(() => closeSheet());
+      }
+      expect(releaseMedia()).toBe('false');
+    });
+
+    it('on a phone, detaches a card scrolled off screen while it waits in the look-ahead band', () => {
+      mocks.isMobileLayout = true;
+      const releaseMedia = renderOnScreen();
+      expect(releaseMedia()).toBe('false');
+
+      intersectOnScreen(0);
+      // Still mounted, URLs kept, but no decoder or buffered media.
+      expect(releaseMedia()).toBe('true');
+
+      intersectOnScreen(0.2);
+      expect(releaseMedia()).toBe('false');
+    });
+
+    it('keeps an off-screen card loaded on desktop, where the look-ahead keeps the next card instant', () => {
+      const releaseMedia = renderOnScreen();
+
+      intersectOnScreen(0);
+      expect(releaseMedia()).toBe('false');
+    });
   });
 
   describe('while a mobile sheet is open over the feed', () => {

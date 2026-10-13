@@ -17,6 +17,7 @@ import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
 import { useCoveredByMobileSheet } from '~/core/state/mobile-sheet-cover';
@@ -169,11 +170,15 @@ export function DebateExploreFeedCard({
   // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
   // a ratio reported exactly at a threshold is the normal case, not an edge case.
   const [active, setActive] = React.useState(false);
+  // Any part of the card on screen. The observer reports crossing in and out of view as well as
+  // its two thresholds, so this needs no threshold of its own.
+  const [onScreen, setOnScreen] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
+          setOnScreen(entry.isIntersecting);
           setActive(current => {
             if (!entry.isIntersecting) return false;
             if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
@@ -196,6 +201,12 @@ export function DebateExploreFeedCard({
   // On a phone the side panel (and the other sheets) covers the feed. Cards behind it pause rather
   // than keep decoding under it; cards inside it, like a profile's Activity gallery, still play.
   const coveredBySheet = useCoveredByMobileSheet();
+  // Paused video still holds its decoders and buffered frames, and on a phone that adds up to a
+  // reloaded tab. A card nobody can see keeps its signed URLs, so it reattaches quickly, but not
+  // its media (GEO-3067's `releaseMedia`). Desktop keeps off-screen cards loaded so the next one
+  // starts at once.
+  const isMobileLayout = useIsMobileLayout();
+  const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -404,6 +415,7 @@ export function DebateExploreFeedCard({
             <DebateCardVideos
               debate={readyDebate}
               active={active && playbackAllowed && !coveredBySheet}
+              releaseMedia={releaseMedia}
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
             />
@@ -462,11 +474,13 @@ export function DebateExploreFeedCard({
 const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
   active,
+  releaseMedia,
   reducedOverlays,
   onOpenClaims,
 }: {
   debate: Debate;
   active: boolean;
+  releaseMedia: boolean;
   reducedOverlays: boolean;
   onOpenClaims: () => void;
 }) {
@@ -475,6 +489,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
       debate={debate}
       active={active}
       preload
+      releaseMedia={releaseMedia}
       reducedOverlays={reducedOverlays}
       onOpenClaims={onOpenClaims}
     />
