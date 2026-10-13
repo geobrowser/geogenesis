@@ -1,12 +1,11 @@
 /** `calendar` is the full-screen week everyone's free time is drawn on (GEO-3152). */
-export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'calendar';
+export type DebateAnalyticsSurface = 'hub' | 'rematch' | 'profile-debates' | 'calendar' | 'lobby';
 /**
  * Surfaces with actions but no filters. The last four are availability and scheduling's own
  * dialogs and prompts, which open from the hub and from outside it alike.
  */
 export type DebateActionAnalyticsSurface =
   | DebateAnalyticsSurface
-  | 'lobby'
   | 'request-popup'
   | 'schedule-editor'
   | 'peer-availability'
@@ -61,6 +60,7 @@ const FILTER_INTENTS = {
   rematch: 'filter_debate_rematch',
   'profile-debates': 'filter_profile_debates',
   calendar: 'filter_debate_calendar',
+  lobby: 'filter_debate_lobby',
 } as const satisfies Record<DebateAnalyticsSurface, string>;
 
 /**

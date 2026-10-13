@@ -2551,17 +2551,32 @@ export type DebateLobbyClaims = {
   disagreements?: { user_id: string; claims: number }[] | null;
 };
 
+/** At most this many `claimEntityIds` per read (`400 too_many_claim_ids`). */
+export const LOBBY_CLAIMS_MAX_IDS = 50;
+
+/** A claim id as the Explore filter takes it, dashless and lowercase, or null if it isn't uuid-shaped. */
+export function geoChatClaimId(id: string) {
+  const compact = dashlessId(id);
+  return /^[0-9a-f]{32}$/.test(compact) ? compact : null;
+}
+
 /**
  * Roster members only. `404 lobby_not_found`, `403 lobby_banned`, `409 lobby_closed`,
  * `403 lobby_not_member`.
+ *
+ * With `claimEntityIds` (uuid-shaped only, else `400 invalid_claim_entity_id`), only those claims, one
+ * entry per space row someone in the room holds a side on; `source` is then always `room` and
+ * `disagreements` null.
  */
 export async function getDebateLobbyClaims(
   lobbyId: string,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
+  claimEntityIds?: readonly string[]
 ) {
-  return geoChatRequest<DebateLobbyClaims>(`/debate-lobbies/${lobbyId}/claims`, {
+  const query = claimEntityIds?.length ? `?claim_entity_ids=${claimEntityIds.map(dashlessId).join(',')}` : '';
+  return geoChatRequest<DebateLobbyClaims>(`/debate-lobbies/${lobbyId}/claims${query}`, {
     auth: true,
     getPrivyIdentityToken,
     accountKey,

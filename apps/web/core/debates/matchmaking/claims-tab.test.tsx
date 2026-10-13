@@ -9,7 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { MatchmakingClaim } from '../api';
 import { ClaimsTab } from './claims-tab';
-import { debatesHubExploreSpaceIdsAtom } from '~/atoms';
+import {
+  debatesHubExploreSearchAtom,
+  debatesHubExploreSpaceIdsAtom,
+  debatesHubHideMyPositionsAtom,
+  lobbyExploreSearchAtom,
+} from '~/atoms';
 
 const mocks = vi.hoisted(() => ({
   promptSignIn: vi.fn(),
@@ -1143,6 +1148,19 @@ describe('All claims reads the Debate tag', () => {
 
     expect(await screen.findByText('A tagged claim')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Agree/ })).toBeDisabled();
+  });
+
+  it('hands each claim to the host’s renderer with what its own card would get', async () => {
+    mocks.taggedClaims[DEBATE_TAG] = [featuredClaim(FEATURED_A, 'A tagged claim')];
+    mocks.authenticated = false;
+    mocks.accountKey = null;
+    const renderClaim = vi.fn((entry: { claim: { claim: string } }) => <p>Hosted: {entry.claim.claim}</p>);
+    render(<ClaimsTab renderClaim={renderClaim} />);
+    await showAllClaims();
+
+    expect(await screen.findByText('Hosted: A tagged claim')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Agree/ })).toBeNull();
+    expect(renderClaim).toHaveBeenLastCalledWith(expect.anything(), { answersReady: true, allowsSignedOutVotes: true });
   });
 
   it('lets a signed-out viewer press, because having no side is a real answer', async () => {
@@ -2638,6 +2656,60 @@ describe('claims the viewer has already answered', () => {
 
       expect(await screen.findByText(/You’ve answered every claim here/)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Show my positions' })).toBeInTheDocument();
+    });
+  });
+
+  // The lobby's Explore offers requests only on claims the viewer has a side on.
+  describe('on the lobby’s Explore list', () => {
+    const answerInPlace = (view: ReturnType<typeof render>, ui: ReactElement) => {
+      mocks.debateClaimRows = [answeredRow(FEATURED_A), answeredRow(FEATURED_B)];
+      view.rerender(ui);
+    };
+    const pastTheHold = () => act(() => new Promise(resolve => setTimeout(resolve, 1500)));
+
+    beforeEach(() => {
+      mocks.graphAnsweredIds = new Set([FEATURED_A]);
+    });
+
+    it('hides them on the hub’s Explore, including one answered in place', async () => {
+      const view = render(<ClaimsTab />);
+      await showAllClaims();
+      expect(await screen.findByText('One you have not')).toBeInTheDocument();
+      expect(screen.queryByText('One you have answered')).toBeNull();
+
+      answerInPlace(view, <ClaimsTab />);
+      await waitFor(() => expect(screen.queryByText('One you have not')).toBeNull(), { timeout: 3000 });
+    });
+
+    it('lists them, keeps one answered in place, and leaves the switch alone', async () => {
+      const view = render(<ClaimsTab variant="lobbyExplore" />);
+      await showAllClaims();
+      expect(await screen.findByText('One you have answered')).toBeInTheDocument();
+      expect(screen.getByText('One you have not')).toBeInTheDocument();
+      expect(mocks.taggedFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull();
+      expect(mocks.spaceFacetFiltersAskedFor.at(-1).excludeAnsweredBy).toBeNull();
+      expect(screen.queryByRole('switch', { name: 'Hide my positions' })).toBeNull();
+      expect(view.store.get(debatesHubHideMyPositionsAtom)).toBe(true);
+
+      answerInPlace(view, <ClaimsTab variant="lobbyExplore" />);
+      await pastTheHold();
+      expect(screen.getByText('One you have not')).toBeInTheDocument();
+      expect(screen.getByText('One you have answered')).toBeInTheDocument();
+    });
+
+    it('keeps its own filters and reports as the lobby', async () => {
+      const view = render(<ClaimsTab variant="lobbyExplore" />);
+      await showAllClaims();
+      await screen.findByText('One you have not');
+
+      fireEvent.change(screen.getByRole('textbox', { name: 'Search claims' }), { target: { value: 'friends' } });
+      expect(view.store.get(lobbyExploreSearchAtom)).toBe('friends');
+      expect(view.store.get(debatesHubExploreSearchAtom)).toBe('');
+      expect(
+        document.querySelector('[data-geo-analytics-intent="filter_debate_lobby"]'),
+        'a filter control reports the lobby surface'
+      ).not.toBeNull();
+      expect(document.querySelector('[data-geo-analytics-intent="filter_debates_hub"]')).toBeNull();
     });
   });
 
