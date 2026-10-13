@@ -555,7 +555,7 @@ function LobbyRoom({
   const tabIds = useTabIds();
   const onPeopleTab = !phone || !showClaims || tab === 'people';
   const onClaimsTab = !phone || tab === 'claims';
-  const alone = showClaims && isAlone(lobby, guest ? null : currentUserId, guest);
+  const alone = showClaims && isAlone(lobby, guest ? null : currentUserId, guest, guestVoice !== null);
 
   // The empty-room block stands in for an empty roster's own line.
   const people =
@@ -672,13 +672,21 @@ function LobbyRoom({
 
 type LobbyPhoneTab = 'people' | 'claims';
 
-/** Nobody else is in: just the viewer on the roster, or nobody for a guest, and no guests. */
+/**
+ * Nobody else is in: no other member and no guest. `guest_count` counts live guest sessions, so a
+ * guest's own counts once it has started (`ownGuestSession`); without a count a guest is not alone.
+ */
 export function isAlone(
   lobby: Pick<LobbyPageView, 'members' | 'guest_count'>,
   viewerId: string | null,
-  guest: boolean
+  guest: boolean,
+  ownGuestSession = false
 ): boolean {
-  if (guest) return lobby.members.length === 0;
+  if (guest) {
+    return (
+      lobby.members.length === 0 && lobby.guest_count !== undefined && lobby.guest_count <= Number(ownGuestSession)
+    );
+  }
   if (!viewerId || (lobby.guest_count ?? 0) > 0) return false;
   return lobby.members.every(member => dashlessId(member.user_id) === dashlessId(viewerId));
 }

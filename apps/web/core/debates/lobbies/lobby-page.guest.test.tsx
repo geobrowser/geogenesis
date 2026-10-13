@@ -738,6 +738,19 @@ describe('DebateLobbyPage state screens', () => {
     );
   });
 
+  it('shows a listening guest the empty state only when no other guest is in', async () => {
+    mocks.guestView = { lobby: { ...lobbyFields, members: [], guest_count: 1 }, claims: null, highlights: null };
+    const { unmount } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    expect(screen.getByTestId('lobby-empty-room')).toBeInTheDocument();
+    unmount();
+
+    mocks.guestView = { lobby: { ...lobbyFields, members: [], guest_count: 3 }, claims: null, highlights: null };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    expect(screen.queryByTestId('lobby-empty-room')).not.toBeInTheDocument();
+  });
+
   it('shows no empty state once someone else is in', () => {
     mocks.authenticated = true;
     mocks.userId = 'priya';

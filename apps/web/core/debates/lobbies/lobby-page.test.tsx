@@ -73,8 +73,13 @@ describe('isAlone', () => {
     expect(isAlone({ members: [member('a1', 'host')] }, null, false)).toBe(false);
   });
 
-  it('is an empty roster for a guest', () => {
-    expect(isAlone({ members: [] }, null, true)).toBe(true);
-    expect(isAlone({ members: [member('a1', 'host')] }, null, true)).toBe(false);
+  it('counts other guests, and the guest’s own session once it has started', () => {
+    expect(isAlone({ members: [], guest_count: 0 }, null, true)).toBe(true);
+    expect(isAlone({ members: [], guest_count: 1 }, null, true, true)).toBe(true);
+    expect(isAlone({ members: [], guest_count: 1 }, null, true, false)).toBe(false);
+    expect(isAlone({ members: [], guest_count: 2 }, null, true, true)).toBe(false);
+    expect(isAlone({ members: [member('a1', 'host')], guest_count: 0 }, null, true)).toBe(false);
+    // An older geo-chat sends no count: not alone.
+    expect(isAlone({ members: [] }, null, true)).toBe(false);
   });
 });
