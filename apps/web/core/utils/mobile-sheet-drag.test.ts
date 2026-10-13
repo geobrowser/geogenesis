@@ -129,6 +129,22 @@ describe('resolveMobileSheetRelease', () => {
   it('dismisses from full screen when pulled past the container', () => {
     expect(release('full', 320, { scrolledSinceFull: true })).toBe('dismiss');
   });
+
+  it('lets a fling decide the direction when the release reverses the drag', () => {
+    // Dragged up past the expand threshold, then flicked back down: back to the container.
+    expect(release('peek', 100, { velocityY: 800 })).toBe('peek');
+    // Pulled down past the dismiss threshold, then flicked back up: back to the container.
+    expect(release('peek', 300, { velocityY: -800 })).toBe('peek');
+    // Pulled down from full screen, then flicked back up: stays full screen.
+    expect(release('full', 120, { velocityY: -800, scrolledSinceFull: true })).toBe('full');
+    expect(release('full', 120, { velocityY: -800 })).toBe('full');
+  });
+
+  it('settles a fling at the next stop in its direction', () => {
+    expect(release('full', 120, { velocityY: 800, scrolledSinceFull: true })).toBe('peek');
+    expect(release('full', 240, { velocityY: 800, scrolledSinceFull: true })).toBe('dismiss');
+    expect(release('peek', 240, { velocityY: -800 })).toBe('peek');
+  });
 });
 
 describe('lockMobileSheetDocumentOverscroll', () => {
@@ -161,7 +177,12 @@ describe('lockMobileSheetDocumentOverscroll', () => {
   });
 });
 
-function touchEvent(type: 'touchstart' | 'touchmove' | 'touchend', target: Element, clientY?: number, clientX = 20) {
+function touchEvent(
+  type: 'touchstart' | 'touchmove' | 'touchend' | 'touchcancel',
+  target: Element,
+  clientY?: number,
+  clientX = 20
+) {
   const event = new Event(type, { bubbles: true, cancelable: true }) as TouchEvent;
   Object.defineProperty(event, 'touches', {
     value: clientY === undefined ? [] : [{ clientX, clientY, identifier: 1, target }],
@@ -174,14 +195,16 @@ function attach(sheet: ReturnType<typeof createSheet>, initialSnap: MobileSheetS
   let snap = initialSnap;
   let top = initialTop;
   const onDragEnd = vi.fn();
+  const onDragCancel = vi.fn();
   const detach = attachMobileSheetGestures(sheet.root, {
     getSnap: () => snap,
     getTop: () => top,
     onDragStart: () => {},
     onDragMove: next => (top = next),
     onDragEnd,
+    onDragCancel,
   });
-  return { detach, onDragEnd, getTop: () => top, setSnap: (next: MobileSheetSnap) => (snap = next) };
+  return { detach, onDragEnd, onDragCancel, getTop: () => top, setSnap: (next: MobileSheetSnap) => (snap = next) };
 }
 
 describe('attachMobileSheetGestures', () => {
@@ -227,6 +250,58 @@ describe('attachMobileSheetGestures', () => {
 
     expect(pulling.defaultPrevented).toBe(true);
     expect(gestures.getTop()).toBe(80);
+    gestures.detach();
+  });
+
+  it('cancels an interrupted drag instead of committing its release', () => {
+    const sheet = createSheet();
+    const gestures = attach(sheet, 'peek', 200);
+
+    touchEvent('touchstart', sheet.target('content'), 400);
+    touchEvent('touchmove', sheet.target('content'), 250);
+    touchEvent('touchcancel', sheet.target('content'));
+
+    expect(gestures.onDragCancel).toHaveBeenCalledTimes(1);
+    expect(gestures.onDragEnd).not.toHaveBeenCalled();
+    gestures.detach();
+  });
+
+  it('cancels a drag when a second finger lands', () => {
+    const sheet = createSheet();
+    const gestures = attach(sheet, 'peek', 200);
+
+    touchEvent('touchstart', sheet.target('content'), 400);
+    touchEvent('touchmove', sheet.target('content'), 250);
+    const twoFingers = new Event('touchstart', { bubbles: true, cancelable: true }) as TouchEvent;
+    Object.defineProperty(twoFingers, 'touches', {
+      value: [
+        { clientX: 20, clientY: 250, identifier: 1 },
+        { clientX: 80, clientY: 300, identifier: 2 },
+      ],
+    });
+    sheet.target('content').dispatchEvent(twoFingers);
+    touchEvent('touchend', sheet.target('content'));
+
+    expect(gestures.onDragCancel).toHaveBeenCalledTimes(1);
+    expect(gestures.onDragEnd).not.toHaveBeenCalled();
+    gestures.detach();
+  });
+
+  it('cancels a mouse drag on the handle when the pointer is cancelled', () => {
+    const sheet = createSheet();
+    const gestures = attach(sheet, 'peek', 200);
+    const pointer = (type: string, target: EventTarget, clientY: number) => {
+      const event = new Event(type, { bubbles: true, cancelable: true });
+      Object.assign(event, { pointerType: 'mouse', pointerId: 7, button: 0, clientX: 20, clientY });
+      target.dispatchEvent(event);
+    };
+
+    pointer('pointerdown', sheet.target('handle-child'), 200);
+    pointer('pointermove', window, 100);
+    pointer('pointercancel', window, 100);
+
+    expect(gestures.onDragCancel).toHaveBeenCalledTimes(1);
+    expect(gestures.onDragEnd).not.toHaveBeenCalled();
     gestures.detach();
   });
 

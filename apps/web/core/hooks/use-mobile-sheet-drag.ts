@@ -105,6 +105,7 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
         if (next === 'dismiss') dismiss();
         else settle(next);
       },
+      onDragCancel: () => settle(snapRef.current),
     });
     const stopWatchingScroll = watchMobileSheetContentScroll(overlayElement, () => {
       if (snapRef.current === 'full') scrolledSinceFullRef.current = true;

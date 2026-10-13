@@ -80,6 +80,10 @@ export function shouldClaimMobileSheetGesture({
 /**
  * Where the sheet settles after a drag is released.
  *
+ * A fling wins over distance: it settles at the next stop in the direction it is moving, from
+ * wherever the sheet is, so a drag that reverses before release goes where the finger last went.
+ * Without a fling, the sheet changes state once it has travelled far enough.
+ *
  * From `full`, a pull down normally returns to `peek`. The exception is a sheet that was expanded
  * and then pulled straight back down before its content was scrolled: that reads as "never mind",
  * so it dismisses in one motion instead of stopping at `peek`.
@@ -100,16 +104,19 @@ export function resolveMobileSheetRelease({
   scrolledSinceFull: boolean;
 }): MobileSheetSnap | 'dismiss' {
   const fling = MOBILE_SHEET_FLING_VELOCITY_PX_PER_SECOND;
+  const dismissesFromFull = from === 'full' && !scrolledSinceFull;
+
+  if (velocityY < -fling) return top > peekTop ? 'peek' : 'full';
+  if (velocityY > fling) return dismissesFromFull || top >= peekTop ? 'dismiss' : 'peek';
 
   if (from === 'peek') {
-    if (top < peekTop - MOBILE_SHEET_SNAP_OFFSET_PX || velocityY < -fling) return 'full';
-    if (top > peekTop + MOBILE_SHEET_DISMISS_OFFSET_PX || velocityY > fling) return 'dismiss';
+    if (top < peekTop - MOBILE_SHEET_SNAP_OFFSET_PX) return 'full';
+    if (top > peekTop + MOBILE_SHEET_DISMISS_OFFSET_PX) return 'dismiss';
     return 'peek';
   }
 
-  const pulledDown = top > MOBILE_SHEET_SNAP_OFFSET_PX || velocityY > fling;
-  if (!pulledDown) return 'full';
-  if (!scrolledSinceFull) return 'dismiss';
+  if (top <= MOBILE_SHEET_SNAP_OFFSET_PX) return 'full';
+  if (dismissesFromFull) return 'dismiss';
   return top > peekTop + MOBILE_SHEET_DISMISS_OFFSET_PX ? 'dismiss' : 'peek';
 }
 
@@ -120,6 +127,8 @@ type GestureCallbacks = {
   onDragStart: () => void;
   onDragMove: (top: number) => void;
   onDragEnd: (top: number, velocityY: number) => void;
+  /** The drag was interrupted (OS cancel, second finger): return to where it started. */
+  onDragCancel: () => void;
 };
 
 type ActiveGesture = {
@@ -232,6 +241,12 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
     return true;
   };
 
+  const cancel = () => {
+    const active = gesture;
+    gesture = undefined;
+    if (active?.decided === 'sheet') callbacks.onDragCancel();
+  };
+
   const end = () => {
     const active = gesture;
     gesture = undefined;
@@ -244,7 +259,7 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
   const handleTouchStart = (event: TouchEvent) => {
     if (event.touches.length !== 1) {
       // A second finger cancels a sheet drag rather than leaving it stuck mid-way.
-      end();
+      cancel();
       return;
     }
     const touch = event.touches[0];
@@ -263,12 +278,22 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
     if (move(event.clientX, event.clientY)) event.preventDefault();
   };
 
-  const handleMouseUp = (event: PointerEvent) => {
-    if (event.pointerId !== gesture?.id) return;
+  const stopMouseTracking = () => {
     window.removeEventListener('pointermove', handleMouseMove);
     window.removeEventListener('pointerup', handleMouseUp);
-    window.removeEventListener('pointercancel', handleMouseUp);
+    window.removeEventListener('pointercancel', handleMouseCancel);
+  };
+
+  const handleMouseUp = (event: PointerEvent) => {
+    if (event.pointerId !== gesture?.id) return;
+    stopMouseTracking();
     end();
+  };
+
+  const handleMouseCancel = (event: PointerEvent) => {
+    if (event.pointerId !== gesture?.id) return;
+    stopMouseTracking();
+    cancel();
   };
 
   const handlePointerDown = (event: PointerEvent) => {
@@ -277,24 +302,22 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
     begin(event.pointerId, event.target, event.clientX, event.clientY);
     window.addEventListener('pointermove', handleMouseMove);
     window.addEventListener('pointerup', handleMouseUp);
-    window.addEventListener('pointercancel', handleMouseUp);
+    window.addEventListener('pointercancel', handleMouseCancel);
   };
 
   root.addEventListener('touchstart', handleTouchStart, { passive: true });
   root.addEventListener('touchmove', handleTouchMove, { passive: false });
   root.addEventListener('touchend', end);
-  root.addEventListener('touchcancel', end);
+  root.addEventListener('touchcancel', cancel);
   root.addEventListener('pointerdown', handlePointerDown);
 
   return () => {
     root.removeEventListener('touchstart', handleTouchStart);
     root.removeEventListener('touchmove', handleTouchMove);
     root.removeEventListener('touchend', end);
-    root.removeEventListener('touchcancel', end);
+    root.removeEventListener('touchcancel', cancel);
     root.removeEventListener('pointerdown', handlePointerDown);
-    window.removeEventListener('pointermove', handleMouseMove);
-    window.removeEventListener('pointerup', handleMouseUp);
-    window.removeEventListener('pointercancel', handleMouseUp);
+    stopMouseTracking();
   };
 }
 
