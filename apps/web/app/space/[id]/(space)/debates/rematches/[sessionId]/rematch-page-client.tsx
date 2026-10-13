@@ -2664,7 +2664,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       title="Leave debate"
       onClick={leave}
       disabled={leaveSession.isPending}
-      className="grid size-8 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+      className="grid size-6 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50 [&>svg]:size-3"
     >
       <LeaveIcon />
     </button>

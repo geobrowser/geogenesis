@@ -149,15 +149,10 @@ describe('DebateChallengeDialog', () => {
   });
 
   /*
-   * Once there is a picture, the switches sit on it — the ready room's arrangement, the tile's own
-   * overlay band, so the control is on the thing it controls. Over an avatar they covered the one
-   * thing saying whose tile this is, which is why the camera-off case keeps them underneath.
-   *
-   * Asserted against the real tile, which is what decides where `tileControls` land: with the tile
-   * mocked the buttons go wherever the mock puts them, so such a test passes with the controls on
-   * the tile, under it, or clipped out of view.
+   * Switches sit under the preview: on this half-card tile they covered the face. Asserted
+   * against the real tile, since a mock would pass with the controls anywhere.
    */
-  it('puts the switches on the tile once the camera is on', async () => {
+  it('keeps the switches under the preview once the camera is on', async () => {
     permission = 'granted';
     media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' } }]);
     renderDialog();
@@ -167,9 +162,10 @@ describe('DebateChallengeDialog', () => {
       expect(found).not.toBeNull();
       return found;
     });
+    const mic = screen.getByRole('button', { name: /microphone/i });
 
-    expect(tile?.contains(screen.getByRole('button', { name: /microphone/i }))).toBe(true);
-    expect(tile?.contains(screen.getByRole('button', { name: /camera/i }))).toBe(true);
+    expect(tile?.contains(mic)).toBe(false);
+    expect(tile?.compareDocumentPosition(mic)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   /*

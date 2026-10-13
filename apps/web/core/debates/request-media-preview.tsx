@@ -192,6 +192,7 @@ function MediaPreview({
       {!micBlocked && (
         <DebateTileToggleButton
           ariaLabel={micOn ? 'Turn microphone off' : 'Turn microphone on'}
+          compact
           enabled={micOn}
           onClick={() => toggle({ micOn: !micOn })}
         >
@@ -201,6 +202,7 @@ function MediaPreview({
       {!cameraBlocked && (
         <DebateTileToggleButton
           ariaLabel={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+          compact
           enabled={cameraOn}
           onClick={() => toggle({ cameraOn: !cameraOn })}
         >
@@ -213,25 +215,17 @@ function MediaPreview({
   return (
     <div className="flex flex-col gap-2">
       {cameraOn ? (
-        <DebateVideoTile
-          participantPosition={null}
-          active={false}
-          tileLabel="You"
-          inactiveIndicatorId="local"
-          tileControls={toggles}
-        >
+        <DebateVideoTile participantPosition={null} active={false} tileLabel="You" inactiveIndicatorId="local">
           <video ref={videoRef} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
         </DebateVideoTile>
       ) : (
-        <>
-          <div className="grid place-items-center py-1">
-            <span className="h-5 w-5 overflow-hidden rounded-full">
-              <Avatar avatarUrl={avatarCid ?? undefined} value={avatarValue ?? undefined} alt="" size={20} />
-            </span>
-          </div>
-          {toggles}
-        </>
+        <div className="grid place-items-center py-1">
+          <span className="h-5 w-5 overflow-hidden rounded-full">
+            <Avatar avatarUrl={avatarCid ?? undefined} value={avatarValue ?? undefined} alt="" size={20} />
+          </span>
+        </div>
       )}
+      {toggles}
 
       {blocked ? (
         <Text variant="footnote" color="grey-04">

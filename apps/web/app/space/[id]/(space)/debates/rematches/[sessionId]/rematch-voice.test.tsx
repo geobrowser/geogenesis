@@ -1621,6 +1621,23 @@ describe('RematchVoiceHeader', () => {
     return Array.from((card.firstElementChild as HTMLElement).children) as HTMLElement[];
   }
 
+  it('pins the corner action to the top of a desktop card and centres it on a phone', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    render(
+      <RematchVoiceHeader
+        session={makeSession('browsing')}
+        currentUserId="me"
+        leaveAction={<button type="button">Leave debate</button>}
+      />
+    );
+    await flushOwnership();
+
+    const corner = screen.getByRole('button', { name: 'Leave debate' }).parentElement;
+
+    expect(corner?.className).toContain('self-start');
+    expect(corner?.className).toContain('max-sm:self-center');
+  });
+
   // The two cards sit side by side, so a difference in either one is a difference you read across
   // the pair. The mute pill had drifted out to the card's left edge while the opponent's chip
   // stayed indented under their name — invisible in either card alone, impossible to miss between

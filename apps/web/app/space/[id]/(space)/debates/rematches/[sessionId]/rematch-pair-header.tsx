@@ -245,7 +245,7 @@ function PairCardBody({
           </span>
           {state}
         </div>
-        {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
+        {action ? <div className="max-sm:self-center flex shrink-0 items-center self-start">{action}</div> : null}
       </div>
     </>
   );

@@ -208,6 +208,17 @@ describe('the picture survives the camera being switched off and on', () => {
   });
 });
 
+describe('the controls beside a preview', () => {
+  it('uses the compact size rather than the room’s', async () => {
+    mocks.permission = 'granted';
+    mount();
+
+    const mic = await screen.findByRole('button', { name: /microphone/i });
+    expect(mic.className).toContain('size-8');
+    expect(mic.className.split(/\s+/)).not.toContain('size-10');
+  });
+});
+
 describe('one device refused and the other allowed', () => {
   it('keeps the microphone switch when only the camera was refused', async () => {
     mocks.cameraPermission = 'denied';
