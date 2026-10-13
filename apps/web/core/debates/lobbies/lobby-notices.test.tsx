@@ -26,14 +26,14 @@ describe('LobbyNotices', () => {
     render(
       <LobbyNotices
         {...base}
-        handoff={priya}
+        handoff={{ host: priya, left: null }}
         queuedOutcome="Debate request sent to Sam."
         onDismissQueuedOutcome={dismiss}
         moderationNotice="A host muted you."
       />
     );
     expect(screen.getAllByRole('status').map(toast => toast.textContent)).toEqual([
-      'Priya is hosting now',
+      'Priya is now hosting.',
       'Debate request sent to Sam.OK',
       'A host muted you.',
     ]);

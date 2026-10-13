@@ -657,6 +657,29 @@ it('reloads the lobbies list on every mount', async () => {
   await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
 });
 
+it('with a staleTime, reloads the lobbies list on mount only once it is that old', async () => {
+  api.listDebateLobbies.mockResolvedValue({ lobbies: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const shared = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const useListed = () => useDebateLobbies(true, { staleTime: 60_000 });
+
+  const first = renderHook(useListed, { wrapper: shared });
+  await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+  first.unmount();
+  const second = renderHook(useListed, { wrapper: shared });
+  expect(second.result.current.isSuccess).toBe(true);
+  second.unmount();
+  expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
+
+  const now = Date.now();
+  const spy = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000);
+  renderHook(useListed, { wrapper: shared });
+  await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
+  spy.mockRestore();
+});
+
 describe('lobby analytics through useLobbyPresence', () => {
   function strictWrapper({ children }: { children: React.ReactNode }) {
     return <React.StrictMode>{wrapper({ children })}</React.StrictMode>;
