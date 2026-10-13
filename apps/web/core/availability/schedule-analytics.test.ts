@@ -2,7 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { AvailabilityBlock } from './blocks';
 import type { PeerSchedule } from './peer-schedule';
-import { debateAvailabilityLinkOpened, debateAvailabilityViewed, debateScheduleSaved } from './schedule-analytics';
+import {
+  debateAvailabilityLinkOpened,
+  debateAvailabilityViewed,
+  debateScheduleSaved,
+  debateScheduledRequestSent,
+} from './schedule-analytics';
 
 const capture = vi.hoisted(() => vi.fn());
 vi.mock('~/core/analytics', () => ({ capture }));
@@ -80,6 +85,28 @@ describe('schedule analytics', () => {
     expect(capture).toHaveBeenCalledWith(
       'debate_availability_link_opened',
       expect.objectContaining({ link_source: linkSource })
+    );
+  });
+});
+
+describe('debateScheduledRequestSent', () => {
+  it('says where a booking was sent from and where its flow began (GEO-3244)', () => {
+    debateScheduledRequestSent({
+      mode: 'request',
+      requestId: 'req-1',
+      startsAt: new Date(3_600_000),
+      analytics: { entry: 'calendar_claim_match', viewerIsFree: true },
+      scope: { request_surface: 'calendar', origin_surface: 'claim_page', opportunity_id: 'offer-1' },
+      now: 0,
+    });
+    expect(capture).toHaveBeenCalledWith(
+      'debate_scheduled_request_sent',
+      expect.objectContaining({
+        request_surface: 'calendar',
+        origin_surface: 'claim_page',
+        opportunity_id: 'offer-1',
+        lead_time_minutes: 60,
+      })
     );
   });
 });

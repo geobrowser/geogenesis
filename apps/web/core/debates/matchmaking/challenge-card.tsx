@@ -9,7 +9,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateChallenge } from '../api';
 import { useAcceptDebateChallenge, useRejectDebateChallenge } from '../hooks';
-import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes } from './hub-analytics';
+import { type DebateAnalyticsSurface, debateActionAnalyticsAttributes, debateAnalyticsLabel } from './hub-analytics';
 import { hubCardMotion } from './hub-motion';
 import { HubPillButton } from './hub-pill-button';
 import { RequestParties } from './request-parties';
@@ -96,6 +96,9 @@ export function DebateChallengeCard({
       {isRecipient ? (
         <div className="grid grid-cols-2 gap-2">
           <HubPillButton
+            analyticsSurface={analyticsSurface}
+            analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Dismiss challenge')}
+            analyticsIntent="decline_debate"
             onClick={() => rejectChallenge.mutate(challenge.id)}
             disabled={busy}
             pending={rejectChallenge.isPending}
@@ -105,6 +108,9 @@ export function DebateChallengeCard({
           </HubPillButton>
           <HubPillButton
             variant="primary"
+            analyticsSurface={analyticsSurface}
+            analyticsLabel={debateAnalyticsLabel(analyticsSurface, 'Explore claims')}
+            analyticsIntent="join_debate"
             onClick={() => acceptChallenge.mutate(challenge.id)}
             disabled={busy}
             pending={acceptChallenge.isPending}

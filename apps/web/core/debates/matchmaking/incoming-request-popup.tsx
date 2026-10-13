@@ -56,6 +56,7 @@ export function IncomingRequestPopup({
       busy={busy}
       error={error?.message ?? null}
       actionsLayout="split"
+      analytics={{ surface: 'request-popup', accept: 'Accept', reject: 'Not now', formatAction: 'Dismiss forever' }}
       rejectLabel="Not now"
       eyebrow={
         <span className="flex min-w-0 items-center justify-center gap-1.5 text-metadata text-grey-04">

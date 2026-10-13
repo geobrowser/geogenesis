@@ -7,6 +7,7 @@ import { equals as idEquals } from '~/core/id/normalize';
 import { Text } from '~/design-system/text';
 
 import type { DebateRematchSession } from './api';
+import { debateActionAnalyticsAttributes } from './matchmaking/hub-analytics';
 import { RequestDebateControl } from './request-debate-control';
 import { debateRequestGate } from './request-gate';
 import { ROOM_REQUEST_WAITING } from './rooms/room-copy';
@@ -81,6 +82,7 @@ export function RematchRequestControl({
       pending={gate.pending}
       pendingLabel={gate.pendingLabel}
       requestError={requestError}
+      analytics={debateActionAnalyticsAttributes('rematch', 'Request debate', 'start_debate')}
       note={
         note ? (
           <Text as="span" variant="footnote" color="grey-04">

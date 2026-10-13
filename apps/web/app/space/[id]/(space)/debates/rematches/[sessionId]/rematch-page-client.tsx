@@ -3182,6 +3182,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           }
           onAccept={() => acceptRequest.mutate(incomingRequest.id)}
           onReject={() => rejectRequest.mutate(incomingRequest.id)}
+          analytics={{ surface: 'rematch', accept: 'Accept request', reject: 'Reject request' }}
         />
       )}
     </div>

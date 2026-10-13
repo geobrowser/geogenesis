@@ -13,6 +13,7 @@ import { DebateDialogShell } from './debate-dialog-shell';
 import { DebateFormatDetails, type DebateFormatOpenRounds } from './format-details';
 import { DebateFormatSelector } from './format-selector';
 import type { DebateFormatId } from './formats';
+import { type DebateActionAnalyticsSurface, debateActionAnalyticsAttributes } from './matchmaking/hub-analytics';
 import { speakerLabel } from './playback-utils';
 
 export type DebateRequestDialogParticipant = DebateParticipantSummary & {
@@ -57,6 +58,11 @@ type DebateRequestDialogProps = {
   formatAction?: { label: string; onClick: () => void };
   /** GEO-2430: overflow ("…") menu anchored to the participants card, e.g. to block a user. */
   overflowMenu?: React.ReactNode;
+  /**
+   * Click labels for the buttons (GEO-3244), named by the host: the visible labels change while
+   * pending ("Joining…"), and the same words mean different things in each host.
+   */
+  analytics?: { surface: DebateActionAnalyticsSurface; accept: string; reject: string; formatAction?: string };
 };
 
 export function DebateRequestDialog({
@@ -76,7 +82,18 @@ export function DebateRequestDialog({
   eyebrow,
   formatAction,
   overflowMenu,
+  analytics,
 }: DebateRequestDialogProps) {
+  const acceptAnalytics = analytics
+    ? debateActionAnalyticsAttributes(analytics.surface, analytics.accept, 'join_debate')
+    : undefined;
+  const rejectAnalytics = analytics
+    ? debateActionAnalyticsAttributes(analytics.surface, analytics.reject, 'decline_debate')
+    : undefined;
+  const formatActionAnalytics =
+    analytics?.formatAction !== undefined
+      ? debateActionAnalyticsAttributes(analytics.surface, analytics.formatAction, 'dismiss_debate_request')
+      : undefined;
   const turnParticipants = React.useMemo(
     () => [...participants].sort((a, b) => a.participant_slot - b.participant_slot),
     [participants]
@@ -105,23 +122,37 @@ export function DebateRequestDialog({
                 type="button"
                 onClick={onReject}
                 disabled={busy}
+                {...rejectAnalytics}
                 className={DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME}
               >
                 {rejectLabel}
               </button>
-              <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+              <button
+                type="button"
+                onClick={onAccept}
+                disabled={busy}
+                {...acceptAnalytics}
+                className={DIALOG_ACTION_BUTTON_CLASS_NAME}
+              >
                 {acceptLabel}
               </button>
             </div>
           ) : (
             <>
-              <button type="button" onClick={onAccept} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+              <button
+                type="button"
+                onClick={onAccept}
+                disabled={busy}
+                {...acceptAnalytics}
+                className={DIALOG_ACTION_BUTTON_CLASS_NAME}
+              >
                 {acceptLabel}
               </button>
               <button
                 type="button"
                 onClick={onReject}
                 disabled={busy}
+                {...rejectAnalytics}
                 className="mx-auto px-4 py-1 text-metadata text-grey-04 hover:text-text disabled:opacity-50"
               >
                 {rejectLabel}
@@ -156,6 +187,7 @@ export function DebateRequestDialog({
               type="button"
               onClick={formatAction.onClick}
               disabled={busy}
+              {...formatActionAnalytics}
               className="text-metadata text-grey-04 underline transition-colors hover:text-text disabled:opacity-50"
             >
               {formatAction.label}

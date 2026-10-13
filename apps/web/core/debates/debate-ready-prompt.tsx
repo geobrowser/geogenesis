@@ -77,6 +77,7 @@ export function DebateReadyPrompt({ debate, currentUserId }: { debate: Debate; c
       busy={abortDebate.isPending}
       error={declineError}
       actionsLayout="split"
+      analytics={{ surface: 'ready-prompt', accept: 'Join', reject: 'Decline' }}
       acceptLabel={joining ? 'Joining…' : 'Join debate'}
       rejectLabel={abortDebate.isPending ? 'Declining…' : 'Decline'}
       eyebrow={

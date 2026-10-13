@@ -17,7 +17,11 @@ export type DebateActionAnalyticsSurface =
   /** The claim page's and side panel's Request debate button and the popup's own controls (GEO-3244). */
   | 'claim'
   /** A person's profile: its Request debate button (GEO-3244). */
-  | 'profile';
+  | 'profile'
+  /** "Your debate is ready": Join and Decline (GEO-3244). */
+  | 'ready-prompt'
+  /** A claimless request from someone's profile, shown to the person it was sent to (GEO-3244). */
+  | 'challenge-popup';
 
 const ACTION_SURFACE_ANALYTICS = {
   hub: {
@@ -71,6 +75,14 @@ const ACTION_SURFACE_ANALYTICS = {
   profile: {
     labelPrefix: 'Profile',
     actionIntent: 'profile_action',
+  },
+  'ready-prompt': {
+    labelPrefix: 'Debate ready prompt',
+    actionIntent: 'debate_ready_prompt_action',
+  },
+  'challenge-popup': {
+    labelPrefix: 'Debate challenge popup',
+    actionIntent: 'debate_challenge_popup_action',
   },
 } as const satisfies Record<DebateActionAnalyticsSurface, { labelPrefix: string; actionIntent: string }>;
 

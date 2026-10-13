@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useCallback } from 'react';
 
-import { useActionContext } from '~/core/action-context-provider';
+import { useActionContext, useActionScope } from '~/core/action-context-provider';
 import { snapshotAnalyticsRevision } from '~/core/analytics-operations';
 import {
   type ScheduledRequestAnalytics,
@@ -119,6 +119,7 @@ function isAdminRefusal(error: unknown) {
 
 export function useCreateScheduledDebate() {
   const getContext = useActionContext('debate_matchmaking', 'entity', '');
+  const scope = useActionScope();
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -140,7 +141,7 @@ export function useCreateScheduledDebate() {
     onMutate: snapshotAnalyticsRevision,
     onSuccess: (request, { startsAt, analytics }, isCurrent) => {
       if (isCurrent()) {
-        debateScheduledRequestSent({ mode: 'request', requestId: request.request_id, startsAt, analytics });
+        debateScheduledRequestSent({ mode: 'request', requestId: request.request_id, startsAt, analytics, scope });
       }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.scheduledDebates(accountKey) });
     },
@@ -162,6 +163,7 @@ export function useCreateScheduledDebate() {
 
 /** Moves an existing request to a new time: "Choose different time" in the scheduling emails. */
 export function useRescheduleScheduledDebate() {
+  const scope = useActionScope();
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
 
@@ -176,7 +178,7 @@ export function useRescheduleScheduledDebate() {
     onMutate: snapshotAnalyticsRevision,
     onSuccess: (request, { startsAt, analytics }, isCurrent) => {
       if (isCurrent()) {
-        debateScheduledRequestSent({ mode: 'reschedule', requestId: request.request_id, startsAt, analytics });
+        debateScheduledRequestSent({ mode: 'reschedule', requestId: request.request_id, startsAt, analytics, scope });
       }
     },
     onError: (error, { analytics }, isCurrent) => {

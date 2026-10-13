@@ -330,3 +330,59 @@ describe('legacy event context isolation', () => {
     );
   });
 });
+
+describe('debate requests (GEO-3244)', () => {
+  const context = {
+    component: 'debate_matchmaking' as const,
+    target_id: 'claim',
+    target_type: 'claim',
+    page_path: '/space/s/claim',
+    page_type: 'entity',
+    page_view_id: 'view',
+    request_surface: 'claim_page' as const,
+    request_path: 'first_available' as const,
+    opportunity_id: 'offer-1',
+  };
+  const events = (name: string) => capture.mock.calls.filter(([event]) => event === name).map(([, props]) => props);
+
+  it('records a send from an offer as an attempt at it, and names what it created', async () => {
+    await runObservedAction(
+      'start_debate',
+      context,
+      async () => ({ id: 'abc' }),
+      undefined,
+      result => ({ request_id: result.id, message: 'not kept' })
+    );
+    expect(events('action_attempted')).toEqual([
+      expect.objectContaining({ action_kind: 'start_debate', opportunity_id: 'offer-1' }),
+    ]);
+    const [completed] = events('action_completed');
+    expect(completed).toMatchObject({
+      outcome: 'succeeded',
+      request_id: 'abc',
+      request_surface: 'claim_page',
+      request_path: 'first_available',
+      opportunity_id: 'offer-1',
+    });
+    expect(completed).not.toHaveProperty('message');
+  });
+
+  it('does not count another action in the same scope as an attempt at the offer', async () => {
+    await runObservedAction('join_debate', context, async () => ({}));
+    expect(events('action_attempted')).toEqual([]);
+  });
+
+  it("records a server's refusal as a failure with its own code, not an unknown", async () => {
+    const refusal = Object.assign(new Error('Away'), { status: 409, code: 'recipient_away' });
+    await expect(runObservedAction('start_debate', context, async () => Promise.reject(refusal))).rejects.toBe(refusal);
+    expect(events('action_completed')).toEqual([
+      expect.objectContaining({ outcome: 'failed', failure_code: 'recipient_away' }),
+    ]);
+  });
+
+  it('leaves a server error or a dropped connection as it was', async () => {
+    const outage = Object.assign(new Error('Down'), { status: 503, code: 'unavailable_upstream' });
+    await expect(runObservedAction('start_debate', context, async () => Promise.reject(outage))).rejects.toBe(outage);
+    expect(events('action_completed')[0]).not.toMatchObject({ failure_code: 'unavailable_upstream' });
+  });
+});

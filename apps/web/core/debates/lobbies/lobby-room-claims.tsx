@@ -11,6 +11,7 @@ import {
 import { type DebateLobbyClaim, dashlessId } from '../api';
 import { useDebateActivity } from '../hooks';
 import { useCreateDebateRequest, useDebateRequests } from '../matchmaking/hooks';
+import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubMessageNote, HubQueryState } from '../matchmaking/hub-states';
 import { RequestDebateControl } from '../request-debate-control';
 import { debateRequestGate } from '../request-gate';
@@ -155,6 +156,7 @@ export function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: 
         )
       }
       disabled={Boolean(blockedReason) || !gate.canRequest}
+      analytics={debateActionAnalyticsAttributes('lobby', 'Request claim debate', 'start_debate')}
       blockedReason={blockedReason}
       isRequesting={createRequest.isPending}
       pending={!readinessBlock && gate.pending}

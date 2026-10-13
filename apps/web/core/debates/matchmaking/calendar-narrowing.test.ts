@@ -15,7 +15,7 @@ import {
   summarizeClaims,
   topicFacet,
 } from './calendar-narrowing';
-import { calendarHref, readCalendarPicks, writeCalendarPicks } from './debate-calendar-route';
+import { calendarHref, readCalendarAttribution, readCalendarPicks, writeCalendarPicks } from './debate-calendar-route';
 
 const VIEWER = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa00';
 const MAYA = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaa01';
@@ -251,6 +251,33 @@ describe('an empty panel list', () => {
     expect(message({ searched: true, topicCount: 1 })).toBe('No claims match that search and topic.');
     // The lists span both weeks, so the message does not send the viewer to the other one.
     expect(message({ matchesOnly: true })).toBe('Nobody on the calendar disagrees with you on a claim yet.');
+  });
+});
+
+describe('a calendar opened from a claim (GEO-3244)', () => {
+  const OFFER = '0a1b2c3d-0000-4000-8000-000000000001';
+
+  it('carries where the flow began and the offer it began from', () => {
+    const href = calendarHref(
+      null,
+      { people: [], claims: [PHONES_KEY], matchesOnly: true },
+      {
+        origin: 'claim_side_panel',
+        opportunityId: OFFER,
+      }
+    );
+    const params = new URL(href, 'https://geo.test').searchParams;
+    expect(readCalendarAttribution(params)).toEqual({ origin: 'claim_side_panel', opportunityId: OFFER });
+    expect(readCalendarPicks(params)).toEqual({ people: [], claims: [PHONES_KEY], matchesOnly: true });
+  });
+
+  it('ignores an origin it does not know, and an offer that is not an id', () => {
+    expect(readCalendarAttribution(new URLSearchParams({ origin: 'spam', opportunity: OFFER }))).toBeNull();
+    expect(readCalendarAttribution(new URLSearchParams({ origin: 'claim_page', opportunity: 'x' }))).toEqual({
+      origin: 'claim_page',
+      opportunityId: null,
+    });
+    expect(readCalendarAttribution(new URLSearchParams())).toBeNull();
   });
 });
 
