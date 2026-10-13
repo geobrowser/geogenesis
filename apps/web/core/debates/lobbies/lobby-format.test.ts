@@ -5,11 +5,15 @@ import {
   debatingCount,
   debatingLabel,
   disagreementCount,
+  handoffLabel,
   hereNowLabel,
   hostAfterChange,
+  hostWhoLeft,
   hostsLabel,
   inDebateLabel,
+  inDebateRequestLabel,
   isAlreadyInAnotherLobby,
+  lobbyDateLabel,
   lobbyErrorMessage,
   lobbyHeadcount,
   lobbyScheduleLabel,
@@ -19,6 +23,7 @@ import {
   moderationErrorMessage,
   moderationLogLabel,
   moderationNoticeText,
+  nextLobbyTimeLabel,
   notYetOpenLabel,
   otherLobbyIdFrom,
   pairLabel,
@@ -28,6 +33,7 @@ import {
   raisedHands,
   rosterOrder,
   sinceLabel,
+  untilLabel,
 } from './lobby-format';
 
 function member(userId: string, role: DebateLobbyRole, actingHost = false): DebateLobbyMember {
@@ -87,7 +93,7 @@ describe('lobby times', () => {
     expect(lobbyScheduleLabel(lobby, now)).toBe(`${time(starts)} · opens ${time(opens)}`);
     expect(lobbyScheduleLabel({ ...lobby, open: true }, now)).toBeNull();
     expect(lobbyScheduleLabel({ ...lobby, scheduled: false }, now)).toBeNull();
-    expect(notYetOpenLabel(lobby, now)).toBe(`Opens ${time(opens)} · starts ${time(starts)}`);
+    expect(notYetOpenLabel(lobby, now)).toMatch(new RegExp(`^Opens at ${time(opens)} · in `));
   });
 });
 
@@ -400,5 +406,47 @@ describe('disagreementCount', () => {
     expect(disagreementCount(rows, 'gh')).toBeNull();
     expect(disagreementCount(null, 'abcd')).toBeNull();
     expect(disagreementCount(undefined, 'abcd')).toBeNull();
+  });
+});
+
+describe('state screen labels', () => {
+  const now = Date.parse('2026-10-05T10:00:00Z');
+
+  it('counts down to the opening in minutes, hours, then days', () => {
+    expect(untilLabel('2026-10-05T10:20:00Z', now)).toBe('in 20 min');
+    expect(untilLabel('2026-10-05T11:00:00Z', now)).toBe('in 1 hour');
+    expect(untilLabel('2026-10-05T15:00:00Z', now)).toBe('in 5 hours');
+    expect(untilLabel('2026-10-06T10:00:00Z', now)).toBe('in 1 day');
+    expect(untilLabel('2026-10-07T09:00:00Z', now)).toBe('in 2 days');
+    expect(untilLabel('2026-10-05T09:00:00Z', now)).toBe('soon');
+    expect(untilLabel('nope', now)).toBe('soon');
+  });
+
+  it('writes the date block with weekday, day, month and time', () => {
+    const at = new Date(2026, 9, 6, 18, 0);
+    const label = lobbyDateLabel(at.toISOString());
+    expect(label).toContain(at.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }));
+    expect(label).toContain(at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }));
+    expect(lobbyDateLabel('nope')).toBeNull();
+  });
+
+  it('says open now for a next lobby already open', () => {
+    expect(nextLobbyTimeLabel({ open: true, starts_at: '2026-10-05T09:00:00Z' }, now)).toBe('open now');
+    expect(nextLobbyTimeLabel({ open: false, starts_at: '2026-10-05T09:00:00Z' }, now)).not.toBe('open now');
+  });
+
+  it('names the host who left a handoff, when the page saw them go', () => {
+    const lobby = { members: [member('b', 'speaker', true)] };
+    expect(hostWhoLeft([member('a', 'host')], lobby)?.user_id).toBe('a');
+    expect(hostWhoLeft([member('b', 'host')], lobby)).toBeNull();
+    expect(hostWhoLeft([], lobby)).toBeNull();
+    expect(handoffLabel({ display_name: 'Priya' }, { display_name: 'Adam' })).toBe('Adam left. Priya is now hosting.');
+    expect(handoffLabel({ display_name: 'Priya' }, null)).toBe('Priya is now hosting.');
+  });
+
+  it('tells the viewer when someone in a debate can be requested', () => {
+    expect(inDebateRequestLabel({ display_name: 'Leo' })).toBe(
+      'Leo is in a debate. You can request them when they’re back.'
+    );
   });
 });

@@ -89,9 +89,9 @@ function lobby(hosting: boolean): LobbyPageView {
   };
 }
 
-function renderMenu(view: LobbyPageView, viewerId: string | null) {
+function renderMenu(view: LobbyPageView, viewerId: string | null, member: DebateLobbyMember = daniel) {
   render(
-    <LobbyPersonMenu lobby={view} member={daniel} isSelf={false} viewerId={viewerId} disagreements={null}>
+    <LobbyPersonMenu lobby={view} member={member} isSelf={false} viewerId={viewerId} disagreements={null}>
       <button type="button">Daniel</button>
     </LobbyPersonMenu>
   );
@@ -157,5 +157,14 @@ describe('LobbyPersonMenu handing off to another overlay', () => {
     fireEvent.click(within(screen.getByTestId('bottom-sheet')).getByRole('button', { name: 'Remove from lobby' }));
     expect(mocks.moderate).toHaveBeenCalledWith({ userId: 'daniel', action: 'remove' }, expect.anything());
     expect(screen.queryByTestId('bottom-sheet')).toBeNull();
+  });
+});
+
+describe('LobbyPersonMenu for someone in a debate', () => {
+  it('says they can be requested once back, in place of Request', () => {
+    renderMenu(lobby(false), 'viewer', { ...daniel, in_debate: true });
+
+    expect(screen.getByText('Daniel is in a debate. You can request them when they’re back.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Request a debate/ })).not.toBeInTheDocument();
   });
 });
