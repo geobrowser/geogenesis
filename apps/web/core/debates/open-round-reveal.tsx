@@ -86,8 +86,8 @@ export function useOpenRoundRevealStep(
 
 /**
  * One debater's pick, as a card over their tile that flips once, on mount, from their name to the
- * pick. A missing pick counted as End, so it flips to End and says it was no pick, which is what
- * makes it clear why the debate ended.
+ * pick. A missing pick flips to "No pick" on grey rather than to either choice: it goes with the
+ * other debater's pick, and ends the debate only when neither picked.
  *
  * `placement` moves the card off the tile's centre while result text is up between the two tiles:
  * the upper tile's card rises, the lower one's drops.
@@ -101,7 +101,7 @@ export function OpenRoundPickReveal({
   pick: OpenRoundPick | null;
   placement?: 'center' | 'raised' | 'lowered';
 }) {
-  const word = pick === 'extend' ? 'Extend' : 'End';
+  const word = pick === 'extend' ? 'Extend' : pick === 'end' ? 'End' : 'No pick';
   return (
     <div
       aria-hidden="true"
@@ -120,11 +120,11 @@ export function OpenRoundPickReveal({
         <div
           className={cx(
             'absolute inset-0 flex rotate-y-180 flex-col items-center justify-center rounded-lg px-2 text-white shadow-[0_10px_30px_rgba(0,0,0,0.35)] backface-hidden',
-            pick === 'extend' ? 'bg-purple' : 'bg-text'
+            pick === 'extend' ? 'bg-purple' : pick === 'end' ? 'bg-text' : 'bg-grey-04'
           )}
         >
           <span className="max-w-full truncate text-[0.6875rem] leading-[0.8125rem] font-medium tracking-[0.06em] uppercase opacity-80">
-            {pick === null ? 'No pick' : name}
+            {name}
           </span>
           <span className="text-[1.375rem] leading-6 font-bold tracking-[0.04em] uppercase">{word}</span>
         </div>
@@ -193,11 +193,15 @@ function openRoundOpenerLine(opener: string | null) {
   return opener === null ? 'You open' : `${opener} opens`;
 }
 
-/** Why a debate ended, when the reason is a missing pick. A split needs no line: the cards say it. */
+/**
+ * Why a debate ended, when nobody picked End: the missing picks. An End ends the debate whatever the
+ * other pick was, so when there is one the cards already say why, and there is no line.
+ */
 export function openRoundWrapNote(
   localPick: OpenRoundPick | null | undefined,
   remote: { name: string; pick: OpenRoundPick | null | undefined }
 ) {
+  if (localPick === 'end' || remote.pick === 'end') return null;
   const localMissed = localPick === null;
   const remoteMissed = remote.pick === null;
   if (localMissed && remoteMissed) return 'No picks in time';
@@ -336,7 +340,7 @@ export function useOpenRoundReveal({
 
 /**
  * The reveal for screen readers, which cannot see the cards turn: both picks, then what they mean.
- * A missing pick is said as such, since it is why the debate ended.
+ * A missing pick is said as such, since it can be why the debate ended.
  */
 function openRoundAnnouncementText({
   step,

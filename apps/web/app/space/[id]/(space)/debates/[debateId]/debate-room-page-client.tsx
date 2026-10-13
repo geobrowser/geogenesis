@@ -713,6 +713,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     msSinceTurnEnded: localTurnEndedAt === null ? null : Date.now() - localTurnEndedAt,
     stillSpeaking: localSpeakingRef.current,
     msUntilTurnStarts: localTurnStartsIn === null ? null : localTurnStartsIn * 1_000,
+    betweenRounds: countdown.openRounds?.phase === 'deciding' || countdown.openRounds?.phase === 'result',
   };
   const localAudioEnabled = shouldEnableLocalAudio(localAudioGate);
   // `connect` publishes tracks after several awaits, by which time the debate may have advanced a
