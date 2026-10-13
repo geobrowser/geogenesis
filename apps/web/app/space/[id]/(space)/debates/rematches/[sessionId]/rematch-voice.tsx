@@ -740,6 +740,15 @@ function VoiceHeaderBody({
     };
   }, [room, roomRef]);
 
+  const releasableRoomRef = React.useRef(room);
+  releasableRoomRef.current = room;
+  React.useEffect(
+    () => () => {
+      releasableRoomRef.current?.localParticipant?.trackPublications?.forEach(publication => publication.track?.stop());
+    },
+    []
+  );
+
   // No noise filter here, deliberately. Krisp substitutes its own output for the *published* track,
   // so anything that leaves it attached and not producing audio is a microphone that reads unmuted
   // and carries nothing: the room stays connected, the cards stay lit, and the other side hears

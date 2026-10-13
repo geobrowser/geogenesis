@@ -54,6 +54,9 @@ const mocks = vi.hoisted(() => ({
   // Returns a promise, like the real one: the unmute click attaches a `.catch` to it.
   setMicrophoneEnabled: vi.fn(() => Promise.resolve()),
   setCameraEnabled: vi.fn((_enabled: boolean) => Promise.resolve()),
+  /** Stopping what the call published, which is what frees the devices. */
+  publishedMicStop: vi.fn(),
+  publishedCameraStop: vi.fn(),
   isMicrophoneEnabled: true,
   isSpeaking: false,
   localIsSpeaking: false,
@@ -138,6 +141,10 @@ vi.mock('@livekit/components-react', () => ({
       identity: 'me',
       setMicrophoneEnabled: mocks.setMicrophoneEnabled,
       setCameraEnabled: mocks.setCameraEnabled,
+      trackPublications: new Map<string, { track?: { stop: () => void } }>([
+        ['mic', { track: { stop: mocks.publishedMicStop } }],
+        ['cam', { track: { stop: mocks.publishedCameraStop } }],
+      ]),
     },
   }),
   useMediaDeviceSelect: ({ kind, requestPermissions }: { kind: MediaDeviceKind; requestPermissions?: boolean }) => {
@@ -443,6 +450,8 @@ beforeEach(() => {
   mocks.opponentCameraPublication = undefined;
   mocks.setMicrophoneEnabled.mockReset().mockResolvedValue(undefined);
   mocks.setCameraEnabled.mockReset().mockResolvedValue(undefined);
+  mocks.publishedMicStop.mockReset();
+  mocks.publishedCameraStop.mockReset();
   clearRematchJoinIntents();
   mocks.isMicrophoneEnabled = true;
   mocks.isSpeaking = false;
@@ -2608,5 +2617,30 @@ describe('video in the header', () => {
 
     expect(slotSizes()).toEqual(withoutCamera);
     expect(withoutCamera).toContain('size-14');
+  });
+});
+
+describe('letting the devices go on the way to the debate', () => {
+  it('stops what it published when the call ends', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(mocks.publishedMicStop).not.toHaveBeenCalled();
+
+    cleanup();
+
+    expect(mocks.publishedMicStop).toHaveBeenCalled();
+    expect(mocks.publishedCameraStop).toHaveBeenCalled();
+  });
+
+  it('stops them the moment a claim is agreed and the session converts', async () => {
+    const view = render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    expect(mocks.publishedMicStop).not.toHaveBeenCalled();
+
+    const converted = { ...makeSession('browsing'), status: 'converted' as const, converted_debate_id: 'debate-1' };
+    view.rerender(<RematchVoiceHeader session={converted} currentUserId="me" />);
+
+    expect(mocks.publishedMicStop).toHaveBeenCalled();
+    expect(mocks.publishedCameraStop).toHaveBeenCalled();
   });
 });
