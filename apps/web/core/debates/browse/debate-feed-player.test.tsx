@@ -6,7 +6,7 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
 
-import { DebateFeedPlayer } from './debate-feed-player';
+import { DebateFeedPlayer, isRangePlayable } from './debate-feed-player';
 
 const SPACE_1 = '11111111111111111111111111111111';
 const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
@@ -1840,5 +1840,29 @@ describe('the pair becomes watchable together (GEO-2965)', () => {
     const active = renderHeld();
     expect(active.slot1.preload).toBe('auto');
     expect(active.slot2.preload).toBe('auto');
+  });
+
+  it('leaves a finalized recording on metadata when its card is buffered, and raw ones on auto', () => {
+    const finalized = 'https://r2.test/debates/d/1.local.finalized.webm?X-Amz-Signature=abc';
+    mocks.controller = controllerFixture({
+      mutedByUser: true,
+      turnSlot: 1,
+      playing: false,
+      urls: { slot1: finalized, slot2: 'https://r2.test/debates/d/2.local.webm?X-Amz-Signature=abc' },
+    });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    expect(slot1.preload).toBe('metadata');
+    expect(slot2.preload).toBe('auto');
+  });
+});
+
+describe('isRangePlayable', () => {
+  it('recognises finalized objects by their path, not their query', () => {
+    expect(isRangePlayable('https://r2.test/a/1.local.finalized.webm?X=1')).toBe(true);
+    expect(isRangePlayable('https://r2.test/a/1.local.finalized-v2.webm')).toBe(true);
+    expect(isRangePlayable('https://r2.test/a/1.local.webm?name=x.finalized.webm')).toBe(false);
+    expect(isRangePlayable('https://r2.test/a/1.mobile.mp4')).toBe(false);
+    expect(isRangePlayable('not a url')).toBe(false);
   });
 });

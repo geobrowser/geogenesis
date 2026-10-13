@@ -86,7 +86,8 @@ type DebateFeedPlayerProps = {
    * `preload="metadata"`, Safari and Firefox generally stop at the header. The active card holds
    * its pair until both can play, so a card arriving without that data waits for it. Raising the
    * next card to `preload="auto"` is what lets it arrive ready on every engine, and it is limited
-   * to one card because it is also the one that costs real bandwidth.
+   * to one card because it is also the one that costs real bandwidth. A finalized recording stays
+   * on `metadata` even then — see `isRangePlayable` — so what this raises is the raw uploads.
    */
   buffer?: boolean;
   /**
@@ -879,6 +880,26 @@ function MeasuredEndCard({
   return shown ? <DebateEndCard card={card} onOpenClaims={onOpenClaims} onReplay={onReplay} /> : null;
 }
 
+/**
+ * Whether `src` is a finalized recording, which plays by range under `preload="metadata"` and
+ * need not be downloaded whole to start.
+ *
+ * The recording rows all say `.local.webm` — the MediaRecorder upload — and geo-chat decides which
+ * object the signed URL points at, so the URL is the only place this is known. A finalized object
+ * (`….finalized.webm`, `….finalized-v2.webm`) carries its duration, seek head and cues at the
+ * front, so the demuxer never has to seek the unfetched tail the way it does on the raw upload
+ * (see `rebuild`). R2 answers its Range requests with 206, and the browser pulls what it plays.
+ * Anything else — the raw upload, a mobile rendition, a URL this does not recognise — is not
+ * assumed to be, and keeps `auto`.
+ */
+export function isRangePlayable(src: string): boolean {
+  try {
+    return /\.finalized(-v\d+)?\.webm$/.test(new URL(src, 'http://localhost').pathname);
+  } catch {
+    return false;
+  }
+}
+
 function DebaterVideo({
   participant,
   byline,
@@ -978,7 +999,7 @@ function DebaterVideo({
    * different debate's element starts from the default again.
    */
   const [buffered, setBuffered] = React.useState(false);
-  if (src && buffer && !buffered) setBuffered(true);
+  if (src && buffer && !buffered && !isRangePlayable(src)) setBuffered(true);
   if (!src && buffered) setBuffered(false);
 
   /**
@@ -1217,7 +1238,8 @@ function DebaterVideo({
             // `metadata` by default: enough to paint a frame and know the shape of the recording,
             // without pulling a multi-megabyte file down for a card nobody has reached yet — the
             // feed keeps several of these mounted at once. `auto` for the active card and the one
-            // after it, which are about to play (`buffered`), and for any element `rebuild` raised.
+            // after it (`buffered`) unless the recording is finalized, which plays by range and
+            // is not pulled down whole (`isRangePlayable`), and for any element `rebuild` raised.
             preload={buffered ? 'auto' : 'metadata'}
             src={src}
             // The viewer's own mute — plus the listening debater's, where `volume` is a no-op.
