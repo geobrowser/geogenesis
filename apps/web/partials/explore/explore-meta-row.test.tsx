@@ -11,10 +11,16 @@ import { ExploreMetaRow } from './explore-meta-row';
 
 const SPACE = '73a82967cb12f604f9589ac4bc8024cb';
 
-const mocks = vi.hoisted(() => ({ spaceType: undefined as 'PERSONAL' | 'PUBLIC' | undefined }));
+const mocks = vi.hoisted(() => ({
+  spaceType: undefined as 'PERSONAL' | 'PUBLIC' | undefined,
+  viewerSpace: null as string | null,
+}));
 
 vi.mock('~/core/hooks/use-is-personal-space', () => ({
   useIsPersonalSpace: () => (mocks.spaceType ? mocks.spaceType === 'PERSONAL' : undefined),
+}));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: mocks.viewerSpace }),
 }));
 vi.mock('~/core/follows/follow-button', () => ({
   FollowButton: (props: { target: { kind: string; id: string; name?: string | null } }) => (
@@ -55,6 +61,7 @@ const item = (overrides: Partial<ExploreFeedItem> = {}): ExploreFeedItem => ({
 
 beforeEach(() => {
   mocks.spaceType = undefined;
+  mocks.viewerSpace = null;
 });
 
 afterEach(cleanup);
@@ -81,5 +88,31 @@ describe('ExploreMetaRow join or follow (GEO-3236)', () => {
     render(<ExploreMetaRow item={item()} />);
 
     expect(screen.getByText('Join')).toBeInTheDocument();
+  });
+
+  it("offers Follow on someone else's personal space even when you're a member of it", () => {
+    mocks.spaceType = 'PERSONAL';
+    render(<ExploreMetaRow item={item({ isMemberOrEditor: true })} />);
+
+    expect(screen.getByTestId('follow')).toHaveAttribute('data-id', SPACE);
+  });
+
+  it('keeps your own Follow mounted on your own space, outside the dotted row', () => {
+    // It draws nothing there, but a self-follow queued while signed out needs it mounted to drop.
+    mocks.spaceType = 'PERSONAL';
+    mocks.viewerSpace = SPACE;
+    const { container } = render(<ExploreMetaRow item={item({ isMemberOrEditor: true })} />);
+
+    expect(screen.getByTestId('follow')).toBeInTheDocument();
+    // An offer that shows nothing takes no segment, so the type leads the dotted run with no dot.
+    expect(container.textContent).not.toContain('·');
+  });
+
+  it('offers nothing on a shared space you are already in', () => {
+    mocks.spaceType = 'PUBLIC';
+    render(<ExploreMetaRow item={item({ isMemberOrEditor: true })} />);
+
+    expect(screen.queryByText('Join')).toBeNull();
+    expect(screen.queryByTestId('follow')).toBeNull();
   });
 });

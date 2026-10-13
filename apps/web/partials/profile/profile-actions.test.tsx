@@ -56,13 +56,16 @@ describe('ProfileActions (GEO-3236)', () => {
     expect(screen.queryByTestId('votes')).toBeNull();
   });
 
-  it('gives the owner Edit profile, and no Follow or votes', () => {
+  it('gives the owner Edit profile and no votes, keeping their own Follow mounted', () => {
     mocks.personalSpaceId = PROFILE_SPACE;
     render(<ProfileActions spaceId={PROFILE_SPACE} />);
 
     expect(screen.getByText('Edit profile')).toBeInTheDocument();
-    expect(screen.queryByTestId('follow')).toBeNull();
     expect(screen.queryByTestId('votes')).toBeNull();
+    // It draws nothing on your own space (FollowButton's own suite covers that), but must stay
+    // mounted: only a mounted Follow can drop a self-follow queued here while signed out.
+    expect(screen.getByTestId('follow')).toHaveAttribute('data-id', PROFILE_SPACE);
+    expect(screen.queryByText('Request debate')).toBeNull();
   });
 
   it('offers nothing until it knows whose profile this is', () => {

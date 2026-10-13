@@ -29,7 +29,7 @@ type Props = {
  * keeps the black one.
  *
  * **Debate and Follow are absent for the owner rather than disabled**, because neither means
- * anything pointed at yourself.
+ * anything pointed at yourself. Follow is still mounted for the owner, drawing nothing; see below.
  *
  * Verify is not here at all: it sits beside the name, where it reads as a statement about who this
  * is rather than as one more thing to do to them.
@@ -56,6 +56,9 @@ export function ProfileActions({ spaceId, name }: Props) {
         <>
           <SmallButton onClick={() => setIsEditOpen(true)}>Edit profile</SmallButton>
           <EditProfileDialog open={isEditOpen} onOpenChange={setIsEditOpen} />
+          {/* Draws nothing on your own profile, but stays mounted: a Follow pressed here while
+              signed out is queued, and only a mounted Follow can see it was yourself and drop it. */}
+          <FollowButton target={{ kind: 'person', id: spaceId, name }} />
         </>
       ) : (
         <>

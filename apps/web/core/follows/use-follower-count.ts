@@ -78,9 +78,9 @@ export function useFollowers(
   });
 
   return React.useMemo(() => {
-    // A count that couldn't be read draws as none rather than loading forever.
-    if (isError) return { count: 0, ids: [] };
-    if (!data) return null;
+    // A count that was never read draws as none rather than loading forever. One that was read and
+    // then failed to refresh keeps what it had: React Query holds the last good data through an error.
+    if (!data) return isError ? { count: 0, ids: [] } : null;
     if (!viewerId || isLoadingFollows) return { count: data.count, ids: data.followerIds };
     return followersForViewer(data, viewerId, followedIds.has(normId(entityId)));
   }, [data, isError, viewerId, isLoadingFollows, followedIds, entityId]);
