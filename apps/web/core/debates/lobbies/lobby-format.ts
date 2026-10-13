@@ -150,9 +150,19 @@ export function pairSubject(pair: DebateLobbyPair, members: DebateLobbyMember[])
   return null;
 }
 
-export function remindedLabel(count: number) {
-  return `${count} reminded`;
+/**
+ * A lobby reminder is called an RSVP on screen, as community calls word it (GEO-3268): "RSVP" to
+ * set it, "Going" once set, "6 going" for the count. geo-chat still calls it a reminder.
+ */
+export function rsvpLabel(going: boolean) {
+  return going ? 'Going' : 'RSVP';
 }
+
+export function goingLabel(count: number) {
+  return `${count} going`;
+}
+
+export const RSVP_FAILED = 'Could not update your RSVP. Try again.';
 
 export const ROLE_LABEL: Record<DebateLobbyRole, string> = {
   host: 'Host',

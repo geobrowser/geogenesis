@@ -31,7 +31,14 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
-import { hostAfterChange, lobbyErrorMessage, notYetOpenLabel, remindedLabel } from './lobby-format';
+import {
+  RSVP_FAILED,
+  goingLabel,
+  hostAfterChange,
+  lobbyErrorMessage,
+  notYetOpenLabel,
+  rsvpLabel,
+} from './lobby-format';
 import { LobbyGuestBanner } from './lobby-guest';
 import {
   LobbyGuestProvider,
@@ -244,7 +251,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
         {notYetOpenLabel(lobby)}
       </Text>
       <Text as="p" variant="footnote" color="grey-04">
-        {remindedLabel(lobby.reminder_count)}
+        {goingLabel(lobby.reminder_count)}
       </Text>
       {guest ? <LobbyGuestBanner lobbyId={lobby.lobby_id} /> : null}
       <div className="flex flex-wrap gap-2">
@@ -256,7 +263,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
             pending={reminder.isPending}
             onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
           >
-            {reminded ? 'Reminded' : 'Remind me'}
+            {rsvpLabel(reminded)}
           </HubPillButton>
         )}
         <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
@@ -292,7 +299,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
       ) : null}
       {reminder.isError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, 'Could not update your reminder. Try again.')}
+          {lobbyErrorMessage(reminder.error, RSVP_FAILED)}
         </Text>
       ) : null}
     </LobbyShell>

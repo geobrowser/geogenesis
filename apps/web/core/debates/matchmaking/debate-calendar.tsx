@@ -11,6 +11,7 @@ import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { Text } from '~/design-system/text';
@@ -21,6 +22,7 @@ import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-avail
 import { type DebatePerson, type ScheduledDebateRequest } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth } from '../hooks';
+import { LobbiesCalendarBody } from '../lobbies/lobbies-calendar';
 import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
 import { useAdminScheduledDebates, useScheduledDebates } from '../rooms/scheduling-hooks';
@@ -76,7 +78,12 @@ import {
   weekDays,
   weekStart,
 } from './debate-calendar-model';
-import { CALENDAR_FROM_PARAM, CALENDAR_PATH, CALENDAR_VIEW_PARAM } from './debate-calendar-route';
+import {
+  CALENDAR_FROM_PARAM,
+  CALENDAR_LOBBIES_VIEW,
+  CALENDAR_PATH,
+  CALENDAR_VIEW_PARAM,
+} from './debate-calendar-route';
 import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch } from './disagreement-counts';
@@ -158,11 +165,23 @@ export function DebateCalendar() {
   // second key.
   const [adminFrom] = React.useState(() => weekStart(new Date(), 0));
   const admin = useAdminScheduledDebates(authenticated, adminFrom);
-  const requestedView: CalendarView = searchParams?.get(CALENDAR_VIEW_PARAM) === 'debates' ? 'debates' : 'availability';
-  const view: CalendarView = admin.isAdmin ? requestedView : 'availability';
+  // The week's debate lobbies (GEO-3268), as a view of their own rather than over the free time.
+  const lobbyJoining = useFeatureFlag('lobbyJoining');
+  const views = React.useMemo<CalendarView[]>(
+    () => [
+      'availability',
+      ...(lobbyJoining ? (['lobbies'] as const) : []),
+      ...(admin.isAdmin ? (['debates'] as const) : []),
+    ],
+    [admin.isAdmin, lobbyJoining]
+  );
+  const viewParam = searchParams?.get(CALENDAR_VIEW_PARAM);
+  const requestedView: CalendarView =
+    viewParam === 'debates' ? 'debates' : viewParam === CALENDAR_LOBBIES_VIEW ? 'lobbies' : 'availability';
+  const view: CalendarView = views.includes(requestedView) ? requestedView : 'availability';
   const changeView = (next: CalendarView) => {
     const params = new URLSearchParams(searchParams?.toString());
-    if (next === 'debates') params.set(CALENDAR_VIEW_PARAM, next);
+    if (next !== 'availability') params.set(CALENDAR_VIEW_PARAM, next);
     else params.delete(CALENDAR_VIEW_PARAM);
     const query = params.toString();
     router.replace(query ? `${pathname}?${query}` : (pathname ?? CALENDAR_PATH), { scroll: false });
@@ -193,7 +212,7 @@ export function DebateCalendar() {
           Debate calendar
         </Text>
         <HubHeaderControls analyticsSurface="calendar" scheduleButtonRef={scheduleButtonRef}>
-          {admin.isAdmin ? <CalendarViewSwitch view={view} onChange={changeView} /> : null}
+          <CalendarViewSwitch view={view} views={views} onChange={changeView} />
         </HubHeaderControls>
       </header>
 
@@ -218,6 +237,8 @@ export function DebateCalendar() {
         </div>
       ) : view === 'debates' ? (
         <AdminDebatesBody isPhone={isPhone} admin={admin} />
+      ) : view === 'lobbies' ? (
+        <LobbiesCalendarBody isPhone={isPhone} />
       ) : (
         <DebateCalendarBody
           isPhone={isPhone}

@@ -16,23 +16,26 @@ import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
 import { useLobbyLineup } from './live-lobbies';
 import { type LobbyEntry, markLobbyEntry } from './lobby-analytics';
 import {
+  RSVP_FAILED,
   debatingLabel,
+  goingLabel,
   hereLabel,
   hostsLabel,
   lobbyErrorMessage,
   lobbyScheduleLabel,
-  remindedLabel,
+  rsvpLabel,
 } from './lobby-format';
 import { LobbyAvatarStack } from './lobby-people';
 import { OpenLobbyDialog } from './open-lobby-dialog';
+import { UpcomingLobbiesRow } from './upcoming-lobbies';
 
 /**
- * Debate lobbies, under the debates panel's tabs (GEO-3133). Signed in and `lobbyJoining` only.
- * Kept current by `debate.lobbies_changed`, which needs the matchmaking scope.
+ * Scheduled debate lobbies, under the debates panel's tabs (GEO-3133). Signed in and `lobbyJoining`
+ * only. Kept current by `debate.lobbies_changed`, which needs the matchmaking scope.
  *
- * While a lobby is live or about to open, the spotlight above the tabs shows it (GEO-3268), and
- * this card lists only the rest, as "Later", so no lobby appears twice. With nothing left to list
- * it keeps just Open a lobby for hosts, and otherwise goes.
+ * A row of date cards (GEO-3268). Live lobbies and the one opening soon belong to the spotlight
+ * above the tabs, so this lists the rest and no lobby appears twice. With nothing to list it keeps
+ * just Open a lobby for hosts, and otherwise goes.
  */
 export function LiveLobbiesCard() {
   const joining = useFeatureFlag('lobbyJoining');
@@ -47,65 +50,24 @@ function LiveLobbiesCardBody() {
   const { live, soon, later } = useLobbyLineup();
   const [dialogOpen, setDialogOpen] = React.useState(false);
 
-  const spotlight = live.length > 0 || soon !== null;
   // With something live, the soon lobby is only the next one in line, so it is listed here.
-  const lobbies = spotlight ? (live.length > 0 && soon ? [soon, ...later] : later) : (lobbiesQuery.data?.lobbies ?? []);
-  if (spotlight && lobbies.length === 0 && !hosting) return null;
+  const lobbies = live.length > 0 && soon ? [soon, ...later] : later;
+
+  if (lobbiesQuery.isError && !lobbiesQuery.data) {
+    return (
+      <Text as="p" variant="footnote" color="grey-04" className="px-4 pt-3">
+        Could not load lobbies.
+      </Text>
+    );
+  }
 
   return (
-    <div className="px-4 pt-3">
-      <section
-        className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
-        aria-label={spotlight ? 'Later debate lobbies' : 'Live debate lobbies'}
-        data-testid="live-lobbies-card"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <Text as="h3" variant="footnoteMedium" color="text">
-            {spotlight ? 'Later' : 'Live debate lobbies'}
-          </Text>
-          {hosting ? (
-            <HubPillButton analyticsLabel="Open a lobby" onClick={() => setDialogOpen(true)}>
-              Open a lobby
-            </HubPillButton>
-          ) : null}
-        </div>
-
-        {spotlight ? (
-          lobbies.length === 0 ? null : (
-            <LobbyRows lobbies={lobbies} />
-          )
-        ) : lobbiesQuery.isLoading ? (
-          <Text as="p" variant="footnote" color="grey-04">
-            Loading lobbies…
-          </Text>
-        ) : lobbiesQuery.isError ? (
-          <Text as="p" variant="footnote" color="grey-04">
-            Could not load lobbies.
-          </Text>
-        ) : lobbies.length === 0 ? (
-          <Text as="p" variant="footnote" color="grey-04">
-            No lobbies right now.
-          </Text>
-        ) : (
-          <LobbyRows lobbies={lobbies} />
-        )}
-      </section>
+    <>
+      <UpcomingLobbiesRow lobbies={lobbies} canHost={hosting} onOpenLobby={() => setDialogOpen(true)} />
       {dialogOpen ? <OpenLobbyDialog onClose={() => setDialogOpen(false)} /> : null}
-    </div>
+    </>
   );
 }
-
-function LobbyRows({ lobbies }: { lobbies: DebateLobbySummary[] }) {
-  return (
-    <ul className="flex flex-col divide-y divide-grey-02">
-      {lobbies.map(lobby => (
-        <LobbyRow key={lobby.lobby_id} lobby={lobby} />
-      ))}
-    </ul>
-  );
-}
-
-const REMINDER_FAILED = 'Could not update your reminder. Try again.';
 
 /**
  * One lobby: Live or its time, its name, who is there, and Join or Remind me. Shared by this card
@@ -163,7 +125,7 @@ export function LobbyRow({
               ]
                 .filter(Boolean)
                 .join(' · ')
-            : [hostedBy, remindedLabel(lobby.reminder_count)].filter(Boolean).join(' · ')}
+            : [hostedBy, goingLabel(lobby.reminder_count)].filter(Boolean).join(' · ')}
         </Text>
         {lobby.open ? (
           <Link
@@ -180,7 +142,7 @@ export function LobbyRow({
             aria-pressed={lobby.viewer_reminded}
             onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded })}
           >
-            {lobby.viewer_reminded ? 'Reminded' : 'Remind me'}
+            {rsvpLabel(lobby.viewer_reminded)}
           </HubPillButton>
         )}
       </div>
@@ -192,7 +154,7 @@ export function LobbyRow({
       ) : null}
       {reminder.isError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, REMINDER_FAILED)}
+          {lobbyErrorMessage(reminder.error, RSVP_FAILED)}
         </Text>
       ) : null}
     </li>

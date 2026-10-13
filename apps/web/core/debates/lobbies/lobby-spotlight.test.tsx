@@ -82,7 +82,7 @@ describe('LobbySpotlight', () => {
     expect(row.getByRole('link', { name: 'Join' })).toHaveAttribute('href', '/debate/ai');
   });
 
-  it('counts down to a lobby opening soon and offers Remind me', () => {
+  it('counts down to a lobby opening soon and offers RSVP', () => {
     vi.useFakeTimers();
     vi.setSystemTime(Date.parse('2026-10-13T17:48:00Z'));
     const soon = lobby({ open: false, scheduled: true, opens_at: '2026-10-13T18:00:00Z', reminder_count: 6 });
@@ -90,8 +90,8 @@ describe('LobbySpotlight', () => {
 
     const card = within(screen.getByRole('region', { name: 'Upcoming debate lobby' }));
     expect(card.getByText('Opens in 12 min')).toBeInTheDocument();
-    expect(card.getByText('Hosted by Bryan · 6 reminded')).toBeInTheDocument();
-    card.getByRole('button', { name: 'Remind me' }).click();
+    expect(card.getByText('Hosted by Bryan · 6 going')).toBeInTheDocument();
+    card.getByRole('button', { name: 'RSVP' }).click();
     expect(mocks.mutate).toHaveBeenCalledWith({ lobbyId: 'nyc', reminded: true });
     vi.useRealTimers();
   });

@@ -73,8 +73,10 @@ describe('every debate entry steps out of a lobby', () => {
   // Not a debater entering a debate: lobby-to-lobby links, watching one live, sign-in, debug.
   const allowed = new Set([
     'core/debates/lobbies/lobbies-card.tsx',
-    // GEO-3268: the panel spotlight's and the Explore banner's links into a lobby.
+    // GEO-3268: links into a lobby from the panel spotlight and row, the calendar and Explore.
     'core/debates/lobbies/lobby-spotlight.tsx',
+    'core/debates/lobbies/upcoming-lobbies.tsx',
+    'core/debates/lobbies/lobbies-calendar.tsx',
     'partials/explore/explore-live-lobbies-banner.tsx',
     'core/debates/lobbies/lobby-page.tsx',
     'core/debates/lobbies/open-lobby-dialog.tsx',

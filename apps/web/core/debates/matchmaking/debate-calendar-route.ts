@@ -16,8 +16,12 @@ function canonicalId(id: string): string | null {
 /** Where the calendar was opened from, read for `debate_calendar_opened`'s `opened_from`. */
 export const CALENDAR_FROM_PARAM = 'from';
 export const CALENDAR_PATH = '/matchmaking/calendar';
-/** `?view=debates` opens the admin view of everyone's scheduled debates (GEO-2943); admins only. */
+/**
+ * `?view=debates` opens the admin view of everyone's scheduled debates (GEO-2943), admins only;
+ * `?view=lobbies` opens the week's debate lobbies (GEO-3268), behind `lobbyJoining`.
+ */
 export const CALENDAR_VIEW_PARAM = 'view';
+export const CALENDAR_LOBBIES_VIEW = 'lobbies';
 
 /**
  * The People and Claims panel's picks (GEO-3220), so a narrowed week survives a reload and can be
@@ -35,6 +39,14 @@ export function calendarHref(from: string | null, picks?: CalendarPicks): string
   if (picks) writeCalendarPicks(params, picks);
   const query = params.toString();
   return query ? `${CALENDAR_PATH}?${query}` : CALENDAR_PATH;
+}
+
+/** The calendar opened on its Lobbies view, from the hub on `from`. */
+export function lobbiesCalendarHref(from: string | null): string {
+  const [path, query = ''] = calendarHref(from).split('?');
+  const params = new URLSearchParams(query);
+  params.set(CALENDAR_VIEW_PARAM, CALENDAR_LOBBIES_VIEW);
+  return `${path}?${params.toString()}`;
 }
 
 /**

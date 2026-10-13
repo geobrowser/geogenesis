@@ -71,6 +71,19 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
+// GEO-3268. Only the lobby flag is overridden; the Lobbies view itself is covered in its own suite.
+const lobbyFlag = vi.hoisted(() => ({ joining: false }));
+vi.mock('~/core/state/feature-flags', async importOriginal => {
+  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
+  return {
+    ...actual,
+    useFeatureFlag: (id: Parameters<typeof actual.useFeatureFlag>[0]) =>
+      id === 'lobbyJoining' ? lobbyFlag.joining : actual.useFeatureFlag(id),
+  };
+});
+vi.mock('../lobbies/lobbies-calendar', () => ({
+  LobbiesCalendarBody: () => <div data-testid="lobbies-calendar" />,
+}));
 function openSidePanel(target: { entityId: string } | null) {
   mocks.sidePanelTarget = target;
   for (const listener of mocks.sidePanelListeners) listener();
@@ -418,6 +431,7 @@ const ADMIN_MATCHES = [
 ];
 
 beforeEach(() => {
+  lobbyFlag.joining = false;
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   Object.assign(mocks, {
@@ -1691,5 +1705,37 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 
     expect(mocks.searchParams.get('claims')).toBe(`${SPACE}:${CLAIM_ONE}`);
     expect(screen.queryByRole('dialog', { name: 'Narrow the calendar' })).not.toBeInTheDocument();
+  });
+});
+
+describe('DebateCalendar, Lobbies view (GEO-3268)', () => {
+  it('offers no Lobbies view with the lobby flag off, and a link to it lands on availability', () => {
+    mocks.searchParams = new URLSearchParams({ view: 'lobbies' });
+    render(<DebateCalendar />);
+
+    expect(screen.queryByRole('radiogroup', { name: 'Calendar view' })).not.toBeInTheDocument();
+    expect(screen.queryByTestId('lobbies-calendar')).not.toBeInTheDocument();
+  });
+
+  it('gives everyone Availability | Lobbies with the flag on, and puts the view in the URL', () => {
+    lobbyFlag.joining = true;
+    mocks.searchParams = new URLSearchParams({ from: '/debates' });
+    render(<DebateCalendar />);
+
+    expect(screen.getByRole('radio', { name: 'Availability' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.queryByRole('radio', { name: 'Admin' })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Lobbies' }));
+    expect(mocks.routerReplace).toHaveBeenCalledWith('/matchmaking/calendar?from=%2Fdebates&view=lobbies', {
+      scroll: false,
+    });
+  });
+
+  it('opens on the Lobbies view from its link', () => {
+    lobbyFlag.joining = true;
+    mocks.searchParams = new URLSearchParams({ view: 'lobbies' });
+    render(<DebateCalendar />);
+
+    expect(screen.getByRole('radio', { name: 'Lobbies' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByTestId('lobbies-calendar')).toBeInTheDocument();
   });
 });

@@ -13,12 +13,14 @@ import { useDebateLobbyReminder } from './hooks';
 import type { LobbyLineup } from './live-lobbies';
 import { markLobbyEntry } from './lobby-analytics';
 import {
+  RSVP_FAILED,
   debatingLabel,
+  goingLabel,
   hereLabel,
   hostsLabel,
   lobbyErrorMessage,
   lobbyScheduleLabel,
-  remindedLabel,
+  rsvpLabel,
 } from './lobby-format';
 import { LobbyAvatarStack } from './lobby-people';
 
@@ -193,8 +195,6 @@ export function opensInLabel(msUntil: number | null) {
   return `Opens in ${minutes} min`;
 }
 
-const REMINDER_FAILED = 'Could not update your reminder. Try again.';
-
 function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
   const reminder = useDebateLobbyReminder();
   const msUntil = useMinuteCountdown(lobby.opens_at);
@@ -219,7 +219,7 @@ function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
       </div>
 
       <p className="text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-grey-03">
-        {[hosts ? `Hosted by ${hosts}` : null, lobby.reminder_count > 0 ? remindedLabel(lobby.reminder_count) : null]
+        {[hosts ? `Hosted by ${hosts}` : null, lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null]
           .filter(Boolean)
           .join(' · ')}
       </p>
@@ -233,11 +233,11 @@ function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
         onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded })}
         className={SPOTLIGHT_ACTION_CLASS_NAME}
       >
-        {lobby.viewer_reminded ? 'Reminded' : 'Remind me'}
+        {rsvpLabel(lobby.viewer_reminded)}
       </button>
       {reminder.isError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, REMINDER_FAILED)}
+          {lobbyErrorMessage(reminder.error, RSVP_FAILED)}
         </Text>
       ) : null}
     </section>
