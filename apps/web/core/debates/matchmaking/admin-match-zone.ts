@@ -122,8 +122,3 @@ export function dateLabels(date: string) {
     }),
   };
 }
-
-/** `3:00 PM` for minutes past midnight, as a wall clock: read in GMT, so no DST hour repeats or vanishes. */
-export function wallTime(minutes: number): string {
-  return timeIn(Date.UTC(2000, 0, 1, 0, minutes), GMT);
-}
