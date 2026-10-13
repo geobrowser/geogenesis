@@ -3,9 +3,8 @@ import { useDebateLobbies } from './hooks';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 
 /**
- * A lobby's hosts from the lobbies list. Before a lobby opens its roster is empty, so the list row
- * is the only place the page can read them; the row may be missing (the list is capped), so this
- * is best effort. Empty when it is.
+ * A lobby's hosts from its lobbies-list row: the roster is empty before it opens. Best effort,
+ * since the capped list may leave the row out; empty then.
  */
 export function listedHosts(lobbies: DebateLobbySummary[], lobbyId: string): DebateLobbyPerson[] {
   return lobbies.find(row => dashlessId(row.lobby_id) === dashlessId(lobbyId))?.hosts ?? [];
