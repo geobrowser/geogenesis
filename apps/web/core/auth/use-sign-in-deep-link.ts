@@ -6,6 +6,7 @@ import { marketingAuthProperties } from '~/core/auth-attempt';
 import { SIGN_IN_MODAL } from '~/core/auth/sign-in-deep-link';
 import { dashlessId } from '~/core/debates/api';
 import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
+import { claimLobbySignInPrompt } from '~/core/debates/lobbies/lobby-guest-sign-in';
 import { useDeepLinkEffect, useDeepLinkParams } from '~/core/deep-links/use-deep-link';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
@@ -64,6 +65,8 @@ export function useSignInDeepLink() {
       // Already signed in: the link has done its job by landing them here, and a login dialog over
       // a live session is noise. The trigger is cleared either way.
       if (authenticated) return;
+      // The lobby page would otherwise open a second prompt on top of this one (GEO-3270).
+      if (lobbyId) claimLobbySignInPrompt(lobbyId);
       openSignIn();
     },
   });

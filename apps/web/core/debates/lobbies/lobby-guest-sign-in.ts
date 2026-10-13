@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import type { AnalyticsProperties } from '~/core/analytics';
+import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { type PrivySignInCallOptions, usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
 import { dashlessId } from '../api';
@@ -46,32 +47,33 @@ export function useLobbyGuestSignIn(lobbyId: string) {
 }
 
 const promptedKey = (lobbyId: string) => `geo.debates.lobby-sign-in-prompted.${dashlessId(lobbyId)}`;
-/** Without storage, still once per page load: StrictMode and re-renders would otherwise reopen it. */
-const promptedThisLoad = new Set<string>();
 
-/** True the first time a lobby asks in this tab; a reload after closing the prompt does not reopen it. */
-function claimPrompt(lobbyId: string) {
-  const key = promptedKey(lobbyId);
-  if (promptedThisLoad.has(key)) return false;
-  promptedThisLoad.add(key);
+/**
+ * Records that this tab has opened the account prompt for a lobby; true only the first time. Shared
+ * with the sign-in deep link, so a visitor it already prompted is not prompted again on arrival.
+ */
+export function claimLobbySignInPrompt(lobbyId: string) {
   try {
-    if (window.sessionStorage.getItem(key)) return false;
-    window.sessionStorage.setItem(key, '1');
+    if (window.sessionStorage.getItem(promptedKey(lobbyId))) return false;
+    window.sessionStorage.setItem(promptedKey(lobbyId), '1');
   } catch {
-    // Once per page load, then.
+    // Without storage it asks once per visit rather than once per tab.
   }
   return true;
 }
 
 /**
  * GEO-3270. A visitor without an account can do nothing in a lobby yet, so the account prompt opens
- * as they arrive rather than behind a notice. Once per lobby per tab; closing it leaves the guest
- * banner's Log in and Create account to open it again. Returns to the lobby like the banner does.
+ * as they arrive rather than behind a notice. Once per lobby per tab, so closing it and reloading
+ * does not put it back; the guest banner's Log in and Create account open it again.
  */
 export function useLobbySignInPrompt(lobbyId: string, open: boolean) {
   const signIn = useLobbyGuestSignIn(lobbyId);
-  React.useEffect(() => {
-    if (!open || !claimPrompt(lobbyId)) return;
-    signIn({ component: 'lobby_sign_in_prompt', auth_trigger: 'page_load' });
-  }, [lobbyId, open, signIn]);
+  useEffectOnceWhen(
+    open,
+    () => {
+      if (claimLobbySignInPrompt(lobbyId)) signIn({ component: 'lobby_sign_in_prompt', auth_trigger: 'page_load' });
+    },
+    lobbyId
+  );
 }

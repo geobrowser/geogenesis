@@ -14,7 +14,7 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   },
 }));
 
-const { useLobbySignInPrompt } = await import('./lobby-guest-sign-in');
+const { claimLobbySignInPrompt, useLobbySignInPrompt } = await import('./lobby-guest-sign-in');
 
 beforeEach(() => {
   window.sessionStorage.clear();
@@ -65,5 +65,12 @@ describe('useLobbySignInPrompt', () => {
     renderHook(() => useLobbySignInPrompt('lobby-e', true));
 
     expect(mocks.signIn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not open for a lobby the sign-in link already prompted for', () => {
+    claimLobbySignInPrompt('lobby-f');
+    renderHook(() => useLobbySignInPrompt('lobby-f', true));
+
+    expect(mocks.signIn).not.toHaveBeenCalled();
   });
 });

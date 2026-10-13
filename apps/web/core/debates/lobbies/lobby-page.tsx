@@ -137,10 +137,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
     !guest && lobby !== null && !lobby.viewer.connected && (admitted || lobby.access.status === 'not_yet_open');
   useMatchmakingScope(waitingOutside);
   // Only where the page shows the guest banner, which is how a closed prompt is opened again.
-  useLobbySignInPrompt(
-    lobbyId,
-    signedOut && (lobby?.access.status === 'admitted' || lobby?.access.status === 'not_yet_open')
-  );
+  useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
 
   return (
     <LobbyGuestProvider value={guest}>

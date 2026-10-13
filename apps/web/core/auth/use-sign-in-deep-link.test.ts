@@ -5,21 +5,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const mocks = vi.hoisted(() => ({
   via: null as string | null,
   options: undefined as { analytics?: Record<string, unknown> } | undefined,
+  run: undefined as (() => void) | undefined,
+  openSignIn: vi.fn(),
 }));
 
 vi.mock('@geogenesis/auth', () => ({ usePrivy: () => ({ ready: true, authenticated: false }) }));
 vi.mock('~/core/deep-links/use-deep-link', () => ({
   useDeepLinkParams: () => ({ via: mocks.via, cleanUrl: window.location.pathname }),
-  useDeepLinkEffect: () => undefined,
+  useDeepLinkEffect: ({ run }: { run: () => void }) => void (mocks.run = run),
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({
   usePrivySignIn: (_: unknown, options: typeof mocks.options) => {
     mocks.options = options;
-    return vi.fn();
+    return mocks.openSignIn;
   },
 }));
 
 const { useSignInDeepLink } = await import('./use-sign-in-deep-link');
+const { claimLobbySignInPrompt } = await import('~/core/debates/lobbies/lobby-guest-sign-in');
 
 const LOBBY = '5f0c1a2b-3c4d-4e5f-8a9b-0c1d2e3f4a5b';
 
@@ -27,6 +30,9 @@ afterEach(() => {
   window.history.replaceState(null, '', '/');
   mocks.via = null;
   mocks.options = undefined;
+  mocks.run = undefined;
+  mocks.openSignIn.mockReset();
+  window.sessionStorage.clear();
 });
 
 describe('useSignInDeepLink', () => {
@@ -57,5 +63,16 @@ describe('useSignInDeepLink', () => {
       page_entity_type: 'debate_lobby',
     });
     expect(analytics).not.toHaveProperty('auth_intent');
+  });
+
+  // GEO-3270. The lobby page prompts on arrival too; one prompt per lobby per tab between them.
+  it('records the lobby as prompted, so the lobby page does not open a second one', () => {
+    window.history.replaceState(null, '', `/debate/${LOBBY}`);
+    mocks.via = 'lobby';
+    renderHook(() => useSignInDeepLink());
+    mocks.run?.();
+
+    expect(mocks.openSignIn).toHaveBeenCalledTimes(1);
+    expect(claimLobbySignInPrompt(LOBBY)).toBe(false);
   });
 });
