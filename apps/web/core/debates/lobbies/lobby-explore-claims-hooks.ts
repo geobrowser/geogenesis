@@ -22,7 +22,8 @@ import { useIsLobbyGuest } from './lobby-guest-hooks';
  * cache keys alone, each sorted so its key doesn't depend on order.
  */
 export function exploreRoomClaimBatches(entries: readonly { claim: { claim_entity_id: string } }[]): string[][] {
-  const ids = [...new Set(entries.map(entry => geoChatClaimId(entry.claim.claim_entity_id)))];
+  // Other ids get no room line: the filter refuses them.
+  const ids = [...new Set(entries.flatMap(entry => geoChatClaimId(entry.claim.claim_entity_id) ?? []))];
   const batches: string[][] = [];
   for (let start = 0; start < ids.length; start += LOBBY_CLAIMS_MAX_IDS) {
     batches.push(ids.slice(start, start + LOBBY_CLAIMS_MAX_IDS).sort());
@@ -46,6 +47,7 @@ export function useNearExploreBatches(batches: string[][]) {
     (claimEntityId: string, isNear: boolean) => {
       const near = nearRef.current;
       const id = geoChatClaimId(claimEntityId);
+      if (id === null) return;
       const count = (near.get(id) ?? 0) + (isNear ? 1 : -1);
       if (count > 0) near.set(id, count);
       else near.delete(id);
@@ -108,7 +110,10 @@ function combineRoomRows(results: readonly { data?: { claims: DebateLobbyClaim[]
 export function namedRoomClaims(response: DebateLobbyClaims, ids: readonly string[]): DebateLobbyClaims {
   if (response.source !== 'room') return { ...response, claims: [] };
   const named = new Set(ids);
-  return { ...response, claims: response.claims.filter(row => named.has(geoChatClaimId(row.claim.claim_entity_id))) };
+  return {
+    ...response,
+    claims: response.claims.filter(row => named.has(geoChatClaimId(row.claim.claim_entity_id) ?? '')),
+  };
 }
 
 export function roomRowsByClaim(batches: readonly (DebateLobbyClaim[] | undefined)[]) {
