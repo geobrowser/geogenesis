@@ -29,6 +29,11 @@ export function readRematchJoinIntent(sessionId: string): DebateRematchJoinInten
 
 export function markRematchAnswered(sessionId: string) {
   if (!sessionId) return;
+
+  if (answeredSessionIds.size >= MAX_REMEMBERED_SESSIONS && !answeredSessionIds.has(sessionId)) {
+    const oldest = answeredSessionIds.values().next();
+    if (!oldest.done) answeredSessionIds.delete(oldest.value);
+  }
   answeredSessionIds.add(sessionId);
 }
 

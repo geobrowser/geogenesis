@@ -2493,6 +2493,42 @@ describe('choosing a camera', () => {
   });
 });
 
+describe('a camera this call will not carry', () => {
+  it('says so rather than dropping the choice in silence', async () => {
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone']) };
+
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(await screen.findByText('Video isn’t available in this call.')).toBeInTheDocument();
+    // And nothing pretends otherwise: no control, no publish.
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+    expect(mocks.setCameraEnabled).not.toHaveBeenCalledWith(true);
+  });
+
+  it('says nothing when the camera was never asked for', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone']) };
+
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(screen.queryByText('Video isn’t available in this call.')).toBeNull();
+  });
+
+  it('says nothing when the call allows the camera', async () => {
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
+    expect(screen.queryByText('Video isn’t available in this call.')).toBeNull();
+  });
+});
+
 describe('video in the header', () => {
   function cameraTrack() {
     return { track: { attach: vi.fn(), detach: vi.fn() } };

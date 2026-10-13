@@ -56,6 +56,7 @@ export type PairHeaderVoice =
       /** The mute/unmute pill and its attached settings chevron. Owned by `rematch-voice.tsx`. */
       controls: React.ReactNode;
       localVideo?: React.ReactNode;
+      cameraMessage?: string | null;
       opponentState: PairMicState;
       /**
        * The viewer is making sound the room cannot hear. Wired to nothing today — see the note on
@@ -283,10 +284,13 @@ function YouCard({
     if (voice.kind === 'message') return voice.message;
     if (voice.micFailureMessage) return voice.micFailureMessage;
     if (talkingWhileMuted) return `Muted · ${firstName(opponentName)} can’t hear you`;
+    if (voice.cameraMessage) return voice.cameraMessage;
     return null;
   })();
 
-  const captionTone = voice.kind === 'live' ? 'text-red-01' : 'text-grey-04';
+  const captionIsCameraNote =
+    voice.kind === 'live' && !voice.micFailureMessage && !talkingWhileMuted && Boolean(voice.cameraMessage);
+  const captionTone = voice.kind === 'live' && !captionIsCameraNote ? 'text-red-01' : 'text-grey-04';
 
   /**
    * The same two states, for a screen reader.

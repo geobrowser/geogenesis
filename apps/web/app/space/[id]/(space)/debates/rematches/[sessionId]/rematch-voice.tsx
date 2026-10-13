@@ -900,6 +900,7 @@ function VoiceHeaderBody({
     return null;
   })();
 
+  const cameraMessage = cameraIntent && !cameraAllowed ? 'Video isn’t available in this call.' : null;
   const localVideo = <TrackVideo track={cameraTrack?.track} />;
   const opponentVideo = <TrackVideo track={opponentParticipant?.getTrackPublication(Track.Source.Camera)?.track} />;
 
@@ -918,6 +919,7 @@ function VoiceHeaderBody({
     micFailureMessage: micFailure ? micFailureMessage(micFailure) : null,
     onRetryMic: onRetry,
     localVideo,
+    cameraMessage,
     controls: (
       <LocalAudioControls
         room={room}
