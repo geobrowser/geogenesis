@@ -55,6 +55,7 @@ export function PersonSpaceIcons({
   matchesBySpace,
   popoverPortal,
   triggerAttributes,
+  hideWhenDetached = true,
 }: {
   spaceIds: string[];
   labelsById: Map<string, SpaceLabel>;
@@ -65,6 +66,8 @@ export function PersonSpaceIcons({
   popoverPortal: HTMLElement | null;
   /** Analytics attributes for the trigger, where its surface labels its own clicks (GEO-3220). */
   triggerAttributes?: Readonly<Record<`data-${string}`, string>>;
+  /** Off when the row sits inside another popover; see `PersonRow`'s `hidePopoversWhenDetached`. */
+  hideWhenDetached?: boolean;
 }) {
   const orderedSpaceIds = React.useMemo(() => orderPersonSpaces(spaceIds, debatesBySpace), [spaceIds, debatesBySpace]);
   const firstSpaceLinkRef = React.useRef<HTMLAnchorElement>(null);
@@ -102,7 +105,7 @@ export function PersonSpaceIcons({
               align="start"
               sideOffset={8}
               collisionPadding={{ top: 52, right: 16, bottom: 16, left: 16 }}
-              hideWhenDetached
+              hideWhenDetached={hideWhenDetached}
               aria-label="Active in"
               onOpenAutoFocus={event => {
                 event.preventDefault();

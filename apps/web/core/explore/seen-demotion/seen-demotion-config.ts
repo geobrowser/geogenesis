@@ -1,15 +1,16 @@
 /**
- * Seen demotion on Explore's Best (GEO-3234): the knobs, their defaults and their bounds.
+ * Seen hiding on Explore's Best (GEO-3234): the knobs, their defaults and their bounds. (The
+ * config keeps its v1 name, `seenDemotion`, so a saved ranking lab config still parses.)
  *
  * Best is the same for everyone and changes slowly, so a returning visitor lands on the same cards
- * every time. With this on, the browser moves a card it has shown this visitor at least `minViews`
- * times in the last `days` days, without the visitor engaging with it, below the unseen cards of
- * its page. It lives in the ranking lab's config (stored with the fresh slot) so it can be turned
+ * every time. With this on, the browser hides a card it has shown this visitor at least `minViews`
+ * times in the last `days` days, without the visitor engaging with it, and fills the gap from
+ * further down Best. It lives in the ranking lab's config (stored with the fresh slot) so it can be turned
  * on and off without a deploy. Shared: no client module may import anything server-only from here.
  */
 export type SeenDemotionConfig = {
   enabled: boolean;
-  /** N: demote after this many views. */
+  /** N: hide after this many views. */
   minViews: number;
   /** D: counting views from the last D days. */
   days: number;
@@ -27,8 +28,11 @@ export const SEEN_DEMOTION_BOUNDS = {
   days: { min: 1, max: 7 },
 } as const;
 
-/** Bumped by hand on any change to how a page is reordered; pages report `+seen.<this>`. */
-export const SEEN_DEMOTION_VERSION = 1;
+/**
+ * Bumped by hand on any change to how a page is composed; pages report `+seen.<this>`.
+ * 1 = moved seen cards down (GEO-3234 v1); 2 = hides them and fills from the page's reserve.
+ */
+export const SEEN_DEMOTION_VERSION = 2;
 
 /** What a Best page carries to the browser when seen demotion is on. */
 export type SeenDemotionPageConfig = Pick<SeenDemotionConfig, 'minViews' | 'days'>;
@@ -69,7 +73,7 @@ export function parseSeenDemotionConfig(
   return { ok: true, config: { enabled: raw.enabled as boolean, ...numbers }, adjustments };
 }
 
-/** The page payload's form, or null when demotion is off. */
+/** The page payload's form, or null when seen hiding is off. */
 export function seenDemotionPageConfig(config: SeenDemotionConfig | null | undefined): SeenDemotionPageConfig | null {
   return config?.enabled ? { minViews: config.minViews, days: config.days } : null;
 }

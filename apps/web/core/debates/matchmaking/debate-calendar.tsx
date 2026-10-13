@@ -657,7 +657,12 @@ function DebateCalendarBody({
       userKey: string,
       slots: FreeSlot[],
       entry: ScheduleEntry,
-      options?: { pick?: { selected: boolean; hidden: boolean; onToggle: () => void }; portal?: HTMLElement | null }
+      options?: {
+        pick?: { selected: boolean; hidden: boolean; onToggle: () => void };
+        portal?: HTMLElement | null;
+        /** Set by the week's hour popover and hover card; see `PersonRow`'s `hidePopoversWhenDetached`. */
+        insidePopover?: boolean;
+      }
     ) => {
       const person = peopleByUser.get(userKey);
       if (!person) return null;
@@ -685,6 +690,7 @@ function DebateCalendarBody({
           spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
           labelsById={labelsById}
           popoverPortal={options?.portal === undefined ? popoverPortal : options.portal}
+          hidePopoversWhenDetached={!options?.insidePopover}
           pick={options?.pick}
           // The calendar is the work: a name opens the profile beside it rather than leaving it.
           openProfileInSidePanel

@@ -47,7 +47,12 @@ const CARD_CLOSE_DELAY_MS = 200;
 
 const GRID_COLUMNS = 'grid-cols-[4rem_repeat(7,minmax(0,1fr))]';
 
-type RenderRow = (userKey: string, slots: FreeSlot[], entry: ScheduleEntry) => React.ReactNode;
+type RenderRow = (
+  userKey: string,
+  slots: FreeSlot[],
+  entry: ScheduleEntry,
+  options?: { insidePopover?: boolean }
+) => React.ReactNode;
 
 type Props = {
   /** Eight local midnights: the week's seven days and the one that closes it. */
@@ -293,7 +298,8 @@ export function CalendarWeek({
                 {renderRow(
                   card.userKey,
                   card.slots.length > 0 ? card.slots : (slotsByUser.get(card.userKey) ?? []),
-                  'calendar_card'
+                  'calendar_card',
+                  { insidePopover: true }
                 )}
               </ul>
             </Popover.Content>
@@ -531,7 +537,9 @@ function HourPeople({
       </div>
       <ul className="min-h-0 overflow-y-auto px-4">
         {people.map(({ userKey, slots }) => (
-          <React.Fragment key={userKey}>{renderRow(userKey, slots, 'calendar_hour')}</React.Fragment>
+          <React.Fragment key={userKey}>
+            {renderRow(userKey, slots, 'calendar_hour', { insidePopover: true })}
+          </React.Fragment>
         ))}
       </ul>
     </>
