@@ -12,7 +12,7 @@ import { Avatar } from '~/design-system/avatar';
 import { Spinner } from '~/design-system/spinner';
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyMember, dashlessId } from '../api';
+import type { DebateLobbyMember } from '../api';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
@@ -36,6 +36,7 @@ import {
   hostAfterChange,
   hostWhoLeft,
   hostsLabel,
+  isAlone,
   isHosting,
   lobbyDateLabel,
   lobbyErrorMessage,
@@ -672,25 +673,6 @@ function LobbyRoom({
 }
 
 type LobbyPhoneTab = 'people' | 'claims';
-
-/**
- * Nobody else is in: no other member and no guest. `guest_count` counts live guest sessions, so a
- * guest's own counts once it has started (`ownGuestSession`); without a count a guest is not alone.
- */
-export function isAlone(
-  lobby: Pick<LobbyPageView, 'members' | 'guest_count'>,
-  viewerId: string | null,
-  guest: boolean,
-  ownGuestSession = false
-): boolean {
-  if (guest) {
-    return (
-      lobby.members.length === 0 && lobby.guest_count !== undefined && lobby.guest_count <= Number(ownGuestSession)
-    );
-  }
-  if (!viewerId || (lobby.guest_count ?? 0) > 0) return false;
-  return lobby.members.every(member => dashlessId(member.user_id) === dashlessId(viewerId));
-}
 
 function LeaveLabel() {
   return (

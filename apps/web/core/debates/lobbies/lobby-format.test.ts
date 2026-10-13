@@ -12,6 +12,7 @@ import {
   hostsLabel,
   inDebateLabel,
   inDebateRequestLabel,
+  isAlone,
   isAlreadyInAnotherLobby,
   lobbyDateLabel,
   lobbyErrorMessage,
@@ -455,5 +456,24 @@ describe('state screen labels', () => {
     expect(inDebateRequestLabel({ display_name: 'Leo' })).toBe(
       'Leo is in a debate. You can request them when they’re back.'
     );
+  });
+});
+
+describe('isAlone', () => {
+  it('is the viewer alone on the roster with no guests', () => {
+    expect(isAlone({ members: [member('a-1', 'host')], guest_count: 0 }, 'a1', false)).toBe(true);
+    expect(isAlone({ members: [member('a1', 'host')], guest_count: 1 }, 'a1', false)).toBe(false);
+    expect(isAlone({ members: [member('a1', 'host'), member('b1', 'speaker')] }, 'a1', false)).toBe(false);
+    expect(isAlone({ members: [member('a1', 'host')] }, null, false)).toBe(false);
+  });
+
+  it('counts other guests, and the guest’s own session once it has started', () => {
+    expect(isAlone({ members: [], guest_count: 0 }, null, true)).toBe(true);
+    expect(isAlone({ members: [], guest_count: 1 }, null, true, true)).toBe(true);
+    expect(isAlone({ members: [], guest_count: 1 }, null, true, false)).toBe(false);
+    expect(isAlone({ members: [], guest_count: 2 }, null, true, true)).toBe(false);
+    expect(isAlone({ members: [member('a1', 'host')], guest_count: 0 }, null, true)).toBe(false);
+    // An older geo-chat sends no count: not alone.
+    expect(isAlone({ members: [] }, null, true)).toBe(false);
   });
 });

@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyMember, DebateLobbyRole } from '../api';
-import { isAlone, useHandoffNotice } from './lobby-page';
+import { useHandoffNotice } from './lobby-page';
 
 function member(userId: string, role: DebateLobbyRole, actingHost = false): DebateLobbyMember {
   return {
@@ -62,24 +62,5 @@ describe('useHandoffNotice', () => {
       useHandoffNotice({ hosts_changed_at: '2026-10-05T10:01:00Z', members: [member('b', 'speaker', true)] })
     );
     expect(result.current).toBeNull();
-  });
-});
-
-describe('isAlone', () => {
-  it('is the viewer alone on the roster with no guests', () => {
-    expect(isAlone({ members: [member('a-1', 'host')], guest_count: 0 }, 'a1', false)).toBe(true);
-    expect(isAlone({ members: [member('a1', 'host')], guest_count: 1 }, 'a1', false)).toBe(false);
-    expect(isAlone({ members: [member('a1', 'host'), member('b1', 'speaker')] }, 'a1', false)).toBe(false);
-    expect(isAlone({ members: [member('a1', 'host')] }, null, false)).toBe(false);
-  });
-
-  it('counts other guests, and the guest’s own session once it has started', () => {
-    expect(isAlone({ members: [], guest_count: 0 }, null, true)).toBe(true);
-    expect(isAlone({ members: [], guest_count: 1 }, null, true, true)).toBe(true);
-    expect(isAlone({ members: [], guest_count: 1 }, null, true, false)).toBe(false);
-    expect(isAlone({ members: [], guest_count: 2 }, null, true, true)).toBe(false);
-    expect(isAlone({ members: [member('a1', 'host')], guest_count: 0 }, null, true)).toBe(false);
-    // An older geo-chat sends no count: not alone.
-    expect(isAlone({ members: [] }, null, true)).toBe(false);
   });
 });

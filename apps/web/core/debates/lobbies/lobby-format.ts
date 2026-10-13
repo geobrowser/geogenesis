@@ -231,6 +231,25 @@ export function hostWhoLeft<T extends Pick<DebateLobbyPerson, 'user_id'>>(
   return lastHosts.find(host => !lobby.members.some(member => sameUser(member, host))) ?? null;
 }
 
+/**
+ * Nobody else is in: no other member and no guest. `guest_count` counts live guest sessions, so a
+ * guest's own counts once it has started (`ownGuestSession`); without a count a guest is not alone.
+ */
+export function isAlone(
+  lobby: Pick<DebateLobbyView, 'members' | 'guest_count'>,
+  viewerId: string | null,
+  guest: boolean,
+  ownGuestSession = false
+): boolean {
+  if (guest) {
+    return (
+      lobby.members.length === 0 && lobby.guest_count !== undefined && lobby.guest_count <= Number(ownGuestSession)
+    );
+  }
+  if (!viewerId || (lobby.guest_count ?? 0) > 0) return false;
+  return lobby.members.every(member => dashlessId(member.user_id) === dashlessId(viewerId));
+}
+
 export function handoffLabel(
   host: Pick<DebateLobbyPerson, 'display_name'>,
   left: Pick<DebateLobbyPerson, 'display_name'> | null
