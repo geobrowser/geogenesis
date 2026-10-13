@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { DebateParticipantSummary } from '../api';
 import {
   type LobbyRoomClaim,
+  LobbyRoomClaimCard,
   LobbyRoomClaimsList,
   type LobbyRoomOffer,
   type LobbyRoomSide,
@@ -39,17 +40,19 @@ vi.mock('../backfill-readiness-for-held-position', async importOriginal => ({
 vi.mock('../matchmaking/matchmaking-claim-card', () => ({
   isResolvableClaim: () => true,
   MatchmakingClaimCard: ({
+    positions,
     header,
     endSlot,
     footer,
   }: {
+    positions: { total_count: number }[];
     header?: React.ReactNode;
     endSlot?: React.ReactNode;
     footer?: React.ReactNode;
   }) => (
-    <article>
+    <article data-testid="card" data-counts={positions.map(side => side.total_count).join(',')}>
       {header}
-      {endSlot}
+      <div data-testid="card-end">{endSlot}</div>
       {footer}
     </article>
   ),
@@ -231,5 +234,45 @@ describe('LobbyRoomClaimsList', () => {
     };
     render(<LobbyRoomClaimsList claims={[withdrawn]} renderOffer={renderOffer} />);
     expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
+  });
+});
+
+// Explore: the card's counts are Geo-wide; the room shows as a line under it.
+describe('LobbyRoomClaimCard on Explore', () => {
+  const geoWide = [side(true, [], 0), side(false, [], 0)].map(s => ({ ...s, total_count: 40 }));
+
+  it('keeps the Geo-wide counts and adds the room line, with the offer on it', () => {
+    const explore = {
+      ...entry(true, geoWide),
+      roomSides: [side(true, [person('Ana'), person('Bo')], 0), side(false, [person('Ben')], 1)],
+    };
+    render(<LobbyRoomClaimCard entry={explore} renderOffer={renderOffer} />);
+
+    expect(screen.getByTestId('card').getAttribute('data-counts')).toBe('40,40');
+    const line = screen.getByTestId('lobby-claim-room-line');
+    // The viewer is counted on their own side.
+    expect(line.textContent).toContain('In this room:');
+    expect(line.textContent).toContain('3 agree');
+    expect(line.textContent).toContain('1 disagrees');
+    expect(line.querySelector('button')?.textContent).toBe('Request as agree (1)');
+    expect(screen.getByTestId('card-end').querySelector('button')).toBeNull();
+    expect(screen.queryByTestId('lobby-claim-disagreeing')).toBeNull();
+  });
+
+  it('draws the line without an offer when nobody on the other side can be asked', () => {
+    const explore = { ...entry(true, geoWide), roomSides: [side(true, [], 0), side(false, [person('Ben')], 0)] };
+    render(<LobbyRoomClaimCard entry={explore} renderOffer={renderOffer} />);
+
+    expect(screen.getByTestId('lobby-claim-room-line').textContent).toContain('1 agrees');
+    expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('draws no room line and no offer when nobody in the room holds a side', () => {
+    const explore = { ...entry(true, geoWide), roomSides: null };
+    render(<LobbyRoomClaimCard entry={explore} renderOffer={renderOffer} />);
+
+    expect(screen.getByTestId('card').getAttribute('data-counts')).toBe('40,40');
+    expect(screen.queryByTestId('lobby-claim-room-line')).toBeNull();
+    expect(screen.queryByRole('button')).toBeNull();
   });
 });

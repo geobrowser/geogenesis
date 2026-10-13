@@ -19,6 +19,9 @@ vi.mock('./lobby-guest-hooks', () => ({ useIsLobbyGuest: () => mocks.guest }));
 vi.mock('./lobby-room-claims', () => ({
   LobbyRoomClaims: () => <p data-testid="lobby-room-claims" />,
 }));
+vi.mock('./lobby-explore-claims', () => ({
+  LobbyExploreClaims: () => <p data-testid="lobby-explore-claims" />,
+}));
 vi.mock('./lobby-highlights', () => ({
   LobbyRoomVote: () => null,
   LobbyRoomClaimsWithHighlights: () => <p data-testid="lobby-room-claims" />,
@@ -44,7 +47,7 @@ describe('LobbyClaimsArea', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Explore' }));
     expect(screen.getByRole('button', { name: 'Explore' }).getAttribute('aria-current')).toBe('true');
     expect(screen.queryByTestId('lobby-room-claims')).toBeNull();
-    expect(screen.getByTestId('lobby-explore-placeholder')).toBeTruthy();
+    expect(screen.getByTestId('lobby-explore-claims')).toBeTruthy();
   });
 
   it('opens the save sheet with the lobby name when a guest votes', () => {

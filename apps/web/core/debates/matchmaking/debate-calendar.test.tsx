@@ -719,6 +719,31 @@ describe('DebateCalendar', () => {
     expect(mocks.openHub).toHaveBeenCalledWith('requests');
   });
 
+  it('says the Geo team arranged a pending match on the week, after the viewer has accepted too', () => {
+    mocks.scheduled = [
+      {
+        request_id: 'admin-1',
+        status: 'pending',
+        scheduled_start_at: at(9, 15),
+        scheduled_end_at: at(9, 15, 30),
+        invited_by_user_id: null,
+        created_by_admin: true,
+        proposed_by_user_id: null,
+        reschedule_count: 0,
+        room_id: null,
+        participants: [
+          { user_id: 'me', accepted: true },
+          { user_id: '11', accepted: null },
+        ],
+        viewer_must_answer: false,
+      },
+    ];
+    render(<DebateCalendar />);
+
+    expect(screen.getByRole('button', { name: /Arranged by the Geo team · Elena/ })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Requested/ })).not.toBeInTheDocument();
+  });
+
   it('says when nobody is free this week, and offers the next', () => {
     mocks.schedulable = response([]);
     render(<DebateCalendar />);

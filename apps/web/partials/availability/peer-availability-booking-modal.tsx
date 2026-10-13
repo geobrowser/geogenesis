@@ -16,7 +16,8 @@ type Props = Omit<React.ComponentProps<typeof PeerAvailabilityModal>, 'booking'>
   /**
    * Picking a slot moves this request instead of proposing a new one. Set by a scheduling email's
    * "Choose different time" (see `core/availability/availability-deep-link`), and by the Requests
-   * tab's Reschedule on an accepted debate, which geo-chat sends back to pending for the new time.
+   * tab's Reschedule on an accepted debate, which geo-chat sends back to pending for the new time,
+   * and its "Choose different time" on an invite the viewer has yet to answer.
    */
   rescheduleRequestId?: string | null;
   /**

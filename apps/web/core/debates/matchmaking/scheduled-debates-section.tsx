@@ -6,6 +6,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 
+import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import {
   type DebateParticipantSummary,
   GeoChatRequestError,
@@ -56,6 +57,21 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   const [rescheduling, setRescheduling] = React.useState<Rescheduling | null>(null);
   const rescheduleOpenerRef = React.useRef<HTMLElement | null>(null);
 
+  // Both kinds of card move their request the same way; only the button that asked differs. Null
+  // when there is no request to move or no week to move it on.
+  const reschedulerFor = (requestId: string | null, opponentUserId: string | null, entry: ScheduleEntry) =>
+    requestId && opponentUserId
+      ? (opener: HTMLElement) => {
+          rescheduleOpenerRef.current = opener;
+          setRescheduling({
+            requestId,
+            opponentUserId,
+            opponentName: lookUp(opponentUserId)?.display_name ?? null,
+            entry,
+          });
+        }
+      : null;
+
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
@@ -88,18 +104,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
               scheduledEndAt={scheduledEndAt}
               opponent={lookUp(opponentUserId)}
               viewer={viewer}
-              onReschedule={
-                requestId && opponentUserId
-                  ? opener => {
-                      rescheduleOpenerRef.current = opener;
-                      setRescheduling({
-                        requestId,
-                        opponentUserId,
-                        opponentName: lookUp(opponentUserId)?.display_name ?? null,
-                      });
-                    }
-                  : null
-              }
+              onReschedule={reschedulerFor(requestId, opponentUserId, 'requests_reschedule')}
             />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
@@ -111,17 +116,26 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
           {requestsError && <ReadFailed>Could not read your scheduled debates: {requestsError.message}</ReadFailed>}
           {/* The instant cards' list, so one that expires folds away the way theirs do. */}
           <HubCardList>
-            {answerable.map(request => (
-              <ScheduledRow
-                key={request.request_id}
-                request={request}
-                opponent={lookUp(opponentOf(request, viewerId))}
-                viewer={viewer}
-                viewerId={viewerId}
-                busy={respond.isPending}
-                onAnswer={answer}
-              />
-            ))}
+            {answerable.map(request => {
+              const opponentUserId = opponentOf(request, viewerId);
+              return (
+                <ScheduledRow
+                  key={request.request_id}
+                  request={request}
+                  opponent={lookUp(opponentUserId)}
+                  viewer={viewer}
+                  viewerId={viewerId}
+                  busy={respond.isPending}
+                  onAnswer={answer}
+                  onReschedule={reschedulerFor(
+                    request.request_id,
+                    opponentUserId,
+                    // "Choose different time" on an unanswered invite; Reschedule once accepted.
+                    request.viewer_must_answer ? 'requests_new_time' : 'requests_reschedule'
+                  )}
+                />
+              );
+            })}
           </HubCardList>
           {conflict && (
             <Text as="p" variant="footnote" color="red-01">
@@ -138,7 +152,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
         userId={rescheduling?.opponentUserId ?? ''}
         peerName={rescheduling?.opponentName}
         rescheduleRequestId={rescheduling?.requestId ?? null}
-        entry="requests_reschedule"
+        entry={rescheduling?.entry ?? null}
         openerRef={rescheduleOpenerRef}
         onClose={() => setRescheduling(null)}
       />
@@ -146,8 +160,8 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   );
 }
 
-/** An accepted debate being moved: whose week to open, and the request it moves. */
-type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null };
+/** A debate being moved: whose week to open, the request it moves, and which button asked. */
+type Rescheduling = { requestId: string; opponentUserId: string; opponentName: string | null; entry: ScheduleEntry };
 
 /**
  * What this tab has to show. Shared with the tab itself, which needs it for its empty state; both
@@ -320,6 +334,7 @@ function ScheduledRow({
   viewerId,
   busy,
   onAnswer,
+  onReschedule,
   ref,
 }: {
   /** From `HubCardList`, whose `popLayout` measures the card on its way out. */
@@ -330,14 +345,18 @@ function ScheduledRow({
   viewerId: string | null;
   busy: boolean;
   onAnswer: (requestId: string, accepted: boolean) => void;
+  /** Opens the other debater's week to propose a new time for this request. Null when they are not known. */
+  onReschedule: ((opener: HTMLElement) => void) | null;
 }) {
   const expiry = useScheduledExpiry(request.scheduled_start_at);
-  // While pending, only whoever proposed the current time may withdraw it; the other side declines.
-  const withdrawable =
-    !request.viewer_must_answer &&
-    viewerId !== null &&
-    request.proposed_by_user_id !== null &&
-    sameId(request.proposed_by_user_id, viewerId);
+  // Whoever proposed the current time may withdraw it, and so may anyone who has already accepted
+  // it (GEO-3233: in an admin match neither debater proposed it). Someone who has not answered
+  // declines instead.
+  const proposedByViewer =
+    viewerId !== null && request.proposed_by_user_id !== null && sameId(request.proposed_by_user_id, viewerId);
+  const viewerAccepted =
+    viewerId !== null && request.participants.some(entry => entry.accepted === true && sameId(entry.user_id, viewerId));
+  const withdrawable = !request.viewer_must_answer && (proposedByViewer || viewerAccepted);
 
   return (
     <ScheduleCard
@@ -345,10 +364,19 @@ function ScheduledRow({
       opponent={opponent}
       viewer={viewer}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
-      status={`${request.viewer_must_answer ? 'Waiting on your answer' : 'Waiting on their answer'} · ${expiry}`}
+      status={`${
+        request.viewer_must_answer
+          ? 'Waiting on your answer'
+          : viewerAccepted
+            ? `Not confirmed until ${opponentName(opponent)} answers`
+            : 'Waiting on their answer'
+      } · ${expiry}`}
+      note={adminArrangedNote(request, opponent, viewerId)}
       actions={
         request.viewer_must_answer ? (
           // Decline first, Accept primary on the right: the order every other request card uses.
+          // Under them, the scheduling email's third answer in its words (GEO-3232): a time that
+          // does not suit is moved, and the other side asked again, rather than declined.
           <div className="grid grid-cols-2 gap-2">
             {/* Labelled apart from the instant request cards' Accept and Decline, which would
                 otherwise share their labels and could not be told from these in the data. */}
@@ -369,13 +397,60 @@ function ScheduledRow({
             >
               Accept
             </HubPillButton>
+            {onReschedule && (
+              <HubPillButton
+                className="col-span-2"
+                analyticsLabel="Debate hub Choose different time for scheduled request"
+                analyticsIntent="choose_different_time_scheduled_request"
+                onClick={event => onReschedule(event.currentTarget)}
+                disabled={busy}
+              >
+                Choose different time
+              </HubPillButton>
+            )}
           </div>
         ) : (
-          withdrawable && <CancelScheduled requestId={request.request_id} kind="request" opponent={opponent} />
+          withdrawable && (
+            <div className="flex flex-col gap-2">
+              {viewerAccepted && onReschedule && (
+                <HubPillButton
+                  className="w-full"
+                  analyticsLabel="Debate hub Reschedule scheduled request"
+                  analyticsIntent="reschedule_scheduled_request"
+                  onClick={event => onReschedule(event.currentTarget)}
+                >
+                  Reschedule
+                </HubPillButton>
+              )}
+              <CancelScheduled
+                requestId={request.request_id}
+                kind={proposedByViewer ? 'request' : 'debate'}
+                opponent={opponent}
+              />
+            </div>
+          )
         )
       }
     />
   );
+}
+
+/**
+ * GEO-3229: a match the Geo team arranged says so on the card for as long as it is pending, including
+ * after one debater has accepted, so it never reads as the other debater having asked. Once a time
+ * has been moved, it also says which debater proposed the new one. Null for a request between people.
+ */
+export function adminArrangedNote(
+  request: ScheduledDebateRequest,
+  opponent: DebateParticipantSummary | null,
+  viewerId: string | null
+): string | null {
+  if (!request.created_by_admin) return null;
+  const arranged = 'Arranged by the Geo team';
+  const proposer = request.proposed_by_user_id;
+  if (request.reschedule_count === 0 || proposer === null) return arranged;
+  if (viewerId !== null && sameId(proposer, viewerId)) return `${arranged} · You proposed this time`;
+  return `${arranged} · ${opponentName(opponent)} proposed this time`;
 }
 
 const CANCEL_COPY = {
@@ -519,6 +594,7 @@ function ScheduleCard({
   viewer,
   when,
   status,
+  note = null,
   urgent = false,
   actions,
   ref,
@@ -528,6 +604,8 @@ function ScheduleCard({
   viewer: DebateParticipantSummary | null;
   when: string;
   status: string;
+  /** A second line under the status, e.g. that the Geo team arranged the debate. */
+  note?: string | null;
   urgent?: boolean;
   actions?: React.ReactNode;
 }) {
@@ -548,6 +626,11 @@ function ScheduleCard({
           <Text as="span" variant="footnote" color={urgent ? 'text' : 'grey-04'}>
             {status}
           </Text>
+          {note && (
+            <Text as="span" variant="footnote" color="grey-04">
+              {note}
+            </Text>
+          )}
         </div>
       </div>
 
