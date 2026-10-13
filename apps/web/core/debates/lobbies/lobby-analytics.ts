@@ -14,8 +14,12 @@ import { debateRoomPath } from '../rooms/room-routes';
 export type LobbyEntry =
   /** No in-app control marked it: a pasted or shared link, a typed URL, a reload. */
   | 'link'
-  /** The lobbies card in the side panel. */
+  /** The lobbies card or the spotlight in the side panel. */
   | 'side_panel'
+  /** The Debate button's hover list in the navbar (GEO-3268). */
+  | 'nav'
+  /** The live lobby banner above the Explore feed (GEO-3268). */
+  | 'explore_banner'
   /** Go to lobby, right after creating it. */
   | 'created'
   /** Back to the room, on a debate's end card or on the lobby's stepped-out prompt. */

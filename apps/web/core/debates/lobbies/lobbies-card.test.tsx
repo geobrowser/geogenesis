@@ -12,6 +12,8 @@ vi.mock('./hooks', () => ({
   useDebateLobbies: () => ({ data: { lobbies: mocks.lobbies }, isLoading: false, isError: false }),
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }));
+// Nothing live or due: the card lists every lobby itself (the spotlight case is in its own suite).
+vi.mock('./live-lobbies', () => ({ useLobbyLineup: () => ({ live: [], soon: null, later: [] }) }));
 vi.mock('./lobby-analytics', () => ({ markLobbyEntry: vi.fn() }));
 vi.mock('./lobby-people', () => ({
   LobbyAvatarStack: ({ total }: { total: number }) => <span data-testid="avatar-stack">{total}</span>,

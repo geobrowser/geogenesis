@@ -89,6 +89,9 @@ vi.mock('../claim-picker-page', async importOriginal => ({
   useClaimEntitiesByIds: () => ({ entities: [], isLoading: false, error: null }),
 }));
 
+// GEO-3268's lineup reads the lobby list and holds the matchmaking scope; nothing is live here.
+vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => ({ live: [], soon: null, later: [] }) }));
+
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
   // exercising it — the schedule itself is covered in core/availability.

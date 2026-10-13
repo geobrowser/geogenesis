@@ -13,7 +13,8 @@ import { useGeoChatAuth } from '../hooks';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
-import { markLobbyEntry } from './lobby-analytics';
+import { useLobbyLineup } from './live-lobbies';
+import { type LobbyEntry, markLobbyEntry } from './lobby-analytics';
 import {
   debatingLabel,
   hereLabel,
@@ -26,8 +27,12 @@ import { LobbyAvatarStack } from './lobby-people';
 import { OpenLobbyDialog } from './open-lobby-dialog';
 
 /**
- * Live debate lobbies, at the top of the debates panel (GEO-3133). Signed in and `lobbyJoining`
- * only. Kept current by `debate.lobbies_changed`, which needs the panel's matchmaking scope.
+ * Debate lobbies, under the debates panel's tabs (GEO-3133). Signed in and `lobbyJoining` only.
+ * Kept current by `debate.lobbies_changed`, which needs the matchmaking scope.
+ *
+ * While a lobby is live or about to open, the spotlight above the tabs shows it (GEO-3268), and
+ * this card lists only the rest, as "Later", so no lobby appears twice. With nothing left to list
+ * it keeps just Open a lobby for hosts, and otherwise goes.
  */
 export function LiveLobbiesCard() {
   const joining = useFeatureFlag('lobbyJoining');
@@ -39,19 +44,24 @@ export function LiveLobbiesCard() {
 function LiveLobbiesCardBody() {
   const hosting = useFeatureFlag('lobbyHosting');
   const lobbiesQuery = useDebateLobbies();
+  const { live, soon, later } = useLobbyLineup();
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const lobbies = lobbiesQuery.data?.lobbies ?? [];
+
+  const spotlight = live.length > 0 || soon !== null;
+  // With something live, the soon lobby is only the next one in line, so it is listed here.
+  const lobbies = spotlight ? (live.length > 0 && soon ? [soon, ...later] : later) : (lobbiesQuery.data?.lobbies ?? []);
+  if (spotlight && lobbies.length === 0 && !hosting) return null;
 
   return (
     <div className="px-4 pt-3">
       <section
         className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
-        aria-label="Live debate lobbies"
+        aria-label={spotlight ? 'Later debate lobbies' : 'Live debate lobbies'}
         data-testid="live-lobbies-card"
       >
         <div className="flex items-center justify-between gap-2">
           <Text as="h3" variant="footnoteMedium" color="text">
-            Live debate lobbies
+            {spotlight ? 'Later' : 'Live debate lobbies'}
           </Text>
           {hosting ? (
             <HubPillButton analyticsLabel="Open a lobby" onClick={() => setDialogOpen(true)}>
@@ -60,7 +70,11 @@ function LiveLobbiesCardBody() {
           ) : null}
         </div>
 
-        {lobbiesQuery.isLoading ? (
+        {spotlight ? (
+          lobbies.length === 0 ? null : (
+            <LobbyRows lobbies={lobbies} />
+          )
+        ) : lobbiesQuery.isLoading ? (
           <Text as="p" variant="footnote" color="grey-04">
             Loading lobbies…
           </Text>
@@ -73,11 +87,7 @@ function LiveLobbiesCardBody() {
             No lobbies right now.
           </Text>
         ) : (
-          <ul className="flex flex-col divide-y divide-grey-02">
-            {lobbies.map(lobby => (
-              <LobbyRow key={lobby.lobby_id} lobby={lobby} />
-            ))}
-          </ul>
+          <LobbyRows lobbies={lobbies} />
         )}
       </section>
       {dialogOpen ? <OpenLobbyDialog onClose={() => setDialogOpen(false)} /> : null}
@@ -85,15 +95,29 @@ function LiveLobbiesCardBody() {
   );
 }
 
+function LobbyRows({ lobbies }: { lobbies: DebateLobbySummary[] }) {
+  return (
+    <ul className="flex flex-col divide-y divide-grey-02">
+      {lobbies.map(lobby => (
+        <LobbyRow key={lobby.lobby_id} lobby={lobby} />
+      ))}
+    </ul>
+  );
+}
+
 const REMINDER_FAILED = 'Could not update your reminder. Try again.';
 
-function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
+/**
+ * One lobby: Live or its time, its name, who is there, and Join or Remind me. Shared by this card
+ * and the Debate button's hover list; `entry` says which.
+ */
+export function LobbyRow({ lobby, entry = 'side_panel' }: { lobby: DebateLobbySummary; entry?: LobbyEntry }) {
   const reminder = useDebateLobbyReminder();
   const hosts = hostsLabel(lobby.hosts);
   const schedule = lobbyScheduleLabel(lobby);
 
   const href = debateRoomPath(lobby.lobby_id);
-  const enter = () => markLobbyEntry(lobby.lobby_id, 'side_panel');
+  const enter = () => markLobbyEntry(lobby.lobby_id, entry);
   const hostedBy = hosts ? `Hosted by ${hosts}` : null;
 
   return (

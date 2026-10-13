@@ -15,6 +15,7 @@ import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-side
 import { EntityFeed } from '~/partials/feed/entity-feed';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
+import { ExploreLiveLobbiesBanner } from './explore-live-lobbies-banner';
 import { ExploreSidePanel } from './explore-side-panel';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
 
@@ -131,6 +132,8 @@ export function ExplorePage({
       <ExploreEmailCapturePopup />
       <main className="min-w-0 pt-2">
         <div className="mx-auto w-full max-w-[880px]">
+          {/* A live lobby comes first: it is happening now, and the welcome note will keep. */}
+          <ExploreLiveLobbiesBanner />
           <ExploreWelcomeBanner />
         </div>
         {forYouEnabled ? (
