@@ -19,7 +19,6 @@ import { nextLobbyByHost, useListedLobbies } from './lobby-host-lobbies';
 import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_STATE_COPY = {
-  unavailable: 'Lobbies aren’t available right now',
   banned: 'You can’t join this lobby',
   bannedFrom: (name: string) => `A host has blocked you from ${name}.`,
   ended: 'This lobby has ended',
@@ -82,11 +81,6 @@ export function FindDebateLink({ primary = false }: { primary?: boolean }) {
       {LOBBY_STATE_COPY.findDebate}
     </Link>
   );
-}
-
-/** `/debate/{id}` when the room is a lobby and `lobbyJoining` is off. */
-export function LobbiesUnavailable() {
-  return <LobbyStateCard title={LOBBY_STATE_COPY.unavailable} actions={<FindDebateLink primary />} />;
 }
 
 export function LobbyBannedCard({ name }: { name: string }) {

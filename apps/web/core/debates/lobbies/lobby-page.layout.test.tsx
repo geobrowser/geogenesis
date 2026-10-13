@@ -77,6 +77,7 @@ vi.mock('./lobby-voice', async () => {
 });
 vi.mock('./lobby-claims-area', () => ({ LobbyClaimsArea: () => <div data-testid="claims" /> }));
 vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: undefined }) }));
+vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn(), useLobbySignInPrompt: vi.fn() }));
 vi.mock('./lobby-highlights-hooks', () => ({
   useLobbyHighlights: (_id: string, enabled: boolean) => {
     mocks.highlightsEnabled.push(enabled);

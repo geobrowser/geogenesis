@@ -44,3 +44,34 @@ export function useLobbyGuestSignIn(lobbyId: string) {
     [redirectTo, signIn]
   );
 }
+
+const promptedKey = (lobbyId: string) => `geo.debates.lobby-sign-in-prompted.${dashlessId(lobbyId)}`;
+/** Without storage, still once per page load: StrictMode and re-renders would otherwise reopen it. */
+const promptedThisLoad = new Set<string>();
+
+/** True the first time a lobby asks in this tab; a reload after closing the prompt does not reopen it. */
+function claimPrompt(lobbyId: string) {
+  const key = promptedKey(lobbyId);
+  if (promptedThisLoad.has(key)) return false;
+  promptedThisLoad.add(key);
+  try {
+    if (window.sessionStorage.getItem(key)) return false;
+    window.sessionStorage.setItem(key, '1');
+  } catch {
+    // Once per page load, then.
+  }
+  return true;
+}
+
+/**
+ * GEO-3270. A visitor without an account can do nothing in a lobby yet, so the account prompt opens
+ * as they arrive rather than behind a notice. Once per lobby per tab; closing it leaves the guest
+ * banner's Log in and Create account to open it again. Returns to the lobby like the banner does.
+ */
+export function useLobbySignInPrompt(lobbyId: string, open: boolean) {
+  const signIn = useLobbyGuestSignIn(lobbyId);
+  React.useEffect(() => {
+    if (!open || !claimPrompt(lobbyId)) return;
+    signIn({ component: 'lobby_sign_in_prompt', auth_trigger: 'page_load' });
+  }, [lobbyId, open, signIn]);
+}

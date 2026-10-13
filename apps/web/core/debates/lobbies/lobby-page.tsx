@@ -51,6 +51,7 @@ import {
   useIsLobbyGuest,
   useLobbyGuestSession,
 } from './lobby-guest-hooks';
+import { useLobbySignInPrompt } from './lobby-guest-sign-in';
 import { LobbyHeader } from './lobby-header';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { usePreOpenHosts } from './lobby-host-lobbies';
@@ -95,8 +96,6 @@ export const LOBBY_COPY = {
   guestListeningOff: 'Listening without an account has been turned off for this lobby. Create an account to join.',
 } as const;
 
-export { LobbiesUnavailable } from './lobby-state-cards';
-
 const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_STATE_COPY.findDebate };
 
 /**
@@ -137,6 +136,11 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const waitingOutside =
     !guest && lobby !== null && !lobby.viewer.connected && (admitted || lobby.access.status === 'not_yet_open');
   useMatchmakingScope(waitingOutside);
+  // Only where the page shows the guest banner, which is how a closed prompt is opened again.
+  useLobbySignInPrompt(
+    lobbyId,
+    signedOut && (lobby?.access.status === 'admitted' || lobby?.access.status === 'not_yet_open')
+  );
 
   return (
     <LobbyGuestProvider value={guest}>
