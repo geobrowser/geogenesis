@@ -2,6 +2,7 @@
 
 import type * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 
 import { NavUtils } from '~/core/utils/utils';
@@ -32,6 +33,26 @@ export const LOBBY_STATE_COPY = {
 
 const REMINDER_FAILED = 'Could not update your reminder. Try again.';
 
+/** The centered card every full-page lobby state sits in; `className` sets its width and spacing. */
+export function LobbyCardFrame({
+  className,
+  after,
+  children,
+  ...props
+}: React.ComponentProps<'div'> & {
+  /** Below the card, e.g. a host's lists once the lobby has ended. */
+  after?: React.ReactNode;
+}) {
+  return (
+    <div className="flex min-h-[calc(100dvh-2.75rem)] flex-col items-center justify-center gap-4 px-4 py-8">
+      <div {...props} className={cx('flex w-full flex-col rounded-xl border border-grey-02 bg-white', className)}>
+        {children}
+      </div>
+      {after}
+    </div>
+  );
+}
+
 /** A full-page state: a titled card with its actions. */
 export function LobbyStateCard({
   title,
@@ -42,28 +63,20 @@ export function LobbyStateCard({
   title: string;
   children?: React.ReactNode;
   actions: React.ReactNode;
-  /** Below the card, e.g. a host's lists once the lobby has ended. */
   after?: React.ReactNode;
 }) {
   return (
-    <div className="flex min-h-[calc(100dvh-2.75rem)] flex-col items-center justify-center gap-4 px-4 py-8">
-      <div
-        role="status"
-        className="flex w-full max-w-md flex-col gap-2.5 rounded-xl border border-grey-02 bg-white p-5"
-        data-testid="lobby-state-card"
-      >
-        <Text as="h1" variant="smallTitle">
-          {title}
-        </Text>
-        {children}
-        <div className="mt-1.5 flex flex-wrap gap-2">{actions}</div>
-      </div>
-      {after}
-    </div>
+    <LobbyCardFrame role="status" className="max-w-md gap-2.5 p-5" data-testid="lobby-state-card" after={after}>
+      <Text as="h1" variant="smallTitle">
+        {title}
+      </Text>
+      {children}
+      <div className="mt-1.5 flex flex-wrap gap-2">{actions}</div>
+    </LobbyCardFrame>
   );
 }
 
-function FindDebateLink({ primary = false }: { primary?: boolean }) {
+export function FindDebateLink({ primary = false }: { primary?: boolean }) {
   return (
     <Link href={NavUtils.toExplore()} className={hubPillClassName(primary ? 'primary' : 'secondary')}>
       {LOBBY_STATE_COPY.findDebate}

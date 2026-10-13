@@ -59,7 +59,14 @@ import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queue
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LobbyPeople } from './lobby-roster';
 import { LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
-import { LobbyBannedCard, LobbyClosedCard, LobbyEmptyRoom } from './lobby-state-cards';
+import {
+  FindDebateLink,
+  LOBBY_STATE_COPY,
+  LobbyBannedCard,
+  LobbyCardFrame,
+  LobbyClosedCard,
+  LobbyEmptyRoom,
+} from './lobby-state-cards';
 import { type LobbyPageView, isMemberView, lobbyViewForGuest, lobbyViewForMember } from './lobby-view';
 import {
   LobbyGuestVoice,
@@ -75,7 +82,6 @@ const HANDOFF_NOTICE_MS = 8_000;
 const NO_MODERATION = { last_moderation: null };
 
 export const LOBBY_COPY = {
-  findDebate: 'Find a debate',
   leaveOther: (name: string | null) => (name ? `Leave ${name}?` : 'Leave your other lobby?'),
   oneLobby: (name: string) => `You can be in one lobby at a time. Joining ${name} will leave it.`,
   scheduled: 'Debate lobby · scheduled',
@@ -90,7 +96,7 @@ export const LOBBY_COPY = {
 
 export { LobbiesUnavailable } from './lobby-state-cards';
 
-const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_COPY.findDebate };
+const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_STATE_COPY.findDebate };
 
 /**
  * The lobby page (GEO-3131). Signed out, drawn from the guest view, listening only (GEO-3129).
@@ -245,96 +251,89 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
   const date = lobbyDateLabel(lobby.starts_at);
 
   return (
-    <div className="flex min-h-[calc(100dvh-2.75rem)] items-center justify-center px-4 py-8">
-      <div
-        className="flex w-full max-w-[480px] flex-col gap-4 rounded-xl border border-grey-02 bg-white p-6"
-        data-testid="debate-lobby"
-      >
-        <Text as="p" variant="footnoteMedium" color="grey-04">
-          {LOBBY_COPY.scheduled}
+    <LobbyCardFrame className="max-w-[480px] gap-4 p-6" data-testid="debate-lobby">
+      <Text as="p" variant="footnoteMedium" color="grey-04">
+        {LOBBY_COPY.scheduled}
+      </Text>
+      <LobbyTitle lobby={lobby} />
+      {hostedBy ? (
+        <div className="flex items-center gap-2.5">
+          <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
+            <Avatar avatarUrl={hosts[0]!.avatar_cid} value={hosts[0]!.profile_space_id} alt="" size={24} />
+          </span>
+          <Text as="span" variant="metadata" color="grey-04">
+            Hosted by {hostedBy}
+          </Text>
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-1 rounded-xl bg-grey-01 p-3">
+        {date ? (
+          <Text as="p" variant="smallTitle">
+            {date}
+          </Text>
+        ) : null}
+        <Text as="p" variant="metadata" color="grey-04">
+          {notYetOpenLabel(lobby, now)}
         </Text>
-        <LobbyTitle lobby={lobby} />
-        {hostedBy ? (
-          <div className="flex items-center gap-2.5">
-            <span className="size-6 shrink-0 overflow-hidden rounded-full [&>svg]:size-full">
-              <Avatar avatarUrl={hosts[0]!.avatar_cid} value={hosts[0]!.profile_space_id} alt="" size={24} />
-            </span>
-            <Text as="span" variant="metadata" color="grey-04">
-              Hosted by {hostedBy}
-            </Text>
-          </div>
-        ) : null}
-        <div className="flex flex-col gap-1 rounded-xl bg-grey-01 p-3">
-          {date ? (
-            <Text as="p" variant="smallTitle">
-              {date}
-            </Text>
-          ) : null}
-          <Text as="p" variant="metadata" color="grey-04">
-            {notYetOpenLabel(lobby, now)}
-          </Text>
-        </div>
-        {lobby.reminder_count > 0 ? (
-          <Text as="p" variant="metadata" color="grey-04">
-            {remindedLabel(lobby.reminder_count)}
-          </Text>
-        ) : null}
-        <div className="flex flex-wrap gap-2">
-          {guest ? null : (
-            <HubPillButton
-              variant={reminded ? 'secondary' : 'primary'}
-              analyticsLabel={reminded ? 'Lobby reminded' : 'Lobby remind me'}
-              aria-pressed={reminded}
-              pending={reminder.isPending}
-              onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
-            >
-              {reminded ? 'Reminded' : 'Remind me'}
-            </HubPillButton>
-          )}
-          <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
-            {LOBBY_COPY.findDebate}
-          </Link>
-          {canCancel ? (
-            confirmingCancel ? (
-              <>
-                <HubPillButton
-                  variant="primary"
-                  analyticsLabel="Lobby cancel confirm"
-                  pending={end.isPending}
-                  pendingLabel="Cancelling…"
-                  onClick={() => end.mutate()}
-                >
-                  Cancel for everyone
-                </HubPillButton>
-                <HubPillButton analyticsLabel="Lobby cancel back" onClick={() => setConfirmingCancel(false)}>
-                  Keep it
-                </HubPillButton>
-              </>
-            ) : (
-              <HubPillButton analyticsLabel="Lobby cancel" onClick={() => setConfirmingCancel(true)}>
-                Cancel lobby
+      </div>
+      {lobby.reminder_count > 0 ? (
+        <Text as="p" variant="metadata" color="grey-04">
+          {remindedLabel(lobby.reminder_count)}
+        </Text>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        {guest ? null : (
+          <HubPillButton
+            variant={reminded ? 'secondary' : 'primary'}
+            analyticsLabel={reminded ? 'Lobby reminded' : 'Lobby remind me'}
+            aria-pressed={reminded}
+            pending={reminder.isPending}
+            onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
+          >
+            {reminded ? 'Reminded' : 'Remind me'}
+          </HubPillButton>
+        )}
+        <FindDebateLink />
+        {canCancel ? (
+          confirmingCancel ? (
+            <>
+              <HubPillButton
+                variant="primary"
+                analyticsLabel="Lobby cancel confirm"
+                pending={end.isPending}
+                pendingLabel="Cancelling…"
+                onClick={() => end.mutate()}
+              >
+                Cancel for everyone
               </HubPillButton>
-            )
-          ) : null}
-        </div>
-        {end.isError ? (
-          <Text as="p" variant="footnote" color="red-01">
-            {lobbyErrorMessage(end.error, 'Could not cancel the lobby. Try again.')}
-          </Text>
-        ) : null}
-        {reminder.isError ? (
-          <Text as="p" variant="footnote" color="red-01">
-            {lobbyErrorMessage(reminder.error, 'Could not update your reminder. Try again.')}
-          </Text>
-        ) : null}
-        {guest ? (
-          <LobbyGuestBanner
-            lobbyId={lobby.lobby_id}
-            message={{ title: LOBBY_COPY.guestBeforeOpen, detail: LOBBY_GUEST_COPY.notListening }}
-          />
+              <HubPillButton analyticsLabel="Lobby cancel back" onClick={() => setConfirmingCancel(false)}>
+                Keep it
+              </HubPillButton>
+            </>
+          ) : (
+            <HubPillButton analyticsLabel="Lobby cancel" onClick={() => setConfirmingCancel(true)}>
+              Cancel lobby
+            </HubPillButton>
+          )
         ) : null}
       </div>
-    </div>
+      {end.isError ? (
+        <Text as="p" variant="footnote" color="red-01">
+          {lobbyErrorMessage(end.error, 'Could not cancel the lobby. Try again.')}
+        </Text>
+      ) : null}
+      {reminder.isError ? (
+        <Text as="p" variant="footnote" color="red-01">
+          {lobbyErrorMessage(reminder.error, 'Could not update your reminder. Try again.')}
+        </Text>
+      ) : null}
+      {guest ? (
+        <LobbyGuestBanner
+          lobbyId={lobby.lobby_id}
+          message={{ title: LOBBY_COPY.guestBeforeOpen, detail: LOBBY_GUEST_COPY.notListening }}
+        />
+      ) : null}
+    </LobbyCardFrame>
   );
 }
 
@@ -386,9 +385,7 @@ function AdmittedLobby({
           <HubPillButton variant="primary" analyticsLabel="Lobby rejoin" onClick={() => void join(false)}>
             Rejoin
           </HubPillButton>
-          <Link href={NavUtils.toExplore()} className={hubPillClassName('secondary')}>
-            {LOBBY_COPY.findDebate}
-          </Link>
+          <FindDebateLink />
         </div>
       </LobbyShell>
     );
