@@ -52,7 +52,7 @@ import {
 } from './lobby-guest-hooks';
 import { LobbyHeader } from './lobby-header';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
-import { listedHosts, useListedLobbies } from './lobby-host-lobbies';
+import { usePreOpenHosts } from './lobby-host-lobbies';
 import { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
 import { type LobbyGuestNotice, type LobbyHandoffNotice, LobbyNotices, LobbyToast } from './lobby-notices';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
@@ -240,7 +240,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
 
   // Ticks so the countdown moves; passed in so the compiler sees it change.
   const now = useMinuteNow();
-  const hosts = listedHosts(useListedLobbies(), lobby.lobby_id);
+  const hosts = usePreOpenHosts(lobby);
   const hostedBy = hostsLabel(hosts);
   const date = lobbyDateLabel(lobby.starts_at);
 

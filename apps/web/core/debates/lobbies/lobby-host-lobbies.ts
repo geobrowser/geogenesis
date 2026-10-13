@@ -36,6 +36,14 @@ function isSooner(a: DebateLobbySummary, b: DebateLobbySummary) {
   return Date.parse(a.starts_at) < Date.parse(b.starts_at);
 }
 
+/**
+ * Who hosts a lobby that has not opened. `LobbyView` carries no hosts yet, so this reads the list
+ * row; once it does, this hook is the one place to switch.
+ */
+export function usePreOpenHosts(lobby: { lobby_id: string }): DebateLobbyPerson[] {
+  return listedHosts(useListedLobbies(), lobby.lobby_id);
+}
+
 /** The lobbies list, signed in only: geo-chat answers it for members alone. */
 export function useListedLobbies() {
   const guest = useIsLobbyGuest();
