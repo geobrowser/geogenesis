@@ -5,65 +5,35 @@ import { useQuery } from '@tanstack/react-query';
 import * as React from 'react';
 
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
+import { createBatchLoader } from '~/core/io/batch-loader';
 import { type Followers, fetchFollowers, followersQueryKey } from '~/core/io/subgraph/fetch-followers';
 import { isInterestedFollowEnabled } from '~/core/topics/interested';
 import type { FollowKind } from '~/core/topics/interested';
 import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
 
-/** Topics per request: a feed page of them fits in one, and the query stays a sane size. */
+/** Ids per request: a feed page of them fits in one, and the query stays a sane size. */
 const BATCH_SIZE = 25;
 
-type Waiter = { resolve: (followers: Followers) => void; reject: (error: unknown) => void };
-type Batch = { interested: boolean; viewerId?: string; waiters: Map<string, Waiter[]> };
-
-/** Asks waiting for the next flush, one batch per (flag, viewer): those go out as separate queries. */
-const batches = new Map<string, Batch>();
-let flushScheduled = false;
+/** One loader per (flag, viewer): those are separate queries, so their asks batch separately. */
+const loaders = new Map<string, (id: string) => Promise<Followers>>();
 
 /**
- * Every topic card asks for its own count, and a feed mounts many at once. Asks made in the same
- * tick go out as one request rather than one each.
+ * Every card asks for its own count, and a feed mounts many at once; asks made in the same tick go
+ * out as one request. See `createBatchLoader`.
  */
-function loadFollowers(topicId: string, interested: boolean, viewerId?: string): Promise<Followers> {
-  return new Promise((resolve, reject) => {
-    const batchKey = `${interested}:${viewerId ? normId(viewerId) : ''}`;
-    const batch = batches.get(batchKey) ?? { interested, viewerId, waiters: new Map() };
-    batches.set(batchKey, batch);
-
-    const id = normId(topicId);
-    batch.waiters.set(id, [...(batch.waiters.get(id) ?? []), { resolve, reject }]);
-
-    if (flushScheduled) return;
-    flushScheduled = true;
-    setTimeout(flush, 0);
-  });
-}
-
-function flush() {
-  flushScheduled = false;
-  const pending = [...batches.values()];
-  batches.clear();
-
-  for (const { interested, viewerId, waiters } of pending) {
-    const entries = [...waiters.entries()];
-    for (let start = 0; start < entries.length; start += BATCH_SIZE) {
-      const chunk = entries.slice(start, start + BATCH_SIZE);
-      fetchFollowers(
-        chunk.map(([id]) => id),
-        interested,
-        viewerId
-      ).then(
-        followers => {
-          for (const [id, topicWaiters] of chunk) {
-            const result = followers.get(id) ?? { count: 0, viewerIndexed: false, followerIds: [] };
-            topicWaiters.forEach(waiter => waiter.resolve(result));
-          }
-        },
-        error => chunk.forEach(([, topicWaiters]) => topicWaiters.forEach(waiter => waiter.reject(error)))
-      );
-    }
+function loadFollowers(entityId: string, interested: boolean, viewerId?: string): Promise<Followers> {
+  const group = `${interested}:${viewerId ? normId(viewerId) : ''}`;
+  let load = loaders.get(group);
+  if (!load) {
+    load = createBatchLoader<Followers>({
+      fetchBatch: ids => fetchFollowers(ids, interested, viewerId),
+      missing: () => ({ count: 0, viewerIndexed: false, followerIds: [] }),
+      maxBatchSize: BATCH_SIZE,
+    });
+    loaders.set(group, load);
   }
+  return load(normId(entityId));
 }
 
 /**

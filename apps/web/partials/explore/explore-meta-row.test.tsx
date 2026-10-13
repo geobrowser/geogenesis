@@ -13,13 +13,8 @@ const SPACE = '73a82967cb12f604f9589ac4bc8024cb';
 
 const mocks = vi.hoisted(() => ({ spaceType: undefined as 'PERSONAL' | 'PUBLIC' | undefined }));
 
-vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
-  useSpacesByIds: (ids: string[]) => ({
-    spaces: [],
-    spacesById: new Map(mocks.spaceType ? ids.map(id => [id, { id, type: mocks.spaceType }]) : []),
-    isLoading: false,
-    isPlaceholderData: false,
-  }),
+vi.mock('~/core/hooks/use-is-personal-space', () => ({
+  useIsPersonalSpace: () => (mocks.spaceType ? mocks.spaceType === 'PERSONAL' : undefined),
 }));
 vi.mock('~/core/follows/follow-button', () => ({
   FollowButton: (props: { target: { kind: string; id: string; name?: string | null } }) => (

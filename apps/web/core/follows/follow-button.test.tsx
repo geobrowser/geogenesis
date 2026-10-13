@@ -283,6 +283,14 @@ describe('FollowTopicButton', () => {
       expect(container).toBeEmptyDOMElement();
     });
 
+    it("can't be pressed until the viewer's own space is known, so it can't be your own row", () => {
+      mocks.personalSpaceId = null;
+      mocks.isLoadingPersonalSpace = true;
+      renderPerson();
+
+      expect(screen.getByRole('button')).toBeDisabled();
+    });
+
     it('drops a queued follow that turns out to be for your own space', async () => {
       // Pressed on your own row while signed out; you then sign in as that person.
       mocks.personalSpaceId = ADA_SPACE;

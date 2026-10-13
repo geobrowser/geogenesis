@@ -182,7 +182,10 @@ export function FollowButton({
   const authResolving = !authReady || (authenticated && !signedIn);
   const noPersonalSpace =
     signedIn && !personalSpaceId && !isLoadingPersonalSpace && !isAccountSetupPending && !queuedFollow.isQueued;
-  const disabled = authResolving || noPersonalSpace || (Boolean(personalSpaceId) && isLoadingFollows);
+  // Until the viewer's own space is known, a person button can't tell whether it is their own row.
+  const ownSpaceUnknown = target.kind === 'person' && isLoadingPersonalSpace;
+  const disabled =
+    authResolving || ownSpaceUnknown || noPersonalSpace || (Boolean(personalSpaceId) && isLoadingFollows);
 
   const onPress = (event: React.MouseEvent) => {
     // Cards are links and side-panel triggers underneath; the press is the button's alone.

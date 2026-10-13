@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { FollowButton } from '~/core/follows/follow-button';
-import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
+import { useIsPersonalSpace } from '~/core/hooks/use-is-personal-space';
 import { RANKING_BLOCK_TYPE_ID } from '~/core/ranking-block-ids';
 import { normId } from '~/core/utils/norm-id';
 import { NavUtils } from '~/core/utils/utils';
@@ -197,14 +197,14 @@ export function ExploreMetaRow({
  * Join for a space; Follow for a person (GEO-3236). Nobody joins someone's personal space, so when
  * an item was posted in one, the offer is to follow its owner instead.
  *
- * The feed doesn't carry space types, so this reads the space through the shared space lookup,
- * cached for five minutes and shared by every card from it. Join draws until the answer is in: nearly every card is in a shared space, and holding
+ * The feed doesn't carry space types, so this asks whether the space is personal: one batched
+ * request for every card on screen, cached per space for good. Join draws until the answer is in: nearly every card is in a shared space, and holding
  * Join back on all of them to spare the rare personal one a swap would cost more than it saves.
  */
 function JoinOrFollowSpace({ item }: { item: ExploreFeedItem }) {
-  const { spacesById } = useSpacesByIds([item.spaceId]);
+  const isPersonal = useIsPersonalSpace(item.spaceId);
 
-  if (spacesById.get(item.spaceId)?.type === 'PERSONAL') {
+  if (isPersonal) {
     return <FollowButton target={{ kind: 'person', id: item.spaceId, name: item.spaceName }} />;
   }
   return (
