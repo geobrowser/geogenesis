@@ -36,6 +36,13 @@ describe('exploreRoomClaimBatches', () => {
     expect(after[1]).toEqual([hex(1)]);
   });
 
+  it('folds only uuid-shaped ids, as geo-chat does, and keeps others as they are', () => {
+    const uuid = 'A1B2C3D4-E5F6-A1B2-C3D4-E5F6A1B2C3D4';
+    expect(exploreRoomClaimBatches([entry(uuid), entry('Claim-One'), entry('claim-one')])).toEqual([
+      ['Claim-One', 'a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4', 'claim-one'],
+    ]);
+  });
+
   it('asks for nothing with nothing on screen', () => {
     expect(exploreRoomClaimBatches([])).toEqual([]);
   });
@@ -74,6 +81,22 @@ describe('getDebateLobbyClaims', () => {
     expect(urls).toHaveLength(2);
     expect(urls[0]).toMatch(`/debate-lobbies/lobby1/claims?claim_entity_ids=${hex(1)},${hex(2)}`);
     expect(urls[1]).toMatch(/\/debate-lobbies\/lobby1\/claims$/);
+  });
+
+  it('sends a non-uuid id as it is, encoded', async () => {
+    const fetch = vi.fn().mockImplementation(
+      async () =>
+        new Response(JSON.stringify({ lobby_id: 'l', source: 'room', claims: [] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        })
+    );
+    vi.stubGlobal('fetch', fetch);
+
+    await getDebateLobbyClaims('lobby1', async () => 'token', 'account', undefined, [hex(1), 'Claim-One,x']);
+
+    const url = fetch.mock.calls.map(call => String(call[0])).find(url => url.includes('/debate-lobbies/'));
+    expect(url).toMatch(`/debate-lobbies/lobby1/claims?claim_entity_ids=${hex(1)},Claim-One%2Cx`);
   });
 });
 
@@ -127,6 +150,17 @@ describe('namedRoomClaims', () => {
   it('keeps only the claims the batch named', () => {
     const response = { lobby_id: 'l', source: 'room' as const, claims: [row(hex(1)), row(hex(7))] };
     expect(namedRoomClaims(response, [hex(1), hex(2)]).claims.map(r => r.claim.claim_entity_id)).toEqual([hex(1)]);
+  });
+
+  it('matches a uuid in either spelling and any other id only as it is', () => {
+    const dashed = `${hex(1).slice(0, 8)}-${hex(1).slice(8, 12)}-${hex(1).slice(12, 16)}-${hex(1).slice(16, 20)}-${hex(1).slice(20)}`;
+    const response = {
+      lobby_id: 'l',
+      source: 'room' as const,
+      claims: [row(dashed.toUpperCase()), row('Claim-One'), row('claimone')],
+    };
+    const ids = namedRoomClaims(response, [hex(1), 'Claim-One']).claims.map(r => r.claim.claim_entity_id);
+    expect(ids).toEqual([dashed.toUpperCase(), 'Claim-One']);
   });
 
   it('ignores a recent-claims answer from a geo-chat that dropped the filter', () => {
