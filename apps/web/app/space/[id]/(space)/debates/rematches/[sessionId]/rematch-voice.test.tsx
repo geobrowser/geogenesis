@@ -3,6 +3,7 @@ import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render as rtlRender, screen, waitFor, within } from '@testing-library/react';
 
 import * as React from 'react';
+import { StrictMode } from 'react';
 import type { ReactElement, ReactNode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -2570,6 +2571,24 @@ describe('video in the header', () => {
     view.unmount();
 
     expect(mocks.localCameraTrack!.track.detach).toHaveBeenCalled();
+  });
+
+  it('matches every attach with a detach, including the StrictMode remount', async () => {
+    mocks.localCameraTrack = cameraTrack();
+    const view = render(
+      <StrictMode>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </StrictMode>
+    );
+    await flushOwnership();
+
+    const { attach, detach } = mocks.localCameraTrack!.track;
+    await waitFor(() => expect(attach).toHaveBeenCalled());
+    expect(attach.mock.calls.length - detach.mock.calls.length).toBe(1);
+
+    view.unmount();
+
+    expect(detach.mock.calls.length).toBe(attach.mock.calls.length);
   });
 
   it('keeps the slot the same size with a camera and without', async () => {
