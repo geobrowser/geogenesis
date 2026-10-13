@@ -487,7 +487,8 @@ function DebateCalendarBody({
           spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
           labelsById={labelsById}
           popoverPortal={popoverPortal}
-          hidePopoversWhenDetached={false}
+          // The week's rows sit inside the hour popover and hover card; the phone's day list is inline.
+          hidePopoversWhenDetached={isPhone}
           disabled={buttonsDisabled}
           disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
           onSeeTimes={(_peer, opener, rowEntry, initialStart) => openBooking(userKey, opener, rowEntry, initialStart)}
@@ -498,6 +499,7 @@ function DebateCalendarBody({
       blockedReason,
       buttonsDisabled,
       debateSpacesByPerson,
+      isPhone,
       labelsById,
       matchAnalysis,
       matchesKnown,

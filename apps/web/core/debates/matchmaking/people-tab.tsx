@@ -592,9 +592,9 @@ export function PersonRow({
   popoverPortal: HTMLElement | null;
   /**
    * Whether the row's matches and spaces popovers vanish once their trigger scrolls out of view.
-   * The calendar turns it off: its rows sit inside the hour and hover popovers, whose transformed
-   * wrappers throw off Radix's measurement, so it reports every trigger detached and the dropdown
-   * never shows.
+   * Off for a row inside another popover (the calendar's hour popover and hover card): the outer
+   * popover's transformed wrapper throws off Radix's measurement, so it reports the trigger detached
+   * and the dropdown never shows.
    */
   hidePopoversWhenDetached?: boolean;
   disabled: boolean;
