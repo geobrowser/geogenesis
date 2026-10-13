@@ -78,7 +78,7 @@ export function joinLabel(lobby: Pick<DebateLobbySummary, 'viewer_on_roster'>, s
  * set-schedule banner. The panel shows it while a lobby is live or one opens within 15 minutes.
  *
  * Live: the busiest lobby large, every other live one listed under it. Soon: a countdown to the
- * next opening, with Remind me. Lobbies further out stay in the card under the tabs, which scrolls.
+ * next opening, with RSVP. Lobbies further out stay in the card under the tabs, which scrolls.
  */
 export function LobbySpotlight({ lineup }: { lineup: LobbyLineup }) {
   const [lead, ...others] = lineup.live;

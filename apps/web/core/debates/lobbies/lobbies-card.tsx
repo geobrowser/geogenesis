@@ -12,7 +12,7 @@ import type { DebateLobbySummary } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
+import { useDebateLobbies, useDebateLobbyReminder, useLobbyReminderError } from './hooks';
 import { useLobbyLineup } from './live-lobbies';
 import { type LobbyEntry, markLobbyEntry } from './lobby-analytics';
 import {
@@ -70,7 +70,7 @@ function LiveLobbiesCardBody() {
 }
 
 /**
- * One lobby: Live or its time, its name, who is there, and Join or Remind me. Shared by this card
+ * One lobby: Live or its time, its name, who is there, and Join or RSVP. Shared by this card
  * and the Debate button's hover list; `entry` says which.
  */
 export function LobbyRow({
@@ -84,6 +84,7 @@ export function LobbyRow({
   showLiveMark?: boolean;
 }) {
   const reminder = useDebateLobbyReminder();
+  const reminderError = useLobbyReminderError(reminder, lobby);
   const hosts = hostsLabel(lobby.hosts);
   const schedule = lobbyScheduleLabel(lobby);
 
@@ -152,9 +153,9 @@ export function LobbyRow({
           {hostedBy}
         </Text>
       ) : null}
-      {reminder.isError ? (
+      {reminderError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, RSVP_FAILED)}
+          {lobbyErrorMessage(reminderError, RSVP_FAILED)}
         </Text>
       ) : null}
     </li>

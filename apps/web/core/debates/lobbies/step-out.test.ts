@@ -79,6 +79,7 @@ describe('every debate entry steps out of a lobby', () => {
     'core/debates/lobbies/lobbies-calendar.tsx',
     'partials/explore/explore-live-lobbies-banner.tsx',
     'core/debates/lobbies/lobby-page.tsx',
+    'core/debates/lobbies/lobby-state-cards.tsx',
     'core/debates/lobbies/open-lobby-dialog.tsx',
     'core/claims/browse/claim-end-slot.tsx',
     'app/debate/[roomId]/room-page-client.tsx',

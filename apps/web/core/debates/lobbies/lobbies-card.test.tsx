@@ -24,6 +24,7 @@ vi.mock('../hooks', () => ({ useGeoChatAuth: () => ({ authenticated: true }) }))
 vi.mock('./hooks', () => ({
   useDebateLobbies: () => ({ data: { lobbies: [] }, isLoading: false, isError: false }),
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
+  useLobbyReminderError: () => null,
 }));
 vi.mock('./live-lobbies', () => ({ useLobbyLineup: () => mocks.lineup }));
 vi.mock('./lobby-analytics', () => ({ markLobbyEntry: vi.fn() }));

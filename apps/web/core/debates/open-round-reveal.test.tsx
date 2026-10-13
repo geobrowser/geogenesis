@@ -97,11 +97,13 @@ describe('OpenRoundPickReveal', () => {
     expect(screen.getByText('Extend')).toHaveClass('uppercase');
   });
 
-  it('shows a missing pick as no pick, counted as End', () => {
+  it('shows a missing pick as no pick under the name, neither Extend nor End', () => {
     const { container } = render(<OpenRoundPickReveal name="Bob" pick={null} />);
     expect(container.firstChild).toHaveAttribute('data-open-round-reveal', 'none');
-    expect(screen.getByText('No pick')).toBeInTheDocument();
-    expect(screen.getByText('End')).toBeInTheDocument();
+    expect(screen.getByText('No pick')).toHaveClass('uppercase');
+    expect(screen.getAllByText('Bob')).toHaveLength(2);
+    expect(screen.queryByText('End')).not.toBeInTheDocument();
+    expect(screen.queryByText('Extend')).not.toBeInTheDocument();
   });
 
   it('rests on the pick side, and only animates for those who allow motion', () => {
@@ -147,6 +149,13 @@ describe('openRoundWrapNote', () => {
     expect(openRoundWrapNote(null, { name: 'Bob', pick: null })).toBe('No picks in time');
     expect(openRoundWrapNote(null, { name: 'Bob', pick: 'extend' })).toBe("You didn't pick in time");
     expect(openRoundWrapNote('extend', { name: 'Bob', pick: null })).toBe("Bob didn't pick in time");
+  });
+
+  // An End ends the debate whatever the other pick was, so the cards already say why.
+  it('says nothing when someone picked End, even beside a missing pick', () => {
+    expect(openRoundWrapNote('end', { name: 'Bob', pick: null })).toBeNull();
+    expect(openRoundWrapNote(null, { name: 'Bob', pick: 'end' })).toBeNull();
+    expect(openRoundWrapNote('end', { name: 'Bob', pick: 'end' })).toBeNull();
   });
 
   it('says nothing for a split or an unknown pick', () => {
@@ -210,6 +219,28 @@ describe('useOpenRoundReveal', () => {
     expect(current.result).toEqual({ kind: 'round', round: 2, opener: null });
     expect(current.chipsHidden).toBe(true);
     expect(current.holdsCountIn).toBe(true);
+  });
+
+  // Extend beside a missing pick extends: the missing card says no pick, and the new round is announced.
+  it('announces the new round when one Extend meets a missing pick', () => {
+    const base = revealRebut();
+    const picks = [
+      { participant_slot: 1 as const, pick: 'extend' as const },
+      { participant_slot: 2 as const, pick: null },
+    ];
+    const debate = {
+      ...base,
+      open_rounds: {
+        ...base.open_rounds!,
+        resolution: 'deadline' as const,
+        revealed_picks: picks,
+        rounds: base.open_rounds!.rounds.map(round => ({ ...round, resolution: 'deadline' as const, picks })),
+      },
+    };
+    expect(reveal({ debate, elapsedMs: 500 }).remotePick).toEqual({ participant_slot: 2, pick: null });
+    const announced = reveal({ debate, elapsedMs: 2_000 });
+    expect(announced.result).toEqual({ kind: 'round', round: 2, opener: null });
+    expect(announced.announcement).toBe('You: Extend. Bob: no pick. Round 2. You open.');
   });
 
   it("clears the opener's tiles for their count-in", () => {

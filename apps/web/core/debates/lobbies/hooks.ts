@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -64,12 +64,13 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
 
 /**
  * The lobby list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount in case
- * patches stopped while nothing held the matchmaking scope.
+ * patches stopped while nothing held the matchmaking scope. With `staleTime`, reloaded on mount only
+ * once that old.
  *
  * Signed in only. geo-chat lists lobbies to accounts alone, and a signed-out visitor cannot join one
  * yet, so every lobby surface stays hidden for them until both change (GEO-3268).
  */
-export function useDebateLobbies(enabled = true) {
+export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: number } = {}) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
@@ -77,7 +78,7 @@ export function useDebateLobbies(enabled = true) {
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && ready && authenticated,
-    refetchOnMount: 'always',
+    ...(staleTime === undefined ? { refetchOnMount: 'always' as const } : { staleTime }),
   });
 }
 
@@ -115,7 +116,16 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
   });
 
   const access = query.data?.access;
-  const opensAt = access?.status === 'not_yet_open' ? access.opens_at : null;
+  useRefetchAtOpening(query, access?.status === 'not_yet_open' ? access.opens_at : null);
+
+  return query;
+}
+
+/** Refetches `query` just after `opensAt`, and again after each refetch that leaves it unchanged. */
+export function useRefetchAtOpening(
+  query: Pick<UseQueryResult, 'refetch' | 'dataUpdatedAt' | 'errorUpdatedAt'>,
+  opensAt: string | null
+) {
   const { refetch, dataUpdatedAt, errorUpdatedAt } = query;
   React.useEffect(() => {
     if (!opensAt) return;
@@ -126,8 +136,6 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
     return () => clearTimeout(timeout);
     // Reschedules after a refetch that still says not yet open, or that failed.
   }, [dataUpdatedAt, errorUpdatedAt, opensAt, refetch]);
-
-  return query;
 }
 
 /** Writes a returned view into the lobby's cache entry and marks the list stale. */
@@ -174,6 +182,26 @@ export function useDebateLobbyReminder() {
       }
     },
   });
+}
+
+/**
+ * The reminder failure to show beside `lobby`: only one asked for this lobby, while it is still to
+ * open. A 409 `lobby_already_open` shows nothing; the refetched list swaps in Join.
+ */
+export function useLobbyReminderError(
+  reminder: ReturnType<typeof useDebateLobbyReminder>,
+  lobby: { lobby_id: string; open: boolean }
+): unknown {
+  const id = dashlessId(lobby.lobby_id);
+  const { reset } = reminder;
+  // Clears when another lobby takes this one's place.
+  React.useEffect(() => reset, [id, reset]);
+
+  if (!reminder.isError || lobby.open) return null;
+  if (!reminder.variables || dashlessId(reminder.variables.lobbyId) !== id) return null;
+  const error = reminder.error;
+  if (error instanceof GeoChatRequestError && error.code === 'lobby_already_open') return null;
+  return error;
 }
 
 export function useEndDebateLobby(lobbyId: string) {

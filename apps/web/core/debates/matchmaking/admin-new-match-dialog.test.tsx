@@ -25,7 +25,14 @@ const mocks = vi.hoisted(() => ({
   freeSlots: new Map<string, number>(),
   // GEO-3231: each debater's own free windows, by user id.
   availability: {} as Record<string, { start: string; end: string; viewer_free: boolean }[]>,
+  // A debater's zone as their own read answers it, where it differs from the roster's: empty is no
+  // schedule. Stands in for a roster that is stale, capped or failed to load.
+  readZones: {} as Record<string, string>,
+  overlapError: null as Error | null,
 }));
+
+const readZone = (userId: string) =>
+  mocks.readZones[userId] ?? mocks.debaters.find(debater => debater.user_id === userId)?.timezone ?? '';
 
 vi.mock('./admin-hooks', () => ({
   ADMIN_MATCH_DAYS: 14,
@@ -48,10 +55,8 @@ vi.mock('./admin-hooks', () => ({
   useAdminDebaterAvailability: (userId: string | null) =>
     userId
       ? {
-          data: {
-            with_timezone: mocks.debaters.find(debater => debater.user_id === userId)?.timezone ?? '',
-            their_slots: mocks.availability[userId] ?? [],
-          },
+          data: { with_timezone: readZone(userId), their_slots: mocks.availability[userId] ?? [] },
+          schedule: { peerHasSchedule: Boolean(readZone(userId)), peerTimezone: readZone(userId) },
           dataUpdatedAt: Date.now(),
           isPending: false,
           error: null,
@@ -60,7 +65,12 @@ vi.mock('./admin-hooks', () => ({
       : { isPending: false, error: null, refetch: vi.fn() },
   useAdminPairOverlap: (first: string | null, second: string | null) =>
     first && second
-      ? { data: mocks.overlap, isPending: mocks.overlap === undefined, error: null, refetch: vi.fn() }
+      ? {
+          data: mocks.overlap,
+          isPending: mocks.overlap === undefined && !mocks.overlapError,
+          error: mocks.overlapError,
+          refetch: vi.fn(),
+        }
       : { isPending: false },
   useCreateAdminMatch: () => ({ mutate: mocks.create, isPending: false, error: null }),
   useAdminAvailabilityPrompt: () => ({ mutateAsync: mocks.prompt }),
@@ -234,6 +244,8 @@ beforeEach(() => {
     fitAnchors: [],
     freeSlots: new Map(),
     availability: {},
+    readZones: {},
+    overlapError: null,
     matchesKnown: true,
     debatersError: null,
   });
@@ -264,8 +276,167 @@ describe('AdminNewMatchDialog', () => {
     const sam = people()[0];
     expect(sam).toHaveTextContent('Sam Patel');
     expect(sam).toHaveTextContent('No availability set');
-    expect(within(sam).queryByRole('button', { name: /Select/ })).not.toBeInTheDocument();
+    expect(within(sam).getByRole('button', { name: 'Select Sam Patel' })).toBeInTheDocument();
     expect(within(sam).getByRole('button', { name: 'Request availability from Sam Patel' })).toBeInTheDocument();
+  });
+
+  it('matches someone with no availability at any time, flagged Off-hours', async () => {
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    // What geo-chat answers measured from someone with no schedule: no shared time, no zone.
+    mocks.overlap = {
+      viewer_timezone: '',
+      viewer_has_schedule: false,
+      candidates: [{ with: 'ana', both_have_schedules: false, with_timezone: '', slots: [], truncated: false }],
+    };
+    mocks.prompt.mockResolvedValueOnce({ sent: true, outcome: 'sent' });
+    const { rerender } = renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    // Nothing to recommend, so the override is where it starts.
+    expect(screen.getByRole('radio', { name: 'Pick any time' })).toBeChecked();
+    expect(screen.getByText('Sam hasn’t set availability.')).toBeInTheDocument();
+    // Assistive tech and the hover title hear the same, not a fully booked fortnight.
+    const strip = screen.getByRole('region', { name: /^Availability in / });
+    expect(within(strip).getAllByText(/Sam hasn’t set availability; Ana/).length).toBeGreaterThan(0);
+    expect(within(strip).queryByText(/Sam not free/)).not.toBeInTheDocument();
+    expect(strip.querySelector('[title*="Sam busy"]')).toBeNull();
+    expect(strip.querySelector('[title*="Sam hasn’t set availability"]')).not.toBeNull();
+    expect(screen.getAllByText(/Not a time they.re both free/).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+    expect(mocks.create.mock.calls[0][0]).toMatchObject({ firstUserId: 'sam', secondUserId: 'ana' });
+
+    // Recommended says why it has nothing, and asks only the one without availability.
+    fireEvent.click(screen.getByRole('radio', { name: 'Recommended' }));
+    expect(screen.getByText(/Sam hasn.t set availability, so there.s no shared time/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Request availability' }));
+    });
+    expect(mocks.prompt.mock.calls.map(([userId]) => userId)).toEqual(['sam']);
+    expect(screen.getByText('Asked Sam')).toBeInTheDocument();
+  });
+
+  it('recommends shared times for someone the roster missed, once their own read has a schedule', () => {
+    // Sam is found by search only, as when the roster is stale, capped or failed to load.
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    mocks.readZones = { sam: 'America/New_York' };
+    mocks.overlap = {
+      viewer_timezone: 'America/New_York',
+      viewer_has_schedule: true,
+      candidates: [
+        {
+          with: 'ana',
+          both_have_schedules: true,
+          with_timezone: 'Europe/Madrid',
+          slots: [{ start: at(7, 9), end: at(7, 9, 30) }],
+          truncated: false,
+        },
+      ],
+    };
+    const { rerender } = renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    expect(screen.getByRole('radio', { name: 'Recommended' })).toBeChecked();
+    expect(screen.queryByText(/hasn.t set availability/)).not.toBeInTheDocument();
+    expect(
+      screen.getAllByRole('button', { pressed: false }).some(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))
+    ).toBe(true);
+    // Their zone came from their own read, so the footer gives their clock as well as Ana's.
+    fireEvent.click(
+      screen.getAllByRole('button', { pressed: false }).find(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))!
+    );
+    expect(screen.getByText(/Sam .* in New York.* · Ana .* in Madrid/)).toBeInTheDocument();
+  });
+
+  it('says someone has no availability when their own read says so, whatever the roster had', () => {
+    // Raj was in the roster, then cleared his schedule. The roster, and a pair overlap read before
+    // he did, still carry his old zone.
+    mocks.readZones = { raj: '' };
+    mocks.overlap = {
+      viewer_timezone: 'Europe/Madrid',
+      viewer_has_schedule: true,
+      candidates: [
+        { with: 'raj', both_have_schedules: false, with_timezone: 'Asia/Kolkata', slots: [], truncated: false },
+      ],
+    };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    expect(screen.getByRole('radio', { name: 'Pick any time' })).toBeChecked();
+    expect(screen.getByText('Raj hasn’t set availability.')).toBeInTheDocument();
+    // The roster's zone for him is a minute old: his own read, with none, decides.
+    expect(screen.getByText(/Ana .* in Madrid/)).toBeInTheDocument();
+    expect(screen.queryByText(/in Kolkata/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('option', { name: /Raj’s time/ })).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('radio', { name: 'Recommended' }));
+    expect(screen.getByText(/Raj hasn.t set availability, so there.s no shared time/)).toBeInTheDocument();
+    expect(screen.queryByText(/never overlaps/)).not.toBeInTheDocument();
+  });
+
+  it('flags every time Off-hours once someone is unset, whatever a stale overlap still offers', () => {
+    // Raj cleared his schedule after this pair's overlap was read, so it still offers his old slots.
+    mocks.readZones = { raj: '' };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+
+    // A once-shared half-hour off the strip is an override, not a recommendation.
+    fireEvent.click(document.querySelector(`[data-start="${Date.parse(at(7, 9))}"]`)!);
+    expect(screen.getByRole('radio', { name: 'Pick any time' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Not a time they’re both free.')).toBeInTheDocument();
+    expect(screen.queryByText('They’re both free then.')).not.toBeInTheDocument();
+    expect(screen.getByText(/The invite is flagged, and the calendar tags it Off-hours/)).toBeInTheDocument();
+  });
+
+  it('flags a time Off-hours straight away when someone is unset, without waiting for the overlap', () => {
+    mocks.overlap = undefined;
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    const { rerender } = renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+
+    expect(screen.getByText('Not a time they’re both free.')).toBeInTheDocument();
+    expect(screen.queryByText(/Checking whether they.re both free then/)).not.toBeInTheDocument();
+  });
+
+  it.each([
+    ['loading', null],
+    ['failed', new Error('down')],
+  ])('says who is unset in Recommended while the overlap is %s', (_state, error) => {
+    mocks.overlap = undefined;
+    mocks.overlapError = error;
+    mocks.searchQuery = 'sam';
+    mocks.searchResults = [{ id: 'sam' }];
+    const { rerender } = renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Sam Patel' }));
+    rerender(<AdminNewMatchDialog open onOpenChange={vi.fn()} onSent={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Recommended' }));
+
+    expect(screen.getByText(/Sam hasn.t set availability, so there.s no shared time/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Request availability' })).toBeInTheDocument();
+    expect(screen.queryByText(/Finding times|Couldn.t load their shared times/)).not.toBeInTheDocument();
+  });
+
+  it('shows a debater’s zone from their own read when it has changed since the roster', () => {
+    mocks.readZones = { raj: 'Asia/Tokyo' };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(
+      screen.getAllByRole('button', { pressed: false }).find(b => /^9:00/.test(b.getAttribute('aria-label') ?? ''))!
+    );
+
+    expect(screen.getByText(/Raj .* in Tokyo/)).toBeInTheDocument();
+    expect(screen.queryByText(/in Kolkata/)).not.toBeInTheDocument();
   });
 
   it('says whether the availability request went out', async () => {
@@ -610,8 +781,8 @@ describe('AdminNewMatchDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
     fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '0' } });
-    fireEvent.change(screen.getByRole('combobox', { name: /^Starts/ }), {
-      target: { value: String(10 * 60) },
+    fireEvent.change(screen.getByLabelText(/^Starts/), {
+      target: { value: '10:00' },
     });
     expect(screen.getByRole('button', { name: 'Send invites' })).toBeEnabled();
 
@@ -620,6 +791,54 @@ describe('AdminNewMatchDialog', () => {
       vi.advanceTimersByTime(60_000);
     });
     expect(screen.getByRole('button', { name: 'Send invites' })).toBeDisabled();
+  });
+
+  it('never calls a custom start free for an unset debater, whatever a stale overlap still offers', () => {
+    // Raj cleared his schedule after the overlap was read; it still has the shared 9:00–10:00.
+    mocks.readZones = { raj: '' };
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:15' } });
+
+    expect(screen.getAllByText(/Not a time they.re both free/).length).toBe(2);
+    expect(screen.queryByText(/isn.t one of their half-hours/)).not.toBeInTheDocument();
+  });
+
+  it('books a custom start off the half-hour, and says whether they are free for all of it', () => {
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '1' } });
+
+    // 9:45–10:15 runs past their shared 9:00–10:00.
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:45' } });
+    expect(screen.getAllByText(/Not a time they.re both free/).length).toBeGreaterThan(0);
+
+    // 9:15–9:45 is inside it, though geo-chat still flags anything off their half-hours.
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:15' } });
+    expect(screen.getByLabelText(/^Starts/)).toHaveValue('09:15');
+    expect(screen.getAllByText(/They.re both free then, but it isn.t one of their half-hours/).length).toBe(2);
+    expect(screen.queryByText(/Not a time they.re both free/)).not.toBeInTheDocument();
+
+    // Clearing the field keeps the last whole time rather than sending nothing or midnight.
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
+    expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe(at(7, 9, 15));
+  });
+
+  it('counts a shared half-hour already under way when a custom start falls inside it', () => {
+    vi.setSystemTime(new Date(2026, 9, 7, 9, 10));
+    renderDialog();
+    fireEvent.click(screen.getByRole('button', { name: 'Select Ana Ruiz' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select Raj Mehta' }));
+    fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '0' } });
+    fireEvent.change(screen.getByLabelText(/^Starts/), { target: { value: '09:15' } });
+
+    expect(screen.getAllByText(/They.re both free then, but it isn.t one of their half-hours/).length).toBe(2);
   });
 
   it('shows both debaters’ availability, whose is whose, and where it overlaps', () => {
@@ -660,7 +879,7 @@ describe('AdminNewMatchDialog', () => {
     // Anything else is the override, on that day at that time.
     fireEvent.click(document.querySelector(`[data-start="${Date.parse(at(8, 14))}"]`)!);
     expect(screen.getByRole('radio', { name: 'Pick any time' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByRole('combobox', { name: /^Starts/ })).toHaveValue(String(14 * 60));
+    expect(screen.getByLabelText(/^Starts/)).toHaveValue('14:00');
     fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
     expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe(at(8, 14));
   });
@@ -785,10 +1004,10 @@ describe('AdminNewMatchDialog', () => {
       pickBoth();
       fireEvent.click(screen.getByRole('radio', { name: 'Pick any time' }));
       fireEvent.change(screen.getByRole('combobox', { name: 'Day' }), { target: { value: '1' } });
-      fireEvent.change(screen.getByRole('combobox', { name: 'Starts (GMT)' }), { target: { value: String(15 * 60) } });
+      fireEvent.change(screen.getByLabelText('Starts (GMT)'), { target: { value: '15:00' } });
 
       switchToMadrid();
-      expect(screen.getByRole('combobox', { name: 'Starts (Madrid)' })).toHaveValue(String(17 * 60));
+      expect(screen.getByLabelText('Starts (Madrid)')).toHaveValue('17:00');
       expect(screen.getByText(/Wed, Oct 7 · 5:00 PM – 5:30 PM Madrid \(GMT\+2\)/)).toBeInTheDocument();
       fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
       expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-07T15:00:00.000Z');
@@ -798,10 +1017,10 @@ describe('AdminNewMatchDialog', () => {
       renderDialog();
       pickBoth();
       fireEvent.click(document.querySelector(`[data-start="${Date.parse('2026-10-08T14:00:00Z')}"]`)!);
-      expect(screen.getByRole('combobox', { name: 'Starts (GMT)' })).toHaveValue(String(14 * 60));
+      expect(screen.getByLabelText('Starts (GMT)')).toHaveValue('14:00');
 
       switchToMadrid();
-      expect(screen.getByRole('combobox', { name: 'Starts (Madrid)' })).toHaveValue(String(16 * 60));
+      expect(screen.getByLabelText('Starts (Madrid)')).toHaveValue('16:00');
       fireEvent.click(screen.getByRole('button', { name: 'Send invites' }));
       expect(mocks.create.mock.calls[0][0].start.toISOString()).toBe('2026-10-08T14:00:00.000Z');
     });
@@ -846,8 +1065,8 @@ describe('AdminNewMatchDialog', () => {
       const day = screen.getByRole('combobox', { name: 'Day' });
       expect(within(day).getAllByRole('option')[0]).toHaveTextContent('Tue, Oct 6');
       fireEvent.change(day, { target: { value: '1' } });
-      fireEvent.change(screen.getByRole('combobox', { name: 'Starts (GMT)' }), {
-        target: { value: String(15 * 60) },
+      fireEvent.change(screen.getByLabelText('Starts (GMT)'), {
+        target: { value: '15:00' },
       });
 
       expect(screen.getByText(/Wed, Oct 7 · 3:00 PM – 3:30 PM GMT/)).toBeInTheDocument();

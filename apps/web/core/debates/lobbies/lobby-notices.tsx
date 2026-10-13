@@ -2,11 +2,14 @@
 
 import type * as React from 'react';
 
-import type { DebateLobbyMember } from '../api';
+import type { DebateLobbyMember, DebateLobbyPerson } from '../api';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { personName } from './lobby-format';
+import { handoffLabel } from './lobby-format';
 
 export type LobbyGuestNotice = { message: string; retry: string | null };
+
+/** Who hosts now, and the host who left when the page saw them go. */
+export type LobbyHandoffNotice = { host: DebateLobbyMember; left: DebateLobbyPerson | null };
 
 /**
  * The lobby's toasts, stacked above the bottom bar so they show on either phone tab and never push
@@ -23,8 +26,8 @@ export function LobbyNotices({
   onGuestRetry,
 }: {
   noticesRef: (element: HTMLElement | null) => void;
-  /** Who hosts now, for a few seconds after a handoff. */
-  handoff: DebateLobbyMember | null;
+  /** For a few seconds after a handoff. */
+  handoff: LobbyHandoffNotice | null;
   queuedOutcome: string | null;
   onDismissQueuedOutcome: () => void;
   moderationNotice: string | null;
@@ -35,7 +38,7 @@ export function LobbyNotices({
 }) {
   return (
     <div ref={noticesRef} className="contents">
-      {handoff ? <LobbyToast>{personName(handoff)} is hosting now</LobbyToast> : null}
+      {handoff ? <LobbyToast>{handoffLabel(handoff.host, handoff.left)}</LobbyToast> : null}
       {queuedOutcome ? (
         <LobbyToast
           action={
