@@ -198,13 +198,13 @@ export function DebateExploreFeedCard({
   // is this one's turn. A card that is allowed but scrolled away still stops,
   // because its own judgement above is unchanged.
   const playbackAllowed = useDebatePlaybackAllowed(debateId);
-  // On a phone the side panel (and the other sheets) covers the feed. Cards behind it pause rather
-  // than keep decoding under it; cards inside it, like a profile's Activity gallery, still play.
+  // A card nobody can see stops playing and lets go of its media: behind a mobile sheet (the side
+  // panel, the Debates hub), or off screen on the mobile layout. Paused video still holds its
+  // decoders and buffered frames, and on a phone that adds up to a reloaded tab. The card keeps its
+  // signed URLs, so it reattaches quickly (GEO-3067's `releaseMedia`). Cards inside a sheet, like a
+  // profile's Activity gallery, are not covered by it. Desktop keeps off-screen cards loaded so
+  // the next one starts at once.
   const coveredBySheet = useCoveredByMobileSheet();
-  // Paused video still holds its decoders and buffered frames, and on a phone that adds up to a
-  // reloaded tab. A card nobody can see keeps its signed URLs, so it reattaches quickly, but not
-  // its media (GEO-3067's `releaseMedia`). Desktop keeps off-screen cards loaded so the next one
-  // starts at once.
   const isMobileLayout = useIsMobileLayout();
   const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen);
 
