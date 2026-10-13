@@ -66,8 +66,8 @@ export function useAdminPairFit(anchorProfileSpaceId: string | null, candidatePr
 
 /**
  * How many half-hours each candidate shares with debater 1 over the next two weeks, keyed by
- * normalized geo-chat user id. A candidate missing from the map is unknown (not loaded, or
- * geo-chat failed), which costs them nothing in the order.
+ * normalized geo-chat user id. A candidate missing from the map is unknown (not loaded, geo-chat
+ * failed, or debater 1 has no schedule to share), which costs them nothing in the order.
  */
 export function useAdminSharedFreeSlots(firstUserId: string | null, candidateUserIds: readonly string[]) {
   const { accountKey, authenticated, getPrivyIdentityToken } = useGeoChatAuth();
@@ -93,6 +93,9 @@ export function useAdminSharedFreeSlots(firstUserId: string | null, candidateUse
       );
       const slots = new Map<string, number>();
       for (const answer of answers) {
+        // From someone with no schedule every candidate answers zero, which is not knowing rather
+        // than sharing no time: leaving them out keeps every row from saying "No free time".
+        if (!answer?.viewer_has_schedule) continue;
         for (const candidate of answer?.candidates ?? []) slots.set(normId(candidate.with), candidate.slots.length);
       }
       return slots;
