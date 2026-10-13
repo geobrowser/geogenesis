@@ -74,6 +74,13 @@ export function useIsLobbyGuest() {
 }
 
 const HEARTBEAT_FALLBACK_MS = 20_000;
+/** Statuses whose tab keeps the listening lock. */
+const HOLDS_LOCK: ReadonlySet<GuestSessionState['status']> = new Set([
+  'starting',
+  'listening',
+  'refused',
+  'handingOver',
+]);
 /** How often a tab waiting on a press checks whether another tab still listens. */
 export const ELSEWHERE_CHECK_MS = 3_000;
 
@@ -134,17 +141,29 @@ export function useLobbyGuestSession(
     [runCommand]
   );
 
-  // Starts only with this browser's listening lock; without it, waits on a press (`retry`).
+  // Starts only with this browser's listening lock; without it, waits on a press (`retry`). A hidden
+  // tab, such as a link opened in the background, waits until it is shown.
   const status = state.status;
   React.useEffect(() => {
     if (!listen || signedIn || status !== 'idle') return;
     let cancelled = false;
-    void acquireGuestTabLock().then(held => {
-      if (cancelled || stateRef.current.status !== 'idle') return;
-      send({ type: held ? 'start' : 'elsewhere' });
-    });
+    const run = () => {
+      if (document.visibilityState === 'hidden') return;
+      document.removeEventListener('visibilitychange', run);
+      void acquireGuestTabLock().then(held => {
+        if (!cancelled && stateRef.current.status === 'idle') return send({ type: held ? 'start' : 'elsewhere' });
+        if (!held) return;
+        // Granted after this run was dropped: a tick later, a re-run has started on it or nobody needs it.
+        setTimeout(() => {
+          if (mountedRef.current && !HOLDS_LOCK.has(stateRef.current.status)) releaseGuestTabLock({ now: true });
+        }, 0);
+      });
+    };
+    document.addEventListener('visibilitychange', run);
+    run();
     return () => {
       cancelled = true;
+      document.removeEventListener('visibilitychange', run);
     };
   }, [listen, send, signedIn, status]);
 

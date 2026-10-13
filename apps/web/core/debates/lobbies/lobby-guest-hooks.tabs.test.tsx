@@ -52,8 +52,15 @@ function session(admission = 1): DebateLobbyGuestSession {
   };
 }
 
-const LISTEN = { listen: true, signedIn: false, member: 'pending' as const };
-const renderSession = () => renderHook(() => useLobbyGuestSession('lobby1', LISTEN));
+type Inputs = { listen: boolean; signedIn: boolean; member: 'pending' | 'joined' | 'failed' };
+const LISTEN: Inputs = { listen: true, signedIn: false, member: 'pending' };
+const renderSession = (initial: Inputs = LISTEN) =>
+  renderHook((inputs: Inputs) => useLobbyGuestSession('lobby1', inputs), { initialProps: initial });
+
+function setVisibility(state: DocumentVisibilityState) {
+  Object.defineProperty(document, 'visibilityState', { configurable: true, get: () => state });
+  document.dispatchEvent(new Event('visibilitychange'));
+}
 
 beforeEach(() => {
   window.localStorage.clear();
@@ -68,6 +75,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  setVisibility('visible');
 });
 
 describe('useLobbyGuestSession across tabs', () => {
@@ -126,5 +134,37 @@ describe('useLobbyGuestSession across tabs', () => {
     expect(mocks.release).toHaveBeenCalledWith({ now: true });
     unmount();
     expect(mocks.release).toHaveBeenLastCalledWith();
+  });
+
+  // A link opened in a background tab must not take a place until someone looks at it.
+  it('a hidden tab neither takes the lock nor starts until it is shown', async () => {
+    setVisibility('hidden');
+    const { result } = renderSession();
+    await act(async () => undefined);
+    expect(mocks.acquire).not.toHaveBeenCalled();
+    expect(mocks.start).not.toHaveBeenCalled();
+    expect(result.current.state.status).toBe('idle');
+
+    act(() => setVisibility('visible'));
+    await waitFor(() => expect(result.current.state.status).toBe('listening'));
+    expect(mocks.acquire).toHaveBeenCalledTimes(1);
+    expect(mocks.start).toHaveBeenCalledTimes(1);
+  });
+
+  it('lets a lock go that was granted after the tab stopped needing it', async () => {
+    let grant!: (held: boolean) => void;
+    mocks.acquire.mockReturnValueOnce(new Promise<boolean>(resolve => (grant = resolve)));
+    const { result, rerender } = renderSession();
+    await waitFor(() => expect(mocks.acquire).toHaveBeenCalled());
+
+    rerender({ listen: true, signedIn: true, member: 'joined' });
+    expect(result.current.state.status).toBe('released');
+    mocks.release.mockClear();
+    await act(async () => {
+      grant(true);
+      await new Promise(resolve => setTimeout(resolve, 0));
+    });
+    expect(mocks.release).toHaveBeenCalledWith({ now: true });
+    expect(mocks.start).not.toHaveBeenCalled();
   });
 });
