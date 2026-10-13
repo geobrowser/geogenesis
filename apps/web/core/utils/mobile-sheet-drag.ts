@@ -121,6 +121,8 @@ export function resolveMobileSheetRelease({
 }
 
 type GestureCallbacks = {
+  /** False while the sheet can't be dragged, e.g. during its dismiss animation. */
+  canStart: () => boolean;
   getSnap: () => MobileSheetSnap;
   /** The sheet's current top edge, read when a gesture is claimed. */
   getTop: () => number;
@@ -171,7 +173,7 @@ export function attachMobileSheetGestures(root: HTMLElement, callbacks: GestureC
   let gesture: ActiveGesture | undefined;
 
   const begin = (id: number, target: EventTarget | null, x: number, y: number) => {
-    if (!canStartMobileSheetGesture(target, root)) {
+    if (!callbacks.canStart() || !canStartMobileSheetGesture(target, root)) {
       gesture = undefined;
       return;
     }

@@ -90,6 +90,9 @@ export function useMobileSheetDrag({ enabled, onDismiss, peekTopPx }: Options) {
     if (!enabled || !overlayElement) return;
 
     const detachGestures = attachMobileSheetGestures(overlayElement, {
+      // Dragging would stop the dismiss animation, and a stopped animation never resolves its
+      // promise, so `onDismiss` would never run.
+      canStart: () => !dismissingRef.current,
       getSnap: () => snapRef.current,
       getTop: () => top.get(),
       onDragStart: () => top.stop(),

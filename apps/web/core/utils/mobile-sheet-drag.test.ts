@@ -191,12 +191,18 @@ function touchEvent(
   return event;
 }
 
-function attach(sheet: ReturnType<typeof createSheet>, initialSnap: MobileSheetSnap, initialTop: number) {
+function attach(
+  sheet: ReturnType<typeof createSheet>,
+  initialSnap: MobileSheetSnap,
+  initialTop: number,
+  { canStart = () => true }: { canStart?: () => boolean } = {}
+) {
   let snap = initialSnap;
   let top = initialTop;
   const onDragEnd = vi.fn();
   const onDragCancel = vi.fn();
   const detach = attachMobileSheetGestures(sheet.root, {
+    canStart,
     getSnap: () => snap,
     getTop: () => top,
     onDragStart: () => {},
@@ -301,6 +307,22 @@ describe('attachMobileSheetGestures', () => {
     pointer('pointercancel', window, 100);
 
     expect(gestures.onDragCancel).toHaveBeenCalledTimes(1);
+    expect(gestures.onDragEnd).not.toHaveBeenCalled();
+    gestures.detach();
+  });
+
+  it('ignores new gestures while the sheet is on its way out', () => {
+    const sheet = createSheet();
+    // A drag would stop the dismiss animation, whose promise then never settles: the sheet would
+    // stay stranded part-way down with dismissal locked.
+    const gestures = attach(sheet, 'peek', 400, { canStart: () => false });
+
+    touchEvent('touchstart', sheet.target('content'), 400);
+    const move = touchEvent('touchmove', sheet.target('content'), 300);
+    touchEvent('touchend', sheet.target('content'));
+
+    expect(move.defaultPrevented).toBe(false);
+    expect(gestures.getTop()).toBe(400);
     expect(gestures.onDragEnd).not.toHaveBeenCalled();
     gestures.detach();
   });
