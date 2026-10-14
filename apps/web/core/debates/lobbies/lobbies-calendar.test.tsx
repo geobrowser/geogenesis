@@ -14,9 +14,6 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: () => true,
-}));
 vi.mock('./hooks', () => ({
   useDebateLobbies: () =>
     mocks.listFailed

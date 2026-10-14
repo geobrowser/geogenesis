@@ -60,9 +60,6 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
   useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: () => false,
-}));
 
 vi.mock('~/core/debates/lobbies/hooks', () => ({
   useDebateLobbies: (enabled: boolean) => ({
