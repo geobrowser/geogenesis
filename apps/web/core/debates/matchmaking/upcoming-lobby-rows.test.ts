@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { DebateLobbySummary, UpcomingDebateRoom } from '~/core/debates/api';
 
-import { byStart, upcomingLobbyRows } from './upcoming-lobby-rows';
+import { upcomingLobbyRows } from './upcoming-lobby-rows';
 
 const HOST = { user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null };
 
@@ -84,16 +84,17 @@ describe('upcomingLobbyRows', () => {
     expect(upcomingLobbyRows([], [summary({ scheduled: false, open: true })], 'user-host')).toEqual([]);
   });
 
+  it('puts the soonest first across both sources', () => {
+    const rows = upcomingLobbyRows(
+      [lobbyRoom({ room_id: 'going-late', starts_at: '2099-09-24T16:00:00Z' })],
+      [summary({ lobby_id: 'hosted-early', starts_at: '2099-09-24T12:00:00Z', viewer_reminded: false })],
+      'user-host'
+    );
+
+    expect(rows.map(row => row.lobbyId)).toEqual(['hosted-early', 'going-late']);
+  });
+
   it('lists no hosted lobbies before the viewer is known', () => {
     expect(upcomingLobbyRows([], [summary()], null)).toEqual([]);
-  });
-});
-
-describe('byStart', () => {
-  it('puts the soonest first without touching the input', () => {
-    const items = [{ startsAt: '2099-09-24T15:00:00Z' }, { startsAt: '2099-09-24T13:00:00Z' }];
-
-    expect(byStart(items).map(item => item.startsAt)).toEqual(['2099-09-24T13:00:00Z', '2099-09-24T15:00:00Z']);
-    expect(items[0]!.startsAt).toBe('2099-09-24T15:00:00Z');
   });
 });

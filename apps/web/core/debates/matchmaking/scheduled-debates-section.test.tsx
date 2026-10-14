@@ -789,19 +789,24 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
     expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('You’re hosting');
   });
 
-  it('orders lobbies and debates by start, as one list', () => {
+  it('lists lobbies under their own heading, apart from the debates', () => {
     setup({
-      upcoming: [
-        upcomingRow({ room_id: 'early', starts_at: '2099-09-24T13:00:00Z', joinable: false }),
-        upcomingRow({ room_id: 'late', starts_at: '2099-09-24T15:00:00Z', joinable: false }),
-      ],
-      lobbies: [lobbyRow({ startsAt: '2099-09-24T14:00:00Z' })],
+      upcoming: [upcomingRow({ room_id: 'room-1', joinable: false })],
+      lobbies: [lobbyRow()],
       people: [ADA],
     });
 
-    const cards = screen.getAllByRole('article');
-    expect(cards).toHaveLength(3);
-    expect(cards[1]).toHaveAttribute('data-testid', 'upcoming-lobby-card');
+    expect(screen.getByText('Upcoming debates')).toBeInTheDocument();
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    const lobbies = screen.getByText('Upcoming lobbies').closest('section') ?? document.body;
+    expect(lobbies).toContainElement(screen.getByTestId('upcoming-lobby-card'));
+  });
+
+  it('shows only Upcoming lobbies when lobbies are all there is', () => {
+    setup({ lobbies: [lobbyRow()] });
+
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    expect(screen.queryByText('Upcoming debates')).not.toBeInTheDocument();
   });
 
   it('builds Going lobbies from the upcoming rooms and names their host from the lobby list', () => {

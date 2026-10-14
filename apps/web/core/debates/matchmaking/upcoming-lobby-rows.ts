@@ -7,8 +7,8 @@ import {
 import { sameId } from '~/core/debates/rooms/room-presence';
 
 /**
- * A lobby in the Requests tab's upcoming list (GEO-3292): one the viewer said Going to, or one they
- * host. Sits beside scheduled debates, ordered by start with them.
+ * A lobby under Upcoming lobbies in the Requests tab (GEO-3292): one the viewer said Going to, or
+ * one they host.
  */
 export type UpcomingLobbyRow = {
   lobbyId: string;
@@ -79,10 +79,6 @@ export function upcomingLobbyRows(
     });
   }
 
-  return [...rows.values()];
-}
-
-/** Scheduled debates and lobbies as one list, soonest first. */
-export function byStart<T extends { startsAt: string }>(items: T[]): T[] {
-  return [...items].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
+  // Soonest first: the two sources each have their own order.
+  return [...rows.values()].sort((a, b) => Date.parse(a.startsAt) - Date.parse(b.startsAt));
 }

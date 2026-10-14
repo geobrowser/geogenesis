@@ -43,7 +43,7 @@ import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
-import { type UpcomingLobbyRow, byStart, upcomingLobbyRows } from './upcoming-lobby-rows';
+import { type UpcomingLobbyRow, upcomingLobbyRows } from './upcoming-lobby-rows';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
 
@@ -80,13 +80,9 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
-  // Debates and lobbies as one week, soonest first (GEO-3292).
-  const upcomingItems = byStart([
-    ...upcoming.map(row => ({ kind: 'debate' as const, startsAt: row.room.starts_at, row })),
-    ...lobbies.map(row => ({ kind: 'lobby' as const, startsAt: row.startsAt, row })),
-  ]);
-
-  if (answerable.length === 0 && upcomingItems.length === 0 && !requestsError && !roomsError) return null;
+  if (answerable.length === 0 && upcoming.length === 0 && lobbies.length === 0 && !requestsError && !roomsError) {
+    return null;
+  }
 
   const answer = (requestId: string, accepted: boolean) => {
     setConflict(null);
@@ -105,24 +101,29 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 
   return (
     <>
-      {(upcomingItems.length > 0 || roomsError) && (
+      {(upcoming.length > 0 || roomsError) && (
         <RequestSection label="Upcoming debates">
-          {upcomingItems.map(item =>
-            item.kind === 'lobby' ? (
-              <UpcomingLobbyRowCard key={item.row.lobbyId} row={item.row} />
-            ) : (
-              <UpcomingRow
-                key={item.row.room.room_id}
-                room={item.row.room}
-                requestId={item.row.requestId}
-                scheduledEndAt={item.row.scheduledEndAt}
-                opponent={lookUp(item.row.opponentUserId)}
-                viewer={viewer}
-                onReschedule={reschedulerFor(item.row.requestId, item.row.opponentUserId, 'requests_reschedule')}
-              />
-            )
-          )}
+          {upcoming.map(({ room, opponentUserId, scheduledEndAt, requestId }) => (
+            <UpcomingRow
+              key={room.room_id}
+              room={room}
+              requestId={requestId}
+              scheduledEndAt={scheduledEndAt}
+              opponent={lookUp(opponentUserId)}
+              viewer={viewer}
+              onReschedule={reschedulerFor(requestId, opponentUserId, 'requests_reschedule')}
+            />
+          ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
+        </RequestSection>
+      )}
+
+      {/* Their own section, so a lobby is never read as a 1:1 (GEO-3292). */}
+      {lobbies.length > 0 && (
+        <RequestSection label="Upcoming lobbies">
+          {lobbies.map(row => (
+            <UpcomingLobbyRowCard key={row.lobbyId} row={row} />
+          ))}
         </RequestSection>
       )}
 
@@ -185,7 +186,7 @@ type Rescheduling = { requestId: string; opponentUserId: string; opponentName: s
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
-  /** Lobbies the viewer said Going to or hosts, listed with the debates. Empty without `lobbyJoining`. */
+  /** Lobbies the viewer said Going to or hosts, soonest first. Empty without `lobbyJoining`. */
   lobbies: UpcomingLobbyRow[];
   /** Who the requests' participants are, resolved from the graph. Empty until that lands. */
   people: DebateParticipantSummary[];
@@ -222,7 +223,7 @@ export function useScheduledContent(): ScheduledContent {
   const upcoming = React.useMemo(
     () =>
       roomList
-        // Lobbies share the list and are listed as lobbies below.
+        // Lobbies share the list and get their own section.
         .filter(room => room.kind !== 'lobby' && !finishedRoomIds.has(room.room_id))
         .map(room => {
           const request = requestForRoom(rows, room.room_id);
@@ -690,8 +691,8 @@ function DebateParties({
 }
 
 /**
- * A lobby among the upcoming debates (GEO-3292): a scheduled debate's header, with the lobby's name
- * and host where a debate has its strip, so it is never taken for a 1:1.
+ * A lobby under Upcoming lobbies (GEO-3292): a scheduled debate's header, with the lobby's name and
+ * host where a debate has its strip.
  */
 function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
   const path = debateRoomPath(row.lobbyId);
