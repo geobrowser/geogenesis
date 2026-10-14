@@ -17,6 +17,7 @@ import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
+import { FollowButton } from '~/core/follows/follow-button';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
@@ -1440,6 +1441,14 @@ function DebaterVideo({
             )}
           </span>
         </button>
+        {/* GEO-3236. A sibling of the identity button, not inside it: a button can't hold a button.
+            Chip-sized and chip-filled, so it reads with the position beside the name, and it takes
+            pointer events back from the row the way the name does. */}
+        {participant && validateSpaceId(participant.profile_space_id) ? (
+          <span className="pointer-events-auto mt-0.5 shrink-0">
+            <FollowButton target={{ kind: 'person', id: participant.profile_space_id, name }} variant="overlay" />
+          </span>
+        ) : null}
       </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}

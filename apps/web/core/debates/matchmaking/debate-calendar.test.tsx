@@ -70,6 +70,13 @@ const mocks = vi.hoisted(() => ({
   sidePanelListeners: new Set<() => void>(),
 }));
 
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
 // GEO-3268. The week's lobbies, pinned above the hours; their own suite covers the chips and cards.
 const weekLobbies = vi.hoisted(() => ({
