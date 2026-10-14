@@ -2,8 +2,8 @@
 
 import cx from 'classnames';
 
-import { FollowTopicButton } from './follow-topic-button';
-import { useTopicFollowerCount } from './use-topic-follower-count';
+import { FollowTopicButton } from './follow-button';
+import { useTopicFollowerCount } from './use-follower-count';
 
 /**
  * The topic page header's action: how many follow the topic, then the button. The count reads
@@ -14,7 +14,7 @@ export function TopicFollowControl({ topic }: { topic: { id: string; name?: stri
 
   return (
     <div className="flex shrink-0 items-center gap-3">
-      <TopicFollowerCount count={count} className="text-metadata text-grey-04" numberClassName="text-text" />
+      <FollowerCount count={count} className="text-metadata text-grey-04" numberClassName="text-text" />
       <FollowTopicButton topic={topic} variant="page" />
     </div>
   );
@@ -22,9 +22,9 @@ export function TopicFollowControl({ topic }: { topic: { id: string; name?: stri
 
 /**
  * "128 following": the one wording for a topic's follower count, wherever it is drawn. Nothing at
- * zero or while loading, so a surface never shows "0 following" or a count that jumps in.
+ * zero or while loading, so a surface never shows a zero or a count that jumps in.
  */
-export function TopicFollowerCount({
+export function FollowerCount({
   count,
   className,
   numberClassName,
