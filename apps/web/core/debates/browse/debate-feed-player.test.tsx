@@ -254,13 +254,18 @@ afterEach(() => {
 });
 
 describe('player layout', () => {
-  it('offers Follow beside each debater, at the chip size, by their personal space (GEO-3236)', () => {
+  it("offers Follow as a badge on each debater's face, by their personal space (GEO-3236, GEO-3305)", () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
     const follows = Array.from(container.querySelectorAll('[data-testid="follow"]'));
     expect(follows.map(follow => follow.getAttribute('data-id'))).toEqual([SPACE_1_DASHED, SPACE_2]);
-    expect(follows.every(follow => follow.getAttribute('data-variant') === 'overlay')).toBe(true);
+    expect(follows.every(follow => follow.getAttribute('data-variant') === 'avatar')).toBe(true);
+    // Pinned to the face rather than beside the name, so it is never in the name/position row.
+    for (const follow of follows) {
+      expect(follow.closest('button')).toBeNull();
+      expect(follow.parentElement?.previousElementSibling?.hasAttribute('data-debater-avatar')).toBe(true);
+    }
   });
 
   it('keeps both stacked videos at the original aspect ratio', () => {
@@ -282,7 +287,7 @@ describe('player layout', () => {
    * the two videos saying who was speaking but not which side they were arguing — the one thing a
    * viewer dropping into the middle of a debate cannot infer.
    */
-  it("puts Follow after each debater's name and their position after Follow (GEO-3305)", () => {
+  it("puts each debater's position immediately after their name", () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     mocks.bylines = new Map([
       [SPACE_1, 'A deliberately much longer affiliation than the participant name'],
@@ -296,44 +301,24 @@ describe('player layout', () => {
       [SPACE_2, 'Disagree', 'Another affiliation whose width must not place the position chip'],
     ]) {
       const chip = getByText(position);
-      const identity = getByText(name).closest('button') as HTMLElement;
-      const nameRow = identity.parentElement;
-      const follow = identity.nextElementSibling;
+      const nameNode = getByText(name);
+      const nameRow = nameNode.parentElement;
 
-      expect(follow?.querySelector('[data-testid="follow"]')).not.toBeNull();
-      expect(follow?.nextElementSibling).toBe(chip);
       expect(chip.parentElement).toBe(nameRow);
+      expect(nameNode.nextElementSibling).toBe(chip);
       expect(nameRow?.nextElementSibling).toBe(getByText(affiliation));
-      expect(nameRow?.className).toContain('items-center');
+      expect(nameNode.closest('button')?.className).toContain('items-center');
     }
   });
 
-  /**
-   * The chip is not a control: it sits in a `pointer-events-none` row and takes no pointer events
-   * back, so a click on it falls through to the pause/play surface. jsdom does not hit-test, so the
-   * test reads that contract off the markup rather than clicking.
-   */
   it('keeps the position chip in the video playback surface', () => {
-    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    mocks.controller = controller;
+
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
-    const chip = within(container).getByText('Agree');
-    expect(chip.closest('button')).toBeNull();
-    const row = chip.closest('[data-debater-row]') as HTMLElement;
-    expect(row.className).toContain('pointer-events-none');
-    for (let node: HTMLElement | null = chip; node && node !== row; node = node.parentElement) {
-      expect(node.className).not.toContain('pointer-events-auto');
-    }
-  });
-
-  it('opens the profile from the byline as well as the name', () => {
-    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
-    mocks.bylines = new Map([[SPACE_1, 'Head of Product at Geo']]);
-    const { getByText } = render(<DebateFeedPlayer debate={debate} active />);
-
-    const byline = getByText('Head of Product at Geo');
-    expect(byline.tagName).toBe('BUTTON');
-    expect(byline.getAttribute('tabindex')).toBe('-1');
+    fireEvent.click(within(container).getByText('Agree'));
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
   });
 
   /**
