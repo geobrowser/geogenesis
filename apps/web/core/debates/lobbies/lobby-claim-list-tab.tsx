@@ -13,11 +13,13 @@ import type { DebateLobbyClaimList } from '../api';
 import { type ClaimListPage, type ClaimListSection, useClaimListPage } from '../claim-list-pages';
 import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { claimRowKey } from '../matchmaking/claim-row-key';
+import { HubStickyControls } from '../matchmaking/claims-tab';
 import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubCardList } from '../matchmaking/hub-motion';
 import { HubQueryState } from '../matchmaking/hub-states';
 import { taggedClaimEntry } from '../matchmaking/tagged-claim-entry';
 import { useRemoveLobbyClaimList } from './lobby-claim-lists-hooks';
+import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS } from './lobby-claims-sticky';
 import { useLobbyRoomCardRenderer } from './lobby-explore-claims';
 import { exploreRoomClaimBatches } from './lobby-explore-claims-hooks';
 import { personName } from './lobby-format';
@@ -77,25 +79,32 @@ function ClaimListSections({
 }) {
   const { authenticated, accountKey } = useGeoChatAuth();
 
-  // geo-chat's rows for the page's claims, in the one space the tab reads: the viewer's side, who
-  // stands ready on each, a live debate. A claim with no row still lists, with no sides.
-  const claimIds = React.useMemo(
-    () => [...new Set(page.sections.flatMap(section => section.claims.map(claim => claim.id)))],
-    [page.sections]
-  );
-  const groups = React.useMemo(
-    () => (authenticated && accountKey && claimIds.length > 0 ? [{ spaceId: page.spaceId, claimIds }] : []),
-    [accountKey, authenticated, claimIds, page.spaceId]
-  );
+  // geo-chat's rows for the page's claims, each in the space it is debated in: the viewer's side,
+  // who stands ready on each, a live debate. A claim with no row still lists, with no sides.
+  const groups = React.useMemo(() => {
+    if (!authenticated || !accountKey) return [];
+    const bySpace = new Map<string, Set<string>>();
+    for (const claim of page.sections.flatMap(section => section.claims)) {
+      const ids = bySpace.get(claim.spaceId) ?? new Set<string>();
+      ids.add(claim.id);
+      bySpace.set(claim.spaceId, ids);
+    }
+    return [...bySpace.entries()]
+      .sort(([a], [z]) => a.localeCompare(z))
+      .map(([spaceId, ids]) => ({ spaceId, claimIds: [...ids] }));
+  }, [accountKey, authenticated, page.sections]);
   const rows = useDebateClaimsBySpaces(groups);
   const entriesBySection = React.useMemo(() => {
-    const byClaim = new Map(rows.claims.map(row => [ID.uuidToHex(row.claim_entity_id), row]));
+    // By space and claim, as Explore keys them: one claim can have a row in two spaces.
+    const rowKey = (spaceId: string, claimId: string) => `${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claimId)}`;
+    const byClaim = new Map(rows.claims.map(row => [rowKey(row.space_id, row.claim_entity_id), row]));
     return page.sections.map(section =>
-      section.claims.map(claim => taggedClaimEntry(claim, page.spaceId, byClaim.get(claim.id)))
+      section.claims.map(claim => taggedClaimEntry(claim, claim.spaceId, byClaim.get(rowKey(claim.spaceId, claim.id))))
     );
-  }, [page.sections, page.spaceId, rows.claims]);
-  // As the Explore tab decides it for a card in this space.
-  const answersReady = !authenticated || (Boolean(accountKey) && !rows.unresolvedSpaceIds.has(page.spaceId));
+  }, [page.sections, rows.claims]);
+  // As the Explore tab decides it, per card, for the space the card is in.
+  const answersReadyFor = (spaceId: string) =>
+    !authenticated || (Boolean(accountKey) && !rows.unresolvedSpaceIds.has(spaceId));
 
   // In page order, so a long page reads a section's room sides as it scrolls into view.
   const batches = React.useMemo(() => exploreRoomClaimBatches(entriesBySection.flat()), [entriesBySection]);
@@ -108,9 +117,10 @@ function ClaimListSections({
   };
   const addedBy = list.added_by ? personName(list.added_by) : null;
 
+  // Edge to edge, so the pinned themes span the column the way Explore's pinned search does.
   return (
-    <div className="flex flex-col gap-3" data-testid="lobby-claim-list-tab">
-      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1">
+    <div className="-mx-4 flex flex-col gap-3" data-testid="lobby-claim-list-tab">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4">
         <Text as="p" variant="footnote" color="grey-04">
           {addedBy ? `Added by ${addedBy} · ` : ''}
           {page.sections.length} {page.sections.length === 1 ? 'theme' : 'themes'}
@@ -124,26 +134,32 @@ function ClaimListSections({
         </Link>
       </div>
       {page.sections.length > 1 ? (
-        <nav aria-label="Themes" className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto overscroll-x-contain px-4">
-          {page.sections.map(section => (
-            <button
-              key={section.id}
-              type="button"
-              {...hubAnalyticsAttributes('Lobby claim list theme', 'jump_lobby_claim_list_theme')}
-              onClick={() => jumpTo(section)}
-              className="shrink-0 rounded-full border border-grey-02 bg-white px-2.5 py-1 text-footnoteMedium whitespace-nowrap text-text transition-colors hover:bg-grey-01"
-            >
-              {section.name}
-            </button>
-          ))}
-        </nav>
+        <HubStickyControls topClassName={LOBBY_CLAIMS_CONTROLS_TOP_CLASS}>
+          <nav
+            aria-label="Themes"
+            className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto overscroll-x-contain px-4"
+          >
+            {page.sections.map(section => (
+              <button
+                key={section.id}
+                type="button"
+                {...hubAnalyticsAttributes('Lobby claim list theme', 'jump_lobby_claim_list_theme')}
+                onClick={() => jumpTo(section)}
+                className="shrink-0 rounded-full border border-grey-02 bg-white px-2.5 py-1 text-footnoteMedium whitespace-nowrap text-text transition-colors hover:bg-grey-01"
+              >
+                {section.name}
+              </button>
+            ))}
+          </nav>
+        </HubStickyControls>
       ) : null}
       {page.sections.map((section, index) => (
         <section
           key={section.id}
           id={sectionDomId(section)}
           aria-label={section.name}
-          className="flex scroll-mt-4 flex-col gap-2"
+          // Clear of the pinned tab row and themes when a theme chip scrolls here.
+          className="flex scroll-mt-[calc(var(--lobby-claims-tabs-h,2rem)+3.5rem)] flex-col gap-2 px-4 md:scroll-mt-[calc(var(--lobby-claims-tabs-h,2rem)+6.25rem)]"
         >
           <div className="flex items-baseline justify-between gap-3 pt-1">
             <Text as="h3" variant="metadataMedium">
@@ -156,7 +172,9 @@ function ClaimListSections({
           <HubCardList>
             {(entriesBySection[index] ?? []).map(entry =>
               // Keyed on the element itself, as `ClaimsTab` does: the list's popLayout measures it.
-              React.cloneElement(renderRoomCard(entry, answersReady), { key: claimRowKey(entry) })
+              React.cloneElement(renderRoomCard(entry, answersReadyFor(entry.claim.space_id)), {
+                key: claimRowKey(entry),
+              })
             )}
           </HubCardList>
         </section>

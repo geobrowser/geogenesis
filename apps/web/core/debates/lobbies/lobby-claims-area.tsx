@@ -19,6 +19,7 @@ import { LobbyClaimListTab, useClaimListName } from './lobby-claim-list-tab';
 import { useRemoveLobbyClaimList, useSaveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { orderedClaimLists } from './lobby-claim-lists-state';
 import { claimListKey, useNewClaimListTabs } from './lobby-claims-mark';
+import { LOBBY_CLAIMS_TABS_HEIGHT_VAR, LOBBY_CLAIMS_TABS_TOP_CLASS } from './lobby-claims-sticky';
 import { LobbyExploreClaims } from './lobby-explore-claims';
 import { moderationErrorMessage } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
@@ -51,10 +52,21 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
   const shownTab: LobbyClaimsTab = activeTab.startsWith('list:') && !activeList ? 'room' : activeTab;
   const hosting = lobby.viewer.hosting;
 
+  const tabsHeight = useTabsHeight();
+
   return (
-    <section className="flex flex-col gap-3" aria-label="Claims">
+    <section
+      className="flex flex-col gap-3"
+      aria-label="Claims"
+      style={{ [LOBBY_CLAIMS_TABS_HEIGHT_VAR]: tabsHeight.value } as React.CSSProperties}
+    >
       <LobbyRoomVote lobby={lobby} />
-      <div className="flex items-end gap-2">
+      {/* Pinned, with the open tab's own controls pinned under it. `-mt-3 pt-3` keeps the flow
+          spacing while giving the pinned row a margin of its own background above the tabs. */}
+      <div
+        ref={tabsHeight.ref}
+        className={`sticky z-20 -mx-4 -mt-3 flex items-end gap-2 bg-white px-4 pt-3 ${LOBBY_CLAIMS_TABS_TOP_CLASS}`}
+      >
         <div className="min-w-0 flex-1">
           <ScrollableTabRow activeKey={shownTab} analyticsLabelPrefix="Lobby claims" className="gap-4">
             {TABS.map(tab => (
@@ -255,6 +267,23 @@ function ClaimListTabMenu({
       </div>
     </LobbyPopup>
   );
+}
+
+/** The pinned tab row's height, as a CSS length, for the controls pinned under it. */
+function useTabsHeight() {
+  const [value, setValue] = React.useState<string | undefined>(undefined);
+  const observer = React.useRef<ResizeObserver | null>(null);
+  const ref = React.useCallback((node: HTMLDivElement | null) => {
+    observer.current?.disconnect();
+    observer.current = null;
+    if (!node) return;
+    const measure = () => setValue(`${node.getBoundingClientRect().height}px`);
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    observer.current = new ResizeObserver(measure);
+    observer.current.observe(node);
+  }, []);
+  return { ref, value };
 }
 
 /**

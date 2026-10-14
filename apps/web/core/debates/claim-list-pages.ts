@@ -11,6 +11,7 @@ import { uuidToHex } from '~/core/id/normalize';
 import { graphql } from '~/core/io/graphql-client';
 
 import { DEBATE_TAG_ID } from './ontology';
+import { tagDisplaySpaceId } from './tagged-claims';
 
 /**
  * Claim list pages for live lobby tabs (GEO-3274).
@@ -33,7 +34,18 @@ const RELATIONS_LIMIT = 500;
 /** Curation moves at human speed. */
 const CLAIM_LIST_STALE_TIME = 5 * 60_000;
 
-export type ClaimListClaim = { id: string; name: string; description: string | null };
+export type ClaimListClaim = {
+  id: string;
+  name: string;
+  description: string | null;
+  /**
+   * Where the claim is debated: the space its Debate tag sits in, which is where geo-chat keeps its
+   * row. A curator page only groups claims, and geo-chat has no rows in the curator's own space, so
+   * a card drawn there had no room sides, no requests and no host menu. The page's space when the
+   * claim is tagged there too, or when it is tagged nowhere.
+   */
+  spaceId: string;
+};
 export type ClaimListSection = { id: string; name: string; claims: ClaimListClaim[] };
 export type ClaimListPage = { entityId: string; spaceId: string; name: string; sections: ClaimListSection[] };
 
@@ -282,7 +294,15 @@ export function useClaimListCatalog() {
 // One list tab: a page's sections and claims, as one space holds them.
 
 const PAGE_SOURCE = /* GraphQL */ `
-  query ClaimListPage($id: UUID!, $spaceId: UUID!, $blocksTypeId: UUID!, $itemTypeId: UUID!, $relationsLimit: Int!) {
+  query ClaimListPage(
+    $id: UUID!
+    $spaceId: UUID!
+    $blocksTypeId: UUID!
+    $itemTypeId: UUID!
+    $tagPropertyId: UUID!
+    $tagId: UUID!
+    $relationsLimit: Int!
+  ) {
     entity(id: $id) {
       id
       name
@@ -304,6 +324,9 @@ const PAGE_SOURCE = /* GraphQL */ `
               name
               description
               typeIds
+              tagRelations: relationsList(filter: { typeId: { is: $tagPropertyId }, toEntityId: { is: $tagId } }) {
+                spaceId
+              }
             }
           }
         }
@@ -323,7 +346,13 @@ type PageQuery = {
         name: string | null;
         items: Array<{
           position: string | null;
-          toEntity: { id: string; name: string | null; description: string | null; typeIds: string[] | null } | null;
+          toEntity: {
+            id: string;
+            name: string | null;
+            description: string | null;
+            typeIds: string[] | null;
+            tagRelations: Array<{ spaceId: string } | null> | null;
+          } | null;
         }> | null;
       } | null;
     }> | null;
@@ -354,7 +383,17 @@ export function decodeClaimListPage(data: PageQuery, spaceId: string): ClaimList
           const id = uuidToHex(claim.id);
           if (seen.has(id)) return [];
           seen.add(id);
-          return [{ id, name: claim.name?.trim() ?? '', description: claim.description ?? null }];
+          const tagSpaceIds = [
+            ...new Set((claim.tagRelations ?? []).flatMap(tag => (tag ? [uuidToHex(tag.spaceId)] : []))),
+          ].sort();
+          return [
+            {
+              id,
+              name: claim.name?.trim() ?? '',
+              description: claim.description ?? null,
+              spaceId: tagDisplaySpaceId({ tagSpaceIds }, [spaceId], () => true) ?? spaceId,
+            },
+          ];
         });
       return claims.length > 0
         ? [{ id: uuidToHex(entity.id), name: entity.name?.trim() || 'Untitled theme', claims }]
@@ -379,6 +418,8 @@ export function useClaimListPage(entityId: string, spaceId: string) {
             spaceId: space,
             blocksTypeId: SystemIds.BLOCKS,
             itemTypeId: SystemIds.COLLECTION_ITEM_RELATION_TYPE,
+            tagPropertyId: TAG_PROPERTY_ID,
+            tagId: DEBATE_TAG_ID,
             relationsLimit: RELATIONS_LIMIT,
           },
           signal,

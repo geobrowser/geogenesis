@@ -150,9 +150,15 @@ describe('decodeSpaceScores', () => {
 });
 
 describe('decodeClaimListPage', () => {
-  const claim = (id: string, position: string | null, typeIds = [CLAIM_TYPE_ID]) => ({
+  const claim = (id: string, position: string | null, typeIds = [CLAIM_TYPE_ID], tagSpaceIds: string[] = []) => ({
     position,
-    toEntity: { id, name: ` Claim ${id} `, description: null, typeIds },
+    toEntity: {
+      id,
+      name: ` Claim ${id} `,
+      description: null,
+      typeIds,
+      tagRelations: tagSpaceIds.map(spaceId => ({ spaceId })),
+    },
   });
 
   it('orders themes and claims by position and keeps only claims', () => {
@@ -181,6 +187,37 @@ describe('decodeClaimListPage', () => {
     // A claim collected twice in one theme is shown once.
     expect(page?.sections[2]!.claims).toHaveLength(1);
     expect(page?.spaceId).toBe(CURATORS);
+  });
+
+  it('draws each claim in the space it is debated in, preferring the page’s own', () => {
+    const page = decodeClaimListPage(
+      {
+        entity: {
+          id: 'page',
+          name: 'AI highlights',
+          blocks: [
+            {
+              position: 'a',
+              toEntity: {
+                id: 'work',
+                name: 'Work',
+                items: [
+                  claim('elsewhere', 'a0', undefined, [POLITICS]),
+                  claim('both', 'a1', undefined, [POLITICS, CURATORS]),
+                  claim('untagged', 'a2'),
+                ],
+              },
+            },
+          ],
+        },
+      },
+      CURATORS
+    );
+    expect(page?.sections[0]!.claims.map(row => [row.id, row.spaceId])).toEqual([
+      ['elsewhere', POLITICS],
+      ['both', CURATORS],
+      ['untagged', CURATORS],
+    ]);
   });
 
   it('is null for a deleted page', () => {

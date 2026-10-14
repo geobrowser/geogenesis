@@ -9,6 +9,7 @@ import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { type ClaimCardDefaults, ClaimsTab } from '../matchmaking/claims-tab';
 import { useHubScrollSelector } from '../matchmaking/hub-scroll';
+import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS } from './lobby-claims-sticky';
 import {
   exploreRoomClaimBatches,
   useLobbyExploreRoomClaims,
@@ -41,17 +42,15 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     [renderRoomCard]
   );
 
-  // The tab pads its own controls and list, inside the claims pane's padding. On a desktop the pane
-  // scrolls on its own, and sticky offsets count from inside its `py-5`, so `-top-5` pins the
-  // controls flush with its top edge; on a phone the page scrolls under the navbar
-  // (`sticky top-0 h-11`), so they pin below that.
+  // The tab pads its own controls and list, inside the claims pane's padding. They pin under the
+  // claims area's pinned tab row; see `lobby-claims-sticky`.
   return (
     <div className="-mx-4">
       <ClaimsTab
         variant="lobbyExplore"
         renderClaim={renderClaim}
         onVisibleClaims={onVisibleClaims}
-        stickyTopClassName="-top-5 md:top-11"
+        stickyTopClassName={LOBBY_CLAIMS_CONTROLS_TOP_CLASS}
       />
     </div>
   );

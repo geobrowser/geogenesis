@@ -443,7 +443,7 @@ export function taggedEntityFilter(
  * which of the two id comparators they reached for.
  */
 export function tagDisplaySpaceId(
-  claim: TaggedClaim,
+  claim: Pick<TaggedClaim, 'tagSpaceIds'>,
   pickedSpaceIds: string[],
   isSpaceShown: (spaceId: string) => boolean
 ): string | null {

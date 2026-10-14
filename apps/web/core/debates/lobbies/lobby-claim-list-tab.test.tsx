@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   page: { data: undefined as ClaimListPage | null | undefined, isLoading: false, error: null as Error | null },
   remove: vi.fn(),
   batches: [] as string[][],
+  groups: undefined as unknown,
 }));
 
 vi.mock('next/link', () => ({
@@ -25,8 +26,11 @@ vi.mock('../claim-list-pages', () => ({
   useClaimListPage: () => ({ ...mocks.page, refetch: vi.fn() }),
 }));
 vi.mock('../hooks', () => ({
-  useGeoChatAuth: () => ({ authenticated: false, accountKey: null }),
-  useDebateClaimsBySpaces: () => ({ claims: [], unresolvedSpaceIds: new Set() }),
+  useGeoChatAuth: () => ({ authenticated: true, accountKey: 'acct' }),
+  useDebateClaimsBySpaces: (groups: unknown) => {
+    mocks.groups = groups;
+    return { claims: [], unresolvedSpaceIds: new Set() };
+  },
 }));
 vi.mock('./lobby-explore-claims-hooks', () => ({
   exploreRoomClaimBatches: (entries: { claim: { claim_entity_id: string } }[]) => [
@@ -44,6 +48,7 @@ vi.mock('./lobby-claim-lists-hooks', () => ({
 }));
 
 const SPACE = '3be38bb922bc80c6a6503fbbba28d2b0';
+const OTHER_SPACE = '41e851610e13a19441c4d980f2f2ce6b';
 const list = {
   entity_id: 'e2b27e141d5fc64c4a7d24dab8f23f69',
   space_id: SPACE,
@@ -67,13 +72,17 @@ describe('LobbyClaimListTab', () => {
       spaceId: SPACE,
       name: 'AI highlights',
       sections: [
-        { id: 'work', name: 'Work', claims: [{ id: 'c1', name: 'AI will create more jobs', description: null }] },
+        {
+          id: 'work',
+          name: 'Work',
+          claims: [{ id: 'c1', name: 'AI will create more jobs', description: null, spaceId: OTHER_SPACE }],
+        },
         {
           id: 'privacy',
           name: 'Privacy',
           claims: [
-            { id: 'c2', name: 'No training on private chats', description: null },
-            { id: 'c3', name: 'Warrants for AI analysis', description: null },
+            { id: 'c2', name: 'No training on private chats', description: null, spaceId: OTHER_SPACE },
+            { id: 'c3', name: 'Warrants for AI analysis', description: null, spaceId: OTHER_SPACE },
           ],
         },
       ],
@@ -88,6 +97,8 @@ describe('LobbyClaimListTab', () => {
       'No training on private chats',
       'Warrants for AI analysis',
     ]);
+    // geo-chat is asked in the space each claim is debated in, not the curator page's.
+    expect(mocks.groups).toEqual([{ spaceId: OTHER_SPACE, claimIds: ['c1', 'c2', 'c3'] }]);
     // Room sides are batched over every card, in page order, and read as they near the viewport.
     expect(mocks.batches).toEqual([['c1', 'c2', 'c3']]);
 
