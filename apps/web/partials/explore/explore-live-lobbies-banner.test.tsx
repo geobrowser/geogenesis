@@ -110,9 +110,10 @@ describe('ExploreLiveLobbiesBanner', () => {
   });
 
   // GEO-3289. Signed-out visitors find lobbies in the navbar and the debates panel only.
+  // Its own lobby: dismissals persist across tests, and `nyc` was dismissed above.
   it('shows nothing to a signed-out visitor', () => {
     mocks.authenticated = false;
-    mocks.live = [lobby({})];
+    mocks.live = [lobby({ lobby_id: 'signed-out-only' })];
     renderBanner();
     expect(screen.queryByTestId('explore-live-lobbies-banner')).not.toBeInTheDocument();
   });
