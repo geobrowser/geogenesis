@@ -6494,6 +6494,24 @@ describe('From this debate', () => {
     expect(screen.getByText('No claims from this debate are left to debate.')).toBeInTheDocument();
   });
 
+  it('says more are publishing when every published claim is already debated, rather than that none are left', async () => {
+    // Shared is published and debated; the minted one is still on its way to the graph.
+    mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+    await openTab();
+
+    expect(
+      screen.getByText('1 claim from this debate is publishing to Geo. It appears here in a minute or two.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/already debated every claim here/)).toBeNull();
+    // "None yet", not "none": the count holds its skeleton until a claim to debate arrives.
+    expect(
+      within(screen.getByRole('button', { name: /^From this debate/ })).getByLabelText(
+        'Counting claims from this debate'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Already debated with Salina/ })).toBeInTheDocument();
+  });
+
   it('folds a claim the pair already debated away, and leaves out one the viewer is not interested in', async () => {
     mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
     mocks.notInterestedIds = [MINTED];

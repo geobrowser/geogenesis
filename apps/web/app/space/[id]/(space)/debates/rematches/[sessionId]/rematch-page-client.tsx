@@ -1778,8 +1778,10 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => debateItems.filter(item => !isPairDebated(item.row)).length,
     [debateItems, isPairDebated]
   );
+  // Against what the count shows, not what is listed: rows the pair already debated are folded away
+  // and not counted, so with only those in hand the badge would otherwise read `0` while more come.
   const debateCountPending =
-    debateItems.length === 0 && (debateItemsSettling || debateExtractionRunning || debatePublishingCount > 0);
+    debateClaimCount === 0 && (debateItemsSettling || debateExtractionRunning || debatePublishingCount > 0);
 
   /* -----------------------------------------------------------------------------------------------
    * GEO-3148. Where the pair land.
@@ -3034,32 +3036,34 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                     : `You and ${remoteName} agree on every claim here. Turn off “Hide agreed” to see them.`
                   : hasFilters
                     ? 'No claims match these filters.'
-                    : claims.length === 0 && debatedClaims.length > 0
-                      ? `You and ${remoteName} have already debated every claim here.`
-                      : tab === 'matches'
-                        ? debatedMatchCount > 0
-                          ? `You’ve already debated every claim you and ${remoteName} disagree on. Pick a side on another of their claims to find a new one.`
-                          : opponentHasPositions
-                            ? `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
-                            : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
-                        : tab === 'opponent'
-                          ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
-                          : tab === 'debate'
-                            ? debatePublishingCount > 0
-                              ? debatePublishingMessage(debatePublishingCount, false)
-                              : debateExtractionRunning
+                    : // Ahead of "already debated every claim": with more still publishing, that is not
+                      // yet true, and these may be the ones the pair have not argued.
+                      tab === 'debate' && debatePublishingCount > 0
+                      ? debatePublishingMessage(debatePublishingCount, false)
+                      : claims.length === 0 && debatedClaims.length > 0
+                        ? `You and ${remoteName} have already debated every claim here.`
+                        : tab === 'matches'
+                          ? debatedMatchCount > 0
+                            ? `You’ve already debated every claim you and ${remoteName} disagree on. Pick a side on another of their claims to find a new one.`
+                            : opponentHasPositions
+                              ? `You and ${remoteName} haven’t taken opposite sides on anything yet. Pick a side on one of their claims to start a debate.`
+                              : `You and ${remoteName} haven’t taken opposite sides on anything yet. Once ${remoteName} takes a side on a claim, take the other one to start a debate.`
+                          : tab === 'opponent'
+                            ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
+                            : tab === 'debate'
+                              ? debateExtractionRunning
                                 ? 'Pulling the claims out of your debate. They appear here as they’re found.'
                                 : 'No claims from this debate are left to debate.'
-                            : tab === 'related'
-                              ? // Reachable even though the tab only appears when neighbours were found: every
-                                // one of them can still be ruled out by this session — already debated, or in a
-                                // space that cannot carry a published debate.
-                                'No related claims are left to debate.'
-                              : source === 'recommended'
-                                ? `Nothing recommended for you and ${remoteName} yet.`
-                                : source === 'mine'
-                                  ? 'You haven’t taken a position on any claims yet.'
-                                  : 'No other eligible claims are available yet.'
+                              : tab === 'related'
+                                ? // Reachable even though the tab only appears when neighbours were found: every
+                                  // one of them can still be ruled out by this session — already debated, or in a
+                                  // space that cannot carry a published debate.
+                                  'No related claims are left to debate.'
+                                : source === 'recommended'
+                                  ? `Nothing recommended for you and ${remoteName} yet.`
+                                  : source === 'mine'
+                                    ? 'You haven’t taken a position on any claims yet.'
+                                    : 'No other eligible claims are available yet.'
           }
           // Each dead end has its own way out. Ordered by how much the viewer has to give up:
           // clearing their filters, then leaving the tab or the source they picked.
