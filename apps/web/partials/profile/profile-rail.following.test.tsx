@@ -201,15 +201,22 @@ describe('Following row count and stack', () => {
     }
   });
 
-  it('shows the count, a stack of three, and a +N badge for the rest', () => {
+  it('shows a stack of three and a +N badge for the rest, with no number before it', () => {
     renderFollowing();
 
-    expect(screen.getByLabelText('Following: 5 follows')).toBeInTheDocument();
-    // The visible numeric count, which this row shows unlike "Verified by".
-    expect(within(screen.getByLabelText('Following: 5 follows')).getByText('5')).toBeInTheDocument();
+    // Drawn like "Verified by": the total reads off the stack, and is spoken by the label.
+    const row = screen.getByLabelText('Following: 5 follows');
+    expect(row.textContent).toBe('+2');
     // Three faces in the closed stack, then the tail.
     expect(screen.getAllByTestId('topic-image')).toHaveLength(3);
-    expect(screen.getByText('+2')).toBeInTheDocument();
+  });
+
+  it('draws no badge when every follow fits in the stack', () => {
+    mocks.topicIds = [TOPIC_A, TOPIC_B];
+    renderFollowing();
+
+    expect(screen.getByLabelText('Following: 2 follows').textContent).toBe('');
+    expect(screen.getAllByTestId('topic-image')).toHaveLength(2);
   });
 });
 
@@ -340,11 +347,13 @@ describe('Followers row (GEO-3236)', () => {
     expect(document.querySelector('.animate-pulse')).toBeInTheDocument();
   });
 
-  it('shows the count and lists the followers, each linking to their profile', async () => {
+  it('shows their faces and lists the followers, each linking to their profile', async () => {
     mocks.followers = { count: 2, ids: [ZED_SPACE, ADA_SPACE] };
     mocks.spaces.set(ADA_SPACE, { id: ADA_SPACE, entity: { name: 'Ada Okafor', image: null } });
     mocks.spaces.set(ZED_SPACE, { id: ZED_SPACE, entity: { name: 'Zed Lee', image: null } });
     renderFollowers();
+    // Two faces and nothing else: no leading count, and no badge with nobody past the stack.
+    expect(screen.getByLabelText('Followers: 2 followers').textContent).toBe('');
     await userEvent.click(screen.getByLabelText('Followers: 2 followers'));
 
     expect(screen.getAllByRole('link').map(link => link.textContent)).toEqual(['Ada Okafor', 'Zed Lee']);

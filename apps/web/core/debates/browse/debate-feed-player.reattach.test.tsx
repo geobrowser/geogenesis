@@ -14,10 +14,8 @@ const mocks = vi.hoisted(() => ({
 // Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
 vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
 vi.mock('~/core/follows/person-follow-counts', () => ({
-  PersonFollowCounts: () => null,
   usePersonFollowerCount: () => null,
   usePersonFollowers: () => null,
-  usePersonFollowingCount: () => null,
 }));
 
 vi.mock('./use-debate-end-card', () => ({ useDebateEndCard: () => ({}) }));

@@ -8,7 +8,6 @@ import {
   ClaimPageView,
 } from '~/core/claims/browse/claim-page-view';
 import { FollowButton } from '~/core/follows/follow-button';
-import { PersonFollowCounts } from '~/core/follows/person-follow-counts';
 import { useSpace } from '~/core/hooks/use-space';
 import { useUserIsEditing } from '~/core/hooks/use-user-is-editing';
 import { useQueryEntity } from '~/core/sync/use-store';
@@ -389,7 +388,6 @@ export function EntityPageBody(props: EntityPageBodyProps) {
               )}
               {isPersonProfile && <PersonalSpaceTagline spaceId={spaceId} personEntityId={entityId} />}
               {isPersonProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={entityId} />}
-              {isPersonProfile && <PersonFollowCounts spaceId={spaceId} />}
               {/*
                * A person's description lives in their About tab here too, not under their
                * name — the panel renders the same About card the space route puts in its rail,

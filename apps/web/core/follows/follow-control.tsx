@@ -21,26 +21,22 @@ export function TopicFollowControl({ topic }: { topic: { id: string; name?: stri
 }
 
 /**
- * "128 following" for a topic, "42 followers" for a person: the one wording for a follower count,
- * wherever it is drawn. A person's says "followers" so it isn't read as who they follow. Nothing at
+ * "128 following": the one wording for a topic's follower count, wherever it is drawn. Nothing at
  * zero or while loading, so a surface never shows a zero or a count that jumps in.
  */
 export function FollowerCount({
   count,
-  kind = 'topic',
   className,
   numberClassName,
 }: {
   count: number | null;
-  kind?: 'topic' | 'person';
   className?: string;
   numberClassName?: string;
 }) {
   if (!count) return null;
-  const noun = kind === 'person' ? (count === 1 ? 'follower' : 'followers') : 'following';
   return (
     <span className={cx('shrink-0 whitespace-nowrap', className)}>
-      <span className={cx('tabular-nums', numberClassName)}>{count.toLocaleString('en-US')}</span> {noun}
+      <span className={cx('tabular-nums', numberClassName)}>{count.toLocaleString('en-US')}</span> following
     </span>
   );
 }

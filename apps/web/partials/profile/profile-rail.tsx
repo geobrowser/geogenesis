@@ -655,8 +655,8 @@ type FollowListEntry = {
 };
 
 /**
- * Who follows this person (GEO-3236): how many, a few faces, and the whole list on a click — the
- * same shape as Verified by above it. Hidden while nobody does.
+ * Who follows this person (GEO-3236): a few faces, a +N for the rest, and the whole list on a
+ * click — the same shape as Verified by above it. Hidden while nobody does.
  */
 export function FollowersRow({ spaceId }: { spaceId: string }) {
   const followers = usePersonFollowers(spaceId);
@@ -790,7 +790,10 @@ function personEntry(id: string, spaceFor: (id: string) => Space | undefined): F
   };
 }
 
-/** A follow row's count, face pile and the list it opens: Followers and Following share it. */
+/**
+ * A follow row's face pile and the list it opens: Followers and Following share it. Drawn like
+ * Verified by: three faces, then a +N badge for the rest, so the total reads off the pile.
+ */
 function FollowListRow({
   label,
   count,
@@ -811,17 +814,14 @@ function FollowListRow({
       <RailPopover
         label={`${label}: ${count} ${count === 1 ? noun[0] : noun[1]}`}
         trigger={
-          <>
-            <span className="tabular-nums">{count.toLocaleString('en-US')}</span>
-            <AvatarGroup>
-              {visible.map(entry => (
-                <AvatarGroup.Item key={entry.id} size={20}>
-                  <FallbackImage value={entry.image ?? PLACEHOLDER_SPACE_IMAGE} sizes="20px" className="object-cover" />
-                </AvatarGroup.Item>
-              ))}
-              <AvatarGroup.Overflow count={count - visible.length} size={20} />
-            </AvatarGroup>
-          </>
+          <AvatarGroup>
+            {visible.map(entry => (
+              <AvatarGroup.Item key={entry.id} size={20}>
+                <FallbackImage value={entry.image ?? PLACEHOLDER_SPACE_IMAGE} sizes="20px" className="object-cover" />
+              </AvatarGroup.Item>
+            ))}
+            <AvatarGroup.Overflow count={count - visible.length} size={20} />
+          </AvatarGroup>
         }
       >
         {entries.map(entry => {
@@ -897,13 +897,10 @@ function RailListThumb({ image }: { image: string | null | undefined }) {
 function FollowRowSkeleton({ label }: { label: string }) {
   return (
     <Row label={label}>
-      <span className="inline-flex items-center gap-2" aria-hidden>
-        <span className="inline-block h-4 w-4 animate-pulse rounded bg-grey-01" />
-        <span className="inline-flex">
-          <span className="inline-block size-5 animate-pulse rounded-full bg-grey-01" />
-          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
-          <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
-        </span>
+      <span className="inline-flex" aria-hidden>
+        <span className="inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+        <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
+        <span className="-ml-1.5 inline-block size-5 animate-pulse rounded-full bg-grey-01" />
       </span>
     </Row>
   );

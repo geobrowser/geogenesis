@@ -8,7 +8,6 @@ import { notFound } from 'next/navigation';
 import { fetchShownPropertyEntitiesForBlocks } from '~/core/blocks/data/fetch-block-shown-properties';
 import { fetchCollectionItemsForBlocks } from '~/core/blocks/data/fetch-collection-items';
 import { ProfileDebateButton } from '~/core/debates/profile-debate-button';
-import { PersonFollowCounts } from '~/core/follows/person-follow-counts';
 import { EntityId } from '~/core/io/substream-schema';
 import { profileRailFacts } from '~/core/profile/profile-rail-facts';
 import { SpaceVerifyButton } from '~/core/space/space-verify-button';
@@ -224,7 +223,6 @@ export default async function Layout(props0: LayoutProps) {
                   />
                 )}
                 {isProfile && <PersonalSpaceHeadline spaceId={spaceId} personEntityId={props.id} />}
-                {isProfile && <PersonFollowCounts spaceId={spaceId} />}
                 {/*
                  * Off a profile entirely, in both modes. A person's description
                  * is shown and edited in the rail's About card instead, and a

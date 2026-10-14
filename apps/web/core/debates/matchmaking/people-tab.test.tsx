@@ -77,10 +77,8 @@ vi.mock('~/core/follows/follow-button', () => ({
   ),
 }));
 vi.mock('~/core/follows/person-follow-counts', () => ({
-  PersonFollowCounts: () => null,
   usePersonFollowerCount: () => null,
   usePersonFollowers: () => null,
-  usePersonFollowingCount: () => null,
 }));
 
 vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened, capture: mocks.capture }));
