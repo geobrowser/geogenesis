@@ -62,7 +62,10 @@ export function RematchPublishCard({
     published: isWatchableDebate(debate),
   });
   const visible = state !== null && !dismissed;
-  const showsCancel = visible && (state === 'publishing' || state === 'published') && cancelWindowOpen;
+  // Withdrawable until it is withdrawn: a failed upload too, which the banner's Retry can still
+  // publish.
+  const showsCancel =
+    visible && (state === 'publishing' || state === 'failed' || state === 'published') && cancelWindowOpen;
 
   // A layout effect, as the room's is: the banner gives up its own Cancel in the same paint this
   // card draws one, so the two never both show or both hide.
@@ -115,12 +118,14 @@ export function RematchPublishCard({
   );
 }
 
-type PublishCardState = 'publishing' | 'published' | 'cancelled_by_you' | 'cancelled_by_opponent';
+type PublishCardState = 'publishing' | 'failed' | 'published' | 'cancelled_by_you' | 'cancelled_by_opponent';
 
 function publishCardLabel(state: PublishCardState, opponentName: string): string {
   switch (state) {
     case 'publishing':
       return 'Publishing your debate';
+    case 'failed':
+      return 'Your debate didn’t upload';
     case 'published':
       return 'Debate published';
     case 'cancelled_by_you':
@@ -161,6 +166,8 @@ export function publishCardState({
     return cancelledBy !== null && cancelledBy !== currentUserId ? 'cancelled_by_opponent' : 'cancelled_by_you';
   }
   if (published) return 'published';
+  // Stopped trying, so not "publishing": the banner below carries Retry and Get help.
+  if (offer.upload === 'failed') return 'failed';
   if (offer.upload !== null || hasUploadedRecording) return 'publishing';
   return null;
 }

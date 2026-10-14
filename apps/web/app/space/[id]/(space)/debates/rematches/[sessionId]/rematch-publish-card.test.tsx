@@ -121,6 +121,21 @@ describe('RematchPublishCard', () => {
     expect(screen.queryByText('Debate published')).toBeNull();
   });
 
+  // Copilot on #2853: an upload that stopped trying read as one still going, with a progress bar
+  // that never moved and no way to put the row away.
+  it('says the debate did not upload once the upload has stopped trying', () => {
+    mocks.offer = { debateId: 'debate-1', busy: false, cancelled: false, upload: 'failed', percent: null };
+    renderCard();
+
+    expect(screen.getByText('Your debate didn’t upload')).toBeInTheDocument();
+    expect(screen.queryByText('Publishing your debate')).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    // Still withdrawable, since the banner's Retry could publish it, and it can be put away.
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByTestId('rematch-publish-card')).toBeNull();
+  });
+
   it('holds the button while a cancel is already being sent', () => {
     mocks.offer = { debateId: 'debate-1', busy: true, cancelled: false, upload: 'uploading', percent: null };
     renderCard();

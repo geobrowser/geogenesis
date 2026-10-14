@@ -874,7 +874,9 @@ export function DebateRecordingUploadCoordinator() {
     : thankingRecordingPending
       ? 'preparing'
       : thankingUpload
-        ? 'uploading'
+        ? failureReasonOf(thankingUpload) === null
+          ? 'uploading'
+          : 'failed'
         : thankingUploadFinished
           ? 'uploaded'
           : null;

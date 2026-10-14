@@ -731,6 +731,30 @@ describe('DebateRecordingUploadCoordinator', () => {
     await waitFor(() => expect(screen.queryByRole('status')).not.toBeInTheDocument());
   });
 
+  // Copilot on #2853: the picker's card read a stopped upload as one still going.
+  it('tells the card the finished debate’s upload has stopped, and that Retry restarted it', async () => {
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingShowsPublishControl = true;
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-1'),
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS,
+        failedAt: Date.now() - 1_000,
+        failedReason: 'retries_exhausted',
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ upload: 'failed' })));
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Retry' }));
+
+    await waitFor(() => expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ upload: 'uploading' })));
+  });
+
   it('does not attempt a failed upload on startup until asked', async () => {
     mocks.thankingDebateId = null;
     mocks.queue = [

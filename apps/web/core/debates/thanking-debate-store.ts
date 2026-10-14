@@ -60,10 +60,11 @@ export type PublishOptOutOffer = {
   /**
    * Where the debate's own recording is on its way out, for a surface that reports it beside the
    * cancel (GEO-3301). `preparing` is still being written to this device, `uploading` is in the
-   * queue, `uploaded` is out; null when there is no recording here to speak for, or it was
-   * withdrawn.
+   * queue, `failed` stopped trying (retries spent, or this browser lost its copy) until the banner's
+   * Retry puts it back, `uploaded` is out; null when there is no recording here to speak for, or it
+   * was withdrawn.
    */
-  upload: 'preparing' | 'uploading' | 'uploaded' | null;
+  upload: 'preparing' | 'uploading' | 'failed' | 'uploaded' | null;
   /** That recording's own upload progress, 0-100, or null while nothing is measurable. */
   percent: number | null;
 };
