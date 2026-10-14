@@ -18,6 +18,9 @@ import { useFollowEntities } from '~/core/topics/use-follow-topics';
 import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
 
+import { CreateSmall } from '~/design-system/icons/create-small';
+import { TickSmall } from '~/design-system/icons/tick-small';
+
 /**
  * What a Follow button follows. A topic by its entity id (GEO-3191); a person by their personal
  * space id (GEO-3236), the id every surface that shows a person already has.
@@ -280,7 +283,7 @@ export function FollowButton({
           className
         )}
       >
-        {ticked ? <TickIcon size={9} strokeWidth={2} /> : <PlusIcon size={8} strokeWidth={2.2} />}
+        {ticked ? <TickSmall size={9} strokeWidth={2} /> : <CreateSmall size={8} strokeWidth={2.2} />}
       </button>
     );
   }
@@ -302,14 +305,14 @@ export function FollowButton({
       {shownFollowed ? (
         <>
           <span className={cx('inline-flex items-center', styles.innerGap, !saving && 'group-hover/follow:hidden')}>
-            <TickIcon size={styles.tick} strokeWidth={1} />
+            <TickSmall size={styles.tick} />
             Following
           </span>
           {!saving ? <span className="hidden group-hover/follow:inline">Unfollow</span> : null}
         </>
       ) : (
         <>
-          <PlusIcon
+          <CreateSmall
             size={styles.plus}
             strokeWidth={1.3}
             className={variant === 'compact' || variant === 'secondary' ? 'text-grey-04' : undefined}
@@ -328,23 +331,6 @@ export function FollowTopicButton({
   ...props
 }: { topic: { id: string; name?: string | null } } & Omit<React.ComponentProps<typeof FollowButton>, 'target'>) {
   return <FollowButton target={{ kind: 'topic', id: topic.id, name: topic.name }} {...props} />;
-}
-
-function TickIcon({ size, strokeWidth }: { size: number; strokeWidth: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
-      <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={strokeWidth} />
-    </svg>
-  );
-}
-
-function PlusIcon({ size, strokeWidth, className }: { size: number; strokeWidth: number; className?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 13 13" fill="none" aria-hidden className={className}>
-      <path d="M6.5 0V13" stroke="currentColor" strokeWidth={strokeWidth} />
-      <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={strokeWidth} />
-    </svg>
-  );
 }
 
 function SavingDots() {
