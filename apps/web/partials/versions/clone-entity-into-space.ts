@@ -15,6 +15,9 @@ const NEVER_COPIED_TYPE_IDS = new Set(
     SystemIds.DAO_SPACE_TYPE,
     SystemIds.EOA_SPACE_TYPE,
     SystemIds.ROOT_SPACE_TYPE,
+    SystemIds.SPACE_TYPE,
+    SystemIds.SCHEMA_TYPE,
+    SystemIds.PROPERTY,
   ].map(normId)
 );
 

@@ -110,6 +110,53 @@ describe('cloneEntityIntoSpace — related entities', () => {
     expect(written.values.some(v => v.entity.id === 'a-person')).toBe(false);
   });
 
+  // A plain space carries only SPACE_TYPE, not one of the specialized space types, so before the
+  // fix it slipped past the never-copied check and was duplicated like ordinary content.
+  it('never copies a plain space', () => {
+    store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'a-space' }),
+      relation({ id: 'space-type', from: 'a-space', to: SystemIds.SPACE_TYPE, typeId: SystemIds.TYPES_PROPERTY }),
+    ];
+    store.values = [value('a-space', SOURCE, 'space-v')];
+
+    const written = run();
+
+    expect(written.values.some(v => v.entity.id === 'a-space')).toBe(false);
+    expect(written.relations.some(r => r.fromEntity.id === 'a-space')).toBe(false);
+  });
+
+  it('never copies a custom type (Types → SCHEMA_TYPE)', () => {
+    store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'custom-type' }),
+      relation({ id: 'type-type', from: 'custom-type', to: SystemIds.SCHEMA_TYPE, typeId: SystemIds.TYPES_PROPERTY }),
+      relation({ id: 'type-props', from: 'custom-type', to: 'a-property', typeId: SystemIds.PROPERTIES }),
+    ];
+    store.values = [value('custom-type', SOURCE, 'type-v')];
+
+    const written = run();
+
+    expect(written.values.some(v => v.entity.id === 'custom-type')).toBe(false);
+    expect(written.relations.some(r => r.fromEntity.id === 'custom-type')).toBe(false);
+  });
+
+  it('never copies a custom property (Types → PROPERTY)', () => {
+    store.relations = [
+      relation({ id: 'rel', from: ENTITY, to: 'custom-property' }),
+      relation({
+        id: 'property-type',
+        from: 'custom-property',
+        to: SystemIds.PROPERTY,
+        typeId: SystemIds.TYPES_PROPERTY,
+      }),
+    ];
+    store.values = [value('custom-property', SOURCE, 'property-v')];
+
+    const written = run();
+
+    expect(written.values.some(v => v.entity.id === 'custom-property')).toBe(false);
+    expect(written.relations.some(r => r.fromEntity.id === 'custom-property')).toBe(false);
+  });
+
   it('leaves the source copies in place — the clone adds, it does not move', () => {
     store.relations = [relation({ id: 'rel', from: ENTITY, to: 'related' })];
     store.values = [value('related', SOURCE, 'related-v')];
