@@ -11,7 +11,7 @@ import { type DebateAnalyticsSurface, debateSurfaceAnalyticsAttributes } from '.
 import { type HubFilterOption, HubMultiFilterMenu } from './hub-filter-menu';
 import { HubPillButton } from './hub-pill-button';
 
-/** Lines of pills the row takes before the rest go behind "more", unless picks need more. */
+/** Lines of pills the row takes before the rest go behind "More", unless picks need more. */
 export const FACET_PILL_LINES = 2;
 
 /**
@@ -151,7 +151,7 @@ export function fitPills({
 
 /**
  * The debate again picker's filters as one row of pills, for a desktop's width (GEO-3223): spaces
- * and topics together, two lines of them, and "more" for the rest.
+ * and topics together, two lines of them, and "More" for the rest.
  *
  * One row because the split was the product's and not the reader's: to someone looking for a claim,
  * "Crypto" and "Regulation" are both things to narrow by, and two rows with two rules asked them to
@@ -161,7 +161,7 @@ export function fitPills({
  * order they were picked, then by count.
  *
  * The facet grows with the corpus, so the row holds what fits on two lines at the width it has,
- * measured, and the full list opens from the "more" at its end. Picked options are always drawn,
+ * measured, and the full list opens from the "More" at its end. Picked options are always drawn,
  * however many there are: every filter in force stays on screen to be undone. Once they take more
  * than a line and a half, the row grows a line, so there is still room for something to pick.
  */
@@ -223,7 +223,7 @@ export function FacetFilterPills({
           trailing: widthOf(trailing),
           available,
           lines,
-          // Past the measuring limit the "more" is drawn whatever fits, so it needs its room too.
+          // Past the measuring limit the "More" is drawn whatever fits, so it needs its room too.
           moreBeyond: options.length > candidates.length,
         })
       );
@@ -289,12 +289,12 @@ export function FacetFilterPills({
 
   const moreTrigger = (
     <HubPillButton
-      // Named for what it says, so a voice user can ask for "more" (WCAG label in name).
+      // Named for what it says, so a voice user can ask for "More" (WCAG label in name).
       aria-label={`More filters (${options.length})`}
       className="text-grey-04"
       {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'More filters', 'filter')}
     >
-      more
+      More
     </HubPillButton>
   );
 
@@ -336,7 +336,7 @@ export function FacetFilterPills({
       >
         {allPill({ tabIndex: -1 })}
         {candidates.map(option => pill(option, { tabIndex: -1 }))}
-        <HubPillButton tabIndex={-1}>more</HubPillButton>
+        <HubPillButton tabIndex={-1}>More</HubPillButton>
       </div>
     </div>
   );
