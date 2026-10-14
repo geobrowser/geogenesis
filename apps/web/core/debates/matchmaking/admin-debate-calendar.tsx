@@ -586,30 +586,16 @@ export function useDebaters(userIds: string[], timezoneByUser: ReadonlyMap<strin
   }, [summaries, timezoneByUser]);
 }
 
-export type CalendarView = 'availability' | 'lobbies' | 'debates';
+export type CalendarView = 'availability' | 'debates';
 
-const VIEW_LABELS: Record<CalendarView, string> = {
-  availability: 'Availability',
-  lobbies: 'Lobbies',
-  debates: 'Admin',
-};
+const VIEW_OPTIONS = [
+  { value: 'availability', label: 'Availability' },
+  { value: 'debates', label: 'Admin' },
+] as const;
 
-/**
- * Availability | Lobbies | Admin, each only where the viewer has it: Lobbies behind `lobbyJoining`
- * (GEO-3268), Admin for an admin. Rendered only with more than one; otherwise there is no switch.
- */
-export function CalendarViewSwitch({
-  view,
-  views,
-  onChange,
-}: {
-  view: CalendarView;
-  views: readonly CalendarView[];
-  onChange: (view: CalendarView) => void;
-}) {
-  const options = React.useMemo(() => views.map(value => ({ value, label: VIEW_LABELS[value] })), [views]);
-  if (views.length < 2) return null;
-  return <SegmentedControl label="Calendar view" options={options} value={view} onChange={onChange} />;
+/** Availability | Admin. Rendered only for an admin; everyone else has one view and no switch. */
+export function CalendarViewSwitch({ view, onChange }: { view: CalendarView; onChange: (view: CalendarView) => void }) {
+  return <SegmentedControl label="Calendar view" options={VIEW_OPTIONS} value={view} onChange={onChange} />;
 }
 
 /**

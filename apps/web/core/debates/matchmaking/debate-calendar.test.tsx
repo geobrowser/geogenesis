@@ -71,18 +71,15 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
-// GEO-3268. Only the lobby flag is overridden; the Lobbies view itself is covered in its own suite.
-const lobbyFlag = vi.hoisted(() => ({ joining: false }));
-vi.mock('~/core/state/feature-flags', async importOriginal => {
-  const actual = await importOriginal<typeof import('~/core/state/feature-flags')>();
-  return {
-    ...actual,
-    useFeatureFlag: (id: Parameters<typeof actual.useFeatureFlag>[0]) =>
-      id === 'lobbyJoining' ? lobbyFlag.joining : actual.useFeatureFlag(id),
-  };
-});
+// GEO-3268. The week's lobbies, pinned above the hours; their own suite covers the chips and cards.
+const weekLobbies = vi.hoisted(() => ({ byDay: null as string[][] | null }));
 vi.mock('../lobbies/lobbies-calendar', () => ({
-  LobbiesCalendarBody: () => <div data-testid="lobbies-calendar" />,
+  useWeekLobbies: () => weekLobbies.byDay,
+  lobbiesPinnedRow: (byDay: string[][]) => ({
+    label: 'Lobbies',
+    renderDay: (_date: Date, day: number) => byDay[day]!.map(name => <span key={name}>{name}</span>),
+  }),
+  lobbyDayLeads: (byDay: string[][]) => byDay.map(names => (names.length > 0 ? <span>{names.join(', ')}</span> : null)),
 }));
 function openSidePanel(target: { entityId: string } | null) {
   mocks.sidePanelTarget = target;
@@ -431,7 +428,7 @@ const ADMIN_MATCHES = [
 ];
 
 beforeEach(() => {
-  lobbyFlag.joining = false;
+  weekLobbies.byDay = null;
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   Object.assign(mocks, {
@@ -1708,34 +1705,42 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
   });
 });
 
-describe('DebateCalendar, Lobbies view (GEO-3268)', () => {
-  it('offers no Lobbies view with the lobby flag off, and a link to it lands on availability', () => {
-    mocks.searchParams = new URLSearchParams({ view: 'lobbies' });
+describe('DebateCalendar, lobbies pinned above the hours (GEO-3268)', () => {
+  // Wednesday's lobby, in a week drawn Sunday to Saturday.
+  const withWednesdayLobby = () => {
+    weekLobbies.byDay = [[], [], [], ['NYC Debates'], [], [], []];
+  };
+
+  it('pins a Lobbies row under the day headers, outside the hours', () => {
+    withWednesdayLobby();
     render(<DebateCalendar />);
 
-    expect(screen.queryByRole('radiogroup', { name: 'Calendar view' })).not.toBeInTheDocument();
-    expect(screen.queryByTestId('lobbies-calendar')).not.toBeInTheDocument();
+    const grid = screen.getByRole('grid', { name: 'Who is free each hour this week' });
+    const row = within(grid).getByRole('rowheader', { name: 'Lobbies' }).closest('[role="row"]')!;
+    expect(within(row as HTMLElement).getByText('NYC Debates')).toBeInTheDocument();
+    expect(row.closest('[role="rowgroup"]')).toBeNull();
   });
 
-  it('gives everyone Availability | Lobbies with the flag on, and puts the view in the URL', () => {
-    lobbyFlag.joining = true;
-    mocks.searchParams = new URLSearchParams({ from: '/debates' });
+  it('draws no Lobbies row in a week without one', () => {
     render(<DebateCalendar />);
-
-    expect(screen.getByRole('radio', { name: 'Availability' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.queryByRole('radio', { name: 'Admin' })).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('radio', { name: 'Lobbies' }));
-    expect(mocks.routerReplace).toHaveBeenCalledWith('/matchmaking/calendar?from=%2Fdebates&view=lobbies', {
-      scroll: false,
-    });
+    expect(screen.queryByRole('rowheader', { name: 'Lobbies' })).not.toBeInTheDocument();
   });
 
-  it('opens on the Lobbies view from its link', () => {
-    lobbyFlag.joining = true;
-    mocks.searchParams = new URLSearchParams({ view: 'lobbies' });
+  it('keeps a week with a lobby on screen when nobody is free in it', () => {
+    mocks.schedulable = response([]);
+    withWednesdayLobby();
     render(<DebateCalendar />);
 
-    expect(screen.getByRole('radio', { name: 'Lobbies' })).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByTestId('lobbies-calendar')).toBeInTheDocument();
+    expect(screen.queryByText('Nobody has open times this week.')).not.toBeInTheDocument();
+    expect(screen.getByText('NYC Debates')).toBeInTheDocument();
+  });
+
+  it('lists a day’s lobbies first on a phone, a day with only a lobby included', () => {
+    mocks.isPhone = true;
+    mocks.schedulable = response([]);
+    withWednesdayLobby();
+    render(<DebateCalendar />);
+
+    expect(within(screen.getByRole('region', { name: /Wed/ })).getByText('NYC Debates')).toBeInTheDocument();
   });
 });

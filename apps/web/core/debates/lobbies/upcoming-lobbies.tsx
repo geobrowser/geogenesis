@@ -12,7 +12,7 @@ import { Text } from '~/design-system/text';
 import { useHorizontalOverflow } from '~/design-system/use-horizontal-overflow';
 
 import type { DebateLobbySummary } from '../api';
-import { lobbiesCalendarHref } from '../matchmaking/debate-calendar-route';
+import { calendarHref } from '../matchmaking/debate-calendar-route';
 import {
   type DebateAnalyticsSurface,
   debateAnalyticsLabel,
@@ -144,7 +144,7 @@ function UpcomingLobbyCard({
  * Scheduled lobbies under the debates panel's tabs (GEO-3268): one row of date cards that scrolls
  * sideways, so a week of lobbies takes one card's height and the claims below never move. A fade and
  * an arrow on whichever edge has more, as the panel's tab row does. The whole week is a link away,
- * on the Calendar's Lobbies view.
+ * pinned above the hours on the Calendar.
  *
  * `lobbies` is what the spotlight above the tabs is not already showing.
  */
@@ -213,7 +213,7 @@ export function UpcomingLobbiesRow({
           </div>
           <div className="flex justify-end px-4">
             <Link
-              href={lobbiesCalendarHref(from)}
+              href={calendarHref(from)}
               onClick={close}
               {...hubAnalyticsAttributes('Upcoming lobbies See the week on Calendar', 'open_debate_calendar')}
               className="text-footnote text-grey-04 hover:text-text hover:underline"

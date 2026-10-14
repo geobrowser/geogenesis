@@ -1,5 +1,7 @@
 'use client';
 
+import * as Popover from '@radix-ui/react-popover';
+
 import * as React from 'react';
 
 import cx from 'classnames';
@@ -10,11 +12,9 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbySummary } from '../api';
-import { CalendarWeekNav, useMinuteClock } from '../matchmaking/debate-calendar-controls';
-import { CALENDAR_WEEKS, DAYS_IN_WEEK, dayListLabel, weekDays, weekStart } from '../matchmaking/debate-calendar-model';
+import { DAYS_IN_WEEK } from '../matchmaking/debate-calendar-model';
+import type { PinnedRow } from '../matchmaking/debate-calendar-week';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '../matchmaking/hub-analytics';
-import { HubPillButton } from '../matchmaking/hub-pill-button';
-import { HubQueryState } from '../matchmaking/hub-states';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbies } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
@@ -23,161 +23,171 @@ import { LobbyByline } from './lobby-host-names';
 import {
   LOBBY_DARK_SURFACE_CLASS_NAME,
   LOBBY_DARK_SURFACE_STYLE,
+  LiveDot,
   LiveMark,
   SPOTLIGHT_ACTION_CLASS_NAME,
   joinLabel,
   liveLobbyCounts,
 } from './lobby-spotlight';
-import { OpenLobbyDialog } from './open-lobby-dialog';
 import { LobbyRsvpButton, lobbyBadgeTime } from './upcoming-lobbies';
 
-const NO_LOBBIES: DebateLobbySummary[] = [];
+/** Chips drawn in a day before the rest collapse into "+N more", as the admin week's busy hours do. */
+const CHIPS_PER_DAY = 2;
 
-function sameLocalDay(iso: string, day: Date) {
-  return localDaysFrom(day.getTime(), Date.parse(iso)) === 0;
-}
-
-/** The week's lobbies by day, each day soonest first. `goingOnly` keeps those the viewer RSVP'd to. */
-export function lobbiesByDay(lobbies: DebateLobbySummary[], days: Date[], goingOnly: boolean) {
+/** The week's lobbies by day, each day soonest first. */
+export function lobbiesByDay(lobbies: DebateLobbySummary[], days: Date[]) {
   return days.map(day =>
     lobbies
-      .filter(lobby => sameLocalDay(lobby.starts_at, day) && (!goingOnly || lobby.viewer_reminded))
+      .filter(lobby => localDaysFrom(day.getTime(), Date.parse(lobby.starts_at)) === 0)
       .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at))
   );
 }
 
 /**
- * The debate calendar's Lobbies view (GEO-3268): the week's lobbies as a column per day, or a list
- * by day on a phone, each with RSVP, and Join on one that is live. Kept apart from the availability
- * week, which is for booking someone's free time; lobby blocks over it would fight that for room.
+ * The debate lobbies in the calendar's week, by day (GEO-3268), for the row pinned above the hours
+ * and the phone's day list. `null` behind `lobbyJoining` or with none that week, so the calendar
+ * draws nothing for them.
  *
- * Read from the same lobby list as the panel, which holds at most 20 upcoming lobbies and two per
- * host, and none that have ended (GEO-3271 asks geo-chat for the whole week).
+ * Read from the panel's lobby list, which holds at most 20 upcoming lobbies and two per host, and
+ * none that have ended (GEO-3271 asks geo-chat for the whole week).
  */
-export function LobbiesCalendarBody({ isPhone }: { isPhone: boolean }) {
-  const hosting = useFeatureFlag('lobbyHosting');
-  const now = useMinuteClock();
-  const [weekOffset, setWeekOffset] = React.useState(0);
-  const [goingOnly, setGoingOnly] = React.useState(false);
-  const [dialogOpen, setDialogOpen] = React.useState(false);
-  const lobbiesQuery = useDebateLobbies();
-  const lobbies = lobbiesQuery.data?.lobbies ?? NO_LOBBIES;
+export function useWeekLobbies(days: Date[]): DebateLobbySummary[][] | null {
+  const joining = useFeatureFlag('lobbyJoining');
+  const { data } = useDebateLobbies(joining);
+  return React.useMemo(() => {
+    if (!joining || !data) return null;
+    const byDay = lobbiesByDay(data.lobbies, days.slice(0, DAYS_IN_WEEK));
+    return byDay.some(day => day.length > 0) ? byDay : null;
+  }, [data, days, joining]);
+}
 
-  // `weekDays` ends with the next week's first day, the week's exclusive bound; the nav takes it
-  // whole, the grid draws only the seven days.
-  const weekBounds = React.useMemo(() => weekDays(weekStart(new Date(now), weekOffset)), [now, weekOffset]);
-  const days = React.useMemo(() => weekBounds.slice(0, DAYS_IN_WEEK), [weekBounds]);
-  const byDay = React.useMemo(() => lobbiesByDay(lobbies, days, goingOnly), [lobbies, days, goingOnly]);
-  const isEmpty = byDay.every(day => day.length === 0);
-  const goToWeek = (next: number) => setWeekOffset(Math.max(0, Math.min(CALENDAR_WEEKS - 1, next)));
+/** The row pinned under the calendar's day headers: each day's lobbies as chips. */
+export function lobbiesPinnedRow(byDay: DebateLobbySummary[][]): PinnedRow {
+  return {
+    label: 'Lobbies',
+    renderDay: (_date, day) => <LobbyDayChips lobbies={byDay[day] ?? []} />,
+  };
+}
 
+/** A day's lobbies on the phone's day list, as cards, above its people. `null` for a day with none. */
+export function lobbyDayLeads(byDay: DebateLobbySummary[][]): (React.ReactNode | null)[] {
+  return byDay.map(lobbies =>
+    lobbies.length === 0 ? null : (
+      <div className="flex flex-col gap-2" data-testid="lobby-day-cards">
+        {lobbies.map(lobby => (
+          <LobbyCalendarCard key={lobby.lobby_id} lobby={lobby} />
+        ))}
+      </div>
+    )
+  );
+}
+
+function LobbyDayChips({ lobbies }: { lobbies: DebateLobbySummary[] }) {
+  if (lobbies.length === 0) return null;
+  const shown = lobbies.slice(0, CHIPS_PER_DAY);
+  const hidden = lobbies.slice(shown.length);
   return (
-    <div className="flex flex-col" data-testid="lobbies-calendar">
-      <CalendarWeekNav
-        days={weekBounds}
-        weekOffset={weekOffset}
-        onGoToWeek={goToWeek}
-        isPhone={isPhone}
-        analyticsLabelPrefix="Lobby calendar"
-      >
-        <HubPillButton
-          analyticsSurface="calendar"
-          analyticsLabel="Lobby calendar Going only"
-          variant={goingOnly ? 'primary' : 'secondary'}
-          aria-pressed={goingOnly}
-          onClick={() => setGoingOnly(on => !on)}
-        >
-          Going only
-        </HubPillButton>
-        {hosting ? (
-          <HubPillButton
-            analyticsSurface="calendar"
-            analyticsLabel="Lobby calendar Open a lobby"
-            variant="primary"
-            onClick={() => setDialogOpen(true)}
-          >
-            Open a lobby
-          </HubPillButton>
-        ) : null}
-      </CalendarWeekNav>
-
-      <div className="px-6 pb-6 md:px-4">
-        <HubQueryState
-          analyticsSurface="calendar"
-          isLoading={lobbiesQuery.isPending}
-          error={lobbiesQuery.data ? null : lobbiesQuery.error}
-          failureReason={lobbiesQuery.failureReason}
-          onRetry={() => void lobbiesQuery.refetch()}
-          isEmpty={isEmpty}
-          emptyMessage={goingOnly ? 'You haven’t RSVP’d to a lobby this week.' : 'No lobbies scheduled this week.'}
-          emptyAction={
-            goingOnly
-              ? { label: 'Show all lobbies', onClick: () => setGoingOnly(false) }
-              : weekOffset < CALENDAR_WEEKS - 1
-                ? { label: 'Next week', onClick: () => goToWeek(weekOffset + 1) }
-                : undefined
+    <>
+      {shown.map(lobby => (
+        <LobbyChip key={lobby.lobby_id} lobby={lobby} />
+      ))}
+      {hidden.length > 0 ? (
+        <LobbyPopover
+          label={`${hidden.length} more lobbies`}
+          trigger={
+            <button
+              type="button"
+              {...debateActionAnalyticsAttributes('calendar', 'Lobby chips more', 'open_lobby_card')}
+              className="self-start rounded-md px-1 text-footnoteMedium text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+            >
+              +{hidden.length} more
+            </button>
           }
         >
-          {isPhone ? (
-            <ol className="flex flex-col gap-4">
-              {days.map((day, index) =>
-                byDay[index]!.length === 0 ? null : (
-                  <li key={day.getTime()} className="flex flex-col gap-2">
-                    <DayHeading day={day} now={now} />
-                    <ul className="flex flex-col gap-2">
-                      {byDay[index]!.map(lobby => (
-                        <LobbyCalendarCard key={lobby.lobby_id} lobby={lobby} />
-                      ))}
-                    </ul>
-                  </li>
-                )
-              )}
-            </ol>
-          ) : (
-            <ol className="grid grid-cols-7 gap-2 border-t border-grey-02 pt-3">
-              {days.map((day, index) => (
-                <li key={day.getTime()} className="flex min-w-0 flex-col gap-2">
-                  <DayHeading day={day} now={now} />
-                  {byDay[index]!.length === 0 ? (
-                    <Text as="p" variant="footnote" color="grey-03">
-                      No lobbies
-                    </Text>
-                  ) : (
-                    <ul className="flex flex-col gap-2">
-                      {byDay[index]!.map(lobby => (
-                        <LobbyCalendarCard key={lobby.lobby_id} lobby={lobby} />
-                      ))}
-                    </ul>
-                  )}
-                </li>
-              ))}
-            </ol>
-          )}
-        </HubQueryState>
-      </div>
-
-      {dialogOpen ? <OpenLobbyDialog onClose={() => setDialogOpen(false)} /> : null}
-    </div>
+          {lobbies.map(lobby => (
+            <LobbyCalendarCard key={lobby.lobby_id} lobby={lobby} />
+          ))}
+        </LobbyPopover>
+      ) : null}
+    </>
   );
 }
 
-/** "Thu 8", or "Today, Thu 8", as the calendar's other views head a day. */
-function DayHeading({ day, now }: { day: Date; now: number }) {
+/**
+ * One lobby in the pinned row: its time and name, or Live and its name while open. Dark while live,
+ * outlined while scheduled, the outline solid once the viewer is going. Opens the lobby's card.
+ */
+function LobbyChip({ lobby }: { lobby: DebateLobbySummary }) {
+  const time = lobby.open ? 'Live' : lobbyBadgeTime(lobby.starts_at);
   return (
-    <Text as="h3" variant="footnoteMedium" color={localDaysFrom(now, day.getTime()) === 0 ? 'text' : 'grey-04'}>
-      {dayListLabel(day, new Date(now))}
-    </Text>
+    <LobbyPopover
+      label={lobby.name}
+      trigger={
+        <button
+          type="button"
+          aria-label={[time, lobby.name, lobby.viewer_reminded && !lobby.open ? 'going' : null]
+            .filter(Boolean)
+            .join(', ')}
+          title={lobby.name}
+          {...debateActionAnalyticsAttributes('calendar', 'Lobby chip', 'open_lobby_card')}
+          data-testid="lobby-chip"
+          className={cx(
+            'flex w-full min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text',
+            lobby.open
+              ? cx('border-transparent text-white', LOBBY_DARK_SURFACE_CLASS_NAME)
+              : lobby.viewer_reminded
+                ? 'border-text bg-white text-text'
+                : 'border-grey-02 bg-white text-text'
+          )}
+        >
+          {lobby.open ? <LiveDot /> : null}
+          <span className="shrink-0 font-medium tabular-nums">{time}</span>
+          <span className="min-w-0 truncate">{lobby.name}</span>
+        </button>
+      }
+    >
+      <LobbyCalendarCard lobby={lobby} />
+    </LobbyPopover>
   );
 }
 
-/** A lobby in its day: live and dark with Join, or its time and host over its name and RSVP. */
-function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
+/** The calendar's card popover, as its hour and admin blocks open theirs. */
+function LobbyPopover({
+  label,
+  trigger,
+  children,
+}: {
+  label: string;
+  trigger: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <Popover.Root>
+      <Popover.Trigger asChild>{trigger}</Popover.Trigger>
+      <Popover.Portal>
+        <Popover.Content
+          side="bottom"
+          align="start"
+          sideOffset={6}
+          collisionPadding={16}
+          aria-label={label}
+          className="z-100 flex max-h-[min(36rem,calc(100vh-6rem))] w-[300px] max-w-[calc(100vw-32px)] flex-col gap-2 overflow-y-auto rounded-xl border border-grey-02 bg-white p-3 shadow-lg"
+        >
+          {children}
+        </Popover.Content>
+      </Popover.Portal>
+    </Popover.Root>
+  );
+}
+
+/** A lobby's card: live and dark with Join, or its time and host over its name and RSVP. */
+export function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
   const href = debateRoomPath(lobby.lobby_id);
   const enter = () => markLobbyEntry(lobby.lobby_id, 'calendar');
 
   if (lobby.open) {
     return (
-      <li
+      <div
         className={cx('flex flex-col gap-2 rounded-lg p-2.5', LOBBY_DARK_SURFACE_CLASS_NAME)}
         style={LOBBY_DARK_SURFACE_STYLE}
         data-testid="lobby-calendar-card"
@@ -203,12 +213,12 @@ function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
         >
           {joinLabel(lobby, true)}
         </Link>
-      </li>
+      </div>
     );
   }
 
   return (
-    <li
+    <div
       className="flex flex-col gap-1.5 rounded-lg border border-grey-02 bg-white p-2.5"
       data-testid="lobby-calendar-card"
     >
@@ -228,6 +238,6 @@ function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
         analyticsLabelPrefix="Lobby calendar"
         className="items-stretch"
       />
-    </li>
+    </div>
   );
 }

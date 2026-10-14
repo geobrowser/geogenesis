@@ -106,12 +106,12 @@ describe('UpcomingLobbiesCard', () => {
     for (const card of screen.getAllByTestId('upcoming-lobby-card')) expect(card).not.toHaveClass('w-full');
   });
 
-  it('links to the Calendar’s Lobbies view', () => {
+  it('links to the Calendar, where the week’s lobbies are pinned above the hours', () => {
     mocks.lineup = { live: [], soon: null, later: [scheduled({})] };
     render(<UpcomingLobbiesCard />);
 
     const link = screen.getByRole('link', { name: 'See the week on Calendar →' });
-    expect(link.getAttribute('href')).toContain('view=lobbies');
+    expect(link.getAttribute('href')).toContain('/matchmaking/calendar');
   });
 
   it('leaves the live lobbies and the one opening soon to the spotlight', () => {

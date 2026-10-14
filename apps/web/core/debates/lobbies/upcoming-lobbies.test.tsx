@@ -3,7 +3,6 @@ import { cleanup, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { lobbiesCalendarHref } from '../matchmaking/debate-calendar-route';
 import { LobbyByline } from './lobby-host-names';
 import { lobbyBadgeTime, lobbyDayLabel } from './upcoming-lobbies';
 
@@ -76,12 +75,5 @@ describe('LobbyByline', () => {
     byline({ hosts: [{ ...host, profile_space_id: 'not-a-space' }], reminder_count: 0, open: false });
     expect(screen.getByTestId('byline')).toHaveTextContent('Bryan');
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
-  });
-});
-
-describe('lobbiesCalendarHref', () => {
-  it('opens the calendar on its Lobbies view, keeping where it came from', () => {
-    expect(lobbiesCalendarHref('/explore')).toBe('/matchmaking/calendar?from=%2Fexplore&view=lobbies');
-    expect(lobbiesCalendarHref(null)).toBe('/matchmaking/calendar?view=lobbies');
   });
 });

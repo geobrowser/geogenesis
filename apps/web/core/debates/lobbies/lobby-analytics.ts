@@ -20,7 +20,7 @@ export type LobbyEntry =
   | 'nav'
   /** The live lobby banner above the Explore feed (GEO-3268). */
   | 'explore_banner'
-  /** The debate calendar's Lobbies view (GEO-3268). */
+  /** A lobby's card on the debate calendar, from the row pinned above the hours (GEO-3268). */
   | 'calendar'
   /** Go to lobby, right after creating it. */
   | 'created'
