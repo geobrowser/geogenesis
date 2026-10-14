@@ -99,6 +99,20 @@ describe('useWeekLobbies', () => {
     expect(mocks.calendarRange).toEqual({ from: WEEK[0], to: WEEK[7] });
   });
 
+  it('leaves out lobbies that have ended, as the panel list does', () => {
+    mocks.lobbies = [
+      lobby({ lobby_id: 'done', state: 'ended', closed_at: at(13, 17), starts_at: at(13, 16) }),
+      lobby({ lobby_id: 'next' }),
+    ];
+    const { result } = renderHook(() => useWeekLobbies(WEEK));
+    expect(result.current.byDay!.flat().map(l => l.lobby_id)).toEqual(['next']);
+  });
+
+  it('draws no row for a week whose only lobbies have ended', () => {
+    mocks.lobbies = [lobby({ state: 'ended', closed_at: at(13, 17), starts_at: at(13, 16) })];
+    expect(renderHook(() => useWeekLobbies(WEEK)).result.current.byDay).toBeNull();
+  });
+
   it('keeps every lobby a host has that week, past the list’s two per host', () => {
     mocks.lobbies = [10, 12, 14, 16, 18].map(hour => lobby({ lobby_id: `h${hour}`, starts_at: at(14, hour) }));
     const { result } = renderHook(() => useWeekLobbies(WEEK));
@@ -135,29 +149,6 @@ describe('useWeekLobbies', () => {
 });
 
 describe('the pinned Lobbies row', () => {
-  // GEO-3300. The week now includes lobbies that have ended.
-  it('greys an ended lobby, with no Live and no going outline', () => {
-    renderWednesday([
-      lobby({ lobby_id: 'done', name: 'Earlier one', state: 'ended', closed_at: at(14, 17), viewer_reminded: true }),
-    ]);
-    const chip = screen.getByTestId('lobby-chip');
-    expect(chip).toHaveClass('bg-grey-01');
-    expect(chip).not.toHaveClass('border-text');
-    expect(chip).toHaveAccessibleName(expect.stringContaining('ended'));
-    expect(chip).not.toHaveAccessibleName(expect.stringContaining('going'));
-  });
-
-  it('opens an ended lobby’s card as Ended and its host, with nothing to RSVP or join', () => {
-    renderWednesday([lobby({ lobby_id: 'done', name: 'Earlier one', state: 'ended', closed_at: at(14, 17) })]);
-
-    fireEvent.click(screen.getByTestId('lobby-chip'));
-    const card = screen.getByTestId('lobby-calendar-card');
-    expect(card).toHaveTextContent(/^Ended · Bryan/);
-    expect(within(card).getByRole('link', { name: 'Earlier one' })).toHaveAttribute('href', '/debate/done');
-    expect(within(card).queryByRole('button')).toBeNull();
-    expect(within(card).queryByRole('link', { name: 'Join' })).toBeNull();
-  });
-
   it('labels the row Lobbies and shows each lobby as its time and name', () => {
     const byDay = lobbiesByDay([lobby({ name: 'NYC Debates' })], WEEK);
     expect(lobbiesPinnedRow(byDay).label).toBe('Lobbies');

@@ -2509,7 +2509,7 @@ export async function listDebateLobbies(
   });
 }
 
-/** Where a lobby stands for the calendar (GEO-3271): `open` is not shown for an ended lobby. */
+/** Where a lobby stands for the calendar (GEO-3271). An ended lobby's `open` is false, so this tells it from upcoming. */
 export type DebateLobbyCalendarState = 'upcoming' | 'open' | 'ended';
 
 /** One lobby in `GET /debate-lobbies/calendar`: the list's row, plus its state and when it ended. */
