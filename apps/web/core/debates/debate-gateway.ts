@@ -171,6 +171,11 @@ export class DebateGatewayClient {
   private readonly pendingChangedClaimsBySpace = new Map<string, Set<string>>();
   /** The newest card patch per dashless lobby id, laid over each list GET until one catches up. */
   private readonly heldLobbyPatches = new Map<string, DebateLobbyCardPatch>();
+  /**
+   * Held patches a read has caught up with while another lobby read was still in flight, by lobby,
+   * at the `as_of` caught up with. Released once no read is in flight; see `releaseCaughtUpPatches`.
+   */
+  private readonly caughtUpPatches = new Map<string, string>();
   private unsubscribeLobbyFetches: (() => void) | null = null;
 
   private snapshot: DebateGatewaySnapshot = {
@@ -236,11 +241,11 @@ export class DebateGatewayClient {
       // A fetch's own success; the overlay's `setQueryData` is `manual` and does not come back here.
       if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
       if (this.accountKey && isLobbyCalendarQueryKey(event.query.queryKey, this.accountKey)) {
+        // A calendar week read before a patch would otherwise undo it, as a list read would.
+        this.overlayHeldPatchesOnCalendars();
         // A week holds lobbies the capped list never returns, so its reads release patches too.
         const week = event.query.state.data as DebateLobbyCalendarResponse | undefined;
         if (week) this.releaseCaughtUpPatches(week.lobbies);
-        // A calendar week read before a patch would otherwise undo it, as a list read would.
-        this.overlayHeldPatchesOnCalendars();
       }
       if (this.accountKey && isLobbiesQueryKey(event.query.queryKey, this.accountKey)) {
         this.overlayHeldLobbyPatches(event.query.state.data as DebateLobbiesResponse | undefined);
@@ -296,6 +301,7 @@ export class DebateGatewayClient {
     this.capabilities = EMPTY_CAPABILITIES;
     this.pendingChangedClaimsBySpace.clear();
     this.heldLobbyPatches.clear();
+    this.caughtUpPatches.clear();
     this.unsubscribeLobbyFetches?.();
     this.unsubscribeLobbyFetches = null;
     if (accountKey) this.queryClient.removeQueries({ queryKey: ['debates'] });
@@ -642,30 +648,39 @@ export class DebateGatewayClient {
   /** Lays held patches over the cached list. `fetched`, a GET's result, also drops those it has caught up with. */
   private overlayHeldLobbyPatches(fetched?: DebateLobbiesResponse) {
     if (!this.accountKey) return;
-    if (fetched) this.releaseCaughtUpPatches(fetched.lobbies);
     this.overlayHeldPatchesOnCalendars();
     const key = ['debates', 'account', this.accountKey, 'lobbies'];
     const list = this.queryClient.getQueryData<DebateLobbiesResponse>(key);
-    if (!list) return;
-
-    let next = list;
-    for (const patch of this.heldLobbyPatches.values()) next = applyLobbyCardPatch(next, patch);
-    if (next !== list) this.queryClient.setQueryData(key, next);
+    if (list) {
+      let next = list;
+      for (const patch of this.heldLobbyPatches.values()) next = applyLobbyCardPatch(next, patch);
+      if (next !== list) this.queryClient.setQueryData(key, next);
+    }
+    // After the overlay: a read that predates a patch needs it laid over before it can go.
+    if (fetched) this.releaseCaughtUpPatches(fetched.lobbies);
   }
 
   /**
-   * Drops the held patches a fetched read (the list, or a calendar week) has caught up with. Not
-   * while any lobby read is still in flight: one may predate a patch, and its landing needs the patch
-   * held to lay it back over. The next read to land with none in flight releases it instead.
+   * Releases the held patches a fetched read (the list, or a calendar week) has caught up with,
+   * called once that read's data has had the held patches laid over it.
+   *
+   * Not while any lobby read is still in flight: one may predate a patch, and its landing needs the
+   * patch held to lay it back over. The catch-up is remembered instead and released once the last
+   * read in flight lands, even if that read does not include the lobby. A newer patch held since
+   * then is not the one caught up with, so it stays.
    */
   private releaseCaughtUpPatches(rows: DebateLobbySummary[]) {
-    if (!this.accountKey || this.heldLobbyPatches.size === 0) return;
-    if (this.queryClient.isFetching({ queryKey: ['debates', 'account', this.accountKey, 'lobbies'] }) > 0) return;
+    if (!this.accountKey) return;
     for (const row of rows) {
       const id = dashlessId(row.lobby_id);
       const held = this.heldLobbyPatches.get(id);
-      if (held && row.as_of && Date.parse(row.as_of) >= Date.parse(held.asOf)) this.heldLobbyPatches.delete(id);
+      if (held && row.as_of && Date.parse(row.as_of) >= Date.parse(held.asOf)) this.caughtUpPatches.set(id, held.asOf);
     }
+    if (this.queryClient.isFetching({ queryKey: ['debates', 'account', this.accountKey, 'lobbies'] }) > 0) return;
+    for (const [id, asOf] of this.caughtUpPatches) {
+      if (this.heldLobbyPatches.get(id)?.asOf === asOf) this.heldLobbyPatches.delete(id);
+    }
+    this.caughtUpPatches.clear();
   }
 
   /**
