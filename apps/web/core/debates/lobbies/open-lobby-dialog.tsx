@@ -73,7 +73,9 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      // A layer opened over the dialog (the claim list picker) handles its own Escape and marks it
+      // handled, so that press closes the layer, not the dialog under it.
+      if (event.key === 'Escape' && !event.defaultPrevented) onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);

@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -140,7 +140,7 @@ describe('claim lists when opening a lobby (GEO-3275)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Add a list' }));
     // Picked pages are passed back to the picker as added, so they cannot be picked twice.
     expect(mocks.pickerAdded).toEqual(['page-b', 'page-a', 'page-c']);
-    fireEvent.click(screen.getByRole('button', { name: 'Close list picker' }));
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
     fireEvent.click(screen.getByRole('button', { name: 'Remove List a' }));
 
     nameAndSubmit();
@@ -162,6 +162,21 @@ describe('claim lists when opening a lobby (GEO-3275)', () => {
     const body = mocks.mutate.mock.calls[0]![0];
     expect(body.starts_at).toEqual(expect.any(String));
     expect(body.claim_lists).toEqual([{ entity_id: 'page-a', space_id: 'space-a' }]);
+  });
+
+  // The dialog closes on Escape; with the picker open over it, Escape is the picker's.
+  it('closes only the picker on Escape while it is open', async () => {
+    const onClose = vi.fn();
+    render(<OpenLobbyDialog onClose={onClose} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add a list' }));
+    expect(screen.getByRole('button', { name: 'Pick list a' })).toBeTruthy();
+
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Pick list a' })).toBeNull());
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(document.body, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
   it('stops offering more at five lists', () => {

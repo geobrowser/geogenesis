@@ -6,14 +6,14 @@ import { Text } from '~/design-system/text';
 
 import { type CreateDebateLobbyRequest, LOBBY_CLAIM_LISTS_MAX } from '../api';
 import type { ClaimListOption } from '../claim-list-pages';
-import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { hubPillClassName } from '../matchmaking/hub-pill-button';
 import { ClaimListPicker } from './lobby-claim-list-picker';
+import { LobbyPopup } from './lobby-popup';
 
 export const OPEN_LOBBY_CLAIM_LISTS_COPY = {
   label: 'Claim lists',
   optional: 'Optional',
   add: 'Add a list',
-  close: 'Close list picker',
   full: `Up to ${LOBBY_CLAIM_LISTS_MAX} lists. Remove one to add another.`,
   hint: 'Shown as tabs in the lobby’s claims panel. You can change them in the lobby.',
 };
@@ -35,8 +35,8 @@ export function claimListsRequestField(
 
 /**
  * The Open a debate lobby dialog's optional Claim lists field: picked lists as removable chips, and
- * the in-lobby picker opened inline under them. Inline rather than as a popover, which inside a
- * modal dialog would have to fight it for the top layer.
+ * "Add a list" opening the in-lobby picker in the same popover (a sheet on phones), so the dialog
+ * keeps its shape. Both render above the dialog: the popover inside it, the sheet in a higher layer.
  */
 export function OpenLobbyClaimListsField({
   value,
@@ -62,7 +62,8 @@ export function OpenLobbyClaimListsField({
         {value.map(list => (
           <span
             key={list.entityId}
-            className="inline-flex max-w-full items-center gap-1 rounded-full bg-grey-01 py-1 pr-1 pl-2.5 text-footnoteMedium text-text"
+            // The "Add a list" pill's own type and shape, so picked lists and the button read as one row.
+            className={hubPillClassName('secondary', 'max-w-full gap-1 pr-1 hover:bg-transparent')}
           >
             <span className="max-w-[200px] truncate">{list.name}</span>
             <button
@@ -77,27 +78,33 @@ export function OpenLobbyClaimListsField({
           </span>
         ))}
         {full ? null : (
-          <HubPillButton
-            analyticsLabel={picking ? 'Open lobby close claim list picker' : 'Open lobby add claim list'}
-            aria-expanded={picking}
-            onClick={() => setPicking(open => !open)}
+          <LobbyPopup
+            open={picking}
+            onOpenChange={setPicking}
+            title={OPEN_LOBBY_CLAIM_LISTS_COPY.add}
+            align="start"
+            wide
+            trigger={
+              <button
+                type="button"
+                data-geo-analytics-label="Open lobby add claim list"
+                className={hubPillClassName('secondary')}
+              >
+                {OPEN_LOBBY_CLAIM_LISTS_COPY.add}
+              </button>
+            }
           >
-            {picking ? OPEN_LOBBY_CLAIM_LISTS_COPY.close : OPEN_LOBBY_CLAIM_LISTS_COPY.add}
-          </HubPillButton>
+            <ClaimListPicker
+              addedIds={addedIds}
+              analyticsLabel="Open lobby pick claim list"
+              onPick={option => {
+                onChange([...value, { entityId: option.entityId, spaceId: option.spaceId, name: option.name }]);
+                setPicking(false);
+              }}
+            />
+          </LobbyPopup>
         )}
       </div>
-      {picking && !full ? (
-        <div className="rounded-lg border border-grey-02">
-          <ClaimListPicker
-            addedIds={addedIds}
-            analyticsLabel="Open lobby pick claim list"
-            onPick={option => {
-              onChange([...value, { entityId: option.entityId, spaceId: option.spaceId, name: option.name }]);
-              setPicking(false);
-            }}
-          />
-        </div>
-      ) : null}
       <Text as="p" variant="footnote" color="grey-04">
         {full ? OPEN_LOBBY_CLAIM_LISTS_COPY.full : OPEN_LOBBY_CLAIM_LISTS_COPY.hint}
       </Text>
