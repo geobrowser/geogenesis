@@ -223,6 +223,7 @@ const memberView: DebateLobbyView = {
 
 beforeEach(() => {
   window.localStorage.clear();
+  window.sessionStorage.clear();
   mocks.phone = false;
   mocks.authenticated = false;
   mocks.memberLobby = undefined;
