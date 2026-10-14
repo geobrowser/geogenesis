@@ -54,10 +54,22 @@ vi.mock('../rooms/scheduling-hooks', () => ({
   useRescheduleScheduledDebate: () => ({ mutate: vi.fn(), isPending: false, error: null }),
 }));
 
+// The card has its own suite; here it only matters which tabs show it.
+vi.mock('../lobbies/lobbies-card', () => ({ UpcomingLobbiesCard: () => <div data-testid="live-lobbies-card" /> }));
+
 // The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
 vi.mock('./scheduled-debates-section', () => ({
   ScheduledDebatesSection: () => null,
-  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
+  hasScheduledContent: () => false,
+  useScheduledContent: () => ({
+    answerable: [],
+    upcoming: [],
+    lobbies: [],
+    people: [],
+    requestsError: null,
+    roomsError: null,
+    lobbiesError: null,
+  }),
 }));
 
 vi.mock('next/navigation', () => ({
@@ -467,6 +479,15 @@ describe('DebatesHubPanel', () => {
     // Tab bodies cross-fade, so the incoming panel arrives after the outgoing one finishes.
     // Signed in, the list includes offline people free at shared times, so the empty copy says so.
     expect(await screen.findByText('Nobody is online or free to debate this week.')).toBeInTheDocument();
+  });
+
+  it('leaves the lobbies card off Requests, which lists the lobbies itself', async () => {
+    renderOpen('people');
+    expect(screen.getByTestId('live-lobbies-card')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /^Requests/ }));
+
+    expect(screen.queryByTestId('live-lobbies-card')).not.toBeInTheDocument();
   });
 
   it('toggles availability from the panel header', async () => {

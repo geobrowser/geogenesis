@@ -362,7 +362,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
           <>
-            <UpcomingLobbiesCard />
+            {/* Requests lists the lobbies the viewer is going to or hosts itself (GEO-3292). */}
+            {activeTab === 'requests' ? null : <UpcomingLobbiesCard />}
             <HubSwap activeKey={activeTab}>
               {activeTab === 'requests' ? (
                 <RequestsTab />

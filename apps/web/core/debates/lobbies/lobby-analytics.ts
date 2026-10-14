@@ -22,6 +22,8 @@ export type LobbyEntry =
   | 'explore_banner'
   /** A lobby's card on the debate calendar, from the row pinned above the hours (GEO-3268). */
   | 'calendar'
+  /** A lobby under Upcoming lobbies in the Requests tab (GEO-3292). */
+  | 'requests'
   /** Go to lobby, right after creating it. */
   | 'created'
   /** Back to the room, on a debate's end card or on the lobby's stepped-out prompt. */
