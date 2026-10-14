@@ -1880,7 +1880,11 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
     });
     const { container } = renderAt(62.1, { playbackBreaks });
-    expect(container.querySelector('[data-debate-banner="round"]')?.textContent).toMatch(/^Round 2 · .+ opens$/);
+    // The round in the badge's words at one size, and who opens it on its own line beneath.
+    const banner = container.querySelector('[data-debate-banner="round"]');
+    expect(banner?.firstElementChild?.textContent).toBe('Round 2 · Rebuttal');
+    expect(banner?.querySelector('[data-debate-banner-sub]')?.textContent).toMatch(/^\S+ opens$/);
+    expect((banner as HTMLElement | null)?.style.fontSize).toBe('');
     expect(stamps(container)).toEqual(['extend', 'extend']);
   });
 

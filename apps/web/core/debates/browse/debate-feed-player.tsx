@@ -850,6 +850,7 @@ export function DebateFeedPlayer({
               cue={breakCue}
               names={breakNames}
               firstSlot={debate.first_participant_slot}
+              roundTurns={roundTurns}
               playing={playing}
             />
             <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} />

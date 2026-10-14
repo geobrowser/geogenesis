@@ -7,7 +7,6 @@ import cx from 'classnames';
 import type { OpenRoundPick, ParticipantSlot } from '~/core/debates/api';
 import { recordingLabelTextShadow } from '~/core/debates/debate-video-tile';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
-import { openRoundNumber } from '~/core/debates/open-rounds';
 import {
   BREAK_BANNER_AT_MS,
   BREAK_QUESTION_MS,
@@ -16,8 +15,8 @@ import {
   type BreakCue,
   type BreakCut,
   type EarlyEndCue,
-  fitBannerLine,
 } from '~/core/debates/playback-breaks';
+import { type TurnCount, roundLabel } from '~/core/debates/round-cues';
 
 /** How long the banner takes to roll out, ending as the player cuts. Matches `--animate-debate-banner-out`. */
 const BREAK_BANNER_OUT_MS = 300;
@@ -157,8 +156,10 @@ const STAMP_TILT: Record<ParticipantSlot, string> = { 1: '-8deg', 2: '6deg' };
  * - The question the room asked, "Keep debating?", in the outlined type the video's labels wear.
  * - Each pick stamped onto its debater, one after the other: Extend in the room's purple, End in
  *   black, a missing pick as "No pick", grey and dashed.
- * - A banner across the seam with what the picks mean: the next round and who opens it, or "That's
- *   a wrap", with the missing-pick line where that is why.
+ * - A banner across the seam with what the picks mean: the next round in the round badge's words
+ *   ("Round 2 · Rebuttal") with who opens it on a smaller line beneath, or "That's a wrap", with the
+ *   missing-pick line where that is why. The name sits on its own line so the banner keeps one size
+ *   whatever the name: a long one truncates there instead of shrinking the round.
  *
  * Before a required round nobody picked, so it is the banner alone. The tiles dim underneath, since
  * the footage there is people looking at their screens.
@@ -169,11 +170,13 @@ export function DebateBreakOverlay({
   cue,
   names,
   firstSlot,
+  roundTurns,
   playing,
 }: {
   cue: BreakCue | null;
   names: BreakNames;
   firstSlot: ParticipantSlot;
+  roundTurns: TurnCount;
   playing: boolean;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
@@ -184,10 +187,8 @@ export function DebateBreakOverlay({
   const bannerAtMs = picks ? BREAK_BANNER_AT_MS : BREAK_SETTLE_MS;
   const wrap = cue.kind === 'final_end';
   const note = wrap && picks ? openRoundWrapNote(picks[1], { name: names[2], pick: picks[2] }, names[1]) : null;
-  const round = openRoundNumber(cue.nextRoundIndex ?? 0);
-  const banner = wrap
-    ? fitBannerLine(() => 'That’s a wrap', '')
-    : fitBannerLine(name => `Round ${round} · ${name} opens`, names[firstSlot]);
+  const title = wrap ? 'That’s a wrap' : roundLabel((cue.nextRoundIndex ?? 0) * 2, roundTurns);
+  const opener = wrap ? null : `${names[firstSlot]} opens`;
 
   return (
     <div
@@ -243,12 +244,20 @@ export function DebateBreakOverlay({
           <div
             data-debate-banner={wrap ? 'wrap' : 'round'}
             className={cx(
-              'w-full truncate px-4 py-3 text-center leading-none font-bold tracking-[0.05em] whitespace-nowrap text-white uppercase shadow-[0_6px_24px_rgba(0,0,0,0.4)] motion-safe:animate-debate-banner',
+              'w-full px-4 py-3 text-center text-[7cqw] leading-none font-bold tracking-[0.05em] whitespace-nowrap text-white uppercase shadow-[0_6px_24px_rgba(0,0,0,0.4)] motion-safe:animate-debate-banner',
               wrap ? 'bg-text' : 'bg-purple'
             )}
-            style={{ fontSize: `${banner.fontCqw}cqw`, ...heldAt(bannerAtMs) }}
+            style={heldAt(bannerAtMs)}
           >
-            {banner.text}
+            <span className="block truncate">{title}</span>
+            {opener && (
+              <span
+                data-debate-banner-sub
+                className="mt-[0.35em] block truncate text-[0.55em] font-medium tracking-[0.02em] normal-case opacity-85"
+              >
+                {opener}
+              </span>
+            )}
           </div>
           {note && (
             <span className="rounded-xl border border-white/40 bg-black/70 px-3 py-1.5 text-metadata text-white">
