@@ -5,7 +5,6 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
-import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 
@@ -30,10 +29,11 @@ import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
 import { requestOpenRounds } from '~/core/debates/format-details';
-import { defaultDebateFormatId } from '~/core/debates/formats';
+import { defaultDebateFormatId, isOpenRoundsFormatId } from '~/core/debates/formats';
 import {
   type FromThisDebateClaim,
   fromThisDebateCandidates,
+  groupFromThisDebateByRound,
   useFromThisDebateList,
 } from '~/core/debates/from-this-debate';
 import {
@@ -57,7 +57,7 @@ import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmak
 import { FacetFilterPills, type FacetPillOption } from '~/core/debates/matchmaking/facet-filter-pills';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
-import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
+import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from '~/core/debates/matchmaking/hub-states';
 import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
@@ -465,8 +465,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * an id it cannot find (`claim_not_found`), and a position on it would be a vote on an entity that
    * does not exist yet. Option A publishes minted claims a minute or two after extraction rather
    * than with the debate (`/api/debates/publish-claims-sweep`). The graph lookup below is what
-   * splits the two, and an unpublished claim is drawn without the controls rather than with
-   * controls that fail.
+   * splits the two. An unpublished claim is held back until the graph has it (GEO-3312): drawn
+   * without controls, it was a card nobody could act on, and every card then changed shape under
+   * the reader a minute later.
    * ---------------------------------------------------------------------------------------------*/
   const sourceDebateId = session?.source_debate_id ?? null;
   const extractedClaimsQuery = useDebateExtractedClaims(sourceDebateId ?? '', sourceDebateId !== null);
@@ -486,7 +487,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const debateList = useFromThisDebateList(debateCandidates, openRequestClaimIds, sessionId);
   const debateClaimIds = React.useMemo(() => debateList.map(claim => claim.id), [debateList]);
   // Polled while any is missing: the early claims publish puts them on the graph a minute or two
-  // after geo-chat extracts them (GEO-2870 option A), and each card gains its controls in place.
+  // after geo-chat extracts them (GEO-2870 option A), and each claim joins the list when it lands.
   const debateEntitiesQuery = useClaimEntitiesByIds(debateClaimIds, { pollMissingMs: DEBATE_CLAIM_PUBLISH_POLL_MS });
   const debateEntitiesById = React.useMemo(
     () => new Map(debateEntitiesQuery.entities.map(entity => [normId(entity.id), entity])),
@@ -1361,12 +1362,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const relatedClaims = relatedClaimsSplit.fresh;
 
   /**
-   * GEO-2870 phase 2. The "From this debate" list, in the order geo-chat extracted it.
+   * GEO-2870 phase 2. The "From this debate" list.
    *
    * A published claim is a picker row like any other — the same projection, session flags and
    * gates as Related, drawn in the debated claim's own space, since that is where the publisher puts
-   * it. An unpublished one has no row, only its text and turn, and is drawn without controls.
-   * Excluded and "Not interested" claims are left out of both.
+   * it. An unpublished one is left out until the graph has it (GEO-3312), and counted in
+   * `debatePublishingCount` so the tab can say more are coming. Excluded and "Not interested"
+   * claims are left out of both.
    */
   const debateSpaceId = sourceDebateQuery.data?.claim.space_id ?? null;
   const debateItemsSettling =
@@ -1383,8 +1385,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         : debateList.flatMap((claim): FromThisDebateItem[] => {
             if (isClaimExcluded(claim.id) || notInterestedIds.has(claim.id)) return [];
             const entity = debateEntitiesById.get(claim.id);
-            if (!entity) return [{ claim, row: null }];
-            if (debateSpaceId === null) return [];
+            if (!entity || debateSpaceId === null) return [];
             const row = rowFromEntity(entity, debateSpaceId);
             if (!row || !idEquals(row.claim.space_id, debateSpaceId) || !canPublishDebateIn(row.claim.space_id)) {
               return [];
@@ -1406,17 +1407,34 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const debateClaimsSplit = React.useMemo(
     () =>
       splitByDebated(
-        debateItems.flatMap(item => (item.row ? [item.row] : [])),
+        debateItems.map(item => item.row),
         isPairDebated
       ),
     [debateItems, isPairDebated]
   );
+  /**
+   * Claims from the debate the graph does not have yet, which the tab leaves out until it does
+   * (GEO-3312). Zero while the lookup is in flight: "not answered" is not "not published".
+   */
+  const debatePublishingCount = React.useMemo(
+    () =>
+      debateItemsSettling
+        ? 0
+        : debateList.filter(
+            claim => !debateEntitiesById.has(claim.id) && !isClaimExcluded(claim.id) && !notInterestedIds.has(claim.id)
+          ).length,
+    [debateEntitiesById, debateItemsSettling, debateList, isClaimExcluded, notInterestedIds]
+  );
+  /** How the source debate names its rounds — the turn count the room labelled them by. */
+  const debateTurnCount =
+    sourceDebateQuery.data?.turn_durations_ms?.length || extractedClaimsQuery.data?.payload?.turns?.length || 0;
+  const debateRoundsNumberedOnly = isOpenRoundsFormatId(sourceDebateQuery.data?.turn_format_id);
   const debateClaims = debateClaimsSplit.fresh;
   const debateItemByClaimId = React.useMemo(
     () => new Map(debateItems.map(item => [item.claim.id, item.claim])),
     [debateItems]
   );
-  /** Who said a claim, for its card: the turn's speaker, else that participant's own name. */
+  /** Who said a claim, for its card's meta row: the turn's speaker, else that participant's own name. */
   const debateSpeakerOf = React.useCallback(
     (claim: FromThisDebateClaim) =>
       claim.speakerName ??
@@ -1759,18 +1777,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     (sessionQuery.isLoading || positions.isLoading || viewerClaimsSettling || Boolean(viewerTabError));
 
   /**
-   * "From this debate" counts what it lists: unpublished claims included, since they are rows on the
-   * tab even without controls, and already-debated ones not, since the tab folds those away. The
-   * list only ever grows while extraction runs (D4), so neither does the number drop.
+   * "From this debate" counts what it lists: published claims, and not already-debated ones, since
+   * the tab folds those away. Unpublished claims join the count as they join the list (GEO-3312).
    *
-   * Held as a skeleton rather than a `0` while extraction is still running and nothing has arrived:
-   * "none yet" is the true answer, and `0` reads as "none".
+   * Held as a skeleton rather than a `0` while extraction is still running or claims are still
+   * publishing and nothing has arrived: "none yet" is the true answer, and `0` reads as "none".
    */
   const debateClaimCount = React.useMemo(
-    () => debateItems.filter(item => !item.row || !isPairDebated(item.row)).length,
+    () => debateItems.filter(item => !isPairDebated(item.row)).length,
     [debateItems, isPairDebated]
   );
-  const debateCountPending = debateItems.length === 0 && (debateItemsSettling || debateExtractionRunning);
+  const debateCountPending =
+    debateItems.length === 0 && (debateItemsSettling || debateExtractionRunning || debatePublishingCount > 0);
 
   /* -----------------------------------------------------------------------------------------------
    * GEO-3148. Where the pair land.
@@ -2381,7 +2399,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       ...curatedClaimsListed,
       ...taggedClaimsListed,
       ...relatedClaimsListed,
-      ...debateItems.flatMap(item => (item.row ? [item.row] : [])),
+      ...debateItems.map(item => item.row),
     ])
       byCanonical.set(normId(claim.claim.space_id), claim.claim.space_id);
     for (const participant of participants)
@@ -2663,11 +2681,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       />
     ) : null;
 
-  /** On "From this debate", who said the claim — the one thing that tab knows that a row does not. */
-  const debateContextFor = (claim: DebateRematchClaim) => {
-    if (tab !== 'debate') return topicMatchCaptionFor(claim);
+  /**
+   * On "From this debate", who said the claim — the one thing that tab knows that a row does not.
+   * Drawn in the card's meta row beside the space (GEO-3312), not as a caption under it.
+   */
+  const debateSaidByFor = (claim: DebateRematchClaim) => {
+    if (tab !== 'debate') return null;
     const extracted = debateItemByClaimId.get(normId(claim.claim.claim_entity_id));
-    return extracted ? <DebateTurnCaption speaker={debateSpeakerOf(extracted)} /> : topicMatchCaptionFor(claim);
+    if (!extracted) return null;
+    const speaker = debateSpeakerOf(extracted);
+    return speaker ? `Said by ${speaker}` : 'Said in this debate';
   };
 
   useRegisterRematchPanelContext({
@@ -2684,7 +2707,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       key={claim.claim.claim_entity_id}
       claim={claim}
       previouslyDebated={previouslyDebated}
-      context={debateContextFor(claim)}
+      context={debateSaidByFor(claim) ? null : topicMatchCaptionFor(claim)}
+      headerMeta={debateSaidByFor(claim)}
       session={session}
       currentUserId={currentUserId}
       chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
@@ -2703,18 +2727,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   );
 
   /**
-   * "From this debate" in extraction order, published rows and unpublished claims interleaved — the
-   * order D4 holds still. Published rows come from `visibleClaims`, so search and the already-debated
-   * fold apply to them exactly as on every other tab; unpublished ones are only searched.
+   * "From this debate" as the debate ran: grouped by round, in the order each claim was said
+   * (GEO-3312). Rows come from `visibleClaims`, so search and the already-debated fold apply exactly
+   * as on every other tab, and a round left with nothing is not drawn.
    */
   const visibleClaimKeys = new Set(visibleClaims.map(claim => normId(claim.claim.claim_entity_id)));
   const visibleDebateItems =
+    tab === 'debate' ? debateItems.filter(item => visibleClaimKeys.has(normId(item.row.claim.claim_entity_id))) : [];
+  const visibleDebateRounds =
     tab === 'debate'
-      ? debateItems.filter(item =>
-          item.row
-            ? visibleClaimKeys.has(normId(item.row.claim.claim_entity_id))
-            : !debouncedSearch || item.claim.text.toLowerCase().includes(debouncedSearch.toLowerCase())
-        )
+      ? groupFromThisDebateByRound(visibleDebateItems, item => item.claim, {
+          turnCount: debateTurnCount,
+          numberedOnly: debateRoundsNumberedOnly,
+        })
       : [];
   const visibleCount = tab === 'debate' ? visibleDebateItems.length : visibleClaims.length;
   const opponentNoteShown = activeTab === 'opponent' && !tabIsLoading && visibleCount > 0;
@@ -3026,9 +3051,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                         : tab === 'opponent'
                           ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
                           : tab === 'debate'
-                            ? debateExtractionRunning
-                              ? 'Pulling the claims out of your debate. They appear here as they’re found.'
-                              : 'No claims from this debate are left to debate.'
+                            ? debatePublishingCount > 0
+                              ? 'Publishing the claims from your debate to Geo. They appear here in a minute or two.'
+                              : debateExtractionRunning
+                                ? 'Pulling the claims out of your debate. They appear here as they’re found.'
+                                : 'No claims from this debate are left to debate.'
                             : tab === 'related'
                               ? // Reachable even though the tab only appears when neighbours were found: every
                                 // one of them can still be ruled out by this session — already debated, or in a
@@ -3088,23 +3115,34 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ))}
             </div>
           ) : tab === 'debate' ? (
-            <HubCardList>
-              {visibleDebateItems.map(item =>
-                item.row ? (
-                  renderClaimCard(item.row)
-                ) : (
-                  <UnpublishedDebateClaimCard
-                    key={item.claim.id}
-                    claim={item.claim}
-                    speaker={debateSpeakerOf(item.claim)}
-                  />
-                )
-              )}
-            </HubCardList>
+            <div className="flex flex-col gap-4" data-testid="from-this-debate-rounds">
+              {visibleDebateRounds.map(round => (
+                <RecommendedSection key={`${sessionId}:${round.key}`} name={round.label} count={round.items.length}>
+                  <HubCardList>{round.items.map(item => renderClaimCard(item.row))}</HubCardList>
+                </RecommendedSection>
+              ))}
+            </div>
           ) : (
             <HubCardList>{visibleClaims.map(claim => renderClaimCard(claim))}</HubCardList>
           )}
         </HubQueryState>
+
+        {/* GEO-3312. Claims still on their way to the graph are left out of the list rather than drawn
+            without controls, so say they are coming once the list has something in it. With
+            nothing in it the empty state says the same. */}
+        {tab === 'debate' && !tabIsLoading && visibleCount > 0 && debatePublishingCount > 0 ? (
+          <Text
+            as="p"
+            variant="footnote"
+            color="grey-04"
+            className="mt-4 text-center"
+            data-testid="from-this-debate-publishing"
+          >
+            {debatePublishingCount === 1
+              ? '1 more claim from this debate is publishing to Geo. It appears here in a minute or two.'
+              : `${debatePublishingCount} more claims from this debate are publishing to Geo. They appear here in a minute or two.`}
+          </Text>
+        ) : null}
 
         {/* GEO-3148. The end of the matches, and the way to everything of theirs. Matches arrive whole,
             so the end of the list really is the end. */}
@@ -3270,6 +3308,7 @@ function RematchClaimCard({
   requestError,
   previouslyDebated = false,
   context = null,
+  headerMeta = null,
 }: {
   claim: DebateRematchClaim;
   session: DebateRematchSession | null;
@@ -3284,8 +3323,10 @@ function RematchClaimCard({
   requestError?: string | null;
   /** The pair have debated this claim against each other before (GEO-3120). */
   previouslyDebated?: boolean;
-  /** Drawn under the card, above any refusal — "From this debate" says who said the claim. */
+  /** Drawn under the card, above any refusal. */
   context?: React.ReactNode;
+  /** Drawn in the card's meta row beside the space — "From this debate" says who said the claim. */
+  headerMeta?: React.ReactNode;
 }) {
   // `true` off a room, so this route's gate is unchanged. See `useRoomOpponentPresent`.
   const roomOpponentPresent = useRoomOpponentPresent();
@@ -3375,6 +3416,7 @@ function RematchClaimCard({
       claim={claim.claim}
       positions={positions}
       readiness={readiness}
+      headerMeta={headerMeta}
       // The card's own offer is replaced rather than hidden. A rematch request is its own mutation
       // with its own gating, but it is the same offer to the reader — so it wears the same control
       // in the same place instead of a footer button of its own (GEO-2825). Nothing to watch here
@@ -3443,8 +3485,8 @@ function RematchClaimCard({
   );
 }
 
-/** A "From this debate" claim, and its picker row once the graph has it (GEO-2870). */
-type FromThisDebateItem = { claim: FromThisDebateClaim; row: DebateRematchClaim | null };
+/** A "From this debate" claim the graph has, and its picker row (GEO-2870, GEO-3312). */
+type FromThisDebateItem = { claim: FromThisDebateClaim; row: DebateRematchClaim };
 
 /** How often the "From this debate" tab re-asks the graph for claims it does not have yet. */
 const DEBATE_CLAIM_PUBLISH_POLL_MS = 15_000;
@@ -3472,34 +3514,6 @@ function TopicMatchCaption({ names }: { names: string[] }) {
     <CardCaption>
       Tagged <span className="text-text">{names.join(', ')}</span>
     </CardCaption>
-  );
-}
-
-function DebateTurnCaption({ speaker }: { speaker: string | null }) {
-  return <CardCaption>{speaker ? `Said by ${speaker}` : 'Said in this debate'}</CardCaption>;
-}
-
-/**
- * A claim from the debate that the graph does not have yet (GEO-2870 phase 2).
- *
- * No position pills and no request: geo-chat resolves both against the graph and refuses an id it
- * cannot find, so either control would be a button that fails. It says when that changes instead.
- * The id is the one the publisher creates the claim under, so the same claim becomes a full card in
- * place once it is published — shortly after extraction, ahead of the debate (GEO-2870 option A).
- */
-function UnpublishedDebateClaimCard({ claim, speaker }: { claim: FromThisDebateClaim; speaker: string | null }) {
-  return (
-    <motion.article
-      {...hubCardMotion}
-      data-testid="from-this-debate-unpublished"
-      className="w-full claim-card-panel-surface"
-    >
-      <p className="claim-card-panel-title">{claim.text}</p>
-      <DebateTurnCaption speaker={speaker} />
-      <Text as="p" variant="footnote" color="grey-04">
-        Publishing to Geo. You can take a side and request a debate on this in a minute or two.
-      </Text>
-    </motion.article>
   );
 }
 

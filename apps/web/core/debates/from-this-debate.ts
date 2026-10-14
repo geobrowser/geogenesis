@@ -5,6 +5,7 @@ import * as React from 'react';
 import { normId } from '~/core/utils/norm-id';
 import { validateEntityId } from '~/core/utils/utils';
 
+import { roundLabel } from './round-cues';
 import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
 
 /**
@@ -21,6 +22,8 @@ export type FromThisDebateClaim = {
   id: string;
   text: string;
   turnIndex: number;
+  /** Where in the debate it was said, in ms from the start; null on payloads without timings. */
+  startMs: number | null;
   /** Who said it, from the turn the claim was extracted from. */
   speakerName: string | null;
   /** That speaker's personal space, so a caller can fall back to the participant's own name. */
@@ -37,9 +40,21 @@ function trimmedId(value: unknown): string | null {
   return validateEntityId(canonical) ? canonical : null;
 }
 
+function startMsOf(value: unknown): number | null {
+  return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+/** Earlier first; a claim without a timing goes after the timed ones in its turn. */
+function startOrder(a: number | null, b: number | null): number {
+  if (a === b) return 0;
+  if (a === null) return 1;
+  if (b === null) return -1;
+  return a - b;
+}
+
 /**
  * geo-chat's `GET /debates/{id}/claims` payload → the claims the picker can list, in the order
- * they were said.
+ * they were said: by turn, then by where in the turn.
  *
  * - A claim with neither a graph match nor a minted id is skipped. Those are payloads written
  *   before geo-chat minted ids (geo-chat#201); the publisher would mint a fresh id for them at
@@ -60,7 +75,12 @@ export function fromThisDebateCandidates(
   const candidates: FromThisDebateClaim[] = [];
   claims
     .map((claim, order) => ({ claim, order }))
-    .sort((a, b) => (a.claim.turn_index ?? 0) - (b.claim.turn_index ?? 0) || a.order - b.order)
+    .sort(
+      (a, b) =>
+        (a.claim.turn_index ?? 0) - (b.claim.turn_index ?? 0) ||
+        startOrder(startMsOf(a.claim.start_ms), startMsOf(b.claim.start_ms)) ||
+        a.order - b.order
+    )
     .forEach(({ claim }) => {
       if (claim.is_contestable === false) return;
       const text = typeof claim.text === 'string' ? claim.text.trim() : '';
@@ -74,6 +94,7 @@ export function fromThisDebateCandidates(
         id,
         text,
         turnIndex: claim.turn_index,
+        startMs: startMsOf(claim.start_ms),
         speakerName: turn?.speaker_name?.trim() || null,
         speakerSpaceId: turn?.attributed_space_id || null,
         matched: matchedId !== null,
@@ -89,6 +110,9 @@ export function fromThisDebateCandidates(
  * claims are appended after them, in the order the payload gives. A claim the payload no longer
  * carries — the final pass dropped or merged it — goes, unless `keepIds` names it: a claim somebody
  * has a request open on stays where it is, as last seen.
+ *
+ * The tab no longer draws in this order: it groups by round and sorts by when each claim was said
+ * ({@link groupFromThisDebateByRound}). What this still decides is which claims are listed.
  */
 export function mergeFromThisDebate(
   previous: FromThisDebateClaim[],
@@ -138,4 +162,46 @@ export function useFromThisDebateList(
     // `resetKey` is read through the ref above, and listed so a new session recomputes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [next, keepIds, resetKey]);
+}
+
+/** One round of the debate on the "From this debate" tab, and the claims said in it. */
+export type FromThisDebateRound<T> = { key: number; label: string; items: T[] };
+
+/**
+ * The tab's list as the debate ran: grouped by round, a round being both debaters' turns, and in
+ * the order each claim was said within it.
+ *
+ * Sorted here rather than trusted from the list, which is append-only (D4) and so puts a claim the
+ * final pass found late after everything already listed, whatever turn it came from.
+ *
+ * `turnCount` names the rounds the way the room did ("Round 2 · Rebuttal"). An Open rounds debate
+ * runs as many rounds as the pair unlock, so the format's names do not apply there and its rounds
+ * are numbered only.
+ */
+export function groupFromThisDebateByRound<T>(
+  items: T[],
+  claimOf: (item: T) => FromThisDebateClaim,
+  { turnCount, numberedOnly }: { turnCount: number; numberedOnly: boolean }
+): FromThisDebateRound<T>[] {
+  const sorted = items
+    .map((item, order) => ({ item, claim: claimOf(item), order }))
+    .sort(
+      (a, b) =>
+        a.claim.turnIndex - b.claim.turnIndex || startOrder(a.claim.startMs, b.claim.startMs) || a.order - b.order
+    );
+  const rounds: FromThisDebateRound<T>[] = [];
+  for (const { item, claim } of sorted) {
+    const key = Math.max(0, Math.floor(claim.turnIndex / 2));
+    let round = rounds[rounds.length - 1];
+    if (!round || round.key !== key) {
+      round = {
+        key,
+        label: numberedOnly || turnCount <= 0 ? `Round ${key + 1}` : roundLabel(key * 2, turnCount),
+        items: [],
+      };
+      rounds.push(round);
+    }
+    round.items.push(item);
+  }
+  return rounds;
 }
