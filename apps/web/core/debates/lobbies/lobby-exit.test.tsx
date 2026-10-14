@@ -1,10 +1,10 @@
-import { cleanup, renderHook } from '@testing-library/react';
+import { cleanup, render, renderHook, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { lastPageOutsideDebates, rememberLastPageOutsideDebates } from '../debate-return-navigation';
 import type { LobbyPresenceState } from './hooks';
-import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
+import { LastPageOutsideDebatesTracker, useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
 import type { GuestSessionState } from './lobby-guest-session';
 import type { LobbyPageView } from './lobby-view';
 
@@ -148,5 +148,21 @@ describe('the page before the lobby', () => {
     rememberLastPageOutsideDebates('/space/s2/e2');
     stored.rerender();
     expect(stored.result.current).toBe('/space/s1/e1');
+  });
+});
+
+describe('LastPageOutsideDebatesTracker', () => {
+  afterEach(() => {
+    window.history.replaceState(null, '', '/');
+  });
+
+  it('follows a jump within the page, which changes neither the path nor the search', async () => {
+    window.history.replaceState(null, '', '/space/s1/e1');
+    render(<LastPageOutsideDebatesTracker />);
+    expect(lastPageOutsideDebates()).toBe('/space/s1/e1');
+
+    // A block link's own anchor: the browser fires `hashchange`, and Next's hooks see no change.
+    window.location.hash = '#block-7';
+    await waitFor(() => expect(lastPageOutsideDebates()).toBe('/space/s1/e1#block-7'));
   });
 });

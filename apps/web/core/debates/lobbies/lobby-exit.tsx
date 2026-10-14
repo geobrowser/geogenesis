@@ -22,6 +22,13 @@ export function LastPageOutsideDebatesTracker() {
     rememberLastPageOutsideDebates();
   }, [pathname, search]);
 
+  // A jump within the page (a block's anchor) changes neither, so follow the hash on its own.
+  React.useEffect(() => {
+    const remember = () => rememberLastPageOutsideDebates();
+    window.addEventListener('hashchange', remember);
+    return () => window.removeEventListener('hashchange', remember);
+  }, []);
+
   return null;
 }
 
