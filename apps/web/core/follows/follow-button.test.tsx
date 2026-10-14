@@ -354,6 +354,42 @@ describe('the avatar badge (GEO-3305)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  it('holds the tick through a write slower than the confirmation, then goes once it lands', () => {
+    vi.useFakeTimers();
+    // A fresh element per render: React skips re-rendering an element it has already seen.
+    const badge = () => <FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada' }} variant="avatar" />;
+    const { container, rerender } = render(badge());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow Ada' }));
+    mocks.pendingIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+    expect(container.querySelector('path[d="M1.5 6L4.5 9L10.5 3"]')).not.toBeNull();
+
+    mocks.pendingIds = new Set();
+    mocks.followedIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    expect(container.querySelector('path[d="M1.5 6L4.5 9L10.5 3"]')).not.toBeNull();
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('keeps a queued follow ticked and pressable, so it can be withdrawn', () => {
+    vi.useFakeTimers();
+    mocks.isQueued = true;
+    renderBadge();
+    act(() => {
+      vi.advanceTimersByTime(5000);
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unfollow Ada' }));
+    expect(mocks.cancel).toHaveBeenCalledOnce();
+  });
+
   it('comes back as a "+" when a follow it confirmed did not land', () => {
     vi.useFakeTimers();
     renderBadge();

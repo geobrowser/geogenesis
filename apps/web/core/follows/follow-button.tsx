@@ -8,6 +8,7 @@ import cx from 'classnames';
 
 import { useActionContext } from '~/core/action-context-provider';
 import { runObservedAction } from '~/core/analytics-operations';
+import { tileChipSurface } from '~/core/debates/debate-video-tile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -28,7 +29,7 @@ export type FollowButtonVariant = 'compact' | 'page' | 'secondary' | 'avatar';
 const NO_PERSONAL_SPACE_HINT = 'You need a personal space to follow';
 const UNREGISTERED_SPACE_HINT = 'Your personal space needs to finish setting up before you can follow';
 
-/** How long the avatar badge shows its tick after a follow before it goes. */
+/** How long the avatar badge keeps its tick once a follow has landed. */
 const AVATAR_CONFIRM_MS = 1500;
 
 const BASE_CLASS =
@@ -123,21 +124,25 @@ export function FollowButton({
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const getContext = useActionContext(kind.component, kind.targetType, targetId);
 
-  const followed = followedIds.has(targetId);
   // Nobody follows themselves. Read again when a queued press replays, since the press can come
   // before the account it belongs to is known: their own row, pressed signed out.
   const isSelf =
     target.kind === 'person' && Boolean(anyPersonalSpaceId) && normId(anyPersonalSpaceId ?? '') === targetId;
   const targetRef = React.useMemo(() => ({ id: targetId, name: target.name ?? null }), [targetId, target.name]);
 
-  // The avatar badge confirms a follow with a tick, then gets out of the way: a face that is
-  // already followed carries no badge at all, so the tick is only ever the answer to a press.
+  // The avatar badge answers its own press with a tick and then gets out of the way: a face that
+  // is already followed carries no badge at all. `confirming` is that press; the tick holds through
+  // the on-chain write, however long it takes, and the dismissal clock starts only once the follow
+  // has landed. Starting it at the press took the tick back mid-write on a slow follow.
   const [confirming, setConfirming] = React.useState(false);
+  const followed = followedIds.has(targetId);
+  const saving = isPending(targetId);
+  const landed = confirming && followed && !saving;
   React.useEffect(() => {
-    if (!confirming) return;
+    if (!landed) return;
     const timer = window.setTimeout(() => setConfirming(false), AVATAR_CONFIRM_MS);
     return () => window.clearTimeout(timer);
-  }, [confirming]);
+  }, [landed]);
 
   const observed = React.useCallback(
     (action: 'follow' | 'unfollow', write: () => Promise<boolean>) =>
@@ -176,7 +181,6 @@ export function FollowButton({
   // Your own profile: there is nothing to follow.
   if (isSelf) return null;
 
-  const saving = isPending(targetId);
   const shownFollowed = followed || queuedFollow.isQueued;
   const signedIn = Boolean(smartAccount);
   // Not yet known to be signed out: Privy still starting, or signed in with the account still
@@ -222,37 +226,35 @@ export function FollowButton({
   const name = target.name ?? kind.fallbackName;
   const hint = noPersonalSpace ? (anyPersonalSpaceId ? UNREGISTERED_SPACE_HINT : NO_PERSONAL_SPACE_HINT) : undefined;
 
+  const buttonProps = {
+    type: 'button',
+    'aria-pressed': shownFollowed,
+    'aria-label': shownFollowed ? `Unfollow ${name}` : `Follow ${name}`,
+    title: hint,
+    disabled,
+    'aria-busy': saving || undefined,
+    onClick: onPress,
+    'data-geo-analytics-label': shownFollowed ? kind.unfollow : kind.follow,
+  } satisfies React.ComponentPropsWithoutRef<'button'> & { 'data-geo-analytics-label': string };
+
   if (variant === 'avatar') {
-    if (shownFollowed && !confirming) return null;
+    // A queued follow keeps its tick so a second press can still withdraw it; a failed write has
+    // neither, so the "+" comes back.
+    const ticked = queuedFollow.isQueued || (confirming && (saving || followed));
+    if (followed && !ticked) return null;
     return (
       <button
-        type="button"
-        aria-pressed={shownFollowed}
-        aria-label={shownFollowed ? `Unfollow ${name}` : `Follow ${name}`}
-        title={hint}
-        disabled={disabled}
-        aria-busy={saving || undefined}
-        onClick={onPress}
-        data-geo-analytics-label={shownFollowed ? kind.unfollow : kind.follow}
+        {...buttonProps}
         className={cx(
           // The badge is 16px; the pseudo-element widens what a thumb can hit without growing it.
-          // Filled like the Agree / Disagree chip beside it (`tileChipSurface`), so the two read
-          // as one set of labels over the video.
-          "relative grid size-4 place-items-center rounded-full bg-white/85 text-text transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:bg-white disabled:cursor-default",
+          // Filled like the Agree / Disagree chip beside it, so the two read as one set of labels.
+          "relative grid size-4 place-items-center rounded-full text-text transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:bg-white disabled:cursor-default",
+          tileChipSurface,
           (saving || disabled) && 'opacity-60',
           className
         )}
       >
-        {shownFollowed || confirming ? (
-          <svg width={9} height={9} viewBox="0 0 12 12" fill="none" aria-hidden>
-            <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={2} />
-          </svg>
-        ) : (
-          <svg width={8} height={8} viewBox="0 0 13 13" fill="none" aria-hidden>
-            <path d="M6.5 0V13" stroke="currentColor" strokeWidth={2.2} />
-            <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={2.2} />
-          </svg>
-        )}
+        {ticked ? <TickIcon size={9} strokeWidth={2} /> : <PlusIcon size={8} strokeWidth={2.2} />}
       </button>
     );
   }
@@ -261,14 +263,7 @@ export function FollowButton({
 
   return (
     <button
-      type="button"
-      aria-pressed={shownFollowed}
-      aria-label={shownFollowed ? `Unfollow ${name}` : `Follow ${name}`}
-      title={hint}
-      disabled={disabled}
-      aria-busy={saving || undefined}
-      onClick={onPress}
-      data-geo-analytics-label={shownFollowed ? kind.unfollow : kind.follow}
+      {...buttonProps}
       className={cx(
         BASE_CLASS,
         styles.shape,
@@ -281,26 +276,18 @@ export function FollowButton({
       {shownFollowed ? (
         <>
           <span className={cx('inline-flex items-center', styles.innerGap, !saving && 'group-hover/follow:hidden')}>
-            <svg width={styles.tick} height={styles.tick} viewBox="0 0 12 12" fill="none" aria-hidden>
-              <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={1} />
-            </svg>
+            <TickIcon size={styles.tick} strokeWidth={1} />
             Following
           </span>
           {!saving ? <span className="hidden group-hover/follow:inline">Unfollow</span> : null}
         </>
       ) : (
         <>
-          <svg
-            width={styles.plus}
-            height={styles.plus}
-            viewBox="0 0 13 13"
-            fill="none"
-            aria-hidden
+          <PlusIcon
+            size={styles.plus}
+            strokeWidth={1.3}
             className={variant === 'compact' || variant === 'secondary' ? 'text-grey-04' : undefined}
-          >
-            <path d="M6.5 0V13" stroke="currentColor" strokeWidth={1.3} />
-            <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={1.3} />
-          </svg>
+          />
           Follow
         </>
       )}
@@ -315,6 +302,23 @@ export function FollowTopicButton({
   ...props
 }: { topic: { id: string; name?: string | null } } & Omit<React.ComponentProps<typeof FollowButton>, 'target'>) {
   return <FollowButton target={{ kind: 'topic', id: topic.id, name: topic.name }} {...props} />;
+}
+
+function TickIcon({ size, strokeWidth }: { size: number; strokeWidth: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 12 12" fill="none" aria-hidden>
+      <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={strokeWidth} />
+    </svg>
+  );
+}
+
+function PlusIcon({ size, strokeWidth, className }: { size: number; strokeWidth: number; className?: string }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 13 13" fill="none" aria-hidden className={className}>
+      <path d="M6.5 0V13" stroke="currentColor" strokeWidth={strokeWidth} />
+      <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={strokeWidth} />
+    </svg>
+  );
 }
 
 function SavingDots() {
