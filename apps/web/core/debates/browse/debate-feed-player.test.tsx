@@ -27,8 +27,8 @@ const mocks = vi.hoisted(() => ({
 const watchedMocks = vi.hoisted(() => ({ markDebateWatched: vi.fn() }));
 // Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
 vi.mock('~/core/follows/follow-button', () => ({
-  FollowButton: (props: { target: { id: string }; variant?: string }) => (
-    <span data-testid="follow" data-id={props.target.id} data-variant={props.variant} />
+  FollowButton: (props: { target: { id: string }; variant?: string; surface?: string }) => (
+    <span data-testid="follow" data-id={props.target.id} data-variant={props.variant} data-surface={props.surface} />
   ),
 }));
 vi.mock('~/core/follows/person-follow-counts', () => ({
@@ -264,7 +264,8 @@ describe('player layout', () => {
     // Pinned to the face rather than beside the name, so it is never in the name/position row.
     for (const follow of follows) {
       expect(follow.closest('button')).toBeNull();
-      expect(follow.parentElement?.previousElementSibling?.hasAttribute('data-debater-avatar')).toBe(true);
+      expect(follow.previousElementSibling?.hasAttribute('data-debater-avatar')).toBe(true);
+      expect(follow.getAttribute('data-surface')).toBe('video');
     }
   });
 

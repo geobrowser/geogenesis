@@ -395,14 +395,17 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 afterEach(cleanup);
 
 describe('PeopleTab', () => {
-  it('offers Follow beside each name, by personal space, and not on rows without one (GEO-3236)', () => {
+  it('offers Follow on each face, by personal space, and not on rows without one (GEO-3236, GEO-3310)', () => {
     mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
 
     render(<PeopleTab onTabChange={mocks.onTabChange} />);
 
-    expect(screen.getAllByTestId('follow').map(follow => follow.getAttribute('data-id'))).toEqual([
-      PROFILE_SPACE_IDS['user-them'],
-    ]);
+    const follows = screen.getAllByTestId('follow');
+    expect(follows.map(follow => follow.getAttribute('data-id'))).toEqual([PROFILE_SPACE_IDS['user-them']]);
+    expect(follows[0].getAttribute('data-variant')).toBe('avatar');
+    // On the face, not in the name's row.
+    expect(follows[0].parentElement?.querySelector('.overflow-hidden.rounded-full')).not.toBeNull();
+    expect(within(follows[0].parentElement as HTMLElement).queryByText('Arturas')).toBeNull();
   });
 
   it('keeps malformed roster IDs out of the shared position query', () => {

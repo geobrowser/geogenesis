@@ -334,6 +334,18 @@ describe('the avatar badge (GEO-3305)', () => {
     expect(mocks.follow).toHaveBeenCalledWith([{ id: ADA_SPACE, name: 'Ada' }]);
   });
 
+  it('takes the video chip fill over video and the page pill fill elsewhere (GEO-3310)', () => {
+    const { rerender } = render(
+      <FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada' }} variant="avatar" surface="video" />
+    );
+    expect(screen.getByRole('button').className).toContain('bg-white/85');
+    expect(screen.getByRole('button').className).not.toContain('border-grey-02');
+
+    rerender(badge());
+    expect(screen.getByRole('button').className).toContain('border-grey-02');
+    expect(screen.getByRole('button').className).not.toContain('bg-white/85');
+  });
+
   it('draws nothing on a face the viewer already follows', () => {
     mocks.followedIds = new Set([ADA_SPACE]);
     const { container } = renderBadge();

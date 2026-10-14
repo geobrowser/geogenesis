@@ -29,6 +29,16 @@ export type FollowButtonVariant = 'compact' | 'page' | 'secondary' | 'avatar';
 const NO_PERSONAL_SPACE_HINT = 'You need a personal space to follow';
 const UNREGISTERED_SPACE_HINT = 'Your personal space needs to finish setting up before you can follow';
 
+/**
+ * The avatar badge takes the fill of the chips beside it. Over video that is the Agree / Disagree
+ * chip's `tileChipSurface`; on a page it is the compact Follow pill it stands in for, whose white
+ * would vanish against the page without the pill's grey rim.
+ */
+const AVATAR_SURFACE = {
+  video: cx(tileChipSurface, 'hover:bg-white'),
+  page: 'border border-grey-02 bg-white hover:border-grey-04',
+} as const;
+
 /** How long the avatar badge keeps its tick once a follow it saw in flight has landed. */
 const AVATAR_CONFIRM_MS = 1500;
 
@@ -43,7 +53,9 @@ const BASE_CLASS =
  *   page's main action (a profile's Request debate). Followed, it fills grey-01, the same settled
  *   state the compact pill takes.
  *
- * `avatar` is drawn separately (see `AvatarFollowBadge`): a "+" pinned to a face, not a pill.
+ * `avatar` is drawn separately: a "+" pinned to the bottom of a face, not a pill. It positions itself,
+ * so the caller's job is a `relative` box around the face. `surface` picks its fill — see
+ * `AVATAR_SURFACE`.
  */
 const VARIANT_CLASS: Record<
   Exclude<FollowButtonVariant, 'avatar'>,
@@ -105,10 +117,13 @@ const KIND = {
 export function FollowButton({
   target,
   variant = 'compact',
+  surface = 'page',
   className,
 }: {
   target: FollowTarget;
   variant?: FollowButtonVariant;
+  /** What an `avatar` badge sits on; other variants ignore it. */
+  surface?: keyof typeof AVATAR_SURFACE;
   className?: string;
 }) {
   const kind = KIND[target.kind];
@@ -257,10 +272,10 @@ export function FollowButton({
       <button
         {...buttonProps}
         className={cx(
-          // The badge is 16px; the pseudo-element widens what a thumb can hit without growing it.
-          // Filled like the Agree / Disagree chip beside it, so the two read as one set of labels.
-          "relative grid size-4 place-items-center rounded-full text-text transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:bg-white disabled:cursor-default",
-          tileChipSurface,
+          // 16px, centred on the face's bottom edge with half of it hanging below. The pseudo-element
+          // widens what a thumb can hit without growing the badge.
+          "absolute -bottom-2 left-1/2 grid size-4 -translate-x-1/2 place-items-center rounded-full text-text transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] disabled:cursor-default",
+          AVATAR_SURFACE[surface],
           (saving || disabled) && 'opacity-60',
           className
         )}
