@@ -593,6 +593,56 @@ describe('DebateGatewayClient', () => {
         expect(weekIds()).toEqual(['aa:8:open']);
       });
 
+      // Copilot on #2850: a lobby the capped list never returns could only be released by the list,
+      // so its patch was held for the session and laid over every week on every update.
+      describe('releasing a calendar-only lobby’s patch', () => {
+        /** Whether `aa`'s patch is still held: a stale week row is re-patched by the next overlay. */
+        async function aaStillHeld() {
+          queryClient.setQueryData(weekKey, {
+            lobbies: [
+              weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z'),
+              weekRow('bb', 1, 'open', '2026-10-07T12:00:01Z'),
+            ],
+          });
+          await lobbiesChanged({ lobby_id: 'bb', lobby_card: card('bb', 2, '2026-10-07T12:00:09Z') });
+          return weekIds()?.[0] === 'aa:8:open';
+        }
+
+        it('lets a week read that has caught up release it', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+
+          expect(await aaStillHeld()).toBe(false);
+        });
+
+        it('keeps it while another lobby read is still in flight, which may predate it', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          let releaseList!: () => void;
+          const listRead = queryClient.fetchQuery({
+            queryKey: lobbiesKey,
+            queryFn: () => new Promise<object>(done => (releaseList = () => done({ lobbies: [] }))),
+          });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          await queryClient.fetchQuery({
+            queryKey: [...lobbiesKey, 'calendar', 3, 4],
+            queryFn: async () => ({ lobbies: [weekRow('aa', 8, 'open', '2026-10-07T12:00:05Z')] }),
+          });
+          const held = await aaStillHeld();
+          releaseList();
+          await listRead;
+
+          expect(held).toBe(true);
+        });
+      });
+
       it('lays a held patch over a week read before it', async () => {
         await started();
         queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
