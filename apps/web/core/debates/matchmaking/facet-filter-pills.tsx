@@ -287,12 +287,13 @@ export function FacetFilterPills({
     />
   );
 
-  const moreTrigger = (
+  const morePill = (props: React.ComponentProps<typeof HubPillButton> = {}) => (
     <HubPillButton
       // Named for what it says, so a voice user can ask for "More" (WCAG label in name).
       aria-label={`More filters (${options.length})`}
       className="text-grey-04"
       {...debateSurfaceAnalyticsAttributes(analyticsSurface, 'More filters', 'filter')}
+      {...props}
     >
       More
     </HubPillButton>
@@ -307,7 +308,7 @@ export function FacetFilterPills({
           <HubMultiFilterMenu
             align="start"
             label="All filters"
-            trigger={moreTrigger}
+            trigger={morePill()}
             analytics={{ name: 'More filters', surface: analyticsSurface }}
             options={menuOptions}
             values={pickedIds}
@@ -336,7 +337,7 @@ export function FacetFilterPills({
       >
         {allPill({ tabIndex: -1 })}
         {candidates.map(option => pill(option, { tabIndex: -1 }))}
-        <HubPillButton tabIndex={-1}>More</HubPillButton>
+        {morePill({ tabIndex: -1 })}
       </div>
     </div>
   );
