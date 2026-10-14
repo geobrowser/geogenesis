@@ -14,6 +14,8 @@ import {
   type UpcomingDebateRoom,
 } from '~/core/debates/api';
 import { useDebateLobbies } from '~/core/debates/lobbies/hooks';
+import { markLobbyEntry } from '~/core/debates/lobbies/lobby-analytics';
+import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
@@ -41,7 +43,6 @@ import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
-import { UpcomingLobbyCard } from './upcoming-lobby-card';
 import { type UpcomingLobbyRow, byStart, upcomingLobbyRows } from './upcoming-lobby-rows';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
@@ -108,12 +109,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
         <RequestSection label="Upcoming debates">
           {upcomingItems.map(item =>
             item.kind === 'lobby' ? (
-              <UpcomingLobbyCard
-                key={item.row.lobbyId}
-                row={item.row}
-                formatTime={formatTime}
-                formatWhen={formatDebateTime}
-              />
+              <UpcomingLobbyRowCard key={item.row.lobbyId} row={item.row} />
             ) : (
               <UpcomingRow
                 key={item.row.room.room_id}
@@ -317,8 +313,7 @@ function UpcomingRow({
 
   return (
     <ScheduleCard
-      opponent={opponent}
-      viewer={viewer}
+      parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={
         room.due
           ? `Starting now${scheduledEndAt ? ` · Ends at ${formatTime(scheduledEndAt)}` : ''}`
@@ -400,8 +395,7 @@ function ScheduledRow({
   return (
     <ScheduleCard
       ref={ref}
-      opponent={opponent}
-      viewer={viewer}
+      parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
       status={`${
         request.viewer_must_answer
@@ -621,26 +615,26 @@ const HOUR_MS = 60 * 60_000;
 const JOIN_PILL = hubPillClassName('primary', 'w-full');
 
 /**
- * One shape for both kinds of card, laid out like the instant request card: a header carrying the
- * time and where things stand, the other debater in the same inset strip the request cards use,
- * then the actions.
+ * One shape for every card here, laid out like the instant request card: a header carrying the
+ * time and where things stand, who it is with in an inset strip, then the actions.
  *
  * The time leads because it is what a scheduled request is *about* — the one thing an instant
  * request never has — so it gets the header to itself rather than a footnote under the name.
  */
 function ScheduleCard({
-  opponent,
-  viewer,
+  parties,
   when,
   status,
   note = null,
   urgent = false,
   actions,
   ref,
+  testId,
 }: {
   ref?: React.Ref<HTMLElement>;
-  opponent: DebateParticipantSummary | null;
-  viewer: DebateParticipantSummary | null;
+  /** Who it is with: the "You vs Them" strip for a debate, the lobby's name and host for a lobby. */
+  parties: React.ReactNode;
+  testId?: string;
   when: string;
   status: string;
   /** A second line under the status, e.g. that the Geo team arranged the debate. */
@@ -653,6 +647,7 @@ function ScheduleCard({
       ref={ref}
       {...hubCardMotion}
       className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
+      data-testid={testId}
     >
       {/* The time on its own line, with where things stand under it: side by side, a slot and a
           sentence crowd each other out at this width, and it was the status that lost. */}
@@ -673,14 +668,82 @@ function ScheduleCard({
         </div>
       </div>
 
-      {/* The same "You vs Them" strip every other request card uses. No positions: a scheduled
-          debate is not about a claim yet, so there is no side to show. */}
-      <RequestParties viewer={viewer} opponent={opponent ?? UNKNOWN_OPPONENT} showPositions={false} />
+      {parties}
 
       {actions}
     </motion.article>
   );
 }
+
+/**
+ * The same "You vs Them" strip every other request card uses. No positions: a scheduled debate is
+ * not about a claim yet, so there is no side to show.
+ */
+function DebateParties({
+  viewer,
+  opponent,
+}: {
+  viewer: DebateParticipantSummary | null;
+  opponent: DebateParticipantSummary | null;
+}) {
+  return <RequestParties viewer={viewer} opponent={opponent ?? UNKNOWN_OPPONENT} showPositions={false} />;
+}
+
+/**
+ * A lobby among the upcoming debates (GEO-3292): a scheduled debate's header, with the lobby's name
+ * and host where a debate has its strip, so it is never taken for a 1:1.
+ */
+function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
+  const path = debateRoomPath(row.lobbyId);
+  const hosts = hostsLabel(row.hosts);
+  const [action, analyticsLabel, analyticsIntent] = row.open
+    ? row.onRoster
+      ? LOBBY_ACTIONS.open
+      : LOBBY_ACTIONS.join
+    : LOBBY_ACTIONS.view;
+
+  return (
+    <ScheduleCard
+      testId="upcoming-lobby-card"
+      when={row.due ? 'Starting now' : formatDebateTime(row.startsAt)}
+      status={row.open ? 'The lobby is open' : `Opens at ${formatTime(row.opensAt)}`}
+      parties={
+        <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-grey-01 px-3 py-2.5">
+          <Text as="span" variant="footnoteMedium" color="grey-04">
+            Debate lobby
+          </Text>
+          <Text as="p" variant="metadataMedium" className="truncate">
+            {row.name}
+          </Text>
+          {(row.hosting || hosts) && (
+            <Text as="p" variant="footnote" color="grey-04" className="truncate">
+              {row.hosting ? 'You’re hosting' : `Hosted by ${hosts}`}
+            </Text>
+          )}
+        </div>
+      }
+      actions={
+        // Lobby to lobby, like the side panel card's links: marked so the join it leads to is
+        // attributed here, with no step-out, which is for entering a 1:1.
+        <Link
+          href={path}
+          onClick={() => markLobbyEntry(row.lobbyId, 'requests')}
+          className={row.open && !row.onRoster ? JOIN_PILL : hubPillClassName('secondary', 'w-full')}
+          {...hubAnalyticsAttributes(analyticsLabel, analyticsIntent)}
+        >
+          {action}
+        </Link>
+      }
+    />
+  );
+}
+
+/** The card's one button: its words, and its analytics label and intent. */
+const LOBBY_ACTIONS = {
+  view: ['View lobby', 'View scheduled lobby', 'view_scheduled_lobby'],
+  join: ['Join lobby', 'Join scheduled lobby', 'join_scheduled_lobby'],
+  open: ['Open lobby', 'Open scheduled lobby', 'open_scheduled_lobby'],
+} as const;
 
 /** Stands in until the graph or roster names them; its empty space id keeps it unlinked. */
 const UNKNOWN_OPPONENT: DebateParticipantSummary = {
