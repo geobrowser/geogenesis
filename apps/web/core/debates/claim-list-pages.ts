@@ -1,4 +1,4 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
+import { Position, SystemIds } from '@geoprotocol/geo-sdk/lite';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
 import { useQuery } from '@tanstack/react-query';
 
@@ -47,11 +47,17 @@ export type ClaimListOption = {
   claimCount: number;
 };
 
+/** What the picker reads: every tagged page, and the score of each space they sit in. */
+export type ClaimListCatalog = {
+  options: ClaimListOption[];
+  /** By space id; a space with no score is absent, and sorts last. */
+  scores: ReadonlyMap<string, number>;
+};
+
 export type ClaimListSpaceGroup = {
   spaceId: string;
-  spaceName: string;
-  /** The space's score; `null` for a space that has none, which sorts last. */
-  score: number | null;
+  /** `undefined` while the space's name is still being looked up. */
+  spaceName: string | undefined;
   /** A to Z. */
   options: ClaimListOption[];
 };
@@ -125,14 +131,8 @@ type CatalogQuery = {
 
 const catalogDocument = parse(CATALOG_SOURCE) as TypedDocumentNode<CatalogQuery, Record<string, unknown>>;
 
-const SPACES_SOURCE = /* GraphQL */ `
-  query ClaimListSpaces($ids: [UUID!]!) {
-    spaces(filter: { id: { in: $ids } }) {
-      id
-      page {
-        name
-      }
-    }
+const SPACE_SCORES_SOURCE = /* GraphQL */ `
+  query ClaimListSpaceScores($ids: [UUID!]!) {
     spaceScores(filter: { spaceId: { in: $ids } }) {
       spaceId
       score
@@ -140,13 +140,12 @@ const SPACES_SOURCE = /* GraphQL */ `
   }
 `;
 
-type SpacesQuery = {
-  spaces: Array<{ id: string; page: { name: string | null } | null } | null> | null;
+type SpaceScoresQuery = {
   // `BigFloat`, so a string.
   spaceScores: Array<{ spaceId: string; score: string | null } | null> | null;
 };
 
-const spacesDocument = parse(SPACES_SOURCE) as TypedDocumentNode<SpacesQuery, Record<string, unknown>>;
+const spaceScoresDocument = parse(SPACE_SCORES_SOURCE) as TypedDocumentNode<SpaceScoresQuery, Record<string, unknown>>;
 
 /** One catalog row's counts, from the blocks and items its tag's space holds. */
 export function catalogOptions(data: CatalogQuery): ClaimListOption[] {
@@ -176,17 +175,28 @@ export function catalogOptions(data: CatalogQuery): ClaimListOption[] {
 /**
  * The picker's groups. A page tagged in several spaces is offered once, under the highest-ranked
  * of them, and the tab then reads that space's copy. Spaces by score, highest first, unscored
- * last; pages A to Z within a space.
+ * last; pages A to Z within a space. `names` only breaks ties and labels the groups.
  */
 export function groupClaimListOptions(
-  options: ClaimListOption[],
-  spaces: ReadonlyMap<string, { name: string; score: number | null }>
+  { options, scores }: ClaimListCatalog,
+  names: (spaceId: string) => string | undefined
 ): ClaimListSpaceGroup[] {
-  const scoreOf = (spaceId: string) => spaces.get(spaceId)?.score ?? null;
+  const rank = (a: string, z: string) => {
+    const sa = scores.get(a);
+    const sz = scores.get(z);
+    if (sa !== sz) {
+      if (sa === undefined) return 1;
+      if (sz === undefined) return -1;
+      return sz - sa;
+    }
+    const byName = (names(a) ?? '').localeCompare(names(z) ?? '');
+    return byName !== 0 ? byName : a.localeCompare(z);
+  };
+
   const best = new Map<string, ClaimListOption>();
   for (const option of options) {
     const held = best.get(option.entityId);
-    if (!held || compareSpaces(option.spaceId, held.spaceId, scoreOf, spaces) < 0) best.set(option.entityId, option);
+    if (!held || rank(option.spaceId, held.spaceId) < 0) best.set(option.entityId, option);
   }
 
   const bySpace = new Map<string, ClaimListOption[]>();
@@ -197,31 +207,12 @@ export function groupClaimListOptions(
   }
 
   return [...bySpace.entries()]
-    .sort(([a], [z]) => compareSpaces(a, z, scoreOf, spaces))
+    .sort(([a], [z]) => rank(a, z))
     .map(([spaceId, list]) => ({
       spaceId,
-      spaceName: spaces.get(spaceId)?.name ?? 'Unnamed space',
-      score: scoreOf(spaceId),
+      spaceName: names(spaceId),
       options: list.sort((a, z) => a.name.localeCompare(z.name, undefined, { sensitivity: 'base' })),
     }));
-}
-
-/** Negative when `a` ranks above `z`. Ties fall to the name, then the id, so the order is stable. */
-function compareSpaces(
-  a: string,
-  z: string,
-  scoreOf: (spaceId: string) => number | null,
-  spaces: ReadonlyMap<string, { name: string }>
-) {
-  const sa = scoreOf(a);
-  const sz = scoreOf(z);
-  if (sa !== sz) {
-    if (sa === null) return 1;
-    if (sz === null) return -1;
-    return sz - sa;
-  }
-  const byName = (spaces.get(a)?.name ?? '').localeCompare(spaces.get(z)?.name ?? '');
-  return byName !== 0 ? byName : a.localeCompare(z);
 }
 
 /** Groups narrowed to pages whose name matches, keeping the space grouping and order. */
@@ -234,7 +225,7 @@ export function searchClaimListGroups(groups: ClaimListSpaceGroup[], query: stri
   });
 }
 
-async function fetchClaimListCatalog(signal?: AbortSignal): Promise<ClaimListSpaceGroup[]> {
+async function fetchClaimListCatalog(signal?: AbortSignal): Promise<ClaimListCatalog> {
   const options: ClaimListOption[] = [];
   let after: string | null = null;
   for (let page = 0; page < CATALOG_MAX_PAGES; page++) {
@@ -262,36 +253,28 @@ async function fetchClaimListCatalog(signal?: AbortSignal): Promise<ClaimListSpa
   }
 
   const spaceIds = [...new Set(options.map(option => option.spaceId))];
-  if (spaceIds.length === 0) return [];
-  const spaces = await Effect.runPromise(
-    graphql({ query: spacesDocument, decoder: decodeSpaces, variables: { ids: spaceIds }, signal })
+  if (spaceIds.length === 0) return { options, scores: new Map() };
+  const scores = await Effect.runPromise(
+    graphql({ query: spaceScoresDocument, decoder: decodeSpaceScores, variables: { ids: spaceIds }, signal })
   );
-  return groupClaimListOptions(options, spaces);
+  return { options, scores };
 }
 
-export function decodeSpaces(data: SpacesQuery): Map<string, { name: string; score: number | null }> {
+export function decodeSpaceScores(data: SpaceScoresQuery): Map<string, number> {
   const scores = new Map<string, number>();
   for (const row of data.spaceScores ?? []) {
-    const score = row?.score === null || row?.score === undefined ? NaN : Number(row.score);
+    const score = Number(row?.score ?? NaN);
     if (row && Number.isFinite(score)) scores.set(uuidToHex(row.spaceId), score);
   }
-  const spaces = new Map<string, { name: string; score: number | null }>();
-  for (const space of data.spaces ?? []) {
-    if (!space) continue;
-    const id = uuidToHex(space.id);
-    spaces.set(id, { name: space.page?.name?.trim() || 'Unnamed space', score: scores.get(id) ?? null });
-  }
-  for (const [id, score] of scores) if (!spaces.has(id)) spaces.set(id, { name: 'Unnamed space', score });
-  return spaces;
+  return scores;
 }
 
-/** Hosts only: nobody else opens the picker, so nobody else pays for the read. */
-export function useClaimListCatalog(enabled: boolean) {
+/** Read only once the picker opens, which only hosts can do, so nobody else pays for it. */
+export function useClaimListCatalog() {
   return useQuery({
     queryKey: ['claim-list-catalog', DEBATE_TAG_ID],
     queryFn: ({ signal }) => fetchClaimListCatalog(signal),
     staleTime: CLAIM_LIST_STALE_TIME,
-    enabled,
   });
 }
 
@@ -357,22 +340,26 @@ const pageDocument = parse(PAGE_SOURCE) as TypedDocumentNode<PageQuery, Record<s
 export function decodeClaimListPage(data: PageQuery, spaceId: string): ClaimListPage | null {
   const page = data.entity;
   if (!page) return null;
-  const sections = [...(page.blocks ?? [])].sort(byPosition).flatMap(block => {
-    const entity = block.toEntity;
-    if (!entity) return [];
-    const seen = new Set<string>();
-    const claims = [...(entity.items ?? [])].sort(byPosition).flatMap(item => {
-      const claim = item.toEntity;
-      if (!claim || !isClaim(claim.typeIds)) return [];
-      const id = uuidToHex(claim.id);
-      if (seen.has(id)) return [];
-      seen.add(id);
-      return [{ id, name: claim.name?.trim() ?? '', description: claim.description ?? null }];
+  const sections = [...(page.blocks ?? [])]
+    .sort((a, z) => Position.compare(a.position, z.position))
+    .flatMap(block => {
+      const entity = block.toEntity;
+      if (!entity) return [];
+      const seen = new Set<string>();
+      const claims = [...(entity.items ?? [])]
+        .sort((a, z) => Position.compare(a.position, z.position))
+        .flatMap(item => {
+          const claim = item.toEntity;
+          if (!claim || !isClaim(claim.typeIds)) return [];
+          const id = uuidToHex(claim.id);
+          if (seen.has(id)) return [];
+          seen.add(id);
+          return [{ id, name: claim.name?.trim() ?? '', description: claim.description ?? null }];
+        });
+      return claims.length > 0
+        ? [{ id: uuidToHex(entity.id), name: entity.name?.trim() || 'Untitled theme', claims }]
+        : [];
     });
-    return claims.length > 0
-      ? [{ id: uuidToHex(entity.id), name: entity.name?.trim() || 'Untitled theme', claims }]
-      : [];
-  });
   return { entityId: uuidToHex(page.id), spaceId, name: page.name?.trim() || 'Untitled list', sections };
 }
 
@@ -404,10 +391,4 @@ export function useClaimListPage(entityId: string, spaceId: string) {
 
 function isClaim(typeIds: string[] | null | undefined) {
   return (typeIds ?? []).some(typeId => uuidToHex(typeId) === CLAIM_TYPE_ID);
-}
-
-/** Blocks and collection items carry a fractional index; absent, they fall to the end. */
-function byPosition(a: { position: string | null }, z: { position: string | null }) {
-  if (a.position === null || z.position === null) return Number(a.position === null) - Number(z.position === null);
-  return a.position < z.position ? -1 : a.position > z.position ? 1 : 0;
 }

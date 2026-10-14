@@ -10,6 +10,7 @@ import {
   type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
+  LOBBY_CLAIM_LISTS_MAX,
   dashlessId,
 } from '../api';
 
@@ -289,7 +290,7 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
     }
     case 'lobby_claim_list_limit': {
       const limit = error.details?.limit;
-      return `This lobby already has ${typeof limit === 'number' ? limit : 5} claim lists. Remove one to add another.`;
+      return `This lobby already has ${typeof limit === 'number' ? limit : LOBBY_CLAIM_LISTS_MAX} claim lists. Remove one to add another.`;
     }
     case 'lobby_host_required':
       return 'Only a host can do that.';

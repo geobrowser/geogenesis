@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
 
 import { Input } from '~/design-system/input';
@@ -13,11 +14,12 @@ import { type DebateLobbyClaimList, LOBBY_CLAIM_LISTS_MAX } from '../api';
 import {
   type ClaimListOption,
   type ClaimListSpaceGroup,
+  groupClaimListOptions,
   searchClaimListGroups,
   useClaimListCatalog,
 } from '../claim-list-pages';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
-import { HubSkeleton } from '../matchmaking/hub-states';
+import { HubQueryState } from '../matchmaking/hub-states';
 import { useSaveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { moderationErrorMessage } from './lobby-format';
 import { LobbyPopup } from './lobby-popup';
@@ -25,13 +27,12 @@ import { LobbyPopup } from './lobby-popup';
 export const CLAIM_LIST_PICKER_COPY = {
   title: 'Add a claim list',
   add: 'Add a claim list',
-  full: `Remove a list to add another`,
+  full: 'Remove a list to add another',
   search: 'Search claim lists',
   added: 'Added',
   adding: 'Adding…',
   none: 'No claim lists yet. A page tagged Debate in its own space shows up here.',
   noMatch: (query: string) => `No claim lists match “${query}”.`,
-  failed: 'Could not load claim lists.',
   addFailed: 'Could not add the list. Try again.',
 };
 
@@ -129,12 +130,21 @@ export function ClaimListPickerContent({
 }) {
   const [query, setQuery] = React.useState('');
   const [shown, setShown] = React.useState(SPACES_PER_STEP);
-  const catalog = useClaimListCatalog(true);
+  const catalog = useClaimListCatalog();
   const save = useSaveLobbyClaimList(lobbyId);
   const [picking, setPicking] = React.useState<string | null>(null);
 
   const added = React.useMemo(() => new Set(lists.map(list => ID.uuidToHex(list.entity_id))), [lists]);
-  const groups = React.useMemo(() => searchClaimListGroups(catalog.data ?? [], query), [catalog.data, query]);
+  const spaceIds = React.useMemo(
+    () => [...new Set((catalog.data?.options ?? []).map(option => option.spaceId))],
+    [catalog.data]
+  );
+  const { labelsById } = useSpaceLabels(spaceIds);
+  const groups = React.useMemo(() => {
+    if (!catalog.data) return [];
+    const ranked = groupClaimListOptions(catalog.data, spaceId => spaceLabel(labelsById, spaceId)?.name);
+    return searchClaimListGroups(ranked, query);
+  }, [catalog.data, labelsById, query]);
   const visible = groups.slice(0, shown);
   const hasMore = groups.length > shown;
   const sentinel = useInfiniteScrollSentinel({
@@ -169,17 +179,14 @@ export function ClaimListPickerContent({
         }}
       />
       <div {...{ [SCROLL_ATTRIBUTE]: '' }} className="-mx-3 max-h-[min(420px,55vh)] overflow-y-auto px-3">
-        {catalog.isLoading ? (
-          <HubSkeleton rows={3} />
-        ) : catalog.error ? (
-          <Text as="p" variant="footnote" color="grey-04" className="py-3">
-            {CLAIM_LIST_PICKER_COPY.failed}
-          </Text>
-        ) : groups.length === 0 ? (
-          <Text as="p" variant="footnote" color="grey-04" className="py-3">
-            {query.trim() ? CLAIM_LIST_PICKER_COPY.noMatch(query.trim()) : CLAIM_LIST_PICKER_COPY.none}
-          </Text>
-        ) : (
+        <HubQueryState
+          analyticsSurface="hub"
+          isLoading={catalog.isLoading}
+          error={catalog.error}
+          onRetry={() => void catalog.refetch()}
+          isEmpty={groups.length === 0}
+          emptyMessage={query.trim() ? CLAIM_LIST_PICKER_COPY.noMatch(query.trim()) : CLAIM_LIST_PICKER_COPY.none}
+        >
           <div className="flex flex-col gap-2">
             {visible.map(group => (
               <SpaceGroup
@@ -193,7 +200,7 @@ export function ClaimListPickerContent({
             ))}
             {hasMore ? <div ref={sentinel} className="h-1" aria-hidden /> : null}
           </div>
-        )}
+        </HubQueryState>
       </div>
       {save.error ? (
         <Text as="p" variant="footnote" color="red-01">
@@ -218,9 +225,9 @@ function SpaceGroup({
   onPick: (option: ClaimListOption) => void;
 }) {
   return (
-    <section aria-label={group.spaceName} className="flex flex-col">
+    <section aria-label={group.spaceName ?? 'Space'} className="flex flex-col">
       <Text as="h3" variant="footnoteMedium" color="grey-04" className="px-2 pt-1 pb-1 uppercase">
-        {group.spaceName}
+        {group.spaceName ?? 'Space'}
       </Text>
       {group.options.map(option => {
         const isAdded = added.has(ID.uuidToHex(option.entityId));

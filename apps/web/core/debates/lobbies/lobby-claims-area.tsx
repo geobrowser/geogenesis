@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import { motion } from 'framer-motion';
 
-import { ID } from '~/core/id';
 import { useLocalVotes } from '~/core/state/local-votes';
 import { clearSaveVotesPromptLobby, openSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
@@ -19,11 +18,12 @@ import { LobbyClaimListPicker } from './lobby-claim-list-picker';
 import { LobbyClaimListTab, useClaimListName } from './lobby-claim-list-tab';
 import { useRemoveLobbyClaimList, useSaveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { orderedClaimLists } from './lobby-claim-lists-state';
+import { claimListKey, useNewClaimListTabs } from './lobby-claims-mark';
 import { LobbyExploreClaims } from './lobby-explore-claims';
 import { moderationErrorMessage } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 import { LobbyRoomClaimsWithHighlights, LobbyRoomVote } from './lobby-highlights';
-import { LobbyPopup } from './lobby-popup';
+import { LobbyPopup, LobbyPopupMenuRow } from './lobby-popup';
 import type { LobbyPageView } from './lobby-view';
 
 /** The two built-in tabs, then one per claim list as `list:<page id>` (GEO-3274). */
@@ -34,8 +34,7 @@ const TABS: { id: 'room' | 'explore'; label: string }[] = [
   { id: 'explore', label: 'Explore' },
 ];
 
-const listTabId = (list: Pick<DebateLobbyClaimList, 'entity_id'>): LobbyClaimsTab =>
-  `list:${ID.uuidToHex(list.entity_id)}`;
+const listTabId = claimListKey;
 
 /**
  * The lobby's claims: "In this room", "Explore", then the claim lists hosts have added, in the
@@ -47,7 +46,7 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
 
   const lists = React.useMemo(() => orderedClaimLists(lobby), [lobby]);
   const activeList = lists.find(list => listTabId(list) === activeTab) ?? null;
-  const unseen = useUnseenLists(lists, activeTab);
+  const unseen = useNewClaimListTabs(lists.map(listTabId), activeTab);
   // A list taken off the lobby takes its tab with it; whoever was on it lands back in the room.
   const shownTab: LobbyClaimsTab = activeTab.startsWith('list:') && !activeList ? 'room' : activeTab;
   const hosting = lobby.viewer.hosting;
@@ -160,12 +159,17 @@ function ClaimListTabButton({
   return (
     // Not `relative`: the tab row measures the active tab against the row itself.
     <span className="flex items-center gap-1">
-      <ClaimsTabButton active={active} analyticsLabel={`Lobby claim list tab`} onSelect={onSelect}>
+      <ClaimsTabButton active={active} analyticsLabel="Lobby claim list tab" onSelect={onSelect}>
         <span className="max-w-[160px] truncate" title={name}>
           {name}
         </span>
         {unseen ? (
-          <span aria-label="New" className="size-1.5 shrink-0 rounded-full bg-ctaPrimary" data-testid="new-list-dot" />
+          <span
+            className="size-1.5 shrink-0 rounded-full bg-ctaPrimary"
+            aria-label="New"
+            role="img"
+            data-testid="new-list-dot"
+          />
         ) : null}
       </ClaimsTabButton>
       {hosting ? <ClaimListTabMenu lobbyId={lobbyId} list={list} index={index} count={count} name={name} /> : null}
@@ -218,28 +222,31 @@ function ClaimListTabMenu({
       }
     >
       <div className="flex flex-col" role="group" aria-label={`${name} options`}>
-        <MenuRow
+        <LobbyPopupMenuRow
+          analyticsIntent="moderate_lobby_claim_list"
           analyticsLabel="Lobby move claim list left"
           disabled={pending || index === 0}
           onClick={() => move(index - 1)}
         >
           Move left
-        </MenuRow>
-        <MenuRow
+        </LobbyPopupMenuRow>
+        <LobbyPopupMenuRow
+          analyticsIntent="moderate_lobby_claim_list"
           analyticsLabel="Lobby move claim list right"
           disabled={pending || index === count - 1}
           onClick={() => move(index + 1)}
         >
           Move right
-        </MenuRow>
-        <MenuRow
+        </LobbyPopupMenuRow>
+        <LobbyPopupMenuRow
+          analyticsIntent="moderate_lobby_claim_list"
           analyticsLabel="Lobby remove claim list"
           disabled={pending}
           danger
           onClick={() => remove.mutate(list.entity_id, done)}
         >
           Remove from lobby
-        </MenuRow>
+        </LobbyPopupMenuRow>
         {error ? (
           <Text as="p" variant="footnote" color="red-01" className="px-3 pb-2">
             {moderationErrorMessage(error)}
@@ -248,70 +255,6 @@ function ClaimListTabMenu({
       </div>
     </LobbyPopup>
   );
-}
-
-function MenuRow({
-  analyticsLabel,
-  disabled,
-  danger = false,
-  onClick,
-  children,
-}: {
-  analyticsLabel: string;
-  disabled: boolean;
-  danger?: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      {...debateActionAnalyticsAttributes('hub', analyticsLabel, 'moderate_lobby_claim_list')}
-      onClick={onClick}
-      className={`flex w-full items-center bg-white px-3 py-2.5 text-left text-button hover:bg-bg disabled:opacity-50 ${danger ? 'text-red-01' : 'text-text'}`}
-    >
-      {children}
-    </button>
-  );
-}
-
-/**
- * List tabs that arrived while the viewer was here and that they have not opened yet. The lists the
- * lobby already had when they came in are not news, and a tab counts as seen once it is opened.
- */
-export function useUnseenLists(lists: DebateLobbyClaimList[], activeTab: LobbyClaimsTab): ReadonlySet<string> {
-  const ids = lists.map(listTabId);
-  const key = ids.join(',');
-  const knownRef = React.useRef<Set<string> | null>(null);
-  const [unseen, setUnseen] = React.useState<ReadonlySet<string>>(() => new Set());
-
-  React.useEffect(() => {
-    const current = key ? key.split(',') : [];
-    if (!knownRef.current) {
-      knownRef.current = new Set(current);
-      return;
-    }
-    const known = knownRef.current;
-    const fresh = current.filter(id => !known.has(id));
-    for (const id of fresh) known.add(id);
-    setUnseen(previous => {
-      const next = new Set([...previous].filter(id => current.includes(id)));
-      for (const id of fresh) next.add(id);
-      return next.size === previous.size && [...next].every(id => previous.has(id)) ? previous : next;
-    });
-  }, [key]);
-
-  React.useEffect(() => {
-    setUnseen(previous => {
-      if (!previous.has(activeTab)) return previous;
-      const next = new Set(previous);
-      next.delete(activeTab);
-      return next;
-    });
-  }, [activeTab, key]);
-
-  return unseen;
 }
 
 /**

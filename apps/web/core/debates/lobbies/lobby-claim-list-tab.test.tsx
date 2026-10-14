@@ -29,23 +29,15 @@ vi.mock('../hooks', () => ({
   useDebateClaimsBySpaces: () => ({ claims: [], unresolvedSpaceIds: new Set() }),
 }));
 vi.mock('./lobby-explore-claims-hooks', () => ({
-  exploreRoomClaimBatches: (entries: { claim: { claim_entity_id: string } }[]) => {
-    mocks.batches = [entries.map(entry => entry.claim.claim_entity_id)];
-    return mocks.batches;
-  },
-  useNearExploreBatches: () => ({ active: [], onNear: vi.fn() }),
-  useLobbyExploreRoomClaims: () => new Map(),
+  exploreRoomClaimBatches: (entries: { claim: { claim_entity_id: string } }[]) => [
+    entries.map(entry => entry.claim.claim_entity_id),
+  ],
 }));
 vi.mock('./lobby-explore-claims', () => ({
-  NearViewport: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
-  exploreRoomClaim: (entry: unknown) => entry,
-  hasDebateClaimRow: () => false,
-}));
-vi.mock('./lobby-highlights', () => ({ LobbyClaimHostMenu: () => null }));
-vi.mock('./lobby-highlights-hooks', () => ({ useLobbyHighlights: () => ({ data: undefined }) }));
-vi.mock('./lobby-room-claims', () => ({ LobbyClaimRequest: () => null }));
-vi.mock('./lobby-room-claims-list', () => ({
-  LobbyRoomClaimCard: ({ entry }: { entry: { claim: { claim: string } } }) => <article>{entry.claim.claim}</article>,
+  useLobbyRoomCardRenderer: (_lobby: unknown, batches: string[][]) => {
+    mocks.batches = batches;
+    return (entry: { claim: { claim: string } }) => <article>{entry.claim.claim}</article>;
+  },
 }));
 vi.mock('./lobby-claim-lists-hooks', () => ({
   useRemoveLobbyClaimList: () => ({ mutate: mocks.remove, isPending: false }),
@@ -107,21 +99,21 @@ describe('LobbyClaimListTab', () => {
     expect(scrollIntoView).toHaveBeenCalled();
   });
 
-  it('says a deleted page is gone, and lets only a host remove it', () => {
+  it('says a deleted page is gone, and lets only a host remove it', async () => {
     mocks.page.data = null;
     const { rerender } = render(<LobbyClaimListTab lobby={lobbyFor(false)} list={list} />);
     expect(screen.getByText('This list is no longer available.')).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Remove from lobby' })).toBeNull();
 
     rerender(<LobbyClaimListTab lobby={lobbyFor(true)} list={list} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove from lobby' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove from lobby' }));
     expect(mocks.remove).toHaveBeenCalledWith(list.entity_id);
   });
 
   it('offers a retry when the page cannot be read', () => {
     mocks.page.error = new Error('boom');
     render(<LobbyClaimListTab lobby={lobbyFor(false)} list={list} />);
-    expect(screen.getByText('Could not load this list.')).toBeTruthy();
+    expect(screen.getByText('Something went wrong.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
   });
 });

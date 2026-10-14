@@ -30,41 +30,15 @@ import type { LobbyPageView } from './lobby-view';
  * "In this room" card so its request is lobby-scoped and its faces are the room's.
  */
 export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
-  const lobbyId = lobby.lobby_id;
   const [batches, setBatches] = React.useState<string[][]>([]);
   const onVisibleClaims = React.useCallback((entries: MatchmakingClaim[]) => {
     const next = exploreRoomClaimBatches(entries);
     setBatches(current => (sameBatches(current, next) ? current : next));
   }, []);
-  const { active, onNear } = useNearExploreBatches(batches);
-  const roomRows = useLobbyExploreRoomClaims(lobbyId, active);
-  const { data: highlights } = useLobbyHighlights(lobbyId);
-  const hosting = lobby.viewer.hosting;
-
-  const renderOffer = React.useCallback(
-    (offer: LobbyRoomOffer) => <LobbyClaimRequest lobbyId={lobbyId} offer={offer} />,
-    [lobbyId]
-  );
-  const renderMenu = React.useCallback(
-    (entry: LobbyRoomClaim) =>
-      hasDebateClaimRow(entry.claim) ? (
-        <LobbyClaimHostMenu lobbyId={lobbyId} claim={entry.claim} state={highlights} />
-      ) : null,
-    [highlights, lobbyId]
-  );
-
+  const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
   const renderClaim = React.useCallback(
-    (entry: MatchmakingClaim, card: ClaimCardDefaults) => (
-      <NearViewport claimEntityId={entry.claim.claim_entity_id} onNear={onNear}>
-        <LobbyRoomClaimCard
-          entry={exploreRoomClaim(entry, roomRows.get(claimRowKey(entry)))}
-          answersReady={card.answersReady}
-          renderOffer={renderOffer}
-          renderMenu={hosting ? renderMenu : undefined}
-        />
-      </NearViewport>
-    ),
-    [hosting, onNear, renderMenu, renderOffer, roomRows]
+    (entry: MatchmakingClaim, card: ClaimCardDefaults) => renderRoomCard(entry, card.answersReady),
+    [renderRoomCard]
   );
 
   // The tab pads its own controls and list, inside the claims pane's padding. On a desktop the pane
@@ -83,8 +57,47 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
   );
 }
 
+/**
+ * Draws a graph-sourced claim as an "In this room" card: lobby-scoped request, the room's faces,
+ * the host menu. The room's sides are read only for the `batches` holding a card near the viewport.
+ * Shared by Explore and the claim list tabs (GEO-3274), which list claims the same way.
+ */
+export function useLobbyRoomCardRenderer(lobby: LobbyPageView, batches: string[][]) {
+  const lobbyId = lobby.lobby_id;
+  const { active, onNear } = useNearExploreBatches(batches);
+  const roomRows = useLobbyExploreRoomClaims(lobbyId, active);
+  const { data: highlights } = useLobbyHighlights(lobbyId);
+  const hosting = lobby.viewer.hosting;
+
+  const renderOffer = React.useCallback(
+    (offer: LobbyRoomOffer) => <LobbyClaimRequest lobbyId={lobbyId} offer={offer} />,
+    [lobbyId]
+  );
+  const renderMenu = React.useCallback(
+    (entry: LobbyRoomClaim) =>
+      hasDebateClaimRow(entry.claim) ? (
+        <LobbyClaimHostMenu lobbyId={lobbyId} claim={entry.claim} state={highlights} />
+      ) : null,
+    [highlights, lobbyId]
+  );
+
+  return React.useCallback(
+    (entry: MatchmakingClaim, answersReady: boolean) => (
+      <NearViewport claimEntityId={entry.claim.claim_entity_id} onNear={onNear}>
+        <LobbyRoomClaimCard
+          entry={exploreRoomClaim(entry, roomRows.get(claimRowKey(entry)))}
+          answersReady={answersReady}
+          renderOffer={renderOffer}
+          renderMenu={hosting ? renderMenu : undefined}
+        />
+      </NearViewport>
+    ),
+    [hosting, onNear, renderMenu, renderOffer, roomRows]
+  );
+}
+
 /** Reports whether its card is near the viewport, both ways, so far-off batches stop being read. */
-export function NearViewport({
+function NearViewport({
   claimEntityId,
   onNear,
   children,

@@ -6,7 +6,7 @@ import {
   type ClaimListOption,
   catalogOptions,
   decodeClaimListPage,
-  decodeSpaces,
+  decodeSpaceScores,
   groupClaimListOptions,
   searchClaimListGroups,
 } from './claim-list-pages';
@@ -67,21 +67,29 @@ describe('groupClaimListOptions', () => {
     themeCount: 1,
     claimCount: 1,
   });
-  const spaces = new Map([
-    [CURATORS, { name: 'Geo Curator Program', score: 0.08 }],
-    [POLITICS, { name: 'US Politics', score: 0.8 }],
-    ['unscored', { name: 'Aardvarks', score: null }],
+  const scores = new Map([
+    [CURATORS, 0.08],
+    [POLITICS, 0.8],
   ]);
+  const NAMES: Record<string, string> = {
+    [CURATORS]: 'Geo Curator Program',
+    [POLITICS]: 'US Politics',
+    unscored: 'Aardvarks',
+  };
+  const names = (spaceId: string) => NAMES[spaceId];
 
   it('orders spaces by score, unscored last, and pages A to Z inside each', () => {
     const groups = groupClaimListOptions(
-      [
-        option('a', CURATORS, 'Spicy debates'),
-        option('b', CURATORS, 'AI highlights'),
-        option('c', 'unscored', 'Zoo'),
-        option('d', POLITICS, 'U.S. politics highlights'),
-      ],
-      spaces
+      {
+        options: [
+          option('a', CURATORS, 'Spicy debates'),
+          option('b', CURATORS, 'AI highlights'),
+          option('c', 'unscored', 'Zoo'),
+          option('d', POLITICS, 'U.S. politics highlights'),
+        ],
+        scores,
+      },
+      names
     );
     expect(groups.map(group => group.spaceName)).toEqual(['US Politics', 'Geo Curator Program', 'Aardvarks']);
     expect(groups[1]!.options.map(row => row.name)).toEqual(['AI highlights', 'Spicy debates']);
@@ -89,8 +97,14 @@ describe('groupClaimListOptions', () => {
 
   it('offers a page tagged in two spaces once, under the higher-ranked one', () => {
     const groups = groupClaimListOptions(
-      [option('page', CURATORS, 'U.S. politics highlights'), option('page', POLITICS, 'U.S. politics highlights')],
-      spaces
+      {
+        options: [
+          option('page', CURATORS, 'U.S. politics highlights'),
+          option('page', POLITICS, 'U.S. politics highlights'),
+        ],
+        scores,
+      },
+      names
     );
     expect(groups).toHaveLength(1);
     expect(groups[0]!.spaceId).toBe(POLITICS);
@@ -102,13 +116,11 @@ describe('searchClaimListGroups', () => {
     {
       spaceId: POLITICS,
       spaceName: 'US Politics',
-      score: 0.8,
       options: [{ entityId: 'p', spaceId: POLITICS, name: 'U.S. politics highlights', themeCount: 1, claimCount: 1 }],
     },
     {
       spaceId: CURATORS,
       spaceName: 'Geo Curator Program',
-      score: 0.08,
       options: [
         { entityId: 'a', spaceId: CURATORS, name: 'AI highlights', themeCount: 1, claimCount: 1 },
         { entityId: 's', spaceId: CURATORS, name: 'Spicy debates', themeCount: 1, claimCount: 1 },
@@ -127,22 +139,13 @@ describe('searchClaimListGroups', () => {
   });
 });
 
-describe('decodeSpaces', () => {
-  it('pairs names with scores and keeps a scored space with no page', () => {
-    const spaces = decodeSpaces({
-      spaces: [
-        { id: CURATORS, page: { name: 'Geo Curator Program' } },
-        { id: POLITICS, page: null },
-      ],
-      spaceScores: [
-        { spaceId: CURATORS, score: '0.0858993459200001' },
-        { spaceId: 'extra', score: '0.5' },
-        { spaceId: POLITICS, score: null },
-      ],
+describe('decodeSpaceScores', () => {
+  it('reads each score as a number and leaves unscored spaces out', () => {
+    const scores = decodeSpaceScores({
+      spaceScores: [{ spaceId: CURATORS, score: '0.0858993459200001' }, { spaceId: POLITICS, score: null }, null],
     });
-    expect(spaces.get(CURATORS)).toEqual({ name: 'Geo Curator Program', score: 0.0858993459200001 });
-    expect(spaces.get(POLITICS)).toEqual({ name: 'Unnamed space', score: null });
-    expect(spaces.get('extra')?.score).toBe(0.5);
+    expect(scores.get(CURATORS)).toBe(0.0858993459200001);
+    expect(scores.has(POLITICS)).toBe(false);
   });
 });
 

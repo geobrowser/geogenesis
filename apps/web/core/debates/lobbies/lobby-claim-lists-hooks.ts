@@ -17,7 +17,7 @@ function useStoreLobbyClaimLists(lobbyId: string) {
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
   return (state: DebateLobbyClaimLists) =>
-    queryClient.setQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, dashlessId(lobbyId)), current =>
+    queryClient.setQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, lobbyId), current =>
       current ? withLobbyClaimLists(current, state) : current
     );
 }
