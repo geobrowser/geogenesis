@@ -12,7 +12,7 @@ import { type LobbyPageView, lobbyViewForGuest, lobbyViewForMember } from './lob
 const mocks = vi.hoisted(() => ({
   roomVote: null as DebateLobbyRoomVote | null,
   highlightsEnabled: [] as boolean[],
-  lobbyHeadcount: vi.fn(),
+  lobbyHeadcountSeen: vi.fn(),
   lobbyRoomVoteSeen: vi.fn(),
   lobbyViewerRole: vi.fn(),
 }));
@@ -26,7 +26,7 @@ vi.mock('./lobby-highlights-hooks', () => ({
 }));
 
 vi.mock('./lobby-analytics', () => ({
-  lobbyHeadcount: mocks.lobbyHeadcount,
+  lobbyHeadcountSeen: mocks.lobbyHeadcountSeen,
   lobbyRoomVoteSeen: mocks.lobbyRoomVoteSeen,
   lobbyViewerRole: mocks.lobbyViewerRole,
 }));
@@ -128,8 +128,8 @@ describe('LobbyAnalyticsScope', () => {
       hosting: true,
       moderation,
     });
-    // Two members present, one stepped out, two guests.
-    expect(mocks.lobbyHeadcount).toHaveBeenCalledWith(LOBBY.replaceAll('-', ''), 4);
+    // The header's count (the whole roster, stepped out included) plus two guests.
+    expect(mocks.lobbyHeadcountSeen).toHaveBeenCalledWith(LOBBY.replaceAll('-', ''), 5);
   });
 
   it('follows the room vote from a hosting tab only', () => {
@@ -155,11 +155,12 @@ describe('LobbyAnalyticsScope', () => {
     );
 
     expect(mocks.lobbyViewerRole).not.toHaveBeenCalled();
-    expect(mocks.lobbyHeadcount).not.toHaveBeenCalled();
+    expect(mocks.lobbyHeadcountSeen).not.toHaveBeenCalled();
     expect(seen.every(context => context.lobby_id === LOBBY.replaceAll('-', ''))).toBe(true);
   });
 });
 
-it('counts members still in the room plus guests', () => {
-  expect(lobbyRoomHeadcount({ members: [member('a'), member('b', true)], guest_count: undefined })).toBe(1);
+it('counts the roster as the lobby header does, plus guests', () => {
+  expect(lobbyRoomHeadcount({ members: [member('a'), member('b', true)], guest_count: undefined })).toBe(2);
+  expect(lobbyRoomHeadcount({ members: [member('a')], guest_count: 3 })).toBe(4);
 });

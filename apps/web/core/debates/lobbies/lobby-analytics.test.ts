@@ -10,7 +10,7 @@ const {
   lobbyDebateRequested,
   lobbyDebateSeen,
   lobbyEnded,
-  lobbyHeadcount,
+  lobbyHeadcountSeen,
   lobbyJoined,
   lobbyLeft,
   lobbyPageClosed,
@@ -325,7 +325,7 @@ describe('roles (GEO-3311)', () => {
     lobbyJoined(lobby, { isNewcomer: false, role: 'listener', hosting: false, moderationAt: null });
     // The views that follow the join repeat it.
     lobbyViewerRole(lobby, { role: 'listener', hosting: false, moderation: null });
-    const moved = { action: 'move_to_speakers', at: '2026-10-08T12:01:00Z' };
+    const moved = { action: 'move_to_speakers' as const, at: '2026-10-08T12:01:00Z' };
     lobbyViewerRole(lobby, { role: 'speaker', hosting: false, moderation: moved });
     lobbyViewerRole(lobby, { role: 'speaker', hosting: false, moderation: moved });
     // The only host left: hosting with no action on the viewer.
@@ -372,9 +372,9 @@ describe('headcount (GEO-3311)', () => {
 
   it('puts the most people the tab saw in the room on lobby_left', () => {
     lobbyJoined(lobby, { isNewcomer: false });
-    lobbyHeadcount(lobby, 3);
-    lobbyHeadcount(lobby, 7);
-    lobbyHeadcount(lobby, 2);
+    lobbyHeadcountSeen(lobby, 3);
+    lobbyHeadcountSeen(lobby, 7);
+    lobbyHeadcountSeen(lobby, 2);
     lobbyLeft(lobby, 'left');
 
     expect(events('lobby_left')[0]).toMatchObject({ peak_headcount: 7 });
@@ -463,8 +463,8 @@ describe('lobby_ended and lobby_rsvp_changed (GEO-3311)', () => {
 
   it('sends how long the lobby was open and the host tab’s headcounts', () => {
     lobbyJoined(lobby, { isNewcomer: false, role: 'host', hosting: true });
-    lobbyHeadcount(lobby, 6);
-    lobbyHeadcount(lobby, 4);
+    lobbyHeadcountSeen(lobby, 6);
+    lobbyHeadcountSeen(lobby, 4);
     lobbyEnded(lobby, { scheduled: true, opensAt: '2026-10-08T11:30:00Z' });
 
     expect(events('lobby_ended')).toEqual([
@@ -498,11 +498,17 @@ describe('lobby_ended and lobby_rsvp_changed (GEO-3311)', () => {
 describe('a reload (GEO-3311)', () => {
   const lobby = 'a5000000000000000000000000000005';
 
-  // A fresh copy of the module over the same sessionStorage, as after a reload.
-  const reload = async () => {
+  // A fresh copy of the module over the same sessionStorage, as after a reload (or, with another
+  // navigation type, a duplicated tab).
+  const reload = async (type: NavigationTimingType = 'reload') => {
+    vi.spyOn(performance, 'getEntriesByType').mockReturnValue([{ type }] as unknown as PerformanceEntryList);
     vi.resetModules();
     return import('./lobby-analytics');
   };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('still credits the lobby with a debate that starts after the tab reloads', async () => {
     lobbyJoined(lobby, { isNewcomer: true });
@@ -532,6 +538,40 @@ describe('a reload (GEO-3311)', () => {
 
     expect(events('lobby_debate_started')).toHaveLength(1);
     expect(events('lobby_left')).toHaveLength(1);
+    reloaded.resetLobbyAnalytics();
+  });
+
+  it('starts fresh in a duplicated tab, which copies sessionStorage, so a debate counts once', async () => {
+    lobbyJoined(lobby, { isNewcomer: false });
+    lobbySteppedOut(lobby);
+
+    const duplicate = await reload('back_forward');
+    duplicate.lobbyDebateSeen({ id: 'debate-in-both-tabs', lobby_id: lobby });
+
+    expect(events('lobby_debate_started')).toEqual([]);
+    duplicate.resetLobbyAnalytics();
+  });
+
+  it('closes a visit the page left without a pagehide, as of the tab’s last write, and joins anew', async () => {
+    lobbyJoined(lobby, { isNewcomer: false });
+    vi.advanceTimersByTime(60_000);
+    lobbyHeadcountSeen(lobby, 3);
+    // The phone discarded the tab; it reloads much later.
+    vi.advanceTimersByTime(30 * 60_000);
+
+    const reloaded = await reload();
+    reloaded.lobbyJoined(lobby, { isNewcomer: false });
+
+    const [first, second] = events('lobby_joined');
+    expect(events('lobby_left')).toEqual([
+      expect.objectContaining({
+        lobby_session_id: first.lobby_session_id,
+        exit: 'page_closed',
+        time_in_lobby_ms: 60_000,
+        peak_headcount: 3,
+      }),
+    ]);
+    expect(second.lobby_session_id).not.toBe(first.lobby_session_id);
     reloaded.resetLobbyAnalytics();
   });
 

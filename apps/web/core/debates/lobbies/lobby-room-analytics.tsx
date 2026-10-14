@@ -5,13 +5,14 @@ import * as React from 'react';
 import { ActionContextProvider } from '~/core/action-context-provider';
 
 import { dashlessId } from '../api';
-import { lobbyHeadcount, lobbyRoomVoteSeen, lobbyViewerRole } from './lobby-analytics';
+import { lobbyHeadcountSeen, lobbyRoomVoteSeen, lobbyViewerRole } from './lobby-analytics';
+import { lobbyHeadcount } from './lobby-format';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { type LobbyPageView, isMemberView } from './lobby-view';
 
-/** Members in the room (stepped-out ones are still listed) plus guests listening without an account. */
+/** Everyone in the room: who the lobby header counts as here, plus guests listening without an account. */
 export function lobbyRoomHeadcount(lobby: Pick<LobbyPageView, 'members' | 'guest_count'>) {
-  return lobby.members.filter(member => !member.stepped_out).length + (lobby.guest_count ?? 0);
+  return lobbyHeadcount(lobby) + (lobby.guest_count ?? 0);
 }
 
 /**
@@ -37,7 +38,7 @@ export function LobbyAnalyticsScope({ lobby, children }: { lobby: LobbyPageView;
 
   const headcount = lobbyRoomHeadcount(lobby);
   React.useEffect(() => {
-    if (inRoom) lobbyHeadcount(lobbyId, headcount);
+    if (inRoom) lobbyHeadcountSeen(lobbyId, headcount);
   }, [headcount, inRoom, lobbyId]);
 
   React.useEffect(() => {

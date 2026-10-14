@@ -1,8 +1,9 @@
 import * as React from 'react';
 
 import { capture } from '~/core/analytics';
+import { currentNavigationType } from '~/core/utils/navigation-type';
 
-import { type Debate, type DebateLobbyRole, type DebateLobbyRoomVote, dashlessId } from '../api';
+import { type Debate, type DebateLobbyRole, type DebateLobbyRoomVote, type DebateLobbyView, dashlessId } from '../api';
 import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
 
@@ -80,6 +81,8 @@ type Session = {
   /** People in the room (members not stepped out, plus guests), the most this tab saw. */
   peakHeadcount: number | null;
   lastHeadcount: number | null;
+  /** When this tab last wrote the session: as late as it is known to have been alive. */
+  touchedAt: number;
 };
 
 type StoredSession = Omit<Session, 'debates' | 'requests'> & { debates: string[]; requests: string[] };
@@ -104,19 +107,27 @@ function fromStored(value: StoredSession): Session {
 }
 
 /**
- * Brings back the sessions an earlier load of this tab kept, once. A reload around a debate's start
- * would otherwise lose the session the debate belongs to, and the debate with it.
+ * Brings back the sessions the previous load of this tab kept, once, and only after a reload. A
+ * reload around a debate's start would otherwise lose the session the debate belongs to. Any other
+ * load starts fresh: a duplicated tab copies sessionStorage, and two tabs holding one session would
+ * each count its debates.
  */
 function restore() {
   if (restored) return;
   restored = true;
+  if (currentNavigationType() !== 'reload') return;
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return;
     const stored = JSON.parse(raw) as { session: StoredSession | null; retained: StoredSession[] };
-    if (stored.session && session === null) session = fromStored(stored.session);
     for (const earlier of stored.retained) {
       if (!retained.has(earlier.lobbyId)) retained.set(earlier.lobbyId, fromStored(earlier));
+    }
+    if (stored.session && session === null) {
+      session = fromStored(stored.session);
+      // Still in the room when the page went without a `pagehide` (a phone discarding the tab):
+      // that visit is over, as of the last time the tab wrote it.
+      if (session.endedAt === null && session.steppedOutAt === null) end('page_closed', session.touchedAt);
     }
   } catch {
     // Unreadable or blocked storage: start fresh.
@@ -124,6 +135,7 @@ function restore() {
 }
 
 function persist() {
+  if (session) session.touchedAt = Date.now();
   try {
     window.sessionStorage.setItem(
       STORAGE_KEY,
@@ -186,12 +198,23 @@ function end(exit: LobbyExit, now = Date.now(), ended = session) {
     lobby_session_id: ended.sessionId,
     time_in_lobby_ms: Math.max(0, Math.round((ended.steppedOutAt ?? now) - ended.joinedAt)),
     exit,
-    ...(ended.peakHeadcount === null ? {} : { peak_headcount: ended.peakHeadcount }),
+    ...optional('peak_headcount', ended.peakHeadcount),
   });
 }
 
+/** `{ [key]: value }`, or nothing when the value is unknown, so a missing fact never reads as false or zero. */
+function optional<K extends string, V>(key: K, value: V | null | undefined) {
+  return (value === null || value === undefined ? {} : { [key]: value }) as Partial<Record<K, V>>;
+}
+
+/** Milliseconds from an ISO instant to now (negative before it); `null` when it does not parse. */
+function msSince(iso: string, now = Date.now()) {
+  const at = Date.parse(iso);
+  return Number.isNaN(at) ? null : Math.round(now - at);
+}
+
 function newcomerProperty(isNewcomer: boolean | null) {
-  return isNewcomer === null ? {} : { is_newcomer: isNewcomer };
+  return optional('is_newcomer', isNewcomer);
 }
 
 /** Set by the control that leads into the lobby, before navigating or joining. */
@@ -207,7 +230,7 @@ function takeEntry(lobbyId: string): LobbyEntry {
 }
 
 function roleProperties(role: DebateLobbyRole | null, hosting: boolean | null) {
-  return { ...(role === null ? {} : { role }), ...(hosting === null ? {} : { hosting }) };
+  return { ...optional('role', role), ...optional('hosting', hosting) };
 }
 
 /** The server put the viewer on the roster. Starts a session unless this one is still going. */
@@ -247,6 +270,7 @@ export function lobbyJoined(
     moderationAt,
     peakHeadcount: null,
     lastHeadcount: null,
+    touchedAt: Date.now(),
   };
   session = started;
   retained.delete(started.lobbyId);
@@ -274,7 +298,7 @@ export function lobbyViewerRole(
   }: {
     role: DebateLobbyRole | null;
     hosting: boolean;
-    moderation: { action: string; at: string } | null | undefined;
+    moderation: DebateLobbyView['viewer']['last_moderation'];
   }
 ) {
   const active = activeFor(lobbyId);
@@ -302,14 +326,14 @@ export function lobbyViewerRole(
     lobby_session_id: active.sessionId,
     role,
     hosting,
-    ...(previous.role === null ? {} : { previous_role: previous.role }),
-    ...(previous.hosting === null ? {} : { previous_hosting: previous.hosting }),
-    ...(freshModeration ? { moderation_action: freshModeration } : {}),
+    ...optional('previous_role', previous.role),
+    ...optional('previous_hosting', previous.hosting),
+    ...optional('moderation_action', freshModeration),
   });
 }
 
 /** How many people are in the room, as the viewer's tab reads it. Kept for the session's peak. */
-export function lobbyHeadcount(lobbyId: string, headcount: number) {
+export function lobbyHeadcountSeen(lobbyId: string, headcount: number) {
   const active = activeFor(lobbyId);
   if (!active) return;
   if (active.lastHeadcount === headcount && (active.peakHeadcount ?? 0) >= headcount) return;
@@ -409,9 +433,8 @@ export function lobbyCreated(lobbyId: string, { scheduled }: { scheduled: boolea
 }
 
 /** The session id to put on an event about this lobby, when the viewer has one going. */
-function sessionProperty(lobbyId: string) {
-  const current = sessionFor(lobbyId, Date.now());
-  return current ? { lobby_session_id: current.sessionId } : {};
+function sessionProperty(current: Session | null) {
+  return optional('lobby_session_id', current?.sessionId);
 }
 
 /** RSVP (Going) set or taken back on a lobby still to open, on the server's confirmation. */
@@ -419,17 +442,24 @@ export function lobbyRsvpChanged(
   lobbyId: string,
   { going, startsAt, reminderCount }: { going: boolean; startsAt: string; reminderCount: number }
 ) {
-  const startsAtMs = Date.parse(startsAt);
+  const sinceStart = msSince(startsAt);
   send('lobby_rsvp_changed', {
     lobby_id: dashlessId(lobbyId),
     going,
     going_count: reminderCount,
-    ...(Number.isNaN(startsAtMs) ? {} : { ms_until_start: Math.round(startsAtMs - Date.now()) }),
+    ...optional('ms_until_start', sinceStart === null ? null : -sinceStart),
   });
 }
 
-function voteTally(vote: DebateLobbyRoomVote) {
-  return { agree: vote.tally.agree, disagree: vote.tally.disagree, eligible: vote.tally.eligible };
+/** What every room vote event says about the vote. */
+function roomVoteProperties(lobbyId: string, vote: DebateLobbyRoomVote) {
+  return {
+    lobby_id: lobbyId,
+    ...sessionProperty(sessionFor(lobbyId, Date.now())),
+    room_vote_id: vote.vote_id,
+    debate_claim_id: vote.claim.id,
+    target_id: vote.claim.claim_entity_id,
+  };
 }
 
 /** A host asked the room to vote, on the server's confirmation. Sent by that host's tab only. */
@@ -438,11 +468,7 @@ export function lobbyRoomVoteStarted(lobbyId: string, vote: DebateLobbyRoomVote,
   // A vote this one replaced ends first, with the tally it had.
   lobbyRoomVoteSeen(id, vote);
   send('lobby_room_vote_started', {
-    lobby_id: id,
-    ...sessionProperty(id),
-    room_vote_id: vote.vote_id,
-    debate_claim_id: vote.claim.id,
-    target_id: vote.claim.claim_entity_id,
+    ...roomVoteProperties(id, vote),
     replaced,
     eligible: vote.tally.eligible,
   });
@@ -452,16 +478,14 @@ function endRoomVote(lobbyId: string, vote: DebateLobbyRoomVote, reason: LobbyRo
   runningRoomVotes.delete(lobbyId);
   if (endedRoomVotes.has(vote.vote_id)) return;
   endedRoomVotes.add(vote.vote_id);
-  const startedAt = Date.parse(vote.started_at);
+  const voteMs = msSince(vote.started_at);
   send('lobby_room_vote_ended', {
-    lobby_id: lobbyId,
-    ...sessionProperty(lobbyId),
-    room_vote_id: vote.vote_id,
-    debate_claim_id: vote.claim.id,
-    target_id: vote.claim.claim_entity_id,
-    ...voteTally(vote),
+    ...roomVoteProperties(lobbyId, vote),
+    agree: vote.tally.agree,
+    disagree: vote.tally.disagree,
+    eligible: vote.tally.eligible,
     end_reason: reason,
-    ...(Number.isNaN(startedAt) ? {} : { vote_ms: Math.max(0, Math.round(Date.now() - startedAt)) }),
+    ...optional('vote_ms', voteMs === null ? null : Math.max(0, voteMs)),
   });
 }
 
@@ -486,14 +510,14 @@ export function lobbyEnded(lobbyId: string, { scheduled, opensAt }: { scheduled:
   const running = runningRoomVotes.get(id);
   if (running) endRoomVote(id, running, 'lobby_ended');
   const current = sessionFor(id, Date.now());
-  const opensAtMs = Date.parse(opensAt);
+  const openMs = msSince(opensAt);
   send('lobby_ended', {
     lobby_id: id,
-    ...(current ? { lobby_session_id: current.sessionId } : {}),
+    ...sessionProperty(current),
     scheduled,
-    ...(Number.isNaN(opensAtMs) ? {} : { open_ms: Math.max(0, Math.round(Date.now() - opensAtMs)) }),
-    ...(current?.lastHeadcount == null ? {} : { headcount: current.lastHeadcount }),
-    ...(current?.peakHeadcount == null ? {} : { peak_headcount: current.peakHeadcount }),
+    ...optional('open_ms', openMs === null ? null : Math.max(0, openMs)),
+    ...optional('headcount', current?.lastHeadcount),
+    ...optional('peak_headcount', current?.peakHeadcount),
   });
 }
 
