@@ -54,6 +54,7 @@ export type DebateMediaSession = {
   releaseSession: (sessionKey: string) => void;
   stopMedia: () => void;
   setPreviewStream: (stream: MediaStream | null) => void;
+  pendingPreview: () => Promise<LocalTrackLike[]> | null;
   ensurePreview: (options?: {
     forceRestart?: boolean;
     audioInputId?: string;
@@ -205,6 +206,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
 
     return { audioInputId: nextAudioInputId, videoInputId: nextVideoInputId };
   }, []);
+
+  const pendingPreview = React.useCallback(() => localPreviewPromiseRef.current, []);
 
   const ensurePreview = React.useCallback(
     async (
@@ -495,6 +498,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       releaseSession,
       stopMedia,
       setPreviewStream,
+      pendingPreview,
       ensurePreview,
       changeAudioInput,
       changeAudioOutput,
@@ -512,6 +516,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       changeAudioOutput,
       changeVideoInput,
       ensurePreview,
+      pendingPreview,
       reportAudioOutputFailure,
       previewBusy,
       previewError,

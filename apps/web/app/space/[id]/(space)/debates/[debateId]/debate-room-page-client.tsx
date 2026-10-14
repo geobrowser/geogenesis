@@ -418,6 +418,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * evidence.
    */
   const handedOverSession = mediaSession.activeSessionKey === mediaSessionKey;
+  const handedOverAtMount = React.useRef(handedOverSession);
   const inherited = React.useMemo(
     () =>
       inheritedJoinState(
@@ -433,6 +434,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(inherited.videoEnabled);
+  const joinStateChosenHere = React.useRef(false);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');
@@ -1963,6 +1965,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const toggleAudioMuted = React.useCallback(() => {
     const next = !audioMuted;
+    joinStateChosenHere.current = true;
     setAudioMuted(next);
     ensureKindsForJoinState({ audioMuted: next, videoEnabled });
   }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
@@ -1973,6 +1976,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const toggleVideoEnabled = React.useCallback(() => {
     const next = !videoEnabled;
+    joinStateChosenHere.current = true;
     setVideoEnabled(next);
     ensureKindsForJoinState({ audioMuted, videoEnabled: next });
   }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
@@ -2466,13 +2470,31 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // window starts. The import is cached by the module loader; media preview remains independent.
     void import('livekit-client').catch(() => undefined);
 
-    void ensureLocalPreview(
-      kindsForJoinState(
-        inherited,
-        mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind)
-      )
-    ).catch(() => undefined);
-  }, [debate, ensureLocalPreview, inherited, mediaSession.localTracksRef, roomState]);
+    let cancelled = false;
+    void (async () => {
+      const pending = mediaSession.pendingPreview();
+      if (pending) {
+        await pending.catch(() => undefined);
+        if (cancelled) return;
+      }
+
+      const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
+      const settled = joinStateChosenHere.current
+        ? { audioMuted, videoEnabled }
+        : inheritedJoinState(liveKinds, handedOverAtMount.current);
+
+      if (!joinStateChosenHere.current) {
+        setAudioMuted(settled.audioMuted);
+        setVideoEnabled(settled.videoEnabled);
+      }
+
+      await ensureLocalPreview(kindsForJoinState(settled, liveKinds)).catch(() => undefined);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debate, ensureLocalPreview, inherited, mediaSession.localTracksRef, mediaSession.pendingPreview, roomState]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;
