@@ -2,13 +2,13 @@ import * as React from 'react';
 
 import { capture } from '~/core/analytics';
 
-import { type Debate, dashlessId } from '../api';
+import { type Debate, type DebateLobbyRole, type DebateLobbyRoomVote, dashlessId } from '../api';
 import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
 
-// Lobby analytics (GEO-3126). Events must be registered in `geobrowser/analytics`; never send
-// `measurement_version`, `source` or `duration*`. Sessions live in memory, touched only from
-// effects and handlers.
+// Lobby analytics (GEO-3126, GEO-3311). Events must be registered in `geobrowser/analytics`; never
+// send `measurement_version`, `source`, `name` or `duration*`. Sessions live in memory, mirrored to
+// the tab's sessionStorage so a reload keeps them, and are touched only from effects and handlers.
 
 /** How the viewer got to the lobby, as of the join that starts the session. */
 export type LobbyEntry =
@@ -38,6 +38,9 @@ export type LobbyExit = 'left' | 'debate_started' | 'page_closed' | 'lobby_ended
 
 export type LobbyRequestKind = 'claim' | 'person';
 
+/** Why a room vote stopped, as the hosting tab that saw it stop can tell. */
+export type LobbyRoomVoteEnd = 'ended' | 'replaced' | 'lobby_ended';
+
 /**
  * `via` on a lobby's shared link. A signed-out visitor's room page learns the kind from the guest
  * view; when that read fails, the link still says it is a lobby and sign-in attributes the sign-up
@@ -54,6 +57,7 @@ export function lobbyShareUrl(lobbyId: string) {
 const ENTRY_TTL_MS = 60_000;
 /** How long after stepping out or leaving a debate still counts for the session. */
 const DEBATE_ATTRIBUTION_MS = 60 * 60_000;
+const STORAGE_KEY = 'geo.lobby-analytics.v1';
 
 type Session = {
   lobbyId: string;
@@ -68,13 +72,67 @@ type Session = {
   debates: Set<string>;
   /** A repeat click reuses a pending challenge, so ids are counted once. */
   requests: Set<string>;
+  /** As of the join, then each change this tab saw. `null` when geo-chat did not say. */
+  role: DebateLobbyRole | null;
+  hosting: boolean | null;
+  /** The viewer's `last_moderation.at` last seen, so a role change can name the host action behind it. */
+  moderationAt: string | null;
+  /** People in the room (members not stepped out, plus guests), the most this tab saw. */
+  peakHeadcount: number | null;
+  lastHeadcount: number | null;
 };
+
+type StoredSession = Omit<Session, 'debates' | 'requests'> & { debates: string[]; requests: string[] };
 
 let session: Session | null = null;
 /** Earlier sessions by dashless lobby id, so a debate or request answered after moving on still counts. */
 const retained = new Map<string, Session>();
 let pendingEntry: { lobbyId: string; entry: LobbyEntry; at: number } | null = null;
 let releaseTimer: ReturnType<typeof setTimeout> | null = null;
+let restored = false;
+/** The room vote each lobby is running, as a hosting tab last saw it, with its latest tally. */
+const runningRoomVotes = new Map<string, DebateLobbyRoomVote>();
+/** Votes this tab already reported ended; a stale read must not end one twice. */
+const endedRoomVotes = new Set<string>();
+
+function toStored(value: Session): StoredSession {
+  return { ...value, debates: [...value.debates], requests: [...value.requests] };
+}
+
+function fromStored(value: StoredSession): Session {
+  return { ...value, debates: new Set(value.debates), requests: new Set(value.requests) };
+}
+
+/**
+ * Brings back the sessions an earlier load of this tab kept, once. A reload around a debate's start
+ * would otherwise lose the session the debate belongs to, and the debate with it.
+ */
+function restore() {
+  if (restored) return;
+  restored = true;
+  try {
+    const raw = window.sessionStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    const stored = JSON.parse(raw) as { session: StoredSession | null; retained: StoredSession[] };
+    if (stored.session && session === null) session = fromStored(stored.session);
+    for (const earlier of stored.retained) {
+      if (!retained.has(earlier.lobbyId)) retained.set(earlier.lobbyId, fromStored(earlier));
+    }
+  } catch {
+    // Unreadable or blocked storage: start fresh.
+  }
+}
+
+function persist() {
+  try {
+    window.sessionStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ session: session ? toStored(session) : null, retained: [...retained.values()].map(toStored) })
+    );
+  } catch {
+    // Storage full or blocked; the in-memory session still counts this visit.
+  }
+}
 
 /** Analytics never gets in the way of the lobby. */
 function send(...args: Parameters<typeof capture>) {
@@ -93,6 +151,7 @@ function cancelRelease() {
 
 /** In the room: joined, not stepped out, not ended. */
 function activeFor(lobbyId: string) {
+  restore();
   return session !== null &&
     sameId(session.lobbyId, lobbyId) &&
     session.steppedOutAt === null &&
@@ -108,6 +167,7 @@ function withinWindow(target: Session, now: number) {
 
 /** The session a debate or request for this lobby belongs to: the current one first, then a retained one. */
 function sessionFor(lobbyId: string, now: number) {
+  restore();
   for (const [id, earlier] of retained) {
     if (!withinWindow(earlier, now)) retained.delete(id);
   }
@@ -120,11 +180,13 @@ function end(exit: LobbyExit, now = Date.now(), ended = session) {
   if (ended === session) cancelRelease();
   if (!ended || ended.endedAt !== null) return;
   ended.endedAt = now;
+  persist();
   send('lobby_left', {
     lobby_id: ended.lobbyId,
     lobby_session_id: ended.sessionId,
     time_in_lobby_ms: Math.max(0, Math.round((ended.steppedOutAt ?? now) - ended.joinedAt)),
     exit,
+    ...(ended.peakHeadcount === null ? {} : { peak_headcount: ended.peakHeadcount }),
   });
 }
 
@@ -144,8 +206,25 @@ function takeEntry(lobbyId: string): LobbyEntry {
   return pending.entry;
 }
 
+function roleProperties(role: DebateLobbyRole | null, hosting: boolean | null) {
+  return { ...(role === null ? {} : { role }), ...(hosting === null ? {} : { hosting }) };
+}
+
 /** The server put the viewer on the roster. Starts a session unless this one is still going. */
-export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boolean | null }) {
+export function lobbyJoined(
+  lobbyId: string,
+  {
+    isNewcomer,
+    role = null,
+    hosting = null,
+    moderationAt = null,
+  }: {
+    isNewcomer: boolean | null;
+    role?: DebateLobbyRole | null;
+    hosting?: boolean | null;
+    moderationAt?: string | null;
+  }
+) {
   cancelRelease();
   if (activeFor(lobbyId)) return;
   // Joining one lobby leaves any other; back without a debate ends a stepped-out one.
@@ -163,19 +242,85 @@ export function lobbyJoined(lobbyId: string, { isNewcomer }: { isNewcomer: boole
     endedAt: null,
     debates: new Set(),
     requests: new Set(),
+    role,
+    hosting,
+    moderationAt,
+    peakHeadcount: null,
+    lastHeadcount: null,
   };
   session = started;
   retained.delete(started.lobbyId);
+  persist();
   send('lobby_joined', {
     lobby_id: started.lobbyId,
     lobby_session_id: started.sessionId,
     ...newcomerProperty(isNewcomer),
+    ...roleProperties(role, hosting),
     entry: takeEntry(lobbyId),
   });
 }
 
+/**
+ * The viewer's own role in the lobby, from each view their tab reads while in the room. A change
+ * from the one the session last knew is reported once; `moderation_action` names the host action
+ * behind it when one landed with it.
+ */
+export function lobbyViewerRole(
+  lobbyId: string,
+  {
+    role,
+    hosting,
+    moderation,
+  }: {
+    role: DebateLobbyRole | null;
+    hosting: boolean;
+    moderation: { action: string; at: string } | null | undefined;
+  }
+) {
+  const active = activeFor(lobbyId);
+  if (!active || role === null) return;
+  const moderationAt = moderation?.at ?? null;
+  const freshModeration = moderation && moderationAt !== active.moderationAt ? moderation.action : null;
+  active.moderationAt = moderationAt;
+  if (active.role === null && active.hosting === null) {
+    // Joined against a server that did not say: this is the first role the session knows.
+    active.role = role;
+    active.hosting = hosting;
+    persist();
+    return;
+  }
+  if (active.role === role && active.hosting === hosting) {
+    persist();
+    return;
+  }
+  const previous = { role: active.role, hosting: active.hosting };
+  active.role = role;
+  active.hosting = hosting;
+  persist();
+  send('lobby_role_changed', {
+    lobby_id: active.lobbyId,
+    lobby_session_id: active.sessionId,
+    role,
+    hosting,
+    ...(previous.role === null ? {} : { previous_role: previous.role }),
+    ...(previous.hosting === null ? {} : { previous_hosting: previous.hosting }),
+    ...(freshModeration ? { moderation_action: freshModeration } : {}),
+  });
+}
+
+/** How many people are in the room, as the viewer's tab reads it. Kept for the session's peak. */
+export function lobbyHeadcount(lobbyId: string, headcount: number) {
+  const active = activeFor(lobbyId);
+  if (!active) return;
+  if (active.lastHeadcount === headcount && (active.peakHeadcount ?? 0) >= headcount) return;
+  active.lastHeadcount = headcount;
+  active.peakHeadcount = Math.max(active.peakHeadcount ?? 0, headcount);
+  persist();
+}
+
 /** Leave, or the server took them out. Also ends a stepped-out session. */
 export function lobbyLeft(lobbyId: string, exit: Exclude<LobbyExit, 'debate_started'>) {
+  restore();
   if (session && sameId(session.lobbyId, lobbyId)) end(exit);
 }
 
@@ -185,10 +330,12 @@ export function lobbySteppedOut(lobbyId: string, now = Date.now()) {
   if (!active) return;
   cancelRelease();
   active.steppedOutAt = now;
+  persist();
 }
 
 /** The lobby page mounted. Cancels the end a StrictMode unmount just scheduled. */
 export function lobbyPageMounted(lobbyId: string) {
+  restore();
   if (session && sameId(session.lobbyId, lobbyId)) cancelRelease();
 }
 
@@ -216,6 +363,7 @@ export function lobbyDebateSeen(debate: Pick<Debate, 'id' | 'lobby_id'>, now = D
   const current = sessionFor(debate.lobby_id, now);
   if (!current || current.debates.has(debate.id)) return;
   current.debates.add(debate.id);
+  persist();
   end('debate_started', now, current);
   send('lobby_debate_started', {
     lobby_id: current.lobbyId,
@@ -246,6 +394,7 @@ export function lobbyDebateRequested(
   const target = sessionFor(lobbyId, Date.now());
   if (!target || target.requests.has(request.requestId)) return;
   target.requests.add(request.requestId);
+  persist();
   send('lobby_debate_requested', {
     lobby_id: target.lobbyId,
     lobby_session_id: target.sessionId,
@@ -259,10 +408,107 @@ export function lobbyCreated(lobbyId: string, { scheduled }: { scheduled: boolea
   send('lobby_created', { lobby_id: dashlessId(lobbyId), scheduled });
 }
 
+/** The session id to put on an event about this lobby, when the viewer has one going. */
+function sessionProperty(lobbyId: string) {
+  const current = sessionFor(lobbyId, Date.now());
+  return current ? { lobby_session_id: current.sessionId } : {};
+}
+
+/** RSVP (Going) set or taken back on a lobby still to open, on the server's confirmation. */
+export function lobbyRsvpChanged(
+  lobbyId: string,
+  { going, startsAt, reminderCount }: { going: boolean; startsAt: string; reminderCount: number }
+) {
+  const startsAtMs = Date.parse(startsAt);
+  send('lobby_rsvp_changed', {
+    lobby_id: dashlessId(lobbyId),
+    going,
+    going_count: reminderCount,
+    ...(Number.isNaN(startsAtMs) ? {} : { ms_until_start: Math.round(startsAtMs - Date.now()) }),
+  });
+}
+
+function voteTally(vote: DebateLobbyRoomVote) {
+  return { agree: vote.tally.agree, disagree: vote.tally.disagree, eligible: vote.tally.eligible };
+}
+
+/** A host asked the room to vote, on the server's confirmation. Sent by that host's tab only. */
+export function lobbyRoomVoteStarted(lobbyId: string, vote: DebateLobbyRoomVote, { replaced }: { replaced: boolean }) {
+  const id = dashlessId(lobbyId);
+  // A vote this one replaced ends first, with the tally it had.
+  lobbyRoomVoteSeen(id, vote);
+  send('lobby_room_vote_started', {
+    lobby_id: id,
+    ...sessionProperty(id),
+    room_vote_id: vote.vote_id,
+    debate_claim_id: vote.claim.id,
+    target_id: vote.claim.claim_entity_id,
+    replaced,
+    eligible: vote.tally.eligible,
+  });
+}
+
+function endRoomVote(lobbyId: string, vote: DebateLobbyRoomVote, reason: LobbyRoomVoteEnd) {
+  runningRoomVotes.delete(lobbyId);
+  if (endedRoomVotes.has(vote.vote_id)) return;
+  endedRoomVotes.add(vote.vote_id);
+  const startedAt = Date.parse(vote.started_at);
+  send('lobby_room_vote_ended', {
+    lobby_id: lobbyId,
+    ...sessionProperty(lobbyId),
+    room_vote_id: vote.vote_id,
+    debate_claim_id: vote.claim.id,
+    target_id: vote.claim.claim_entity_id,
+    ...voteTally(vote),
+    end_reason: reason,
+    ...(Number.isNaN(startedAt) ? {} : { vote_ms: Math.max(0, Math.round(Date.now() - startedAt)) }),
+  });
+}
+
+/**
+ * The lobby's room vote as a hosting tab reads it. Keeps the latest tally of the running vote and,
+ * when that vote is gone or another took its place, reports it ended with that tally. Every hosting
+ * tab reports, so a lobby with two hosts in can send a vote's end twice: count by `room_vote_id`.
+ */
+export function lobbyRoomVoteSeen(lobbyId: string, vote: DebateLobbyRoomVote | null) {
+  const id = dashlessId(lobbyId);
+  const previous = runningRoomVotes.get(id);
+  if (previous && previous.vote_id !== vote?.vote_id) endRoomVote(id, previous, vote ? 'replaced' : 'ended');
+  if (vote && !endedRoomVotes.has(vote.vote_id)) runningRoomVotes.set(id, vote);
+}
+
+/**
+ * A host ended the lobby, on the server's confirmation. Sent by that host's tab only; a lobby that
+ * closes because everyone left has no `lobby_ended`, and its last `lobby_left` marks the end.
+ */
+export function lobbyEnded(lobbyId: string, { scheduled, opensAt }: { scheduled: boolean; opensAt: string }) {
+  const id = dashlessId(lobbyId);
+  const running = runningRoomVotes.get(id);
+  if (running) endRoomVote(id, running, 'lobby_ended');
+  const current = sessionFor(id, Date.now());
+  const opensAtMs = Date.parse(opensAt);
+  send('lobby_ended', {
+    lobby_id: id,
+    ...(current ? { lobby_session_id: current.sessionId } : {}),
+    scheduled,
+    ...(Number.isNaN(opensAtMs) ? {} : { open_ms: Math.max(0, Math.round(Date.now() - opensAtMs)) }),
+    ...(current?.lastHeadcount == null ? {} : { headcount: current.lastHeadcount }),
+    ...(current?.peakHeadcount == null ? {} : { peak_headcount: current.peakHeadcount }),
+  });
+}
+
 /** Tests only. */
 export function resetLobbyAnalytics() {
   cancelRelease();
   session = null;
   retained.clear();
   pendingEntry = null;
+  runningRoomVotes.clear();
+  endedRoomVotes.clear();
+  restored = false;
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing kept.
+  }
 }

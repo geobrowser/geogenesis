@@ -20,6 +20,7 @@ import {
 } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
+import { lobbyRoomVoteSeen, lobbyRoomVoteStarted } from './lobby-analytics';
 import { useDebateLobbyGuestView, useIsLobbyGuest } from './lobby-guest-hooks';
 import {
   type LobbyHighlightsState,
@@ -101,7 +102,10 @@ export function useStartLobbyRoomVote(lobbyId: string) {
         getPrivyIdentityToken,
         accountKey
       ),
-    onSuccess: store,
+    onSuccess: (state, { replace }) => {
+      store(state);
+      if (state.room_vote) lobbyRoomVoteStarted(lobbyId, state.room_vote, { replaced: replace === true });
+    },
   });
 }
 
@@ -113,7 +117,11 @@ export function useEndLobbyRoomVote(lobbyId: string) {
   return useMutation({
     mutationFn: (voteId: string) =>
       endDebateLobbyRoomVote(dashlessId(lobbyId), voteId, getPrivyIdentityToken, accountKey),
-    onSuccess: store,
+    onSuccess: state => {
+      store(state);
+      // Reported with the tally this tab last saw, before a later read can replace it.
+      lobbyRoomVoteSeen(lobbyId, state.room_vote);
+    },
   });
 }
 

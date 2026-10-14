@@ -9,12 +9,18 @@ const {
   lobbyCreated,
   lobbyDebateRequested,
   lobbyDebateSeen,
+  lobbyEnded,
+  lobbyHeadcount,
   lobbyJoined,
   lobbyLeft,
   lobbyPageClosed,
   lobbyPageMounted,
   lobbyPageUnmounted,
+  lobbyRoomVoteSeen,
+  lobbyRoomVoteStarted,
+  lobbyRsvpChanged,
   lobbySteppedOut,
+  lobbyViewerRole,
   markLobbyEntry,
   resetLobbyAnalytics,
   useLobbyDebateAnalytics,
@@ -298,5 +304,242 @@ describe('a visit without an account', () => {
     lobbyJoined(LOBBY, { isNewcomer: true });
     lobbyJoined(LOBBY, { isNewcomer: true });
     expect(events('lobby_joined')).toEqual([expect.objectContaining({ lobby_id: DASHLESS, entry: 'link' })]);
+  });
+});
+
+describe('roles (GEO-3311)', () => {
+  const lobby = 'a1000000000000000000000000000001';
+
+  it('puts the role at join on lobby_joined, and leaves it out when geo-chat did not say', () => {
+    lobbyJoined(lobby, { isNewcomer: false, role: 'listener', hosting: false });
+    lobbyLeft(lobby, 'left');
+    lobbyJoined(lobby, { isNewcomer: false });
+
+    const [first, second] = events('lobby_joined');
+    expect(first).toMatchObject({ role: 'listener', hosting: false });
+    expect(second).not.toHaveProperty('role');
+    expect(second).not.toHaveProperty('hosting');
+  });
+
+  it('reports each change once, naming the host action that landed with it', () => {
+    lobbyJoined(lobby, { isNewcomer: false, role: 'listener', hosting: false, moderationAt: null });
+    // The views that follow the join repeat it.
+    lobbyViewerRole(lobby, { role: 'listener', hosting: false, moderation: null });
+    const moved = { action: 'move_to_speakers', at: '2026-10-08T12:01:00Z' };
+    lobbyViewerRole(lobby, { role: 'speaker', hosting: false, moderation: moved });
+    lobbyViewerRole(lobby, { role: 'speaker', hosting: false, moderation: moved });
+    // The only host left: hosting with no action on the viewer.
+    lobbyViewerRole(lobby, { role: 'speaker', hosting: true, moderation: moved });
+
+    expect(events('lobby_role_changed')).toEqual([
+      {
+        lobby_id: lobby,
+        lobby_session_id: expect.any(String),
+        role: 'speaker',
+        hosting: false,
+        previous_role: 'listener',
+        previous_hosting: false,
+        moderation_action: 'move_to_speakers',
+      },
+      {
+        lobby_id: lobby,
+        lobby_session_id: expect.any(String),
+        role: 'speaker',
+        hosting: true,
+        previous_role: 'speaker',
+        previous_hosting: false,
+      },
+    ]);
+  });
+
+  it('takes the first role after a join that did not say as known, not as a change', () => {
+    lobbyJoined(lobby, { isNewcomer: false });
+    lobbyViewerRole(lobby, { role: 'speaker', hosting: false, moderation: null });
+    expect(events('lobby_role_changed')).toEqual([]);
+  });
+
+  it('sends nothing for a role read outside the room', () => {
+    lobbyViewerRole(lobby, { role: 'host', hosting: true, moderation: null });
+    lobbyJoined(lobby, { isNewcomer: false, role: 'listener', hosting: false });
+    lobbySteppedOut(lobby);
+    lobbyViewerRole(lobby, { role: 'speaker', hosting: false, moderation: null });
+    expect(events('lobby_role_changed')).toEqual([]);
+  });
+});
+
+describe('headcount (GEO-3311)', () => {
+  const lobby = 'a2000000000000000000000000000002';
+
+  it('puts the most people the tab saw in the room on lobby_left', () => {
+    lobbyJoined(lobby, { isNewcomer: false });
+    lobbyHeadcount(lobby, 3);
+    lobbyHeadcount(lobby, 7);
+    lobbyHeadcount(lobby, 2);
+    lobbyLeft(lobby, 'left');
+
+    expect(events('lobby_left')[0]).toMatchObject({ peak_headcount: 7 });
+  });
+
+  it('leaves peak_headcount out when the tab never read the room', () => {
+    lobbyJoined(lobby, { isNewcomer: false });
+    lobbyLeft(lobby, 'left');
+    expect(events('lobby_left')[0]).not.toHaveProperty('peak_headcount');
+  });
+});
+
+describe('room votes (GEO-3311)', () => {
+  const lobby = 'a3000000000000000000000000000003';
+  const vote = (id: string, tally = { agree: 0, disagree: 0, eligible: 4 }) => ({
+    vote_id: id,
+    claim: {
+      id: `claim-${id}`,
+      space_id: 'space',
+      claim_entity_id: `entity-${id}`,
+      claim: 'Claim text',
+      description: null,
+    },
+    started_by: null,
+    started_at: '2026-10-08T12:00:00Z',
+    tally,
+  });
+
+  it('reports a started vote with its claim, and its end with the last tally the host saw', () => {
+    lobbyJoined(lobby, { isNewcomer: false, role: 'host', hosting: true });
+    lobbyRoomVoteStarted(lobby, vote('v1'), { replaced: false });
+    lobbyRoomVoteSeen(lobby, vote('v1', { agree: 2, disagree: 1, eligible: 5 }));
+    vi.advanceTimersByTime(90_000);
+    lobbyRoomVoteSeen(lobby, null);
+    // A later read of the same state, and a stale one, end nothing again.
+    lobbyRoomVoteSeen(lobby, null);
+    lobbyRoomVoteSeen(lobby, vote('v1'));
+    lobbyRoomVoteSeen(lobby, null);
+
+    expect(events('lobby_room_vote_started')).toEqual([
+      {
+        lobby_id: lobby,
+        lobby_session_id: expect.any(String),
+        room_vote_id: 'v1',
+        debate_claim_id: 'claim-v1',
+        target_id: 'entity-v1',
+        replaced: false,
+        eligible: 4,
+      },
+    ]);
+    expect(events('lobby_room_vote_ended')).toEqual([
+      {
+        lobby_id: lobby,
+        lobby_session_id: expect.any(String),
+        room_vote_id: 'v1',
+        debate_claim_id: 'claim-v1',
+        target_id: 'entity-v1',
+        agree: 2,
+        disagree: 1,
+        eligible: 5,
+        end_reason: 'ended',
+        vote_ms: 90_000,
+      },
+    ]);
+  });
+
+  it('ends a replaced vote before the new one starts, from any host’s tab', () => {
+    lobbyRoomVoteSeen(lobby, vote('v1', { agree: 1, disagree: 0, eligible: 3 }));
+    lobbyRoomVoteStarted(lobby, vote('v2'), { replaced: true });
+
+    expect(capture.mock.calls.map(([name]) => name)).toEqual(['lobby_room_vote_ended', 'lobby_room_vote_started']);
+    expect(events('lobby_room_vote_ended')[0]).toMatchObject({ room_vote_id: 'v1', end_reason: 'replaced', agree: 1 });
+    expect(events('lobby_room_vote_started')[0]).toMatchObject({ room_vote_id: 'v2', replaced: true });
+  });
+
+  it('ends a running vote as lobby_ended when the host ends the lobby', () => {
+    lobbyRoomVoteSeen(lobby, vote('v3'));
+    lobbyEnded(lobby, { scheduled: false, opensAt: '2026-10-08T11:00:00Z' });
+
+    expect(events('lobby_room_vote_ended')[0]).toMatchObject({ room_vote_id: 'v3', end_reason: 'lobby_ended' });
+  });
+});
+
+describe('lobby_ended and lobby_rsvp_changed (GEO-3311)', () => {
+  const lobby = 'a4000000000000000000000000000004';
+
+  it('sends how long the lobby was open and the host tab’s headcounts', () => {
+    lobbyJoined(lobby, { isNewcomer: false, role: 'host', hosting: true });
+    lobbyHeadcount(lobby, 6);
+    lobbyHeadcount(lobby, 4);
+    lobbyEnded(lobby, { scheduled: true, opensAt: '2026-10-08T11:30:00Z' });
+
+    expect(events('lobby_ended')).toEqual([
+      {
+        lobby_id: lobby,
+        lobby_session_id: expect.any(String),
+        scheduled: true,
+        open_ms: 30 * 60_000,
+        headcount: 4,
+        peak_headcount: 6,
+      },
+    ]);
+  });
+
+  it('sends lobby_ended without session fields from a host who was not in the room', () => {
+    lobbyEnded(lobby, { scheduled: false, opensAt: 'not a date' });
+    expect(events('lobby_ended')).toEqual([{ lobby_id: lobby, scheduled: false }]);
+  });
+
+  it('records Going and taking it back, with the count and the time to the start', () => {
+    lobbyRsvpChanged(lobby, { going: true, startsAt: '2026-10-09T12:00:00Z', reminderCount: 3 });
+    lobbyRsvpChanged(lobby, { going: false, startsAt: '2026-10-09T12:00:00Z', reminderCount: 2 });
+
+    expect(events('lobby_rsvp_changed')).toEqual([
+      { lobby_id: lobby, going: true, going_count: 3, ms_until_start: 24 * 60 * 60_000 },
+      { lobby_id: lobby, going: false, going_count: 2, ms_until_start: 24 * 60 * 60_000 },
+    ]);
+  });
+});
+
+describe('a reload (GEO-3311)', () => {
+  const lobby = 'a5000000000000000000000000000005';
+
+  // A fresh copy of the module over the same sessionStorage, as after a reload.
+  const reload = async () => {
+    vi.resetModules();
+    return import('./lobby-analytics');
+  };
+
+  it('still credits the lobby with a debate that starts after the tab reloads', async () => {
+    lobbyJoined(lobby, { isNewcomer: true });
+    lobbySteppedOut(lobby);
+
+    const reloaded = await reload();
+    reloaded.lobbyDebateSeen({ id: 'debate-after-reload', lobby_id: lobby });
+
+    const [joined] = events('lobby_joined');
+    expect(events('lobby_debate_started')).toEqual([
+      expect.objectContaining({
+        lobby_id: lobby,
+        lobby_session_id: joined.lobby_session_id,
+        debate_id: 'debate-after-reload',
+        is_newcomer: true,
+      }),
+    ]);
+    reloaded.resetLobbyAnalytics();
+  });
+
+  it('does not count a debate twice across a reload', async () => {
+    lobbyJoined(lobby, { isNewcomer: false });
+    lobbyDebateSeen({ id: 'debate-before-reload', lobby_id: lobby });
+
+    const reloaded = await reload();
+    reloaded.lobbyDebateSeen({ id: 'debate-before-reload', lobby_id: lobby });
+
+    expect(events('lobby_debate_started')).toHaveLength(1);
+    expect(events('lobby_left')).toHaveLength(1);
+    reloaded.resetLobbyAnalytics();
+  });
+
+  it('starts from nothing when storage cannot be read', async () => {
+    window.sessionStorage.setItem('geo.lobby-analytics.v1', '{not json');
+    const reloaded = await reload();
+    reloaded.lobbyDebateSeen({ id: 'debate-unreadable', lobby_id: lobby });
+    expect(events('lobby_debate_started')).toEqual([]);
+    reloaded.resetLobbyAnalytics();
   });
 });
