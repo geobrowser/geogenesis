@@ -11,6 +11,7 @@ import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
+import { breakAnnouncesRound, breakCueAt, earlyEndCueAt, inUncondensedLeadIn } from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -25,6 +26,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { DebateBreakOverlay, DebateEarlyEndLabels } from './debate-break-cues';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
@@ -155,7 +157,9 @@ export function DebateFeedPlayer({
     timelineSeconds,
     turnState,
     turnSpans,
-    turnCount,
+    turnSegments,
+    roundTurns,
+    playbackBreaks,
     subtitle,
     onPlaybackTick,
     resyncSlot,
@@ -352,13 +356,48 @@ export function DebateFeedPlayer({
    * small for a phrase across it.
    */
   const roundCard = React.useMemo(
-    () => (playing && !reducedOverlays ? roundCardAt(turnSpans, turnCount, playheadSeconds) : null),
-    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
+    () =>
+      playing && !reducedOverlays
+        ? // A condensed break's own graphic already announced the round it leads into (GEO-3277).
+          roundCardAt(turnSpans, roundTurns, playheadSeconds, round =>
+            breakAnnouncesRound(playbackBreaks.condensed, round)
+          )
+        : null,
+    [playbackBreaks.condensed, playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
   );
   const roundBadge = React.useMemo(
-    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, turnCount, playheadSeconds) : null),
-    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, roundTurns, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
   );
+
+  /**
+   * The breaks between Open rounds and the early ends a condensed render cut down (GEO-3277), drawn
+   * from the playhead like the round card. Not gated on `playing`, unlike the card: the footage
+   * under a break is a sped-up catch-up that means nothing without its graphic, so a viewer who
+   * pauses or scrubs there sees the graphic held where the video is.
+   */
+  const playheadMs = playheadSeconds * 1_000;
+  const breakCue = React.useMemo(
+    () => (reducedOverlays ? null : breakCueAt(playbackBreaks.condensed, playbackBreaks.picks, playheadMs)),
+    [playbackBreaks.condensed, playbackBreaks.picks, playheadMs, reducedOverlays]
+  );
+  const earlyEndCue = React.useMemo(
+    () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, turnSegments, playheadMs)),
+    [playbackBreaks.earlyEnds, playheadMs, reducedOverlays, turnSegments]
+  );
+  /**
+   * A required round's lead-in that an older render kept inside the next turn. Both mics are open
+   * between rounds (#2838), so it can hold talk that was never meant to be published: nobody is
+   * audible through it, and it is not captioned.
+   */
+  const leadInSilent = React.useMemo(
+    () => inUncondensedLeadIn(debate, turnSegments, playheadMs),
+    [debate, playheadMs, turnSegments]
+  );
+  const breakNames = {
+    1: slot1Participant ? speakerLabel(slot1Participant) : 'Debater',
+    2: slot2Participant ? speakerLabel(slot2Participant) : 'Debater',
+  };
 
   const showReplay = ready && playbackEnded;
   // The end card is where an ended debate lands, except on a compact gallery tile — which has no
@@ -639,7 +678,7 @@ export function DebateFeedPlayer({
           videoRef={slot1VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
-          audible={playing && turnState?.slot === 1}
+          audible={playing && turnState?.slot === 1 && !leadInSilent}
           countdown={playing && turnState?.slot === 1 ? turnState : null}
           roundBadge={turnState?.slot === 1 ? roundBadge : null}
           // Only this tile's: the card is centred on the seam, so it crosses the *top* tile's name
@@ -703,7 +742,7 @@ export function DebateFeedPlayer({
           videoRef={slot2VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
-          audible={playing && turnState?.slot === 2}
+          audible={playing && turnState?.slot === 2 && !leadInSilent}
           countdown={playing && turnState?.slot === 2 ? turnState : null}
           roundBadge={turnState?.slot === 2 ? roundBadge : null}
           mutedByUser={mutedByUser}
@@ -791,13 +830,29 @@ export function DebateFeedPlayer({
           It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
           real only where the render retained speech from before the incoming debater's clock
           started (GEO-2754), which is the one case where they are already talking as it lands. */}
-        {subtitle && !roundCard && !endCardShown && (!reducedOverlays || (active && playing && mutedByUser)) && (
-          <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
-            {subtitle}
-          </span>
-        )}
+        {subtitle &&
+          !roundCard &&
+          !breakCue &&
+          !leadInSilent &&
+          !endCardShown &&
+          (!reducedOverlays || (active && playing && mutedByUser)) && (
+            <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
+              {subtitle}
+            </span>
+          )}
 
         <DebateRoundCard cue={roundCard} />
+        {!endCardShown && (
+          <>
+            <DebateBreakOverlay
+              cue={breakCue}
+              names={breakNames}
+              firstSlot={debate.first_participant_slot}
+              playing={playing}
+            />
+            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} />
+          </>
+        )}
 
         {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because

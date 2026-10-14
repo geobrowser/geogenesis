@@ -9,6 +9,8 @@ import { reportEvent } from '~/core/telemetry/logger';
 import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
+import { debateTurnRoleForDebate, isOpenRoundsDebate } from './open-rounds';
+import { breaksEndMs } from './playback-breaks';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
@@ -27,6 +29,7 @@ import {
   turnStateFromSegments,
   usableTurnDurationsMs,
 } from './playback-utils';
+import type { TurnCount } from './round-cues';
 
 type PlaybackUrls = {
   slot1: string | null;
@@ -350,6 +353,18 @@ export function useDebatePlayback(
     [mediaQuery.data?.turn_segments]
   );
   /**
+   * The breaks between Open rounds and the early ends a condensed render cut down (GEO-3276), and
+   * the picks the breaks reveal. All empty on a fixed format and on an older render.
+   */
+  const playbackBreaks = React.useMemo(
+    () => ({
+      condensed: mediaQuery.data?.condensed_breaks ?? [],
+      earlyEnds: mediaQuery.data?.early_end_gaps ?? [],
+      picks: mediaQuery.data?.round_picks ?? [],
+    }),
+    [mediaQuery.data?.condensed_breaks, mediaQuery.data?.early_end_gaps, mediaQuery.data?.round_picks]
+  );
+  /**
    * Every turn's place on the timeline, for anything that has to name a turn rather than time it.
    *
    * Same precedence as `turnStateAt`: the rendered segments where they exist, the format's
@@ -374,6 +389,11 @@ export function useDebatePlayback(
    * segments instead: that is still what was recorded, where the catalog would be a guess.
    */
   const turnCount = turnDurations?.length ?? turnSegments.length;
+  /** What the round cues call each turn: by count for a fixed format, as named for Open rounds. */
+  const roundTurns = React.useMemo<TurnCount>(
+    () => (isOpenRoundsDebate(debate) ? turnIndex => debateTurnRoleForDebate(debate, turnIndex) : turnCount),
+    [debate, turnCount]
+  );
   const turnStateAt = React.useCallback(
     (seconds: number): TurnState =>
       turnSegments.length > 0
@@ -390,11 +410,12 @@ export function useDebatePlayback(
   const timelineSeconds = React.useMemo(
     () =>
       turnSegments.length > 0
-        ? timelineSecondsForSegments(turnSegments)
+        ? // A final End's reveal plays after the last turn (GEO-3276).
+          Math.max(timelineSecondsForSegments(turnSegments), breaksEndMs(playbackBreaks.condensed) / 1_000)
         : turnDurations
           ? timelineSecondsFor(turnDurations)
           : 0,
-    [turnDurations, turnSegments]
+    [playbackBreaks.condensed, turnDurations, turnSegments]
   );
 
   /**
@@ -1514,7 +1535,10 @@ export function useDebatePlayback(
     timelineSeconds,
     turnState,
     turnSpans,
+    turnSegments,
     turnCount,
+    roundTurns,
+    playbackBreaks,
     activeSlot,
     subtitle,
     onPlaybackTick: updateTurnState,

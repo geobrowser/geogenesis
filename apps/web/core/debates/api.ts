@@ -171,11 +171,56 @@ export type DebateMediaTurnSegment = {
   countdown_start_ms?: number;
 };
 
+/**
+ * A break between two Open rounds as a condensed render plays it (GEO-3276): its source stretch
+ * sped up to `duration_ms` with the sound muted, on the same output timeline as the turns.
+ * `round_index` is the round that ended at the break; `next_round_index` the one whose first turn
+ * starts at `output_end_ms`, absent after the final End.
+ */
+export type DebateMediaCondensedBreak = {
+  kind: 'lead_in' | 'extend' | 'final_end';
+  round_index: number;
+  next_round_index?: number | null;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+  speed: number;
+};
+
+/** An early end inside a round, cut down to a short quiet at `output_ms` (GEO-3276). */
+export type DebateMediaEarlyEndGap = {
+  turn_index: number;
+  next_turn_index: number;
+  output_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+  removed_ms: number;
+  quiet_kept_ms: number;
+};
+
+/** Every pick a debater saved for a round, in order; the last one per slot is what counted. */
+export type DebateMediaRoundPick = {
+  round_index: number;
+  participant_slot: ParticipantSlot;
+  pick: OpenRoundPick;
+  previous_pick: OpenRoundPick | null;
+  turn_index: number;
+  during_decision: boolean;
+  at: string;
+  output_ms: number;
+};
+
 export type DebateMediaResponse = {
   job: DebateMediaJobSummary | null;
   artifacts: DebateMediaArtifact[];
   transcript_segment_count: number;
   turn_segments?: DebateMediaTurnSegment[];
+  /** Present only on an Open rounds debate rendered with condensed breaks (GEO-3276). */
+  condensed_breaks?: DebateMediaCondensedBreak[];
+  early_end_gaps?: DebateMediaEarlyEndGap[];
+  round_picks?: DebateMediaRoundPick[];
   layout: DebateMediaRenderLayout;
   whisper_model_id: string;
 };

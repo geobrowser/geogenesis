@@ -2,9 +2,10 @@ import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { Debate, DebateParticipant } from '~/core/debates/api';
+import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/debates/api';
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
+import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
 import { DebateFeedPlayer } from './debate-feed-player';
 
@@ -139,6 +140,10 @@ function controllerFixture(overrides: {
   seekBoth?: ReturnType<typeof vi.fn>;
   /** Where the playhead sits, which is all a round cue reads. */
   playheadSeconds?: number;
+  /** A condensed Open rounds render's breaks and picks (GEO-3277); none by default. */
+  playbackBreaks?: DebatePlaybackController['playbackBreaks'];
+  turnSegments?: DebateMediaTurnSegment[];
+  roundTurns?: DebatePlaybackController['roundTurns'];
 }) {
   /*
    * Four 30s turns from `turnSlot`, and `turnState` read off them rather than pinned.
@@ -176,6 +181,9 @@ function controllerFixture(overrides: {
     // The format's count, which is what names a round. Equal to the spans here because nothing was
     // yielded early; the two part company on a debate that was.
     turnCount: 4,
+    roundTurns: overrides.roundTurns ?? 4,
+    turnSegments: overrides.turnSegments ?? [],
+    playbackBreaks: overrides.playbackBreaks ?? { condensed: [], earlyEnds: [], picks: [] },
     activeSlot: speakingSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
@@ -1806,5 +1814,166 @@ describe('the pair becomes watchable together (GEO-2965)', () => {
     const active = renderHeld();
     expect(active.slot1.preload).toBe('auto');
     expect(active.slot2.preload).toBe('auto');
+  });
+});
+
+describe('open rounds breaks in published playback (GEO-3277)', () => {
+  // Round 2's lead-in or reveal: a 2.4 s condensed break at 60 s, after round 1 (index) resolved Extend.
+  const extendBreak = {
+    kind: 'extend' as const,
+    round_index: 0,
+    next_round_index: 1,
+    output_start_ms: 60_000,
+    output_end_ms: 62_400,
+    duration_ms: 2_400,
+    source_start_ms: 70_000,
+    source_end_ms: 78_000,
+    speed: 3.33,
+  };
+  const pick = (round: number, slot: 1 | 2, value: 'extend' | 'end', at: string) => ({
+    round_index: round,
+    participant_slot: slot,
+    pick: value,
+    previous_pick: null,
+    turn_index: round * 2 + 1,
+    during_decision: true,
+    at,
+    output_ms: 60_000,
+  });
+  const breaks = (overrides: Partial<DebatePlaybackController['playbackBreaks']>) => ({
+    condensed: [],
+    earlyEnds: [],
+    picks: [],
+    ...overrides,
+  });
+
+  it('turns both picks over first, then announces the next round and who opens it', () => {
+    const playbackBreaks = breaks({
+      condensed: [extendBreak],
+      picks: [pick(0, 1, 'extend', '2026-10-13T18:59:45Z'), pick(0, 2, 'extend', '2026-10-13T18:59:47Z')],
+    });
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 60.3, playbackBreaks });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active />);
+
+    const reveals = [...container.querySelectorAll('[data-open-round-reveal]')];
+    expect(reveals.map(card => card.getAttribute('data-open-round-reveal'))).toEqual(['extend', 'extend']);
+    expect(container.querySelector('[data-open-round-result]')).toBeNull();
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.5, playbackBreaks });
+    rerender(<DebateFeedPlayer debate={debate} active />);
+    const result = container.querySelector('[data-open-round-result="round"]');
+    expect(result?.textContent).toMatch(/^Round2.+opens$/);
+    expect(container.querySelector('[data-open-round-reveal]')).toBeNull();
+  });
+
+  it('holds the animations at the playhead, so a scrub into the break lands mid-graphic', () => {
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 61.5,
+      playbackBreaks: breaks({ condensed: [extendBreak] }),
+    });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    const root = container.querySelector('[data-debate-break="extend"]') as HTMLElement;
+    expect(root.style.getPropertyValue('--open-round-t')).toBe('1500');
+    const slam = container.querySelector(
+      '[data-open-round-result] .motion-safe\\:animate-open-round-slam'
+    ) as HTMLElement;
+    expect(slam.style.animationPlayState).toBe('paused');
+  });
+
+  it('does not announce a round twice: the round card stands down after a break that announced it', () => {
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 60.5,
+      playbackBreaks: breaks({ condensed: [{ ...extendBreak, output_start_ms: 57_600, output_end_ms: 60_000 }] }),
+    });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+  });
+
+  it('keeps the picks up beside "That\'s a wrap" after the final End, and names a missing pick', () => {
+    const finalEnd = { ...extendBreak, kind: 'final_end' as const, round_index: 1, next_round_index: null };
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 61.8,
+      playbackBreaks: breaks({ condensed: [finalEnd], picks: [pick(1, 1, 'extend', '2026-10-13T19:01:30Z')] }),
+    });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(container.querySelector('[data-open-round-result="wrap"]')?.textContent).toMatch(/didn't pick in time$/);
+    const reveals = [...container.querySelectorAll('[data-open-round-reveal]')];
+    expect(reveals.map(card => card.getAttribute('data-open-round-reveal'))).toEqual(['extend', 'none']);
+  });
+
+  it('shows "Ended early" and whose turn it is around an early end the render cut down', () => {
+    const turnSegments: DebateMediaTurnSegment[] = [
+      { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000 },
+      { turn_index: 1, participant_slot: 2, output_start_ms: 30_000, output_end_ms: 60_000, duration_ms: 30_000 },
+    ];
+    const earlyEnd = {
+      turn_index: 0,
+      next_turn_index: 1,
+      output_ms: 30_000,
+      source_start_ms: 30_000,
+      source_end_ms: 33_000,
+      removed_ms: 3_000,
+      quiet_kept_ms: 300,
+    };
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 30.1,
+      turnSegments,
+      playbackBreaks: breaks({ earlyEnds: [earlyEnd] }),
+    });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    const labels = container.querySelector('[data-debate-early-end]');
+    expect(labels?.textContent).toContain('Ended early');
+    expect(labels?.textContent).toMatch(/’s turn$/);
+  });
+
+  // Older renders keep a required round's lead-in at the front of its first turn, and both mics are
+  // open between rounds now: nothing said there may be heard or captioned.
+  it("keeps an older render's lead-in silent and uncaptioned, then plays the round", () => {
+    const openRoundsDebate = {
+      ...debate,
+      open_rounds: { required_rebuttal_rounds: 1, required_round_lead_in_ms: 8_000 },
+    } as unknown as Debate;
+    const turnSegments: DebateMediaTurnSegment[] = [
+      {
+        turn_index: 2,
+        participant_slot: 1,
+        output_start_ms: 60_000,
+        output_end_ms: 113_000,
+        duration_ms: 53_000,
+        countdown_start_ms: 68_000,
+      },
+    ];
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 62,
+      turnSegments,
+      subtitle: 'Talk between rounds',
+    });
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRoundsDebate} active />);
+    const [slot1] = Array.from(container.querySelectorAll('video'));
+    expect(slot1.muted).toBe(true);
+    expect(container.textContent).not.toContain('Talk between rounds');
+
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 70,
+      turnSegments,
+      subtitle: 'The round itself',
+    });
+    rerender(<DebateFeedPlayer debate={openRoundsDebate} active />);
+    expect(slot1.muted).toBe(false);
+    expect(container.textContent).toContain('The round itself');
   });
 });

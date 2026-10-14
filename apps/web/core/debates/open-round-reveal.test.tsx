@@ -158,6 +158,12 @@ describe('openRoundWrapNote', () => {
     expect(openRoundWrapNote('end', { name: 'Bob', pick: 'end' })).toBeNull();
   });
 
+  // Published playback has no "you" (GEO-3277): the first side is named like the second.
+  it('names the first side when given a name instead of "you"', () => {
+    expect(openRoundWrapNote(null, { name: 'Adam', pick: 'extend' }, 'Preston')).toBe("Preston didn't pick in time");
+    expect(openRoundWrapNote('extend', { name: 'Adam', pick: null }, 'Preston')).toBe("Adam didn't pick in time");
+  });
+
   it('says nothing for a split or an unknown pick', () => {
     expect(openRoundWrapNote('extend', { name: 'Bob', pick: 'end' })).toBeNull();
     expect(openRoundWrapNote(undefined, { name: 'Bob', pick: undefined })).toBeNull();
