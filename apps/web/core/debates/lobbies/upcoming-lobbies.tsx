@@ -150,20 +150,21 @@ function UpcomingLobbyCard({
  */
 export function UpcomingLobbiesRow({
   lobbies,
+  loadFailed = false,
   canHost,
   onOpenLobby,
 }: {
   lobbies: DebateLobbySummary[];
+  /** The list could not be read: said in place of the cards. */
+  loadFailed?: boolean;
   canHost: boolean;
   onOpenLobby: () => void;
 }) {
-  const scrollerRef = React.useRef<HTMLUListElement>(null);
-  const overflow = useHorizontalOverflow(scrollerRef);
   const { close } = useDebatesHub();
   const pathname = usePathname();
   const searchParams = useSearchParams();
 
-  if (lobbies.length === 0 && !canHost) return null;
+  if (lobbies.length === 0 && !canHost && !loadFailed) return null;
 
   const from = urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash);
 
@@ -180,37 +181,13 @@ export function UpcomingLobbiesRow({
         ) : null}
       </div>
 
-      {lobbies.length > 0 ? (
+      {loadFailed ? (
+        <Text as="p" variant="footnote" color="grey-04" className="px-4">
+          Could not load lobbies.
+        </Text>
+      ) : lobbies.length > 0 ? (
         <>
-          <div className="relative">
-            <ul
-              ref={scrollerRef}
-              className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto overscroll-x-contain px-4"
-            >
-              {lobbies.map(lobby => (
-                <UpcomingLobbyCard key={lobby.lobby_id} lobby={lobby} entry="side_panel" alone={lobbies.length === 1} />
-              ))}
-            </ul>
-            {(['start', 'end'] as const).map(side =>
-              overflow[side] ? (
-                <ScrollEdgeButton
-                  key={side}
-                  side={side}
-                  ariaLabel={side === 'start' ? 'Show earlier lobbies' : 'Show more lobbies'}
-                  analyticsLabel={debateAnalyticsLabel(
-                    'hub',
-                    `Upcoming lobbies scroll ${side === 'start' ? 'left' : 'right'}`
-                  )}
-                  analyticsIntent="scroll_lobbies"
-                  onClick={() => {
-                    if (scrollerRef.current) scrollRowBy(scrollerRef.current, side === 'start' ? -1 : 1);
-                  }}
-                  className={cx('bottom-0 w-14', side === 'start' ? 'pl-2' : 'pr-2')}
-                  buttonClassName="size-7 border border-grey-02 bg-white text-text hover:bg-grey-01"
-                />
-              ) : null
-            )}
-          </div>
+          <UpcomingLobbiesScroller lobbies={lobbies} />
           <div className="flex justify-end px-4">
             <Link
               href={calendarHref(from)}
@@ -224,5 +201,53 @@ export function UpcomingLobbiesRow({
         </>
       ) : null}
     </section>
+  );
+}
+
+/**
+ * The cards, scrolling sideways. Its own component so the overflow hook mounts with the scroller it
+ * measures: the row itself first draws before any lobby has loaded. The cards sit in a list sized to
+ * them, which the hook also observes, so lobbies added later are measured too, as the tab row's are.
+ */
+function UpcomingLobbiesScroller({ lobbies }: { lobbies: DebateLobbySummary[] }) {
+  const scrollerRef = React.useRef<HTMLDivElement>(null);
+  const overflow = useHorizontalOverflow(scrollerRef);
+
+  return (
+    <div className="relative">
+      {/* `overscroll-x-contain` so a swipe that reaches the end does not chain into the browser's
+          back gesture. */}
+      <div
+        ref={scrollerRef}
+        className="no-scrollbar snap-x snap-mandatory scroll-px-4 overflow-x-auto overscroll-x-contain"
+      >
+        {/* Sized to its cards, except a lone card's, which fills the panel and truncates its name
+            rather than growing the list to fit it. */}
+        <ul className={cx('flex gap-2 px-4', lobbies.length === 1 ? 'w-full' : 'w-max')}>
+          {lobbies.map(lobby => (
+            <UpcomingLobbyCard key={lobby.lobby_id} lobby={lobby} entry="side_panel" alone={lobbies.length === 1} />
+          ))}
+        </ul>
+      </div>
+      {(['start', 'end'] as const).map(side =>
+        overflow[side] ? (
+          <ScrollEdgeButton
+            key={side}
+            side={side}
+            ariaLabel={side === 'start' ? 'Show earlier lobbies' : 'Show more lobbies'}
+            analyticsLabel={debateAnalyticsLabel(
+              'hub',
+              `Upcoming lobbies scroll ${side === 'start' ? 'left' : 'right'}`
+            )}
+            analyticsIntent="scroll_lobbies"
+            onClick={() => {
+              if (scrollerRef.current) scrollRowBy(scrollerRef.current, side === 'start' ? -1 : 1);
+            }}
+            className={cx('bottom-0 w-14', side === 'start' ? 'pl-2' : 'pr-2')}
+            buttonClassName="size-7 border border-grey-02 bg-white text-text hover:bg-grey-01"
+          />
+        ) : null
+      )}
+    </div>
   );
 }

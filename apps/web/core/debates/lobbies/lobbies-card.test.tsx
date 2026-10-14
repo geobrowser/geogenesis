@@ -10,6 +10,7 @@ const mocks = vi.hoisted(() => ({
   lineup: { live: [], soon: null, later: [] } as LobbyLineup,
   hosting: true,
   mutate: vi.fn(),
+  listFailed: false,
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
@@ -22,7 +23,10 @@ vi.mock('next/navigation', () => ({
 vi.mock('../matchmaking/use-debates-hub', () => ({ useDebatesHub: () => ({ close: vi.fn() }) }));
 vi.mock('../hooks', () => ({ useGeoChatAuth: () => ({ authenticated: true }) }));
 vi.mock('./hooks', () => ({
-  useDebateLobbies: () => ({ data: { lobbies: [] }, isLoading: false, isError: false }),
+  useDebateLobbies: () =>
+    mocks.listFailed
+      ? { data: undefined, isLoading: false, isError: true }
+      : { data: { lobbies: [] }, isLoading: false, isError: false },
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
 }));
@@ -66,6 +70,7 @@ const scheduled = (overrides: Partial<DebateLobbySummary>) =>
 beforeEach(() => {
   mocks.lineup = { live: [], soon: null, later: [] };
   mocks.hosting = true;
+  mocks.listFailed = false;
 });
 
 afterEach(() => {
@@ -143,5 +148,48 @@ describe('UpcomingLobbiesCard', () => {
     mocks.hosting = false;
     render(<UpcomingLobbiesCard />);
     expect(screen.queryByTestId('upcoming-lobbies')).toBeNull();
+  });
+
+  // Hosting does not depend on the list loading, so a failed list keeps the way to open one.
+  it('says the list failed and still offers Open a lobby to a host', () => {
+    mocks.listFailed = true;
+    render(<UpcomingLobbiesCard />);
+    expect(screen.getByText('Could not load lobbies.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Open a lobby' })).toBeTruthy();
+  });
+
+  it('says the list failed to a non-host too', () => {
+    mocks.listFailed = true;
+    mocks.hosting = false;
+    render(<UpcomingLobbiesCard />);
+    expect(screen.getByText('Could not load lobbies.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Open a lobby' })).toBeNull();
+  });
+
+  // The overflow hook measures the scroller it finds on mount. The list used to mount only with
+  // its first lobby, after the hook had found nothing, so the arrows never came.
+  it('arrows a row whose lobbies arrive after it first drew empty', () => {
+    const widths = {
+      scrollWidth: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'scrollWidth'),
+      clientWidth: Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'clientWidth'),
+    };
+    Object.defineProperty(HTMLElement.prototype, 'scrollWidth', { configurable: true, get: () => 900 });
+    Object.defineProperty(HTMLElement.prototype, 'clientWidth', { configurable: true, get: () => 360 });
+    try {
+      const { rerender } = render(<UpcomingLobbiesCard />);
+      expect(screen.queryByRole('button', { name: 'Show more lobbies' })).toBeNull();
+
+      mocks.lineup = {
+        live: [],
+        soon: null,
+        later: ['a', 'b', 'c'].map(id => scheduled({ lobby_id: id })),
+      };
+      rerender(<UpcomingLobbiesCard />);
+      expect(screen.getByRole('button', { name: 'Show more lobbies' })).toBeTruthy();
+    } finally {
+      for (const [key, descriptor] of Object.entries(widths)) {
+        if (descriptor) Object.defineProperty(HTMLElement.prototype, key, descriptor);
+      }
+    }
   });
 });

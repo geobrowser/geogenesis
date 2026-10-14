@@ -35,6 +35,8 @@ import {
 } from './lobby-spotlight';
 import { LobbyRsvpButton, lobbyBadgeTime } from './upcoming-lobbies';
 
+const CALENDAR_HOST_LABEL = debateAnalyticsLabel('calendar', 'Lobby calendar host');
+
 /** Chips drawn in a day before the rest collapse into "+N more", as the admin week's busy hours do. */
 const CHIPS_PER_DAY = 2;
 
@@ -52,22 +54,40 @@ export function lobbiesByDay(lobbies: DebateLobbySummary[], days: Date[]) {
   return byDay;
 }
 
+export type WeekLobbies = {
+  /** `null` behind `lobbyJoining`, before the list loads, or with none that week: nothing to draw. */
+  byDay: DebateLobbySummary[][] | null;
+  /** The first read is in flight, so a week without people is not known to be empty yet. */
+  isLoading: boolean;
+  /** The read failed with nothing to show, for the calendar's partial-load note. */
+  error: unknown;
+  refetch: () => void;
+};
+
 /**
  * The debate lobbies in the calendar's week, by day (GEO-3268), for the row pinned above the hours
- * and the phone's day list. `null` behind `lobbyJoining` or with none that week, so the calendar
- * draws nothing for them.
+ * and the phone's day list, with the read's state so the calendar can tell loading or failed from
+ * a week without lobbies.
  *
  * Read from the panel's lobby list, which holds at most 20 upcoming lobbies and two per host, and
  * none that have ended (GEO-3271 asks geo-chat for the whole week).
  */
-export function useWeekLobbies(days: Date[]): DebateLobbySummary[][] | null {
+export function useWeekLobbies(days: Date[]): WeekLobbies {
   const joining = useFeatureFlag('lobbyJoining');
-  const { data } = useDebateLobbies(joining);
-  return React.useMemo(() => {
+  const { data, isLoading, error, refetch } = useDebateLobbies(joining);
+  const byDay = React.useMemo(() => {
     if (!joining || !data) return null;
-    const byDay = lobbiesByDay(data.lobbies, days);
-    return byDay.some(day => day.length > 0) ? byDay : null;
+    const week = lobbiesByDay(data.lobbies, days);
+    return week.some(day => day.length > 0) ? week : null;
   }, [data, days, joining]);
+
+  return {
+    byDay,
+    // `isLoading`, not `isPending`: a disabled read (signed out, flag off) is pending for good.
+    isLoading: joining && isLoading,
+    error: joining && !data ? error : null,
+    refetch: () => void refetch(),
+  };
 }
 
 /** The row pinned under the calendar's day headers: each day's lobbies as chips. */
@@ -211,6 +231,11 @@ export function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
         <Text as="p" variant="metadataMedium" color="white" className="truncate">
           {lobby.name}
         </Text>
+        {lobby.hosts.length > 0 ? (
+          <Text as="p" variant="footnote" color="grey-03" className="truncate">
+            <LobbyByline lobby={lobby} analyticsLabel={CALENDAR_HOST_LABEL} hostedBy />
+          </Text>
+        ) : null}
         <Link
           href={href}
           onClick={enter}
@@ -235,7 +260,7 @@ export function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
       <Text as="p" variant="footnote" color="grey-04" className="truncate">
         <span className="font-medium text-text">{lobbyBadgeTime(lobby.starts_at)}</span>
         {lobby.hosts.length > 0 || lobby.reminder_count > 0 ? ' · ' : null}
-        <LobbyByline lobby={lobby} analyticsLabel={debateAnalyticsLabel('calendar', 'Lobby calendar host')} />
+        <LobbyByline lobby={lobby} analyticsLabel={CALENDAR_HOST_LABEL} />
       </Text>
       <Link href={href} onClick={enter} className="min-w-0 hover:underline">
         <Text as="span" variant="metadataMedium" className="block truncate">

@@ -4,8 +4,6 @@ import * as React from 'react';
 
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
-import { Text } from '~/design-system/text';
-
 import { useGeoChatAuth } from '../hooks';
 import { useDebateLobbies } from './hooks';
 import { useLobbyLineup } from './live-lobbies';
@@ -36,17 +34,15 @@ function UpcomingLobbiesCardBody() {
   // With something live, the soon lobby is only the next one in line, so it is listed here.
   const lobbies = live.length > 0 && soon ? [soon, ...later] : later;
 
-  if (lobbiesQuery.isError && !lobbiesQuery.data) {
-    return (
-      <Text as="p" variant="footnote" color="grey-04" className="px-4 pt-3">
-        Could not load lobbies.
-      </Text>
-    );
-  }
-
   return (
     <>
-      <UpcomingLobbiesRow lobbies={lobbies} canHost={hosting} onOpenLobby={() => setDialogOpen(true)} />
+      <UpcomingLobbiesRow
+        lobbies={lobbies}
+        // Hosting does not need the list, so a failed read keeps Open a lobby beside the error.
+        loadFailed={lobbiesQuery.isError && !lobbiesQuery.data}
+        canHost={hosting}
+        onOpenLobby={() => setDialogOpen(true)}
+      />
       {dialogOpen ? <OpenLobbyDialog onClose={() => setDialogOpen(false)} /> : null}
     </>
   );

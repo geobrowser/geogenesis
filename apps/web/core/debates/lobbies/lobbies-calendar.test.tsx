@@ -8,13 +8,21 @@ import type { DebateLobbySummary } from '../api';
 // Wednesday 14 October 2026, noon local: the week shown runs Sunday 11 to Saturday 17.
 const NOW = new Date(2026, 9, 14, 12, 0).getTime();
 
-const mocks = vi.hoisted(() => ({ lobbies: [] as DebateLobbySummary[], joining: true, mutate: vi.fn() }));
+const mocks = vi.hoisted(() => ({
+  lobbies: [] as DebateLobbySummary[],
+  joining: true,
+  listFailed: false,
+  mutate: vi.fn(),
+}));
 
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => (id === 'lobbyJoining' ? mocks.joining : true),
 }));
 vi.mock('./hooks', () => ({
-  useDebateLobbies: () => ({ data: { lobbies: mocks.lobbies } }),
+  useDebateLobbies: () =>
+    mocks.listFailed
+      ? { data: undefined, isLoading: false, error: new Error('boom'), refetch: vi.fn() }
+      : { data: { lobbies: mocks.lobbies }, isLoading: false, error: null, refetch: vi.fn() },
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
 }));
@@ -57,6 +65,7 @@ beforeEach(() => {
   vi.setSystemTime(NOW);
   mocks.lobbies = [];
   mocks.joining = true;
+  mocks.listFailed = false;
 });
 
 afterEach(() => {
@@ -82,19 +91,29 @@ describe('useWeekLobbies', () => {
   it('gives the week’s lobbies by day, for the seven days only', () => {
     mocks.lobbies = [lobby({ lobby_id: 'wed' }), lobby({ lobby_id: 'next-sun', starts_at: at(18, 10) })];
     const { result } = renderHook(() => useWeekLobbies(WEEK));
-    expect(result.current).toHaveLength(7);
-    expect(result.current!.flat().map(l => l.lobby_id)).toEqual(['wed']);
+    expect(result.current.byDay).toHaveLength(7);
+    expect(result.current.byDay!.flat().map(l => l.lobby_id)).toEqual(['wed']);
   });
 
   it('is null with no lobby that week, so the calendar draws no row', () => {
     mocks.lobbies = [lobby({ starts_at: at(25, 10) })];
-    expect(renderHook(() => useWeekLobbies(WEEK)).result.current).toBeNull();
+    expect(renderHook(() => useWeekLobbies(WEEK)).result.current.byDay).toBeNull();
   });
 
-  it('is null with the lobby flag off', () => {
+  it('is null with the lobby flag off, and reports no read in flight or failed', () => {
     mocks.joining = false;
     mocks.lobbies = [lobby({})];
-    expect(renderHook(() => useWeekLobbies(WEEK)).result.current).toBeNull();
+    const { result } = renderHook(() => useWeekLobbies(WEEK));
+    expect(result.current.byDay).toBeNull();
+    expect(result.current.isLoading).toBe(false);
+    expect(result.current.error).toBeNull();
+  });
+
+  it('passes a failed read on, so the calendar can say so', () => {
+    mocks.listFailed = true;
+    const { result } = renderHook(() => useWeekLobbies(WEEK));
+    expect(result.current.byDay).toBeNull();
+    expect(result.current.error).toBeInstanceOf(Error);
   });
 });
 
@@ -137,6 +156,8 @@ describe('the pinned Lobbies row', () => {
     fireEvent.click(screen.getByTestId('lobby-chip'));
     const card = screen.getByTestId('lobby-calendar-card');
     expect(card).toHaveTextContent('· 14 here');
+    // The host stays on the card once the lobby opens, as on every other live surface.
+    expect(card).toHaveTextContent('Bryan');
     expect(within(card).getByRole('link', { name: 'Join' })).toHaveAttribute('href', '/debate/live');
   });
 

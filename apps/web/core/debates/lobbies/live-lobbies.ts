@@ -67,16 +67,27 @@ export function nextLineupBoundary(lobbies: DebateLobbySummary[], now: number): 
 /** `setTimeout`'s ceiling; a later boundary is waited for in steps. */
 const MAX_TIMEOUT_MS = 2_147_483_647;
 
-/** Re-renders when a scheduled lobby enters the soon window, so the panel picks it up on time. */
+/**
+ * The time the lineup is judged at: re-read whenever the list changes, so a lobby added since mount
+ * is placed against now rather than the mount time, and again when a scheduled lobby enters the soon
+ * window, so the panel picks it up on time.
+ */
 function useLineupClock(lobbies: DebateLobbySummary[]) {
   const [now, setNow] = React.useState(() => Date.now());
+  // Bumped at each boundary, which re-runs the effect: it reads the clock and waits for the next.
+  const [boundaryTick, setBoundaryTick] = React.useState(0);
 
   React.useEffect(() => {
-    const boundary = nextLineupBoundary(lobbies, Date.now());
+    const current = Date.now();
+    setNow(current);
+    const boundary = nextLineupBoundary(lobbies, current);
     if (boundary === null) return;
-    const timeout = setTimeout(() => setNow(Date.now()), Math.min(boundary - Date.now() + 250, MAX_TIMEOUT_MS));
+    const timeout = setTimeout(
+      () => setBoundaryTick(tick => tick + 1),
+      Math.min(boundary - current + 250, MAX_TIMEOUT_MS)
+    );
     return () => clearTimeout(timeout);
-  }, [lobbies, now]);
+  }, [lobbies, boundaryTick]);
 
   return now;
 }

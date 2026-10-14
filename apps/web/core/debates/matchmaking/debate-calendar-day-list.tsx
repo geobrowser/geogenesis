@@ -43,7 +43,10 @@ export function CalendarDayList({
   debates: OwnDebate[];
   opponentName: (userId: string | null) => string | null;
   renderRow: RenderRow;
-  /** Drawn first under a day's heading, before its people, such as its debate lobbies (GEO-3268). */
+  /**
+   * Drawn under a day's heading after the viewer's own debates and before its people, such as its
+   * debate lobbies (GEO-3268): the viewer's own commitments lead, then what they could join.
+   */
   dayLeads?: readonly React.ReactNode[];
 }) {
   const byDay = React.useMemo(() => {

@@ -72,9 +72,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
 // GEO-3268. The week's lobbies, pinned above the hours; their own suite covers the chips and cards.
-const weekLobbies = vi.hoisted(() => ({ byDay: null as string[][] | null }));
+const weekLobbies = vi.hoisted(() => ({
+  byDay: null as string[][] | null,
+  isLoading: false,
+  error: null as unknown,
+  refetch: vi.fn(),
+}));
 vi.mock('../lobbies/lobbies-calendar', () => ({
-  useWeekLobbies: () => weekLobbies.byDay,
+  useWeekLobbies: () => ({ ...weekLobbies }),
   lobbiesPinnedRow: (byDay: string[][]) => ({
     label: 'Lobbies',
     renderDay: (_date: Date, day: number) => byDay[day]!.map(name => <span key={name}>{name}</span>),
@@ -428,7 +433,7 @@ const ADMIN_MATCHES = [
 ];
 
 beforeEach(() => {
-  weekLobbies.byDay = null;
+  Object.assign(weekLobbies, { byDay: null, isLoading: false, error: null });
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   Object.assign(mocks, {
@@ -1744,5 +1749,31 @@ describe('DebateCalendar, lobbies pinned above the hours (GEO-3268)', () => {
     render(<DebateCalendar />);
 
     expect(within(screen.getByRole('region', { name: /Wed/ })).getByText('NYC Debates')).toBeInTheDocument();
+  });
+
+  // Copilot on #2836: loading and failed both read as "no lobbies", so a week with only a lobby
+  // flashed the empty state, and kept it with no way back when the read failed.
+  it('waits for the lobbies before calling a week without people empty', () => {
+    mocks.schedulable = response([]);
+    weekLobbies.isLoading = true;
+    render(<DebateCalendar />);
+
+    expect(screen.queryByText('Nobody has open times this week.')).not.toBeInTheDocument();
+  });
+
+  it('still waits on nothing when people are free, so the week is not held up', () => {
+    weekLobbies.isLoading = true;
+    render(<DebateCalendar />);
+    expect(screen.getByRole('grid', { name: 'Who is free each hour this week' })).toBeInTheDocument();
+  });
+
+  it('says when the lobbies could not load, with a retry, and keeps the week up', () => {
+    weekLobbies.error = new Error('boom');
+    render(<DebateCalendar />);
+
+    expect(screen.getByText(/Couldn’t load lobbies, so they’re missing from the week./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(weekLobbies.refetch).toHaveBeenCalled();
+    expect(screen.getByRole('grid', { name: 'Who is free each hour this week' })).toBeInTheDocument();
   });
 });
