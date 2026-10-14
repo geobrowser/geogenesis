@@ -84,7 +84,7 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
 }
 
 /** Reports whether its card is near the viewport, both ways, so far-off batches stop being read. */
-function NearViewport({
+export function NearViewport({
   claimEntityId,
   onNear,
   children,

@@ -287,6 +287,10 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
         ? `You already have ${limit} lobbies open or scheduled. End one to open another.`
         : 'You have too many lobbies open or scheduled. End one to open another.';
     }
+    case 'lobby_claim_list_limit': {
+      const limit = error.details?.limit;
+      return `This lobby already has ${typeof limit === 'number' ? limit : 5} claim lists. Remove one to add another.`;
+    }
     case 'lobby_host_required':
       return 'Only a host can do that.';
     case 'lobby_connection_in_use':

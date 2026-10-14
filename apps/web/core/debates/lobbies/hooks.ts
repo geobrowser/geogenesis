@@ -34,6 +34,7 @@ import {
   lobbySteppedOut,
   markLobbyEntry,
 } from './lobby-analytics';
+import { settleFetchedLobbyClaimLists } from './lobby-claim-lists-state';
 import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
@@ -101,13 +102,19 @@ export const MAX_TIMEOUT_MS = 2_147_483_647;
  */
 export function useDebateLobby(lobbyId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
     // Waits out a new account geo-chat does not know yet; a guest signing in listens meanwhile.
     ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobby(accountKey, lobbyId),
-    queryFn: ({ signal }) => getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal),
+    // A list change that landed while this read was in flight is newer than what it read.
+    queryFn: async ({ signal }) =>
+      settleFetchedLobbyClaimLists(
+        queryClient.getQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, lobbyId)),
+        await getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal)
+      ),
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
   });
 

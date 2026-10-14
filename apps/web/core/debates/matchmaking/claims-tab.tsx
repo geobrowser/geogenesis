@@ -7,25 +7,17 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 
-import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { ID } from '~/core/id';
-import { responsePositionLabel } from '~/core/responses/entity-response';
 import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
 
-import type {
-  DebateClaim,
-  DebateClaimPositionSummary,
-  MatchmakingClaim,
-  MatchmakingClaimsFilter,
-  MatchmakingClaimsQuery,
-} from '../api';
+import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
@@ -53,6 +45,7 @@ import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
+import { taggedClaimEntry } from './tagged-claim-entry';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
@@ -565,30 +558,13 @@ export function ClaimsTab({
       taggedRows.claims.map(row => [`${ID.uuidToHex(row.space_id)}:${ID.uuidToHex(row.claim_entity_id)}`, row])
     );
 
-    return taggedPage.map(({ claim, spaceId }) => {
-      const row = rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`);
-      const responseKind = resolveClaimResponseKind();
-
-      return {
-        claim: {
-          id: row?.id ?? claim.entity.id,
-          space_id: spaceId,
-          claim_entity_id: claim.entity.id,
-          claim: claim.entity.name ?? '',
-          description: claim.entity.description,
-        },
-        topics: [],
-        response_kind: responseKind,
-        viewer_response: row?.viewer_response ?? null,
-        viewer_position: row?.viewer_response?.position ?? null,
-        viewer_debate_ready: row?.viewer_debate_ready ?? false,
-        readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-        positions: taggedPositionSummaries(row),
-        // The index's ranking score, which this list is ordered by on the server and doesn't re-sort.
-        score: 0,
-        active_debate: Boolean(row?.active_debate),
-      };
-    });
+    return taggedPage.map(({ claim, spaceId }) =>
+      taggedClaimEntry(
+        claim.entity,
+        spaceId,
+        rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`)
+      )
+    );
   }, [graphSourced, taggedPage, taggedRows.claims]);
 
   // Whether a card may be answered at all.
@@ -1332,34 +1308,6 @@ export function HubStickyControls({
       {children}
     </div>
   );
-}
-
-/**
- * The two sides of a tagged claim, from geo-chat's per-space row.
- *
- * That row reports the sides as `online_choices` — who is online and available on each — where the
- * hub's index reports a total alongside them. The card draws the avatars and their overflow count
- * off `total_count`, so the online count stands in for it: it is the only count this endpoint
- * gives, and undercounting a side is better than claiming a total it never told us.
- */
-function taggedPositionSummaries(row: DebateClaim | undefined): DebateClaimPositionSummary[] {
-  return [true, false].map(position => {
-    const choice = row?.online_choices.find(candidate => candidate.position === position);
-
-    return {
-      position,
-      // Our label, never geo-chat's stale Verify/Dispute — see `positionSummariesFromCounts`.
-      position_label: responsePositionLabel(position),
-      total_count: choice?.participant_count ?? 0,
-      available_now_count: choice?.participant_count ?? 0,
-      // These are `online_choices`, so the count already *is* the present population — the same
-      // number, but it has to be set explicitly. `present_count` is what the avatar stack and its
-      // `+N` read (GEO-2691), and leaving it unset would fall back to the length of the capped
-      // preview and silently drop the overflow: 5 people behind 2 faces would render no "+3".
-      present_count: choice?.participant_count ?? 0,
-      participants: choice?.participants ?? [],
-    };
-  });
 }
 
 type SpaceTopicFiltersProps = {

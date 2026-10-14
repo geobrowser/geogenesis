@@ -1,0 +1,127 @@
+import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+
+import * as React from 'react';
+
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+import type { ClaimListPage } from '../claim-list-pages';
+import { LobbyClaimListTab } from './lobby-claim-list-tab';
+import type { LobbyPageView } from './lobby-view';
+
+const mocks = vi.hoisted(() => ({
+  page: { data: undefined as ClaimListPage | null | undefined, isLoading: false, error: null as Error | null },
+  remove: vi.fn(),
+  batches: [] as string[][],
+}));
+
+vi.mock('next/link', () => ({
+  default: ({ href, children, ...props }: { href: string; children: React.ReactNode }) => (
+    <a href={href} {...props}>
+      {children}
+    </a>
+  ),
+}));
+vi.mock('../claim-list-pages', () => ({
+  useClaimListPage: () => ({ ...mocks.page, refetch: vi.fn() }),
+}));
+vi.mock('../hooks', () => ({
+  useGeoChatAuth: () => ({ authenticated: false, accountKey: null }),
+  useDebateClaimsBySpaces: () => ({ claims: [], unresolvedSpaceIds: new Set() }),
+}));
+vi.mock('./lobby-explore-claims-hooks', () => ({
+  exploreRoomClaimBatches: (entries: { claim: { claim_entity_id: string } }[]) => {
+    mocks.batches = [entries.map(entry => entry.claim.claim_entity_id)];
+    return mocks.batches;
+  },
+  useNearExploreBatches: () => ({ active: [], onNear: vi.fn() }),
+  useLobbyExploreRoomClaims: () => new Map(),
+}));
+vi.mock('./lobby-explore-claims', () => ({
+  NearViewport: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  exploreRoomClaim: (entry: unknown) => entry,
+  hasDebateClaimRow: () => false,
+}));
+vi.mock('./lobby-highlights', () => ({ LobbyClaimHostMenu: () => null }));
+vi.mock('./lobby-highlights-hooks', () => ({ useLobbyHighlights: () => ({ data: undefined }) }));
+vi.mock('./lobby-room-claims', () => ({ LobbyClaimRequest: () => null }));
+vi.mock('./lobby-room-claims-list', () => ({
+  LobbyRoomClaimCard: ({ entry }: { entry: { claim: { claim: string } } }) => <article>{entry.claim.claim}</article>,
+}));
+vi.mock('./lobby-claim-lists-hooks', () => ({
+  useRemoveLobbyClaimList: () => ({ mutate: mocks.remove, isPending: false }),
+}));
+
+const SPACE = '3be38bb922bc80c6a6503fbbba28d2b0';
+const list = {
+  entity_id: 'e2b27e141d5fc64c4a7d24dab8f23f69',
+  space_id: SPACE,
+  position: 0,
+  added_by: { user_id: 'u1', profile_space_id: 'p1', display_name: 'Maya', avatar_cid: null },
+  added_at: '2026-10-13T12:00:00Z',
+};
+const lobbyFor = (hosting: boolean) =>
+  ({ lobby_id: 'lobby-1', viewer: { kind: 'member', hosting } }) as unknown as LobbyPageView;
+
+afterEach(() => {
+  cleanup();
+  mocks.page = { data: undefined, isLoading: false, error: null };
+  mocks.remove.mockClear();
+});
+
+describe('LobbyClaimListTab', () => {
+  it('draws each theme as a section of cards, with who added it and a link to the page', () => {
+    mocks.page.data = {
+      entityId: list.entity_id,
+      spaceId: SPACE,
+      name: 'AI highlights',
+      sections: [
+        { id: 'work', name: 'Work', claims: [{ id: 'c1', name: 'AI will create more jobs', description: null }] },
+        {
+          id: 'privacy',
+          name: 'Privacy',
+          claims: [
+            { id: 'c2', name: 'No training on private chats', description: null },
+            { id: 'c3', name: 'Warrants for AI analysis', description: null },
+          ],
+        },
+      ],
+    };
+    render(<LobbyClaimListTab lobby={lobbyFor(false)} list={list} />);
+
+    expect(screen.getByText('Added by Maya · 2 themes')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Open the full page' }).getAttribute('href')).toContain(list.entity_id);
+    expect(screen.getByRole('region', { name: 'Privacy' }).textContent).toContain('2 claims');
+    expect(screen.getAllByRole('article').map(card => card.textContent)).toEqual([
+      'AI will create more jobs',
+      'No training on private chats',
+      'Warrants for AI analysis',
+    ]);
+    // Room sides are batched over every card, in page order, and read as they near the viewport.
+    expect(mocks.batches).toEqual([['c1', 'c2', 'c3']]);
+
+    const scrollIntoView = vi.fn();
+    document.getElementById(`lobby-claim-list-${list.entity_id}-privacy`)!.scrollIntoView = scrollIntoView;
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Themes' })).getByRole('button', { name: 'Privacy' })
+    );
+    expect(scrollIntoView).toHaveBeenCalled();
+  });
+
+  it('says a deleted page is gone, and lets only a host remove it', () => {
+    mocks.page.data = null;
+    const { rerender } = render(<LobbyClaimListTab lobby={lobbyFor(false)} list={list} />);
+    expect(screen.getByText('This list is no longer available.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove from lobby' })).toBeNull();
+
+    rerender(<LobbyClaimListTab lobby={lobbyFor(true)} list={list} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Remove from lobby' }));
+    expect(mocks.remove).toHaveBeenCalledWith(list.entity_id);
+  });
+
+  it('offers a retry when the page cannot be read', () => {
+    mocks.page.error = new Error('boom');
+    render(<LobbyClaimListTab lobby={lobbyFor(false)} list={list} />);
+    expect(screen.getByText('Could not load this list.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeTruthy();
+  });
+});
