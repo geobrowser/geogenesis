@@ -376,6 +376,9 @@ export function DebateRecordingUploadCoordinator() {
   const cancelSourceRef = React.useRef<RecordingCancelSource>('upload_banner');
   const [cancelBusy, setCancelBusy] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<string | null>(null);
+  // geo-chat refused a cancel for this debate as past its deadline. Terminal: asking again cannot
+  // get a different answer, so the prompt treats it exactly as a window it saw close.
+  const [cancelRefusedDebateId, setCancelRefusedDebateId] = React.useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = React.useState<{ id: string; loaded: number } | null>(null);
   // Debates whose recording finished uploading in this session and is still publishable. The queue
   // row is deleted as soon as an upload completes, so nothing else can keep the banner and its
@@ -821,12 +824,14 @@ export function DebateRecordingUploadCoordinator() {
     : (thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null));
   const cancelPromptOpen = cancelTargetDebateId !== null;
   // The prompt can be opened just before geo-chat's deadline and answered after it. The surface
-  // that opened it says when the window has closed; past that the prompt says so rather than
-  // sending a cancel the server will refuse.
+  // that opened it says when the window has closed, and geo-chat says so itself when this tab could
+  // not see it (the room, or a skewed clock); past either the prompt says so rather than sending a
+  // cancel the server will refuse.
   const cancelPromptTooLate =
     cancelTargetDebateId !== null &&
-    thankingDebate?.cancelWindowOpen === false &&
-    normalizeDebateId(cancelTargetDebateId) === normalizedThankingDebateId;
+    ((thankingDebate?.cancelWindowOpen === false &&
+      normalizeDebateId(cancelTargetDebateId) === normalizedThankingDebateId) ||
+      normalizeDebateId(cancelTargetDebateId) === cancelRefusedDebateId);
 
   // "Debate uploaded" is the banner's line about the Cancel action beside it — the upload is done
   // and still withdrawable — so it belongs to the banner only while the banner owns that action.
@@ -1022,7 +1027,7 @@ export function DebateRecordingUploadCoordinator() {
       // The same deadline, reached on a clock this tab could not see — or from the room, which does
       // not report the window closing.
       if (error instanceof GeoChatRequestError && error.code === 'recording_not_cancellable') {
-        setCancelError(RECORDING_CANCEL_TOO_LATE);
+        setCancelRefusedDebateId(normalizedTargetDebateId);
       } else {
         setCancelError(error instanceof Error ? error.message : 'Could not cancel the upload.');
       }

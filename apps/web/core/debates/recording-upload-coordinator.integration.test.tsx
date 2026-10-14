@@ -1370,6 +1370,13 @@ describe('DebateRecordingUploadCoordinator', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/thank-you period/)).toBeNull();
     expect(mocks.deleteUpload).not.toHaveBeenCalled();
+
+    // Copilot on #2853: the refusal is terminal, so the prompt stops offering to ask again.
+    const confirm = screen.getByRole('button', { name: 'Delete debate forever' });
+    expect(confirm).toBeDisabled();
+    const requests = mocks.cancelRecording.mock.calls.length;
+    fireEvent.click(confirm);
+    expect(mocks.cancelRecording).toHaveBeenCalledTimes(requests);
   });
 
   it('keeps publication cancelled when server cancellation succeeds but local cleanup fails', async () => {
