@@ -240,7 +240,7 @@ export function FollowButton({
         data-geo-analytics-label={shownFollowed ? kind.unfollow : kind.follow}
         className={cx(
           // The badge is 16px; the pseudo-element widens what a thumb can hit without growing it.
-          "relative grid size-4 place-items-center rounded-full border border-white bg-ctaPrimary text-white transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:bg-ctaHover disabled:cursor-default",
+          "relative grid size-4 place-items-center rounded-full border border-white bg-purple text-white transition-[filter] duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:brightness-90 disabled:cursor-default",
           (saving || disabled) && 'opacity-60',
           className
         )}
