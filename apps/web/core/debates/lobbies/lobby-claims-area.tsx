@@ -46,7 +46,16 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
   const lists = React.useMemo(() => orderedClaimLists(lobby), [lobby]);
   const activeList = lists.find(list => claimListKey(list) === activeTab) ?? null;
   const unseen = useNewClaimListTabs(lists.map(claimListKey), activeTab);
-  // A list taken off the lobby takes its tab with it; whoever was on it lands back in the room.
+  // A list taken off the lobby takes its tab with it; whoever was on it lands back in the room, and
+  // stays there if the page is added again later. Only a list that was here and went: a host's own
+  // pick is selected a moment before the list it added arrives.
+  const listKeys = lists.map(claimListKey).join('\n');
+  const [previousListKeys, setPreviousListKeys] = React.useState(listKeys);
+  if (previousListKeys !== listKeys) {
+    setPreviousListKeys(listKeys);
+    const removed = previousListKeys.split('\n').includes(activeTab) && !listKeys.split('\n').includes(activeTab);
+    if (removed) setActiveTab('room');
+  }
   const shownTab: LobbyClaimsTab = activeTab.startsWith('list:') && !activeList ? 'room' : activeTab;
   const hosting = lobby.viewer.hosting;
 

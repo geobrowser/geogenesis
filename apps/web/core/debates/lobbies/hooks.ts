@@ -109,12 +109,15 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
     // Waits out a new account geo-chat does not know yet; a guest signing in listens meanwhile.
     ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobby(accountKey, lobbyId),
-    // A list change that landed while this read was in flight is newer than what it read.
-    queryFn: async ({ signal }) =>
-      settleFetchedLobbyClaimLists(
+    // A list change that landed while this read was in flight is newer than what it read. The cache
+    // is read only once the response is in: read before, it would miss exactly that change.
+    queryFn: async ({ signal }) => {
+      const fetched = await getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal);
+      return settleFetchedLobbyClaimLists(
         queryClient.getQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, lobbyId)),
-        await getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal)
-      ),
+        fetched
+      );
+    },
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
   });
 

@@ -61,6 +61,16 @@ describe('useClaimsTabMark', () => {
     expect(result.current).toBe(false);
   });
 
+  it('marks a claim list added while highlights are still loading, or never load', () => {
+    const { result, rerender } = renderHook(({ lists }) => useClaimsTabMark(undefined, false, lists), {
+      initialProps: { lists: [{ entity_id: 'p1' }] },
+    });
+    expect(result.current).toBe(false);
+
+    rerender({ lists: [{ entity_id: 'p1' }, { entity_id: 'p2' }] });
+    expect(result.current).toBe(true);
+  });
+
   it('marks a claim list added while on People (GEO-3274)', () => {
     const empty: State = { highlights: [], room_vote: null };
     const { result, rerender } = renderHook(({ lists, viewing }) => useClaimsTabMark(empty, viewing, lists), {

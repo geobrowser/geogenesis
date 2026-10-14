@@ -140,6 +140,17 @@ describe('LobbyClaimsArea', () => {
       expect(screen.queryByTestId('new-list-dot')).toBeNull();
     });
 
+    it('leaves the viewer in the room when a removed list is added back', () => {
+      const { rerender } = render(<LobbyClaimsArea lobby={withLists([list('p1', 0)])} />);
+      fireEvent.click(screen.getByRole('button', { name: 'List p1' }));
+      rerender(<LobbyClaimsArea lobby={withLists([])} />);
+
+      // A host adds the same page again later: new tabs never move anyone.
+      rerender(<LobbyClaimsArea lobby={withLists([list('p1', 0)])} />);
+      expect(screen.getByRole('button', { name: 'In this room' }).getAttribute('aria-current')).toBe('true');
+      expect(screen.queryByTestId('list-tab-p1')).toBeNull();
+    });
+
     it('sends whoever was on a removed list back to In this room', () => {
       const { rerender } = render(<LobbyClaimsArea lobby={withLists([list('p1', 0)])} />);
       fireEvent.click(screen.getByRole('button', { name: 'List p1' }));
