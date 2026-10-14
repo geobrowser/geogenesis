@@ -594,6 +594,17 @@ describe('DebateCoordinator', () => {
     expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: false, cameraOn: false });
   });
 
+  it('shows no card to the person who accepted', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).toBeNull();
+  });
+
   it('asks the sender how to join instead of moving them', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';

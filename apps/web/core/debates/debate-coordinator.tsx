@@ -323,7 +323,8 @@ export function DebateCoordinator() {
     !roomSessionIds.has(activity.rematch.id) &&
     roomsKnown &&
     validateSpaceId(activity.rematch.source_space_id) &&
-    pathname !== debateRematchPath(activity.rematch)
+    pathname !== debateRematchPath(activity.rematch) &&
+    activity.rematch.participants.find(participant => participant.participant_slot === 1)?.user_id === currentUserId
       ? activity.rematch
       : null;
 
