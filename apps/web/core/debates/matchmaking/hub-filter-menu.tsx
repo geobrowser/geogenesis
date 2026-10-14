@@ -196,8 +196,9 @@ type MultiProps<T extends string> = {
   searchEmptyLabel?: string;
   /**
    * Replaces the labelled pill that opens the menu, for a host that opens it from something of its
-   * own. The topic pill row ends in a "…" that opens this list, and a second labelled trigger there
-   * would read as one more topic. `label` and `labelPending` go unused when this is set.
+   * own. The topic pill row ends in a "More" pill that opens this list, and a second labelled
+   * trigger there would read as one more topic. `label` and `labelPending` go unused when this is
+   * set.
    */
   trigger?: React.ReactElement;
 };
