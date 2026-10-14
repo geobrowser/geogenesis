@@ -19,6 +19,7 @@ import {
   isAccountWarmingUp,
   joinDebateQueue,
   listDebateClaims,
+  listDebateLobbyCalendar,
   listDebatePeople,
   listMatchmakingClaims,
   listNotInterestedClaims,
@@ -217,6 +218,29 @@ describe('upcoming debate rooms', () => {
     await listUpcomingDebateRooms(vi.fn(), 'user-a');
 
     expect(fetch).toHaveBeenCalledWith('http://localhost:8080/me/debate-rooms?include=lobbies', expect.anything());
+  });
+});
+
+// GEO-3300. The calendar's week reads geo-chat's date range (GEO-3271).
+describe('debate lobby calendar', () => {
+  it('asks for the week as RFC 3339 bounds, encoded', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ lobbies: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+
+    await listDebateLobbyCalendar(
+      { from: new Date('2026-10-11T07:00:00Z'), to: new Date('2026-10-18T07:00:00Z') },
+      vi.fn(),
+      'user-a'
+    );
+
+    expect(fetch).toHaveBeenCalledWith(
+      'http://localhost:8080/debate-lobbies/calendar?from=2026-10-11T07%3A00%3A00.000Z&to=2026-10-18T07%3A00%3A00.000Z',
+      expect.anything()
+    );
   });
 });
 

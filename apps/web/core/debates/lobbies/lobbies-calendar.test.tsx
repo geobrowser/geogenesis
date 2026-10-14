@@ -3,22 +3,25 @@ import { cleanup, fireEvent, render, renderHook, screen, within } from '@testing
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbySummary } from '../api';
+import type { DebateLobbyCalendarRow } from '../api';
 
 // Wednesday 14 October 2026, noon local: the week shown runs Sunday 11 to Saturday 17.
 const NOW = new Date(2026, 9, 14, 12, 0).getTime();
 
 const mocks = vi.hoisted(() => ({
-  lobbies: [] as DebateLobbySummary[],
+  lobbies: [] as DebateLobbyCalendarRow[],
+  calendarRange: null as { from: Date; to: Date } | null,
   listFailed: false,
   mutate: vi.fn(),
 }));
 
 vi.mock('./hooks', () => ({
-  useDebateLobbies: () =>
-    mocks.listFailed
+  useDebateLobbyCalendar: (from: Date, to: Date) => {
+    mocks.calendarRange = { from, to };
+    return mocks.listFailed
       ? { data: undefined, isLoading: false, error: new Error('boom'), refetch: vi.fn() }
-      : { data: { lobbies: mocks.lobbies }, isLoading: false, error: null, refetch: vi.fn() },
+      : { data: { lobbies: mocks.lobbies }, isLoading: false, error: null, refetch: vi.fn() };
+  },
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
 }));
@@ -33,7 +36,9 @@ const at = (day: number, hour: number) => new Date(2026, 9, day, hour, 0).toISOS
 // Eight midnights, as the calendar passes them: Sunday 11 to the Sunday after.
 const WEEK = Array.from({ length: 8 }, (_, index) => new Date(2026, 9, 11 + index));
 
-const lobby = (overrides: Partial<DebateLobbySummary>): DebateLobbySummary => ({
+const lobby = (overrides: Partial<DebateLobbyCalendarRow>): DebateLobbyCalendarRow => ({
+  state: overrides.open ? 'open' : 'upcoming',
+  closed_at: null,
   lobby_id: 'lobby',
   name: 'Lobby',
   scheduled: true,
@@ -51,7 +56,7 @@ const lobby = (overrides: Partial<DebateLobbySummary>): DebateLobbySummary => ({
 });
 
 /** Wednesday's cell of the pinned row. */
-const renderWednesday = (lobbies: DebateLobbySummary[]) => {
+const renderWednesday = (lobbies: DebateLobbyCalendarRow[]) => {
   const byDay = lobbiesByDay(lobbies, WEEK);
   return render(<div data-testid="day">{lobbiesPinnedRow(byDay).renderDay(WEEK[3]!, 3)}</div>);
 };
@@ -83,6 +88,32 @@ describe('lobbiesByDay', () => {
 });
 
 describe('useWeekLobbies', () => {
+  // GEO-3300. The week's own range, not the panel's capped list.
+  it('reads exactly the week drawn, Sunday midnight to the next', () => {
+    renderHook(() => useWeekLobbies(WEEK));
+    expect(mocks.calendarRange).toEqual({ from: WEEK[0], to: WEEK[7] });
+  });
+
+  it('leaves out lobbies that have ended, as the panel list does', () => {
+    mocks.lobbies = [
+      lobby({ lobby_id: 'done', state: 'ended', closed_at: at(13, 17), starts_at: at(13, 16) }),
+      lobby({ lobby_id: 'next' }),
+    ];
+    const { result } = renderHook(() => useWeekLobbies(WEEK));
+    expect(result.current.byDay!.flat().map(l => l.lobby_id)).toEqual(['next']);
+  });
+
+  it('draws no row for a week whose only lobbies have ended', () => {
+    mocks.lobbies = [lobby({ state: 'ended', closed_at: at(13, 17), starts_at: at(13, 16) })];
+    expect(renderHook(() => useWeekLobbies(WEEK)).result.current.byDay).toBeNull();
+  });
+
+  it('keeps every lobby a host has that week, past the list’s two per host', () => {
+    mocks.lobbies = [10, 12, 14, 16, 18].map(hour => lobby({ lobby_id: `h${hour}`, starts_at: at(14, hour) }));
+    const { result } = renderHook(() => useWeekLobbies(WEEK));
+    expect(result.current.byDay![3]).toHaveLength(5);
+  });
+
   it('gives the week’s lobbies by day, for the seven days only', () => {
     mocks.lobbies = [lobby({ lobby_id: 'wed' }), lobby({ lobby_id: 'next-sun', starts_at: at(18, 10) })];
     const { result } = renderHook(() => useWeekLobbies(WEEK));
