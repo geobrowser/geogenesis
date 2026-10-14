@@ -242,14 +242,6 @@ export function DebateCoordinator() {
   const [rematchJoinError, setRematchJoinError] = React.useState<string | null>(null);
   const promptedChallenge = challenge && challenge.id !== snoozedChallengeId ? challenge : null;
 
-  const promptedRematchSender =
-    hasAttention &&
-    activity?.rematch &&
-    !activity.rematch.source_debate_id &&
-    !rematchAnswered &&
-    (activity.rematch.status === 'browsing' || activity.rematch.status === 'request_pending')
-      ? activity.rematch
-      : null;
   // Only the recipient is prompted. `challenge` itself stays live for everyone, since `activeFlow`
   // above reads it to keep other popups from stacking on top of an outstanding challenge.
   const isChallengeRecipient = promptedChallenge?.recipient.user_id === currentUserId;
@@ -320,6 +312,21 @@ export function DebateCoordinator() {
   const roomsQueryError = upcomingRoomsQuery.error;
   const roomsKnown =
     upcomingRoomsQuery.isSuccess || (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
+
+  const promptedRematchSender =
+    hasAttention &&
+    activity?.rematch &&
+    !activity.rematch.source_debate_id &&
+    !rematchAnswered &&
+    (activity.rematch.status === 'browsing' || activity.rematch.status === 'request_pending') &&
+    !atRoom &&
+    !roomSessionIds.has(activity.rematch.id) &&
+    roomsKnown &&
+    validateSpaceId(activity.rematch.source_space_id) &&
+    pathname !== debateRematchPath(activity.rematch)
+      ? activity.rematch
+      : null;
+
   const refetchUpcomingRooms = upcomingRoomsQuery.refetch;
   // One refetch per session before routing on it, and a tick so the effect re-runs even when the
   // refetch changes nothing.

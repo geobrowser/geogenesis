@@ -600,6 +600,66 @@ describe('DebateCoordinator', () => {
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
+  it('shows no card for a session a room holds', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const activity = challengeRematchActivity();
+    mocks.upcomingRooms = [upcomingRoom({ room_id: 'room-1', rematch_session_id: activity.rematch!.id })];
+    mocks.activity = activity;
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('shows no card for a session carrying the rooms sentinel space', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const activity = challengeRematchActivity();
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_space_id: 'debates' } };
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('shows no card over a debate room', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/debate/room-1';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('waits for the room list before showing the card', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.roomsSettled = false;
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('shows no card once they are in the picker it would send them to', async () => {
+    mocks.currentUserId = 'user-requester';
+    const activity = challengeRematchActivity();
+    mocks.pathname = `/space/${activity.rematch!.source_space_id}/debates/rematches/${activity.rematch!.id}`;
+    mocks.activity = activity;
+
+    render(<DebateCoordinator />);
+
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
   it('walks them in once they choose', async () => {
     mocks.currentUserId = 'user-requester';
     mocks.pathname = '/space/space-1/claims';
