@@ -167,28 +167,38 @@ export function publishCardState({
 
 /**
  * Whether geo-chat still accepts a cancel for this debate: through the end of its thank-you period
- * (`debateThankYouDeadlineMs`, the deadline `recording_cancellation_allowed` checks). Read on the
- * server's clock, and flipped by a timer at the deadline so the button goes when the window does
- * rather than on the next unrelated render.
+ * (`debateThankYouDeadlineMs`, the deadline `recording_cancellation_allowed` checks). Flipped by a
+ * timer at the deadline so the button goes when the window does rather than on the next unrelated
+ * render.
+ *
+ * Only a synchronized server clock closes it. Until the sync answers, or if it fails and falls back
+ * to this device's clock, the window stays open and geo-chat enforces its own deadline: a device
+ * clock running fast would otherwise hide a cancel the server still accepts, and a refused one
+ * already ends in the prompt's "too late" state.
  */
 export function useRecordingCancelWindowOpen(
   debate: Pick<Debate, 'status' | 'turn_ends_at' | 'completed_at'>
 ): boolean {
   const deadlineMs = debateThankYouDeadlineMs(debate);
   const clock = useServerClock(deadlineMs !== null);
-  const [open, setOpen] = React.useState(() => deadlineMs !== null && Date.now() <= deadlineMs);
+  const syncedClock = clock !== null && clock.roundTripMs !== null ? clock : null;
+  const [open, setOpen] = React.useState(deadlineMs !== null);
 
   React.useEffect(() => {
     if (deadlineMs === null) {
       setOpen(false);
       return;
     }
-    const remaining = deadlineMs - (clock ? clock.now() : Date.now());
+    if (!syncedClock) {
+      setOpen(true);
+      return;
+    }
+    const remaining = deadlineMs - syncedClock.now();
     setOpen(remaining >= 0);
     if (remaining < 0) return;
     const timer = window.setTimeout(() => setOpen(false), remaining + 1);
     return () => window.clearTimeout(timer);
-  }, [clock, deadlineMs]);
+  }, [deadlineMs, syncedClock]);
 
   return open;
 }

@@ -10,6 +10,8 @@ const mocks = vi.hoisted(() => ({
   offer: { debateId: null, busy: false, cancelled: false, upload: null, percent: null } as PublishOptOutOffer,
   setThankingDebate: vi.fn(),
   setPublishOptOutRequest: vi.fn(),
+  // A synchronized clock reading the (faked) device time; `roundTripMs: null` is a failed sync.
+  clock: null as { now: () => number; roundTripMs: number | null } | null,
 }));
 
 vi.mock('~/core/debates/thanking-debate-store', () => ({
@@ -18,8 +20,8 @@ vi.mock('~/core/debates/thanking-debate-store', () => ({
   useSetThankingDebate: () => mocks.setThankingDebate,
 }));
 
-// The device clock decides; the server sync has its own tests.
-vi.mock('~/core/debates/matchmaking/use-request-countdown', () => ({ useServerClock: () => null }));
+// The server sync has its own tests; here it answers with whatever clock a case sets.
+vi.mock('~/core/debates/matchmaking/use-request-countdown', () => ({ useServerClock: () => mocks.clock }));
 
 const { RematchPublishCard, publishCardState } = await import('./rematch-publish-card');
 
@@ -55,6 +57,7 @@ beforeEach(() => {
   mocks.offer = { debateId: null, busy: false, cancelled: false, upload: null, percent: null };
   mocks.setThankingDebate.mockClear();
   mocks.setPublishOptOutRequest.mockClear();
+  mocks.clock = { now: () => Date.now(), roundTripMs: 40 };
 });
 
 afterEach(() => {
@@ -138,6 +141,29 @@ describe('RematchPublishCard', () => {
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
     expect(screen.getByText('Publishing your debate')).toBeInTheDocument();
     expect(lastPublished()).toEqual(expect.objectContaining({ cancelWindowOpen: false, showsPublishControl: false }));
+  });
+
+  // Copilot on #2853: a failed sync falls back to this device's clock, which can run ahead of the
+  // server's. Only a synchronized clock may close the window; geo-chat enforces its own otherwise.
+  it.each([
+    ['the clock sync failed and this device runs a minute fast', { now: () => Date.now(), roundTripMs: null }],
+    ['the clock sync has not answered yet', null],
+  ])('keeps the cancel while %s', (_label, clock) => {
+    mocks.clock = clock;
+    vi.setSystemTime(NOW + 60_000);
+    mocks.offer = { debateId: 'debate-1', busy: false, cancelled: false, upload: 'uploading', percent: null };
+    renderCard();
+
+    expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+    expect(lastPublished()).toEqual(expect.objectContaining({ cancelWindowOpen: true }));
+  });
+
+  it('closes the window on a synchronized clock that is past the deadline', () => {
+    vi.setSystemTime(NOW + 60_000);
+    mocks.offer = { debateId: 'debate-1', busy: false, cancelled: false, upload: 'uploading', percent: null };
+    renderCard();
+
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 
   it('says the debate was not published once the viewer withdraws it', () => {
