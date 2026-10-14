@@ -31,6 +31,7 @@ vi.mock('./hooks', () => ({
       : { data: { lobbies: [] }, isLoading: false, isError: false },
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
+  useLobbyReminderSaving: () => false,
 }));
 vi.mock('./live-lobbies', () => ({ useLobbyLineup: () => mocks.lineup }));
 vi.mock('./lobby-analytics', () => ({ markLobbyEntry: vi.fn() }));

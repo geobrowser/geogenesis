@@ -10,7 +10,7 @@ import { Text } from '~/design-system/text';
 import { type DebateLobbySummary, GeoChatRequestError, dashlessId } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { sameId } from '../rooms/room-presence';
-import { useDebateLobbies, useDebateLobbyReminder, useLobbyReminderError } from './hooks';
+import { useDebateLobbies, useDebateLobbyReminder, useLobbyReminderError, useLobbyReminderSaving } from './hooks';
 import { RSVP_FAILED, lobbyErrorMessage } from './lobby-format';
 
 /** Stands in for no lobby, so the hooks below run the same either way; an open one shows no error. */
@@ -97,9 +97,13 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
 
   const queuedHere = lobby !== null && intent !== undefined && sameId(intent, lobbyId);
   const reminded = Boolean(lobby?.viewer_reminded) || queuedHere;
+  // Another control's write for this lobby (the navbar's replay, say) still landing: taking it back
+  // now would lose to that write, so wait it out.
+  const savingElsewhere = useLobbyReminderSaving(lobbyId);
+  const pending = isPending || savingElsewhere;
 
   const press = React.useCallback(() => {
-    if (!lobby) return;
+    if (!lobby || pending) return;
     if (reminded) {
       if (queuedHere) cancel();
       if (lobby.viewer_reminded) mutate({ lobbyId: lobby.lobby_id, reminded: false });
@@ -122,11 +126,11 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
       // Walked away from: no reminder set on some later sign-in.
       { onCancel: cancel }
     );
-  }, [authenticated, cancel, lobby, lobbyId, mutate, queue, queuedHere, reminded, signIn]);
+  }, [authenticated, cancel, lobby, lobbyId, mutate, pending, queue, queuedHere, reminded, signIn]);
 
   return {
     reminded,
-    pending: isPending,
+    pending,
     error,
     press,
   };

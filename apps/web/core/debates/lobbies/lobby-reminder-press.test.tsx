@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   authenticated: true,
   listLoaded: true,
   listFailed: false,
+  savingElsewhere: false,
   refetch: vi.fn(),
   mutate: vi.fn(),
   mutateAsync: vi.fn(),
@@ -38,6 +39,7 @@ vi.mock('./hooks', () => ({
     refetch: mocks.refetch,
   }),
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, mutateAsync: mocks.mutateAsync, isPending: false }),
+  useLobbyReminderSaving: () => mocks.savingElsewhere,
   useLobbyReminderError: (_reminder: unknown, target: unknown) => {
     mocks.errorFor.push(target);
     return mocks.error;
@@ -66,6 +68,7 @@ beforeEach(() => {
   mocks.authenticated = true;
   mocks.listLoaded = true;
   mocks.listFailed = false;
+  mocks.savingElsewhere = false;
   mocks.intent = undefined;
   mocks.lobbies = [];
   mocks.config = undefined;
@@ -231,6 +234,17 @@ describe('useLobbyReminderPress', () => {
     mocks.mutateAsync.mockResolvedValue(undefined);
     await act(() => runReplay('abc123'));
     expect(mocks.mutateAsync).toHaveBeenCalledWith({ lobbyId: 'abc-123', reminded: true });
+  });
+
+  // Copilot on #2863: taking it back mid-write would lose the race to the write. Wait it out.
+  it('is busy and ignores a press while another control is saving this lobby’s reminder', () => {
+    mocks.savingElsewhere = true;
+    mocks.intent = 'abc123';
+    const { result } = renderHook(() => useLobbyReminderPress(lobby()));
+    expect(result.current.pending).toBe(true);
+    act(() => result.current.press());
+    expect(mocks.cancel).not.toHaveBeenCalled();
+    expect(mocks.mutate).not.toHaveBeenCalled();
   });
 });
 

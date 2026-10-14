@@ -32,6 +32,7 @@ vi.mock('./hooks', () => ({
   useDebateLobbies: () => ({ data: undefined }),
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
+  useLobbyReminderSaving: () => false,
 }));
 vi.mock('./lobby-analytics', () => ({ markLobbyEntry: vi.fn() }));
 vi.mock('./lobby-people', () => ({ LobbyAvatarStack: () => null }));

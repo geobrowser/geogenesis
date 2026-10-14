@@ -15,6 +15,7 @@ const api = vi.hoisted(() => ({
   endDebateLobbyStepOut: vi.fn(),
   listDebateLobbies: vi.fn(),
   listDebateLobbyCalendar: vi.fn(),
+  setDebateLobbyReminder: vi.fn(),
 }));
 
 const capture = vi.hoisted(() => vi.fn());
@@ -38,7 +39,9 @@ const {
   useDebateLobbies,
   useDebateLobby,
   useDebateLobbyCalendar,
+  useDebateLobbyReminder,
   useLobbyPresence,
+  useLobbyReminderSaving,
 } = await import('./hooks');
 const { debateQueryKeys } = await import('../hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
@@ -746,6 +749,34 @@ it('waits out a new account’s warm-up signed in, and reads once signed out', a
     Object.assign(auth, { authenticated: true, accountKey: 'acct' });
     api.listDebateLobbies.mockReset();
   }
+});
+
+// Copilot on #2863: a reminder saving through one control (the navbar's replay) shows as saving on
+// every control for that lobby, so none can take it back while the write is still landing.
+it('shows a reminder saving in one control as saving in every control for that lobby', async () => {
+  let settle: (view: unknown) => void = () => undefined;
+  api.setDebateLobbyReminder.mockImplementationOnce(() => new Promise(done => (settle = done)));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  const { result } = renderHook(
+    () => ({
+      replay: useDebateLobbyReminder(),
+      panel: useLobbyReminderSaving('abc-123'),
+      other: useLobbyReminderSaving('zzz'),
+    }),
+    { wrapper }
+  );
+  expect(result.current.panel).toBe(false);
+
+  act(() => result.current.replay.mutate({ lobbyId: 'abc123', reminded: true }));
+  await waitFor(() => expect(result.current.panel).toBe(true));
+  expect(result.current.other).toBe(false);
+
+  await act(async () => settle(view(false)));
+  await waitFor(() => expect(result.current.panel).toBe(false));
 });
 
 // GEO-3289. Signed out there is no gateway scope to patch the list, so it is polled.

@@ -1,6 +1,6 @@
 'use client';
 
-import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type UseQueryResult, useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -200,12 +200,16 @@ export function useCreateDebateLobby() {
   });
 }
 
+/** Every reminder write shares it, so one in flight shows on every control for that lobby. */
+const LOBBY_REMINDER_MUTATION_KEY = ['debates', 'lobby-reminder'] as const;
+
 export function useDebateLobbyReminder() {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
 
   return useMutation({
+    mutationKey: LOBBY_REMINDER_MUTATION_KEY,
     mutationFn: ({ lobbyId, reminded }: { lobbyId: string; reminded: boolean }) =>
       setDebateLobbyReminder(lobbyId, reminded, getPrivyIdentityToken, accountKey),
     onSuccess: store,
@@ -216,6 +220,19 @@ export function useDebateLobbyReminder() {
       }
     },
   });
+}
+
+/**
+ * Whether any control is writing this lobby's reminder (GEO-3289), the navbar's queued replay
+ * included. Each control has its own mutation, so this is what stops one taking a reminder back
+ * while another's write is still landing.
+ */
+export function useLobbyReminderSaving(lobbyId: string) {
+  const saving = useMutationState({
+    filters: { mutationKey: LOBBY_REMINDER_MUTATION_KEY, status: 'pending' },
+    select: mutation => (mutation.state.variables as { lobbyId: string } | undefined)?.lobbyId,
+  });
+  return lobbyId !== '' && saving.some(id => id !== undefined && dashlessId(id) === dashlessId(lobbyId));
 }
 
 /**
