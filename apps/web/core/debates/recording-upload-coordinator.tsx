@@ -835,9 +835,11 @@ export function DebateRecordingUploadCoordinator() {
 
   // "Debate uploaded" is the banner's line about the Cancel action beside it — the upload is done
   // and still withdrawable — so it belongs to the banner only while the banner owns that action.
-  // While the card does, the banner has nothing left to say about a finished upload and falls back
-  // to reporting whatever else is still going out.
-  const bannerThankingUploadFinished = !cardOwnsPublishControl && thankingUploadFinished;
+  // While the card does, or once the window has closed and there is no action left (the claim
+  // picker keeps reporting the debate past it, GEO-3301), the banner has nothing left to say about
+  // a finished upload and falls back to reporting whatever else is still going out, failures
+  // included.
+  const bannerThankingUploadFinished = !cardOwnsPublishControl && thankingCancelWindowOpen && thankingUploadFinished;
   // Everything still on its way out of this browser, counted as debates rather than queue rows.
   // The thank-you recording is counted before it reaches IndexedDB — persisting the blob takes a
   // moment and the banner has to be up for the whole thank-you period, not from partway through.

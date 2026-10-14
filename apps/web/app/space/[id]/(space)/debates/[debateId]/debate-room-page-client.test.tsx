@@ -43,6 +43,7 @@ const mocks = vi.hoisted(() => ({
   endTurnMutateAsync: vi.fn(),
   savePickMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
+  requestLobbyRejoinOnLeave: vi.fn(),
   enqueueRecording: vi.fn(),
   startLiveStream: vi.fn(),
   liveStreamAppend: vi.fn(),
@@ -133,7 +134,10 @@ vi.mock('~/core/debates/api', async importOriginal => {
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async () => {
   const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
-  return { useConsumeDebateReturnDestination: () => consumeDebateReturnDestination };
+  return {
+    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
+    useLobbyRejoinOnLeave: () => mocks.requestLobbyRejoinOnLeave,
+  };
 });
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -4323,8 +4327,11 @@ describe('DebateRoomPageClient', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Waiting for Bri...')).toBeInTheDocument();
+    mocks.requestLobbyRejoinOnLeave.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
     await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    // Copilot on #2853: the end card's lobby row rejoined, so this way out has to as well.
+    expect(mocks.requestLobbyRejoinOnLeave).toHaveBeenCalledOnce();
   });
 
   it('automatically consents shortly before the thank-you countdown ends', async () => {
@@ -4460,6 +4467,35 @@ describe('DebateRoomPageClient', () => {
 
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
     expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
+  });
+
+  // Copilot on #2853: an ended session's early exit failing its save left Retry save on the
+  // save-only branch, so a retry that worked still never left the hidden room.
+  it('finishes the exit from Retry save after an ended session’s first persist failed', async () => {
+    setHistoryLength(2);
+    mocks.enqueueRecording.mockRejectedValueOnce(new Error('Could not save the local recording.'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('ended', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const retry = await screen.findByRole('button', { name: 'Retry save' });
+    expect(mocks.back).not.toHaveBeenCalled();
+
+    fireEvent.click(retry);
+
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
   });
 
   it('finishes the early rematch exit from Retry save when the first persist failed', async () => {

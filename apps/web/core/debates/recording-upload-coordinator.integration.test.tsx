@@ -1246,6 +1246,30 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
   });
 
+  // Copilot on #2853. The claim picker keeps reporting the debate after geo-chat's window closes;
+  // "Debate uploaded" spoke for a Cancel that no longer existed, and hid other uploads' failures.
+  it('stops saying "Debate uploaded" once the window closes, and shows other failures again', async () => {
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingHasUploadedRecording = true;
+    mocks.thankingCancelWindowOpen = false;
+    mocks.queue = [
+      {
+        ...queuedRecording('debate-2'),
+        attemptCount: MAX_RECORDING_UPLOAD_ATTEMPTS,
+        failedAt: Date.now() - 1_000,
+        failedReason: 'retries_exhausted',
+        lastError: 'Load failed',
+      },
+    ];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('1 debate didn’t upload')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+    expect(screen.queryByText('Debate uploaded')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  });
+
   it('restores the uploaded banner from the debate snapshot after a remount', async () => {
     mocks.queue = [];
     mocks.thankingHasUploadedRecording = true;

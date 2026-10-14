@@ -23,6 +23,7 @@ import {
   getServerTime,
   startLocalRecordingMultipart,
 } from '~/core/debates/api';
+import { DebateNotice } from '~/core/debates/debate-notice';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
 import {
   preferredRecordingMimeType,
@@ -42,7 +43,6 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
-import { DebateNotice } from '~/core/debates/debate-notice';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -78,7 +78,7 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import { useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useConsumeDebateReturnDestination, useLobbyRejoinOnLeave } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -754,6 +754,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * own consent — the other room may still be finishing its recording.
    */
   const rematchReady = countdown.effectiveStatus === 'thanking' && liveRematchDestination !== null;
+  /** The other debater left the session, so there is no picker to go to. */
+  const rematchSessionClosed = rematchSessionStatus === 'ended' || rematchSessionStatus === 'expired';
+  /**
+   * The session has its answer, so the thank-you period no longer holds the exit: both rooms
+   * consented and the pair go to the picker, or it ended without them and the viewer goes back. The
+   * room is hidden through the handoff (GEO-3301), so sitting out the rest of the period would be up
+   * to 20 seconds of blank screen. Both the exit and its Retry save read this one answer.
+   */
+  const handoffSettled = rematchReady || (countdown.effectiveStatus === 'thanking' && rematchSessionClosed);
 
   // A completed debate with a live rematch session is a dead end while the room is idle:
   // DebateCoordinator defers to this page so the recording finalizes first, but finalization only
@@ -2133,9 +2142,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const retryLiveDebateFinalization = React.useCallback(() => {
     // A retry inside the thank-you period is only a save, because the countdown still owns the
-    // exit. Once both debaters have accepted it owns the exit too: the early finalize is what
-    // failed, and taking the save-only branch here would consume nothing and leave them stranded.
-    if (debate?.status === 'thanking' && !rematchReady) {
+    // exit. Once the handoff has settled (both rooms consented, or the session ended) the retry owns
+    // the exit too: the early finalize is what failed, and taking the save-only branch here would
+    // consume nothing and leave them stranded.
+    if (debate?.status === 'thanking' && !handoffSettled) {
       setRoomError(null);
       setRoomState('saving');
       recordingPersistenceStartedRef.current = debate.id;
@@ -2152,8 +2162,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     finalizedDebateRef.current = null;
-    void finishLiveDebate({ allowDuringThankYou: rematchReady });
-  }, [rematchReady, debate?.id, debate?.status, finishLiveDebate, persistStoppedLocalRecording]);
+    void finishLiveDebate({ allowDuringThankYou: handoffSettled });
+  }, [handoffSettled, debate?.id, debate?.status, finishLiveDebate, persistStoppedLocalRecording]);
 
   const requestRematch = React.useCallback(async () => {
     if (rematchConsentRequested) return;
@@ -2206,16 +2216,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     requestRematch,
   ]);
 
-  // Leave as soon as the session has an answer rather than on the clock: both rooms consented (see
-  // `rematchReady`), or it ended without them, because the other debater left it. The room is
-  // hidden through the handoff (GEO-3301), so sitting out the rest of the thank-you period would be
-  // up to 20 seconds of blank screen; `finishLiveDebate` saves the recording and goes back either way.
-  const rematchSessionClosed = rematchSessionStatus === 'ended' || rematchSessionStatus === 'expired';
+  // Leave as soon as the session has an answer rather than on the clock; see `handoffSettled`.
+  // `finishLiveDebate` saves the recording, then follows the session to the picker or goes back.
   React.useEffect(() => {
-    if (countdown.effectiveStatus !== 'thanking') return;
-    if (!liveRematchDestination && !rematchSessionClosed) return;
+    if (!handoffSettled) return;
     void finishLiveDebate({ allowDuringThankYou: true });
-  }, [countdown.effectiveStatus, finishLiveDebate, liveRematchDestination, rematchSessionClosed]);
+  }, [finishLiveDebate, handoffSettled]);
 
   /**
    * GEO-2819. A tab that joined the room for the intro is already there when the second "I'm
@@ -2953,6 +2959,7 @@ function DebateRecordingModal({
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
+  const requestLobbyRejoinOnLeave = useLobbyRejoinOnLeave();
   const localParticipant =
     (localSlot
       ? debate.participants.find(participant => participant.participant_slot === localSlot)
@@ -3293,7 +3300,12 @@ function DebateRecordingModal({
         <DebateHandoffNotice
           opponentName={remoteName}
           waitingForOpponent={rematchSession !== null && !remoteConsented}
-          onLeave={onLeave}
+          // The only way out while the room is hidden, so it rejoins the lobby the way the end
+          // card's "Back to <lobby>" row did, and the picker's Leave does.
+          onLeave={() => {
+            requestLobbyRejoinOnLeave();
+            onLeave();
+          }}
           leaveDisabled={leaveDisabled}
         />
       )}
