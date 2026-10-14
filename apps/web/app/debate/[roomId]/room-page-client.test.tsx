@@ -163,7 +163,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   // GEO-3131. A lobby's room view is `not_a_participant`, which must not redirect.
-  // GEO-3270. Not behind `lobbyJoining`: a new account from a shared link never has it.
+  // GEO-3270. Open to anyone with the link, a brand-new account included.
   it('opens the lobby page for a lobby', () => {
     mocks.kind = 'lobby';
     mocks.access = { status: 'not_a_participant' };

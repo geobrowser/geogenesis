@@ -7,8 +7,6 @@ import * as React from 'react';
 import cx from 'classnames';
 import Link from 'next/link';
 
-import { useFeatureFlag } from '~/core/state/feature-flags';
-
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbySummary } from '../api';
@@ -55,7 +53,7 @@ export function lobbiesByDay(lobbies: DebateLobbySummary[], days: Date[]) {
 }
 
 export type WeekLobbies = {
-  /** `null` behind `lobbyJoining`, before the list loads, or with none that week: nothing to draw. */
+  /** `null` before the list loads, or with none that week: nothing to draw. */
   byDay: DebateLobbySummary[][] | null;
   /** The first read is in flight, so a week without people is not known to be empty yet. */
   isLoading: boolean;
@@ -73,19 +71,18 @@ export type WeekLobbies = {
  * none that have ended (GEO-3271 asks geo-chat for the whole week).
  */
 export function useWeekLobbies(days: Date[]): WeekLobbies {
-  const joining = useFeatureFlag('lobbyJoining');
-  const { data, isLoading, error, refetch } = useDebateLobbies(joining);
+  const { data, isLoading, error, refetch } = useDebateLobbies();
   const byDay = React.useMemo(() => {
-    if (!joining || !data) return null;
+    if (!data) return null;
     const week = lobbiesByDay(data.lobbies, days);
     return week.some(day => day.length > 0) ? week : null;
-  }, [data, days, joining]);
+  }, [data, days]);
 
   return {
     byDay,
-    // `isLoading`, not `isPending`: a disabled read (signed out, flag off) is pending for good.
-    isLoading: joining && isLoading,
-    error: joining && !data ? error : null,
+    // `isLoading`, not `isPending`: a disabled read (signed out) is pending for good.
+    isLoading,
+    error: data ? null : error,
     refetch: () => void refetch(),
   };
 }
