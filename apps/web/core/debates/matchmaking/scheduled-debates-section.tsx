@@ -30,7 +30,6 @@ import {
   useScheduledDebates,
 } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { Date as DateIcon } from '~/design-system/icons/date';
@@ -187,14 +186,14 @@ type Rescheduling = { requestId: string; opponentUserId: string; opponentName: s
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
-  /** Lobbies the viewer said Going to or hosts, soonest first. Empty without `lobbyJoining`. */
+  /** Lobbies the viewer said Going to or hosts, soonest first. */
   lobbies: UpcomingLobbyRow[];
   /** Who the requests' participants are, resolved from the graph. Empty until that lands. */
   people: DebateParticipantSummary[];
   /** Kept apart: one read failing must not hide what the others returned. */
   requestsError: Error | null;
   roomsError: Error | null;
-  /** The lobby list, which hosted lobbies and hosts' names come from. Null without `lobbyJoining`. */
+  /** The lobby list, which hosted lobbies and hosts' names come from. */
   lobbiesError: Error | null;
 };
 
@@ -224,10 +223,9 @@ export function useScheduledContent(): ScheduledContent {
   const requests = useScheduledDebates();
   const rooms = useUpcomingDebateRooms();
   const viewerId = useCurrentGeoChatUserId();
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
   // For hosts' names and the viewer's own scheduled lobbies. Kept current by
   // `debate.lobbies_changed`, as on the side panel card, so a copy this fresh need not be refetched.
-  const lobbyList = useDebateLobbies(lobbyJoining, { staleTime: LOBBY_LIST_STALE_MS });
+  const lobbyList = useDebateLobbies(true, { staleTime: LOBBY_LIST_STALE_MS });
 
   const rows = requests.data?.requests;
 
@@ -254,8 +252,8 @@ export function useScheduledContent(): ScheduledContent {
   );
 
   const lobbies = React.useMemo(
-    () => (lobbyJoining ? upcomingLobbyRows(roomList, lobbyList.data?.lobbies ?? [], viewerId) : []),
-    [lobbyJoining, lobbyList.data, roomList, viewerId]
+    () => upcomingLobbyRows(roomList, lobbyList.data?.lobbies ?? [], viewerId),
+    [lobbyList.data, roomList, viewerId]
   );
 
   // The viewer included: their own side of the strip needs a face too.
@@ -272,7 +270,7 @@ export function useScheduledContent(): ScheduledContent {
     people,
     requestsError: requests.error ?? null,
     roomsError: rooms.error ?? null,
-    lobbiesError: lobbyJoining ? (lobbyList.error ?? null) : null,
+    lobbiesError: lobbyList.error ?? null,
   };
 }
 

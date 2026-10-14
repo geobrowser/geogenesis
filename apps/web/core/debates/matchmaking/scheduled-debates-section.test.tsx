@@ -32,7 +32,6 @@ const mocks = vi.hoisted(() => ({
     avatar_cid: string | null;
   }[],
   graphLookupIds: [] as string[],
-  lobbyJoining: true,
   lobbies: [] as DebateLobbySummary[],
   lobbiesError: null as Error | null,
 }));
@@ -59,10 +58,6 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
 vi.mock('~/core/debates/rooms/hooks', () => ({
   useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms }, error: mocks.roomsError }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
-}));
-
-vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: (flag: string) => (flag === 'lobbyJoining' ? mocks.lobbyJoining : false),
 }));
 
 vi.mock('~/core/debates/lobbies/hooks', () => ({
@@ -195,7 +190,6 @@ afterEach(() => {
   mocks.finishedRoomIds = new Set();
   mocks.graphPeople = [];
   mocks.graphLookupIds = [];
-  mocks.lobbyJoining = true;
   mocks.lobbies = [];
   mocks.lobbiesError = null;
 });
@@ -846,12 +840,9 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
     expect(screen.getByText('Could not read your lobbies: boom')).toBeInTheDocument();
   });
 
-  it('carries a failed lobby list read out of the hook, and drops it with lobby joining off', () => {
+  it('carries a failed lobby list read out of the hook', () => {
     mocks.lobbiesError = new Error('boom');
     expect(renderHook(() => useScheduledContent()).result.current.lobbiesError?.message).toBe('boom');
-
-    mocks.lobbyJoining = false;
-    expect(renderHook(() => useScheduledContent()).result.current.lobbiesError).toBeNull();
   });
 
   it('builds Going lobbies from the upcoming rooms and names their host from the lobby list', () => {
@@ -870,15 +861,5 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
         hosts: [expect.objectContaining({ display_name: 'Bryan' })],
       }),
     ]);
-  });
-
-  it('lists nothing for lobbies with lobby joining off', () => {
-    mocks.lobbyJoining = false;
-    mocks.rooms = [room({ room_id: 'lobby-1', kind: 'lobby', name: 'Should cities ban cars?' })];
-    mocks.lobbies = [lobbySummary()];
-    const { result } = renderHook(() => useScheduledContent());
-
-    expect(result.current.lobbies).toEqual([]);
-    expect(result.current.upcoming).toEqual([]);
   });
 });

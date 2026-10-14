@@ -4,72 +4,56 @@ import { useMutation, useMutationState, useQueryClient } from '@tanstack/react-q
 
 import * as React from 'react';
 
-import { reconcileDeletedRelations } from '~/core/bounties/reconcile-store';
 import { readCachedSmartAccount } from '~/core/hooks/cached-write-identity';
-import { publishOnce } from '~/core/hooks/publish-once';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
-import { usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import { followedTopicsQueryKey } from '~/core/io/subgraph/fetch-followed-topics';
 import { interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import { SPACE_REGISTRY_ADDRESS_HEX } from '~/core/sdk/geo-network';
-import type { Relation } from '~/core/types';
 import { normId } from '~/core/utils/norm-id';
 
-import {
-  type FollowedTopicRelation,
-  type TopicRef,
-  buildFollowRelations,
-  buildUnfollowRelations,
-  followEditName,
-} from './follow-ops';
 import {
   type FollowKind,
   type InterestedCall,
   type InterestedTopicRow,
+  type TopicRef,
   buildInterestedClearCalls,
   buildInterestedFollowCalls,
   interestedTopicIds,
-  isInterestedFollowEnabled,
 } from './interested';
-import { followedTopicsQueryOptions, interestedTopicsQueryOptions } from './use-followed-topics';
+import { interestedTopicsQueryOptions } from './use-followed-topics';
 
 const FOLLOW_MUTATION_KEY = ['follow-topics'] as const;
 
-type FollowVariables = { spaceId: string; topicIds: string[]; interestedOnly: boolean; followKind: FollowKind } & (
+/** One held Interested: an entity, in the space it was cast in. Clearing one names both. */
+function heldKey(row: InterestedTopicRow) {
+  return `${normId(row.objectId)}:${normId(row.spaceId)}`;
+}
+
+type FollowVariables = { spaceId: string; topicIds: string[]; followKind: FollowKind } & (
   { kind: 'follow'; topics: TopicRef[] } | { kind: 'unfollow' }
 );
 
 /**
- * One edit per call, published to the viewer's personal space. Topics already being written by any
- * mounted control are skipped. Resolves false when signed out, blocked, or the publish failed.
+ * A topic follow is an Interested vote (GEO-3158), cast from the viewer's personal space: one user
+ * operation for the whole selection. A follow skips topics already held Interested, and an unfollow
+ * clears every Interested on the topic. Topics already being written by any mounted control are
+ * skipped. Resolves false when signed out, blocked, or the write failed.
  *
- * With `NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED` (GEO-3158) a follow is an Interested instead: one
- * user operation for the whole selection, and no `Following` relation. Interested replaces the
- * relation entirely, so neither path reads or writes relations: a follow skips topics already held
- * Interested, and an unfollow clears every Interested on the topic. Old `Following` relations are
- * left where they are and count for nothing. Flag off, nothing here reads or writes Interested.
+ * The old topic follow, a `Following` relation, is never written or read; existing ones are left
+ * where they are and count for nothing.
  */
 export function useFollowTopics() {
   return useFollowEntities({ kind: 'topic' });
 }
 
 /**
- * The follow writes for a topic or a person. A person (GEO-3236), keyed by their personal space id,
- * is always an Interested: people never had a `Following` relation, and none is written for them. A
- * topic is whichever kind the flag picks, unless `interestedOnly` says Interested regardless. Every
- * caller shares one mutation key, so a follow in flight shows as saving on every control for it.
+ * The follow writes for a topic or a person (GEO-3236, keyed by their personal space id): an
+ * Interested vote either way. Every caller shares one mutation key, so a follow in flight shows as
+ * saving on every control for it.
  */
-export function useFollowEntities({
-  kind,
-  interestedOnly = kind === 'person',
-}: {
-  kind: FollowKind;
-  interestedOnly?: boolean;
-}) {
+export function useFollowEntities({ kind }: { kind: FollowKind }) {
   const followKind = kind;
   const { personalSpaceId, isRegistered } = usePersonalSpaceId();
-  const { makeProposal } = usePublish();
   const { smartAccount } = useSmartAccount();
   const queryClient = useQueryClient();
 
@@ -92,10 +76,11 @@ export function useFollowEntities({
     }
   };
 
-  const runInterested = async (variables: FollowVariables, interested: InterestedTopicRow[]): Promise<boolean> => {
+  const write = async (variables: FollowVariables): Promise<boolean> => {
     const { spaceId } = variables;
     // Interested is an on-chain response from the personal space, which must exist on chain.
     if (!isRegistered) return false;
+    const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
     const interestedKey = interestedTopicsQueryKey(spaceId);
 
     if (variables.kind === 'follow') {
@@ -108,7 +93,8 @@ export function useFollowEntities({
       if (calls.length === 0) return true;
       if (!(await sendCalls(calls))) return false;
 
-      // Same reasoning as the relation path below: cancel, then write what was sent.
+      // A refetch started before the write would land the pre-write rows, and the indexer trails the
+      // write, so cancel, then write what was sent; it stands until the query goes stale normally.
       await queryClient.cancelQueries({ queryKey: interestedKey, exact: true });
       queryClient.setQueryData<InterestedTopicRow[]>(interestedKey, current => {
         const kept = current ?? interested;
@@ -131,65 +117,14 @@ export function useFollowEntities({
     if (!(await sendCalls(calls))) return false;
 
     await queryClient.cancelQueries({ queryKey: interestedKey, exact: true });
-    const gone = new Set(cleared.map(row => `${normId(row.objectId)}:${normId(row.spaceId)}`));
+    const gone = new Set(cleared.map(heldKey));
     queryClient.setQueryData<InterestedTopicRow[]>(interestedKey, current =>
-      (current ?? interested).filter(row => !gone.has(`${normId(row.objectId)}:${normId(row.spaceId)}`))
+      (current ?? interested).filter(row => !gone.has(heldKey(row)))
     );
     return true;
   };
 
-  const { mutateAsync } = useMutation({
-    mutationKey: FOLLOW_MUTATION_KEY,
-    mutationFn: async (variables: FollowVariables) => {
-      const { spaceId } = variables;
-      if (variables.interestedOnly || isInterestedFollowEnabled()) {
-        const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
-        return runInterested(variables, interested);
-      }
-
-      const queryKey = followedTopicsQueryKey(spaceId);
-      const rows = await queryClient.ensureQueryData(followedTopicsQueryOptions(spaceId));
-
-      let added: FollowedTopicRelation[] = [];
-      let relations: Relation[];
-      if (variables.kind === 'follow') {
-        const built = buildFollowRelations({
-          personalSpaceId: spaceId,
-          topics: variables.topics,
-          existingTopicIds: new Set(rows.map(row => row.toEntityId)),
-        });
-        added = built.followed;
-        relations = built.relations;
-      } else {
-        relations = buildUnfollowRelations({ personalSpaceId: spaceId, rows, topicIds: variables.topicIds });
-      }
-
-      if (relations.length === 0) return true;
-
-      const ok = await publishOnce(makeProposal, {
-        values: [],
-        relations,
-        spaceId,
-        name: followEditName(variables.kind === 'follow' ? 'Follow' : 'Unfollow', relations),
-      });
-      if (!ok) return false;
-
-      if (variables.kind === 'unfollow') reconcileDeletedRelations(relations);
-
-      // A refetch started before the publish would land the pre-write rows.
-      // No refetch after either: the indexer trails the publish, so these rows
-      // stand until the query goes stale normally.
-      await queryClient.cancelQueries({ queryKey, exact: true });
-      const deleted = new Set(relations.filter(r => r.isDeleted).map(r => r.id));
-      // A refetch during the publish may already hold the new rows.
-      queryClient.setQueryData<FollowedTopicRelation[]>(queryKey, current => {
-        const kept = (current ?? rows).filter(row => !deleted.has(row.id));
-        const known = new Set(kept.map(row => normId(row.id)));
-        return [...kept, ...added.filter(row => !known.has(normId(row.id)))];
-      });
-      return true;
-    },
-  });
+  const { mutateAsync } = useMutation({ mutationKey: FOLLOW_MUTATION_KEY, mutationFn: write });
 
   const run = React.useCallback(
     async (kind: FollowVariables['kind'], topics: readonly TopicRef[]) => {
@@ -210,15 +145,15 @@ export function useFollowEntities({
       try {
         return await mutateAsync(
           kind === 'follow'
-            ? { kind, spaceId: personalSpaceId, topicIds, topics: free, interestedOnly, followKind }
-            : { kind, spaceId: personalSpaceId, topicIds, interestedOnly, followKind }
+            ? { kind, spaceId: personalSpaceId, topicIds, topics: free, followKind }
+            : { kind, spaceId: personalSpaceId, topicIds, followKind }
         );
       } catch (error) {
         console.error(`[follow-topics] ${kind} failed:`, error);
         return false;
       }
     },
-    [mutateAsync, personalSpaceId, queryClient, interestedOnly, followKind]
+    [mutateAsync, personalSpaceId, queryClient, followKind]
   );
 
   const follow = React.useCallback((topics: readonly TopicRef[]) => run('follow', topics), [run]);

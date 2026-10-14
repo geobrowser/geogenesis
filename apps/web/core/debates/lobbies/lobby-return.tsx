@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import { useFeatureFlag } from '~/core/state/feature-flags';
-
 import { Text } from '~/design-system/text';
 
 import { consumeDebateReturnDestination, peekDebateReturnDestination } from '../debate-return-navigation';
@@ -15,26 +13,24 @@ import { requestLobbyRejoin } from './step-out';
 
 /**
  * geo-chat's lobby to return to: the one the viewer stepped out of, from any tab, or null. Undefined
- * while it is unknown (flag off, loading, or the call failed), so callers fall back to this tab.
+ * while it is unknown (loading, or the call failed), so callers fall back to this tab.
  */
 function useServerLobbyReturn(): { lobbyId: string | null } | undefined {
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
-  const mine = useMyDebateLobby(lobbyJoining);
-  if (!lobbyJoining || mine.isError || !mine.data) return undefined;
+  const mine = useMyDebateLobby();
+  if (mine.isError || !mine.data) return undefined;
   return { lobbyId: mine.data.stepped_out ? mine.data.current_lobby_id : null };
 }
 
 /** The lobby this debate flow returns to; null when it did not start in one or that lobby is gone. */
 export function useRecordedLobby(): string | null {
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
-  const mine = useMyDebateLobby(lobbyJoining);
+  const mine = useMyDebateLobby();
   // This tab's record, read once per mount; used only when geo-chat cannot answer.
   const [stored] = React.useState(() => {
     const destination = peekDebateReturnDestination();
     return destination ? debateRoomIdFromPath(destination) : null;
   });
 
-  if (!lobbyJoining || mine.isError) return stored;
+  if (mine.isError) return stored;
   return mine.data?.stepped_out ? mine.data.current_lobby_id : null;
 }
 

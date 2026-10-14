@@ -42,6 +42,20 @@ describe('createBatchLoader', () => {
     expect(await load('gone')).toBe('missing:gone');
   });
 
+  it('rejects only the key whose fallback throws, and answers the rest of its batch', async () => {
+    const load = createBatchLoader<string>({
+      fetchBatch: async keys => new Map(keys.filter(key => key !== 'gone').map(key => [key, `v:${key}`])),
+      missing: key => {
+        throw new Error(`no ${key}`);
+      },
+      maxBatchSize: 25,
+    });
+
+    const [gone, kept] = await Promise.allSettled([load('gone'), load('a')]);
+    expect(gone).toMatchObject({ status: 'rejected', reason: new Error('no gone') });
+    expect(kept).toEqual({ status: 'fulfilled', value: 'v:a' });
+  });
+
   it('rejects every key in a failed batch', async () => {
     const load = createBatchLoader<string>({
       fetchBatch: async () => Promise.reject(new Error('offline')),

@@ -34,7 +34,7 @@ describe('useFollowerCount', () => {
       await client.refetchQueries();
     });
 
-    expect(client.getQueryState(['followers', ENTITY, 'interested', null])?.status).toBe('error');
+    expect(client.getQueryState(['followers', ENTITY, null])?.status).toBe('error');
     // React Query tells components about the error on its next scheduled tick; let it.
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 20));

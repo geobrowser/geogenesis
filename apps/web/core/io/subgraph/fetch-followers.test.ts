@@ -11,7 +11,7 @@ const MARCUS = 'e1fbf3a014554cef945bdd49613b2a05';
 
 describe('followersQuery', () => {
   it('reads Interested rows for each topic in one request, one alias each, plus the viewer', () => {
-    const query = followersQuery([TOPIC_A, TOPIC_B], true, ADA);
+    const query = followersQuery([TOPIC_A, TOPIC_B], ADA);
 
     expect(query).toContain('t0: userVotesConnection');
     expect(query).toContain('t1: userVotesConnection');
@@ -23,16 +23,14 @@ describe('followersQuery', () => {
   });
 
   it('asks nothing about a viewer who is signed out', () => {
-    expect(followersQuery([TOPIC_A], true)).not.toContain('v0:');
+    expect(followersQuery([TOPIC_A])).not.toContain('v0:');
   });
 
-  it('reads Following relations with the flag off', () => {
-    const query = followersQuery([TOPIC_A], false, ADA);
+  it('never reads Following relations, the old topic follow', () => {
+    const query = followersQuery([TOPIC_A], ADA);
 
-    expect(query).toContain('t0: relationsConnection');
-    expect(query).toContain('typeId: { is: "f374b8f2d33148a3a220ba3648992e93" }');
-    expect(query).toContain(`fromEntityId: { is: "${ADA}" }`);
-    expect(query).not.toContain('userVotesConnection');
+    expect(query).not.toContain('relationsConnection');
+    expect(query).toContain('v0: userVotesConnection');
   });
 });
 
@@ -57,29 +55,6 @@ describe('readFollowers', () => {
   it("ignores an Interested vote cast into someone else's space", () => {
     // The permissionless action takes any space, so a vote elsewhere could otherwise be stacked.
     const followers = readFollowers({ totalCount: 1, nodes: [{ userId: ADA, spaceId: MARCUS }] }, null);
-
-    expect(followers.count).toBe(0);
-  });
-
-  it('counts a personal space once, however many Following rows it has', () => {
-    const followers = readFollowers(
-      {
-        totalCount: 3,
-        nodes: [
-          { fromEntityId: ADA, spaceId: ADA },
-          { fromEntityId: ADA, spaceId: ADA },
-          { fromEntityId: MARCUS, spaceId: MARCUS },
-        ],
-      },
-      null
-    );
-
-    expect(followers.count).toBe(2);
-  });
-
-  it("ignores a Following relation written from someone else's entity", () => {
-    // Anyone can write a relation *from* any entity into a space they control.
-    const followers = readFollowers({ totalCount: 1, nodes: [{ fromEntityId: ADA, spaceId: MARCUS }] }, null);
 
     expect(followers.count).toBe(0);
   });

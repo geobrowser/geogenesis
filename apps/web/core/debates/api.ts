@@ -2331,7 +2331,7 @@ export async function listUpcomingDebateRooms(
   accountKey: string | null,
   signal?: AbortSignal
 ) {
-  // Lobby rows are opt-in, so bundles that predate lobbies never see them; `lobbyJoining` gates them here.
+  // Lobby rows are opt-in, so bundles that predate lobbies never see them.
   return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms?include=lobbies', {
     auth: true,
     getPrivyIdentityToken,

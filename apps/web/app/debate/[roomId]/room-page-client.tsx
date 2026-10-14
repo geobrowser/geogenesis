@@ -95,9 +95,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   if (denial) return null;
 
   // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest, signed out too.
-  // Not behind `lobbyJoining` (GEO-3270): that flag gates finding lobbies, and a link is somebody
-  // inviting you to one. A brand-new account never has the flag, so gating here sent everyone who
-  // signed up from a shared lobby link to "Lobbies aren't available" and on to Explore.
+  // A lobby link opens for everyone, including a brand-new account (GEO-3270).
   if (knownLobby) return <DebateLobbyPage key={roomId} lobbyId={roomId} />;
 
   // A room link is pasted into a calendar invite, so the person opening it is often signed out.

@@ -13,7 +13,6 @@ import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useQueuedAction } from '~/core/state/pending-actions';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
-import { isInterestedFollowEnabled } from '~/core/topics/interested';
 import { useFollowEntities } from '~/core/topics/use-follow-topics';
 import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
@@ -100,12 +99,11 @@ const KIND = {
  * Follow or unfollow one topic or person: in place of the votes wherever it stands, since following
  * is what either is for.
  *
- * A person follow is only ever an Interested vote; a topic follow is whichever kind the Interested
- * flag writes. Signed out, the press is held in the app-level queue and sign-in opens; the follow
- * lands once the new account has a personal space, without a second press. Signed in with no
- * personal space, it can't be written at all and says so. While the viewer's own follows are loading
- * it can't be pressed, or a follow would be written for something already followed. Nobody follows
- * themselves, so on your own profile there is no button.
+ * A follow is an Interested vote, for a topic and a person alike. Signed out, the press is held in
+ * the app-level queue and sign-in opens; the follow lands once the new account has a personal space,
+ * without a second press. Signed in with no personal space, it can't be written at all and says so.
+ * While the viewer's own follows are loading it can't be pressed, or a follow would be written for
+ * something already followed. Nobody follows themselves, so on your own profile there is no button.
  */
 export function FollowButton({
   target,
@@ -117,17 +115,15 @@ export function FollowButton({
   className?: string;
 }) {
   const kind = KIND[target.kind];
-  const interestedOnly = target.kind === 'person';
   const targetId = normId(target.id);
   const { follow, unfollow, isPending } = useFollowEntities({ kind: target.kind });
   const { topicIds: followedIds, isLoading: isLoadingFollows } = useFollowedEntities({ kind: target.kind });
   const { ready: authReady, authenticated } = usePrivy();
   const { smartAccount } = useSmartAccount();
   const { personalSpaceId: anyPersonalSpaceId, isRegistered, isLoading: isLoadingPersonalSpace } = usePersonalSpaceId();
-  // An Interested follow is cast from the personal space on chain, so one not yet registered there
-  // can't write it; a `Following` relation only needs the space to exist.
-  const writesInterested = interestedOnly || isInterestedFollowEnabled();
-  const personalSpaceId = writesInterested && !isRegistered ? null : anyPersonalSpaceId;
+  // A follow is an Interested cast from the personal space on chain, so one not yet registered
+  // there can't write it.
+  const personalSpaceId = isRegistered ? anyPersonalSpaceId : null;
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const getContext = useActionContext(kind.component, kind.targetType, targetId);
 
