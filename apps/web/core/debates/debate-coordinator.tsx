@@ -563,7 +563,6 @@ export function DebateCoordinator() {
               onSuccess: result => {
                 if (!result.session) return;
                 rememberRematchJoinIntent(result.session.id, chosen);
-                markRematchAnswered(result.session.id);
               },
             });
           }}

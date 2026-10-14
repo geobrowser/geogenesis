@@ -7,7 +7,12 @@ import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, Upcomin
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
 import { registerLobbyStepOut } from './lobbies/step-out';
-import { clearRematchJoinIntents, hasAnsweredRematchJoin, markRematchAnswered } from './rematch-join-intent';
+import {
+  clearRematchJoinIntents,
+  hasAnsweredRematchJoin,
+  markRematchAnswered,
+  readRematchJoinIntent,
+} from './rematch-join-intent';
 
 const mocks = vi.hoisted(() => ({
   leaveRematchMutate: vi.fn(),
@@ -572,7 +577,7 @@ describe('DebateCoordinator', () => {
     expect(mocks.push).not.toHaveBeenCalled();
   });
 
-  it('records the answer given on the challenge card against the new session', async () => {
+  it('records the choice made on the challenge card against the new session', async () => {
     mocks.currentUserId = 'user-recipient';
     mocks.pathname = '/space/space-1/claims';
     mocks.activity = { ...activityWithRematch('browsing'), rematch: null, challenge: pendingChallenge() };
@@ -586,7 +591,7 @@ describe('DebateCoordinator', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Explore claims' }));
 
     expect(mocks.acceptChallengeMutate).toHaveBeenCalled();
-    expect(hasAnsweredRematchJoin('rematch-1')).toBe(true);
+    expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: false, cameraOn: false });
   });
 
   it('asks the sender how to join instead of moving them', async () => {

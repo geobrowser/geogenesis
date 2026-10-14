@@ -22,6 +22,7 @@ import {
   EXTRACTED_CLAIMS_POLL_MS,
   debateQueryKeys,
   extractedClaimsRefetchInterval,
+  useAcceptDebateChallenge,
   useAcceptDebateRematchRequest,
   useClearDebateActivity,
   useClearTimedOutDebateActivity,
@@ -41,10 +42,12 @@ import {
   useSpaceDebates,
   useUpdateDebateAvailability,
 } from './hooks';
+import { clearRematchJoinIntents, hasAnsweredRematchJoin } from './rematch-join-intent';
 
 const mocks = vi.hoisted(() => ({
   authenticated: true,
   spaceSupport: 'indexed' as 'indexed' | 'not-indexed' | 'unknown',
+  acceptDebateChallenge: vi.fn(),
   acceptDebateRematchRequest: vi.fn(),
   getIdentityToken: vi.fn(),
   identityToken: vi.fn(),
@@ -107,6 +110,7 @@ vi.mock('./api', async importOriginal => {
   const actual = await importOriginal<typeof import('./api')>();
   return {
     ...actual,
+    acceptDebateChallenge: mocks.acceptDebateChallenge,
     acceptDebateRematchRequest: mocks.acceptDebateRematchRequest,
     consentToDebateRematch: mocks.consentToDebateRematch,
     endDebateTurn: mocks.endDebateTurn,
@@ -936,6 +940,27 @@ describe('useConsentToDebateRematch', () => {
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.rematch('user-a', session.id) });
     expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
     expect(queryClient.getQueryData<Debate>(debateQueryKeys.debate('debate-1'))?.rematch_session_id).toBe(session.id);
+  });
+});
+
+describe('useAcceptDebateChallenge', () => {
+  it('marks the session answered for a caller that passes no callbacks', async () => {
+    clearRematchJoinIntents();
+
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    setCachedIdentityToken(null);
+    mocks.acceptDebateChallenge.mockResolvedValue({ session: { id: 'rematch-from-the-hub' } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+        {children}
+      </QueryClientProvider>
+    );
+
+    const { result } = renderHook(() => useAcceptDebateChallenge(), { wrapper });
+    result.current.mutate('challenge-1');
+
+    await waitFor(() => expect(hasAnsweredRematchJoin('rematch-from-the-hub')).toBe(true));
   });
 });
 
