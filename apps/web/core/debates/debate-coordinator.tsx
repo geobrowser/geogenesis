@@ -235,7 +235,7 @@ export function DebateCoordinator() {
    * it survives the walk into the picker, and this is what closes the card as soon as it is given.
    */
   const rematchAnswered = Boolean(activity?.rematch && hasAnsweredRematchJoin(activity.rematch.id));
-  const [rematchAnswerTick, setRematchAnswerTick] = React.useState(0);
+  const [, setAnsweredRematchTick] = React.useState(0);
   const leaveRematch = useLeaveDebateRematch(activity?.rematch?.id ?? '');
   // Optional: a missing provider should cost the media choice, not the card.
   const mediaSession = useOptionalDebateMediaSession();
@@ -525,11 +525,11 @@ export function DebateCoordinator() {
           key={promptedRematchSender.id}
           session={promptedRematchSender}
           currentUserId={currentUserId}
-          busy={leaveRematch.isPending || rematchAnswerTick > 0}
+          busy={leaveRematch.isPending}
           error={rematchJoinError}
           onExplore={() => {
             markRematchAnswered(promptedRematchSender.id);
-            setRematchAnswerTick(tick => tick + 1);
+            setAnsweredRematchTick(tick => tick + 1);
             rememberDebateReturnDestination();
             routeIntoDebate(() => router.push(debateRematchPath(promptedRematchSender)));
           }}

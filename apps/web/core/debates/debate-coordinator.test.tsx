@@ -1,11 +1,12 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
+import { registerLobbyStepOut } from './lobbies/step-out';
 import { clearRematchJoinIntents, hasAnsweredRematchJoin, markRematchAnswered } from './rematch-join-intent';
 
 const mocks = vi.hoisted(() => ({
@@ -658,6 +659,56 @@ describe('DebateCoordinator', () => {
 
     await new Promise(resolve => setTimeout(resolve, 50));
     expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+  });
+
+  it('closes the card as soon as it is answered, before the navigation commits', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    let letThePushThrough!: () => void;
+    const release = registerLobbyStepOut(
+      () =>
+        new Promise<void>(resolve => {
+          letThePushThrough = resolve;
+        })
+    );
+
+    try {
+      render(<DebateCoordinator />);
+      await screen.findByText('Remote speaker accepted your request');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+      expect(screen.queryByText('Remote speaker accepted your request')).toBeNull();
+      expect(mocks.push).not.toHaveBeenCalled();
+
+      await act(async () => {
+        letThePushThrough();
+        await Promise.resolve();
+      });
+      await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    } finally {
+      release();
+    }
+  });
+
+  it('leaves a later card usable after one has been answered', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    const first = challengeRematchActivity();
+    mocks.activity = first;
+
+    const view = render(<DebateCoordinator />);
+    await screen.findByText('Remote speaker accepted your request');
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    // A different challenge, accepted after the first was answered.
+    mocks.activity = { ...first, rematch: { ...first.rematch!, id: 'rematch-2' } };
+    view.rerender(<DebateCoordinator />);
+
+    await screen.findByText('Remote speaker accepted your request');
+    expect(screen.getByRole('button', { name: 'Explore claims' })).toBeEnabled();
+    expect(screen.getByRole('button', { name: 'Decline' })).toBeEnabled();
   });
 
   it('walks them in once they choose', async () => {
