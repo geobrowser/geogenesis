@@ -1404,8 +1404,8 @@ function DebaterVideo({
         }}
         style={{ opacity: nameFocused ? 1 : 1 - cardYield }}
         className={cx(
-          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom,opacity] duration-150',
-          cardYield > 0.5 && '[&_button]:pointer-events-none',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 transition-[padding-bottom,opacity] duration-150',
+          cardYield > 0.5 && '[&_[data-debater-avatar]]:pointer-events-none [&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
@@ -1414,14 +1414,31 @@ function DebaterVideo({
           clearScrubber === 'on-hover' && 'group-hover:pb-5'
         )}
       >
+        {/* The face, with Follow as a "+" pinned to its bottom edge (GEO-3305), the way short-video
+            apps do it: a pill beside the name and the position chip was one chip too many for the
+            band. The badge can't sit inside a button, so the face is its own pointer target for the
+            profile, out of the tab order because the name button is the same link for the keyboard.
+            A face already followed has no badge; see `FollowButton`'s `avatar` variant. */}
+        <span className="pointer-events-auto relative shrink-0">
+          <span
+            aria-hidden
+            data-debater-avatar
+            onClick={openProfile}
+            className="block size-7 cursor-pointer overflow-hidden rounded-full bg-white"
+          >
+            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={28} />
+          </span>
+          {participant && validateSpaceId(participant.profile_space_id) ? (
+            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2">
+              <FollowButton target={{ kind: 'person', id: participant.profile_space_id, name }} variant="avatar" />
+            </span>
+          ) : null}
+        </span>
         <button
           type="button"
           onClick={onIdentityClick}
-          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
+          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center text-left"
         >
-          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
-          </span>
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
@@ -1441,14 +1458,6 @@ function DebaterVideo({
             )}
           </span>
         </button>
-        {/* GEO-3236. A sibling of the identity button, not inside it: a button can't hold a button.
-            Chip-sized and chip-filled, so it reads with the position beside the name, and it takes
-            pointer events back from the row the way the name does. */}
-        {participant && validateSpaceId(participant.profile_space_id) ? (
-          <span className="pointer-events-auto mt-0.5 shrink-0">
-            <FollowButton target={{ kind: 'person', id: participant.profile_space_id, name }} variant="overlay" />
-          </span>
-        ) : null}
       </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}

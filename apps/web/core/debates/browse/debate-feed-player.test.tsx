@@ -254,13 +254,18 @@ afterEach(() => {
 });
 
 describe('player layout', () => {
-  it('offers Follow beside each debater, at the chip size, by their personal space (GEO-3236)', () => {
+  it("offers Follow as a badge on each debater's face, by their personal space (GEO-3236, GEO-3305)", () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
 
     const follows = Array.from(container.querySelectorAll('[data-testid="follow"]'));
     expect(follows.map(follow => follow.getAttribute('data-id'))).toEqual([SPACE_1_DASHED, SPACE_2]);
-    expect(follows.every(follow => follow.getAttribute('data-variant') === 'overlay')).toBe(true);
+    expect(follows.every(follow => follow.getAttribute('data-variant') === 'avatar')).toBe(true);
+    // Pinned to the face rather than beside the name, so it is never in the name/position row.
+    for (const follow of follows) {
+      expect(follow.closest('button')).toBeNull();
+      expect(follow.parentElement?.previousElementSibling?.hasAttribute('data-debater-avatar')).toBe(true);
+    }
   });
 
   it('keeps both stacked videos at the original aspect ratio', () => {
