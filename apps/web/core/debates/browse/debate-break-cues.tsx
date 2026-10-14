@@ -20,6 +20,14 @@ import { type TurnCount, roundLabel } from '~/core/debates/round-cues';
 /** How long the banner takes to roll out, ending as the player cuts. Matches `--animate-debate-banner-out`. */
 const BREAK_BANNER_OUT_MS = 300;
 
+/**
+ * How early a graphic is put on the page ahead of its start. The playhead arrives about four times
+ * a second, so a graphic mounted only once a sample passed its start appeared up to a quarter of a
+ * second late, with its roll-in already over. Mounted ahead, its held animation keeps it hidden
+ * until `--break-t`, which runs every frame, reaches its start.
+ */
+const MOUNT_AHEAD_MS = 400;
+
 /** Each debater's name, by slot. Slot 1 is the top tile. */
 export type BreakNames = Record<ParticipantSlot, string>;
 
@@ -209,12 +217,13 @@ export function DebateBreakOverlay({
   const opener = wrap ? null : `${names[firstSlot]} opens`;
 
   return (
-    <div
-      ref={ref}
-      aria-hidden
-      data-debate-break={cue.kind}
-      className="pointer-events-none absolute inset-0 z-[22] bg-black/40"
-    >
+    <div ref={ref} aria-hidden data-debate-break={cue.kind} className="pointer-events-none absolute inset-0 z-[22]">
+      {/* The dim comes in with the first graphic, not ahead of it: the question, or a lead-in's banner. */}
+      <div
+        data-debate-dim
+        className="absolute inset-0 bg-black/40 motion-safe:animate-[fadeIn_300ms_ease-out_both]"
+        style={heldAt(BREAK_SETTLE_MS)}
+      />
       {picks && cue.elapsedMs < BREAK_SETTLE_MS + BREAK_QUESTION_MS && (
         <div className="absolute inset-0 grid place-items-center px-4 text-center">
           <div
@@ -250,7 +259,7 @@ export function DebateBreakOverlay({
           );
         })}
 
-      {cue.elapsedMs >= bannerAtMs && (
+      {cue.elapsedMs >= bannerAtMs - MOUNT_AHEAD_MS && (
         <div
           data-debate-banner-out
           // Rolls on out, the way it rolled in, as the cut to the next speaker comes.

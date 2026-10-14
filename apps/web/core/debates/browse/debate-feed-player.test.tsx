@@ -1894,7 +1894,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
     expect(container.querySelector('[data-debate-question]')).toBeNull();
     expect(stamps(container)).toEqual(['extend', 'extend']);
-    expect(container.querySelector('[data-debate-banner]')).toBeNull();
+    // On the page ahead of its moment, held until the stamps have landed, so its roll-in plays whole.
+    expect((container.querySelector('[data-debate-banner]') as HTMLElement).style.animationDelay).toContain('1850ms');
   });
 
   it('then says what the picks mean: the next round and who opens it', () => {
@@ -1911,13 +1912,17 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(stamps(container)).toEqual(['extend', 'extend']);
   });
 
-  // The playhead's first sample in a break lands up to a quarter of a second in, which skipped the
-  // banner's roll in before a required round: it seemed to appear, then roll out.
-  it('shows only the dim for the first moment of a break, so nothing starts before the clock does', () => {
+  // The playhead's first sample in a break lands up to a quarter of a second in. Graphics mounted
+  // only once a sample passed their start lost their roll-in: the dim came first, and the banner
+  // just appeared. Both are on the page from the start, held to start together.
+  it('brings the dim and a lead-in banner in together, each held to the same start', () => {
     const leadIn = { ...extendBreak, kind: 'lead_in' as const, startMs: 60_000, endMs: 68_000 };
-    const { container } = renderAt(60.2, { playbackBreaks: breaks({ breaks: [leadIn] }) });
-    expect(container.querySelector('[data-debate-break="lead_in"]')).not.toBeNull();
-    expect(container.querySelector('[data-debate-banner]')).toBeNull();
+    const { container } = renderAt(60.05, { playbackBreaks: breaks({ breaks: [leadIn] }) });
+    const dim = container.querySelector('[data-debate-dim]') as HTMLElement;
+    const banner = container.querySelector('[data-debate-banner]') as HTMLElement;
+    expect(banner).not.toBeNull();
+    expect(dim.style.animationDelay).toContain('300ms');
+    expect(banner.style.animationDelay).toContain('300ms');
   });
 
   it('rolls the banner out over the last moment before the cut', () => {
