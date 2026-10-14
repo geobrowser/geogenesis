@@ -2,13 +2,13 @@
 
 import * as React from 'react';
 
-import { useAtomValue, useStore } from 'jotai';
+import { useStore } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
 import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
-import { fromClaimsFilterSearch, toClaimsFilterSearch } from './claims-filter-params';
+import { fromClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubHeaderControls } from './hub-header-controls';
@@ -16,6 +16,7 @@ import { HubLiveRail } from './hub-live-rail';
 import { HubSkeleton } from './hub-states';
 import { LobbyTab } from './lobby-tab';
 import { useHubFilterOwner } from './use-hub-filter-owner';
+import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspace-query';
 import type { DebatesHubTab } from '~/atoms';
 
 const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
@@ -103,26 +104,20 @@ export function DebatesHubWorkspace() {
   //
   // The delay also covers arrival: on the commit a URL is applied, this still sees the values from
   // before it, and the re-render that brings the new ones cancels that write before it lands.
-  const atoms = VARIANT_ATOMS[shown];
-  const search = useAtomValue(atoms.search);
-  const spaceIds = useAtomValue(atoms.spaceIds);
-  const topicIds = useAtomValue(atoms.topicIds);
+  const query = useWorkspaceQuery(shown);
   React.useEffect(() => {
     if (!ready || !filtersReconciled || appliedQuery.current === undefined) return;
-
-    const query = toClaimsFilterSearch({ list: shown, search, spaceIds, topicIds }, DEFAULT_WORKSPACE_LIST);
     if (query === window.location.search.replace(/^\?/, '')) return;
 
     const timer = window.setTimeout(() => {
       appliedQuery.current = query;
-      const { pathname } = window.location;
-      window.history.replaceState(null, '', query ? `${pathname}?${query}` : pathname);
+      window.history.replaceState(null, '', workspaceHref(query));
     }, URL_SYNC_DELAY_MS);
     return () => window.clearTimeout(timer);
-  }, [ready, filtersReconciled, shown, search, spaceIds, topicIds]);
+  }, [ready, filtersReconciled, query]);
 
   const showList = React.useCallback((tab: DebatesHubTab) => {
-    if (tab === 'explore' || tab === 'positions' || tab === 'lobby') setList(tab);
+    if (isWorkspaceList(tab)) setList(tab);
   }, []);
 
   const picker = (

@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import { MotionConfig, motion } from 'framer-motion';
-import { useAtomValue } from 'jotai';
 import Link from 'next/link';
 import { usePathname, useSearchParams } from 'next/navigation';
 import { createPortal } from 'react-dom';
@@ -26,7 +25,6 @@ import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
 import { UpcomingLobbiesCard } from '../lobbies/lobbies-card';
 import { LobbySpotlight } from '../lobbies/lobby-spotlight';
-import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { calendarHref } from './debate-calendar-route';
 import { useDebateRequests, useMatchmakingScope } from './hooks';
@@ -45,18 +43,8 @@ import { useDebatesHub } from './use-debates-hub';
 import { useFocusTrap } from './use-focus-trap';
 import { useHubFilterOwner } from './use-hub-filter-owner';
 import { useRequestsTabCount } from './use-requests-tab-count';
-import {
-  type DebatesHubTab,
-  debatesHubExploreSearchAtom,
-  debatesHubExploreSpaceIdsAtom,
-  debatesHubExploreTopicIdsAtom,
-  debatesHubLobbySearchAtom,
-  debatesHubLobbySpaceIdsAtom,
-  debatesHubLobbyTopicIdsAtom,
-  debatesHubPositionsSearchAtom,
-  debatesHubPositionsSpaceIdsAtom,
-  debatesHubPositionsTopicIdsAtom,
-} from '~/atoms';
+import { isWorkspaceList, useWorkspaceQuery, workspaceHref } from './use-workspace-query';
+import { type DebatesHubTab } from '~/atoms';
 
 // The hub sits below the navbar (h-11) rather than covering it, so the toggle that opened it stays
 // visible and clickable. Mobile falls back to the bottom-sheet pattern used by the entity panel.
@@ -427,45 +415,15 @@ function CalendarButton() {
   );
 }
 
-/**
- * The way out to the full-screen hub at `/matchmaking`.
- *
- * Values match the workspace picker (`lobby` / `explore` / `positions`). Lobby is omitted from the
- * URL as the workspace default.
- */
-function workspaceListFor(tab: DebatesHubTab): string | null {
-  if (tab === 'explore' || tab === 'positions' || tab === 'lobby') return tab;
-  return null;
-}
-
+/** The way out to the full-screen hub, carrying the list on this tab and what narrows it. */
 function ExpandToWorkspaceLink({ activeTab }: { activeTab: DebatesHubTab }) {
   const { close } = useDebatesHub();
-
-  const exploreSearch = useAtomValue(debatesHubExploreSearchAtom);
-  const exploreSpaceIds = useAtomValue(debatesHubExploreSpaceIdsAtom);
-  const exploreTopicIds = useAtomValue(debatesHubExploreTopicIdsAtom);
-  const lobbySearch = useAtomValue(debatesHubLobbySearchAtom);
-  const lobbySpaceIds = useAtomValue(debatesHubLobbySpaceIdsAtom);
-  const lobbyTopicIds = useAtomValue(debatesHubLobbyTopicIdsAtom);
-  const positionsSearch = useAtomValue(debatesHubPositionsSearchAtom);
-  const positionsSpaceIds = useAtomValue(debatesHubPositionsSpaceIdsAtom);
-  const positionsTopicIds = useAtomValue(debatesHubPositionsTopicIdsAtom);
-
-  const filters =
-    activeTab === 'lobby'
-      ? { search: lobbySearch, spaceIds: lobbySpaceIds, topicIds: lobbyTopicIds }
-      : activeTab === 'positions'
-        ? { search: positionsSearch, spaceIds: positionsSpaceIds, topicIds: positionsTopicIds }
-        : activeTab === 'explore'
-          ? { search: exploreSearch, spaceIds: exploreSpaceIds, topicIds: exploreTopicIds }
-          : { search: '', spaceIds: [] as string[], topicIds: [] as string[] };
-
-  const query = toClaimsFilterSearch({ list: workspaceListFor(activeTab), ...filters }, 'lobby');
+  const query = useWorkspaceQuery(isWorkspaceList(activeTab) ? activeTab : null);
 
   return (
     <div className="shrink-0 border-t border-grey-02 px-4 py-2.5">
       <Link
-        href={query ? `/matchmaking?${query}` : '/matchmaking'}
+        href={workspaceHref(query)}
         onClick={close}
         className="flex items-center justify-center gap-1.5 text-metadata text-grey-04 transition-colors hover:text-text"
       >

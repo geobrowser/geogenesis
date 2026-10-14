@@ -24,6 +24,7 @@ vi.mock('./claims-tab', async () => {
     // The list a URL means when it names none, so the workspace can follow a bare `/matchmaking`
     // back to Lobby. Mirrored because this file mocks the module wholesale.
     DEFAULT_WORKSPACE_LIST: 'lobby',
+    CLAIMS_TAB_VARIANTS: ['explore', 'lobby', 'positions'],
     VARIANT_ATOMS: {
       explore: {
         spaceIds: atoms.debatesHubExploreSpaceIdsAtom,
