@@ -96,34 +96,37 @@ function Banner({ scheduleButtonRef, surface = 'hub', className, hidden = false 
       }}
     />
   );
-  if (hidden) return modal;
-
+  // Hidden, only the callout goes. The modal keeps its place in the tree, so React keeps the one
+  // already open, with the unsaved week inside it, rather than mounting a fresh one.
   return (
-    <div className={cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-[#EFE2FF] p-4')}>
-      <div className="flex items-center justify-between gap-3">
-        <Text as={surface === 'calendar' ? 'h2' : 'h3'} variant="smallTitle">
-          Debate schedule
-        </Text>
-        <HubPillButton
-          ref={openerRef}
-          variant="primary"
-          analyticsSurface={surface}
-          analyticsLabel={debateAnalyticsLabel(surface, 'Open schedule')}
-          analyticsIntent="open_debate_schedule"
-          onClick={() => {
-            returnFocusRef.current = openerRef.current;
-            setModalOpen(true);
-          }}
-        >
-          Set my schedule
-        </HubPillButton>
-      </div>
+    <div className={hidden ? 'contents' : cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-[#EFE2FF] p-4')}>
+      {hidden ? null : (
+        <>
+          <div className="flex items-center justify-between gap-3">
+            <Text as={surface === 'calendar' ? 'h2' : 'h3'} variant="smallTitle">
+              Debate schedule
+            </Text>
+            <HubPillButton
+              ref={openerRef}
+              variant="primary"
+              analyticsSurface={surface}
+              analyticsLabel={debateAnalyticsLabel(surface, 'Open schedule')}
+              analyticsIntent="open_debate_schedule"
+              onClick={() => {
+                returnFocusRef.current = openerRef.current;
+                setModalOpen(true);
+              }}
+            >
+              Set my schedule
+            </HubPillButton>
+          </div>
 
-      <Text as="p" variant="metadata" className="mt-2">
-        Set the times you’re free for debates. Others can check your availability and request a time that works for both
-        of you. You can change it any time in the dropdown above.
-      </Text>
-
+          <Text as="p" variant="metadata" className="mt-2">
+            Set the times you’re free for debates. Others can check your availability and request a time that works for
+            both of you. You can change it any time in the dropdown above.
+          </Text>
+        </>
+      )}
       {modal}
     </div>
   );

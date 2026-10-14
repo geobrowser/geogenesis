@@ -212,8 +212,11 @@ describe('SetScheduleBanner hidden', () => {
     await user.click(await screen.findByRole('button', { name: 'Set my schedule' }));
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
 
+    const dialog = screen.getByRole('dialog');
+
     rerender(<Harness hidden />);
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    // The same dialog, not a fresh one: a remount would reset the unsaved week inside it.
+    expect(screen.getByRole('dialog')).toBe(dialog);
     expect(screen.queryByText('Debate schedule')).not.toBeInTheDocument();
   });
 

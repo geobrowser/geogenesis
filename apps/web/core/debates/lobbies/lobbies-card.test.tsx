@@ -96,6 +96,11 @@ describe('UpcomingLobbiesCard', () => {
     expect(first).toHaveTextContent('NYC Debates');
     expect(first).toHaveTextContent('Adam · 6 going');
     expect(second).toHaveTextContent('AI Policy Night');
+    // The hub's prefix, as every hub control's label carries it.
+    expect(within(first!).getByRole('button', { name: 'RSVP' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate hub Upcoming lobby RSVP'
+    );
     within(first!).getByRole('button', { name: 'RSVP' }).click();
     expect(mocks.mutate).toHaveBeenCalledWith({ lobbyId: 'a', reminded: true });
   });

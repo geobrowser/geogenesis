@@ -67,7 +67,11 @@ export function LobbyRsvpButton({
       <HubPillButton
         variant={lobby.viewer_reminded ? 'primary' : 'secondary'}
         analyticsSurface={analyticsSurface}
-        analyticsLabel={`${analyticsLabelPrefix} ${lobby.viewer_reminded ? 'Going' : 'RSVP'}`}
+        // Prefixed here: HubPillButton takes an explicit label as given, so the surface would not reach it.
+        analyticsLabel={debateAnalyticsLabel(
+          analyticsSurface,
+          `${analyticsLabelPrefix} ${lobby.viewer_reminded ? 'Going' : 'RSVP'}`
+        )}
         aria-pressed={lobby.viewer_reminded}
         pending={reminder.isPending}
         onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded })}

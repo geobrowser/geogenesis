@@ -146,6 +146,11 @@ describe('the pinned Lobbies row', () => {
     const card = screen.getByTestId('lobby-calendar-card');
     expect(card).toHaveTextContent('Bryan · 6 going');
     expect(within(card).getByRole('link', { name: 'NYC Debates' })).toHaveAttribute('href', '/debate/nyc');
+    // Counted on the calendar, under its own prefix.
+    expect(within(card).getByRole('button', { name: 'RSVP' })).toHaveAttribute(
+      'data-geo-analytics-label',
+      'Debate calendar Lobby RSVP'
+    );
     fireEvent.click(within(card).getByRole('button', { name: 'RSVP' }));
     expect(mocks.mutate).toHaveBeenCalledWith({ lobbyId: 'nyc', reminded: true });
   });

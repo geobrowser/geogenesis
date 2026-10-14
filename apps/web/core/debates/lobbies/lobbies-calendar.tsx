@@ -270,7 +270,7 @@ export function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
       <LobbyRsvpButton
         lobby={lobby}
         analyticsSurface="calendar"
-        analyticsLabelPrefix="Lobby calendar"
+        analyticsLabelPrefix="Lobby"
         className="items-stretch"
       />
     </div>
