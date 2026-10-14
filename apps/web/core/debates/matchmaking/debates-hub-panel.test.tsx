@@ -60,6 +60,7 @@ vi.mock('../lobbies/lobbies-card', () => ({ LiveLobbiesCard: () => <div data-tes
 // The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
 vi.mock('./scheduled-debates-section', () => ({
   ScheduledDebatesSection: () => null,
+  hasScheduledContent: () => false,
   useScheduledContent: () => ({
     answerable: [],
     upcoming: [],

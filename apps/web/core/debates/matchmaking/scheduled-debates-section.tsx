@@ -80,9 +80,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
-  if (answerable.length === 0 && upcoming.length === 0 && lobbies.length === 0 && !requestsError && !roomsError) {
-    return null;
-  }
+  if (!hasScheduledContent(content)) return null;
 
   const answer = (requestId: string, accepted: boolean) => {
     setConflict(null);
@@ -195,6 +193,13 @@ export type ScheduledContent = {
   roomsError: Error | null;
 };
 
+/** Anything for this section to show, a failed read included: one is not an empty schedule. */
+export function hasScheduledContent({ answerable, upcoming, lobbies, requestsError, roomsError }: ScheduledContent) {
+  return (
+    answerable.length > 0 || upcoming.length > 0 || lobbies.length > 0 || requestsError !== null || roomsError !== null
+  );
+}
+
 /** A room's opponent and scheduled end come from the request that booked it. */
 export type UpcomingRoomRow = {
   room: UpcomingDebateRoom;
@@ -209,8 +214,8 @@ export function useScheduledContent(): ScheduledContent {
   const rooms = useUpcomingDebateRooms();
   const viewerId = useCurrentGeoChatUserId();
   const lobbyJoining = useFeatureFlag('lobbyJoining');
-  // For hosts' names and the viewer's own scheduled lobbies. A fresh enough copy is fine here: the
-  // side panel card keeps the same entry current.
+  // For hosts' names and the viewer's own scheduled lobbies. Kept current by
+  // `debate.lobbies_changed`, as on the side panel card, so a copy this fresh need not be refetched.
   const lobbyList = useDebateLobbies(lobbyJoining, { staleTime: LOBBY_LIST_STALE_MS });
 
   const rows = requests.data?.requests;
