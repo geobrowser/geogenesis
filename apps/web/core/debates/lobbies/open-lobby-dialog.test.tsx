@@ -11,7 +11,8 @@ vi.mock('./hooks', () => ({
 vi.mock('./lobby-analytics', () => ({ lobbyShareUrl: (id: string) => `/debate/${id}`, markLobbyEntry: vi.fn() }));
 vi.mock('../use-scroll-lock', () => ({ useScrollLock: () => {} }));
 // The real picker reads the graph; here it offers six pages and reports what it was told is added.
-vi.mock('./lobby-claim-list-picker', () => ({
+vi.mock('./lobby-claim-list-picker', async importOriginal => ({
+  ...(await importOriginal<typeof import('./lobby-claim-list-picker')>()),
   ClaimListPicker: ({
     addedIds,
     onPick,

@@ -2,19 +2,21 @@
 
 import * as React from 'react';
 
+import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
 import { type CreateDebateLobbyRequest, LOBBY_CLAIM_LISTS_MAX } from '../api';
 import type { ClaimListOption } from '../claim-list-pages';
+import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { hubPillClassName } from '../matchmaking/hub-pill-button';
-import { ClaimListPicker } from './lobby-claim-list-picker';
+import { CLAIM_LIST_PICKER_COPY, ClaimListPicker } from './lobby-claim-list-picker';
 import { LobbyPopup } from './lobby-popup';
 
 export const OPEN_LOBBY_CLAIM_LISTS_COPY = {
   label: 'Claim lists',
   optional: 'Optional',
   add: 'Add a list',
-  full: `Up to ${LOBBY_CLAIM_LISTS_MAX} lists. Remove one to add another.`,
+  full: `Up to ${LOBBY_CLAIM_LISTS_MAX} lists. ${CLAIM_LIST_PICKER_COPY.full}.`,
   hint: 'Shown as tabs in the lobby’s claims panel. You can change them in the lobby.',
 };
 
@@ -63,17 +65,17 @@ export function OpenLobbyClaimListsField({
           <span
             key={list.entityId}
             // The "Add a list" pill's own type and shape, so picked lists and the button read as one row.
-            className={hubPillClassName('secondary', 'max-w-full gap-1 pr-1 hover:bg-transparent')}
+            className={hubPillClassName('tag', 'max-w-full gap-1 pr-1')}
           >
             <span className="max-w-[200px] truncate">{list.name}</span>
             <button
               type="button"
               aria-label={`Remove ${list.name}`}
-              data-geo-analytics-label="Open lobby remove claim list"
+              {...debateActionAnalyticsAttributes('hub', 'Open lobby remove claim list', 'remove_lobby_claim_list')}
               onClick={() => onChange(value.filter(other => other.entityId !== list.entityId))}
               className="grid size-5 shrink-0 place-items-center rounded-full text-grey-04 hover:bg-grey-02 hover:text-text"
             >
-              ×
+              <CloseSmall />
             </button>
           </span>
         ))}
@@ -87,7 +89,7 @@ export function OpenLobbyClaimListsField({
             trigger={
               <button
                 type="button"
-                data-geo-analytics-label="Open lobby add claim list"
+                {...debateActionAnalyticsAttributes('hub', 'Open lobby add claim list', 'add_lobby_claim_list')}
                 className={hubPillClassName('secondary')}
               >
                 {OPEN_LOBBY_CLAIM_LISTS_COPY.add}
