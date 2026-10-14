@@ -39,6 +39,10 @@ function debate(overrides: Partial<Debate> = {}): Debate {
   } as Debate;
 }
 
+/** A server recording for one debater's slot; only the slot matters to the card. */
+const recording = (participant_slot: 1 | 2) =>
+  ({ participant_slot, user_id: participant_slot === 1 ? 'user-a' : 'user-b' }) as Debate['recordings'][number];
+
 function renderCard(overrides: Partial<Debate> = {}) {
   return render(<RematchPublishCard debate={debate(overrides)} currentUserId="user-a" opponentName="Jenna" />);
 }
@@ -86,12 +90,24 @@ describe('RematchPublishCard', () => {
     });
   });
 
-  it('keeps offering the cancel after the upload finishes', () => {
+  it('calls it published once both recordings are in, and keeps offering the cancel', () => {
     mocks.offer = { debateId: 'debate-1', busy: false, cancelled: false, upload: 'uploaded', percent: null };
-    renderCard();
+    renderCard({ recordings: [recording(1), recording(2)] });
 
     expect(screen.getByText('Debate published')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+  });
+
+  // Copilot on #2853: a debate plays only with both slots, so one recording in is not published.
+  it.each([
+    ['the other debater’s', [recording(2)]],
+    ['this device’s', [recording(1)]],
+  ])('still says publishing when only %s recording is in', (_label, recordings) => {
+    mocks.offer = { debateId: 'debate-1', busy: false, cancelled: false, upload: null, percent: null };
+    renderCard({ recordings });
+
+    expect(screen.getByText('Publishing your debate')).toBeInTheDocument();
+    expect(screen.queryByText('Debate published')).toBeNull();
   });
 
   it('holds the button while a cancel is already being sent', () => {
@@ -158,10 +174,15 @@ describe('publishCardState', () => {
     cancelledBy: null,
     currentUserId: 'user-a',
     hasUploadedRecording: false,
+    published: false,
   } as const;
 
-  it('reads a recording another tab or device already uploaded as published', () => {
-    expect(publishCardState({ ...base, hasUploadedRecording: true })).toBe('published');
+  it('reads a debate the server already has both recordings for as published', () => {
+    expect(publishCardState({ ...base, hasUploadedRecording: true, published: true })).toBe('published');
+  });
+
+  it('reads a finished local upload as still publishing until the debate is', () => {
+    expect(publishCardState({ ...base, offer: { cancelled: false, upload: 'uploaded' } })).toBe('publishing');
   });
 
   it('reads a recording still being written to this device as publishing', () => {
@@ -170,7 +191,12 @@ describe('publishCardState', () => {
 
   it('puts a withdrawal ahead of any upload state', () => {
     expect(
-      publishCardState({ ...base, offer: { cancelled: false, upload: 'uploaded' }, recordingCancelled: true })
+      publishCardState({
+        ...base,
+        offer: { cancelled: false, upload: 'uploaded' },
+        published: true,
+        recordingCancelled: true,
+      })
     ).toBe('cancelled_by_you');
   });
 });

@@ -7,6 +7,7 @@ import cx from 'classnames';
 import type { Debate } from '~/core/debates/api';
 import { DebateUploadProgressBar } from '~/core/debates/debate-upload-progress-bar';
 import { useServerClock } from '~/core/debates/matchmaking/use-request-countdown';
+import { isWatchableDebate } from '~/core/debates/playback-utils';
 import { debateThankYouDeadlineMs } from '~/core/debates/thank-you-period';
 import {
   type PublishOptOutOffer,
@@ -58,6 +59,7 @@ export function RematchPublishCard({
     cancelledBy: debate.recording_cancelled_by,
     currentUserId,
     hasUploadedRecording,
+    published: isWatchableDebate(debate),
   });
   const visible = state !== null && !dismissed;
   const showsCancel = visible && (state === 'publishing' || state === 'published') && cancelWindowOpen;
@@ -145,7 +147,12 @@ type PublishCardState = 'publishing' | 'published' | 'cancelled_by_you' | 'cance
 /**
  * What the card says, or null for no card. Withdrawn wins over everything: the coordinator knows the
  * moment its own cancel is accepted, the debate row says so once it refetches, and either way the
- * upload behind it is gone. No recording anywhere means nothing to report and nothing to withdraw.
+ * upload behind it is gone.
+ *
+ * Published only once the debate is: both debaters' recordings on the server, the rule playback
+ * itself uses (`isWatchableDebate`). This device finishing its own upload, or the other debater
+ * finishing theirs, is still publishing. No recording anywhere means nothing to report and nothing
+ * to withdraw.
  */
 export function publishCardState({
   offer,
@@ -153,18 +160,22 @@ export function publishCardState({
   cancelledBy,
   currentUserId,
   hasUploadedRecording,
+  published,
 }: {
   offer: Pick<PublishOptOutOffer, 'cancelled' | 'upload'>;
   recordingCancelled: boolean;
   cancelledBy: string | null;
   currentUserId: string;
+  /** Either debater's recording is on the server. */
   hasUploadedRecording: boolean;
+  /** Both are: see `isWatchableDebate`. */
+  published: boolean;
 }): PublishCardState | null {
   if (recordingCancelled || offer.cancelled) {
     return cancelledBy !== null && cancelledBy !== currentUserId ? 'cancelled_by_opponent' : 'cancelled_by_you';
   }
-  if (offer.upload === 'preparing' || offer.upload === 'uploading') return 'publishing';
-  if (offer.upload === 'uploaded' || hasUploadedRecording) return 'published';
+  if (published) return 'published';
+  if (offer.upload !== null || hasUploadedRecording) return 'publishing';
   return null;
 }
 
