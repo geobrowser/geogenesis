@@ -643,7 +643,10 @@ export class DebateGatewayClient {
     const list = this.queryClient.getQueryData<DebateLobbiesResponse>(key);
     if (!list) return;
 
-    if (fetched) {
+    // A calendar week read still in flight may predate a held patch, and lands after this. Pruning
+    // waits for the next list read once none is, so the week's own landing can lay the patch over.
+    const weekReadInFlight = this.queryClient.isFetching({ queryKey: [...key, 'calendar'] }) > 0;
+    if (fetched && !weekReadInFlight) {
       for (const row of fetched.lobbies) {
         const id = dashlessId(row.lobby_id);
         const held = this.heldLobbyPatches.get(id);
@@ -658,8 +661,8 @@ export class DebateGatewayClient {
 
   /**
    * Lays held patches over every cached calendar week (GEO-3300), so a lobby's headcount and who is
-   * going stay current there too. Weeks are pruned with the list: a held patch the list has caught
-   * up with is dropped, and a week's own row newer than a patch is left as it is.
+   * going stay current there too. A held patch is dropped once the list catches up with it and no
+   * week read is in flight; a week's own row newer than a patch is left as it is.
    */
   private overlayHeldPatchesOnCalendars() {
     if (!this.accountKey || this.heldLobbyPatches.size === 0) return;

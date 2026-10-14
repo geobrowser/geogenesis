@@ -564,6 +564,35 @@ describe('DebateGatewayClient', () => {
         expect(weekIds()).toEqual(['aa:3:ended']);
       });
 
+      // Copilot on #2850: the list used to drop a patch as soon as it caught up, even with a week
+      // read from before that patch still in flight, which then landed with nothing to lay over it.
+      it('keeps a patch for a week read still in flight when the list catches up first', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3, '2026-10-07T12:00:01Z')] });
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+
+        // A week read that started before the patch, held open.
+        let releaseWeek!: () => void;
+        const weekRead = queryClient.fetchQuery({
+          queryKey: weekKey,
+          queryFn: () =>
+            new Promise<object>(done => {
+              releaseWeek = () => done({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+            }),
+        });
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+        // The list catches up with the patch before the week read lands.
+        await queryClient.fetchQuery({
+          queryKey: lobbiesKey,
+          queryFn: async () => ({ lobbies: [row('aa', 8, '2026-10-07T12:00:05Z')] }),
+        });
+        releaseWeek();
+        await weekRead;
+
+        expect(weekIds()).toEqual(['aa:8:open']);
+      });
+
       it('lays a held patch over a week read before it', async () => {
         await started();
         queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
