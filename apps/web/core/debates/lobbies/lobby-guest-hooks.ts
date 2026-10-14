@@ -23,6 +23,13 @@ import {
   type GuestSessionState,
   transition,
 } from './lobby-guest-session';
+import {
+  acquireGuestTabLock,
+  isGuestListeningElsewhere,
+  lobbyListeningElsewhere,
+  onGuestTabLockLost,
+  releaseGuestTabLock,
+} from './lobby-guest-tab-lock';
 
 /** While visible; every 30s hidden, and at once on focus. The server caches each lobby for 2s. */
 export const GUEST_VIEW_POLL_MS = 5_000;
@@ -68,6 +75,15 @@ export function useIsLobbyGuest() {
 }
 
 const HEARTBEAT_FALLBACK_MS = 20_000;
+/** Statuses whose tab keeps the listening lock. */
+const HOLDS_LOCK: ReadonlySet<GuestSessionState['status']> = new Set([
+  'starting',
+  'listening',
+  'refused',
+  'handingOver',
+]);
+/** How often a tab waiting on a press checks whether another tab still listens. */
+export const ELSEWHERE_CHECK_MS = 3_000;
 
 /** Where the signed-in path stands: a failed one means this tab stops being a guest. */
 export type LobbyMemberPath = 'pending' | 'joined' | 'failed';
@@ -126,10 +142,63 @@ export function useLobbyGuestSession(
     [runCommand]
   );
 
+  // Starts only with this browser's listening lock; without it, waits on a press (`retry`). A hidden
+  // tab, such as a link opened in the background, waits until it is shown.
   const status = state.status;
   React.useEffect(() => {
-    if (listen && !signedIn && status === 'idle') send({ type: 'start' });
-  }, [listen, send, signedIn, status]);
+    if (!listen || signedIn || status !== 'idle') return;
+    let cancelled = false;
+    const run = () => {
+      if (document.visibilityState === 'hidden') return;
+      document.removeEventListener('visibilitychange', run);
+      void acquireGuestTabLock({ lobbyId: id }).then(held => {
+        if (!cancelled && stateRef.current.status === 'idle') {
+          return send(held ? { type: 'start' } : { type: 'elsewhere', sameLobby: false });
+        }
+        if (!held) return;
+        // Granted after this run was dropped: a tick later, a re-run has started on it or nobody needs it.
+        setTimeout(() => {
+          if (mountedRef.current && !HOLDS_LOCK.has(stateRef.current.status)) releaseGuestTabLock({ now: true });
+        }, 0);
+      });
+    };
+    document.addEventListener('visibilitychange', run);
+    run();
+    return () => {
+      cancelled = true;
+      document.removeEventListener('visibilitychange', run);
+    };
+  }, [id, listen, send, signedIn, status]);
+
+  const elsewhere = React.useCallback(() => {
+    const other = lobbyListeningElsewhere();
+    send({ type: 'elsewhere', sameLobby: other !== null && dashlessId(other) === id });
+  }, [id, send]);
+  React.useEffect(() => onGuestTabLockLost(elsewhere), [elsewhere]);
+
+  // Only a tab that listens, or may retry, keeps the lock.
+  const releasable = status === 'superseded' || status === 'removed' || status === 'ended' || status === 'released';
+  React.useEffect(() => {
+    if (releasable) releaseGuestTabLock();
+  }, [releasable]);
+
+  // While waiting on a press: whether another tab still listens, for the notice.
+  const [otherTabListening, setOtherTabListening] = React.useState(true);
+  React.useEffect(() => {
+    if (status !== 'superseded') return;
+    let stopped = false;
+    const check = () =>
+      void isGuestListeningElsewhere().then(elsewhere => {
+        // Unknown (no Web Locks): a later admission superseded this page, so another one listens.
+        if (!stopped && elsewhere !== null) setOtherTabListening(elsewhere);
+      });
+    check();
+    const timer = setInterval(check, ELSEWHERE_CHECK_MS);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [status]);
 
   React.useEffect(() => {
     if (member === 'joined') send({ type: 'memberJoined' });
@@ -223,7 +292,8 @@ export function useLobbyGuestSession(
     };
   }, [id, send, session]);
 
-  // Leave on unload and unmount while listening; a bfcache restore starts again on the same secret.
+  // Leave on unload and unmount while listening; a bfcache restore starts again on the same secret
+  // if no other tab took listening meanwhile.
   React.useEffect(() => {
     mountedRef.current = true;
     const leave = () => {
@@ -231,23 +301,33 @@ export function useLobbyGuestSession(
       if (current.status !== 'listening') return;
       runCommand({ type: 'leave', secret: current.session.guest_secret, admission: current.session.admission });
     };
-    const restore = (event: PageTransitionEvent) => {
-      if (event.persisted) send({ type: 'restart' });
+    const hide = () => {
+      leave();
+      releaseGuestTabLock({ now: true });
     };
-    window.addEventListener('pagehide', leave);
+    const restore = (event: PageTransitionEvent) => {
+      if (!event.persisted || stateRef.current.status !== 'listening') return;
+      void acquireGuestTabLock({ lobbyId: id }).then(held => (held ? send({ type: 'restart' }) : elsewhere()));
+    };
+    window.addEventListener('pagehide', hide);
     window.addEventListener('pageshow', restore);
     return () => {
-      window.removeEventListener('pagehide', leave);
+      window.removeEventListener('pagehide', hide);
       window.removeEventListener('pageshow', restore);
       mountedRef.current = false;
       leave();
+      releaseGuestTabLock();
     };
-  }, [runCommand, send]);
+  }, [elsewhere, id, runCommand, send]);
 
   return {
     state,
-    /** After a refusal. Not once signed in. */
-    retry: React.useCallback(() => send({ type: 'start' }), [send]),
+    /** After a refusal, or to take listening from another tab. Not once signed in. */
+    retry: React.useCallback(() => {
+      void acquireGuestTabLock({ steal: true, lobbyId: id }).then(() => send({ type: 'start' }));
+    }, [id, send]),
+    /** Waiting on a press: another tab in this browser listens now. */
+    otherTabListening,
     /** A fresh token for a full reconnect, on the same guest. */
     reconnect: React.useCallback(() => send({ type: 'restart' }), [send]),
     /** The member room is up, or will not come up: drop the guest room. */
