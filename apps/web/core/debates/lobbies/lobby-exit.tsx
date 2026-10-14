@@ -34,11 +34,7 @@ export function useLobbyExitHref() {
   return href;
 }
 
-export type LobbyExitReason = 'left' | 'ended' | 'closed' | 'removed' | 'banned';
-
-export const LOBBY_EXIT_COPY = {
-  removed: 'A host removed you from this lobby.',
-} as const;
+type LobbyExitReason = 'left' | 'ended' | 'closed' | 'removed' | 'banned';
 
 type LobbyExitInput = {
   access: LobbyPageView['access'] | null;
@@ -57,7 +53,7 @@ type LobbyExitSeen = {
  * Why the viewer is out of a lobby they were in on this page, or null. Arriving at a lobby that
  * has already ended, banned them or removed them earlier keeps its own card.
  */
-export function lobbyExitReason({ access, presence, guestStatus }: LobbyExitInput, seen: LobbyExitSeen) {
+function lobbyExitReason({ access, presence, guestStatus }: LobbyExitInput, seen: LobbyExitSeen) {
   if (presence.status === 'left') return 'left';
   if (seen.inside && presence.status === 'dropped') return presence.reason;
   if (seen.inside && guestStatus === 'removed') return 'removed';
@@ -71,11 +67,9 @@ function exitNotice(reason: LobbyExitReason, name: string) {
     case 'left':
       return null;
     case 'ended':
-      return LOBBY_STATE_COPY.ended;
     case 'closed':
-      return LOBBY_STATE_COPY.closed;
     case 'removed':
-      return LOBBY_EXIT_COPY.removed;
+      return LOBBY_STATE_COPY[reason];
     case 'banned':
       return LOBBY_STATE_COPY.bannedFrom(name);
   }

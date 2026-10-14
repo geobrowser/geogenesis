@@ -29,12 +29,8 @@ export function rememberLobbyReturnDestination(lobbyId: string) {
 }
 
 function storeDestination(stored: StoredDebateReturnDestination) {
-  try {
-    window.sessionStorage.setItem(debateReturnDestinationKey, JSON.stringify(stored));
-  } catch {
-    // Browser storage can be unavailable in privacy modes. Existing history
-    // and route fallbacks still handle the exit in that case.
-  }
+  // Without storage, existing history and route fallbacks still handle the exit.
+  writeSession(debateReturnDestinationKey, JSON.stringify(stored));
 }
 
 /**
@@ -55,12 +51,7 @@ export function peekDebateReturnDestination(): string | null {
 }
 
 function readStoredDestination(): { href: string; lobby: boolean } | null {
-  let raw: string | null = null;
-  try {
-    raw = window.sessionStorage.getItem(debateReturnDestinationKey);
-  } catch {
-    return null;
-  }
+  const raw = readSession(debateReturnDestinationKey);
   if (!raw) return null;
 
   try {
@@ -77,11 +68,7 @@ function readStoredDestination(): { href: string; lobby: boolean } | null {
 }
 
 export function clearDebateReturnDestination() {
-  try {
-    window.sessionStorage.removeItem(debateReturnDestinationKey);
-  } catch {
-    // Nothing to clear when storage is unavailable.
-  }
+  removeSession(debateReturnDestinationKey);
 }
 
 const lastPageOutsideDebatesKey = 'geo.debates.last-page-outside';
@@ -92,24 +79,40 @@ const lastPageOutsideDebatesKey = 'geo.debates.last-page-outside';
  */
 export function rememberLastPageOutsideDebates(href = currentBrowserHref()) {
   const page = safeInternalHref(href);
-  if (!page || isDebateFlowHref(page)) return;
-  try {
-    window.sessionStorage.setItem(lastPageOutsideDebatesKey, page);
-  } catch {
-    // Without storage, leaving a lobby falls back to Explore.
-  }
+  // Without storage, leaving a lobby falls back to Explore.
+  if (page && !isDebateFlowHref(page)) writeSession(lastPageOutsideDebatesKey, page);
 }
 
 /** The last page this tab was on outside the debate surfaces, or null. */
 export function lastPageOutsideDebates(): string | null {
-  let stored: string | null = null;
+  const stored = readSession(lastPageOutsideDebatesKey);
+  const page = stored ? safeInternalHref(stored) : null;
+  return page && !isDebateFlowHref(page) ? page : null;
+}
+
+/** Session storage can be unavailable in privacy modes; these treat that as empty. */
+function readSession(key: string): string | null {
   try {
-    stored = window.sessionStorage.getItem(lastPageOutsideDebatesKey);
+    return window.sessionStorage.getItem(key);
   } catch {
     return null;
   }
-  const page = stored ? safeInternalHref(stored) : null;
-  return page && !isDebateFlowHref(page) ? page : null;
+}
+
+function writeSession(key: string, value: string) {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // Nothing to keep it in.
+  }
+}
+
+function removeSession(key: string) {
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Nothing to clear.
+  }
 }
 
 function currentBrowserHref() {
