@@ -240,7 +240,9 @@ export function FollowButton({
         data-geo-analytics-label={shownFollowed ? kind.unfollow : kind.follow}
         className={cx(
           // The badge is 16px; the pseudo-element widens what a thumb can hit without growing it.
-          "relative grid size-4 place-items-center rounded-full bg-purple text-white transition-[filter] duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:brightness-90 disabled:cursor-default",
+          // Filled like the Agree / Disagree chip beside it (`tileChipSurface`), so the two read
+          // as one set of labels over the video.
+          "relative grid size-4 place-items-center rounded-full bg-white/85 text-text transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:bg-white disabled:cursor-default",
           (saving || disabled) && 'opacity-60',
           className
         )}
