@@ -57,21 +57,28 @@ describe('useClaimTimings', () => {
     transcript.media = undefined;
   });
 
-  // GEO-3277: claim times are the rendered video's, which an Open rounds render edits; the player
-  // plays the raw recordings, so a claim after a condensed break has to move back onto their clock.
+  // Timecodes published to the graph are the edited video's; the player plays the raw recordings,
+  // so each is placed by the turn it falls in, from the turn's two served positions (GEO-3293).
   it('places each claim on the recordings the player plays, not the edited video', () => {
     transcript.media = {
-      condensed_breaks: [
+      turn_segments: [
         {
-          kind: 'lead_in',
-          round_index: 0,
-          next_round_index: 1,
-          output_start_ms: 120_000,
-          output_end_ms: 121_600,
-          duration_ms: 1_600,
-          source_start_ms: 120_000,
-          source_end_ms: 128_000,
-          speed: 5,
+          turn_index: 1,
+          participant_slot: 2,
+          output_start_ms: 60_000,
+          output_end_ms: 120_000,
+          duration_ms: 60_000,
+          source_start_ms: 60_000,
+          source_end_ms: 120_000,
+        },
+        {
+          turn_index: 2,
+          participant_slot: 1,
+          output_start_ms: 121_600,
+          output_end_ms: 166_600,
+          duration_ms: 45_000,
+          source_start_ms: 128_000,
+          source_end_ms: 173_000,
         },
       ],
     };

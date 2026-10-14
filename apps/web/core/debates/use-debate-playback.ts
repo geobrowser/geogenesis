@@ -11,7 +11,6 @@ import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
 import { debateTurnRoleForDebate, isOpenRoundsDebate } from './open-rounds';
 import { breaksEndMs, playbackBreaksFrom } from './playback-breaks';
-import { playbackClockFrom, toPlaybackClock } from './playback-clock';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
@@ -30,6 +29,7 @@ import {
   turnStateFromSegments,
   usableTurnDurationsMs,
 } from './playback-utils';
+import { transcriptOnRecordings, turnOnRecordings } from './recording-clock';
 import type { TurnCount } from './round-cues';
 
 type PlaybackUrls = {
@@ -350,22 +350,20 @@ export function useDebatePlayback(
   // media job has not finished, and the allowance remains the fallback for both.
   const mediaQuery = useDebateMedia(debate.id, enabled);
   /**
-   * The response's times are the rendered video's, which an Open rounds render edits; this player
-   * plays the raw recordings. Everything read from it goes through this clock first (GEO-3277).
+   * This player plays the raw recordings, so it reads every time on their clock: the source times
+   * the API serves beside the rendered video's, which an Open rounds render edits (GEO-3293).
    */
-  const playbackClock = React.useMemo(() => playbackClockFrom(mediaQuery.data), [mediaQuery.data]);
   const turnSegments = React.useMemo(
-    () =>
-      sortTurnSegments((mediaQuery.data?.turn_segments ?? []).map(segment => toPlaybackClock(segment, playbackClock))),
-    [mediaQuery.data?.turn_segments, playbackClock]
+    () => sortTurnSegments((mediaQuery.data?.turn_segments ?? []).map(turnOnRecordings)),
+    [mediaQuery.data?.turn_segments]
   );
   /**
    * The breaks between Open rounds and the early ends, at their real length on this clock, and the
    * picks the breaks reveal. Empty on a fixed format.
    */
   const playbackBreaks = React.useMemo(
-    () => playbackBreaksFrom(debate, mediaQuery.data, turnSegments, playbackClock),
-    [debate, mediaQuery.data, playbackClock, turnSegments]
+    () => playbackBreaksFrom(debate, mediaQuery.data, turnSegments),
+    [debate, mediaQuery.data, turnSegments]
   );
   /**
    * Every turn's place on the timeline, for anything that has to name a turn rather than time it.
@@ -482,13 +480,8 @@ export function useDebatePlayback(
 
   const transcriptQuery = useDebateTranscript(debate.id, 'json', enabled);
   const transcriptSegments = React.useMemo(
-    () =>
-      (transcriptQuery.data?.segments ?? NO_TRANSCRIPT_SEGMENTS).map(segment => ({
-        ...segment,
-        start_ms: playbackClock(segment.start_ms, 'start'),
-        end_ms: playbackClock(segment.end_ms, 'end'),
-      })),
-    [playbackClock, transcriptQuery.data?.segments]
+    () => transcriptOnRecordings(transcriptQuery.data?.segments ?? NO_TRANSCRIPT_SEGMENTS),
+    [transcriptQuery.data?.segments]
   );
   const subtitle = React.useMemo(() => {
     if (!activeSlot) return null;

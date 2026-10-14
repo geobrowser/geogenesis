@@ -169,13 +169,16 @@ export type DebateMediaTurnSegment = {
   output_end_ms: number;
   duration_ms: number;
   countdown_start_ms?: number;
+  /** The same turn on the raw recordings' clock (GEO-3293). Absent where the two clocks agree: a
+   * fixed format, or a render with no edits. See `recording-clock.ts`. */
+  source_start_ms?: number;
+  source_end_ms?: number;
 };
 
 /**
- * The media response's times are on the *rendered video's* clock: `output_*`, `turn_segments`,
- * transcript lines and claim times. An Open rounds render cuts the pick window and condenses breaks,
- * so that clock runs ahead of the raw recordings the web player plays. `playback-clock.ts`
- * translates it back; `source_*` is already on the recordings' clock.
+ * The media response serves times on two clocks: the *rendered video's* (`output_*`) and the raw
+ * recordings' (`source_*`), which is what the web player plays. An Open rounds render cuts the pick
+ * window and condenses breaks, so the two drift apart; `recording-clock.ts` reads the source side.
  *
  * A break between two Open rounds as a condensed render plays it (GEO-3276): its source stretch
  * sped up to `duration_ms` with the sound muted, on the same output timeline as the turns.
@@ -225,6 +228,9 @@ export type DebateMediaRoundPick = {
   during_decision: boolean;
   at: string;
   output_ms: number;
+  /** When the pick was made, on the raw recordings' clock (GEO-3293). A pick made in a pick window the
+   * render cut keeps its real time here, where `output_ms` puts it at the cut. */
+  source_ms?: number;
 };
 
 export type DebateMediaResponse = {
@@ -264,6 +270,10 @@ export type DebateTranscriptSegment = {
   sequence_index: number;
   start_ms: number;
   end_ms: number;
+  /** The line on the raw recordings' clock (GEO-3293). Absent on a fixed format, where the clocks
+   * agree, and on a line in a stretch an Open rounds render cut. */
+  source_start_ms?: number;
+  source_end_ms?: number;
   text: string;
   metadata: Record<string, unknown>;
   created_at: string;

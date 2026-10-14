@@ -2,9 +2,10 @@ import type { DebateMediaResponse, DebateMediaRoundPick, DebateMediaTurnSegment 
 
 /**
  * The Preston vs Adam debate (01a1369d…) as geo-chat's condensed render published it (GEO-3276),
- * copied from its media response and render metadata on 2026-10-14. Times named `output_*` are the
- * rendered video's; `RENDERED_SOURCE_TURNS` is the same render's own record of where each turn sits
- * in the raw recordings, which is what the web player plays.
+ * copied from its media response and render metadata on 2026-10-14, with the source times the API
+ * serves since GEO-3293. Times named `output_*` are the rendered video's, `source_*` the raw
+ * recordings', which is what the web player plays. `RENDERED_SOURCE_TURNS` is the render's own
+ * record of where each turn sits in the recordings, which the served source times match.
  */
 
 export const DEBATE_STARTED_AT = '2026-10-13T18:56:05.738851Z';
@@ -17,6 +18,8 @@ export const RENDERED_TURN_SEGMENTS: DebateMediaTurnSegment[] = [
     output_end_ms: 60_000,
     duration_ms: 60_000,
     countdown_start_ms: 0,
+    source_start_ms: 0,
+    source_end_ms: 60_000,
   },
   {
     turn_index: 1,
@@ -25,6 +28,8 @@ export const RENDERED_TURN_SEGMENTS: DebateMediaTurnSegment[] = [
     output_end_ms: 120_000,
     duration_ms: 60_000,
     countdown_start_ms: 60_000,
+    source_start_ms: 60_000,
+    source_end_ms: 120_000,
   },
   {
     turn_index: 2,
@@ -33,6 +38,8 @@ export const RENDERED_TURN_SEGMENTS: DebateMediaTurnSegment[] = [
     output_end_ms: 166_600,
     duration_ms: 45_000,
     countdown_start_ms: 121_600,
+    source_start_ms: 128_000,
+    source_end_ms: 173_000,
   },
   {
     turn_index: 3,
@@ -41,6 +48,8 @@ export const RENDERED_TURN_SEGMENTS: DebateMediaTurnSegment[] = [
     output_end_ms: 211_600,
     duration_ms: 45_000,
     countdown_start_ms: 166_600,
+    source_start_ms: 173_000,
+    source_end_ms: 218_000,
   },
   {
     turn_index: 4,
@@ -49,6 +58,8 @@ export const RENDERED_TURN_SEGMENTS: DebateMediaTurnSegment[] = [
     output_end_ms: 254_994,
     duration_ms: 40_994,
     countdown_start_ms: 214_000,
+    source_start_ms: 229_950,
+    source_end_ms: 270_944,
   },
   {
     turn_index: 5,
@@ -57,6 +68,8 @@ export const RENDERED_TURN_SEGMENTS: DebateMediaTurnSegment[] = [
     output_end_ms: 301_430,
     duration_ms: 46_436,
     countdown_start_ms: 255_294,
+    source_start_ms: 274_650,
+    source_end_ms: 321_086,
   },
 ];
 

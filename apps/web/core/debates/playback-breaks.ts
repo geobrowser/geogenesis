@@ -8,7 +8,6 @@ import type {
   ParticipantSlot,
 } from './api';
 import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rounds';
-import type { PlaybackClock } from './playback-clock';
 
 /**
  * The breaks between Open rounds in a published debate (GEO-3277), on the web player's clock.
@@ -82,28 +81,34 @@ export type PlaybackBreaks = {
 export const NO_PLAYBACK_BREAKS: PlaybackBreaks = { breaks: [], earlyEnds: [], picks: [] };
 
 /**
- * Every break and early end in a debate, on the player's clock.
+ * Every break and early end in a debate, on the player's clock: the raw recordings'.
  *
- * `segments` must already be on that clock. A condensed render (GEO-3276) lists its breaks and early
- * ends with their source positions. An older render lists only its kept Extend reveals, and keeps
+ * `segments` must already be on that clock (`turnOnRecordings`). A condensed render (GEO-3276)
+ * lists its breaks and early ends with their source positions (GEO-3293). A break's deciding starts
+ * where the round it follows ended, which is the end of that round's last turn. An older render lists only its kept Extend reveals, and keeps
  * a required round's lead-in at the front of that round's first turn, before its countdown, which is
  * where it is found here.
  */
 export function playbackBreaksFrom(
   debate: Pick<Debate, 'open_rounds'>,
   media: Pick<DebateMediaResponse, 'condensed_breaks' | 'early_end_gaps' | 'round_results' | 'round_picks'> | undefined,
-  segments: readonly DebateMediaTurnSegment[],
-  clock: PlaybackClock
+  segments: readonly DebateMediaTurnSegment[]
 ): PlaybackBreaks {
   // Open rounds only, for now: a fixed-format debate plays as it always has, even if its media
   // carries an early-end gap.
   if (!media || !isOpenRoundsDebate(debate)) return NO_PLAYBACK_BREAKS;
 
+  // The round ended when its last turn did; the pick window runs from there. Falls back to the
+  // break's own start, which is where a render that never cut the window put it.
+  const roundEndMs = (roundIndex: number, fallbackMs: number) =>
+    segments.find(segment => segment.turn_index === roundIndex * 2 + 1)?.output_end_ms ?? fallbackMs;
+
   const breaks: PlayerBreak[] = (media.condensed_breaks ?? []).map(entry => ({
     kind: entry.kind,
     roundIndex: entry.round_index,
     nextRoundIndex: entry.next_round_index ?? null,
-    decidingStartMs: entry.kind === 'lead_in' ? entry.source_start_ms : clock(entry.output_start_ms, 'end'),
+    decidingStartMs:
+      entry.kind === 'lead_in' ? entry.source_start_ms : roundEndMs(entry.round_index, entry.source_start_ms),
     startMs: entry.source_start_ms,
     endMs: entry.source_end_ms,
   }));
@@ -114,7 +119,7 @@ export function playbackBreaksFrom(
       kind: 'extend',
       roundIndex: result.round_index,
       nextRoundIndex: result.round_index + 1,
-      decidingStartMs: clock(result.output_start_ms, 'end'),
+      decidingStartMs: roundEndMs(result.round_index, result.source_start_ms),
       startMs: result.source_start_ms,
       endMs: result.source_end_ms,
     });

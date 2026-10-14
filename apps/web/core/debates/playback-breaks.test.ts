@@ -16,7 +16,7 @@ import {
   playbackBreaksFrom,
   silentAt,
 } from './playback-breaks';
-import { identityClock, playbackClockFrom, toPlaybackClock } from './playback-clock';
+import { turnOnRecordings } from './recording-clock';
 
 const openRounds = (leadInMs = 8_000) =>
   ({
@@ -24,20 +24,14 @@ const openRounds = (leadInMs = 8_000) =>
   }) as unknown as Debate;
 
 // The Preston vs Adam debate on the player's clock: the raw recordings, from the debate's start.
-const clock = playbackClockFrom(RENDERED_MEDIA);
-const segments = RENDERED_MEDIA.turn_segments!.map(segment => toPlaybackClock(segment, clock));
-const BREAKS = playbackBreaksFrom(openRounds(), RENDERED_MEDIA, segments, clock);
+const segments = RENDERED_MEDIA.turn_segments!.map(turnOnRecordings);
+const BREAKS = playbackBreaksFrom(openRounds(), RENDERED_MEDIA, segments);
 const cueAt = (ms: number) => breakCueAt(BREAKS.breaks, BREAKS.picks, ms);
 
 describe('playbackBreaksFrom', () => {
   it('finds nothing in a fixed-format debate, even from the same media', () => {
     expect(
-      playbackBreaksFrom(
-        { open_rounds: null } as unknown as Pick<Debate, 'open_rounds'>,
-        RENDERED_MEDIA,
-        segments,
-        clock
-      )
+      playbackBreaksFrom({ open_rounds: null } as unknown as Pick<Debate, 'open_rounds'>, RENDERED_MEDIA, segments)
     ).toBe(NO_PLAYBACK_BREAKS);
   });
 
@@ -71,15 +65,15 @@ describe('playbackBreaksFrom', () => {
         countdown_start_ms: 128_000,
       },
     ];
-    expect(playbackBreaksFrom(openRounds(), { round_results: [] }, older, identityClock).breaks).toEqual([
+    expect(playbackBreaksFrom(openRounds(), { round_results: [] }, older).breaks).toEqual([
       { kind: 'lead_in', roundIndex: 0, nextRoundIndex: 1, decidingStartMs: 120_000, startMs: 120_000, endMs: 128_000 },
     ]);
-    expect(playbackBreaksFrom(openRounds(0), { round_results: [] }, older, identityClock).breaks).toEqual([]);
+    expect(playbackBreaksFrom(openRounds(0), { round_results: [] }, older).breaks).toEqual([]);
   });
 
   it('is nothing for a fixed format or a debate with no media yet', () => {
-    expect(playbackBreaksFrom({} as Debate, { round_results: [] }, [], identityClock).breaks).toEqual([]);
-    expect(playbackBreaksFrom(openRounds(), undefined, segments, clock).breaks).toEqual([]);
+    expect(playbackBreaksFrom({} as Debate, { round_results: [] }, []).breaks).toEqual([]);
+    expect(playbackBreaksFrom(openRounds(), undefined, segments).breaks).toEqual([]);
   });
 });
 

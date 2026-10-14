@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { type ClaimTiming, resolveClaimTimings } from './claim-timing';
 import { useDebateMedia, useDebateTranscript } from './hooks';
-import { identityClock, playbackClockFrom } from './playback-clock';
+import { recordingTimeOf, transcriptOnRecordings } from './recording-clock';
 import type { DebateTranscriptClaims } from './transcript-claims';
 
 export type ClaimTimingsResult = {
@@ -24,9 +24,9 @@ const EMPTY_TIMINGS = new Map<string, ClaimTiming>();
 
 /**
  * When each of a debate's claims was said, on the web player's clock: the raw recordings, from the
- * debate's start. Published timecodes and transcript lines are both on the rendered video's clock,
- * which an Open rounds render edits, so each is moved back onto the recordings (GEO-3277). The move
- * keeps every claim in order, so a time-ordered surface does not need to wait for it.
+ * debate's start. Transcript lines carry their time on that clock (GEO-3293). Timecodes published
+ * to the graph are the rendered video's, which an Open rounds render edits, so each is placed by
+ * the turn it falls in. Both keep every claim in order, so a time-ordered surface need not wait.
  *
  * Published timecodes come back with the claims themselves and need nothing else. Everything else
  * is recovered by matching the claims against the Whisper transcript, which the player already
@@ -48,22 +48,31 @@ export function useClaimTimings(
   const needsTranscript = enabled && debateId !== null && claims.all.length > 0 && !allPublished;
 
   const transcript = useDebateTranscript(debateId ?? '', 'json', needsTranscript);
-  const segments = transcript.data?.segments;
+  const segments = React.useMemo(
+    () => (transcript.data?.segments ? transcriptOnRecordings(transcript.data.segments) : []),
+    [transcript.data?.segments]
+  );
   // The same response the player reads, so on a playing card this is a cache read.
   const media = useDebateMedia(debateId ?? '', enabled && debateId !== null && claims.all.length > 0);
-  const clock = React.useMemo(() => playbackClockFrom(media.data), [media.data]);
+  const turns = media.data?.turn_segments;
 
   const timings = React.useMemo(() => {
     if (claims.all.length === 0) return EMPTY_TIMINGS;
-    const resolved = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments: segments ?? [] });
-    if (clock === identityClock) return resolved;
+    const resolved = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments });
+    if (!turns?.some(turn => turn.source_start_ms !== undefined)) return resolved;
     return new Map(
       [...resolved].map(([id, timing]) => [
         id,
-        { ...timing, startMs: clock(timing.startMs, 'start'), endMs: clock(timing.endMs, 'end') },
+        timing.source === 'published'
+          ? {
+              ...timing,
+              startMs: recordingTimeOf(timing.startMs, turns, 'start'),
+              endMs: recordingTimeOf(timing.endMs, turns, 'end'),
+            }
+          : timing,
       ])
     );
-  }, [claims.all, claims.blocks, clock, segments]);
+  }, [claims.all, claims.blocks, segments, turns]);
 
   // A failed transcript fetch is ready, not pending: published timings still resolved, and the rest
   // are not coming. Reporting "still loading" forever would hold a time-ordered surface empty.
