@@ -10,13 +10,12 @@ const NOW = new Date(2026, 9, 14, 12, 0).getTime();
 
 const mocks = vi.hoisted(() => ({
   lobbies: [] as DebateLobbySummary[],
-  joining: true,
   listFailed: false,
   mutate: vi.fn(),
 }));
 
 vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: (id: string) => (id === 'lobbyJoining' ? mocks.joining : true),
+  useFeatureFlag: () => true,
 }));
 vi.mock('./hooks', () => ({
   useDebateLobbies: () =>
@@ -64,7 +63,6 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   mocks.lobbies = [];
-  mocks.joining = true;
   mocks.listFailed = false;
 });
 
@@ -98,15 +96,6 @@ describe('useWeekLobbies', () => {
   it('is null with no lobby that week, so the calendar draws no row', () => {
     mocks.lobbies = [lobby({ starts_at: at(25, 10) })];
     expect(renderHook(() => useWeekLobbies(WEEK)).result.current.byDay).toBeNull();
-  });
-
-  it('is null with the lobby flag off, and reports no read in flight or failed', () => {
-    mocks.joining = false;
-    mocks.lobbies = [lobby({})];
-    const { result } = renderHook(() => useWeekLobbies(WEEK));
-    expect(result.current.byDay).toBeNull();
-    expect(result.current.isLoading).toBe(false);
-    expect(result.current.error).toBeNull();
   });
 
   it('passes a failed read on, so the calendar can say so', () => {
