@@ -3895,7 +3895,7 @@ describe('DebateRoomPageClient', () => {
     };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Debate over')).toBeInTheDocument();
+    await waitFor(() => expect(recordingSurface()).toHaveClass('invisible'));
     expect(screen.queryByText('Ending turn…')).not.toBeInTheDocument();
   });
 
@@ -4168,7 +4168,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await screen.findByText('Debate over');
+    await waitFor(() => expect(recordingSurface()).toHaveClass('invisible'));
     expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull();
     expect(screen.queryByText('Publish debate?')).toBeNull();
     await waitFor(() =>
@@ -4192,17 +4192,15 @@ describe('DebateRoomPageClient', () => {
     };
   }
 
-  // GEO-3301. The end card no longer carries the rounds the two unlocked, a publish row, a way back
-  // to a lobby or a "Debate again?" — only where the pair are going.
-  it('says only that the debate is over, whatever the format', async () => {
+  // GEO-3301. No end card: the rounds the two unlocked, a publish row, a way back to a lobby and
+  // "Debate again?" all went, and the room hides itself until the picker takes over.
+  it('hides the room between the last turn and the picker, whatever the format', async () => {
     mocks.debate = thankingOpenRoundsDebate(2);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    const card = (await screen.findByText('Debate over')).closest('section')!;
-    expect(card).not.toHaveTextContent(/rebuttal round|Opening only|Debate again|Publish/);
-    expect(card.querySelectorAll('[data-round-pip]')).toHaveLength(0);
-    expect(within(card).queryAllByRole('button')).toHaveLength(0);
+    await waitFor(() => expect(recordingSurface()).toHaveClass('invisible'));
+    expect(screen.queryByText(/Opening only|Debate again|Publish debate/)).toBeNull();
   });
 
   it('advances from the final turn to thanking without waiting for a debate refresh', async () => {
@@ -4227,10 +4225,7 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(
-      await screen.findByText((_, element) => element?.textContent === 'Nice debate!Say thanks')
-    ).toBeInTheDocument();
-    expect(screen.getByText('Debate over')).toBeInTheDocument();
+    await waitFor(() => expect(recordingSurface()).toHaveClass('invisible'));
     expect(screen.queryByRole('button', { name: "Let's go!" })).toBeNull();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
@@ -4259,9 +4254,9 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(screen.queryByText('Debate over')).not.toBeInTheDocument();
+    expect(document.querySelector('main.invisible')).toBeNull();
     await act(() => vi.advanceTimersByTimeAsync(101));
-    expect(screen.getByText('Debate over')).toBeInTheDocument();
+    expect(recordingSurface()).toHaveClass('invisible');
     expect(mocks.refetchDebate).not.toHaveBeenCalled();
   });
 
@@ -4286,9 +4281,10 @@ describe('DebateRoomPageClient', () => {
   });
 
   // GEO-3301. Nobody is asked: the room consents for its viewer the moment the debate ends, and
-  // says who it is waiting on until the other room has done the same.
-  it('consents to the next session as soon as the debate ends, and says who it is waiting on', async () => {
+  // shows nothing while both rooms do, so the debate goes straight to the picker.
+  it('consents as soon as the debate ends, with nothing on screen while it does', async () => {
     installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:21.000Z'));
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
     mocks.debate = {
@@ -4302,10 +4298,33 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('deciding');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Debate over')).toBeInTheDocument();
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
-    expect(screen.getByText('Waiting for Bri...')).toBeInTheDocument();
+    expect(recordingSurface()).toHaveClass('invisible');
+    expect(screen.queryByText('Waiting for Bri...')).toBeNull();
     expect(screen.queryByRole('button', { name: "Let's go!" })).toBeNull();
+  });
+
+  // A blank screen is only right while the handoff is quick. Past it the other room is likely gone,
+  // so the viewer is told who the room is waiting on and keeps a way out.
+  it('says who it is waiting on, with a way out, once the handoff runs long', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:24.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByText('Waiting for Bri...')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
+    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
   });
 
   it('automatically consents shortly before the thank-you countdown ends', async () => {
@@ -5398,33 +5417,33 @@ describe('DebateRoomPageClient', () => {
       );
     });
 
-    it('says the debate hit the maximum after the cap round, then hands over to the end card', async () => {
+    it('says the debate hit the maximum after the cap round, then hands over to the picker', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 1_000);
       const view = await renderLiveDebate(openRoundsCapRoundLastTurn());
 
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'max'));
       expect(result()).toHaveTextContent("That's the max10 rebuttal rounds");
-      expect(screen.queryByText('Debate over')).not.toBeInTheDocument();
+      expect(recordingSurface()).not.toHaveClass('invisible');
       expect(screen.queryByText('Say thanks')).not.toBeInTheDocument();
       expect(document.querySelector('[data-open-round-reveal]')).toBeNull();
 
       rerenderAt(view, OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 3_500, openRoundsCapRoundLastTurn());
-      await waitFor(() => expect(screen.getByText('Debate over')).toBeInTheDocument());
+      await waitFor(() => expect(recordingSurface()).toHaveClass('invisible'));
       expect(result()).toBeNull();
     });
 
-    it('holds "That\'s a wrap" into thanking before the end card', async () => {
+    it('holds "That\'s a wrap" into thanking before the handoff', async () => {
       // Thanking starts at 20:02:08, at the end of the result window.
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:08.500'));
       const view = await renderLiveDebate(openRoundsRevealEnd());
 
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'wrap'));
       expect(reveal('remote')).toHaveAttribute('data-open-round-reveal', 'end');
-      expect(screen.queryByText('Debate over')).not.toBeInTheDocument();
+      expect(recordingSurface()).not.toHaveClass('invisible');
       expect(screen.queryByText('Say thanks')).not.toBeInTheDocument();
 
       rerenderAt(view, '20:02:09.600', openRoundsThankingAfterEnd());
-      await waitFor(() => expect(screen.getByText('Debate over')).toBeInTheDocument());
+      await waitFor(() => expect(recordingSurface()).toHaveClass('invisible'));
       expect(result()).toBeNull();
       expect(reveal('remote')).toBeNull();
     });
@@ -5961,6 +5980,14 @@ function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteR
             : null,
     })),
   };
+}
+
+/**
+ * The room's own surface. GEO-3301 hides it between the last turn and the claim picker rather than
+ * unmounting it, so the media elements stay put while the recording is saved.
+ */
+function recordingSurface() {
+  return screen.getByRole('dialog', { name: 'Debate recording' }).querySelector('main')!;
 }
 
 function rematchSession(

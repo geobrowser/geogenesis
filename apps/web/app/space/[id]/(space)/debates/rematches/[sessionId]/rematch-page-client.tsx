@@ -119,6 +119,7 @@ import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 import { validateEntityId } from '~/core/utils/utils';
 
+import { PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
@@ -2807,17 +2808,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   }
 
   // GEO-3301. A word rather than the arrow it used to be: people did not read the icon as a way out,
-  // and with the "Debate again?" step gone this is the only one the pair have. Red for leaving, the
-  // tinted fill so it stays quieter than the dark Request debate buttons the page is for.
+  // and with the "Debate again?" step gone this is the only one the pair have. The design system's
+  // secondary pill, so it reads as a plain action beside the dark Request debate buttons.
   const leaveButton = (
-    <button
+    <SmallButton
       type="button"
       onClick={leave}
       disabled={leaveSession.isPending}
-      className="inline-flex min-h-7 shrink-0 items-center rounded-full bg-errorTertiary px-3 text-metadataMedium text-red-01 transition-colors hover:bg-red-01 hover:text-white disabled:opacity-50"
+      className={PILL_BUTTON_SECONDARY_CLASS_NAME}
     >
       Leave
-    </button>
+    </SmallButton>
   );
 
   return (
@@ -2879,7 +2880,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               with them: under the pair, inside the sticky block so the way to withdraw it stays on
               screen while the list scrolls. A session from a profile challenge has no debate. */}
           {sourceDebateQuery.data && currentUserId ? (
-            <div className="mb-4 empty:hidden">
+            // `-mt-1` so it sits the unmute prompt's 12px under the header rather than the block's 16px.
+            <div className="-mt-1 mb-4 empty:hidden">
               <RematchPublishCard
                 // Per debate: a dismissal belongs to the one it was about, not the next session's.
                 key={sourceDebateQuery.data.id}

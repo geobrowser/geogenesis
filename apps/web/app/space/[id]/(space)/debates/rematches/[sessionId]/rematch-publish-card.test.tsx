@@ -63,12 +63,13 @@ afterEach(() => {
 });
 
 describe('RematchPublishCard', () => {
-  it('shows the debated claim over the upload, and asks the coordinator to cancel', () => {
+  it('reports the upload, and asks the coordinator to cancel', () => {
     mocks.offer = { debateId: 'debate-1', busy: false, cancelled: false, upload: 'uploading', percent: 40 };
     renderCard();
 
-    expect(screen.getByText('Nuclear power is necessary to hit 2040 climate targets.')).toBeInTheDocument();
     expect(screen.getByText('Publishing your debate')).toBeInTheDocument();
+    // Nothing to wave away while the recording can still be withdrawn.
+    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
     expect(screen.getByRole('progressbar', { name: 'Upload progress' })).toHaveAttribute('aria-valuenow', '40');
 
     fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -96,6 +97,13 @@ describe('RematchPublishCard', () => {
 
     expect(screen.getByText('Debate published')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Cancel' })).toBeEnabled();
+  });
+
+  it('can be dismissed once the debate is published', () => {
+    renderCard({ recordings: [recording(1), recording(2)] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    expect(screen.queryByTestId('rematch-publish-card')).toBeNull();
   });
 
   // Copilot on #2853: a debate plays only with both slots, so one recording in is not published.
@@ -136,7 +144,7 @@ describe('RematchPublishCard', () => {
     mocks.offer = { debateId: null, busy: false, cancelled: true, upload: null, percent: null };
     renderCard();
 
-    expect(screen.getByText('Debate not published. The video was removed for you and Jenna.')).toBeInTheDocument();
+    expect(screen.getByText('Debate not published')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
   });
 
@@ -144,7 +152,7 @@ describe('RematchPublishCard', () => {
   it('says so when the other debater withdrew it, and can be dismissed', () => {
     renderCard({ recording_cancelled_at: '2026-07-02T00:00:24.000Z', recording_cancelled_by: 'user-b' });
 
-    expect(screen.getByText('Jenna cancelled publishing. The video was removed for both of you.')).toBeInTheDocument();
+    expect(screen.getByText('Jenna cancelled publishing')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
     expect(screen.queryByTestId('rematch-publish-card')).toBeNull();

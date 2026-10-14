@@ -42,7 +42,6 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
-import { DebateRoomOverlayCard } from '~/core/debates/debate-room-overlay-card';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -132,7 +131,7 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { reportError } from '~/core/telemetry/logger';
 
-import { Button } from '~/design-system/button';
+import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -255,6 +254,13 @@ type DebateRecordingModalRoomState = Exclude<DebateRoomState, 'idle'> | 'transit
 type DebateRemotePresence = 'absent' | 'present' | 'left';
 
 const debateThankingDurationMs = 20_000;
+/**
+ * How long the room stays blank between the last turn and the claim picker before it says what it
+ * is waiting on (GEO-3301). Both rooms consent and save their recordings in that gap, which is
+ * usually under this; past it the other room is likely gone, and a blank screen with no way out
+ * would read as a hang.
+ */
+const debateHandoffQuietMs = 3_000;
 const debatePreflightDurationMs = 5_000;
 const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
@@ -3048,6 +3054,12 @@ function DebateRecordingModal({
   );
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
   const controlsDisabled = roomState === 'saving' || roomState === 'transitioning';
+  const handingOff =
+    countdown.effectiveStatus === 'thanking' &&
+    countdown.remainingSeconds > 0 &&
+    !reveal.holdsEndCard &&
+    !roomError &&
+    roomState !== 'reconnecting';
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
@@ -3181,7 +3193,16 @@ function DebateRecordingModal({
       {/* `main` is wide enough for the claim, which is set and sized exactly as the intro screen
           sets it so the headline does not change under you at the swap. Everything below it stays
           in the single 430px column the room has always used. */}
-      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]">
+      {/* GEO-3301. Between the last turn and the claim picker the room has nothing left to show, so
+          it shows nothing: the picker's white surface, then the picker. `invisible` rather than
+          unmounting, so the media elements and refs the recording is still being saved through
+          stay put. A failed save or a dropped connection keeps the room up to say so. */}
+      <main
+        className={cx(
+          'mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]',
+          handingOff && 'invisible'
+        )}
+      >
         <h1 className="mb-5 w-full max-w-[900px] text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
           {debate.claim.claim}
         </h1>
@@ -3239,13 +3260,6 @@ function DebateRecordingModal({
               {reveal.announcement}
             </p>
           )}
-
-          {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && !reveal.holdsEndCard && (
-            <DebateEndingCard
-              opponentName={remoteName}
-              waitingForOpponent={rematchSession !== null && !remoteConsented}
-            />
-          )}
         </div>
 
         {roomState === 'reconnecting' && (
@@ -3270,6 +3284,14 @@ function DebateRecordingModal({
           </div>
         )}
       </main>
+      {handingOff && countdown.elapsedMs >= debateHandoffQuietMs && (
+        <DebateHandoffNotice
+          opponentName={remoteName}
+          waitingForOpponent={rematchSession !== null && !remoteConsented}
+          onLeave={onLeave}
+          leaveDisabled={leaveDisabled}
+        />
+      )}
     </div>
   );
 }
@@ -3549,28 +3571,41 @@ function DebateRecordingRemovedDialog({
 const cardPill = 'inline-flex min-h-7 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-metadata';
 
 /**
- * What the room shows between the last turn and the claim picker (GEO-3301).
- *
- * This used to be the thank-you card: publish switch, "Debate again?", the opponent's answer and a
- * way back to a lobby, held on screen for the whole thank-you period. Both rooms now consent to the
- * next session on their own and leave as soon as the server has both, and the publish control
- * lives in the picker — so all that is left to say is where the pair are going, and who the room is
- * still waiting on when the other side has not caught up yet.
+ * What the room says between the last turn and the claim picker, once the handoff has run long
+ * (GEO-3301). Usually never seen: both rooms consent and the pair are in the picker well inside
+ * `debateHandoffQuietMs`. When they are not, this says who the room is waiting on and keeps the
+ * way out, since the room itself is hidden.
  */
-function DebateEndingCard({ opponentName, waitingForOpponent }: { opponentName: string; waitingForOpponent: boolean }) {
+function DebateHandoffNotice({
+  opponentName,
+  waitingForOpponent,
+  onLeave,
+  leaveDisabled,
+}: {
+  opponentName: string;
+  waitingForOpponent: boolean;
+  onLeave: () => void;
+  leaveDisabled: boolean;
+}) {
   return (
-    <DebateRoomOverlayCard className="w-[calc(100%-7rem)] gap-2 px-3 py-2">
-      <div role="status" className="flex min-h-7 items-center justify-between gap-2.5">
-        <Text as="span" variant="smallTitle" color="text">
-          Debate over
+    <div className="absolute inset-0 grid place-items-center px-5">
+      <div
+        role="status"
+        className="flex w-full max-w-[360px] items-center justify-between gap-2.5 rounded-lg border border-grey-02 bg-white p-3"
+      >
+        <Text as="p" variant="metadata" color="grey-04" className="min-w-0 truncate">
+          {waitingForOpponent ? `Waiting for ${opponentName}...` : 'Opening claims...'}
         </Text>
-        <span className="inline-flex min-h-7 min-w-0 items-center rounded-full bg-grey-01 px-3 text-metadata text-grey-04">
-          <span className="truncate">
-            {waitingForOpponent ? `Waiting for ${opponentName}...` : 'Opening claims...'}
-          </span>
-        </span>
+        <SmallButton
+          type="button"
+          className={PILL_BUTTON_SECONDARY_CLASS_NAME}
+          onClick={onLeave}
+          disabled={leaveDisabled}
+        >
+          Leave
+        </SmallButton>
       </div>
-    </DebateRoomOverlayCard>
+    </div>
   );
 }
 

@@ -2,9 +2,8 @@
 
 import * as React from 'react';
 
-import cx from 'classnames';
-
 import type { Debate } from '~/core/debates/api';
+import { CameraIcon } from '~/core/debates/debate-room-controls';
 import { DebateUploadProgressBar } from '~/core/debates/debate-upload-progress-bar';
 import { useServerClock } from '~/core/debates/matchmaking/use-request-countdown';
 import { isWatchableDebate } from '~/core/debates/playback-utils';
@@ -18,14 +17,16 @@ import {
 
 import { PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
-import { CloseSmall } from '~/design-system/icons/close-small';
+
+import { RematchNotice } from './rematch-notice';
 
 /**
  * The finished debate's recording, under the pair in the claim picker (GEO-3301).
  *
  * The pair used to sit through a 20 second thank-you screen whose only lasting job was the
- * "Publish debate?" switch. They come straight here now, so the switch comes with them, as a card:
- * the debated claim, where its recording is, and the way to withdraw it.
+ * "Publish debate?" switch. They come straight here now, so the switch comes with them, as a row in
+ * the unmute prompt's style (`RematchNotice`): where the recording is, and the way to withdraw it.
+ * Once it is published or withdrawn the row says so and can be dismissed.
  *
  * It owns no cancel flow of its own. The upload coordinator does — the confirmation, the request,
  * the local blob — exactly as it did for the switch. This card tells the coordinator which debate
@@ -42,7 +43,7 @@ export function RematchPublishCard({
 }: {
   debate: Debate;
   currentUserId: string;
-  /** First name: the card says it inside a sentence. */
+  /** First name: the row says it inside a sentence. */
   opponentName: string;
 }) {
   const offer = usePublishOptOutOffer();
@@ -82,42 +83,15 @@ export function RematchPublishCard({
 
   if (!visible) return null;
 
-  const done = state === 'cancelled_by_you' || state === 'cancelled_by_opponent';
+  const dismiss = state === 'publishing' ? undefined : () => setDismissed(true);
 
   return (
-    <section
-      aria-label="Your debate's recording"
+    <RematchNotice
       data-testid="rematch-publish-card"
-      className={cx(
-        'flex flex-col gap-1.5 rounded-lg border p-3',
-        done ? 'border-transparent bg-grey-01' : 'border-grey-02 bg-white'
-      )}
-    >
-      <p className="text-metadataMedium text-text">{debate.claim.claim}</p>
-      <div className="flex min-h-7 items-center gap-2.5">
-        <p role="status" className="flex min-w-0 flex-1 flex-wrap items-center gap-2 text-chat text-grey-04">
-          {state === 'publishing' && (
-            <>
-              <span>Publishing your debate</span>
-              <DebateUploadProgressBar label="Upload progress" percent={offer.percent} tone="light" />
-            </>
-          )}
-          {state === 'published' && (
-            <>
-              <span>Debate published</span>
-              <span className="text-green">
-                <Check />
-              </span>
-            </>
-          )}
-          {state === 'cancelled_by_you' && (
-            <span>Debate not published. The video was removed for you and {opponentName}.</span>
-          )}
-          {state === 'cancelled_by_opponent' && (
-            <span>{opponentName} cancelled publishing. The video was removed for both of you.</span>
-          )}
-        </p>
-        {showsCancel && (
+      icon={<CameraIcon disabled={false} />}
+      onDismiss={dismiss}
+      action={
+        showsCancel ? (
           <SmallButton
             type="button"
             className={PILL_BUTTON_SECONDARY_CLASS_NAME}
@@ -126,19 +100,24 @@ export function RematchPublishCard({
           >
             Cancel
           </SmallButton>
-        )}
-        {done && (
-          <button
-            type="button"
-            aria-label="Dismiss"
-            onClick={() => setDismissed(true)}
-            className="grid size-7 shrink-0 place-items-center rounded-full text-grey-04 transition-colors hover:text-text"
-          >
-            <CloseSmall />
-          </button>
-        )}
-      </div>
-    </section>
+        ) : null
+      }
+    >
+      <p role="status">
+        {state === 'publishing' && 'Publishing your debate'}
+        {state === 'published' && 'Debate published'}
+        {state === 'cancelled_by_you' && 'Debate not published'}
+        {state === 'cancelled_by_opponent' && `${opponentName} cancelled publishing`}
+      </p>
+      {state === 'publishing' && (
+        <DebateUploadProgressBar label="Upload progress" percent={offer.percent} tone="light" />
+      )}
+      {state === 'published' && (
+        <span className="flex text-green">
+          <Check />
+        </span>
+      )}
+    </RematchNotice>
   );
 }
 
