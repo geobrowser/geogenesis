@@ -16,6 +16,8 @@ export type LobbyEntry =
   | 'link'
   /** The lobbies card in the side panel. */
   | 'side_panel'
+  /** A lobby under Upcoming lobbies in the Requests tab (GEO-3292). */
+  | 'requests'
   /** Go to lobby, right after creating it. */
   | 'created'
   /** Back to the room, on a debate's end card or on the lobby's stepped-out prompt. */
