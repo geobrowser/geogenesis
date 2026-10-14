@@ -11,7 +11,7 @@ import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
-import { breakAnnouncesRound, breakCueAt, earlyEndCueAt, revealFlipMs, silentAt } from '~/core/debates/playback-breaks';
+import { breakAnnouncesRound, breakCueAt, breakCuts, earlyEndCueAt, silentAt } from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -26,7 +26,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { DebateBreakOverlay, DebateEarlyEndLabels } from './debate-break-cues';
+import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
@@ -371,21 +371,17 @@ export function DebateFeedPlayer({
   );
 
   /**
-   * The breaks between Open rounds and the early ends a condensed render cut down (GEO-3277), drawn
-   * from the playhead like the round card. Not gated on `playing`, unlike the card: the footage
-   * under a break is a sped-up catch-up that means nothing without its graphic, so a viewer who
-   * pauses or scrubs there sees the graphic held where the video is.
+   * The breaks between Open rounds and the early ends (GEO-3277), drawn from the playhead like the
+   * round card. Not gated on `playing`, unlike the card: the footage under a break means nothing
+   * without its graphic, so a viewer who pauses or scrubs there sees the graphic held where it is.
    */
   const playheadMs = playheadSeconds * 1_000;
-  const debateStartedAtMs = debate.started_at ? Date.parse(debate.started_at) : null;
-  const flipMs = revealFlipMs(debate);
   const breakCue = React.useMemo(
-    () =>
-      reducedOverlays
-        ? null
-        : breakCueAt(playbackBreaks.breaks, playbackBreaks.picks, playheadMs, { debateStartedAtMs, flipMs }),
-    [debateStartedAtMs, flipMs, playbackBreaks.breaks, playbackBreaks.picks, playheadMs, reducedOverlays]
+    () => (reducedOverlays ? null : breakCueAt(playbackBreaks.breaks, playbackBreaks.picks, playheadMs)),
+    [playbackBreaks.breaks, playbackBreaks.picks, playheadMs, reducedOverlays]
   );
+  const cuts = React.useMemo(() => breakCuts(playbackBreaks), [playbackBreaks]);
+  useBreakCuts(cuts, { playheadMs, running: playing && !isScrubbing, seek: seekBothRaw });
   const earlyEndCue = React.useMemo(
     () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, turnSegments, playheadMs)),
     [playbackBreaks.earlyEnds, playheadMs, reducedOverlays, turnSegments]

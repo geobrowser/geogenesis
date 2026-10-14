@@ -1,16 +1,19 @@
 import { describe, expect, it } from 'vitest';
 
 import type { Debate, DebateMediaTurnSegment } from './api';
-import { DEBATE_STARTED_AT, RENDERED_MEDIA } from './open-rounds-media-fixtures';
+import { RENDERED_MEDIA } from './open-rounds-media-fixtures';
 import {
+  BREAK_FLIP_MS,
+  BREAK_PLAYED_MS,
+  BREAK_QUESTION_MS,
   EARLY_END_HOLD_MS,
   breakAnnouncesRound,
   breakCueAt,
+  breakCuts,
   breaksEndMs,
   earlyEndCueAt,
   finalPicks,
   playbackBreaksFrom,
-  revealFlipMs,
   silentAt,
 } from './playback-breaks';
 import { identityClock, playbackClockFrom, toPlaybackClock } from './playback-clock';
@@ -24,9 +27,7 @@ const openRounds = (leadInMs = 8_000) =>
 const clock = playbackClockFrom(RENDERED_MEDIA);
 const segments = RENDERED_MEDIA.turn_segments!.map(segment => toPlaybackClock(segment, clock));
 const BREAKS = playbackBreaksFrom(openRounds(), RENDERED_MEDIA, segments, clock);
-const startedAtMs = Date.parse(DEBATE_STARTED_AT);
-const cueAt = (ms: number) =>
-  breakCueAt(BREAKS.breaks, BREAKS.picks, ms, { debateStartedAtMs: startedAtMs, flipMs: revealFlipMs(openRounds()) });
+const cueAt = (ms: number) => breakCueAt(BREAKS.breaks, BREAKS.picks, ms);
 
 describe('playbackBreaksFrom', () => {
   it('puts each break at its real length, with the pick window in front of it', () => {
@@ -79,33 +80,43 @@ describe('breakCueAt', () => {
     expect(cueAt(333_481)).toBeNull();
   });
 
-  it('asks the question while they pick, ticking each debater off as they pick and never saying which way', () => {
-    // Preston saved his pick 219.36 s in; Adam his at 221.94 s.
-    expect(cueAt(218_500)).toEqual({
+  // Round 2 (index 1) ended at 218 s. The player plays its first couple of seconds: the question,
+  // the picks turning, then the round; then it cuts to Round 3 at 229.95 s.
+  it('asks the question first, ticking off whoever picked and never saying which way', () => {
+    expect(cueAt(218_000)).toEqual({
       phase: 'deciding',
       roundIndex: 1,
       nextRoundIndex: 2,
-      picked: { 1: false, 2: false },
+      picked: { 1: true, 2: true },
     });
-    expect(cueAt(220_000)).toMatchObject({ phase: 'deciding', picked: { 1: true, 2: false } });
-    expect(cueAt(221_945)).toMatchObject({ phase: 'deciding', picked: { 1: true, 2: true } });
+    // In Round 3 Adam never picked.
+    expect(cueAt(321_100)).toMatchObject({ phase: 'deciding', picked: { 1: true, 2: false } });
   });
 
-  it('turns the picks for the room’s share of its result window, then the next round takes over', () => {
-    expect(cueAt(222_500)).toMatchObject({
+  it('then turns the picks over, then announces the next round', () => {
+    expect(cueAt(218_000 + BREAK_QUESTION_MS + 100)).toMatchObject({
       phase: 'reveal',
       kind: 'extend',
-      elapsedMs: 550,
-      resultStartMs: 1_350,
+      elapsedMs: 100,
+      resultStartMs: BREAK_FLIP_MS,
+      durationMs: BREAK_PLAYED_MS.extend - BREAK_QUESTION_MS,
       picks: { 1: 'extend', 2: 'extend' },
       nextRoundIndex: 2,
     });
   });
 
-  it('announces a required round for the whole lead-in, with no picks, since nobody picked', () => {
-    expect(cueAt(124_000)).toMatchObject({
+  it('holds the last step on a playhead past the played stretch, as a scrub or a pause leaves it', () => {
+    expect(cueAt(226_000)).toMatchObject({
+      phase: 'reveal',
+      elapsedMs: BREAK_PLAYED_MS.extend - BREAK_QUESTION_MS,
+    });
+  });
+
+  it('announces a required round from the start of its lead-in, with no picks, since nobody picked', () => {
+    expect(cueAt(120_500)).toMatchObject({
       phase: 'reveal',
       kind: 'lead_in',
+      elapsedMs: 500,
       resultStartMs: 0,
       picks: null,
       nextRoundIndex: 1,
@@ -113,17 +124,28 @@ describe('breakCueAt', () => {
   });
 
   it('reveals the final round with a missing pick as no pick, and leads nowhere', () => {
-    expect(cueAt(331_000)).toMatchObject({
+    expect(cueAt(321_086 + BREAK_QUESTION_MS + 100)).toMatchObject({
       phase: 'reveal',
       kind: 'final_end',
       picks: { 1: 'extend', 2: null },
       nextRoundIndex: null,
     });
   });
+});
 
-  it('shows nobody as picked when it cannot place the picks in time', () => {
-    const cue = breakCueAt(BREAKS.breaks, BREAKS.picks, 221_945, { debateStartedAtMs: null, flipMs: 1_350 });
-    expect(cue).toMatchObject({ phase: 'deciding', picked: { 1: false, 2: false } });
+describe('breakCuts', () => {
+  it('cuts each break after its first couple of seconds, and an early end’s quiet at once', () => {
+    expect(breakCuts(BREAKS)).toEqual([
+      { atMs: 120_000 + BREAK_PLAYED_MS.lead_in, toMs: 128_000 },
+      { atMs: 218_000 + BREAK_PLAYED_MS.extend, toMs: 229_950 },
+      { atMs: 270_944, toMs: 274_650 },
+      { atMs: 321_086 + BREAK_PLAYED_MS.final_end, toMs: 333_481 },
+    ]);
+  });
+
+  it('leaves a break shorter than its share whole', () => {
+    const short = { ...BREAKS, earlyEnds: [], breaks: [{ ...BREAKS.breaks[0], endMs: 121_000 }] };
+    expect(breakCuts(short)).toEqual([]);
   });
 });
 

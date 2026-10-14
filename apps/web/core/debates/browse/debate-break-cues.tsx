@@ -14,7 +14,7 @@ import {
   openRoundWrapNote,
 } from '~/core/debates/open-round-reveal';
 import { openRoundNumber } from '~/core/debates/open-rounds';
-import type { BreakCue, EarlyEndCue } from '~/core/debates/playback-breaks';
+import type { BreakCue, BreakCut, EarlyEndCue } from '~/core/debates/playback-breaks';
 
 import { Check } from '~/design-system/icons/check';
 import { Text } from '~/design-system/text';
@@ -38,6 +38,31 @@ const TILE_CLASS: Record<ParticipantSlot, string> = {
 const MAX_AHEAD_MS = 500;
 
 type RevealCue = Extract<BreakCue, { phase: 'reveal' }>;
+
+/** How far ahead of a cut its timer is set: the playhead arrives about four times a second. */
+const CUT_LOOKAHEAD_MS = 1_000;
+
+/**
+ * Makes the player's cuts (`breakCuts`): at each one, jumps both recordings to where it leads. Timed
+ * off the wall clock from the latest playhead sample, which lands it within a frame of the cut where
+ * waiting for the next sample could miss it by a quarter of a second. Only while playing on its own:
+ * a viewer who pauses or drags the scrubber into a break keeps it.
+ */
+export function useBreakCuts(
+  cuts: readonly BreakCut[],
+  { playheadMs, running, seek }: { playheadMs: number; running: boolean; seek: (seconds: number) => void }
+) {
+  const next = running
+    ? (cuts.find(cut => playheadMs < cut.toMs && cut.atMs - playheadMs < CUT_LOOKAHEAD_MS) ?? null)
+    : null;
+  const atMs = next?.atMs ?? null;
+  const toMs = next?.toMs ?? null;
+  React.useEffect(() => {
+    if (atMs === null || toMs === null) return;
+    const timer = window.setTimeout(() => seek(toMs / 1_000), Math.max(0, atMs - playheadMs));
+    return () => window.clearTimeout(timer);
+  }, [atMs, playheadMs, seek, toMs]);
+}
 
 /**
  * Writes how far into the reveal the playhead is to `--open-round-t` on every frame, which is what
