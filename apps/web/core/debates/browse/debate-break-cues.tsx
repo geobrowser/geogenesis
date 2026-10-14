@@ -18,6 +18,9 @@ import {
   fitBannerLine,
 } from '~/core/debates/playback-breaks';
 
+/** How long the banner takes to roll out, ending as the player cuts. Matches `--animate-debate-banner-out`. */
+const BREAK_BANNER_OUT_MS = 300;
+
 /** Each debater's name, by slot. Slot 1 is the top tile. */
 export type BreakNames = Record<ParticipantSlot, string>;
 
@@ -61,35 +64,71 @@ export function useBreakCuts(
   }, [atMs, playheadMs, seek, toMs]);
 }
 
+/** A gap between the drawn clock and the playhead wider than this is a jump (a scrub), not drift. */
+export const BREAK_CLOCK_SNAP_MS = 400;
+
+/** The share of the remaining drift taken in each frame: gone within a few frames, never a jump. */
+const BREAK_CLOCK_EASE = 0.1;
+
+/**
+ * Where the break's drawn clock goes on the next frame, toward `targetMs`, the playhead read off its
+ * last sample and carried on at real speed.
+ *
+ * The playhead arrives about four times a second and each sample can land a little behind or ahead
+ * of where the frames had got to. Snapping to it made a 300 ms wipe step backwards and forwards: the
+ * roll looked rough on some runs and smooth on others, depending on where the samples fell. So the
+ * clock runs at real speed and takes the drift in a little at a time, and never moves backwards
+ * while playing. Only a gap too wide to be drift, a scrub, is jumped.
+ */
+export function advanceBreakClock(displayedMs: number, targetMs: number, frameMs: number, playedMs: number) {
+  const drift = targetMs - displayedMs;
+  if (Math.abs(drift) > BREAK_CLOCK_SNAP_MS) return Math.min(playedMs, Math.max(0, targetMs));
+  return Math.min(playedMs, displayedMs + Math.max(0, frameMs + drift * BREAK_CLOCK_EASE));
+}
+
 /**
  * Writes how far into the break the playhead is to `--break-t` on every frame, which is what the
- * held animations read (`heldAt`). Smoothed between the player's playhead samples while playing,
- * and held still while paused.
+ * held animations read (`heldAt`): smoothly while playing (`advanceBreakClock`), exactly where the
+ * playhead is while paused, and from the playhead on a break's first frame.
  */
 function useBreakClock(ref: React.RefObject<HTMLDivElement | null>, cue: BreakCue | null, playing: boolean) {
   const sample = React.useRef({ elapsedMs: 0, at: 0 });
+  const displayed = React.useRef<number | null>(null);
   const elapsedMs = cue?.elapsedMs ?? null;
   const playedMs = cue?.playedMs ?? 0;
 
+  const write = React.useCallback(
+    (ms: number) => {
+      displayed.current = ms;
+      ref.current?.style.setProperty('--break-t', String(ms));
+    },
+    [ref]
+  );
+
   React.useLayoutEffect(() => {
-    if (elapsedMs === null) return;
+    if (elapsedMs === null) {
+      displayed.current = null;
+      return;
+    }
     sample.current = { elapsedMs, at: performance.now() };
-    ref.current?.style.setProperty('--break-t', String(elapsedMs));
-  }, [elapsedMs, ref]);
+    if (!playing || displayed.current === null) write(elapsedMs);
+  }, [elapsedMs, playing, write]);
 
   const shown = elapsedMs !== null;
   React.useEffect(() => {
     if (!shown || !playing) return;
     let frame = 0;
-    const tick = () => {
+    let last = performance.now();
+    const tick = (now: number) => {
       const { elapsedMs: sampled, at } = sample.current;
-      const ahead = Math.min(performance.now() - at, MAX_AHEAD_MS);
-      ref.current?.style.setProperty('--break-t', String(Math.min(playedMs, sampled + ahead)));
+      const target = sampled + Math.min(now - at, MAX_AHEAD_MS);
+      write(advanceBreakClock(displayed.current ?? target, target, now - last, playedMs));
+      last = now;
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [playedMs, playing, ref, shown]);
+  }, [playedMs, playing, shown, write]);
 }
 
 /**
@@ -154,7 +193,6 @@ export function DebateBreakOverlay({
       aria-hidden
       data-debate-break={cue.kind}
       className="pointer-events-none absolute inset-0 z-[22] bg-black/40"
-      style={{ '--break-t': String(cue.elapsedMs) } as React.CSSProperties}
     >
       {picks && cue.elapsedMs < BREAK_QUESTION_MS && (
         <div className="absolute inset-0 grid place-items-center px-4 text-center">
@@ -194,7 +232,12 @@ export function DebateBreakOverlay({
         })}
 
       {cue.elapsedMs >= bannerAtMs && (
-        <div className="absolute inset-x-0 top-1/2 grid -translate-y-1/2 justify-items-center gap-2.5">
+        <div
+          data-debate-banner-out
+          // Rolls on out, the way it rolled in, as the cut to the next speaker comes.
+          className="absolute inset-x-0 top-1/2 grid -translate-y-1/2 justify-items-center gap-2.5 motion-safe:animate-debate-banner-out"
+          style={heldAt(cue.playedMs - BREAK_BANNER_OUT_MS)}
+        >
           <div
             data-debate-banner={wrap ? 'wrap' : 'round'}
             className={cx(

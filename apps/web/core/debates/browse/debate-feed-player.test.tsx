@@ -1884,6 +1884,15 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(stamps(container)).toEqual(['extend', 'extend']);
   });
 
+  it('rolls the banner out over the last moment before the cut', () => {
+    const { container } = renderAt(62.5, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
+    const out = container.querySelector('[data-debate-banner-out]') as HTMLElement;
+    expect(out.className).toContain('animate-debate-banner-out');
+    // The cut is 2.85 s in; the roll-out takes the 0.3 s before it.
+    expect(out.style.animationDelay).toContain('2550ms');
+    expect(out.style.animationPlayState).toBe('paused');
+  });
+
   it('holds the animations at the playhead, so a scrub into the break lands mid-stamp', () => {
     const { container } = renderAt(61.2, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
     const root = container.querySelector('[data-debate-break="extend"]') as HTMLElement;
