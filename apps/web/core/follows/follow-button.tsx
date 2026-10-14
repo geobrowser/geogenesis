@@ -163,16 +163,20 @@ export function FollowButton({
   // write behind. The pending write is per person, not per control: a follow pressed in the side
   // panel ticks this face too, so the two never disagree about a follow that is happening. A follow
   // that arrives with nothing in flight here — another tab or device, a refetch — stays bare.
+  //
+  // Both pieces of state name the target they belong to, so a control handed a different person
+  // starts clean rather than reading the last one's follow as this one's landing.
   const inFlight = !followed && (saving || queuedFollow.isQueued);
-  const [wasInFlight, setWasInFlight] = React.useState(inFlight);
-  const [justLanded, setJustLanded] = React.useState(false);
-  if (inFlight !== wasInFlight) {
-    setWasInFlight(inFlight);
-    if (wasInFlight && followed) setJustLanded(true);
+  const [lastFlight, setLastFlight] = React.useState({ targetId, inFlight });
+  const [landedId, setLandedId] = React.useState<string | null>(null);
+  if (lastFlight.targetId !== targetId || lastFlight.inFlight !== inFlight) {
+    setLastFlight({ targetId, inFlight });
+    if (lastFlight.targetId === targetId && lastFlight.inFlight && followed) setLandedId(targetId);
   }
+  const justLanded = landedId === targetId;
   React.useEffect(() => {
     if (!justLanded) return;
-    const timer = window.setTimeout(() => setJustLanded(false), AVATAR_CONFIRM_MS);
+    const timer = window.setTimeout(() => setLandedId(null), AVATAR_CONFIRM_MS);
     return () => window.clearTimeout(timer);
   }, [justLanded]);
 
@@ -209,7 +213,7 @@ export function FollowButton({
     if (saving || disabled) return;
 
     if (followed) {
-      setJustLanded(false);
+      setLandedId(null);
       void observed('unfollow', () => unfollow([targetId]));
       return;
     }

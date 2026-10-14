@@ -476,6 +476,38 @@ describe('the avatar badge (GEO-3305)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
+  describe('handed a different person', () => {
+    const GRACE_SPACE = '0b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e';
+    const graceBadge = () => (
+      <FollowButton target={{ kind: 'person', id: GRACE_SPACE, name: 'Grace' }} variant="avatar" />
+    );
+
+    it("does not read the last person's follow in flight as this person's landing", () => {
+      vi.useFakeTimers();
+      const { container, rerender } = renderBadge();
+      mocks.pendingIds = new Set([ADA_SPACE]);
+      rerender(badge());
+
+      mocks.followedIds = new Set([GRACE_SPACE]);
+      rerender(graceBadge());
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it("does not carry the last person's tick over", () => {
+      vi.useFakeTimers();
+      const { container, rerender } = renderBadge();
+      mocks.pendingIds = new Set([ADA_SPACE]);
+      rerender(badge());
+      mocks.pendingIds = new Set();
+      mocks.followedIds = new Set([ADA_SPACE, GRACE_SPACE]);
+      rerender(badge());
+      expect(container.querySelector(TICK)).not.toBeNull();
+
+      rerender(graceBadge());
+      expect(container).toBeEmptyDOMElement();
+    });
+  });
+
   it('comes back as a "+" when a follow it confirmed did not land', () => {
     vi.useFakeTimers();
     renderBadge();
