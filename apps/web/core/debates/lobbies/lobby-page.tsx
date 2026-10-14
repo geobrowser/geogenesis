@@ -559,7 +559,9 @@ function LobbyRoom({
   // Per-person disagreements ride on the claims read the claims panel already makes.
   const disagreements = useDebateLobbyClaims(lobby.lobby_id, showClaims).data?.disagreements ?? null;
   const highlights = useLobbyHighlights(lobby.lobby_id, phone && showClaims).data;
-  const claimsMark = useClaimsTabMark(highlights, phone && tab === 'claims', lobby.claim_lists);
+  // The desktop panel always shows the claims, so what arrives there is seen; only a phone on
+  // People builds up a mark.
+  const claimsMark = useClaimsTabMark(highlights, !phone || tab === 'claims', lobby.claim_lists);
   const tabbed = phone && showClaims;
   const tabIds = useTabIds();
   const onPeopleTab = !phone || !showClaims || tab === 'people';

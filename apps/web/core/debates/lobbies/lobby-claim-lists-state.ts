@@ -1,5 +1,5 @@
 import type { DebateLobbyClaimList, DebateLobbyClaimLists, DebateLobbyView } from '../api';
-import { isNewerInstant } from './lobby-highlights-state';
+import { isInstant, isNewerInstant } from './lobby-highlights-state';
 
 /**
  * `debate.lobby_claim_lists_changed`'s `lobby_claim_lists`; `null` when unreadable. Only the parts
@@ -7,7 +7,7 @@ import { isNewerInstant } from './lobby-highlights-state';
  */
 export function parseLobbyClaimLists(value: unknown): DebateLobbyClaimLists | null {
   if (!isRecord(value) || typeof value.lobby_id !== 'string') return null;
-  if (value.as_of !== null && typeof value.as_of !== 'string') return null;
+  if (value.as_of !== null && !isInstant(value.as_of)) return null;
   if (!Array.isArray(value.claim_lists) || !value.claim_lists.every(isClaimList)) return null;
   return value as DebateLobbyClaimLists;
 }

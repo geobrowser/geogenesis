@@ -27,6 +27,7 @@ describe('parseLobbyClaimLists', () => {
     ['a list that is not an array', { lobby_id: 'l1', as_of: null, claim_lists: {} }],
     ['a row without a space', { lobby_id: 'l1', as_of: null, claim_lists: [{ entity_id: 'p1', position: 0 }] }],
     ['a numeric stamp', { lobby_id: 'l1', as_of: 3, claim_lists: [] }],
+    ['a stamp that is not an instant', { lobby_id: 'l1', as_of: 'yesterday', claim_lists: [] }],
   ])('refuses %s', (_label, value) => {
     expect(parseLobbyClaimLists(value)).toBeNull();
   });
@@ -48,6 +49,12 @@ describe('withLobbyClaimLists', () => {
   it('keeps the view itself for the same or an older state', () => {
     expect(withLobbyClaimLists(view, { lobby_id: 'l1', as_of: view.claim_lists_as_of, claim_lists: [] })).toBe(view);
     expect(withLobbyClaimLists(view, { lobby_id: 'l1', as_of: '2026-10-13T11:00:00Z', claim_lists: [] })).toBe(view);
+  });
+
+  // Taken, an unreadable stamp would refuse every valid change after it, freezing the lists.
+  it('never takes a state whose stamp cannot be read, even over none', () => {
+    const empty = { claim_lists: [], claim_lists_as_of: null };
+    expect(withLobbyClaimLists(empty, { lobby_id: 'l1', as_of: 'garbage', claim_lists: [list('p1', 0)] })).toBe(empty);
   });
 
   it('takes the first lists on a view from a geo-chat that had none', () => {

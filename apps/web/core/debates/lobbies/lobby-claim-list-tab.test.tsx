@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { GeoChatRequestError } from '../api';
 import type { ClaimListPage } from '../claim-list-pages';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { LobbyClaimListTab } from './lobby-claim-list-tab';
@@ -12,6 +13,7 @@ import type { LobbyPageView } from './lobby-view';
 const mocks = vi.hoisted(() => ({
   page: { data: undefined as ClaimListPage | null | undefined, isLoading: false, error: null as Error | null },
   remove: vi.fn(),
+  removeState: { isPending: false, error: null as Error | null },
   batches: [] as string[][],
   groups: undefined as unknown,
 }));
@@ -50,7 +52,7 @@ vi.mock('./lobby-explore-claims', () => ({
   },
 }));
 vi.mock('./lobby-claim-lists-hooks', () => ({
-  useRemoveLobbyClaimList: () => ({ mutate: mocks.remove, isPending: false }),
+  useRemoveLobbyClaimList: () => ({ mutate: mocks.remove, ...mocks.removeState }),
 }));
 
 const SPACE = '3be38bb922bc80c6a6503fbbba28d2b0';
@@ -69,6 +71,7 @@ afterEach(() => {
   cleanup();
   mocks.page = { data: undefined, isLoading: false, error: null };
   mocks.remove.mockClear();
+  mocks.removeState = { isPending: false, error: null };
 });
 
 describe('LobbyClaimListTab', () => {
@@ -191,6 +194,18 @@ describe('LobbyClaimListTab', () => {
     rerender(<LobbyClaimListTab lobby={lobbyFor(true)} list={list} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Remove from lobby' }));
     expect(mocks.remove).toHaveBeenCalledWith(list.entity_id);
+  });
+
+  it('says why removing a deleted page failed, and does not send it twice', async () => {
+    mocks.page.data = null;
+    mocks.removeState = { isPending: false, error: new GeoChatRequestError('nope', 'lobby_host_required', 403) };
+    const { rerender } = render(<LobbyClaimListTab lobby={lobbyFor(true)} list={list} />);
+    expect(await screen.findByText('Only a host can do that.')).toBeTruthy();
+
+    mocks.removeState = { isPending: true, error: null };
+    rerender(<LobbyClaimListTab lobby={lobbyFor(true)} list={list} />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Removing…' }));
+    expect(mocks.remove).not.toHaveBeenCalled();
   });
 
   it('offers a retry when the page cannot be read', () => {

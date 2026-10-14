@@ -29,7 +29,7 @@ import { useRemoveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS, LOBBY_CLAIMS_SECTION_SCROLL_MARGIN_CLASS } from './lobby-claims-sticky';
 import { useLobbyRoomCardRenderer } from './lobby-explore-claims';
 import { exploreRoomClaimBatches } from './lobby-explore-claims-hooks';
-import { personName } from './lobby-format';
+import { moderationErrorMessage, personName } from './lobby-format';
 import type { LobbyPageView } from './lobby-view';
 
 export const CLAIM_LIST_TAB_COPY = {
@@ -37,6 +37,7 @@ export const CLAIM_LIST_TAB_COPY = {
   openPage: 'Open the full page',
   gone: 'This list is no longer available.',
   remove: 'Remove from lobby',
+  removing: 'Removing…',
   empty: 'This list has no claims yet.',
 };
 
@@ -69,9 +70,22 @@ export function LobbyClaimListTab({ lobby, list }: { lobby: LobbyPageView; list:
       onRetry={() => void refetch()}
       isEmpty={sections.length === 0}
       emptyMessage={gone ? CLAIM_LIST_TAB_COPY.gone : CLAIM_LIST_TAB_COPY.empty}
+      // As the tab menu does: why a removal failed, and no second request while one is out.
+      emptyNote={
+        gone && remove.error ? (
+          <Text as="p" variant="footnote" color="red-01">
+            {moderationErrorMessage(remove.error)}
+          </Text>
+        ) : undefined
+      }
       emptyAction={
         gone && lobby.viewer.hosting
-          ? { label: CLAIM_LIST_TAB_COPY.remove, onClick: () => remove.mutate(list.entity_id) }
+          ? {
+              label: remove.isPending ? CLAIM_LIST_TAB_COPY.removing : CLAIM_LIST_TAB_COPY.remove,
+              onClick: () => {
+                if (!remove.isPending) remove.mutate(list.entity_id);
+              },
+            }
           : undefined
       }
     >

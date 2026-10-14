@@ -7,6 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyHighlights, DebateLobbyMember, DebateLobbyView } from '../api';
 
+const claimList = (entityId: string) => ({
+  entity_id: entityId,
+  space_id: 's1',
+  position: 0,
+  added_by: null,
+  added_at: '2026-10-13T12:00:00Z',
+});
+
 const mocks = vi.hoisted(() => ({
   phone: false,
   lobby: undefined as DebateLobbyView | undefined,
@@ -313,6 +321,25 @@ describe('DebateLobbyPage layout on a phone', () => {
 
     fireEvent.click(claimsTab());
     expect(within(claimsTab()).queryByRole('img', { name: 'New' })).toBeNull();
+  });
+
+  // The desktop panel shows the claims, so a list that arrives there has been seen (GEO-3274).
+  it('does not mark Claims for a list added while the desktop panel showed it', () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    mocks.lobby = { ...view(), claim_lists: [claimList('p1')] };
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+
+    mocks.phone = true;
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+    expect(within(screen.getByRole('tab', { name: /Claims/ })).queryByRole('img', { name: 'New' })).toBeNull();
+  });
+
+  it('marks Claims for a list added while a phone is on People', () => {
+    mocks.phone = true;
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    mocks.lobby = { ...view(), claim_lists: [claimList('p1')] };
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+    expect(within(screen.getByRole('tab', { name: /Claims/ })).getByRole('img', { name: 'New' })).toBeInTheDocument();
   });
 
   it('reads highlights for the mark only on a phone', () => {
