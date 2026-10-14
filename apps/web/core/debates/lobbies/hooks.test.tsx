@@ -881,6 +881,32 @@ describe('lobby analytics from the lobby hooks (GEO-3311)', () => {
     expect(lobbyEvents('lobby_joined')).toEqual([expect.objectContaining({ role: 'speaker', hosting: false })]);
   });
 
+  it('starts the session from the room the join answered with', async () => {
+    const member = (id: string) => ({
+      user_id: id,
+      profile_space_id: `space-${id}`,
+      display_name: null,
+      avatar_cid: null,
+      role: 'listener' as const,
+      creator: false,
+      acting_host: false,
+      on_roster_since: '2026-10-05T10:00:00Z',
+      stepped_out: false,
+      in_debate: false,
+    });
+    api.setDebateLobbyPresence.mockImplementationOnce(async () => ({
+      ...view(true),
+      members: [member('u1'), member('u2')],
+      guest_count: 1,
+    }));
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    await act(() => result.current.leave());
+
+    expect(lobbyEvents('lobby_left')).toEqual([expect.objectContaining({ peak_headcount: 3 })]);
+  });
+
   it('records Going on the server’s confirmation, not on a refusal', async () => {
     api.setDebateLobbyReminder.mockResolvedValueOnce({
       ...view(false),

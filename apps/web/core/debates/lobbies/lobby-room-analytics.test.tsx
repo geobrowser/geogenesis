@@ -31,7 +31,7 @@ vi.mock('./lobby-analytics', () => ({
   lobbyViewerRole: mocks.lobbyViewerRole,
 }));
 
-const { LobbyAnalyticsScope, lobbyRoomHeadcount } = await import('./lobby-room-analytics');
+const { LobbyAnalyticsScope } = await import('./lobby-room-analytics');
 
 const LOBBY = '6f347510-bc7a-4865-8c1f-99748bb2ee27';
 const CLAIM = '22222222222222222222222222222222';
@@ -158,9 +158,4 @@ describe('LobbyAnalyticsScope', () => {
     expect(mocks.lobbyHeadcountSeen).not.toHaveBeenCalled();
     expect(seen.every(context => context.lobby_id === LOBBY.replaceAll('-', ''))).toBe(true);
   });
-});
-
-it('counts the roster as the lobby header does, plus guests', () => {
-  expect(lobbyRoomHeadcount({ members: [member('a'), member('b', true)], guest_count: undefined })).toBe(2);
-  expect(lobbyRoomHeadcount({ members: [member('a')], guest_count: 3 })).toBe(4);
 });

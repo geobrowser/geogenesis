@@ -115,7 +115,11 @@ function fromStored(value: StoredSession): Session {
 function restore() {
   if (restored) return;
   restored = true;
-  if (currentNavigationType() !== 'reload') return;
+  if (currentNavigationType() !== 'reload') {
+    // What a duplicated tab copied must not come back on its own later reload either.
+    forget();
+    return;
+  }
   try {
     const raw = window.sessionStorage.getItem(STORAGE_KEY);
     if (!raw) return;
@@ -131,6 +135,14 @@ function restore() {
     }
   } catch {
     // Unreadable or blocked storage: start fresh.
+  }
+}
+
+function forget() {
+  try {
+    window.sessionStorage.removeItem(STORAGE_KEY);
+  } catch {
+    // Nothing kept.
   }
 }
 
@@ -241,11 +253,14 @@ export function lobbyJoined(
     role = null,
     hosting = null,
     moderationAt = null,
+    headcount = null,
   }: {
     isNewcomer: boolean | null;
     role?: DebateLobbyRole | null;
     hosting?: boolean | null;
     moderationAt?: string | null;
+    /** The room as the join's own view counts it: the baseline before any later view changes it. */
+    headcount?: number | null;
   }
 ) {
   cancelRelease();
@@ -268,8 +283,8 @@ export function lobbyJoined(
     role,
     hosting,
     moderationAt,
-    peakHeadcount: null,
-    lastHeadcount: null,
+    peakHeadcount: headcount,
+    lastHeadcount: headcount,
     touchedAt: Date.now(),
   };
   session = started;
@@ -462,11 +477,12 @@ function roomVoteProperties(lobbyId: string, vote: DebateLobbyRoomVote) {
   };
 }
 
-/** A host asked the room to vote, on the server's confirmation. Sent by that host's tab only. */
+/**
+ * A host asked the room to vote, on the server's confirmation. Sent by that host's tab only. Only
+ * sends: what the tab tracks as running comes from `lobbyRoomVoteSeen`, fed the freshest state.
+ */
 export function lobbyRoomVoteStarted(lobbyId: string, vote: DebateLobbyRoomVote, { replaced }: { replaced: boolean }) {
   const id = dashlessId(lobbyId);
-  // A vote this one replaced ends first, with the tally it had.
-  lobbyRoomVoteSeen(id, vote);
   send('lobby_room_vote_started', {
     ...roomVoteProperties(id, vote),
     replaced,
@@ -530,9 +546,5 @@ export function resetLobbyAnalytics() {
   runningRoomVotes.clear();
   endedRoomVotes.clear();
   restored = false;
-  try {
-    window.sessionStorage.removeItem(STORAGE_KEY);
-  } catch {
-    // Nothing kept.
-  }
+  forget();
 }

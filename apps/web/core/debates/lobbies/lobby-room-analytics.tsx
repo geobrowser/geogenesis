@@ -6,14 +6,9 @@ import { ActionContextProvider } from '~/core/action-context-provider';
 
 import { dashlessId } from '../api';
 import { lobbyHeadcountSeen, lobbyRoomVoteSeen, lobbyViewerRole } from './lobby-analytics';
-import { lobbyHeadcount } from './lobby-format';
+import { lobbyRoomHeadcount } from './lobby-format';
 import { useLobbyHighlights } from './lobby-highlights-hooks';
 import { type LobbyPageView, isMemberView } from './lobby-view';
-
-/** Everyone in the room: who the lobby header counts as here, plus guests listening without an account. */
-export function lobbyRoomHeadcount(lobby: Pick<LobbyPageView, 'members' | 'guest_count'>) {
-  return lobbyHeadcount(lobby) + (lobby.guest_count ?? 0);
-}
 
 /**
  * Lobby attribution for everything inside an admitted lobby (GEO-3311). Every action taken here

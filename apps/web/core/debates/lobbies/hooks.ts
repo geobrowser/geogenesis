@@ -39,7 +39,13 @@ import {
   markLobbyEntry,
 } from './lobby-analytics';
 import { settleFetchedLobbyClaimLists } from './lobby-claim-lists-state';
-import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
+import {
+  isAlreadyInAnotherLobby,
+  isRemovedFromLobby,
+  lobbyErrorMessage,
+  lobbyRoomHeadcount,
+  otherLobbyIdFrom,
+} from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
 
@@ -358,6 +364,7 @@ export function useLobbyPresence(
             role: view.viewer.role,
             hosting: view.viewer.hosting,
             moderationAt: view.viewer.last_moderation?.at ?? null,
+            headcount: lobbyRoomHeadcount(view),
           });
         }
         setState(view.viewer.connected ? { status: 'joined' } : { status: 'idle' });

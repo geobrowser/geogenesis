@@ -380,6 +380,12 @@ describe('headcount (GEO-3311)', () => {
     expect(events('lobby_left')[0]).toMatchObject({ peak_headcount: 7 });
   });
 
+  it('starts from the headcount the join answered with, so an unchanged room still has a peak', () => {
+    lobbyJoined(lobby, { isNewcomer: false, headcount: 4 });
+    lobbyLeft(lobby, 'left');
+    expect(events('lobby_left')[0]).toMatchObject({ peak_headcount: 4 });
+  });
+
   it('leaves peak_headcount out when the tab never read the room', () => {
     lobbyJoined(lobby, { isNewcomer: false });
     lobbyLeft(lobby, 'left');
@@ -405,6 +411,7 @@ describe('room votes (GEO-3311)', () => {
 
   it('reports a started vote with its claim, and its end with the last tally the host saw', () => {
     lobbyJoined(lobby, { isNewcomer: false, role: 'host', hosting: true });
+    lobbyRoomVoteSeen(lobby, vote('v1'));
     lobbyRoomVoteStarted(lobby, vote('v1'), { replaced: false });
     lobbyRoomVoteSeen(lobby, vote('v1', { agree: 2, disagree: 1, eligible: 5 }));
     vi.advanceTimersByTime(90_000);
@@ -441,8 +448,9 @@ describe('room votes (GEO-3311)', () => {
     ]);
   });
 
-  it('ends a replaced vote before the new one starts, from any host’s tab', () => {
+  it('ends a replaced vote, from any host’s tab, and the start only sends', () => {
     lobbyRoomVoteSeen(lobby, vote('v1', { agree: 1, disagree: 0, eligible: 3 }));
+    lobbyRoomVoteSeen(lobby, vote('v2'));
     lobbyRoomVoteStarted(lobby, vote('v2'), { replaced: true });
 
     expect(capture.mock.calls.map(([name]) => name)).toEqual(['lobby_room_vote_ended', 'lobby_room_vote_started']);
@@ -550,6 +558,20 @@ describe('a reload (GEO-3311)', () => {
 
     expect(events('lobby_debate_started')).toEqual([]);
     duplicate.resetLobbyAnalytics();
+  });
+
+  it('forgets what a duplicated tab copied, so its own later reload does not bring it back', async () => {
+    lobbyJoined(lobby, { isNewcomer: false });
+    lobbySteppedOut(lobby);
+
+    const duplicate = await reload('back_forward');
+    // Reads only: nothing this tab does writes the session back.
+    duplicate.lobbyDebateSeen({ id: 'debate-elsewhere', lobby_id: 'b0000000000000000000000000000000' });
+    const reloadedDuplicate = await reload();
+    reloadedDuplicate.lobbyDebateSeen({ id: 'debate-in-both-tabs', lobby_id: lobby });
+
+    expect(events('lobby_debate_started')).toEqual([]);
+    reloadedDuplicate.resetLobbyAnalytics();
   });
 
   it('closes a visit the page left without a pagehide, as of the tab’s last write, and joins anew', async () => {
