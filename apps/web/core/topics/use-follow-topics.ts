@@ -24,6 +24,11 @@ import { interestedTopicsQueryOptions } from './use-followed-topics';
 
 const FOLLOW_MUTATION_KEY = ['follow-topics'] as const;
 
+/** One held Interested: an entity, in the space it was cast in. Clearing one names both. */
+function heldKey(row: InterestedTopicRow) {
+  return `${normId(row.objectId)}:${normId(row.spaceId)}`;
+}
+
 type FollowVariables = { spaceId: string; topicIds: string[]; followKind: FollowKind } & (
   { kind: 'follow'; topics: TopicRef[] } | { kind: 'unfollow' }
 );
@@ -71,10 +76,11 @@ export function useFollowEntities({ kind }: { kind: FollowKind }) {
     }
   };
 
-  const runInterested = async (variables: FollowVariables, interested: InterestedTopicRow[]): Promise<boolean> => {
+  const write = async (variables: FollowVariables): Promise<boolean> => {
     const { spaceId } = variables;
     // Interested is an on-chain response from the personal space, which must exist on chain.
     if (!isRegistered) return false;
+    const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(spaceId));
     const interestedKey = interestedTopicsQueryKey(spaceId);
 
     if (variables.kind === 'follow') {
@@ -111,20 +117,14 @@ export function useFollowEntities({ kind }: { kind: FollowKind }) {
     if (!(await sendCalls(calls))) return false;
 
     await queryClient.cancelQueries({ queryKey: interestedKey, exact: true });
-    const gone = new Set(cleared.map(row => `${normId(row.objectId)}:${normId(row.spaceId)}`));
+    const gone = new Set(cleared.map(heldKey));
     queryClient.setQueryData<InterestedTopicRow[]>(interestedKey, current =>
-      (current ?? interested).filter(row => !gone.has(`${normId(row.objectId)}:${normId(row.spaceId)}`))
+      (current ?? interested).filter(row => !gone.has(heldKey(row)))
     );
     return true;
   };
 
-  const { mutateAsync } = useMutation({
-    mutationKey: FOLLOW_MUTATION_KEY,
-    mutationFn: async (variables: FollowVariables) => {
-      const interested = await queryClient.ensureQueryData(interestedTopicsQueryOptions(variables.spaceId));
-      return runInterested(variables, interested);
-    },
-  });
+  const { mutateAsync } = useMutation({ mutationKey: FOLLOW_MUTATION_KEY, mutationFn: write });
 
   const run = React.useCallback(
     async (kind: FollowVariables['kind'], topics: readonly TopicRef[]) => {

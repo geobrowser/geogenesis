@@ -8,7 +8,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { fetchInterestedTopics, interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import { normId } from '~/core/utils/norm-id';
 
-import { type FollowKind, interestedTopicIds } from './interested';
+import { type FollowKind, followKindOf, interestedTopicIds } from './interested';
 
 /** The topics and people a space holds Interested on (GEO-3158): its follows. */
 export function interestedTopicsQueryOptions(spaceId: string) {
@@ -58,7 +58,7 @@ export function useFollowedEntities({
 
   const topicIds = React.useMemo(() => interestedTopicIds(interested ?? [], kind), [interested, kind]);
   const kinds = React.useMemo(
-    () => new Map((interested ?? []).map(row => [normId(row.objectId), row.kind ?? 'topic'] as const)),
+    () => new Map((interested ?? []).map(row => [normId(row.objectId), followKindOf(row)] as const)),
     [interested]
   );
 

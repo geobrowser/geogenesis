@@ -21,7 +21,7 @@ type Meta = { name: string | null; image: string; homeSpaceId: string | null };
 const mocks = vi.hoisted(() => ({
   // Inlined literal (not OWNER_SPACE): vi.hoisted runs before the module's const declarations.
   personalSpaceId: '11111111111111111111111111111111' as string | null,
-  /** Followed topic ids. No `Following` rows: with the Interested flag on there are none. */
+  /** Followed topic ids, as the Interested read returns them. */
   topicIds: [] as string[],
   isLoading: false,
   metadata: new Map<string, Meta>(),
@@ -162,8 +162,8 @@ describe('Following row visibility', () => {
 });
 
 describe('Following row data', () => {
-  it('lists Interested follows, which have no Following relation rows', async () => {
-    // #2685 read the relation rows, so with the Interested flag on the row never appeared.
+  it('lists Interested follows', async () => {
+    // #2685 read `Following` relation rows, so an Interested follow never appeared.
     mocks.topicIds = [TOPIC_A];
     mocks.metadata.set(TOPIC_A, { name: 'Mental health', image: 'ipfs://a', homeSpaceId: TOPIC_HOME });
     renderFollowing();

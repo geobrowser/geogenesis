@@ -298,8 +298,8 @@ describe('FollowTopicButton', () => {
       expect(mocks.follow).not.toHaveBeenCalled();
     });
 
-    it('needs a registered personal space even with the Interested flag off', () => {
-      // A person follow is only ever an Interested, which is cast on chain.
+    it('needs a registered personal space, as a topic follow does', () => {
+      // A follow is an Interested, which is cast on chain.
       mocks.isRegistered = false;
       renderPerson();
 

@@ -16,7 +16,7 @@ const MAX_BATCH_SIZE = 100;
  * paying a request per avatar. A group of avatars mounts in one commit, so all of its lookups
  * land in the same microtask and go out together.
  */
-export const loadProfileBySpaceId: (spaceId: string) => Promise<Profile> = createBatchLoader<Profile>({
+export const loadProfileBySpaceId = createBatchLoader<Profile>({
   fetchBatch: async spaceIds => {
     const profiles = await Effect.runPromise(fetchProfilesBySpaceIds(spaceIds));
     const bySpaceId = new Map<string, Profile>();

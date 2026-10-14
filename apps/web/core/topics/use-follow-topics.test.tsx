@@ -9,7 +9,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { interestedTopicsQueryKey } from '~/core/io/subgraph/fetch-interested-topics';
 import { PERMISSIONLESS_ACTIONS, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 
-import type { InterestedTopicRow } from './interested';
+import type { FollowKind, InterestedTopicRow } from './interested';
 import { useFollowEntities, useFollowTopics } from './use-follow-topics';
 
 const mocks = vi.hoisted(() => ({
@@ -33,13 +33,15 @@ const SPACE = '11111111111111111111111111111111';
 const TOPIC_A = '22222222222222222222222222222222';
 const TOPIC_B = '33333333333333333333333333333333';
 
-function setup(interested: InterestedTopicRow[] = []) {
+function setup(interested: InterestedTopicRow[] = [], kind: FollowKind = 'topic') {
   mocks.fetchInterestedTopics.mockResolvedValue(interested);
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
   );
-  const { result } = renderHook(() => useFollowTopics(), { wrapper });
+  const { result } = renderHook(() => (kind === 'topic' ? useFollowTopics() : useFollowEntities({ kind })), {
+    wrapper,
+  });
   const cachedInterested = () => client.getQueryData<InterestedTopicRow[]>(interestedTopicsQueryKey(SPACE));
   return { result, cachedInterested };
 }
@@ -182,19 +184,8 @@ describe('useFollowEntities on a person (GEO-3236)', () => {
     mocks.sendUserOperation.mockResolvedValue(undefined);
   });
 
-  function setupPerson(interested: InterestedTopicRow[] = []) {
-    mocks.fetchInterestedTopics.mockResolvedValue(interested);
-    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
-    const wrapper = ({ children }: { children: ReactNode }) => (
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>
-    );
-    const { result } = renderHook(() => useFollowEntities({ kind: 'person' }), { wrapper });
-    const cachedInterested = () => client.getQueryData<InterestedTopicRow[]>(interestedTopicsQueryKey(SPACE));
-    return { result, cachedInterested };
-  }
-
   it('writes an Interested on their personal space', async () => {
-    const { result, cachedInterested } = setupPerson();
+    const { result, cachedInterested } = setup([], 'person');
 
     let ok = false;
     await act(async () => {
@@ -208,7 +199,7 @@ describe('useFollowEntities on a person (GEO-3236)', () => {
   });
 
   it('clears the Interested to unfollow', async () => {
-    const { result, cachedInterested } = setupPerson([{ objectId: PERSON, spaceId: SPACE, kind: 'person' }]);
+    const { result, cachedInterested } = setup([{ objectId: PERSON, spaceId: SPACE, kind: 'person' }], 'person');
 
     await act(async () => {
       await result.current.unfollow([PERSON]);

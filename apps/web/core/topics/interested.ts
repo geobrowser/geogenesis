@@ -52,6 +52,11 @@ export type InterestedTopicRow = {
 
 export type FollowKind = 'topic' | 'person';
 
+/** What a held Interested follows. An untagged row is a topic, which is all Interested was before. */
+export function followKindOf(row: Pick<InterestedTopicRow, 'kind'>): FollowKind {
+  return row.kind ?? 'topic';
+}
+
 /**
  * The read rule: a topic is followed exactly when the space holds a current Interested on it. A
  * `Following` relation, the old topic follow, counts for nothing (Preston, 6 Oct). Held in several
@@ -62,7 +67,7 @@ export function interestedTopicIds(
   kind: FollowKind | 'any' = 'any'
 ): Set<string> {
   return new Set(
-    interested.filter(row => kind === 'any' || (row.kind ?? 'topic') === kind).map(row => normId(row.objectId))
+    interested.filter(row => kind === 'any' || followKindOf(row) === kind).map(row => normId(row.objectId))
   );
 }
 
