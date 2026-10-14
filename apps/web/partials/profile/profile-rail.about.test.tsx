@@ -17,17 +17,29 @@ const mocks = vi.hoisted(() => ({
   deleteValue: vi.fn(),
 }));
 
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/hooks/use-user-is-editing', () => ({ useUserIsEditing: () => mocks.isEditing }));
 vi.mock('~/core/hooks/use-profile-facts', () => ({ useProfileFacts: () => ({}) }));
 vi.mock('~/core/hooks/use-personal-space-id', () => ({ usePersonalSpaceId: () => ({ personalSpaceId: SPACE_ID }) }));
 vi.mock('~/core/topics/use-followed-topics', () => ({
   useFollowedTopics: () => ({ rows: [], topicIds: new Set(), isLoading: false }),
+  useFollowedInterests: () => ({ ids: new Set(), isLoading: false }),
+}));
+vi.mock('~/core/hooks/use-spaces-by-ids', () => ({
+  useSpacesByIds: () => ({ spaces: [], spacesById: new Map(), isLoading: false, isPlaceholderData: false }),
 }));
 vi.mock('~/core/topics/use-topic-metadata', () => ({
   useTopicMetadata: () => ({ metadata: new Map(), isLoading: false }),
 }));
 vi.mock('~/core/topics/use-follow-topics', () => ({
   useFollowTopics: () => ({ follow: vi.fn(), unfollow: vi.fn(), isPending: () => false, canFollow: true }),
+  useFollowEntities: () => ({ follow: vi.fn(), unfollow: vi.fn(), isPending: () => false, canFollow: true }),
 }));
 vi.mock('~/core/sync/use-store', () => ({ useValue: () => mocks.stored ?? null }));
 vi.mock('~/core/sync/use-mutate', () => ({

@@ -3,9 +3,10 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { FollowTopicButton } from './follow-topic-button';
+import { FollowButton, FollowTopicButton } from './follow-button';
 
 const TOPIC = '5ef5a5860f274d8e8f6c59ae5b3e89e2';
+const ADA_SPACE = '73a82967cb12f604f9589ac4bc8024cb';
 
 const mocks = vi.hoisted(() => ({
   follow: vi.fn(async () => true),
@@ -26,21 +27,30 @@ const mocks = vi.hoisted(() => ({
   isQueued: false,
   queuedRun: null as null | (() => Promise<void> | void),
   observed: vi.fn(),
+  /** The kind each follow hook was last asked for. */
+  writesKind: null as string | null,
+  readsKind: null as string | null,
 }));
 
 vi.mock('@geogenesis/auth', () => ({
   usePrivy: () => ({ ready: mocks.authReady, authenticated: mocks.authenticated }),
 }));
-vi.mock('./use-follow-topics', () => ({
-  useFollowTopics: () => ({
-    follow: mocks.follow,
-    unfollow: mocks.unfollow,
-    isPending: (id: string) => mocks.pendingIds.has(id),
-    canFollow: true,
-  }),
+vi.mock('~/core/topics/use-follow-topics', () => ({
+  useFollowEntities: ({ kind }: { kind: string }) => {
+    mocks.writesKind = kind;
+    return {
+      follow: mocks.follow,
+      unfollow: mocks.unfollow,
+      isPending: (id: string) => mocks.pendingIds.has(id),
+      canFollow: true,
+    };
+  },
 }));
-vi.mock('./use-followed-topics', () => ({
-  useFollowedTopics: () => ({ topicIds: mocks.followedIds, rows: [], isLoading: mocks.isLoadingFollows }),
+vi.mock('~/core/topics/use-followed-topics', () => ({
+  useFollowedEntities: ({ kind }: { kind: string }) => {
+    mocks.readsKind = kind;
+    return { topicIds: mocks.followedIds, rows: [], isLoading: mocks.isLoadingFollows };
+  },
 }));
 vi.mock('~/core/hooks/use-smart-account', () => ({
   useSmartAccount: () => ({ smartAccount: mocks.smartAccount }),
@@ -242,5 +252,67 @@ describe('FollowTopicButton', () => {
 
       await expect(mocks.queuedRun?.()).rejects.toThrow('Your follow could not be saved yet.');
     });
+  });
+
+  describe('on a person (GEO-3236)', () => {
+    const renderPerson = () => render(<FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada Okafor' }} />);
+
+    it('follows a person by their personal space id, always as an Interested', () => {
+      renderPerson();
+      fireEvent.click(screen.getByRole('button', { name: 'Follow Ada Okafor' }));
+
+      expect(mocks.follow).toHaveBeenCalledWith([{ id: ADA_SPACE, name: 'Ada Okafor' }]);
+      expect(mocks.writesKind).toBe('person');
+      expect(mocks.readsKind).toBe('person');
+      expect(mocks.observed).toHaveBeenCalledWith('follow_person');
+    });
+
+    it('unfollows a person in one press', () => {
+      mocks.followedIds = new Set([ADA_SPACE]);
+      renderPerson();
+      fireEvent.click(screen.getByRole('button', { name: 'Unfollow Ada Okafor' }));
+
+      expect(mocks.unfollow).toHaveBeenCalledWith([ADA_SPACE]);
+      expect(mocks.observed).toHaveBeenCalledWith('unfollow_person');
+    });
+
+    it('draws nothing on your own profile', () => {
+      mocks.personalSpaceId = ADA_SPACE;
+      const { container } = renderPerson();
+
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it("can't be pressed until the viewer's own space is known, so it can't be your own row", () => {
+      mocks.personalSpaceId = null;
+      mocks.isLoadingPersonalSpace = true;
+      renderPerson();
+
+      expect(screen.getByRole('button')).toBeDisabled();
+    });
+
+    it('drops a queued follow that turns out to be for your own space', async () => {
+      // Pressed on your own row while signed out; you then sign in as that person.
+      mocks.personalSpaceId = ADA_SPACE;
+      renderPerson();
+      await mocks.queuedRun?.();
+
+      expect(mocks.follow).not.toHaveBeenCalled();
+    });
+
+    it('needs a registered personal space even with the Interested flag off', () => {
+      // A person follow is only ever an Interested, which is cast on chain.
+      mocks.isRegistered = false;
+      renderPerson();
+
+      expect(screen.getByRole('button')).toBeDisabled();
+    });
+  });
+
+  it('follows a topic as a topic', () => {
+    renderButton();
+
+    expect(mocks.writesKind).toBe('topic');
+    expect(mocks.readsKind).toBe('topic');
   });
 });

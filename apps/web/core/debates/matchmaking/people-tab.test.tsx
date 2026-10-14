@@ -70,6 +70,17 @@ const mocks = vi.hoisted(() => ({
   personProfileOpened: vi.fn(),
 }));
 
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({
+  FollowButton: (props: { target: { id: string }; variant?: string }) => (
+    <span data-testid="follow" data-id={props.target.id} data-variant={props.variant} />
+  ),
+}));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened, capture: mocks.capture }));
 
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
@@ -384,6 +395,16 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 afterEach(cleanup);
 
 describe('PeopleTab', () => {
+  it('offers Follow beside each name, by personal space, and not on rows without one (GEO-3236)', () => {
+    mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    expect(screen.getAllByTestId('follow').map(follow => follow.getAttribute('data-id'))).toEqual([
+      PROFILE_SPACE_IDS['user-them'],
+    ]);
+  });
+
   it('keeps malformed roster IDs out of the shared position query', () => {
     mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
 

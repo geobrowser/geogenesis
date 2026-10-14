@@ -4,6 +4,7 @@ import { Environment } from '~/core/environment';
 import { type InterestedTopicRow, interestedVoteCondition } from '~/core/topics/interested';
 import { normId } from '~/core/utils/norm-id';
 
+import { fetchPersonalSpaceIds } from './fetch-personal-space-ids';
 import { graphql } from './graphql';
 
 const PAGE_SIZE = 1000;
@@ -71,5 +72,9 @@ export async function fetchInterestedTopics(spaceId: string, signal?: AbortSigna
     after = page.pageInfo.hasNextPage ? page.pageInfo.endCursor : null;
   } while (after);
 
-  return rows;
+  const people = await fetchPersonalSpaceIds(
+    rows.map(row => row.objectId),
+    signal
+  );
+  return rows.map(row => ({ ...row, kind: people.has(row.objectId) ? 'person' : 'topic' }));
 }
