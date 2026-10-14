@@ -29,12 +29,8 @@ export function rememberLobbyReturnDestination(lobbyId: string) {
 }
 
 function storeDestination(stored: StoredDebateReturnDestination) {
-  try {
-    window.sessionStorage.setItem(debateReturnDestinationKey, JSON.stringify(stored));
-  } catch {
-    // Browser storage can be unavailable in privacy modes. Existing history
-    // and route fallbacks still handle the exit in that case.
-  }
+  // Without storage, existing history and route fallbacks still handle the exit.
+  writeSession(debateReturnDestinationKey, JSON.stringify(stored));
 }
 
 /**
@@ -55,12 +51,7 @@ export function peekDebateReturnDestination(): string | null {
 }
 
 function readStoredDestination(): { href: string; lobby: boolean } | null {
-  let raw: string | null = null;
-  try {
-    raw = window.sessionStorage.getItem(debateReturnDestinationKey);
-  } catch {
-    return null;
-  }
+  const raw = readSession(debateReturnDestinationKey);
   if (!raw) return null;
 
   try {
@@ -77,10 +68,67 @@ function readStoredDestination(): { href: string; lobby: boolean } | null {
 }
 
 export function clearDebateReturnDestination() {
+  removeSession(debateReturnDestinationKey);
+}
+
+const lastPageOutsideDebatesKey = 'geo.debates.last-page-outside';
+/** A page was recorded since this document loaded, so the stored one is from this visit. */
+let recordedInThisDocument = false;
+
+/**
+ * Every page that is not a debate surface, so leaving a lobby lands where it was opened from. A
+ * debate stepped out to from the lobby is skipped, so it never stands in for that page.
+ */
+export function rememberLastPageOutsideDebates(href = currentBrowserHref()) {
+  const page = safeInternalHref(href);
+  // Without storage, leaving a lobby falls back to Explore.
+  if (!page || isDebateFlowHref(page)) return;
+  writeSession(lastPageOutsideDebatesKey, page);
+  recordedInThisDocument = true;
+}
+
+/**
+ * The last page this tab was on outside the debate surfaces, or null. A lobby opened straight from
+ * outside the app (a pasted or shared link) has none: the tab's page from an earlier visit is
+ * forgotten. A reload or Back into the lobby keeps it.
+ */
+export function lastPageOutsideDebates(): string | null {
+  if (!recordedInThisDocument && !documentRestored()) {
+    removeSession(lastPageOutsideDebatesKey);
+    return null;
+  }
+  const stored = readSession(lastPageOutsideDebatesKey);
+  const page = stored ? safeInternalHref(stored) : null;
+  return page && !isDebateFlowHref(page) ? page : null;
+}
+
+function documentRestored() {
+  const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+  return entry?.type === 'reload' || entry?.type === 'back_forward';
+}
+
+/** Session storage can be unavailable in privacy modes; these treat that as empty. */
+function readSession(key: string): string | null {
   try {
-    window.sessionStorage.removeItem(debateReturnDestinationKey);
+    return window.sessionStorage.getItem(key);
   } catch {
-    // Nothing to clear when storage is unavailable.
+    return null;
+  }
+}
+
+function writeSession(key: string, value: string) {
+  try {
+    window.sessionStorage.setItem(key, value);
+  } catch {
+    // Nothing to keep it in.
+  }
+}
+
+function removeSession(key: string) {
+  try {
+    window.sessionStorage.removeItem(key);
+  } catch {
+    // Nothing to clear.
   }
 }
 

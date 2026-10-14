@@ -23,7 +23,9 @@ import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
-import { LiveLobbiesCard } from '../lobbies/lobbies-card';
+import { useLobbyLineup } from '../lobbies/live-lobbies';
+import { UpcomingLobbiesCard } from '../lobbies/lobbies-card';
+import { LobbySpotlight } from '../lobbies/lobby-spotlight';
 import { toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab } from './claims-tab';
 import { calendarHref } from './debate-calendar-route';
@@ -256,6 +258,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
   const { data: requests } = useDebateRequests(authenticated);
 
   const requestCount = useRequestsTabCount({ authenticated, activity, requests });
+  const lobbyLineup = useLobbyLineup();
+  // A live lobby, or one opening within 15 minutes, takes the banner's place above the tabs
+  // (GEO-3268). The schedule banner comes back once neither is true.
+  const lobbySpotlight = lobbyLineup.live.length > 0 || lobbyLineup.soon !== null;
   const scrollRef = React.useRef<HTMLDivElement>(null);
   // Shared so the banner can hand focus up to the header's calendar when it leaves.
   const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
@@ -293,7 +299,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </HubHeaderControls>
       </div>
 
-      <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
+      {lobbySpotlight ? <LobbySpotlight lineup={lobbyLineup} /> : null}
+      {/* Kept mounted under the spotlight: it holds the schedule dialog, which a lobby going live
+          would otherwise close mid-edit. */}
+      <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} hidden={lobbySpotlight} />
 
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
           restoration, so a row drawn before then is the signed-out one — a returning viewer would
@@ -353,7 +362,8 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
             corrects both. One render, but it is the wrong viewer's data. */}
         {!ready || !filtersReconciled ? null : (
           <>
-            <LiveLobbiesCard />
+            {/* Requests lists the lobbies the viewer is going to or hosts itself (GEO-3292). */}
+            {activeTab === 'requests' ? null : <UpcomingLobbiesCard />}
             <HubSwap activeKey={activeTab}>
               {activeTab === 'requests' ? (
                 <RequestsTab />

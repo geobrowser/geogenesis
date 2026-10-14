@@ -70,9 +70,7 @@ export function ScrollableTabRow({
   }, []);
 
   const scrollBy = (direction: -1 | 1) => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    scrollRowTo(scroller, scroller.scrollLeft + direction * scroller.clientWidth * SCROLL_STEP_RATIO);
+    if (scrollerRef.current) scrollRowBy(scrollerRef.current, direction);
   };
 
   return (
@@ -83,12 +81,22 @@ export function ScrollableTabRow({
         <div className={cx('relative flex w-max items-center pb-2', className)}>{children}</div>
       </div>
       <div aria-hidden className="absolute right-0 bottom-0 left-0 z-0 h-px bg-grey-02" />
-      {overflow.start ? (
-        <EdgeButton side="start" label={`${analyticsLabelPrefix} scroll tabs left`} onClick={() => scrollBy(-1)} />
-      ) : null}
-      {overflow.end ? (
-        <EdgeButton side="end" label={`${analyticsLabelPrefix} scroll tabs right`} onClick={() => scrollBy(1)} />
-      ) : null}
+      {(['start', 'end'] as const).map(side =>
+        overflow[side] ? (
+          <ScrollEdgeButton
+            key={side}
+            side={side}
+            ariaLabel={side === 'start' ? 'Show earlier tabs' : 'Show more tabs'}
+            analyticsLabel={`${analyticsLabelPrefix} scroll tabs ${side === 'start' ? 'left' : 'right'}`}
+            analyticsIntent="scroll_tabs"
+            onClick={() => scrollBy(side === 'start' ? -1 : 1)}
+            // The fade stops a pixel short of the bottom so the row's rule runs unbroken under it,
+            // and above the active tab's marker, which is drawn on that rule.
+            className="bottom-px z-110 w-12"
+            buttonClassName="mb-2 size-6 text-grey-04 hover:bg-grey-01 hover:text-text"
+          />
+        ) : null
+      )}
     </div>
   );
 }
@@ -104,6 +112,11 @@ function scrollActiveTabIntoView(scroller: HTMLElement) {
   else if (right > scroller.scrollLeft + scroller.clientWidth) scrollRowTo(scroller, right - scroller.clientWidth);
 }
 
+/** Moves a sideways row by most of its width, so a press of an edge button is never wasted. */
+export function scrollRowBy(scroller: HTMLElement, direction: -1 | 1) {
+  scrollRowTo(scroller, scroller.scrollLeft + direction * scroller.clientWidth * SCROLL_STEP_RATIO);
+}
+
 function scrollRowTo(scroller: HTMLElement, left: number) {
   // jsdom has no `scrollTo` on elements, and older engines take no options object.
   if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ left, behavior: 'smooth' });
@@ -111,25 +124,42 @@ function scrollRowTo(scroller: HTMLElement, left: number) {
 }
 
 /**
- * The fade and the arrow on one edge. The fade stops a pixel short of the bottom so the row's rule
- * runs unbroken under it, and above the active tab's marker, which is drawn on that rule.
+ * The fade and the arrow on one edge of a sideways row: this tab row's, and the debates panel's
+ * row of upcoming lobbies. `className` places the fade, `buttonClassName` sizes and colours the arrow.
  */
-function EdgeButton({ side, label, onClick }: { side: 'start' | 'end'; label: string; onClick: () => void }) {
+export function ScrollEdgeButton({
+  side,
+  ariaLabel,
+  analyticsLabel,
+  analyticsIntent,
+  onClick,
+  className,
+  buttonClassName,
+}: {
+  side: 'start' | 'end';
+  ariaLabel: string;
+  analyticsLabel: string;
+  analyticsIntent: string;
+  onClick: () => void;
+  className?: string;
+  buttonClassName?: string;
+}) {
   return (
     <div
       className={cx(
-        'pointer-events-none absolute top-0 bottom-px z-110 flex w-12 items-center',
+        'pointer-events-none absolute top-0 flex items-center',
         side === 'start' ? 'left-0 justify-start bg-linear-to-r' : 'right-0 justify-end bg-linear-to-l',
-        'from-white from-40% to-transparent'
+        'from-white from-40% to-transparent',
+        className
       )}
     >
       <button
         type="button"
-        aria-label={side === 'start' ? 'Show earlier tabs' : 'Show more tabs'}
-        data-geo-analytics-label={label}
-        data-geo-analytics-intent="scroll_tabs"
+        aria-label={ariaLabel}
+        data-geo-analytics-label={analyticsLabel}
+        data-geo-analytics-intent={analyticsIntent}
         onClick={onClick}
-        className="pointer-events-auto mb-2 grid size-6 place-items-center rounded-full text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+        className={cx('pointer-events-auto grid place-items-center rounded-full transition-colors', buttonClassName)}
       >
         {/* The design system has a right chevron only; the left one is the same glyph turned. */}
         <span className={cx('grid place-items-center', side === 'start' && 'rotate-180')}>

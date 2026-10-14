@@ -55,14 +55,14 @@ afterEach(() => {
 
 describe('LobbyClosedCard next lobby', () => {
   // Inside a lobby nothing pushes `debate.lobbies_changed`, so the list refetches itself at opens_at.
-  it('swaps Remind me for Join once the next lobby opens', async () => {
+  it('swaps RSVP for Join once the next lobby opens', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     const opensAt = new Date(Date.now() + 60_000).toISOString();
     api.listDebateLobbies
       .mockResolvedValueOnce({ lobbies: [summary({ opens_at: opensAt })] })
       .mockResolvedValue({ lobbies: [summary({ opens_at: opensAt, open: true })] });
     renderCard();
-    expect(await screen.findByRole('button', { name: 'Remind me' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'RSVP' })).toBeTruthy();
 
     await act(async () => {
       await vi.advanceTimersByTimeAsync(55_000);
@@ -85,7 +85,7 @@ describe('LobbyClosedCard next lobby', () => {
     );
     renderCard();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Remind me' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'RSVP' }));
     expect(await screen.findByRole('link', { name: 'Join' })).toBeTruthy();
     expect(api.listDebateLobbies).toHaveBeenCalledTimes(2);
     expect(screen.queryByText(/join it instead|Try again/)).toBeNull();
@@ -96,17 +96,17 @@ describe('LobbyClosedCard next lobby', () => {
     api.setDebateLobbyReminder.mockRejectedValue(new Error('network'));
     renderCard();
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Remind me' }));
-    expect(await screen.findByText('Could not update your reminder. Try again.')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'RSVP' }));
+    expect(await screen.findByText('Could not update your RSVP. Try again.')).toBeTruthy();
   });
 
   // The error belongs to the lobby asked about, not to whatever the refreshed list suggests next.
-  describe('after a failed Remind me', () => {
+  describe('after a failed RSVP', () => {
     async function failOnA(opensAt: string) {
       api.setDebateLobbyReminder.mockRejectedValue(new Error('network'));
       renderCard();
-      fireEvent.click(await screen.findByRole('button', { name: 'Remind me' }));
-      expect(await screen.findByText('Could not update your reminder. Try again.')).toBeTruthy();
+      fireEvent.click(await screen.findByRole('button', { name: 'RSVP' }));
+      expect(await screen.findByText('Could not update your RSVP. Try again.')).toBeTruthy();
       expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
       await act(async () => {
         await vi.advanceTimersByTimeAsync(Date.parse(opensAt) - Date.now() + 2_000);
@@ -122,7 +122,7 @@ describe('LobbyClosedCard next lobby', () => {
       await failOnA(opensAt);
 
       expect(await screen.findByRole('link', { name: 'Join' })).toBeTruthy();
-      expect(screen.queryByText('Could not update your reminder. Try again.')).toBeNull();
+      expect(screen.queryByText('Could not update your RSVP. Try again.')).toBeNull();
     });
 
     it('drops the error when the refresh suggests another lobby', async () => {
@@ -134,8 +134,8 @@ describe('LobbyClosedCard next lobby', () => {
       await failOnA(opensAt);
 
       expect(await screen.findByText(/Later hour/)).toBeTruthy();
-      expect(screen.getByRole('button', { name: 'Remind me' })).toBeTruthy();
-      expect(screen.queryByText('Could not update your reminder. Try again.')).toBeNull();
+      expect(screen.getByRole('button', { name: 'RSVP' })).toBeTruthy();
+      expect(screen.queryByText('Could not update your RSVP. Try again.')).toBeNull();
     });
   });
 });

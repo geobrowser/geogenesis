@@ -64,8 +64,12 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
 }
 
 /**
- * The side panel list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount:
- * patches stop while the panel is closed. With `staleTime`, reloaded on mount only once that old.
+ * The lobby list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount in case
+ * patches stopped while nothing held the matchmaking scope. With `staleTime`, reloaded on mount only
+ * once that old.
+ *
+ * Signed in only. geo-chat lists lobbies to accounts alone, and a signed-out visitor cannot join one
+ * yet, so every lobby surface stays hidden for them until both change (GEO-3268).
  */
 export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: number } = {}) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();

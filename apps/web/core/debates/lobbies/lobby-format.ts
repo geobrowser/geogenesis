@@ -77,8 +77,7 @@ export function untilLabel(iso: string, now: number) {
   const at = Date.parse(iso);
   if (Number.isNaN(at) || at <= now) return 'soon';
   if (at - now < 3_600_000) return `in ${Math.ceil((at - now) / 60_000)} min`;
-  // Rounded: a daylight saving change makes a calendar day 23 or 25 hours.
-  const days = Math.round((startOfLocalDay(at) - startOfLocalDay(now)) / 86_400_000);
+  const days = localDaysFrom(now, at);
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
@@ -88,6 +87,12 @@ function startOfLocalDay(ms: number) {
   const day = new Date(ms);
   day.setHours(0, 0, 0, 0);
   return day.getTime();
+}
+
+/** Calendar days from `from` to `to` in local time: 0 the same day, 1 the next, -1 the one before. */
+export function localDaysFrom(from: number, to: number) {
+  // Rounded: a daylight saving change makes a calendar day 23 or 25 hours.
+  return Math.round((startOfLocalDay(to) - startOfLocalDay(from)) / 86_400_000);
 }
 
 /** "Opens at 17:50 · in 2 days", for the lobby page before the door opens. */
@@ -183,9 +188,19 @@ export function pairSubject(pair: DebateLobbyPair, members: DebateLobbyMember[])
   return null;
 }
 
-export function remindedLabel(count: number) {
-  return `${count} reminded`;
+/**
+ * A lobby reminder is called an RSVP on screen, as community calls word it (GEO-3268): "RSVP" to
+ * set it, "Going" once set, "6 going" for the count. geo-chat still calls it a reminder.
+ */
+export function rsvpLabel(going: boolean) {
+  return going ? 'Going' : 'RSVP';
 }
+
+export function goingLabel(count: number) {
+  return `${count} going`;
+}
+
+export const RSVP_FAILED = 'Could not update your RSVP. Try again.';
 
 export const ROLE_LABEL: Record<DebateLobbyRole, string> = {
   host: 'Host',

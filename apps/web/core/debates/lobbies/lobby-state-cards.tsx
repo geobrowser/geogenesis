@@ -14,13 +14,14 @@ import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button'
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbyReminder, useLobbyReminderError } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
-import { lobbyErrorMessage, nextLobbyTimeLabel, personName } from './lobby-format';
+import { RSVP_FAILED, lobbyErrorMessage, nextLobbyTimeLabel, personName, rsvpLabel } from './lobby-format';
 import { nextLobbyByHost, useListedLobbies } from './lobby-host-lobbies';
 import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_STATE_COPY = {
   banned: 'You can’t join this lobby',
   bannedFrom: (name: string) => `A host has blocked you from ${name}.`,
+  removed: 'A host removed you from this lobby.',
   ended: 'This lobby has ended',
   closed: 'This lobby has closed',
   findDebate: 'Find a debate',
@@ -29,8 +30,6 @@ export const LOBBY_STATE_COPY = {
   emptyDetail: 'You’re the first one here. Share the link, or come back for the next lobby.',
   whoIsFree: 'See who’s free this week',
 } as const;
-
-const REMINDER_FAILED = 'Could not update your reminder. Try again.';
 
 /** The centered card every full-page lobby state sits in; `className` sets its width and spacing. */
 export function LobbyCardFrame({
@@ -128,7 +127,7 @@ export function LobbyClosedCard({
   );
 }
 
-/** Remind me on a lobby still to open; Join on one already open. */
+/** RSVP on a lobby still to open; Join on one already open. */
 function NextLobbyAction({
   lobby,
   reminder,
@@ -158,7 +157,7 @@ function NextLobbyAction({
       pending={reminder.isPending}
       onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
     >
-      {reminded ? 'Reminded' : 'Remind me'}
+      {rsvpLabel(reminded)}
     </HubPillButton>
   );
 }
@@ -170,7 +169,7 @@ function ReminderError({ reminder, lobby }: { reminder: LobbyReminder; lobby: De
   if (!error) return null;
   return (
     <Text as="p" variant="footnote" color="red-01">
-      {lobbyErrorMessage(error, REMINDER_FAILED)}
+      {lobbyErrorMessage(error, RSVP_FAILED)}
     </Text>
   );
 }
