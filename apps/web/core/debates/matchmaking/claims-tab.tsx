@@ -186,7 +186,8 @@ export type ClaimsLayout = 'panel' | 'workspace';
  *
  * The expand link carries the selection in the URL regardless, and the workspace seeds from it on
  * mount, because a link is the one way onto this surface with no session behind it — a shared or
- * reopened `/matchmaking?…` meets those atoms at their defaults. Seeding only; nothing goes back.
+ * reopened `/matchmaking?…` meets those atoms at their defaults. The workspace writes changes back
+ * to the URL (GEO-3298) so the address bar stays a link to what is on screen; the panel does not.
  */
 export const VARIANT_ATOMS = {
   explore: {
