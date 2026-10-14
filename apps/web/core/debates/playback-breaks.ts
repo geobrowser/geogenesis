@@ -3,6 +3,7 @@ import type {
   DebateMediaResponse,
   DebateMediaRoundPick,
   DebateMediaTurnSegment,
+  DebateParticipant,
   OpenRoundPick,
   ParticipantSlot,
 } from './api';
@@ -40,10 +41,38 @@ export const BREAK_BANNER_AT_MS = BREAK_QUESTION_MS + 750;
  * to read. The final End's holds "That's a wrap" a little longer, since nothing has to start after it.
  */
 export const BREAK_PLAYED_MS: Record<'lead_in' | 'extend' | 'final_end', number> = {
-  lead_in: 1_600,
-  extend: BREAK_BANNER_AT_MS + 800,
-  final_end: BREAK_BANNER_AT_MS + 1_000,
+  lead_in: 2_100,
+  extend: BREAK_BANNER_AT_MS + 1_300,
+  final_end: BREAK_BANNER_AT_MS + 1_500,
 };
+
+/** A debater as the break graphics name them: their first name, which keeps the banner to one line. */
+export function breakFirstName(participant: Pick<DebateParticipant, 'display_name'> | null | undefined) {
+  return participant?.display_name?.trim().split(/\s+/)[0] || 'Debater';
+}
+
+/** The banner's type at its largest and smallest, as a share of the player's width. */
+export const BANNER_MAX_CQW = 7;
+export const BANNER_MIN_CQW = 4;
+/** The width the banner's line may take, inside its padding. */
+const BANNER_LINE_CQW = 88;
+/** Calibre Bold's average uppercase advance with the banner's tracking, in em. Measured off the player. */
+const BANNER_CHAR_EM = 0.6;
+
+/**
+ * The banner's line and the size that keeps it on one: a name in a two-line banner is the thing
+ * that breaks it. The type shrinks to fit, down to `BANNER_MIN_CQW`; a first name too long even for
+ * that is cut with an ellipsis. Sized by character count rather than measured, so it is the same on
+ * every device and before the font loads.
+ */
+export function fitBannerLine(line: (name: string) => string, name: string): { text: string; fontCqw: number } {
+  const sizeFor = (text: string) => BANNER_LINE_CQW / (text.length * BANNER_CHAR_EM);
+  const full = line(name);
+  if (sizeFor(full) >= BANNER_MIN_CQW) return { text: full, fontCqw: Math.min(BANNER_MAX_CQW, sizeFor(full)) };
+  const maxChars = Math.floor(BANNER_LINE_CQW / (BANNER_MIN_CQW * BANNER_CHAR_EM));
+  const room = Math.max(1, maxChars - line('').length - 1);
+  return { text: line(`${name.slice(0, room)}…`), fontCqw: BANNER_MIN_CQW };
+}
 
 export type PlayerBreak = {
   kind: 'lead_in' | 'extend' | 'final_end';

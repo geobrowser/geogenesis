@@ -15,6 +15,7 @@ import {
   type BreakCue,
   type BreakCut,
   type EarlyEndCue,
+  fitBannerLine,
 } from '~/core/debates/playback-breaks';
 
 /** Each debater's name, by slot. Slot 1 is the top tile. */
@@ -142,6 +143,10 @@ export function DebateBreakOverlay({
   const bannerAtMs = picks ? BREAK_BANNER_AT_MS : 0;
   const wrap = cue.kind === 'final_end';
   const note = wrap && picks ? openRoundWrapNote(picks[1], { name: names[2], pick: picks[2] }, names[1]) : null;
+  const round = openRoundNumber(cue.nextRoundIndex ?? 0);
+  const banner = wrap
+    ? fitBannerLine(() => 'That’s a wrap', '')
+    : fitBannerLine(name => `Round ${round} · ${name} opens`, names[firstSlot]);
 
   return (
     <div
@@ -193,12 +198,12 @@ export function DebateBreakOverlay({
           <div
             data-debate-banner={wrap ? 'wrap' : 'round'}
             className={cx(
-              'grid w-full place-items-center px-4 py-3 text-[7cqw] leading-none font-bold tracking-[0.05em] text-white uppercase shadow-[0_6px_24px_rgba(0,0,0,0.4)] motion-safe:animate-debate-banner',
+              'w-full truncate px-4 py-3 text-center leading-none font-bold tracking-[0.05em] whitespace-nowrap text-white uppercase shadow-[0_6px_24px_rgba(0,0,0,0.4)] motion-safe:animate-debate-banner',
               wrap ? 'bg-text' : 'bg-purple'
             )}
-            style={heldAt(bannerAtMs)}
+            style={{ fontSize: `${banner.fontCqw}cqw`, ...heldAt(bannerAtMs) }}
           >
-            {wrap ? 'That’s a wrap' : `Round ${openRoundNumber(cue.nextRoundIndex ?? 0)} · ${names[firstSlot]} opens`}
+            {banner.text}
           </div>
           {note && (
             <span className="rounded-xl border border-white/40 bg-black/70 px-3 py-1.5 text-metadata text-white">

@@ -1819,8 +1819,8 @@ describe('the pair becomes watchable together (GEO-2965)', () => {
 
 describe('open rounds breaks in published playback (GEO-3277)', () => {
   // On the player's clock: Round 1 (index) ends at 60 s, they pick until 64 s, then 8 s of reveal and
-  // count-in before Round 2 (index) starts at 72 s. The player plays only its first 2.35 s: the
-  // question to 60.8 s, the picks turning to 61.55 s, then the round, then cuts to 72 s.
+  // count-in before Round 2 (index) starts at 72 s. The player plays only its first 2.85 s: the
+  // question to 60.8 s, the stamps, the banner from 61.55 s, then cuts to 72 s.
   const extendBreak = {
     kind: 'extend' as const,
     roundIndex: 0,
@@ -1897,8 +1897,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     vi.useFakeTimers();
     try {
       const seekBoth = vi.fn();
-      // The cut is 2.35 s in, at 62.35 s.
-      renderAt(61.5, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
+      // The cut is 2.85 s in, at 62.85 s.
+      renderAt(62, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
       vi.advanceTimersByTime(800);
       expect(seekBoth).not.toHaveBeenCalled();
       vi.advanceTimersByTime(100);
@@ -1906,7 +1906,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
 
       cleanup();
       const pausedSeek = vi.fn();
-      renderAt(61.5, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
+      renderAt(62, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
       vi.advanceTimersByTime(5_000);
       expect(pausedSeek).not.toHaveBeenCalled();
     } finally {

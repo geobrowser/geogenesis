@@ -3,14 +3,18 @@ import { describe, expect, it } from 'vitest';
 import type { Debate, DebateMediaTurnSegment } from './api';
 import { RENDERED_MEDIA } from './open-rounds-media-fixtures';
 import {
+  BANNER_MAX_CQW,
+  BANNER_MIN_CQW,
   BREAK_PLAYED_MS,
   EARLY_END_HOLD_MS,
   breakAnnouncesRound,
   breakCueAt,
   breakCuts,
+  breakFirstName,
   breaksEndMs,
   earlyEndCueAt,
   finalPicks,
+  fitBannerLine,
   playbackBreaksFrom,
   silentAt,
 } from './playback-breaks';
@@ -160,5 +164,36 @@ describe('breaksEndMs', () => {
   it('is where the final End’s reveal ends, after the last turn', () => {
     expect(breaksEndMs(BREAKS.breaks)).toBe(333_481);
     expect(breaksEndMs([])).toBe(0);
+  });
+});
+
+describe('breakFirstName', () => {
+  it('is the first name, so the banner keeps to one line', () => {
+    expect(breakFirstName({ display_name: 'Preston Mantel' })).toBe('Preston');
+    expect(breakFirstName({ display_name: '  Adam   Fischer ' })).toBe('Adam');
+    expect(breakFirstName({ display_name: null })).toBe('Debater');
+    expect(breakFirstName(null)).toBe('Debater');
+  });
+});
+
+describe('fitBannerLine', () => {
+  const line = (name: string) => `Round 2 · ${name} opens`;
+
+  it('keeps a short line at full size', () => {
+    expect(fitBannerLine(() => 'That’s a wrap', '')).toEqual({ text: 'That’s a wrap', fontCqw: BANNER_MAX_CQW });
+  });
+
+  it('shrinks the type to keep a longer name on one line', () => {
+    const fit = fitBannerLine(line, 'Preston');
+    expect(fit.text).toBe('Round 2 · Preston opens');
+    expect(fit.fontCqw).toBeLessThan(BANNER_MAX_CQW);
+    expect(fit.fontCqw).toBeGreaterThanOrEqual(BANNER_MIN_CQW);
+  });
+
+  it('cuts a first name too long even for the smallest size, with an ellipsis', () => {
+    const fit = fitBannerLine(line, 'Maximilianajosephinebartholomew');
+    expect(fit.fontCqw).toBe(BANNER_MIN_CQW);
+    expect(fit.text).toMatch(/^Round 2 · Maximi.*… opens$/);
+    expect(fit.text.length).toBeLessThan(line('Maximilianajosephinebartholomew').length);
   });
 });

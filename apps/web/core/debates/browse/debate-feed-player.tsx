@@ -11,7 +11,14 @@ import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
-import { breakAnnouncesRound, breakCueAt, breakCuts, earlyEndCueAt, silentAt } from '~/core/debates/playback-breaks';
+import {
+  breakAnnouncesRound,
+  breakCueAt,
+  breakCuts,
+  breakFirstName,
+  earlyEndCueAt,
+  silentAt,
+} from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -392,10 +399,7 @@ export function DebateFeedPlayer({
    * is audible through it, and it is not captioned.
    */
   const betweenTurns = React.useMemo(() => silentAt(playbackBreaks, playheadMs), [playbackBreaks, playheadMs]);
-  const breakNames = {
-    1: slot1Participant ? speakerLabel(slot1Participant) : 'Debater',
-    2: slot2Participant ? speakerLabel(slot2Participant) : 'Debater',
-  };
+  const breakNames = { 1: breakFirstName(slot1Participant), 2: breakFirstName(slot2Participant) };
 
   const showReplay = ready && playbackEnded;
   // The end card is where an ended debate lands, except on a compact gallery tile — which has no
