@@ -19,6 +19,7 @@ import { pendingActionsAtom } from '~/core/state/pending-actions';
 import { closeSaveVotesPrompt, readSaveVotesPrompt } from '~/core/state/save-votes-prompt';
 
 import type { DebateClaimPositionSummary, DebateClaimSummary, MatchmakingReadiness } from '../api';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from './hub-scroll';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 
 // Claim and space ids are knowledge-graph ids, so the fixtures have to be real ones — the card
@@ -67,6 +68,7 @@ const mocks = vi.hoisted(() => ({
   /** Whether each render of the card's summary read was enabled, in order. */
   summaryEnabled: [] as boolean[],
   nearViewport: true,
+  rootSelectors: [] as (string | undefined)[],
   useEntityResponse: vi.fn(),
 }));
 
@@ -136,7 +138,10 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => {
 // Off-screen is the default state of most cards in a list, and the state where this card's reads
 // are deliberately not made. Controllable so a test can be in it.
 vi.mock('~/core/hooks/use-near-viewport', () => ({
-  useNearViewport: () => ({ ref: vi.fn(), nearViewport: mocks.nearViewport }),
+  useNearViewport: (options?: { rootSelector?: string }) => {
+    mocks.rootSelectors.push(options?.rootSelector);
+    return { ref: vi.fn(), nearViewport: mocks.nearViewport };
+  },
 }));
 
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({
@@ -302,6 +307,7 @@ beforeEach(() => {
   mocks.viewerSpaceId = 'personal-space';
   mocks.summaryEnabled = [];
   mocks.nearViewport = true;
+  mocks.rootSelectors = [];
   mocks.useEntityResponse.mockReset();
 });
 
@@ -313,6 +319,24 @@ afterEach(cleanup);
  * every holder including offline ones. So a side with nobody available rendered a bare "+2" and no
  * faces, and a side with one available person out of three said "+2" when only one was reachable.
  */
+// The lobby's claims column scrolls only on a desktop, and the card stays mounted across the
+// breakpoint, so it has to follow the selector it is handed rather than assume the hub's.
+describe('scroll root', () => {
+  it('measures against the scroll box the provider names, and the viewport when it names none', () => {
+    const card = (selector: string | undefined) => (
+      <HubScrollSelectorProvider value={selector}>
+        <MatchmakingClaimCard claim={claim} positions={positions} readiness={readiness()} />
+      </HubScrollSelectorProvider>
+    );
+    renderCard(card(HUB_SCROLL_SELECTOR));
+    expect(mocks.rootSelectors.at(-1)).toBe(HUB_SCROLL_SELECTOR);
+    cleanup();
+
+    renderCard(card(undefined));
+    expect(mocks.rootSelectors.at(-1)).toBeUndefined();
+  });
+});
+
 describe('position avatar stack', () => {
   const withCounts = (overrides: Array<Partial<DebateClaimPositionSummary>>): DebateClaimPositionSummary[] => [
     { ...positions[0], ...overrides[0] },

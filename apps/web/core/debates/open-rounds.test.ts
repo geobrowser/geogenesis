@@ -5,6 +5,7 @@ import { debateTurnRole } from './formats';
 import {
   debateThankingStartsAtMs,
   debateTurnRoleForDebate,
+  isBetweenOpenRounds,
   isDebatesLastTurn,
   isOpenRoundsDebate,
   openRebuttalRoundCount,
@@ -438,5 +439,32 @@ describe('open rounds: the lead-in to a required round', () => {
       kind: 'hold',
       phase: { phase: 'deciding', roundIndex: 1, decisionDeadlineAtMs: at('20:03:48.000') },
     });
+  });
+});
+
+describe('isBetweenOpenRounds', () => {
+  it('is the pick window and the result, count-in or lead-in, never a turn or the end', () => {
+    expect(
+      isBetweenOpenRounds({
+        phase: 'deciding',
+        roundIndex: 0,
+        isFinalRound: false,
+        roundEndedAtMs: 0,
+        decisionDeadlineAtMs: 1,
+      })
+    ).toBe(true);
+    expect(
+      isBetweenOpenRounds({
+        phase: 'result',
+        roundIndex: 0,
+        isFinalRound: false,
+        outcome: 'extend',
+        resolvedAtMs: 0,
+        nextPhaseStartsAtMs: 1,
+      })
+    ).toBe(true);
+    expect(isBetweenOpenRounds({ phase: 'speaking', roundIndex: 1, isFinalRound: false })).toBe(false);
+    expect(isBetweenOpenRounds({ phase: 'finished', roundIndex: 1, isFinalRound: false })).toBe(false);
+    expect(isBetweenOpenRounds(null)).toBe(false);
   });
 });

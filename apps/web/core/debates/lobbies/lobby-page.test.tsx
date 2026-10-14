@@ -38,10 +38,23 @@ describe('useHandoffNotice', () => {
     expect(result.current).toBeNull();
 
     rerender({ hosts_changed_at: '2026-10-05T10:01:00Z', members: [member('b', 'speaker', true)] });
-    expect(result.current?.user_id).toBe('b');
+    expect(result.current?.host.user_id).toBe('b');
+    expect(result.current?.left?.user_id).toBe('a');
 
     act(() => vi.advanceTimersByTime(8_000));
     expect(result.current).toBeNull();
+  });
+
+  it('names no one as gone when the last host is still on the roster', () => {
+    const { result, rerender } = renderHook(lobby => useHandoffNotice(lobby), {
+      initialProps: { hosts_changed_at: null as string | null, members: [member('a', 'host'), member('b', 'speaker')] },
+    });
+    rerender({
+      hosts_changed_at: '2026-10-05T10:01:00Z',
+      members: [member('a', 'host'), member('b', 'speaker', true)],
+    });
+    expect(result.current?.host.user_id).toBe('b');
+    expect(result.current?.left).toBeNull();
   });
 
   it('says nothing about hosting that changed before the page opened', () => {

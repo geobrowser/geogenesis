@@ -2,164 +2,48 @@
 
 import * as React from 'react';
 
-import Link from 'next/link';
-
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
-import { Text } from '~/design-system/text';
-
-import type { DebateLobbySummary } from '../api';
 import { useGeoChatAuth } from '../hooks';
-import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
-import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
-import { markLobbyEntry } from './lobby-analytics';
-import {
-  debatingLabel,
-  hereLabel,
-  hostsLabel,
-  lobbyErrorMessage,
-  lobbyScheduleLabel,
-  remindedLabel,
-} from './lobby-format';
-import { LobbyAvatarStack } from './lobby-people';
+import { useDebateLobbies } from './hooks';
+import { useLobbyLineup } from './live-lobbies';
 import { OpenLobbyDialog } from './open-lobby-dialog';
+import { UpcomingLobbiesRow } from './upcoming-lobbies';
 
 /**
- * Live debate lobbies, at the top of the debates panel (GEO-3133). Signed in and `lobbyJoining`
- * only. Kept current by `debate.lobbies_changed`, which needs the panel's matchmaking scope.
+ * Scheduled debate lobbies, under the debates panel's tabs (GEO-3133). Signed in and `lobbyJoining`
+ * only. Kept current by `debate.lobbies_changed`, which needs the matchmaking scope.
+ *
+ * A row of date cards (GEO-3268). Live lobbies and the one opening soon belong to the spotlight
+ * above the tabs, so this lists the rest and no lobby appears twice. With nothing to list it keeps
+ * just Open a lobby for hosts, and otherwise goes.
  */
-export function LiveLobbiesCard() {
+export function UpcomingLobbiesCard() {
   const joining = useFeatureFlag('lobbyJoining');
   const { authenticated } = useGeoChatAuth();
   if (!joining || !authenticated) return null;
-  return <LiveLobbiesCardBody />;
+  return <UpcomingLobbiesCardBody />;
 }
 
-function LiveLobbiesCardBody() {
+function UpcomingLobbiesCardBody() {
   const hosting = useFeatureFlag('lobbyHosting');
   const lobbiesQuery = useDebateLobbies();
+  const { live, soon, later } = useLobbyLineup();
   const [dialogOpen, setDialogOpen] = React.useState(false);
-  const lobbies = lobbiesQuery.data?.lobbies ?? [];
+
+  // With something live, the soon lobby is only the next one in line, so it is listed here.
+  const lobbies = live.length > 0 && soon ? [soon, ...later] : later;
 
   return (
-    <div className="px-4 pt-3">
-      <section
-        className="flex flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
-        aria-label="Live debate lobbies"
-        data-testid="live-lobbies-card"
-      >
-        <div className="flex items-center justify-between gap-2">
-          <Text as="h3" variant="footnoteMedium" color="text">
-            Live debate lobbies
-          </Text>
-          {hosting ? (
-            <HubPillButton analyticsLabel="Open a lobby" onClick={() => setDialogOpen(true)}>
-              Open a lobby
-            </HubPillButton>
-          ) : null}
-        </div>
-
-        {lobbiesQuery.isLoading ? (
-          <Text as="p" variant="footnote" color="grey-04">
-            Loading lobbies…
-          </Text>
-        ) : lobbiesQuery.isError ? (
-          <Text as="p" variant="footnote" color="grey-04">
-            Could not load lobbies.
-          </Text>
-        ) : lobbies.length === 0 ? (
-          <Text as="p" variant="footnote" color="grey-04">
-            No lobbies right now.
-          </Text>
-        ) : (
-          <ul className="flex flex-col divide-y divide-grey-02">
-            {lobbies.map(lobby => (
-              <LobbyRow key={lobby.lobby_id} lobby={lobby} />
-            ))}
-          </ul>
-        )}
-      </section>
+    <>
+      <UpcomingLobbiesRow
+        lobbies={lobbies}
+        // Hosting does not need the list, so a failed read keeps Open a lobby beside the error.
+        loadFailed={lobbiesQuery.isError && !lobbiesQuery.data}
+        canHost={hosting}
+        onOpenLobby={() => setDialogOpen(true)}
+      />
       {dialogOpen ? <OpenLobbyDialog onClose={() => setDialogOpen(false)} /> : null}
-    </div>
-  );
-}
-
-const REMINDER_FAILED = 'Could not update your reminder. Try again.';
-
-function LobbyRow({ lobby }: { lobby: DebateLobbySummary }) {
-  const reminder = useDebateLobbyReminder();
-  const hosts = hostsLabel(lobby.hosts);
-  const schedule = lobbyScheduleLabel(lobby);
-
-  const href = debateRoomPath(lobby.lobby_id);
-  const enter = () => markLobbyEntry(lobby.lobby_id, 'side_panel');
-  const hostedBy = hosts ? `Hosted by ${hosts}` : null;
-
-  return (
-    <li className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0" data-testid="lobby-row">
-      {lobby.open ? (
-        <span className="inline-flex items-center gap-1.5">
-          <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-green" />
-          <Text as="span" variant="footnoteMedium" color="text">
-            Live
-          </Text>
-        </span>
-      ) : schedule ? (
-        <Text as="p" variant="footnoteMedium" color="grey-04">
-          {schedule}
-        </Text>
-      ) : null}
-
-      <Link href={href} onClick={enter} className="min-w-0 hover:underline">
-        <Text as="p" variant="metadataMedium" className="truncate">
-          {lobby.name}
-        </Text>
-      </Link>
-
-      <div className="flex items-center gap-2.5">
-        {lobby.open ? <LobbyAvatarStack people={lobby.avatars} total={lobby.headcount} /> : null}
-        <Text as="span" variant="footnote" color={lobby.open ? 'text' : 'grey-04'} className="min-w-0 flex-1 truncate">
-          {lobby.open
-            ? [
-                hereLabel(lobby.headcount),
-                lobby.debating_count > 0 ? debatingLabel(lobby.debating_count) : null,
-                lobby.viewer_on_roster ? 'You’re here' : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')
-            : [hostedBy, remindedLabel(lobby.reminder_count)].filter(Boolean).join(' · ')}
-        </Text>
-        {lobby.open ? (
-          <Link
-            href={href}
-            onClick={enter}
-            className={hubPillClassName(lobby.viewer_on_roster ? 'secondary' : 'primary')}
-          >
-            {lobby.viewer_on_roster ? 'Open' : 'Join'}
-          </Link>
-        ) : (
-          <HubPillButton
-            analyticsLabel={lobby.viewer_reminded ? 'Lobby reminded' : 'Lobby remind me'}
-            pending={reminder.isPending}
-            aria-pressed={lobby.viewer_reminded}
-            onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded })}
-          >
-            {lobby.viewer_reminded ? 'Reminded' : 'Remind me'}
-          </HubPillButton>
-        )}
-      </div>
-
-      {lobby.open && hostedBy ? (
-        <Text as="p" variant="footnote" color="grey-04" className="truncate">
-          {hostedBy}
-        </Text>
-      ) : null}
-      {reminder.isError ? (
-        <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, REMINDER_FAILED)}
-        </Text>
-      ) : null}
-    </li>
+    </>
   );
 }

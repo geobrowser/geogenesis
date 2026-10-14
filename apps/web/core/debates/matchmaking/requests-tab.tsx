@@ -16,7 +16,7 @@ import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { RequestSection } from './request-section';
-import { ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
+import { ScheduledDebatesSection, hasScheduledContent, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
@@ -92,12 +92,7 @@ export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
-  const hasScheduled =
-    scheduled.answerable.length > 0 ||
-    scheduled.upcoming.length > 0 ||
-    availabilityRequests.length > 0 ||
-    scheduled.requestsError !== null ||
-    scheduled.roomsError !== null;
+  const hasScheduled = hasScheduledContent(scheduled) || availabilityRequests.length > 0;
   const hasRequests = Boolean(sent || outgoingChallenge || received.length > 0 || incomingChallenge);
   const isEmpty = !hasRequests && !hasScheduled;
 

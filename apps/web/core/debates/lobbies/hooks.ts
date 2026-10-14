@@ -1,6 +1,6 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -34,6 +34,7 @@ import {
   lobbySteppedOut,
   markLobbyEntry,
 } from './lobby-analytics';
+import { settleFetchedLobbyClaimLists } from './lobby-claim-lists-state';
 import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
@@ -63,10 +64,14 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
 }
 
 /**
- * The side panel list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount:
- * patches stop while the panel is closed.
+ * The lobby list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount in case
+ * patches stopped while nothing held the matchmaking scope. With `staleTime`, reloaded on mount only
+ * once that old.
+ *
+ * Signed in only. geo-chat lists lobbies to accounts alone, and a signed-out visitor cannot join one
+ * yet, so every lobby surface stays hidden for them until both change (GEO-3268).
  */
-export function useDebateLobbies(enabled = true) {
+export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: number } = {}) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
 
   return useQuery({
@@ -74,7 +79,7 @@ export function useDebateLobbies(enabled = true) {
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && ready && authenticated,
-    refetchOnMount: 'always',
+    ...(staleTime === undefined ? { refetchOnMount: 'always' as const } : { staleTime }),
   });
 }
 
@@ -101,18 +106,36 @@ export const MAX_TIMEOUT_MS = 2_147_483_647;
  */
 export function useDebateLobby(lobbyId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
     // Waits out a new account geo-chat does not know yet; a guest signing in listens meanwhile.
     ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobby(accountKey, lobbyId),
-    queryFn: ({ signal }) => getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal),
+    // A list change that landed while this read was in flight is newer than what it read. The cache
+    // is read only once the response is in: read before, it would miss exactly that change.
+    queryFn: async ({ signal }) => {
+      const fetched = await getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal);
+      return settleFetchedLobbyClaimLists(
+        queryClient.getQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, lobbyId)),
+        fetched
+      );
+    },
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
   });
 
   const access = query.data?.access;
-  const opensAt = access?.status === 'not_yet_open' ? access.opens_at : null;
+  useRefetchAtOpening(query, access?.status === 'not_yet_open' ? access.opens_at : null);
+
+  return query;
+}
+
+/** Refetches `query` just after `opensAt`, and again after each refetch that leaves it unchanged. */
+export function useRefetchAtOpening(
+  query: Pick<UseQueryResult, 'refetch' | 'dataUpdatedAt' | 'errorUpdatedAt'>,
+  opensAt: string | null
+) {
   const { refetch, dataUpdatedAt, errorUpdatedAt } = query;
   React.useEffect(() => {
     if (!opensAt) return;
@@ -123,8 +146,6 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
     return () => clearTimeout(timeout);
     // Reschedules after a refetch that still says not yet open, or that failed.
   }, [dataUpdatedAt, errorUpdatedAt, opensAt, refetch]);
-
-  return query;
 }
 
 /** Writes a returned view into the lobby's cache entry and marks the list stale. */
@@ -171,6 +192,26 @@ export function useDebateLobbyReminder() {
       }
     },
   });
+}
+
+/**
+ * The reminder failure to show beside `lobby`: only one asked for this lobby, while it is still to
+ * open. A 409 `lobby_already_open` shows nothing; the refetched list swaps in Join.
+ */
+export function useLobbyReminderError(
+  reminder: ReturnType<typeof useDebateLobbyReminder>,
+  lobby: { lobby_id: string; open: boolean }
+): unknown {
+  const id = dashlessId(lobby.lobby_id);
+  const { reset } = reminder;
+  // Clears when another lobby takes this one's place.
+  React.useEffect(() => reset, [id, reset]);
+
+  if (!reminder.isError || lobby.open) return null;
+  if (!reminder.variables || dashlessId(reminder.variables.lobbyId) !== id) return null;
+  const error = reminder.error;
+  if (error instanceof GeoChatRequestError && error.code === 'lobby_already_open') return null;
+  return error;
 }
 
 export function useEndDebateLobby(lobbyId: string) {

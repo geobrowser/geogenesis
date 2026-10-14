@@ -7,12 +7,27 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyHighlights, DebateLobbyMember, DebateLobbyView } from '../api';
 
+const claimList = (entityId: string) => ({
+  entity_id: entityId,
+  space_id: 's1',
+  position: 0,
+  added_by: null,
+  added_at: '2026-10-13T12:00:00Z',
+});
+
 const mocks = vi.hoisted(() => ({
   phone: false,
   lobby: undefined as DebateLobbyView | undefined,
   highlights: undefined as Pick<DebateLobbyHighlights, 'highlights' | 'room_vote'> | undefined,
   highlightsEnabled: [] as boolean[],
   leave: vi.fn(),
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: mocks.replace }),
+  usePathname: () => '/debate/lobby-1',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
@@ -39,6 +54,8 @@ vi.mock('./hooks', () => ({
     voiceAwayAt: null,
   }),
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false }),
+  useLobbyReminderError: () => null,
+  useRefetchAtOpening: vi.fn(),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }));
 vi.mock('./lobby-guest-hooks', async importOriginal => ({
@@ -73,8 +90,15 @@ vi.mock('./lobby-voice', async () => {
     ),
   };
 });
-vi.mock('./lobby-claims-area', () => ({ LobbyClaimsArea: () => <div data-testid="claims" /> }));
+// Reports the scroll root its lists' observers would be handed, which is all the page decides.
+vi.mock('./lobby-claims-area', async () => {
+  const { useHubScrollSelector } = await import('../matchmaking/hub-scroll');
+  return {
+    LobbyClaimsArea: () => <div data-testid="claims" data-scroll-root={useHubScrollSelector() ?? 'viewport'} />,
+  };
+});
 vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: undefined }) }));
+vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn(), useLobbySignInPrompt: vi.fn() }));
 vi.mock('./lobby-highlights-hooks', () => ({
   useLobbyHighlights: (_id: string, enabled: boolean) => {
     mocks.highlightsEnabled.push(enabled);
@@ -202,9 +226,49 @@ describe('DebateLobbyPage layout on desktop', () => {
     fireEvent.click(within(header).getByRole('button', { name: 'Raised hands · 1' }));
     expect(screen.getByTestId('host-lists')).toBeInTheDocument();
   });
+  it('scrolls the people and the claims each on their own, under a fixed header and bar', () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByTestId('debate-lobby')).toHaveClass('h-[calc(100dvh-2.75rem)]');
+    expect(screen.getByRole('region', { name: 'People in the lobby' })).toHaveClass('overflow-y-auto');
+    const claims = screen.getByRole('complementary', { name: 'Claims in the room' });
+    expect(claims).toHaveClass('overflow-y-auto');
+    // The Claims tab's paging sentinel and the cards measure against the column through this.
+    expect(claims).toHaveAttribute('data-debates-hub-scroll');
+  });
+});
+
+describe('DebateLobbyPage across the phone breakpoint', () => {
+  // The claims stay mounted when a window is resized or a tablet rotated across it, so their
+  // observers only measure against the right box if the selector they are handed changes with it.
+  it('hands the claims lists the column while it scrolls, and the viewport once it does not', () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    const claims = screen.getByTestId('claims');
+    expect(claims).toHaveAttribute('data-scroll-root', '[data-debates-hub-scroll]');
+
+    mocks.phone = true;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByTestId('claims')).toBe(claims);
+    expect(claims).toHaveAttribute('data-scroll-root', 'viewport');
+
+    mocks.phone = false;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(claims).toHaveAttribute('data-scroll-root', '[data-debates-hub-scroll]');
+  });
 });
 
 describe('DebateLobbyPage layout on a phone', () => {
+  it('scrolls the page, with no scroll box for the lists to measure against', () => {
+    mocks.phone = true;
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByTestId('debate-lobby')).toHaveClass('min-h-[calc(100dvh-2.75rem)]');
+    fireEvent.click(screen.getByRole('tab', { name: 'Claims' }));
+    const claims = screen.getByRole('tabpanel', { name: 'Claims' });
+    expect(claims).not.toHaveClass('overflow-y-auto');
+    expect(claims).not.toHaveAttribute('data-debates-hub-scroll');
+  });
+
   it('switches People and Claims tabs, keeping both mounted, with availability in the bar', () => {
     mocks.phone = true;
     render(<DebateLobbyPage lobbyId="lobby1" />);
@@ -264,6 +328,25 @@ describe('DebateLobbyPage layout on a phone', () => {
 
     fireEvent.click(claimsTab());
     expect(within(claimsTab()).queryByRole('img', { name: 'New' })).toBeNull();
+  });
+
+  // The desktop panel shows the claims, so a list that arrives there has been seen (GEO-3274).
+  it('does not mark Claims for a list added while the desktop panel showed it', () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    mocks.lobby = { ...view(), claim_lists: [claimList('p1')] };
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+
+    mocks.phone = true;
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+    expect(within(screen.getByRole('tab', { name: /Claims/ })).queryByRole('img', { name: 'New' })).toBeNull();
+  });
+
+  it('marks Claims for a list added while a phone is on People', () => {
+    mocks.phone = true;
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    mocks.lobby = { ...view(), claim_lists: [claimList('p1')] };
+    act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
+    expect(within(screen.getByRole('tab', { name: /Claims/ })).getByRole('img', { name: 'New' })).toBeInTheDocument();
   });
 
   it('reads highlights for the mark only on a phone', () => {

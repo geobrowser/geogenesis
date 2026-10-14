@@ -8,13 +8,14 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
+import { LastPageOutsideDebatesTracker } from '~/core/debates/lobbies/lobby-exit';
 import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
-import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
+import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { useDiff } from '~/core/state/diff-store';
 import { Persistence } from '~/core/state/persistence';
 
@@ -122,7 +123,7 @@ export function App({ children }: { children: React.ReactNode }) {
   const [mobileBrowseOpen, setMobileBrowseOpen] = React.useState(false);
   const mobileBrowseButtonRef = React.useRef<HTMLButtonElement>(null);
   const navbarRef = React.useRef<HTMLElement>(null);
-  const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
+  const sidebarOpen = useAtomValue(browseSidebarShownAtom);
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
   const rankingFullscreenFocusTarget = useAtomValue(rankingFullscreenFocusTargetAtom);
 
@@ -156,6 +157,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-[100dvh] items-stretch">
         <React.Suspense fallback={null}>
           <PageViewTracker />
+          <LastPageOutsideDebatesTracker />
         </React.Suspense>
         <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">

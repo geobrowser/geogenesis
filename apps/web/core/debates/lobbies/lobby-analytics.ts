@@ -14,8 +14,16 @@ import { debateRoomPath } from '../rooms/room-routes';
 export type LobbyEntry =
   /** No in-app control marked it: a pasted or shared link, a typed URL, a reload. */
   | 'link'
-  /** The lobbies card in the side panel. */
+  /** The lobbies card or the spotlight in the side panel. */
   | 'side_panel'
+  /** The Debate button's hover list in the navbar (GEO-3268). */
+  | 'nav'
+  /** The live lobby banner above the Explore feed (GEO-3268). */
+  | 'explore_banner'
+  /** A lobby's card on the debate calendar, from the row pinned above the hours (GEO-3268). */
+  | 'calendar'
+  /** A lobby under Upcoming lobbies in the Requests tab (GEO-3292). */
+  | 'requests'
   /** Go to lobby, right after creating it. */
   | 'created'
   /** Back to the room, on a debate's end card or on the lobby's stepped-out prompt. */
@@ -31,8 +39,9 @@ export type LobbyExit = 'left' | 'debate_started' | 'page_closed' | 'lobby_ended
 export type LobbyRequestKind = 'claim' | 'person';
 
 /**
- * `via` on a lobby's shared link. A signed-out visitor's room page cannot read the room's kind, so
- * the link says it is a lobby and sign-in attributes the sign-up to it. Bare room links stay `room`.
+ * `via` on a lobby's shared link. A signed-out visitor's room page learns the kind from the guest
+ * view; when that read fails, the link still says it is a lobby and sign-in attributes the sign-up
+ * to it. Bare room links stay `room`.
  */
 export const LOBBY_LINK_VIA = 'lobby';
 

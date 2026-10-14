@@ -8,6 +8,8 @@ import { normId } from '~/core/utils/norm-id';
 import type { DebateLobbyClaim, MatchmakingClaim } from '../api';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { type ClaimCardDefaults, ClaimsTab } from '../matchmaking/claims-tab';
+import { useHubScrollSelector } from '../matchmaking/hub-scroll';
+import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS } from './lobby-claims-sticky';
 import {
   exploreRoomClaimBatches,
   useLobbyExploreRoomClaims,
@@ -29,12 +31,38 @@ import type { LobbyPageView } from './lobby-view';
  * "In this room" card so its request is lobby-scoped and its faces are the room's.
  */
 export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
-  const lobbyId = lobby.lobby_id;
   const [batches, setBatches] = React.useState<string[][]>([]);
   const onVisibleClaims = React.useCallback((entries: MatchmakingClaim[]) => {
     const next = exploreRoomClaimBatches(entries);
     setBatches(current => (sameBatches(current, next) ? current : next));
   }, []);
+  const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
+  const renderClaim = React.useCallback(
+    (entry: MatchmakingClaim, card: ClaimCardDefaults) => renderRoomCard(entry, card.answersReady),
+    [renderRoomCard]
+  );
+
+  // The tab pads its own controls and list, inside the claims pane's padding. They pin under the
+  // claims area's pinned tab row; see `lobby-claims-sticky`.
+  return (
+    <div className="-mx-4">
+      <ClaimsTab
+        variant="lobbyExplore"
+        renderClaim={renderClaim}
+        onVisibleClaims={onVisibleClaims}
+        stickyTopClassName={LOBBY_CLAIMS_CONTROLS_TOP_CLASS}
+      />
+    </div>
+  );
+}
+
+/**
+ * Draws a graph-sourced claim as an "In this room" card: lobby-scoped request, the room's faces,
+ * the host menu. The room's sides are read only for the `batches` holding a card near the viewport.
+ * Shared by Explore and the claim list tabs (GEO-3274), which list claims the same way.
+ */
+export function useLobbyRoomCardRenderer(lobby: LobbyPageView, batches: string[][]) {
+  const lobbyId = lobby.lobby_id;
   const { active, onNear } = useNearExploreBatches(batches);
   const roomRows = useLobbyExploreRoomClaims(lobbyId, active);
   const { data: highlights } = useLobbyHighlights(lobbyId);
@@ -52,31 +80,18 @@ export function LobbyExploreClaims({ lobby }: { lobby: LobbyPageView }) {
     [highlights, lobbyId]
   );
 
-  const renderClaim = React.useCallback(
-    (entry: MatchmakingClaim, card: ClaimCardDefaults) => (
+  return React.useCallback(
+    (entry: MatchmakingClaim, answersReady: boolean) => (
       <NearViewport claimEntityId={entry.claim.claim_entity_id} onNear={onNear}>
         <LobbyRoomClaimCard
           entry={exploreRoomClaim(entry, roomRows.get(claimRowKey(entry)))}
-          answersReady={card.answersReady}
+          answersReady={answersReady}
           renderOffer={renderOffer}
           renderMenu={hosting ? renderMenu : undefined}
         />
       </NearViewport>
     ),
     [hosting, onNear, renderMenu, renderOffer, roomRows]
-  );
-
-  // The tab pads its own controls and list, inside the claims pane's padding. The page scrolls under
-  // the navbar (`sticky top-0 h-11`), so the controls pin below it.
-  return (
-    <div className="-mx-4">
-      <ClaimsTab
-        variant="lobbyExplore"
-        renderClaim={renderClaim}
-        onVisibleClaims={onVisibleClaims}
-        stickyTopClassName="top-11"
-      />
-    </div>
   );
 }
 
@@ -93,7 +108,8 @@ function NearViewport({
   /** The list's popLayout measures the row through this. */
   ref?: React.Ref<HTMLDivElement>;
 }) {
-  const { ref, nearViewport } = useNearViewport({ sticky: false });
+  const hubScrollSelector = useHubScrollSelector();
+  const { ref, nearViewport } = useNearViewport({ sticky: false, rootSelector: hubScrollSelector });
   // Paired, as `onNear` counts cards per id.
   React.useEffect(() => {
     if (!nearViewport) return;

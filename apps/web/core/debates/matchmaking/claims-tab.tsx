@@ -7,25 +7,15 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 
-import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { ID } from '~/core/id';
-import { responsePositionLabel } from '~/core/responses/entity-response';
-import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
 
-import type {
-  DebateClaim,
-  DebateClaimPositionSummary,
-  MatchmakingClaim,
-  MatchmakingClaimsFilter,
-  MatchmakingClaimsQuery,
-} from '../api';
+import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
@@ -48,10 +38,18 @@ import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
+import { useHubScrollSelector } from './hub-scroll';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
+import {
+  claimRowGroups,
+  placedAnswersReady,
+  placedClaimKey,
+  rowsByPlacedClaim,
+  taggedClaimEntry,
+} from './tagged-claim-entry';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
@@ -535,19 +533,13 @@ export function ClaimsTab({
   // not yet resolved. `fetchDebateClaims` sends `auth: 'optional'` when it has no account, so a
   // request in that window succeeds and comes back with every viewer field null; the rows still
   // carry the public ones, so the card drew its avatars while reporting no response from the viewer.
-  const taggedGroups = React.useMemo(() => {
-    if (!authenticated || !accountKey) return [];
-    const bySpace = new Map<string, string[]>();
-    for (const { claim, spaceId } of taggedPage) {
-      if (!validateEntityId(claim.entity.id)) continue;
-      const existing = bySpace.get(spaceId);
-      if (existing) existing.push(claim.entity.id);
-      else bySpace.set(spaceId, [claim.entity.id]);
-    }
-    return [...bySpace.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([spaceId, claimIds]) => ({ spaceId, claimIds }));
-  }, [accountKey, authenticated, taggedPage]);
+  const taggedGroups = React.useMemo(
+    () =>
+      authenticated && accountKey
+        ? claimRowGroups(taggedPage.map(({ claim, spaceId }) => ({ spaceId, claimId: claim.entity.id })))
+        : [],
+    [accountKey, authenticated, taggedPage]
+  );
   const taggedRows = useDebateClaimsBySpaces(taggedGroups);
 
   // The page in the shape the rest of the tab already speaks. geo-chat has a row for a claim only
@@ -560,34 +552,15 @@ export function ClaimsTab({
     // of them comes back twice — once per space, each with that space's sides, readiness and live
     // debate. Keyed on the claim alone the map keeps whichever arrived last, and would draw one
     // space's answers onto another space's card and publish into the second.
-    const rowsBySpaceAndClaim = new Map(
-      taggedRows.claims.map(row => [`${ID.uuidToHex(row.space_id)}:${ID.uuidToHex(row.claim_entity_id)}`, row])
+    const rowsBySpaceAndClaim = rowsByPlacedClaim(taggedRows.claims);
+
+    return taggedPage.map(({ claim, spaceId }) =>
+      taggedClaimEntry(
+        claim.entity,
+        spaceId,
+        rowsBySpaceAndClaim.get(placedClaimKey({ spaceId, claimId: claim.entity.id }))
+      )
     );
-
-    return taggedPage.map(({ claim, spaceId }) => {
-      const row = rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`);
-      const responseKind = resolveClaimResponseKind();
-
-      return {
-        claim: {
-          id: row?.id ?? claim.entity.id,
-          space_id: spaceId,
-          claim_entity_id: claim.entity.id,
-          claim: claim.entity.name ?? '',
-          description: claim.entity.description,
-        },
-        topics: [],
-        response_kind: responseKind,
-        viewer_response: row?.viewer_response ?? null,
-        viewer_position: row?.viewer_response?.position ?? null,
-        viewer_debate_ready: row?.viewer_debate_ready ?? false,
-        readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-        positions: taggedPositionSummaries(row),
-        // The index's ranking score, which this list is ordered by on the server and doesn't re-sort.
-        score: 0,
-        active_debate: Boolean(row?.active_debate),
-      };
-    });
   }, [graphSourced, taggedPage, taggedRows.claims]);
 
   // Whether a card may be answered at all.
@@ -621,7 +594,7 @@ export function ClaimsTab({
   const taggedAnswersReadyFor = React.useCallback(
     (entry: MatchmakingClaim) =>
       !graphSourced ||
-      (authenticated ? Boolean(accountKey) && !taggedRows.unresolvedSpaceIds.has(entry.claim.space_id) : true),
+      placedAnswersReady({ authenticated, accountKey }, taggedRows.unresolvedSpaceIds, entry.claim.space_id),
     [accountKey, authenticated, graphSourced, taggedRows.unresolvedSpaceIds]
   );
 
@@ -1018,6 +991,7 @@ export function ClaimsTab({
     hasNextPage &&
     ((graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage) || answersInFlight);
 
+  const hubScrollSelector = useHubScrollSelector();
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: mayFetchAhead,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
@@ -1026,10 +1000,7 @@ export function ClaimsTab({
     // any of it can be shown. Starting the next page a screenful or two early is what keeps that
     // from reading as a list that stops every time you reach the bottom.
     rootMargin: '1200px',
-    // The hub scrolls in its own panel, and `rootMargin` expands the root — so measured against the
-    // viewport the lead above buys nothing: the sentinel is clipped by the panel until it has been
-    // scrolled to, which is the moment the lead was meant to come before.
-    rootSelector: '[data-debates-hub-scroll]',
+    rootSelector: hubScrollSelector,
   });
 
   /**
@@ -1333,34 +1304,6 @@ export function HubStickyControls({
       {children}
     </div>
   );
-}
-
-/**
- * The two sides of a tagged claim, from geo-chat's per-space row.
- *
- * That row reports the sides as `online_choices` — who is online and available on each — where the
- * hub's index reports a total alongside them. The card draws the avatars and their overflow count
- * off `total_count`, so the online count stands in for it: it is the only count this endpoint
- * gives, and undercounting a side is better than claiming a total it never told us.
- */
-function taggedPositionSummaries(row: DebateClaim | undefined): DebateClaimPositionSummary[] {
-  return [true, false].map(position => {
-    const choice = row?.online_choices.find(candidate => candidate.position === position);
-
-    return {
-      position,
-      // Our label, never geo-chat's stale Verify/Dispute — see `positionSummariesFromCounts`.
-      position_label: responsePositionLabel(position),
-      total_count: choice?.participant_count ?? 0,
-      available_now_count: choice?.participant_count ?? 0,
-      // These are `online_choices`, so the count already *is* the present population — the same
-      // number, but it has to be set explicitly. `present_count` is what the avatar stack and its
-      // `+N` read (GEO-2691), and leaving it unset would fall back to the length of the capped
-      // preview and silently drop the overflow: 5 people behind 2 faces would render no "+3".
-      present_count: choice?.participant_count ?? 0,
-      participants: choice?.participants ?? [],
-    };
-  });
 }
 
 type SpaceTopicFiltersProps = {

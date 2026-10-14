@@ -5,7 +5,8 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbyView } from '../api';
+import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbySummary, DebateLobbyView } from '../api';
+import { rememberLastPageOutsideDebates } from '../debate-return-navigation';
 
 const mocks = vi.hoisted(() => ({
   phone: false,
@@ -14,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   /** The member read failed for good, after its warm-up retries. */
   memberError: false,
   memberRefetch: vi.fn(),
+  /** The member view was read since the page mounted, rather than served from the cache. */
+  memberFresh: true,
   guestView: undefined as DebateLobbyGuestView | undefined,
   presenceStatus: 'idle',
   start: vi.fn(),
@@ -32,6 +35,18 @@ const mocks = vi.hoisted(() => ({
   /** When the guest view was last read; `refetchGuestView` moves it to now. */
   guestViewAt: 0,
   refetchGuestView: vi.fn(),
+  /** The signed-in lobbies list. */
+  lobbies: [] as DebateLobbySummary[],
+  userId: null as string | null,
+  /** Whether the page asked for the account prompt, render by render (GEO-3270). */
+  signInPrompt: [] as boolean[],
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: mocks.replace }),
+  usePathname: () => '/debate/lobby-1',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
@@ -59,7 +74,12 @@ vi.mock('../matchmaking/hub-header-controls', () => ({
 }));
 vi.mock('./hooks', () => ({
   MAX_TIMEOUT_MS: 2_147_483_647,
-  useDebateLobby: () => ({ data: mocks.memberLobby, isError: mocks.memberError, refetch: mocks.memberRefetch }),
+  useDebateLobby: () => ({
+    data: mocks.memberLobby,
+    isError: mocks.memberError,
+    refetch: mocks.memberRefetch,
+    isFetchedAfterMount: mocks.memberFresh,
+  }),
   useLobbyPresence: (_id: string, admitted: boolean) => {
     mocks.presenceAdmitted.push(admitted);
     return {
@@ -73,6 +93,9 @@ vi.mock('./hooks', () => ({
     };
   },
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false }),
+  useLobbyReminderError: () => null,
+  useRefetchAtOpening: vi.fn(),
+  useDebateLobbies: (enabled: boolean) => ({ data: enabled ? { lobbies: mocks.lobbies } : undefined }),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
 }));
 vi.mock('./lobby-guest-hooks', async importOriginal => ({
@@ -147,9 +170,12 @@ vi.mock('./lobby-queued-request', () => ({
     dismissOutcome: vi.fn(),
   }),
 }));
-vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn() }));
+vi.mock('./lobby-guest-sign-in', () => ({
+  useLobbyGuestSignIn: () => vi.fn(),
+  useLobbySignInPrompt: (_lobbyId: string, open: boolean) => void mocks.signInPrompt.push(open),
+}));
 vi.mock('../matchmaking/hooks', () => ({ useMatchmakingScope: vi.fn() }));
-vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => null }));
+vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.userId }));
 
 const { DebateLobbyPage, memberPath } = await import('./lobby-page');
 const { readGuestSecret } = await import('./lobby-guest-secret');
@@ -202,6 +228,7 @@ beforeEach(() => {
   mocks.memberLobby = undefined;
   mocks.memberError = false;
   mocks.memberRefetch.mockReset();
+  mocks.memberFresh = true;
   mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
   mocks.presenceStatus = 'idle';
   mocks.onAudible = null;
@@ -209,6 +236,9 @@ beforeEach(() => {
   mocks.presenceAdmitted = [];
   mocks.activityEnabled = [];
   mocks.guestViewAt = 0;
+  mocks.lobbies = [];
+  mocks.userId = null;
+  mocks.signInPrompt = [];
   mocks.refetchGuestView.mockReset().mockImplementation(async () => {
     mocks.guestViewAt = Date.now() + 1;
   });
@@ -229,6 +259,7 @@ beforeEach(() => {
   });
   mocks.heartbeat.mockReset().mockResolvedValue({ alive: true, reason: null, lease_expires_at: 'x' });
   mocks.leave.mockClear();
+  mocks.replace.mockReset();
 });
 
 afterEach(() => {
@@ -263,6 +294,27 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     expect(await screen.findByText('A host removed you from this lobby.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
     expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
+    // Removed before this visit: the page says so rather than sending them away.
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('leaves to the page the lobby was opened from', () => {
+    rememberLastPageOutsideDebates('/space/s1/e1?tab=debates');
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByRole('link', { name: 'Leave lobby' })).toHaveAttribute('href', '/space/s1/e1?tab=debates');
+  });
+
+  it('goes back to the page it came from when a host removes it while listening', async () => {
+    rememberLastPageOutsideDebates('/space/s1/e1');
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByText('You’re listening.');
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'removed', lease_expires_at: null });
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    vi.useRealTimers();
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/s1/e1'));
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('A host removed you from this lobby.')).not.toBeInTheDocument();
   });
 
   // geo-chat's upgrade order: join (ends the guest), member token, member room up, then guest room down.
@@ -524,13 +576,45 @@ describe('DebateLobbyPage when guests are turned off mid-session', () => {
     expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
   });
 
-  it('shows the closed lobby instead when the lobby itself ended', async () => {
+  it('leaves, without flashing the closed card, when the lobby itself ended', async () => {
     const { rerender } = await endSession();
     mocks.guestView = { ...mocks.guestView!, lobby: { ...lobbyFields, access: { status: 'closed', reason: 'ended' } } };
     rerender(<DebateLobbyPage lobbyId="lobby1" />);
 
-    expect(await screen.findByText('This lobby has ended.')).toBeInTheDocument();
+    // Blank in the same render that sees the end, so the card never paints.
+    expect(screen.getByTestId('lobby-exiting')).toBeInTheDocument();
+    expect(screen.queryByText('This lobby has ended')).not.toBeInTheDocument();
     expect(screen.queryByText(/has been turned off/)).not.toBeInTheDocument();
+    // Ended while they were in it, opened straight from a link: back to Explore.
+    expect(mocks.replace).toHaveBeenCalledWith('/explore');
+  });
+});
+
+// GEO-3270. Only where the guest banner is there to open it again.
+describe('DebateLobbyPage account prompt', () => {
+  it('asks for it for a visitor in an open lobby', () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.signInPrompt.at(-1)).toBe(true);
+  });
+
+  it('asks for it for a visitor before the lobby opens', () => {
+    mocks.guestView = {
+      ...mocks.guestView!,
+      lobby: { ...lobbyFields, access: { status: 'not_yet_open', opens_at: '2099-10-06T17:50:00Z' } },
+    };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.signInPrompt.at(-1)).toBe(true);
+  });
+
+  it('does not ask for an ended lobby or a signed-in viewer', () => {
+    mocks.guestView = { ...mocks.guestView!, lobby: { ...lobbyFields, access: { status: 'closed', reason: 'ended' } } };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    cleanup();
+    mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
+    mocks.authenticated = true;
+    mocks.memberLobby = memberView;
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.signInPrompt.every(open => !open)).toBe(true);
   });
 });
 
@@ -593,6 +677,9 @@ describe('DebateLobbyPage guest banner', () => {
 
 // The banner follows the guest room's own connection, not whether a token exists.
 describe('DebateLobbyPage banner and the guest room connection', () => {
+  // The room can show before the heartbeat effect runs; a removal sent then finds no `checkNow` target.
+  const heartbeatArmed = () => act(async () => {});
+
   const states = (connected: boolean) => ({ speaking: new Set<string>(), micOn: new Set<string>(), connected });
 
   it('invites while connecting, says listening once connected, and stops when it fails or drops', async () => {
@@ -614,6 +701,7 @@ describe('DebateLobbyPage banner and the guest room connection', () => {
   it('a removed room asks the session at once; superseded steps aside', async () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
     await screen.findByTestId('guest-room');
+    await heartbeatArmed();
     expect(mocks.heartbeat).not.toHaveBeenCalled();
 
     mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'superseded', lease_expires_at: null });
@@ -626,8 +714,166 @@ describe('DebateLobbyPage banner and the guest room connection', () => {
   it('a removed room whose session is still this tab’s reconnects on the same secret', async () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
     await screen.findByTestId('guest-room');
+    await heartbeatArmed();
     act(() => mocks.onGuestRemoved?.());
     await waitFor(() => expect(mocks.start).toHaveBeenCalledTimes(2));
     expect(mocks.start).toHaveBeenLastCalledWith('lobby1', { guest_secret: 'secret-1' });
+  });
+});
+
+describe('DebateLobbyPage state screens', () => {
+  it('shows the ended card, not a redirect, when a cached open lobby turns out to have ended', () => {
+    mocks.authenticated = true;
+    mocks.userId = 'adam';
+    mocks.memberFresh = false;
+    mocks.memberLobby = memberView;
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    mocks.memberFresh = true;
+    mocks.memberLobby = { ...memberView, access: { status: 'closed', reason: 'ended' } };
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('heading', { name: 'This lobby has ended' })).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  const adamPerson = { user_id: 'adam', profile_space_id: 'space-adam', display_name: 'Adam', avatar_cid: null };
+  const listed = (overrides: Partial<DebateLobbySummary>): DebateLobbySummary => ({
+    lobby_id: 'lobby1',
+    name: 'Onboarding with Adam',
+    scheduled: true,
+    starts_at: '2099-10-06T18:00:00Z',
+    opens_at: '2099-10-06T17:50:00Z',
+    open: false,
+    hosts: [adamPerson],
+    headcount: 0,
+    avatars: [],
+    debating_count: 0,
+    reminder_count: 0,
+    viewer_reminded: false,
+    viewer_on_roster: false,
+    ...overrides,
+  });
+  const notYetOpen = {
+    ...lobbyFields,
+    scheduled: true,
+    starts_at: '2099-10-06T18:00:00Z',
+    opens_at: '2099-10-06T17:50:00Z',
+    access: { status: 'not_yet_open' as const, opens_at: '2099-10-06T17:50:00Z' },
+    members: [],
+    reminder_count: 3,
+  };
+
+  it('tells a visitor before opening that they can listen once it opens', () => {
+    mocks.guestView = { lobby: notYetOpen, claims: null, highlights: null };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByText('Debate lobby · scheduled')).toBeInTheDocument();
+    expect(screen.getByText(/^Opens at .* · in \d+ days$/)).toBeInTheDocument();
+    expect(screen.getByText('No account? You can still join and listen when it opens.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'RSVP' })).not.toBeInTheDocument();
+    // Without the view's hosts (older geo-chat) a visitor gets no host line: the list is members only.
+    expect(screen.queryByText(/Hosted by/)).not.toBeInTheDocument();
+  });
+
+  it('names the host to a visitor from the view’s hosts', () => {
+    mocks.guestView = { lobby: { ...notYetOpen, hosts: [adamPerson] }, claims: null, highlights: null };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByText('Hosted by Adam')).toBeInTheDocument();
+  });
+
+  it('says the account is setting up for a guest who signs in before it opens', () => {
+    mocks.guestView = { lobby: notYetOpen, claims: null, highlights: null };
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    mocks.authenticated = true;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByText('Setting up your account…')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Create account' })).not.toBeInTheDocument();
+  });
+
+  it('names the host from the lobbies list before it opens', () => {
+    mocks.authenticated = true;
+    mocks.memberLobby = { ...memberView, ...notYetOpen, viewer: { ...memberView.viewer, connected: false } };
+    mocks.lobbies = [listed({})];
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByText('Hosted by Adam')).toBeInTheDocument();
+    expect(screen.getByText('3 going')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
+    expect(screen.queryByText(/No account/)).not.toBeInTheDocument();
+  });
+
+  it('points an ended lobby at the host’s next one, with RSVP', () => {
+    mocks.authenticated = true;
+    mocks.memberLobby = { ...memberView, access: { status: 'closed', reason: 'ended' }, members: [] };
+    mocks.lobbies = [listed({ lobby_id: 'next', name: 'Tuesday debate hour' })];
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('heading', { name: 'This lobby has ended' })).toBeInTheDocument();
+    expect(screen.getByText(/^Adam’s next lobby: Tuesday debate hour, .+\.$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Find a debate' })).toBeInTheDocument();
+  });
+
+  it('shows an ended lobby with only Find a debate when the host has nothing next', () => {
+    mocks.authenticated = true;
+    mocks.memberLobby = { ...memberView, access: { status: 'closed', reason: 'ended' }, members: [] };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.queryByText(/next lobby/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'RSVP' })).not.toBeInTheDocument();
+  });
+
+  it('titles the banned card', () => {
+    mocks.authenticated = true;
+    mocks.memberLobby = { ...memberView, access: { status: 'banned' }, members: [] };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('heading', { name: 'You can’t join this lobby' })).toBeInTheDocument();
+    expect(screen.getByText('A host has blocked you from Onboarding with Adam.')).toBeInTheDocument();
+  });
+
+  it('shows the first one in an empty lobby what to do, with the next lobby and the People tab', () => {
+    mocks.authenticated = true;
+    mocks.userId = 'adam';
+    mocks.presenceStatus = 'joined';
+    mocks.memberLobby = { ...memberView, guest_count: 0 };
+    mocks.lobbies = [listed({ lobby_id: 'next', name: 'Tuesday debate hour' })];
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    const empty = screen.getByTestId('lobby-empty-room');
+    expect(empty).toHaveTextContent('Nobody’s here right now.');
+    expect(empty).toHaveTextContent('Tuesday debate hour');
+    expect(screen.getByRole('link', { name: 'See who’s free this week' })).toHaveAttribute(
+      'href',
+      expect.stringContaining('modalTarget=people')
+    );
+  });
+
+  it('shows a listening guest the empty state only when no other guest is in', async () => {
+    mocks.guestView = { lobby: { ...lobbyFields, members: [], guest_count: 1 }, claims: null, highlights: null };
+    const { unmount } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    expect(screen.getByTestId('lobby-empty-room')).toBeInTheDocument();
+    unmount();
+
+    mocks.guestView = { lobby: { ...lobbyFields, members: [], guest_count: 3 }, claims: null, highlights: null };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByTestId('guest-room');
+    expect(screen.queryByTestId('lobby-empty-room')).not.toBeInTheDocument();
+  });
+
+  it('shows no empty state once someone else is in', () => {
+    mocks.authenticated = true;
+    mocks.userId = 'priya';
+    mocks.presenceStatus = 'joined';
+    mocks.memberLobby = { ...memberView, guest_count: 0 };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.queryByTestId('lobby-empty-room')).not.toBeInTheDocument();
   });
 });

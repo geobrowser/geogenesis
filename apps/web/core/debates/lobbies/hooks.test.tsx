@@ -24,14 +24,16 @@ vi.mock('~/core/analytics', async importOriginal => ({
 
 vi.mock('../api', async importOriginal => ({ ...(await importOriginal<typeof import('../api')>()), ...api }));
 
+const auth = vi.hoisted(() => ({ authenticated: true, accountKey: 'acct' as string | null }));
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
+  useGeoChatAuth: () => ({ ready: true, ...auth, getPrivyIdentityToken: vi.fn() }),
 }));
 
 const { GeoChatRequestError } = await import('../api');
 const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useLobbyPresence } = await import('./hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
+const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
 const { lobbyDebateSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
 
@@ -551,6 +553,49 @@ describe('useDebateLobby', () => {
   });
 });
 
+describe('useDebateLobby and claim lists (GEO-3274)', () => {
+  // A refetch that read the lobby before a list event landed must not put the older lists back.
+  it('keeps lists an event laid over the cache while its GET was in flight', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ['debates', 'account', 'acct', 'lobby', 'lobby1'];
+    const list = (entityId: string) => ({
+      entity_id: entityId,
+      space_id: 's1',
+      position: 0,
+      added_by: null,
+      added_at: '2026-10-13T12:00:00Z',
+    });
+    client.setQueryData(key, { ...view(false), claim_lists: [], claim_lists_as_of: '2026-10-13T12:00:01Z' });
+    let respond: (value: DebateLobbyView) => void = () => undefined;
+    api.getDebateLobby.mockImplementationOnce(() => new Promise<DebateLobbyView>(done => (respond = done)));
+
+    const { result } = renderHook(() => useDebateLobby('lobby1'), {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    await waitFor(() => expect(api.getDebateLobby).toHaveBeenCalledTimes(1));
+
+    // The event, as the gateway lays it over the cache.
+    act(() => {
+      client.setQueryData<DebateLobbyView>(key, current =>
+        current
+          ? withLobbyClaimLists(current, {
+              lobby_id: 'lobby1',
+              as_of: '2026-10-13T12:00:03Z',
+              claim_lists: [list('newer')],
+            })
+          : current
+      );
+    });
+    // The GET read the lobby in between: newer than the cache it started on, older than the event.
+    await act(async () => {
+      respond({ ...view(false), claim_lists: [list('older')], claim_lists_as_of: '2026-10-13T12:00:02Z' });
+    });
+
+    await waitFor(() => expect(result.current.isFetching).toBe(false));
+    expect(result.current.data?.claim_lists?.map(row => row.entity_id)).toEqual(['newer']);
+  });
+});
+
 // GEO-3134: geo-chat refuses a removed member's join with 409 lobby_removed unless it says `rejoin`.
 describe('useLobbyPresence after a host removed the viewer', () => {
   const removed = () => new GeoChatRequestError('raw', 'lobby_removed', 409);
@@ -641,6 +686,27 @@ it('moves a ban this tab heard to the removed screen once unbanned, and Rejoin c
   expect(result.current.state.status).toBe('joined');
 });
 
+// Copilot on #2836 asked for the list to be hidden once signed out. It already is: the key carries
+// the account, which Privy clears with the session, so a signed-out read is a different, empty entry.
+it('shows no lobbies once the viewer signs out', async () => {
+  api.listDebateLobbies.mockResolvedValue({ lobbies: [{ lobby_id: 'members-only' }] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  try {
+    const { result, rerender } = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(result.current.data?.lobbies).toHaveLength(1));
+
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    rerender();
+    expect(result.current.data).toBeUndefined();
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+  }
+});
+
 // Card patches stop while the panel is closed, so a reopen inside the stale window still reloads.
 it('reloads the lobbies list on every mount', async () => {
   api.listDebateLobbies.mockResolvedValue({ lobbies: [] });
@@ -655,6 +721,29 @@ it('reloads the lobbies list on every mount', async () => {
 
   renderHook(() => useDebateLobbies(), { wrapper: shared });
   await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
+});
+
+it('with a staleTime, reloads the lobbies list on mount only once it is that old', async () => {
+  api.listDebateLobbies.mockResolvedValue({ lobbies: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const shared = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const useListed = () => useDebateLobbies(true, { staleTime: 60_000 });
+
+  const first = renderHook(useListed, { wrapper: shared });
+  await waitFor(() => expect(first.result.current.isSuccess).toBe(true));
+  first.unmount();
+  const second = renderHook(useListed, { wrapper: shared });
+  expect(second.result.current.isSuccess).toBe(true);
+  second.unmount();
+  expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
+
+  const now = Date.now();
+  const spy = vi.spyOn(Date, 'now').mockReturnValue(now + 61_000);
+  renderHook(useListed, { wrapper: shared });
+  await waitFor(() => expect(api.listDebateLobbies).toHaveBeenCalledTimes(2));
+  spy.mockRestore();
 });
 
 describe('lobby analytics through useLobbyPresence', () => {
