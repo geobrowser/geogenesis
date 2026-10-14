@@ -46,6 +46,11 @@ export type LocalAudioGateInput = {
   stillSpeaking: boolean;
   /** Milliseconds until this participant's turn opens, or null if it is not next. */
   msUntilTurnStarts: number | null;
+  /**
+   * Open rounds is between two rounds: both are picking Extend or End, or the result, count-in or a
+   * required round's lead-in is up. Nobody holds a turn, so both debaters can talk.
+   */
+  betweenRounds: boolean;
 };
 
 /**
@@ -63,6 +68,7 @@ export function shouldEnableLocalAudio({
   msSinceTurnEnded,
   stillSpeaking,
   msUntilTurnStarts,
+  betweenRounds,
 }: LocalAudioGateInput): boolean {
   if (audioMuted || !effectiveStatus || !localSlot) return false;
   // The intro is an open two-way call; turn-taking starts with the debate. Load-bearing: the turn
@@ -72,6 +78,7 @@ export function shouldEnableLocalAudio({
   if (effectiveStatus !== 'in_progress') return false;
 
   if (activeSlot === localSlot) return true;
+  if (betweenRounds) return true;
   // Past the buzzer: hold only while they are genuinely still talking, and never past the cap.
   // Someone who stopped on time keeps the clean cut they always had — no dead air is added.
   if (stillSpeaking && msSinceTurnEnded !== null && msSinceTurnEnded < MIC_OVERRUN_MAX_MS) return true;

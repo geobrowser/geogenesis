@@ -10,6 +10,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate } from '~/core/debates/api';
 import { DebatePlaybackGate } from '~/core/debates/debate-playback-gate';
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
+import { InsideMobileSheet } from '~/core/state/mobile-sheet-cover';
+import { lockMobileSheetDocumentOverscroll } from '~/core/utils/mobile-sheet-drag';
 import { NavUtils } from '~/core/utils/utils';
 
 import { DebateExploreFeedCard } from './debate-explore-feed-card';
@@ -34,12 +36,16 @@ const mocks = vi.hoisted(() => ({
   endCardVote: vi.fn(),
   endCardReplay: vi.fn(),
   portalledClick: vi.fn(),
+  isMobileLayout: false,
 }));
+
+vi.mock('~/core/hooks/use-is-mobile-layout', () => ({ useIsMobileLayout: () => mocks.isMobileLayout }));
 
 type ObserverRecord = {
   callback: IntersectionObserverCallback;
   elements: Set<Element>;
   instance: IntersectionObserver;
+  options?: IntersectionObserverInit;
 };
 
 let observers: ObserverRecord[] = [];
@@ -79,10 +85,12 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
     DebateFeedPlayer: ({
       debate,
       active,
+      releaseMedia,
       reducedOverlays,
     }: {
       debate: Debate;
       active: boolean;
+      releaseMedia?: boolean;
       reducedOverlays?: boolean;
     }) => (
       <>
@@ -91,6 +99,7 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
           data-testid="player"
           data-debate={debate.id}
           data-active={active}
+          data-release-media={releaseMedia ? 'true' : 'false'}
           data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
           onClick={mocks.playerToggle}
         />
@@ -211,6 +220,7 @@ beforeEach(() => {
   mocks.debateQuery = { data: undefined, isError: false };
   mocks.mediaQuery = { data: undefined, isError: false };
   mocks.withEndCard = false;
+  mocks.isMobileLayout = false;
 
   class MockIntersectionObserver implements IntersectionObserver {
     readonly root = null;
@@ -219,8 +229,8 @@ beforeEach(() => {
     readonly thresholds = [0.6];
     private readonly record: ObserverRecord;
 
-    constructor(callback: IntersectionObserverCallback) {
-      this.record = { callback, elements: new Set(), instance: this };
+    constructor(callback: IntersectionObserverCallback, options?: IntersectionObserverInit) {
+      this.record = { callback, elements: new Set(), instance: this, options };
       observers.push(this.record);
     }
 
@@ -253,6 +263,23 @@ afterEach(() => {
 function intersectAll(ratio: number) {
   act(() => {
     for (const record of observers) {
+      for (const element of record.elements) {
+        record.callback(
+          [{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
+          record.instance
+        );
+      }
+    }
+  });
+}
+
+/**
+ * Only the card's own on-screen observer, leaving the near-viewport window (`rootMargin`) where it
+ * is: a card scrolled just off screen is still in the look-ahead band and keeps its player mounted.
+ */
+function intersectOnScreen(ratio: number) {
+  act(() => {
+    for (const record of observers.filter(candidate => !candidate.options?.rootMargin)) {
       for (const element of record.elements) {
         record.callback(
           [{ target: element, isIntersecting: ratio > 0, intersectionRatio: ratio } as IntersectionObserverEntry],
@@ -381,6 +408,126 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.4);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  describe('releasing media nobody can see', () => {
+    function renderOnScreen() {
+      mocks.debateQuery = { data: watchableDebate(), isError: false };
+      mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+      renderCard();
+      intersectAll(0.7);
+      return () => screen.getByTestId('player').getAttribute('data-release-media');
+    }
+
+    it('detaches the recordings behind an open sheet and reattaches them when it closes', () => {
+      const releaseMedia = renderOnScreen();
+      expect(releaseMedia()).toBe('false');
+
+      let closeSheet = () => {};
+      act(() => {
+        closeSheet = lockMobileSheetDocumentOverscroll();
+      });
+      try {
+        expect(releaseMedia()).toBe('true');
+      } finally {
+        act(() => closeSheet());
+      }
+      expect(releaseMedia()).toBe('false');
+    });
+
+    it('detaches a card inside a sheet once another sheet opens on top of it', () => {
+      const profilePanel = Symbol('profile panel');
+      const rankingSheet = Symbol('ranking sheet');
+      mocks.debateQuery = { data: watchableDebate(), isError: false };
+      mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+      render(
+        <InsideMobileSheet sheet={profilePanel}>
+          <CardHarness props={{}} />
+        </InsideMobileSheet>
+      );
+      intersectAll(0.7);
+      const releaseMedia = () => screen.getByTestId('player').getAttribute('data-release-media');
+
+      const closes: (() => void)[] = [];
+      try {
+        act(() => {
+          closes.push(lockMobileSheetDocumentOverscroll(profilePanel));
+        });
+        expect(releaseMedia()).toBe('false');
+
+        act(() => {
+          closes.push(lockMobileSheetDocumentOverscroll(rankingSheet));
+        });
+        expect(releaseMedia()).toBe('true');
+
+        act(() => closes.pop()?.());
+        expect(releaseMedia()).toBe('false');
+      } finally {
+        act(() => closes.forEach(close => close()));
+      }
+    });
+
+    it('on a phone, detaches a card scrolled off screen while it waits in the look-ahead band', () => {
+      mocks.isMobileLayout = true;
+      const releaseMedia = renderOnScreen();
+      expect(releaseMedia()).toBe('false');
+
+      intersectOnScreen(0);
+      // Still mounted, URLs kept, but no decoder or buffered media.
+      expect(releaseMedia()).toBe('true');
+
+      intersectOnScreen(0.2);
+      expect(releaseMedia()).toBe('false');
+    });
+
+    it('keeps an off-screen card loaded on desktop, where the look-ahead keeps the next card instant', () => {
+      const releaseMedia = renderOnScreen();
+
+      intersectOnScreen(0);
+      expect(releaseMedia()).toBe('false');
+    });
+  });
+
+  describe('while a mobile sheet is open over the feed', () => {
+    function renderPlaying(wrap?: (card: React.ReactElement) => React.ReactElement) {
+      mocks.debateQuery = { data: watchableDebate(), isError: false };
+      mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+      const card = <CardHarness props={{}} />;
+      render(wrap ? wrap(card) : card);
+      intersectAll(0.7);
+      return () => screen.getByTestId('player').getAttribute('data-active');
+    }
+
+    it('pauses the cards behind the sheet and resumes them when it closes', () => {
+      const playerActive = renderPlaying();
+      expect(playerActive()).toBe('true');
+
+      let closeSheet = () => {};
+      act(() => {
+        closeSheet = lockMobileSheetDocumentOverscroll();
+      });
+      try {
+        expect(playerActive()).toBe('false');
+      } finally {
+        act(() => closeSheet());
+      }
+      expect(playerActive()).toBe('true');
+    });
+
+    it('keeps playing a card inside the sheet, like a profile Activity gallery', () => {
+      const sheet = Symbol('sheet');
+      const playerActive = renderPlaying(card => <InsideMobileSheet sheet={sheet}>{card}</InsideMobileSheet>);
+
+      let closeSheet = () => {};
+      act(() => {
+        closeSheet = lockMobileSheetDocumentOverscroll(sheet);
+      });
+      try {
+        expect(playerActive()).toBe('true');
+      } finally {
+        act(() => closeSheet());
+      }
+    });
   });
 
   it('requests playback before a player interaction', () => {

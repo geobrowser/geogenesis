@@ -59,6 +59,7 @@ import type {
 } from '../api';
 import { useGeoChatAuth } from '../hooks';
 import { hubCardMotion } from './hub-motion';
+import { useHubScrollSelector } from './hub-scroll';
 
 type Props = {
   claim: DebateClaimSummary;
@@ -218,7 +219,8 @@ export function MatchmakingClaimCard({
   // more cards at a time and previously did no response reads at all, mounting them eagerly is
   // sixty requests for claims nobody has scrolled to. `ClaimExploreFeedCard` gates its reads for
   // exactly this reason; the shared card had not caught up.
-  const { ref: viewportRef, nearViewport } = useNearViewport();
+  const hubScrollSelector = useHubScrollSelector();
+  const { ref: viewportRef, nearViewport } = useNearViewport({ rootSelector: hubScrollSelector });
 
   // A batch is the exception, and must not be deferred. `ClaimResponseBatchBoundary` primes these
   // very keys from one request for the whole page, so there is nothing per-card left to save — and

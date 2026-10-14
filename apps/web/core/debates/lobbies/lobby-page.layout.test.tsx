@@ -75,7 +75,13 @@ vi.mock('./lobby-voice', async () => {
     ),
   };
 });
-vi.mock('./lobby-claims-area', () => ({ LobbyClaimsArea: () => <div data-testid="claims" /> }));
+// Reports the scroll root its lists' observers would be handed, which is all the page decides.
+vi.mock('./lobby-claims-area', async () => {
+  const { useHubScrollSelector } = await import('../matchmaking/hub-scroll');
+  return {
+    LobbyClaimsArea: () => <div data-testid="claims" data-scroll-root={useHubScrollSelector() ?? 'viewport'} />,
+  };
+});
 vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: undefined }) }));
 vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn(), useLobbySignInPrompt: vi.fn() }));
 vi.mock('./lobby-highlights-hooks', () => ({
@@ -205,9 +211,49 @@ describe('DebateLobbyPage layout on desktop', () => {
     fireEvent.click(within(header).getByRole('button', { name: 'Raised hands · 1' }));
     expect(screen.getByTestId('host-lists')).toBeInTheDocument();
   });
+  it('scrolls the people and the claims each on their own, under a fixed header and bar', () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByTestId('debate-lobby')).toHaveClass('h-[calc(100dvh-2.75rem)]');
+    expect(screen.getByRole('region', { name: 'People in the lobby' })).toHaveClass('overflow-y-auto');
+    const claims = screen.getByRole('complementary', { name: 'Claims in the room' });
+    expect(claims).toHaveClass('overflow-y-auto');
+    // The Claims tab's paging sentinel and the cards measure against the column through this.
+    expect(claims).toHaveAttribute('data-debates-hub-scroll');
+  });
+});
+
+describe('DebateLobbyPage across the phone breakpoint', () => {
+  // The claims stay mounted when a window is resized or a tablet rotated across it, so their
+  // observers only measure against the right box if the selector they are handed changes with it.
+  it('hands the claims lists the column while it scrolls, and the viewport once it does not', () => {
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+    const claims = screen.getByTestId('claims');
+    expect(claims).toHaveAttribute('data-scroll-root', '[data-debates-hub-scroll]');
+
+    mocks.phone = true;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByTestId('claims')).toBe(claims);
+    expect(claims).toHaveAttribute('data-scroll-root', 'viewport');
+
+    mocks.phone = false;
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(claims).toHaveAttribute('data-scroll-root', '[data-debates-hub-scroll]');
+  });
 });
 
 describe('DebateLobbyPage layout on a phone', () => {
+  it('scrolls the page, with no scroll box for the lists to measure against', () => {
+    mocks.phone = true;
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByTestId('debate-lobby')).toHaveClass('min-h-[calc(100dvh-2.75rem)]');
+    fireEvent.click(screen.getByRole('tab', { name: 'Claims' }));
+    const claims = screen.getByRole('tabpanel', { name: 'Claims' });
+    expect(claims).not.toHaveClass('overflow-y-auto');
+    expect(claims).not.toHaveAttribute('data-debates-hub-scroll');
+  });
+
   it('switches People and Claims tabs, keeping both mounted, with availability in the bar', () => {
     mocks.phone = true;
     render(<DebateLobbyPage lobbyId="lobby1" />);
