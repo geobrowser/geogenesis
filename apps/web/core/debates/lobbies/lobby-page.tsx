@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -105,6 +106,8 @@ const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_STATE_COPY.f
  * A guest who signs in stays a guest until the member view loads, so audio never drops.
  */
 export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
+  // The lobby wants the width; the browse sidebar opens collapsed here and as it was elsewhere.
+  useBrowseSidebarPageDefault(false);
   const { ready, authenticated } = useGeoChatAuth();
   const signedOut = ready && !authenticated;
   const lobbyQuery = useDebateLobby(lobbyId);
