@@ -9,6 +9,7 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
+import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
@@ -35,9 +36,10 @@ import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
 import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
+import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
-import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
+import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
@@ -349,6 +351,9 @@ export function DebateFeedPlayer({
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
+  // The agreed stamps design (GEO-3277, GEO-3314, GEO-3316, GEO-3317) is Open rounds only for now.
+  const stamped = isOpenRoundsDebate(debate);
+
   const ticker = useDebateClaimTicker(debate, {
     playheadMs: playheadSeconds * 1000,
     timelineMs: timelineSeconds * 1000,
@@ -490,6 +495,8 @@ export function DebateFeedPlayer({
 
   /** The same condition the stack is given, so the corner's box can cap itself only when open. */
   const claimsOpenFor = (slot: number) => {
+    // An Open rounds counter opens its own list; the corner keeps its live width.
+    if (stamped) return false;
     // A backlog opened on purpose stays open, and a claim arriving lands at the bottom of it —
     // that is the whole point of having opened it. Same for a keyboard that has tabbed into it.
     if (pinnedSlot === slot || focusedSlot === slot) return true;
@@ -518,7 +525,8 @@ export function DebateFeedPlayer({
    * leave the corner stuck open behind them.
    */
   const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
-    if (event.pointerType !== 'mouse') return;
+    // An Open rounds counter answers to the pointer on itself, not the tile.
+    if (stamped || event.pointerType !== 'mouse') return;
     const clearSlot = (current: number | null) => (current === slot ? null : current);
 
     if (!hovered) {
@@ -560,6 +568,8 @@ export function DebateFeedPlayer({
   const stackShownFor = (slot: number) => {
     if (reducedOverlays) return false;
     if (playbackEnded) return false;
+    // An Open rounds counter shows from the start, at 0.
+    if (stamped) return true;
     return (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0 || (ticker.historyBySlot.get(slot)?.length ?? 0) > 0;
   };
 
@@ -594,6 +604,20 @@ export function DebateFeedPlayer({
     const cards = ticker.cardsBySlot.get(slot) ?? [];
     const history = ticker.historyBySlot.get(slot) ?? [];
     if (!stackShownFor(slot)) return null;
+
+    if (stamped) {
+      return (
+        <DebateClaimCounter
+          history={history}
+          playheadMs={playheadMs}
+          name={breakNames[slot as 1 | 2]}
+          rowsByClaimId={ticker.rowsByClaimId}
+          entitiesByClaimId={ticker.entitiesByClaimId}
+          onAnswered={ticker.onAnswered}
+          onSeeAll={onOpenClaims}
+        />
+      );
+    }
 
     const pinned = pinnedSlot === slot;
     const clearSlot = (current: number | null) => (current === slot ? null : current);
@@ -692,7 +716,8 @@ export function DebateFeedPlayer({
           cardYield={Math.max(roundCard?.opacity ?? 0, bannerYield)}
           // The claim corner yields to the break's banner only, which is Open rounds only. The round
           // card plays in every format and leaves the corner as it always has.
-          claimsYield={bannerYield}
+          claimsYield={Math.max(bannerYield, stamped ? (roundCard?.opacity ?? 0) : 0)}
+          stamped={stamped}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
@@ -763,6 +788,7 @@ export function DebateFeedPlayer({
           onToggle={toggleFromVideo}
           claims={claimsFor(2)}
           claimsOpen={claimsOpenFor(2)}
+          stamped={stamped}
           onClaimsHoverChange={onTileHover(2)}
           // This is the half the scrubber sits in, so its claim corner is the one that has to lift
           // clear of the bar.
@@ -850,7 +876,7 @@ export function DebateFeedPlayer({
             </span>
           )}
 
-        <DebateRoundCard cue={roundCard} />
+        {stamped ? <DebateRoundBanner cue={roundCard} /> : <DebateRoundCard cue={roundCard} />}
         {!endCardShown && (
           <>
             <DebateBreakOverlay
@@ -962,6 +988,7 @@ function DebaterVideo({
   scrubber,
   scrimClassName = 'h-14',
   inert = false,
+  stamped = false,
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
@@ -985,6 +1012,8 @@ function DebaterVideo({
    * scrubber, the name's profile link — should take keyboard focus or be read out underneath it.
    */
   inert?: boolean;
+  /** Open rounds: the agreed stamps design for the timer's last ten seconds and the round tag. */
+  stamped?: boolean;
   /**
    * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
@@ -1322,8 +1351,15 @@ function DebaterVideo({
 
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
-      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
-      {countdown && <DebateRoundBadge cue={roundBadge ?? null} />}
+      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} buildUp={stamped} />}
+      {countdown && (
+        <DebateRoundBadge
+          cue={roundBadge ?? null}
+          stamped={stamped}
+          // Kept clear of the timer as it grows over a turn's last ten seconds.
+          rightPx={stamped ? TIMER_RIGHT_PX + TIMER_PX * turnTimerScale(countdown.seconds) + 8 : undefined}
+        />
+      )}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -1518,26 +1554,82 @@ function DebaterVideo({
   );
 }
 
-function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
+/** The turn timer's size and inset from the tile's corner, in px (`size-8`, `right-3`). */
+const TIMER_PX = 32;
+const TIMER_RIGHT_PX = 12;
+
+/**
+ * How large the turn timer is drawn, for an Open rounds debate's last ten seconds of a turn
+ * (GEO-3316): a step bigger with each second's pulse from 10 s, reaching 1.3x as 5 s arrives, then
+ * held there. 1 the rest of the time.
+ */
+export function turnTimerScale(seconds: number) {
+  if (seconds > 10) return 1;
+  if (seconds <= 5) return 1.3;
+  return 1 + (0.3 * Math.min(5, 11 - Math.ceil(seconds))) / 5;
+}
+
+function CountdownBadge({
+  seconds,
+  progress,
+  buildUp = false,
+}: {
+  seconds: number;
+  progress: number;
+  buildUp?: boolean;
+}) {
   // The ring shows time remaining, so it shrinks as the turn elapses rather than filling up.
   const remaining = 1 - Math.max(0, Math.min(1, progress));
-  const degrees = remaining * 360;
+  const whole = Math.ceil(seconds);
+  // Open rounds: from 10 s the timer pulses each second and grows; from 5 s it turns red, holds its
+  // size, and its rim drains over those five seconds with a ripple each second.
+  const counting = buildUp && seconds <= 10 && seconds > 0;
+  const final = counting && seconds <= 5;
+  const degrees = final ? (Math.max(0, seconds) / 5) * 360 : remaining * 360;
   return (
-    <div className="absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
-      <span
-        className="col-start-1 row-start-1 size-7 rounded-full"
-        style={{
-          backgroundImage: `conic-gradient(#ffffff ${degrees}deg, rgba(255,255,255,0.3) 0deg)`,
-          // Hollowed into a 2px ring so the badge's own translucent backing shows through the
-          // middle. The frame draws a stroked circle; a filled disc would print the number on a
-          // grey plate the design does not have.
-          maskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
-          WebkitMaskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
-        }}
-      />
-      <span className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums">
-        {Math.ceil(seconds)}
-      </span>
+    <div
+      data-turn-timer={final ? 'final' : counting ? 'building' : 'steady'}
+      className="absolute top-3 right-3 z-10 size-8 origin-top-right transition-[scale] duration-300 ease-out"
+      style={{ scale: buildUp ? turnTimerScale(seconds) : 1 }}
+    >
+      <div
+        // Re-mounted each second, which restarts its pulse.
+        key={counting ? whole : 'steady'}
+        className={cx(
+          'relative grid size-8 place-items-center rounded-full',
+          counting && 'motion-safe:animate-[turnTimerPulse_450ms_ease-out]',
+          final ? 'bg-red-01' : 'bg-linear-to-b from-black/50 to-black/25'
+        )}
+      >
+        {final && (
+          <span
+            aria-hidden
+            className="absolute inset-0 rounded-full ring-2 ring-red-01 motion-safe:animate-[turnTimerRipple_700ms_ease-out_both] motion-reduce:hidden"
+          />
+        )}
+        <span
+          className="col-start-1 row-start-1 size-7 rounded-full transition-[--turn-timer-rim] duration-300 ease-linear"
+          style={
+            {
+              '--turn-timer-rim': `${degrees}deg`,
+              backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)',
+              // Hollowed into a 2px ring so the badge's own translucent backing shows through the
+              // middle. The frame draws a stroked circle; a filled disc would print the number on a
+              // grey plate the design does not have.
+              maskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
+              WebkitMaskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
+            } as React.CSSProperties
+          }
+        />
+        <span
+          className={cx(
+            'col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none text-white tabular-nums',
+            final ? 'font-bold' : 'font-medium'
+          )}
+        >
+          {whole}
+        </span>
+      </div>
     </div>
   );
 }

@@ -7,7 +7,7 @@ import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-read
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
-import { DebateFeedPlayer } from './debate-feed-player';
+import { DebateFeedPlayer, turnTimerScale } from './debate-feed-player';
 
 const SPACE_1 = '11111111111111111111111111111111';
 const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
@@ -100,6 +100,14 @@ vi.mock('./debate-claim-ticker', () => ({
     );
   },
   ClaimScrubberMarkers: () => null,
+}));
+
+// The Open rounds counter has its own suite; here it stands in so the player's wiring is what is
+// under test: which corner each format draws, and what it is handed.
+vi.mock('./debate-claim-counter', () => ({
+  DebateClaimCounter: ({ history, name }: { history: unknown[]; name: string }) => (
+    <div data-testid="claim-counter" data-count={history.length} data-name={name} />
+  ),
 }));
 
 /**
@@ -2028,5 +2036,68 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
     expect(slot1.muted).toBe(false);
     expect(container.textContent).toContain('The round itself');
+  });
+});
+
+describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, GEO-3316, GEO-3317)', () => {
+  const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+  const at = (playheadSeconds: number) => controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds });
+
+  it('opens with the purple "Round 1 · Opening" banner instead of the round card', () => {
+    mocks.controller = at(0.5);
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    expect(container.querySelector('[data-round-banner]')?.getAttribute('data-round-banner')).toBe('Round 1 · Opening');
+    expect(container.querySelector('[data-round-card]')).toBeNull();
+  });
+
+  it('keeps the round card in a fixed-format debate', () => {
+    mocks.controller = at(0.5);
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+    expect(container.querySelector('[data-round-card]')).not.toBeNull();
+    expect(container.querySelector('[data-round-banner]')).toBeNull();
+  });
+
+  it('labels the round beside the timer as a purple tag', () => {
+    mocks.controller = at(12);
+    const open = render(<DebateFeedPlayer debate={openRounds} active />).container;
+    expect(open.querySelector('[data-round-badge]')?.className).toContain('bg-purple');
+
+    mocks.controller = at(12);
+    const fixed = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(fixed.querySelector('[data-round-badge]')?.className).not.toContain('bg-purple');
+  });
+
+  it('builds the timer up over a turn’s last ten seconds and turns it red for the last five', () => {
+    const timer = (secondsLeft: number, d: Debate) => {
+      mocks.controller = { ...at(12), turnState: { slot: 1, seconds: secondsLeft, progress: 0.5 } };
+      return render(<DebateFeedPlayer debate={d} active />).container.querySelector('[data-turn-timer]');
+    };
+    expect(timer(18, openRounds)?.getAttribute('data-turn-timer')).toBe('steady');
+    expect(timer(8, openRounds)?.getAttribute('data-turn-timer')).toBe('building');
+    expect(timer(4, openRounds)?.getAttribute('data-turn-timer')).toBe('final');
+    // A fixed format keeps today's timer.
+    expect(timer(4, debate)?.getAttribute('data-turn-timer')).toBe('steady');
+  });
+
+  it('draws a claim counter in each corner from the start, and the live cards only in a fixed format', () => {
+    mocks.controller = at(12);
+    const open = render(<DebateFeedPlayer debate={openRounds} active />).container;
+    expect(open.querySelectorAll('[data-testid="claim-counter"]')).toHaveLength(2);
+    expect(open.querySelector('[data-testid="claim-stack"]')).toBeNull();
+
+    mocks.controller = at(12);
+    const fixed = render(<DebateFeedPlayer debate={debate} active />).container;
+    expect(fixed.querySelector('[data-testid="claim-counter"]')).toBeNull();
+  });
+});
+
+describe('turnTimerScale', () => {
+  it('grows a step a second from 10 s, holds at 1.3x from 5 s, and is 1 otherwise', () => {
+    expect(turnTimerScale(20)).toBe(1);
+    expect(turnTimerScale(9.5)).toBeCloseTo(1.06);
+    // The fifth pulse, at 6 s, is the one that reaches the full size.
+    expect(turnTimerScale(6.2)).toBeCloseTo(1.24);
+    expect(turnTimerScale(5.5)).toBeCloseTo(1.3);
+    expect(turnTimerScale(3)).toBe(1.3);
   });
 });

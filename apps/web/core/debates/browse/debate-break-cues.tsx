@@ -166,10 +166,10 @@ const STAMP_CLASS =
 const STAMP_FONT = { fontFamily: 'var(--font-geist-bold)' } as const;
 
 /** The banners' and the question's type: the recording timer's Geist. */
-const LABEL_FONT = { fontFamily: 'var(--font-geist-medium)' } as const;
+export const LABEL_FONT = { fontFamily: 'var(--font-geist-medium)' } as const;
 
 /** A purple band across a box's width, the round and turn announcements. */
-const BANNER_CLASS =
+export const BANNER_CLASS =
   'w-full bg-purple px-4 py-[0.6em] text-center text-[5cqw] leading-none font-medium tracking-[0.04em] whitespace-nowrap text-white uppercase';
 
 /**

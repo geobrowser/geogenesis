@@ -447,6 +447,93 @@
   }
 }
 
+/* An Open rounds round banner that is not part of a break (the opening): rolls in over its first
+   300 ms, holds, and rolls on out over its last 300 ms. Run over 1800 ms, the round card's length. */
+@keyframes debateBannerInOut {
+  0% {
+    clip-path: inset(0 100% 0 0);
+    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+  }
+  16.7% {
+    clip-path: inset(0 0 0 0);
+  }
+  83.3% {
+    clip-path: inset(0 0 0 0);
+    animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.3);
+  }
+  100% {
+    clip-path: inset(0 0 0 100%);
+  }
+}
+
+/* "+1 claim" rising out of the claim counter: from tucked behind it at half size, up and out, a
+   beat at the top, then gone. */
+@keyframes claimPlusOne {
+  0% {
+    opacity: 0;
+    translate: 0 0;
+    scale: 0.55;
+  }
+  8% {
+    opacity: 1;
+  }
+  45% {
+    translate: 0 calc(-100% - 0.35rem);
+    scale: 1;
+  }
+  75% {
+    opacity: 1;
+    translate: 0 calc(-100% - 0.35rem);
+  }
+  100% {
+    opacity: 0;
+    translate: 0 calc(-100% - 0.35rem);
+    scale: 1;
+  }
+}
+
+/* The counter's bump as the +1 leaves it. */
+@keyframes claimCounterBump {
+  0%,
+  100% {
+    scale: 1;
+  }
+  45% {
+    scale: 1.22;
+  }
+}
+
+/* The turn timer's once-a-second swell over its last ten seconds, on top of its stepped size. */
+@keyframes turnTimerPulse {
+  0%,
+  100% {
+    scale: 1;
+  }
+  45% {
+    scale: 1.08;
+  }
+}
+
+/* The red ripple each second sends out over a turn's last five. */
+@keyframes turnTimerRipple {
+  from {
+    opacity: 0.75;
+    scale: 1;
+  }
+  to {
+    opacity: 0;
+    scale: 1.7;
+  }
+}
+
+/* The turn timer's rim over its last five seconds, an animatable angle so it drains smoothly
+   between the playhead's samples. */
+@property --turn-timer-rim {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 360deg;
+}
+
 @keyframes fadeIn {
   0% {
     opacity: 0;

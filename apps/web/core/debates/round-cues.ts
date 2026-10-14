@@ -92,6 +92,8 @@ export type RoundCue = {
   role: string | null;
   /** 0–1, from the playhead. */
   opacity: number;
+  /** How far into the round card's run the playhead is, in ms. Only on the card's cue. */
+  ageMs?: number;
 };
 
 function cueFor(span: TurnSpan, turnCount: TurnCount, opacity: number): RoundCue {
@@ -181,7 +183,7 @@ export function roundCardAt(
   const opacity = ageMs < FADE_IN_MS ? ageMs / FADE_IN_MS : untilEnd < FADE_OUT_MS ? untilEnd / FADE_OUT_MS : 1;
   if (opacity <= 0) return null;
 
-  return cueFor(current, turnCount, opacity);
+  return { ...cueFor(current, turnCount, opacity), ageMs };
 }
 
 /**
