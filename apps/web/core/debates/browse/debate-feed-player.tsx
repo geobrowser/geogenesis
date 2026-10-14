@@ -13,6 +13,7 @@ import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
   breakAnnouncesRound,
+  breakBannerShown,
   breakCueAt,
   breakCuts,
   breakFirstName,
@@ -388,6 +389,9 @@ export function DebateFeedPlayer({
     [playbackBreaks.breaks, playbackBreaks.picks, playheadMs, reducedOverlays]
   );
   const cuts = React.useMemo(() => breakCuts(playbackBreaks), [playbackBreaks]);
+  // The break's banner lies across the seam, over the top tile's name and claim corner: they step
+  // out while it is up and come back with the next speaker, as they do for the round card.
+  const bannerYield = breakBannerShown(breakCue) ? 1 : 0;
   useBreakCuts(cuts, { playheadMs, running: playing && !isScrubbing, seek: seekBothRaw });
   const earlyEndCue = React.useMemo(
     () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, turnSegments, playheadMs)),
@@ -683,9 +687,9 @@ export function DebateFeedPlayer({
           audible={playing && turnState?.slot === 1 && !betweenTurns}
           countdown={playing && turnState?.slot === 1 ? turnState : null}
           roundBadge={turnState?.slot === 1 ? roundBadge : null}
-          // Only this tile's: the card is centred on the seam, so it crosses the *top* tile's name
-          // band and comes nowhere near the bottom tile's, half a player away.
-          cardYield={roundCard?.opacity ?? 0}
+          // Only this tile's: the card and the break's banner are centred on the seam, so they cross
+          // the *top* tile's name band and come nowhere near the bottom tile's, half a player away.
+          cardYield={Math.max(roundCard?.opacity ?? 0, bannerYield)}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
@@ -978,10 +982,12 @@ function DebaterVideo({
    */
   inert?: boolean;
   /**
-   * How much of this tile's bottom band the round card has taken, 0–1.
+   * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
    * The card's own opacity, handed straight back, so the name crossfades against it rather than
-   * running a timer of its own. See where it is applied below.
+   * running a timer of its own; the banner's is all or nothing, and the transition fades it. The
+   * claim corner steps out with the name unless the viewer has its backlog open. See where it is
+   * applied below.
    */
   cardYield?: number;
   mutedByUser: boolean;
@@ -1375,8 +1381,9 @@ function DebaterVideo({
       {claims && (
         <div
           data-claim-corner
+          style={{ opacity: claimsOpen ? 1 : 1 - cardYield }}
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom,opacity] duration-150',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,
             // because it is one line of somebody's argument and there is nothing to read it
             // against. `100% - 1.75rem` rather than a percentage: the corner hangs off `right-3`,

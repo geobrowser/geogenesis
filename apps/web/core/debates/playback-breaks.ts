@@ -181,6 +181,16 @@ export function breakCueAt(
   };
 }
 
+/** When the banner rolls in: once both picks are stamped, or as the dim settles before a required round nobody picked for. */
+export function breakBannerAtMs(cue: Pick<BreakCue, 'picks'>) {
+  return cue.picks ? BREAK_BANNER_AT_MS : BREAK_SETTLE_MS;
+}
+
+/** Whether the banner is across the seam: from its roll-in until the cut to the next speaker. */
+export function breakBannerShown(cue: BreakCue | null) {
+  return cue !== null && cue.elapsedMs >= breakBannerAtMs(cue);
+}
+
 /** How much of a break plays: its share, or all of it when it is shorter than that. */
 function playedLengthMs(entry: PlayerBreak) {
   return Math.min(BREAK_PLAYED_MS[entry.kind], entry.endMs - entry.decidingStartMs);

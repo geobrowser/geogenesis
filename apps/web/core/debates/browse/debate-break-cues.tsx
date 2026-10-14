@@ -8,13 +8,13 @@ import type { OpenRoundPick, ParticipantSlot } from '~/core/debates/api';
 import { recordingLabelTextShadow } from '~/core/debates/debate-video-tile';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
-  BREAK_BANNER_AT_MS,
   BREAK_QUESTION_MS,
   BREAK_SETTLE_MS,
   BREAK_STAMP_GAP_MS,
   type BreakCue,
   type BreakCut,
   type EarlyEndCue,
+  breakBannerAtMs,
 } from '~/core/debates/playback-breaks';
 import { type TurnCount, roundLabel } from '~/core/debates/round-cues';
 
@@ -184,7 +184,7 @@ export function DebateBreakOverlay({
   if (!cue) return null;
 
   const picks = cue.picks;
-  const bannerAtMs = picks ? BREAK_BANNER_AT_MS : BREAK_SETTLE_MS;
+  const bannerAtMs = breakBannerAtMs(cue);
   const wrap = cue.kind === 'final_end';
   const note = wrap && picks ? openRoundWrapNote(picks[1], { name: names[2], pick: picks[2] }, names[1]) : null;
   const title = wrap ? 'That’s a wrap' : roundLabel((cue.nextRoundIndex ?? 0) * 2, roundTurns);

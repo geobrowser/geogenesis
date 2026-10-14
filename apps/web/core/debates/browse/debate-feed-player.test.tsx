@@ -1858,6 +1858,29 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
   const stamps = (container: HTMLElement) =>
     [...container.querySelectorAll('[data-debate-stamp]')].map(stamp => stamp.getAttribute('data-debate-stamp'));
 
+  // The banner crosses the seam, so the top tile's name steps out from under it and comes back
+  // after the cut; the bottom tile's, half a player away, stays.
+  it('hides the top debater’s name while the banner is up, and only then', () => {
+    const playbackBreaks = breaks({
+      breaks: [extendBreak],
+      picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
+    });
+    const rows = (container: HTMLElement) =>
+      ([...container.querySelectorAll('[data-debater-row]')] as HTMLElement[]).map(row => row.style.opacity);
+
+    const { container, rerender } = renderAt(61.5, { playbackBreaks });
+    expect(rows(container)).toEqual(['1', '1']);
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 62.2, playbackBreaks });
+    rerender(<DebateFeedPlayer debate={startedDebate} active />);
+    expect(container.querySelector('[data-debate-banner]')).not.toBeNull();
+    expect(rows(container)).toEqual(['0', '1']);
+
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 2, playheadSeconds: 72.5, playbackBreaks });
+    rerender(<DebateFeedPlayer debate={startedDebate} active />);
+    expect(rows(container)).toEqual(['1', '1']);
+  });
+
   it('asks "Keep debating?" first, then stamps each pick onto its debater', () => {
     const playbackBreaks = breaks({
       breaks: [extendBreak],
