@@ -6,6 +6,7 @@ import * as React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyGuestView, DebateLobbyMember, DebateLobbySummary, DebateLobbyView } from '../api';
+import { rememberLastPageOutsideDebates } from '../debate-return-navigation';
 
 const mocks = vi.hoisted(() => ({
   phone: false,
@@ -37,6 +38,13 @@ const mocks = vi.hoisted(() => ({
   userId: null as string | null,
   /** Whether the page asked for the account prompt, render by render (GEO-3270). */
   signInPrompt: [] as boolean[],
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: mocks.replace }),
+  usePathname: () => '/debate/lobby-1',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
@@ -243,6 +251,7 @@ beforeEach(() => {
   });
   mocks.heartbeat.mockReset().mockResolvedValue({ alive: true, reason: null, lease_expires_at: 'x' });
   mocks.leave.mockClear();
+  mocks.replace.mockReset();
 });
 
 afterEach(() => {
@@ -277,6 +286,26 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     expect(await screen.findByText('A host removed you from this lobby.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
     expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
+    // Removed before this visit: the page says so rather than sending them away.
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
+  it('leaves to the page the lobby was opened from', () => {
+    rememberLastPageOutsideDebates('/space/s1/e1?tab=debates');
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(screen.getByRole('link', { name: 'Leave lobby' })).toHaveAttribute('href', '/space/s1/e1?tab=debates');
+  });
+
+  it('goes back to the page it came from when a host removes it while listening', async () => {
+    rememberLastPageOutsideDebates('/space/s1/e1');
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    await screen.findByText('You’re listening.');
+    mocks.heartbeat.mockResolvedValueOnce({ alive: false, reason: 'removed', lease_expires_at: null });
+    await act(async () => vi.advanceTimersByTimeAsync(20_000));
+    vi.useRealTimers();
+    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/s1/e1'));
+    expect(mocks.replace).toHaveBeenCalledTimes(1);
   });
 
   // geo-chat's upgrade order: join (ends the guest), member token, member room up, then guest room down.
@@ -545,6 +574,8 @@ describe('DebateLobbyPage when guests are turned off mid-session', () => {
 
     expect(await screen.findByText('This lobby has ended')).toBeInTheDocument();
     expect(screen.queryByText(/has been turned off/)).not.toBeInTheDocument();
+    // Ended while they were in it, opened straight from a link: back to Explore.
+    expect(mocks.replace).toHaveBeenCalledWith('/explore');
   });
 });
 

@@ -13,6 +13,13 @@ const mocks = vi.hoisted(() => ({
   highlights: undefined as Pick<DebateLobbyHighlights, 'highlights' | 'room_vote'> | undefined,
   highlightsEnabled: [] as boolean[],
   leave: vi.fn(),
+  replace: vi.fn(),
+}));
+
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: mocks.replace }),
+  usePathname: () => '/debate/lobby-1',
+  useSearchParams: () => new URLSearchParams(),
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));

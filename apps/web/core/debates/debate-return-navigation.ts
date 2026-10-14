@@ -84,6 +84,34 @@ export function clearDebateReturnDestination() {
   }
 }
 
+const lastPageOutsideDebatesKey = 'geo.debates.last-page-outside';
+
+/**
+ * Every page that is not a debate surface, so leaving a lobby lands where it was opened from. A
+ * debate stepped out to from the lobby is skipped, so it never stands in for that page.
+ */
+export function rememberLastPageOutsideDebates(href = currentBrowserHref()) {
+  const page = safeInternalHref(href);
+  if (!page || isDebateFlowHref(page)) return;
+  try {
+    window.sessionStorage.setItem(lastPageOutsideDebatesKey, page);
+  } catch {
+    // Without storage, leaving a lobby falls back to Explore.
+  }
+}
+
+/** The last page this tab was on outside the debate surfaces, or null. */
+export function lastPageOutsideDebates(): string | null {
+  let stored: string | null = null;
+  try {
+    stored = window.sessionStorage.getItem(lastPageOutsideDebatesKey);
+  } catch {
+    return null;
+  }
+  const page = stored ? safeInternalHref(stored) : null;
+  return page && !isDebateFlowHref(page) ? page : null;
+}
+
 function currentBrowserHref() {
   if (typeof window === 'undefined') return '';
   return `${window.location.pathname}${window.location.search}${window.location.hash}`;

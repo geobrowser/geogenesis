@@ -34,6 +34,7 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
+import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
 import {
   hostAfterChange,
   hostWhoLeft,
@@ -140,6 +141,14 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   useMatchmakingScope(waitingOutside);
   // Only where the page shows the guest banner, which is how a closed prompt is opened again.
   useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
+  const exitHref = useLobbyExitHref();
+  useExitLobbyWhenOut({
+    access: lobby?.access ?? null,
+    presence: presence.state,
+    guestStatus: guestSession.state.status,
+    name: lobby?.name ?? null,
+    exitHref,
+  });
 
   return (
     <LobbyGuestProvider value={guest}>
@@ -499,6 +508,7 @@ function LobbyRoom({
   guestSession: LobbyGuestSession;
 }) {
   const guest = useIsLobbyGuest();
+  const exitHref = useLobbyExitHref();
   const currentUserId = useCurrentGeoChatUserId();
   const { authenticated } = useGeoChatAuth();
   const phone = useIsPhoneLayout();
@@ -576,7 +586,7 @@ function LobbyRoom({
       <LobbyHandControl lobby={memberLobby} />
     ) : null;
   const leave = guest ? (
-    <Link href={NavUtils.toExplore()} aria-label="Leave lobby" className={hubPillClassName('secondary', 'md:h-10')}>
+    <Link href={exitHref} replace aria-label="Leave lobby" className={hubPillClassName('secondary', 'md:h-10')}>
       <LeaveLabel />
     </Link>
   ) : (
