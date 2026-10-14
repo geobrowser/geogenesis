@@ -1988,26 +1988,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(container.querySelector('[data-debate-banner="round"]')?.textContent).toMatch(/^Round 2 · /);
   });
 
-  // Open rounds gets the breaks' design for an early end too: a stamp and a purple banner.
-  it('stamps "Ended early" and bands whose turn it is in an Open rounds debate', () => {
-    const turnSegments: DebateMediaTurnSegment[] = [
-      { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000 },
-      { turn_index: 1, participant_slot: 2, output_start_ms: 33_000, output_end_ms: 63_000, duration_ms: 30_000 },
-    ];
-    mocks.controller = controllerFixture({
-      mutedByUser: false,
-      turnSlot: 1,
-      playheadSeconds: 31,
-      turnSegments,
-      playbackBreaks: breaks({ earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000 }] }),
-    });
-    const openRoundsDebate = { ...startedDebate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
-    const { container } = render(<DebateFeedPlayer debate={openRoundsDebate} active />);
-    expect(container.querySelector('[data-debate-stamp="ended"]')?.textContent).toBe('Ended early');
-    expect(container.querySelector('[data-debate-banner="turn"]')?.textContent).toMatch(/’s turn$/);
-  });
-
-  it('shows "Ended early" and whose turn it is over an early end’s quiet', () => {
+  it('stamps "Ended early" and bands whose turn it is over an early end’s quiet', () => {
     const turnSegments: DebateMediaTurnSegment[] = [
       { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000 },
       { turn_index: 1, participant_slot: 2, output_start_ms: 33_000, output_end_ms: 63_000, duration_ms: 30_000 },
@@ -2016,12 +1997,9 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       turnSegments,
       playbackBreaks: breaks({ earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000 }] }),
     });
-    const labels = container.querySelector('[data-debate-early-end]');
-    expect(labels?.textContent).toContain('Ended early');
-    expect(labels?.textContent).toMatch(/’s turn$/);
-    // A fixed format keeps the room's outlined type: no stamp, no banner.
-    expect(container.querySelector('[data-debate-stamp]')).toBeNull();
-    expect(container.querySelector('[data-debate-banner]')).toBeNull();
+    // In the breaks' design: a stamp on the debater who ended, a banner for the next speaker.
+    expect(container.querySelector('[data-debate-stamp="ended"]')?.textContent).toBe('Ended early');
+    expect(container.querySelector('[data-debate-banner="turn"]')?.textContent).toMatch(/’s turn$/);
   });
 
   // Both mics are open between rounds now: nothing said while nobody holds a turn may be heard or

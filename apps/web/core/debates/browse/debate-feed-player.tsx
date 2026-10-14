@@ -9,7 +9,6 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
-import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
@@ -691,6 +690,9 @@ export function DebateFeedPlayer({
           // Only this tile's: the card and the break's banner are centred on the seam, so they cross
           // the *top* tile's name band and come nowhere near the bottom tile's, half a player away.
           cardYield={Math.max(roundCard?.opacity ?? 0, bannerYield)}
+          // The claim corner yields to the break's banner only, which is Open rounds only. The round
+          // card plays in every format and leaves the corner as it always has.
+          claimsYield={bannerYield}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
@@ -858,7 +860,7 @@ export function DebateFeedPlayer({
               roundTurns={roundTurns}
               playing={playing}
             />
-            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} stamped={isOpenRoundsDebate(debate)} />
+            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} />
           </>
         )}
 
@@ -944,6 +946,7 @@ function DebaterVideo({
   countdown,
   roundBadge,
   cardYield = 0,
+  claimsYield = 0,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -986,11 +989,13 @@ function DebaterVideo({
    * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
    * The card's own opacity, handed straight back, so the name crossfades against it rather than
-   * running a timer of its own; the banner's is all or nothing, and the transition fades it. The
-   * claim corner steps out with the name unless the viewer has its backlog open. See where it is
-   * applied below.
+   * running a timer of its own; the banner's is all or nothing, and the transition fades it. See
+   * where it is applied below.
    */
   cardYield?: number;
+  /** How far the claim corner has stepped out from under the break's banner, 0–1. It stays while
+   * the viewer has its backlog open. */
+  claimsYield?: number;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -1382,7 +1387,7 @@ function DebaterVideo({
       {claims && (
         <div
           data-claim-corner
-          style={{ opacity: claimsOpen ? 1 : 1 - cardYield }}
+          style={{ opacity: claimsOpen ? 1 : 1 - claimsYield }}
           className={cx(
             'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom,opacity] duration-150',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,

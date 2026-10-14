@@ -5,6 +5,7 @@ import { RENDERED_MEDIA } from './open-rounds-media-fixtures';
 import {
   BREAK_PLAYED_MS,
   EARLY_END_HOLD_MS,
+  NO_PLAYBACK_BREAKS,
   breakAnnouncesRound,
   breakCueAt,
   breakCuts,
@@ -29,6 +30,17 @@ const BREAKS = playbackBreaksFrom(openRounds(), RENDERED_MEDIA, segments, clock)
 const cueAt = (ms: number) => breakCueAt(BREAKS.breaks, BREAKS.picks, ms);
 
 describe('playbackBreaksFrom', () => {
+  it('finds nothing in a fixed-format debate, even from the same media', () => {
+    expect(
+      playbackBreaksFrom(
+        { open_rounds: null } as unknown as Pick<Debate, 'open_rounds'>,
+        RENDERED_MEDIA,
+        segments,
+        clock
+      )
+    ).toBe(NO_PLAYBACK_BREAKS);
+  });
+
   it('puts each break at its real length, with the pick window in front of it', () => {
     expect(BREAKS.breaks).toEqual([
       // The 8 s lead-in into Round 2: no pick window, nobody picked.

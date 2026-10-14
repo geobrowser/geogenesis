@@ -5,7 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { OpenRoundPick, ParticipantSlot } from '~/core/debates/api';
-import { recordingLabelTextShadow } from '~/core/debates/debate-video-tile';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
   BREAK_QUESTION_MS,
@@ -285,69 +284,39 @@ export function DebateBreakOverlay({
 }
 
 /**
- * Around an early end: "Ended early" on the debater who ended their turn, and whose turn it is on
- * the other tile. The playback counterpart of the room's "Ending turn…" and count-in.
- *
- * `stamped` for Open rounds, in the breaks' design: a grey "Ended early" stamp and a purple banner
- * for the next speaker. Fixed formats keep the room's outlined type.
+ * Around an early end in an Open rounds debate: an "Ended early" stamp on the debater who ended
+ * their turn, and a purple banner with whose turn it is on the other tile, in the breaks' design.
+ * The playback counterpart of the room's "Ending turn…" and count-in.
  */
-export function DebateEarlyEndLabels({
-  cue,
-  names,
-  stamped = false,
-}: {
-  cue: EarlyEndCue | null;
-  names: BreakNames;
-  stamped?: boolean;
-}) {
+export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; names: BreakNames }) {
   if (!cue) return null;
-  const label = (slot: ParticipantSlot) =>
-    slot === cue.endedSlot ? 'Ended early' : slot === cue.nextSlot ? `${names[slot]}’s turn` : null;
 
   return (
     <div aria-hidden data-debate-early-end className="pointer-events-none absolute inset-0 z-[22]">
-      {SLOTS.map(slot => {
-        const text = label(slot);
-        if (!text) return null;
-        if (stamped) {
-          return (
-            <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
-              {slot === cue.endedSlot ? (
-                <span
-                  data-debate-stamp="ended"
-                  className={cx(STAMP_CLASS, 'border-dashed text-[9cqw] text-grey-04')}
-                  style={
-                    {
-                      ...STAMP_FONT,
-                      '--stamp-rotate': STAMP_TILT[slot],
-                      transform: `rotate(${STAMP_TILT[slot]})`,
-                    } as React.CSSProperties
-                  }
-                >
-                  {text}
-                </span>
-              ) : (
-                <div
-                  data-debate-banner="turn"
-                  className={cx(BANNER_CLASS, 'truncate motion-safe:animate-debate-banner')}
-                  style={LABEL_FONT}
-                >
-                  {text}
-                </div>
-              )}
-            </div>
-          );
-        }
-        return (
-          <div
-            key={slot}
-            className={`${TILE_CLASS[slot]} grid place-items-center px-4 text-center text-recordingLabel text-text`}
-            style={recordingLabelTextShadow}
-          >
-            {text}
-          </div>
-        );
-      })}
+      <div className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center')}>
+        <span
+          data-debate-stamp="ended"
+          className={cx(STAMP_CLASS, 'border-dashed text-[9cqw] text-grey-04')}
+          style={
+            {
+              ...STAMP_FONT,
+              '--stamp-rotate': STAMP_TILT[cue.endedSlot],
+              transform: `rotate(${STAMP_TILT[cue.endedSlot]})`,
+            } as React.CSSProperties
+          }
+        >
+          Ended early
+        </span>
+      </div>
+      <div className={cx(TILE_CLASS[cue.nextSlot], 'grid place-items-center')}>
+        <div
+          data-debate-banner="turn"
+          className={cx(BANNER_CLASS, 'truncate motion-safe:animate-debate-banner')}
+          style={LABEL_FONT}
+        >
+          {names[cue.nextSlot]}’s turn
+        </div>
+      </div>
     </div>
   );
 }

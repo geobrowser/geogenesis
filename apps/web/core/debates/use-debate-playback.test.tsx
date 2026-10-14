@@ -1079,7 +1079,9 @@ describe('useDebatePlayback — no invented turn schedule (GEO-2956)', () => {
         speed: 1.5,
       },
     ];
-    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+    // Breaks are Open rounds only.
+    const openRoundsDebate = { ...untimedDebate(), open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+    const { result } = renderHook(() => useDebatePlayback(openRoundsDebate, true));
 
     await waitFor(() => expect(result.current.ready).toBe(true));
     // On the recordings' clock: 5 s of picking after the last turn, then the 3 s reveal.

@@ -95,7 +95,9 @@ export function playbackBreaksFrom(
   segments: readonly DebateMediaTurnSegment[],
   clock: PlaybackClock
 ): PlaybackBreaks {
-  if (!media) return NO_PLAYBACK_BREAKS;
+  // Open rounds only, for now: a fixed-format debate plays as it always has, even if its media
+  // carries an early-end gap.
+  if (!media || !isOpenRoundsDebate(debate)) return NO_PLAYBACK_BREAKS;
 
   const breaks: PlayerBreak[] = (media.condensed_breaks ?? []).map(entry => ({
     kind: entry.kind,
