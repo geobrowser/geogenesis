@@ -1,7 +1,54 @@
 import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { responsePositionLabel } from '~/core/responses/entity-response';
+import { validateEntityId } from '~/core/utils/utils';
 
 import type { DebateClaim, DebateClaimPositionSummary, MatchmakingClaim } from '../api';
+import { claimRowKey } from './claim-row-key';
+
+/** A graph claim and the space its card is drawn in. */
+export type PlacedClaim = { spaceId: string; claimId: string };
+
+/**
+ * geo-chat's row lookups for graph-sourced cards: one group per space, in a stable order, so the
+ * query keys hold while the list around them changes. Ids geo-chat would refuse are left out.
+ */
+export function claimRowGroups(placed: Iterable<PlacedClaim>): Array<{ spaceId: string; claimIds: string[] }> {
+  const bySpace = new Map<string, Set<string>>();
+  for (const { spaceId, claimId } of placed) {
+    if (!validateEntityId(claimId)) continue;
+    const ids = bySpace.get(spaceId) ?? new Set<string>();
+    ids.add(claimId);
+    bySpace.set(spaceId, ids);
+  }
+  return [...bySpace.entries()]
+    .sort(([a], [z]) => a.localeCompare(z))
+    .map(([spaceId, ids]) => ({ spaceId, claimIds: [...ids] }));
+}
+
+/**
+ * geo-chat's rows by the card they belong to: space *and* claim, see {@link claimRowKey}. Read back
+ * with {@link placedClaimKey}.
+ */
+export function rowsByPlacedClaim(rows: readonly DebateClaim[]): Map<string, DebateClaim> {
+  return new Map(rows.map(row => [claimRowKey({ claim: row }), row]));
+}
+
+export function placedClaimKey({ spaceId, claimId }: PlacedClaim): string {
+  return claimRowKey({ claim: { space_id: spaceId, claim_entity_id: claimId } });
+}
+
+/**
+ * Whether a graph-sourced card in `spaceId` may be answered yet. Signed out is an answer (a press
+ * opens sign-in); signed in, the account key and that space's rows have to have landed, or the side
+ * the viewer already holds would be drawn unselected and a press would republish it.
+ */
+export function placedAnswersReady(
+  viewer: { authenticated: boolean; accountKey: string | null },
+  unresolvedSpaceIds: ReadonlySet<string>,
+  spaceId: string
+): boolean {
+  return viewer.authenticated ? Boolean(viewer.accountKey) && !unresolvedSpaceIds.has(spaceId) : true;
+}
 
 /**
  * A graph-sourced claim in the shape the hub's cards read, for the space it is drawn in. geo-chat has

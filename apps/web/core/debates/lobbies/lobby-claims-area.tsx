@@ -35,8 +35,6 @@ const TABS: { id: 'room' | 'explore'; label: string }[] = [
   { id: 'explore', label: 'Explore' },
 ];
 
-const listTabId = claimListKey;
-
 /**
  * The lobby's claims: "In this room", "Explore", then the claim lists hosts have added, in the
  * debates hub's tab row. Hosts get a "+" after the row to add a list.
@@ -46,8 +44,8 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
   useSavePromptOnGuestVote(lobby.name);
 
   const lists = React.useMemo(() => orderedClaimLists(lobby), [lobby]);
-  const activeList = lists.find(list => listTabId(list) === activeTab) ?? null;
-  const unseen = useNewClaimListTabs(lists.map(listTabId), activeTab);
+  const activeList = lists.find(list => claimListKey(list) === activeTab) ?? null;
+  const unseen = useNewClaimListTabs(lists.map(claimListKey), activeTab);
   // A list taken off the lobby takes its tab with it; whoever was on it lands back in the room.
   const shownTab: LobbyClaimsTab = activeTab.startsWith('list:') && !activeList ? 'room' : activeTab;
   const hosting = lobby.viewer.hosting;
@@ -86,10 +84,10 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
                 list={list}
                 index={index}
                 count={lists.length}
-                active={shownTab === listTabId(list)}
-                unseen={unseen.has(listTabId(list))}
+                active={shownTab === claimListKey(list)}
+                unseen={unseen.has(claimListKey(list))}
                 hosting={hosting}
-                onSelect={() => setActiveTab(listTabId(list))}
+                onSelect={() => setActiveTab(claimListKey(list))}
               />
             ))}
           </ScrollableTabRow>
@@ -98,7 +96,7 @@ export function LobbyClaimsArea({ lobby }: { lobby: LobbyPageView }) {
           <LobbyClaimListPicker
             lobbyId={lobby.lobby_id}
             lists={lists}
-            onAdded={entityId => setActiveTab(listTabId({ entity_id: entityId }))}
+            onAdded={entityId => setActiveTab(claimListKey({ entity_id: entityId }))}
           />
         ) : null}
       </div>

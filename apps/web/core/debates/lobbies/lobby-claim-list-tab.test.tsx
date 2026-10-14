@@ -76,14 +76,31 @@ describe('LobbyClaimListTab', () => {
         {
           id: 'work',
           name: 'Work',
-          claims: [{ id: 'c1', name: 'AI will create more jobs', description: null, spaceId: OTHER_SPACE }],
+          claims: [
+            {
+              id: 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1',
+              name: 'AI will create more jobs',
+              description: null,
+              spaceId: OTHER_SPACE,
+            },
+          ],
         },
         {
           id: 'privacy',
           name: 'Privacy',
           claims: [
-            { id: 'c2', name: 'No training on private chats', description: null, spaceId: OTHER_SPACE },
-            { id: 'c3', name: 'Warrants for AI analysis', description: null, spaceId: OTHER_SPACE },
+            {
+              id: 'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2',
+              name: 'No training on private chats',
+              description: null,
+              spaceId: OTHER_SPACE,
+            },
+            {
+              id: 'c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3',
+              name: 'Warrants for AI analysis',
+              description: null,
+              spaceId: OTHER_SPACE,
+            },
           ],
         },
       ],
@@ -99,9 +116,20 @@ describe('LobbyClaimListTab', () => {
       'Warrants for AI analysis',
     ]);
     // geo-chat is asked in the space each claim is debated in, not the curator page's.
-    expect(mocks.groups).toEqual([{ spaceId: OTHER_SPACE, claimIds: ['c1', 'c2', 'c3'] }]);
+    expect(mocks.groups).toEqual([
+      {
+        spaceId: OTHER_SPACE,
+        claimIds: [
+          'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1',
+          'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2',
+          'c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3',
+        ],
+      },
+    ]);
     // Room sides are batched over every card, in page order, and read as they near the viewport.
-    expect(mocks.batches).toEqual([['c1', 'c2', 'c3']]);
+    expect(mocks.batches).toEqual([
+      ['c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1', 'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2', 'c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3'],
+    ]);
 
     // No scroll box of its own (phones): the theme scrolls the page, which is what scrolls there.
     const windowScroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
@@ -118,8 +146,16 @@ describe('LobbyClaimListTab', () => {
       spaceId: SPACE,
       name: 'AI highlights',
       sections: [
-        { id: 'work', name: 'Work', claims: [{ id: 'c1', name: 'One', description: null, spaceId: SPACE }] },
-        { id: 'privacy', name: 'Privacy', claims: [{ id: 'c2', name: 'Two', description: null, spaceId: SPACE }] },
+        {
+          id: 'work',
+          name: 'Work',
+          claims: [{ id: 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1', name: 'One', description: null, spaceId: SPACE }],
+        },
+        {
+          id: 'privacy',
+          name: 'Privacy',
+          claims: [{ id: 'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2', name: 'Two', description: null, spaceId: SPACE }],
+        },
       ],
     };
     const windowScroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});

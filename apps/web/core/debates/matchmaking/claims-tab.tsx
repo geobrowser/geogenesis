@@ -12,8 +12,6 @@ import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sent
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { ID } from '~/core/id';
-import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
 
@@ -45,7 +43,13 @@ import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
-import { taggedClaimEntry } from './tagged-claim-entry';
+import {
+  claimRowGroups,
+  placedAnswersReady,
+  placedClaimKey,
+  rowsByPlacedClaim,
+  taggedClaimEntry,
+} from './tagged-claim-entry';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
@@ -529,19 +533,13 @@ export function ClaimsTab({
   // not yet resolved. `fetchDebateClaims` sends `auth: 'optional'` when it has no account, so a
   // request in that window succeeds and comes back with every viewer field null; the rows still
   // carry the public ones, so the card drew its avatars while reporting no response from the viewer.
-  const taggedGroups = React.useMemo(() => {
-    if (!authenticated || !accountKey) return [];
-    const bySpace = new Map<string, string[]>();
-    for (const { claim, spaceId } of taggedPage) {
-      if (!validateEntityId(claim.entity.id)) continue;
-      const existing = bySpace.get(spaceId);
-      if (existing) existing.push(claim.entity.id);
-      else bySpace.set(spaceId, [claim.entity.id]);
-    }
-    return [...bySpace.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([spaceId, claimIds]) => ({ spaceId, claimIds }));
-  }, [accountKey, authenticated, taggedPage]);
+  const taggedGroups = React.useMemo(
+    () =>
+      authenticated && accountKey
+        ? claimRowGroups(taggedPage.map(({ claim, spaceId }) => ({ spaceId, claimId: claim.entity.id })))
+        : [],
+    [accountKey, authenticated, taggedPage]
+  );
   const taggedRows = useDebateClaimsBySpaces(taggedGroups);
 
   // The page in the shape the rest of the tab already speaks. geo-chat has a row for a claim only
@@ -554,15 +552,13 @@ export function ClaimsTab({
     // of them comes back twice — once per space, each with that space's sides, readiness and live
     // debate. Keyed on the claim alone the map keeps whichever arrived last, and would draw one
     // space's answers onto another space's card and publish into the second.
-    const rowsBySpaceAndClaim = new Map(
-      taggedRows.claims.map(row => [`${ID.uuidToHex(row.space_id)}:${ID.uuidToHex(row.claim_entity_id)}`, row])
-    );
+    const rowsBySpaceAndClaim = rowsByPlacedClaim(taggedRows.claims);
 
     return taggedPage.map(({ claim, spaceId }) =>
       taggedClaimEntry(
         claim.entity,
         spaceId,
-        rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`)
+        rowsBySpaceAndClaim.get(placedClaimKey({ spaceId, claimId: claim.entity.id }))
       )
     );
   }, [graphSourced, taggedPage, taggedRows.claims]);
@@ -598,7 +594,7 @@ export function ClaimsTab({
   const taggedAnswersReadyFor = React.useCallback(
     (entry: MatchmakingClaim) =>
       !graphSourced ||
-      (authenticated ? Boolean(accountKey) && !taggedRows.unresolvedSpaceIds.has(entry.claim.space_id) : true),
+      placedAnswersReady({ authenticated, accountKey }, taggedRows.unresolvedSpaceIds, entry.claim.space_id),
     [accountKey, authenticated, graphSourced, taggedRows.unresolvedSpaceIds]
   );
 

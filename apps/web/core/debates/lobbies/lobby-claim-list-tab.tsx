@@ -4,7 +4,6 @@ import * as React from 'react';
 
 import Link from 'next/link';
 
-import { ID } from '~/core/id';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Text } from '~/design-system/text';
@@ -18,9 +17,15 @@ import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubCardList } from '../matchmaking/hub-motion';
 import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import { HubQueryState } from '../matchmaking/hub-states';
-import { taggedClaimEntry } from '../matchmaking/tagged-claim-entry';
+import {
+  claimRowGroups,
+  placedAnswersReady,
+  placedClaimKey,
+  rowsByPlacedClaim,
+  taggedClaimEntry,
+} from '../matchmaking/tagged-claim-entry';
 import { useRemoveLobbyClaimList } from './lobby-claim-lists-hooks';
-import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS } from './lobby-claims-sticky';
+import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS, LOBBY_CLAIMS_SECTION_SCROLL_MARGIN_CLASS } from './lobby-claims-sticky';
 import { useLobbyRoomCardRenderer } from './lobby-explore-claims';
 import { exploreRoomClaimBatches } from './lobby-explore-claims-hooks';
 import { personName } from './lobby-format';
@@ -82,30 +87,30 @@ function ClaimListSections({
 
   // geo-chat's rows for the page's claims, each in the space it is debated in: the viewer's side,
   // who stands ready on each, a live debate. A claim with no row still lists, with no sides.
-  const groups = React.useMemo(() => {
-    if (!authenticated || !accountKey) return [];
-    const bySpace = new Map<string, Set<string>>();
-    for (const claim of page.sections.flatMap(section => section.claims)) {
-      const ids = bySpace.get(claim.spaceId) ?? new Set<string>();
-      ids.add(claim.id);
-      bySpace.set(claim.spaceId, ids);
-    }
-    return [...bySpace.entries()]
-      .sort(([a], [z]) => a.localeCompare(z))
-      .map(([spaceId, ids]) => ({ spaceId, claimIds: [...ids] }));
-  }, [accountKey, authenticated, page.sections]);
+  const groups = React.useMemo(
+    () =>
+      authenticated && accountKey
+        ? claimRowGroups(
+            page.sections.flatMap(section =>
+              section.claims.map(claim => ({ spaceId: claim.spaceId, claimId: claim.id }))
+            )
+          )
+        : [],
+    [accountKey, authenticated, page.sections]
+  );
   const rows = useDebateClaimsBySpaces(groups);
   const entriesBySection = React.useMemo(() => {
-    // By space and claim, as Explore keys them: one claim can have a row in two spaces.
-    const rowKey = (spaceId: string, claimId: string) => `${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claimId)}`;
-    const byClaim = new Map(rows.claims.map(row => [rowKey(row.space_id, row.claim_entity_id), row]));
+    const byClaim = rowsByPlacedClaim(rows.claims);
     return page.sections.map(section =>
-      section.claims.map(claim => taggedClaimEntry(claim, claim.spaceId, byClaim.get(rowKey(claim.spaceId, claim.id))))
+      section.claims.map(claim =>
+        taggedClaimEntry(
+          claim,
+          claim.spaceId,
+          byClaim.get(placedClaimKey({ spaceId: claim.spaceId, claimId: claim.id }))
+        )
+      )
     );
   }, [page.sections, rows.claims]);
-  // As the Explore tab decides it, per card, for the space the card is in.
-  const answersReadyFor = (spaceId: string) =>
-    !authenticated || (Boolean(accountKey) && !rows.unresolvedSpaceIds.has(spaceId));
 
   // In page order, so a long page reads a section's room sides as it scrolls into view.
   const batches = React.useMemo(() => exploreRoomClaimBatches(entriesBySection.flat()), [entriesBySection]);
@@ -163,7 +168,7 @@ function ClaimListSections({
           id={sectionDomId(section)}
           aria-label={section.name}
           // Clear of the pinned tab row and themes when a theme chip scrolls here.
-          className="flex scroll-mt-[calc(var(--lobby-claims-tabs-h,2rem)+3.5rem)] flex-col gap-2 px-4 md:scroll-mt-[calc(var(--lobby-claims-tabs-h,2rem)+6.25rem)]"
+          className={`flex flex-col gap-2 px-4 ${LOBBY_CLAIMS_SECTION_SCROLL_MARGIN_CLASS}`}
         >
           <div className="flex items-baseline justify-between gap-3 pt-1">
             <Text as="h3" variant="metadataMedium">
@@ -176,9 +181,15 @@ function ClaimListSections({
           <HubCardList>
             {(entriesBySection[index] ?? []).map(entry =>
               // Keyed on the element itself, as `ClaimsTab` does: the list's popLayout measures it.
-              React.cloneElement(renderRoomCard(entry, answersReadyFor(entry.claim.space_id)), {
-                key: claimRowKey(entry),
-              })
+              React.cloneElement(
+                renderRoomCard(
+                  entry,
+                  placedAnswersReady({ authenticated, accountKey }, rows.unresolvedSpaceIds, entry.claim.space_id)
+                ),
+                {
+                  key: claimRowKey(entry),
+                }
+              )
             )}
           </HubCardList>
         </section>
