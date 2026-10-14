@@ -187,9 +187,14 @@ export function FollowButton({
   const inFlight = !followed && (saving || queuedFollow.isQueued);
   const [lastFlight, setLastFlight] = React.useState({ targetId, inFlight });
   const [landedId, setLandedId] = React.useState<string | null>(null);
-  if (lastFlight.targetId !== targetId || lastFlight.inFlight !== inFlight) {
+  if (lastFlight.targetId !== targetId) {
+    // A new person: the last one's landing goes with them, or coming back to them later would
+    // replay a tick whose moment has passed.
     setLastFlight({ targetId, inFlight });
-    if (lastFlight.targetId === targetId && lastFlight.inFlight && followed) setLandedId(targetId);
+    setLandedId(null);
+  } else if (lastFlight.inFlight !== inFlight) {
+    setLastFlight({ targetId, inFlight });
+    if (lastFlight.inFlight && followed) setLandedId(targetId);
   }
   const justLanded = landedId === targetId;
   React.useEffect(() => {

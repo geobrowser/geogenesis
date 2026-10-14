@@ -518,6 +518,24 @@ describe('the avatar badge (GEO-3305)', () => {
       rerender(graceBadge());
       expect(container).toBeEmptyDOMElement();
     });
+
+    it("does not replay the last person's tick on coming back to them after it has gone", () => {
+      vi.useFakeTimers();
+      const { container, rerender } = renderBadge();
+      mocks.pendingIds = new Set([ADA_SPACE]);
+      rerender(badge());
+      mocks.pendingIds = new Set();
+      mocks.followedIds = new Set([ADA_SPACE, GRACE_SPACE]);
+      rerender(badge());
+      expect(container.querySelector(TICK)).not.toBeNull();
+
+      rerender(graceBadge());
+      act(() => {
+        vi.advanceTimersByTime(2000);
+      });
+      rerender(badge());
+      expect(container).toBeEmptyDOMElement();
+    });
   });
 
   it('comes back as a "+" when a follow it confirmed did not land', () => {
