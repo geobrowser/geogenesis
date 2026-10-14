@@ -2,7 +2,6 @@ import { Effect, Either } from 'effect';
 
 import { Environment } from '~/core/environment';
 import { interestedVoteCondition } from '~/core/topics/interested';
-import { FOLLOWING_PROPERTY } from '~/core/topics/ontology';
 import { normId } from '~/core/utils/norm-id';
 
 import { graphql } from './graphql';
@@ -26,50 +25,35 @@ export type Followers = {
   followerIds: string[];
 };
 
-/** A follow row in either shape: an Interested vote (`userId`) or a `Following` relation (`fromEntityId`). */
-type FollowRow = { userId?: string; fromEntityId?: string; spaceId: string };
+/** A follow row: an Interested vote, by who cast it and the space it was cast in. */
+type FollowRow = { userId: string; spaceId: string };
 type Connection = { totalCount: number; nodes?: FollowRow[] };
 
 /**
  * One aliased connection per topic or person, so a feed's worth of cards is one request, plus one
  * viewer-scoped total per one when there is a viewer.
  *
- * A follow counts once per follower, and only as written in the follower's own personal space —
- * the space the app writes it to, and the one the viewer's own follows are read from. Flag on, a
- * follow is an Interested vote (kind 3): one person can hold several, cast in other spaces, and the
- * permissionless action lets anyone cast one into a space of their choosing. Flag off, it is a
- * `Following` relation, which anyone can write *from* someone else's entity into a space they
- * control. Either way a raw row total would let one person count many times, and no filter can
- * compare two columns, so the rows are read and the rule applied here.
+ * A follow counts once per follower, and only as cast in the follower's own personal space — the
+ * space the app writes it to, and the one the viewer's own follows are read from. A follow is an
+ * Interested vote (kind 3): one person can hold several, cast in other spaces, and the
+ * permissionless action lets anyone cast one into a space of their choosing. A raw row total would
+ * let one person count many times, and no filter can compare two columns, so the rows are read and
+ * the rule applied here.
  */
-export function followersQuery(entityIds: readonly string[], interested: boolean, viewerId?: string): string {
+export function followersQuery(entityIds: readonly string[], viewerId?: string): string {
   const viewer = viewerId ? normId(viewerId) : null;
 
   const fields = entityIds.flatMap((id, index) => {
     const entity = normId(id);
-    const all = interested
-      ? `t${index}: userVotesConnection(
+    const all = `t${index}: userVotesConnection(
           condition: { ${interestedVoteCondition({ objectId: entity })} }
           first: ${FOLLOWER_ROWS}
-        ) { totalCount nodes { userId spaceId } }`
-      : `t${index}: relationsConnection(
-          filter: { typeId: { is: "${FOLLOWING_PROPERTY}" }, toEntityId: { is: ${JSON.stringify(entity)} } }
-          first: ${FOLLOWER_ROWS}
-        ) { totalCount nodes { fromEntityId spaceId } }`;
+        ) { totalCount nodes { userId spaceId } }`;
     if (!viewer) return [all];
 
     // The viewer's own-space follow, exactly: what one past the rows read can't answer.
-    const mine = interested
-      ? `v${index}: userVotesConnection(
+    const mine = `v${index}: userVotesConnection(
           condition: { ${interestedVoteCondition({ objectId: entity, userId: viewer, spaceId: viewer })} }
-        ) { totalCount }`
-      : `v${index}: relationsConnection(
-          filter: {
-            typeId: { is: "${FOLLOWING_PROPERTY}" }
-            toEntityId: { is: ${JSON.stringify(entity)} }
-            fromEntityId: { is: ${JSON.stringify(viewer)} }
-            spaceId: { is: ${JSON.stringify(viewer)} }
-          }
         ) { totalCount }`;
     return [all, mine];
   });
@@ -77,13 +61,8 @@ export function followersQuery(entityIds: readonly string[], interested: boolean
   return `query {\n${fields.join('\n')}\n}`;
 }
 
-export function followersQueryKey(entityId: string, interested: boolean, viewerId?: string | null) {
-  return [
-    'followers',
-    normId(entityId),
-    interested ? 'interested' : 'following',
-    viewerId ? normId(viewerId) : null,
-  ] as const;
+export function followersQueryKey(entityId: string, viewerId?: string | null) {
+  return ['followers', normId(entityId), viewerId ? normId(viewerId) : null] as const;
 }
 
 /** One entity's followers off its connections; see `followersQuery` for which rows count. */
@@ -94,8 +73,7 @@ export function readFollowers(all: Connection | null | undefined, viewer: Connec
   const nodes = all.nodes ?? [];
   const followers = new Set<string>();
   for (const row of nodes) {
-    const follower = row.userId ?? row.fromEntityId;
-    if (follower && normId(follower) === normId(row.spaceId)) followers.add(normId(follower));
+    if (normId(row.userId) === normId(row.spaceId)) followers.add(normId(row.userId));
   }
 
   // Past the rows read, the server's total stands in. It can't apply the rule above, so one that
@@ -106,14 +84,13 @@ export function readFollowers(all: Connection | null | undefined, viewer: Connec
 
 export async function fetchFollowers(
   entityIds: readonly string[],
-  interested: boolean,
   viewerId?: string,
   signal?: AbortSignal
 ): Promise<Map<string, Followers>> {
   const result = await Effect.runPromise(
     Effect.either(
       graphql<Record<string, Connection | null>>({
-        query: followersQuery(entityIds, interested, viewerId),
+        query: followersQuery(entityIds, viewerId),
         endpoint: Environment.getConfig().api,
         signal,
       })

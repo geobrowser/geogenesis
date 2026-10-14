@@ -195,15 +195,13 @@ describe('FollowTopicButton', () => {
     expect(button).toHaveAttribute('title', 'You need a personal space to follow');
   });
 
-  it('says the space must finish registering when an Interested follow needs it on chain', () => {
-    vi.stubEnv('NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED', 'true');
+  it('says the space must finish registering, since a follow is cast from it on chain', () => {
     mocks.isRegistered = false;
     renderButton();
     const button = screen.getByRole('button');
 
     expect(button).toBeDisabled();
     expect(button).toHaveAttribute('title', 'Your personal space needs to finish setting up before you can follow');
-    vi.unstubAllEnvs();
   });
 
   it('holds the press while a new personal space is on its way', () => {

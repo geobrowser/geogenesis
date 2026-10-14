@@ -7,7 +7,6 @@ import * as React from 'react';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { createBatchLoader } from '~/core/io/batch-loader';
 import { type Followers, fetchFollowers, followersQueryKey } from '~/core/io/subgraph/fetch-followers';
-import { isInterestedFollowEnabled } from '~/core/topics/interested';
 import type { FollowKind } from '~/core/topics/interested';
 import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
@@ -15,19 +14,19 @@ import { normId } from '~/core/utils/norm-id';
 /** Ids per request: a feed page of them fits in one, and the query stays a sane size. */
 const BATCH_SIZE = 25;
 
-/** One loader per (flag, viewer): those are separate queries, so their asks batch separately. */
+/** One loader per viewer: each is a separate query, so their asks batch separately. */
 const loaders = new Map<string, (id: string) => Promise<Followers>>();
 
 /**
  * Every card asks for its own count, and a feed mounts many at once; asks made in the same tick go
  * out as one request. See `createBatchLoader`.
  */
-function loadFollowers(entityId: string, interested: boolean, viewerId?: string): Promise<Followers> {
-  const group = `${interested}:${viewerId ? normId(viewerId) : ''}`;
+function loadFollowers(entityId: string, viewerId?: string): Promise<Followers> {
+  const group = viewerId ? normId(viewerId) : '';
   let load = loaders.get(group);
   if (!load) {
     load = createBatchLoader<Followers>({
-      fetchBatch: ids => fetchFollowers(ids, interested, viewerId),
+      fetchBatch: ids => fetchFollowers(ids, viewerId),
       missing: () => ({ count: 0, viewerIndexed: false, followerIds: [] }),
       maxBatchSize: BATCH_SIZE,
     });
@@ -44,8 +43,7 @@ function loadFollowers(entityId: string, interested: boolean, viewerId?: string)
  * the count comes from their own follows instead, which update as soon as the write succeeds: the
  * others from the indexer, plus one if the viewer follows now.
  *
- * `kind: 'person'` for a person, whose follows are only ever Interested votes. A topic reads
- * whichever kind the Interested flag writes.
+ * `kind: 'person'` for a person, so the viewer's own follow is read from their person follows.
  *
  * `null` until the count has loaded, so a control draws nothing rather than a zero that jumps.
  */
@@ -64,15 +62,13 @@ export function useFollowers(
   entityId: string,
   { kind = 'topic', enabled = true }: { kind?: FollowKind; enabled?: boolean } = {}
 ): { count: number; ids: string[] } | null {
-  // A person's follows are only ever Interested; a topic's are whichever kind the flag writes.
-  const interested = kind === 'person' || isInterestedFollowEnabled();
   const { personalSpaceId } = usePersonalSpaceId();
   const { topicIds: followedIds, isLoading: isLoadingFollows } = useFollowedEntities({ kind });
   const viewerId = personalSpaceId ?? undefined;
 
   const { data, isError } = useQuery({
-    queryKey: followersQueryKey(entityId, interested, viewerId),
-    queryFn: () => loadFollowers(entityId, interested, viewerId),
+    queryKey: followersQueryKey(entityId, viewerId),
+    queryFn: () => loadFollowers(entityId, viewerId),
     staleTime: 60_000,
     enabled,
   });
