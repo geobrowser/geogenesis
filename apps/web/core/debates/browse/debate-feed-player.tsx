@@ -1142,17 +1142,6 @@ function DebaterVideo({
   };
 
   const openProfile = useOpenDebaterProfile(participant);
-  const onIdentityClick = (event: React.MouseEvent<HTMLButtonElement>) => {
-    // The position sits inside the name row for layout, but it remains part of the video's
-    // play/pause surface rather than becoming a second link to the participant's profile.
-    if (event.target instanceof Element && event.target.closest('[data-debate-position-chip]')) {
-      event.stopPropagation();
-      onToggle();
-      return;
-    }
-    openProfile(event);
-  };
-
   /**
    * Whether the keyboard is on this tile's name, which overrides the round card's crossfade.
    *
@@ -1414,41 +1403,56 @@ function DebaterVideo({
           clearScrubber === 'on-hover' && 'group-hover:pb-5'
         )}
       >
-        <button
-          type="button"
-          onClick={onIdentityClick}
-          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
-        >
-          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
-          </span>
-          <span className="flex min-w-0 flex-col">
-            <span className="flex min-w-0 items-center gap-2">
-              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
-              {/* Named from the side rather than read off `position_label`, for the same reason
-                  the room tile is: geo-chat still calls a factual claim's sides "Verify" and
-                  "Dispute", which is a word this app no longer has a way to publish. `position`
-                  is a non-null boolean, so the label is always a real one and the participant is
-                  the only thing left to guard. */}
-              {participant && (
-                <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
-              )}
-            </span>
-            {byline && (
-              <span data-debate-byline title={byline} className="truncate text-[0.75rem] leading-4 text-white/80">
-                {byline}
+        {/* Name, then Follow, then the position (GEO-3305): Follow belongs to the person, so it
+            sits against their name, and the stance closes the row. Follow can't live inside the
+            identity button (a button can't hold a button), so the name row is split into its
+            parts rather than being one button: the avatar and name are the profile link, the
+            byline under them is the same link again for the pointer, and the chip takes no
+            pointer events at all, so a click on it lands on the pause/play surface underneath.
+
+            The width cap is the old 55% for the name and chip plus room for Follow, which used to
+            sit outside it. */}
+        <span className="flex max-w-[calc(55%+5rem)] min-w-0 flex-col">
+          <span className="flex min-w-0 items-center gap-2">
+            <button
+              type="button"
+              onClick={openProfile}
+              className="pointer-events-auto flex min-w-0 items-center gap-2 text-left"
+            >
+              <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
+                <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
               </span>
+              <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
+            </button>
+            {/* GEO-3236. Chip-sized and chip-filled, so it reads with the position beside it. */}
+            {participant && validateSpaceId(participant.profile_space_id) ? (
+              <span className="pointer-events-auto shrink-0">
+                <FollowButton target={{ kind: 'person', id: participant.profile_space_id, name }} variant="overlay" />
+              </span>
+            ) : null}
+            {/* Named from the side rather than read off `position_label`, for the same reason
+                the room tile is: geo-chat still calls a factual claim's sides "Verify" and
+                "Dispute", which is a word this app no longer has a way to publish. `position`
+                is a non-null boolean, so the label is always a real one and the participant is
+                the only thing left to guard. */}
+            {participant && (
+              <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
             )}
           </span>
-        </button>
-        {/* GEO-3236. A sibling of the identity button, not inside it: a button can't hold a button.
-            Chip-sized and chip-filled, so it reads with the position beside the name, and it takes
-            pointer events back from the row the way the name does. */}
-        {participant && validateSpaceId(participant.profile_space_id) ? (
-          <span className="pointer-events-auto mt-0.5 shrink-0">
-            <FollowButton target={{ kind: 'person', id: participant.profile_space_id, name }} variant="overlay" />
-          </span>
-        ) : null}
+          {byline && (
+            // Out of the tab order: the name button above is the same link for the keyboard.
+            <button
+              type="button"
+              tabIndex={-1}
+              onClick={openProfile}
+              data-debate-byline
+              title={byline}
+              className="pointer-events-auto min-w-0 truncate pl-7 text-left text-[0.75rem] leading-4 text-white/80"
+            >
+              {byline}
+            </button>
+          )}
+        </span>
       </div>
 
       {scrubber && <div className="absolute inset-x-0 bottom-0 z-10">{scrubber}</div>}
