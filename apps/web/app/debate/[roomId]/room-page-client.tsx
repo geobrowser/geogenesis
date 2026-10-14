@@ -11,7 +11,7 @@ import { GeoChatRequestError } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
 import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
 import { useDebateLobbyGuestView } from '~/core/debates/lobbies/lobby-guest-hooks';
-import { DebateLobbyPage, LobbiesUnavailable } from '~/core/debates/lobbies/lobby-page';
+import { DebateLobbyPage } from '~/core/debates/lobbies/lobby-page';
 import {
   useDebateRoom,
   useDebateRoomPresence,
@@ -27,7 +27,6 @@ import {
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import { ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spinner } from '~/design-system/spinner';
@@ -46,7 +45,6 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const room = roomQuery.data ?? null;
   // A lobby answers `not_a_participant` here, so it is never a denial.
   const isLobby = room?.kind === 'lobby';
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
 
   // Refusals arrive in the body, not the status: a stranger gets a 200 saying `not_a_participant`.
   // Only a room that does not exist is an HTTP error.
@@ -74,7 +72,7 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // Signed out, the room's kind is unknown; the guest view answers for a lobby (GEO-3129), and is
   // kept through sign-in so the lobby page stays mounted until the member read says the same.
   const signedOut = ready && !authenticated;
-  const guestView = useDebateLobbyGuestView(roomId, { enabled: signedOut && lobbyJoining });
+  const guestView = useDebateLobbyGuestView(roomId, { enabled: signedOut });
   const knownLobby = isLobby || guestView.data !== undefined;
 
   // A room whose debate is over would otherwise mount the picker, flash its claims and redirect
@@ -97,14 +95,15 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   if (denial) return null;
 
   // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest, signed out too.
-  if (knownLobby) {
-    return lobbyJoining ? <DebateLobbyPage key={roomId} lobbyId={roomId} /> : <LobbiesUnavailable />;
-  }
+  // Not behind `lobbyJoining` (GEO-3270): that flag gates finding lobbies, and a link is somebody
+  // inviting you to one. A brand-new account never has the flag, so gating here sent everyone who
+  // signed up from a shared lobby link to "Lobbies aren't available" and on to Explore.
+  if (knownLobby) return <DebateLobbyPage key={roomId} lobbyId={roomId} />;
 
   // A room link is pasted into a calendar invite, so the person opening it is often signed out.
   // The room cannot say who they are, and an error card is a dead end.
   if (signedOut) {
-    if (lobbyJoining && guestView.isPending && guestView.fetchStatus !== 'idle') {
+    if (guestView.isPending && guestView.fetchStatus !== 'idle') {
       return <RoomNotice busy>Opening…</RoomNotice>;
     }
     const lobbyLink = searchParams?.get('via') === LOBBY_LINK_VIA;

@@ -18,7 +18,7 @@ import { useMobileSheetDrag } from '~/core/hooks/use-mobile-sheet-drag';
 import { Calendar } from '~/design-system/icons/calendar';
 import { CloseSmall } from '~/design-system/icons/close-small';
 import { ExpandSmall } from '~/design-system/icons/expand-small';
-import { MobileSheetGrabHandle } from '~/design-system/mobile-sheet-grab-handle';
+import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
@@ -96,9 +96,10 @@ function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHu
 export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
-  const { dragControls, handleDragEnd, handlePointerDown, setOverlayElement } = useMobileSheetDrag({
+  const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
     enabled: isMobile && isOpen,
     onDismiss: close,
+    peekTopPx: MOBILE_SHEET_TOP_OFFSET_PX,
   });
   // Held here rather than per tab, so switching tabs doesn't drop and re-take the gateway scope.
   useMatchmakingScope(isOpen);
@@ -204,35 +205,23 @@ export function DebatesHubPanel() {
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           transition={{ duration: 0.15 }}
-          onPointerDown={handlePointerDown}
         >
           {/* Not a button: `aria-modal` hides it from assistive tech anyway, so labelling it
               "Close" only promised a control nobody could hear about — the header's button is the
               announced one. Tapping outside still closes, which is what this is for. */}
           <div aria-hidden className="absolute inset-0 bg-grey-04/50" onClick={close} />
-          <motion.div
+          <MobileSheetSurface
             ref={sheetRef as React.RefObject<HTMLDivElement>}
             tabIndex={-1}
             data-debates-hub
-            data-mobile-sheet-surface
             role="dialog"
             aria-modal="true"
             aria-label="Debates"
-            drag="y"
-            dragControls={dragControls}
-            dragListener={false}
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.12}
-            onDragEnd={handleDragEnd}
-            initial={{ y: '100%' }}
-            animate={{ y: 0 }}
-            transition={{ type: 'spring', damping: 30, stiffness: 320 }}
-            className="rounded-t-2xl shadow-2xl absolute inset-x-0 bottom-0 z-1 flex flex-col overflow-hidden overscroll-none bg-white"
-            style={{ top: MOBILE_SHEET_TOP_OFFSET_PX }}
+            sheetStyle={sheetStyle}
+            sheet={sheet}
           >
-            <MobileSheetGrabHandle />
             {body}
-          </motion.div>
+          </MobileSheetSurface>
         </motion.div>
       </MotionConfig>,
       document.body

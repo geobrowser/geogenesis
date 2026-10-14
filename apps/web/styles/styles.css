@@ -774,6 +774,14 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
   body[data-mobile-sheet-open] {
     overscroll-behavior-y: none;
   }
+
+  /* No rubber-band at the top of sheet content: a pull down from there moves the sheet instead.
+     Content that bleeds to the edge (profile activity's carousel overshoots by ~1px) must not let
+     the whole sheet pan sideways; nested carousels keep their own horizontal scroll. */
+  [data-mobile-sheet-surface] [data-mobile-sheet-scroll] {
+    overflow-x: hidden;
+    overscroll-behavior-y: none;
+  }
 }
 
 /* Ranking compose edit mode (mobile): hide app navbar and use full viewport. */

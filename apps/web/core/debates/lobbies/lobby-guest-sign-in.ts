@@ -3,6 +3,9 @@
 import * as React from 'react';
 
 import type { AnalyticsProperties } from '~/core/analytics';
+import { SIGN_IN_MODAL } from '~/core/auth/sign-in-deep-link';
+import { useDeepLinkParams } from '~/core/deep-links/use-deep-link';
+import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
 import { type PrivySignInCallOptions, usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 
 import { dashlessId } from '../api';
@@ -42,5 +45,46 @@ export function useLobbyGuestSignIn(lobbyId: string) {
     (properties?: AnalyticsProperties, options?: PrivySignInCallOptions) =>
       void signIn(properties, { redirectTo, ...options }),
     [redirectTo, signIn]
+  );
+}
+
+const promptedKey = (lobbyId: string) => `geo.debates.lobby-sign-in-prompted.${dashlessId(lobbyId)}`;
+/** This page load's claims, so the deep link and the page still agree when storage is unavailable. */
+const promptedThisLoad = new Set<string>();
+
+/**
+ * Records that this tab has opened the account prompt for a lobby; true only the first time. Shared
+ * with the sign-in deep link, so a visitor it already prompted is not prompted again on arrival.
+ */
+export function claimLobbySignInPrompt(lobbyId: string) {
+  const key = promptedKey(lobbyId);
+  if (promptedThisLoad.has(key)) return false;
+  promptedThisLoad.add(key);
+  try {
+    if (window.sessionStorage.getItem(key)) return false;
+    window.sessionStorage.setItem(key, '1');
+  } catch {
+    // Without storage it asks once per page load rather than once per tab.
+  }
+  return true;
+}
+
+/**
+ * GEO-3270. A visitor without an account can do nothing in a lobby yet, so the account prompt opens
+ * as they arrive rather than behind a notice. Once per lobby per tab, so closing it and reloading
+ * does not put it back; the guest banner's Log in and Create account open it again.
+ *
+ * Held while the URL carries the sign-in link, which opens its own prompt once Privy is ready and
+ * claims the lobby's as it does; nothing orders that effect before this one.
+ */
+export function useLobbySignInPrompt(lobbyId: string, open: boolean) {
+  const signIn = useLobbyGuestSignIn(lobbyId);
+  const signInLink = useDeepLinkParams(SIGN_IN_MODAL);
+  useEffectOnceWhen(
+    open && !signInLink.requested,
+    () => {
+      if (claimLobbySignInPrompt(lobbyId)) signIn({ component: 'lobby_sign_in_prompt', auth_trigger: 'page_load' });
+    },
+    lobbyId
   );
 }

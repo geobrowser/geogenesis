@@ -48,6 +48,7 @@ import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
+import { useHubScrollSelector } from './hub-scroll';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
@@ -1018,6 +1019,7 @@ export function ClaimsTab({
     hasNextPage &&
     ((graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage) || answersInFlight);
 
+  const hubScrollSelector = useHubScrollSelector();
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: mayFetchAhead,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
@@ -1026,10 +1028,7 @@ export function ClaimsTab({
     // any of it can be shown. Starting the next page a screenful or two early is what keeps that
     // from reading as a list that stops every time you reach the bottom.
     rootMargin: '1200px',
-    // The hub scrolls in its own panel, and `rootMargin` expands the root — so measured against the
-    // viewport the lead above buys nothing: the sentinel is clipped by the panel until it has been
-    // scrolled to, which is the moment the lead was meant to come before.
-    rootSelector: '[data-debates-hub-scroll]',
+    rootSelector: hubScrollSelector,
   });
 
   /**

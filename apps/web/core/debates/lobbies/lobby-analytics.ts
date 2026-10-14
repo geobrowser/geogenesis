@@ -37,8 +37,9 @@ export type LobbyExit = 'left' | 'debate_started' | 'page_closed' | 'lobby_ended
 export type LobbyRequestKind = 'claim' | 'person';
 
 /**
- * `via` on a lobby's shared link. A signed-out visitor's room page cannot read the room's kind, so
- * the link says it is a lobby and sign-in attributes the sign-up to it. Bare room links stay `room`.
+ * `via` on a lobby's shared link. A signed-out visitor's room page learns the kind from the guest
+ * view; when that read fails, the link still says it is a lobby and sign-in attributes the sign-up
+ * to it. Bare room links stay `room`.
  */
 export const LOBBY_LINK_VIA = 'lobby';
 
