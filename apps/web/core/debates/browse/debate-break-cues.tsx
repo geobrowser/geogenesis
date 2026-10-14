@@ -216,7 +216,7 @@ export function DebateBreakOverlay({
               <span
                 data-debate-stamp={key}
                 className={cx(
-                  'rounded-[10px] border-[5px] border-current bg-white/92 px-4 pt-1.5 pb-1 text-[11cqw] leading-none font-bold tracking-[0.06em] whitespace-nowrap uppercase shadow-[0_10px_30px_rgba(0,0,0,0.35)] motion-safe:animate-debate-stamp',
+                  'rounded-[10px] border-[5px] border-current bg-white px-4 pt-1.5 pb-1 text-[11cqw] leading-none font-bold tracking-[0.06em] whitespace-nowrap uppercase shadow-[0_10px_30px_rgba(0,0,0,0.35)] motion-safe:animate-debate-stamp',
                   STAMP_INK[key]
                 )}
                 style={
