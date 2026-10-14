@@ -146,14 +146,16 @@ describe('useLobbyReminderPress', () => {
     expect(mocks.mutateAsync).toHaveBeenCalledWith({ lobbyId: 'abc-123', reminded: true });
   });
 
-  // The runner turns a throw into a retry toast; the button already shows the failure.
-  it('resolves rather than throws when the reminder fails', async () => {
+  // Copilot on #2863: the replay may run through the navbar or another lobby's card, neither of
+  // which shows this lobby's error. A failure is thrown so the runner keeps it and offers Retry;
+  // only a lobby that opened meanwhile (409) settles quietly.
+  it('throws a failed replay for the runner to retry, and settles quietly on 409', async () => {
     mocks.lobbies = [lobby()];
-    renderHook(() => useLobbyReminderPress(lobby()));
+    renderHook(() => useLobbyReminderReplay());
     mocks.mutateAsync.mockRejectedValueOnce(new GeoChatRequestError('opened', 'lobby_already_open', 409));
     await expect(mocks.config!.run('abc123')).resolves.toBeUndefined();
     mocks.mutateAsync.mockRejectedValueOnce(new GeoChatRequestError('down', 'unavailable', 503));
-    await expect(mocks.config!.run('abc123')).resolves.toBeUndefined();
+    await expect(mocks.config!.run('abc123')).rejects.toThrow('down');
   });
 
   it('does nothing on a press without a lobby', () => {

@@ -27,8 +27,8 @@ const QUEUED_REMINDER_ID = 'lobby-reminder';
  * Each decides from the account's own lobby list, by id, rather than from the card that was pressed:
  * that list loading says geo-chat knows the new account, and it still answers once the card is gone
  * (the panel closed, or the lobby opened and its card became Join). Set unless that list says it
- * already is, the lobby opened, or it is no longer listed; a failure is left to the button's error
- * rather than thrown, which the runner would turn into a retry toast.
+ * already is, the lobby opened, or it is no longer listed. Any other failure is thrown for the
+ * runner's Retry, since the copy replaying it may show no error for this lobby.
  */
 function useQueuedLobbyReminder(reminder: ReturnType<typeof useDebateLobbyReminder>) {
   const { mutateAsync } = reminder;
@@ -49,8 +49,11 @@ function useQueuedLobbyReminder(reminder: ReturnType<typeof useDebateLobbyRemind
       try {
         await mutateAsync({ lobbyId: target.lobby_id, reminded: true });
       } catch (error) {
-        // Opened since: the list swaps in Join. Anything else is shown beside the button.
+        // Opened since: the list swaps in Join.
         if (error instanceof GeoChatRequestError && error.status === 409) return;
+        // Thrown, so the runner keeps it queued and offers Retry: the copy replaying it may be the
+        // navbar's, or another lobby's card, and neither shows this lobby's error.
+        throw error;
       }
     },
   });
