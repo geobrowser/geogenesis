@@ -16,6 +16,7 @@ import {
   getDebateLobby,
   getMyDebateLobby,
   listDebateLobbies,
+  listDebateLobbyCalendar,
   sendDebateLobbyHeartbeat,
   setDebateLobbyPresence,
   setDebateLobbyReminder,
@@ -81,6 +82,22 @@ export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: nu
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
     enabled: enabled && ready && authenticated,
     ...(staleTime === undefined ? { refetchOnMount: 'always' as const } : { staleTime }),
+  });
+}
+
+/**
+ * Every lobby starting in `[from, to)` (GEO-3271), for the calendar's week: no per-host or total cap,
+ * and ended lobbies included. Signed in only, as the list is. Refetched with it; card patches are
+ * laid over it by the gateway.
+ */
+export function useDebateLobbyCalendar(from: Date, to: Date, enabled = true) {
+  const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+
+  return useQuery({
+    ...debateQueryNetworkOptions,
+    queryKey: debateQueryKeys.lobbyCalendar(accountKey, from.getTime(), to.getTime()),
+    queryFn: ({ signal }) => listDebateLobbyCalendar({ from, to }, getPrivyIdentityToken, accountKey, signal),
+    enabled: enabled && ready && authenticated,
   });
 }
 

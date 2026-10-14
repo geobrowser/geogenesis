@@ -14,6 +14,7 @@ const api = vi.hoisted(() => ({
   stepOutOfDebateLobby: vi.fn(),
   endDebateLobbyStepOut: vi.fn(),
   listDebateLobbies: vi.fn(),
+  listDebateLobbyCalendar: vi.fn(),
 }));
 
 const capture = vi.hoisted(() => vi.fn());
@@ -31,7 +32,9 @@ vi.mock('../hooks', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useLobbyPresence } = await import('./hooks');
+const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useDebateLobbyCalendar, useLobbyPresence } =
+  await import('./hooks');
+const { debateQueryKeys } = await import('../hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
 const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
@@ -705,6 +708,25 @@ it('shows no lobbies once the viewer signs out', async () => {
   } finally {
     Object.assign(auth, { authenticated: true, accountKey: 'acct' });
   }
+});
+
+// GEO-3300. The calendar's week sits under the list's key, so whatever refetches the list (a
+// lobby created, opened or closed, an RSVP, a reconnect) refetches the week too.
+it('reads the calendar week for its bounds, and again whenever the lobby list is refetched', async () => {
+  api.listDebateLobbyCalendar.mockResolvedValue({ lobbies: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const from = new Date('2026-10-11T07:00:00Z');
+  const to = new Date('2026-10-18T07:00:00Z');
+
+  const { result } = renderHook(() => useDebateLobbyCalendar(from, to), { wrapper });
+  await waitFor(() => expect(result.current.isSuccess).toBe(true));
+  expect(api.listDebateLobbyCalendar).toHaveBeenCalledWith({ from, to }, expect.anything(), 'acct', expect.anything());
+
+  await client.invalidateQueries({ queryKey: debateQueryKeys.lobbies('acct') });
+  await waitFor(() => expect(api.listDebateLobbyCalendar).toHaveBeenCalledTimes(2));
 });
 
 // Card patches stop while the panel is closed, so a reopen inside the stale window still reloads.

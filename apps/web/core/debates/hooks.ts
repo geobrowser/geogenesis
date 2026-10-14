@@ -169,6 +169,12 @@ export const debateQueryKeys = {
   upcomingRooms: (accountKey: string | null) => ['debates', 'account', accountKey, 'upcoming-rooms'] as const,
   /** GEO-3133. Patched or refetched on `debate.lobbies_changed`. */
   lobbies: (accountKey: string | null) => ['debates', 'account', accountKey, 'lobbies'] as const,
+  /**
+   * GEO-3271. Under `lobbies`, so everything that refetches the list (a lobby created, opened or
+   * closed, an RSVP, a reconnect) refetches the calendar's week too. Bounds in ms.
+   */
+  lobbyCalendar: (accountKey: string | null, from: number, to: number) =>
+    ['debates', 'account', accountKey, 'lobbies', 'calendar', from, to] as const,
   /** Refetched on a card-less `debate.lobbies_changed`. */
   myLobby: (accountKey: string | null) => ['debates', 'account', accountKey, 'my-lobby'] as const,
   /** Dashless, as `debate.lobby_changed` spells it. */
