@@ -42,6 +42,7 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
+import { DebateNotice } from '~/core/debates/debate-notice';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -132,6 +133,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { reportError } from '~/core/telemetry/logger';
 
 import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
+import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
 
 type DebateRoomPageClientProps = {
@@ -2204,13 +2206,16 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     requestRematch,
   ]);
 
-  // Leave as soon as both rooms have consented rather than on the clock; see `rematchReady`.
+  // Leave as soon as the session has an answer rather than on the clock: both rooms consented (see
+  // `rematchReady`), or it ended without them, because the other debater left it. The room is
+  // hidden through the handoff (GEO-3301), so sitting out the rest of the thank-you period would be
+  // up to 20 seconds of blank screen; `finishLiveDebate` saves the recording and goes back either way.
+  const rematchSessionClosed = rematchSessionStatus === 'ended' || rematchSessionStatus === 'expired';
   React.useEffect(() => {
     if (countdown.effectiveStatus !== 'thanking') return;
-    if (countdown.remainingSeconds > 0 && !rematchReady) return;
-    if (!liveRematchDestination) return;
+    if (!liveRematchDestination && !rematchSessionClosed) return;
     void finishLiveDebate({ allowDuringThankYou: true });
-  }, [rematchReady, countdown.effectiveStatus, countdown.remainingSeconds, finishLiveDebate, liveRematchDestination]);
+  }, [countdown.effectiveStatus, finishLiveDebate, liveRematchDestination, rematchSessionClosed]);
 
   /**
    * GEO-2819. A tab that joined the room for the intro is already there when the second "I'm
@@ -3588,22 +3593,23 @@ function DebateHandoffNotice({
   leaveDisabled: boolean;
 }) {
   return (
-    <div className="absolute inset-0 grid place-items-center px-5">
-      <div
-        role="status"
-        className="flex w-full max-w-[360px] items-center justify-between gap-2.5 rounded-lg border border-grey-02 bg-white p-3"
-      >
-        <Text as="p" variant="metadata" color="grey-04" className="min-w-0 truncate">
-          {waitingForOpponent ? `Waiting for ${opponentName}...` : 'Opening claims...'}
-        </Text>
-        <SmallButton
-          type="button"
-          className={PILL_BUTTON_SECONDARY_CLASS_NAME}
-          onClick={onLeave}
-          disabled={leaveDisabled}
+    <div role="status" className="absolute inset-0 grid place-items-center px-5">
+      <div className="w-full max-w-[420px]">
+        <DebateNotice
+          icon={<Time />}
+          action={
+            <SmallButton
+              type="button"
+              className={PILL_BUTTON_SECONDARY_CLASS_NAME}
+              onClick={onLeave}
+              disabled={leaveDisabled}
+            >
+              Leave
+            </SmallButton>
+          }
         >
-          Leave
-        </SmallButton>
+          <p className="truncate">{waitingForOpponent ? `Waiting for ${opponentName}...` : 'Opening claims...'}</p>
+        </DebateNotice>
       </div>
     </div>
   );

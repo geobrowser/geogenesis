@@ -5,11 +5,12 @@ import * as React from 'react';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
 /**
- * One grey row under the pair in the claim picker: a leading icon, a line of text, an action and a
- * way to wave it away. The unmute prompt was the first; the finished debate's publishing row
- * (GEO-3301) is the second, and draws itself the same way so the two stack as one family.
+ * One grey row in the debate flow: a leading icon, a line of text, an action and a way to wave it
+ * away. The claim picker's unmute prompt was the first; the finished debate's publishing row and
+ * the room's "Waiting for …" between the last turn and the picker (GEO-3301) draw themselves the
+ * same way, so the handoff and the picker read as one flow.
  */
-export function RematchNotice({
+export function DebateNotice({
   icon,
   children,
   action,

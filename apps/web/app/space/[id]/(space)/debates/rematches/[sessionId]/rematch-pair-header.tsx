@@ -4,13 +4,12 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { CloseSmall } from '~/design-system/icons/close-small';
-
-import { RematchNotice } from './rematch-notice';
 
 /**
  * The "You VS them" header for the rematch claim picker (GEO-2992).
@@ -510,7 +509,7 @@ function TalkingBars() {
  */
 function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & { opponentName: string }) {
   return (
-    <RematchNotice
+    <DebateNotice
       data-testid="rematch-unmute-notice"
       icon={<MicrophoneIcon muted />}
       onDismiss={onDismiss}
@@ -525,7 +524,7 @@ function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & 
       }
     >
       <p>You’re in a live room with {firstName(opponentName)}. Unmute to talk while you pick a claim.</p>
-    </RematchNotice>
+    </DebateNotice>
   );
 }
 

@@ -2859,7 +2859,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               this button is the only way off it. Signed out, mid identity exchange, or on a failed
               session lookup there is no pair to draw — and a picker with no exit is worse than one
               with no header. */}
-          <div className="mb-4">
+          {/* One stack, so the publishing row sits the header's own 12px under the pair and its
+              notices, and takes no space at all when there is nothing to draw. */}
+          <div className="mb-4 flex flex-col gap-3">
             {session && currentUserId ? (
               <RematchVoiceHeader
                 session={session}
@@ -2875,13 +2877,11 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             ) : (
               <div className="flex justify-end">{leaveButton}</div>
             )}
-          </div>
-          {/* GEO-3301. The pair arrive straight from the debate, so the recording it left behind comes
-              with them: under the pair, inside the sticky block so the way to withdraw it stays on
-              screen while the list scrolls. A session from a profile challenge has no debate. */}
-          {sourceDebateQuery.data && currentUserId ? (
-            // `-mt-1` so it sits the unmute prompt's 12px under the header rather than the block's 16px.
-            <div className="-mt-1 mb-4 empty:hidden">
+            {/* GEO-3301. The pair arrive straight from the debate, so the recording it left behind
+                comes with them: under the pair, inside the sticky block so the way to withdraw it
+                stays on screen while the list scrolls. A session from a profile challenge has no
+                debate. */}
+            {sourceDebateQuery.data && currentUserId ? (
               <RematchPublishCard
                 // Per debate: a dismissal belongs to the one it was about, not the next session's.
                 key={sourceDebateQuery.data.id}
@@ -2889,8 +2889,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                 currentUserId={currentUserId}
                 opponentName={remoteFirstName}
               />
-            </div>
-          ) : null}
+            ) : null}
+          </div>
           <header className="mb-4">
             <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
               {pickerTabs.map(spec => (

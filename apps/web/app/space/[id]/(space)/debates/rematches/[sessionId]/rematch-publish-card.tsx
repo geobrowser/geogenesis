@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import type { Debate } from '~/core/debates/api';
+import { DebateNotice } from '~/core/debates/debate-notice';
 import { CameraIcon } from '~/core/debates/debate-room-controls';
 import { DebateUploadProgressBar } from '~/core/debates/debate-upload-progress-bar';
 import { useServerClock } from '~/core/debates/matchmaking/use-request-countdown';
@@ -18,14 +19,12 @@ import {
 import { PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
 
-import { RematchNotice } from './rematch-notice';
-
 /**
  * The finished debate's recording, under the pair in the claim picker (GEO-3301).
  *
  * The pair used to sit through a 20 second thank-you screen whose only lasting job was the
  * "Publish debate?" switch. They come straight here now, so the switch comes with them, as a row in
- * the unmute prompt's style (`RematchNotice`): where the recording is, and the way to withdraw it.
+ * the unmute prompt's style (`DebateNotice`): where the recording is, and the way to withdraw it.
  * Once it is published or withdrawn the row says so and can be dismissed.
  *
  * It owns no cancel flow of its own. The upload coordinator does — the confirmation, the request,
@@ -86,7 +85,7 @@ export function RematchPublishCard({
   const dismiss = state === 'publishing' ? undefined : () => setDismissed(true);
 
   return (
-    <RematchNotice
+    <DebateNotice
       data-testid="rematch-publish-card"
       icon={<CameraIcon disabled={false} />}
       onDismiss={dismiss}
@@ -103,12 +102,7 @@ export function RematchPublishCard({
         ) : null
       }
     >
-      <p role="status">
-        {state === 'publishing' && 'Publishing your debate'}
-        {state === 'published' && 'Debate published'}
-        {state === 'cancelled_by_you' && 'Debate not published'}
-        {state === 'cancelled_by_opponent' && `${opponentName} cancelled publishing`}
-      </p>
+      <p role="status">{publishCardLabel(state, opponentName)}</p>
       {state === 'publishing' && (
         <DebateUploadProgressBar label="Upload progress" percent={offer.percent} tone="light" />
       )}
@@ -117,11 +111,24 @@ export function RematchPublishCard({
           <Check />
         </span>
       )}
-    </RematchNotice>
+    </DebateNotice>
   );
 }
 
 type PublishCardState = 'publishing' | 'published' | 'cancelled_by_you' | 'cancelled_by_opponent';
+
+function publishCardLabel(state: PublishCardState, opponentName: string): string {
+  switch (state) {
+    case 'publishing':
+      return 'Publishing your debate';
+    case 'published':
+      return 'Debate published';
+    case 'cancelled_by_you':
+      return 'Debate not published';
+    case 'cancelled_by_opponent':
+      return `${opponentName} cancelled publishing`;
+  }
+}
 
 /**
  * What the card says, or null for no card. Withdrawn wins over everything: the coordinator knows the
