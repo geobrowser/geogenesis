@@ -171,37 +171,53 @@ export function useFromThisDebateList(
   }, [next, keepIds, resetKey]);
 }
 
-/** One round of the debate on the "From this debate" tab, and the claims said in it. */
-export type FromThisDebateRound<T> = { key: number; label: string; items: T[] };
+/**
+ * One stretch of the "From this debate" list: a round and the claims said in it, or, where the
+ * rounds cannot be told ({@link groupFromThisDebateByRound}), the whole list with no label.
+ */
+export type FromThisDebateRound<T> = { key: number; label: string | null; items: T[] };
 
 /**
- * The tab's list as the debate ran: grouped by round, a round being both debaters' turns, and in
- * the order each claim was said within it.
+ * The tab's list as the debate ran: in the order each claim was said, grouped by round where the
+ * rounds can be told, a round being both debaters' turns.
  *
  * Sorted here rather than trusted from the list, which is append-only (D4) and so puts a claim the
  * final pass found late after everything already listed, whatever turn it came from.
  *
- * `turnCount` names the rounds the way the room did ("Round 2 · Rebuttal"). An Open rounds debate
- * runs as many rounds as the pair unlock, so the format's names do not apply there and its rounds
- * are numbered only.
+ * A claim's `turnIndex` counts runs of one speaker's transcribed speech, not the room's turns:
+ * geo-chat numbers a new turn each time the speaker changes, skipping silence. A turn nobody spoke
+ * in merges the turns either side of it, and every round after it would be labelled one early. So
+ * rounds are drawn only when the transcript has exactly as many turns as the room ran
+ * (`roomTurnCount`); otherwise the list comes back as one unlabelled stretch, still in order. Equal
+ * counts can still hide a silent turn offset by crosstalk, which only geo-chat could tell apart.
+ *
+ * Rounds are named the way the room named them ("Round 2 · Rebuttal"). An Open rounds debate runs
+ * as many rounds as the pair unlock, so the format's names do not apply there and its rounds are
+ * numbered only.
  */
 export function groupFromThisDebateByRound<T>(
   items: T[],
   claimOf: (item: T) => FromThisDebateClaim,
-  { turnCount, numberedOnly }: { turnCount: number; numberedOnly: boolean }
+  {
+    roomTurnCount,
+    extractedTurnCount,
+    numberedOnly,
+  }: { roomTurnCount: number; extractedTurnCount: number; numberedOnly: boolean }
 ): FromThisDebateRound<T>[] {
   const sorted = items
     .map((item, order) => ({ item, claim: claimOf(item), order }))
     .sort((a, b) => compareWhenSaid(a.claim, b.claim) || a.order - b.order);
+  if (sorted.length === 0) return [];
+  if (roomTurnCount <= 0 || extractedTurnCount !== roomTurnCount) {
+    return [{ key: -1, label: null, items: sorted.map(({ item }) => item) }];
+  }
   const rounds: FromThisDebateRound<T>[] = [];
   for (const { item, claim } of sorted) {
     const key = openRoundIndexForTurn(claim.turnIndex);
     let round = rounds[rounds.length - 1];
     if (!round || round.key !== key) {
-      // Without a turn count there is no format to name the round from, only its number.
       const firstTurn = key * 2;
-      const label =
-        numberedOnly || turnCount <= 0 ? roundParts(firstTurn, turnCount).round : roundLabel(firstTurn, turnCount);
+      const label = numberedOnly ? roundParts(firstTurn, roomTurnCount).round : roundLabel(firstTurn, roomTurnCount);
       round = { key, label, items: [] };
       rounds.push(round);
     }

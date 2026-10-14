@@ -171,7 +171,11 @@ describe('groupFromThisDebateByRound', () => {
       item(D, 'Round 1, first', 0, 5_000),
     ];
 
-    const rounds = groupFromThisDebateByRound(listed, claim => claim, { turnCount: 4, numberedOnly: false });
+    const rounds = groupFromThisDebateByRound(listed, claim => claim, {
+      roomTurnCount: 4,
+      extractedTurnCount: 4,
+      numberedOnly: false,
+    });
 
     expect(rounds.map(round => [round.label, round.items.map(claim => claim.text)])).toEqual([
       ['Round 1 · Opening', ['Round 1, first', 'Round 1, second', 'Round 1, reply']],
@@ -183,16 +187,39 @@ describe('groupFromThisDebateByRound', () => {
     const listed = [item(MINTED_A, 'Opening', 0), item(MINTED_B, 'Middle', 3), item(E, 'Last', 5)];
 
     expect(
-      groupFromThisDebateByRound(listed, claim => claim, { turnCount: 6, numberedOnly: false }).map(r => r.label)
+      groupFromThisDebateByRound(listed, claim => claim, {
+        roomTurnCount: 6,
+        extractedTurnCount: 6,
+        numberedOnly: false,
+      }).map(r => r.label)
     ).toEqual(['Round 1 · Opening', 'Round 2 · Rebuttal', 'Round 3 · Closing']);
     expect(
-      groupFromThisDebateByRound(listed, claim => claim, { turnCount: 6, numberedOnly: true }).map(r => r.label)
+      groupFromThisDebateByRound(listed, claim => claim, {
+        roomTurnCount: 6,
+        extractedTurnCount: 6,
+        numberedOnly: true,
+      }).map(r => r.label)
     ).toEqual(['Round 1', 'Round 2', 'Round 3']);
+  });
+
+  it('draws no rounds, only the order said, when the transcript ran a different number of turns than the room', () => {
+    // geo-chat numbers speaker changes over non-silent speech: a turn nobody spoke in merges the
+    // turns either side of it, so transcript turn 1 here is the room's turn 3, a rebuttal.
+    const listed = [item(MINTED_A, 'Rebuttal', 1, 200_000), item(MINTED_B, 'Opening', 0, 5_000)];
+
+    const rounds = groupFromThisDebateByRound(listed, claim => claim, {
+      roomTurnCount: 4,
+      extractedTurnCount: 2,
+      numberedOnly: false,
+    });
+
+    expect(rounds).toEqual([{ key: -1, label: null, items: [listed[1], listed[0]] }]);
   });
 
   it('leaves out a round with nothing in it', () => {
     const rounds = groupFromThisDebateByRound([item(MINTED_A, 'Only', 4)], claim => claim, {
-      turnCount: 6,
+      roomTurnCount: 6,
+      extractedTurnCount: 6,
       numberedOnly: false,
     });
 

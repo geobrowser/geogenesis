@@ -5,6 +5,7 @@ import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 import * as React from 'react';
 
 import cx from 'classnames';
+import { motion } from 'framer-motion';
 import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
 import pluralize from 'pluralize';
@@ -58,7 +59,7 @@ import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmak
 import { FacetFilterPills, type FacetPillOption } from '~/core/debates/matchmaking/facet-filter-pills';
 import { debateActionAnalyticsAttributes } from '~/core/debates/matchmaking/hub-analytics';
 import { HubFilterMenu, type HubFilterOption } from '~/core/debates/matchmaking/hub-filter-menu';
-import { HubCardList } from '~/core/debates/matchmaking/hub-motion';
+import { HubCardList, hubCardMotion } from '~/core/debates/matchmaking/hub-motion';
 import { HubPillButton } from '~/core/debates/matchmaking/hub-pill-button';
 import { HubQueryState, HubSkeleton, exploreClaimsAction } from '~/core/debates/matchmaking/hub-states';
 import { HideAgreedSwitch, HideMyPositionsSwitch } from '~/core/debates/matchmaking/matches-only-switch';
@@ -1416,9 +1417,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     () => (debateItemsSettling ? 0 : debateListShown.filter(claim => !debateEntitiesById.has(claim.id)).length),
     [debateEntitiesById, debateItemsSettling, debateListShown]
   );
-  /** How the source debate names its rounds — the turn count the room labelled them by. */
-  const debateTurnCount =
-    sourceDebateQuery.data?.turn_durations_ms?.length || extractedClaimsQuery.data?.payload?.turns?.length || 0;
+  /** The turns the room ran, and the transcript's, which `groupFromThisDebateByRound` compares. */
+  const debateRoomTurnCount = sourceDebateQuery.data?.turn_durations_ms?.length ?? 0;
+  const debateExtractedTurnCount = extractedClaimsQuery.data?.payload?.turns?.length ?? 0;
   const debateRoundsNumberedOnly = isOpenRoundsFormatId(sourceDebateQuery.data?.turn_format_id);
   const debateClaims = debateClaimsSplit.fresh;
   const debateItemByClaimId = React.useMemo(
@@ -2733,7 +2734,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const visibleDebateRounds =
     tab === 'debate'
       ? groupFromThisDebateByRound(visibleDebateItems, item => item.claim, {
-          turnCount: debateTurnCount,
+          roomTurnCount: debateRoomTurnCount,
+          extractedTurnCount: debateExtractedTurnCount,
           numberedOnly: debateRoundsNumberedOnly,
         })
       : [];
@@ -3113,17 +3115,25 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               ))}
             </div>
           ) : tab === 'debate' ? (
-            <div className="flex flex-col gap-4" data-testid="from-this-debate-rounds">
-              {visibleDebateRounds.map(round => (
-                <RecommendedSection
-                  key={`${sessionId}:${round.key}`}
-                  name={round.label}
-                  count={round.items.length}
-                  collapsible={false}
-                >
-                  <HubCardList>{round.items.map(item => renderClaimCard(item.row))}</HubCardList>
-                </RecommendedSection>
-              ))}
+            // One list, headings between the cards rather than a list per round: a claim a later
+            // extraction moves to another round is then a move within one keyed list, and its card
+            // keeps its state — a failed response's error, a response still in flight — where a
+            // list per round would unmount it and mount a fresh one.
+            <div data-testid="from-this-debate-rounds">
+              <HubCardList>
+                {visibleDebateRounds.flatMap(round => [
+                  ...(round.label
+                    ? [
+                        <motion.div key={`round:${round.key}`} {...hubCardMotion} className="pt-2 first:pt-0">
+                          <Text as="h2" variant="smallTitle" color="text">
+                            {round.label}
+                          </Text>
+                        </motion.div>,
+                      ]
+                    : []),
+                  ...round.items.map(item => renderClaimCard(item.row)),
+                ])}
+              </HubCardList>
             </div>
           ) : (
             <HubCardList>{visibleClaims.map(claim => renderClaimCard(claim))}</HubCardList>
@@ -3527,16 +3537,12 @@ function TopicMatchCaption({ names }: { names: string[] }) {
   );
 }
 
-/**
- * One titled block of claims: a curated page's data blocks, the already-debated fold, and "From
- * this debate"'s rounds. Collapsible so a long list stays scannable, unless `collapsible` is off.
- */
+/** One curated block, collapsible so a long page of recommendations stays scannable. */
 function RecommendedSection({
   name,
   count,
   defaultOpen = true,
   showCount = false,
-  collapsible = true,
   children,
 }: {
   name: string;
@@ -3544,27 +3550,10 @@ function RecommendedSection({
   defaultOpen?: boolean;
   /** Draw the count beside the name. A closed section otherwise gives no hint of what is in it. */
   showCount?: boolean;
-  /**
-   * Off for "From this debate"'s rounds (GEO-3312). Closing a section unmounts its cards, and with
-   * them the inline error of a request sent from one, while the page still counts that card as on
-   * screen and holds its own alert back — so a refusal landing after the close was shown nowhere.
-   */
-  collapsible?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const contentId = React.useId();
-
-  if (!collapsible) {
-    return (
-      <section>
-        <Text as="h2" variant="smallTitle" color="text" className="mb-2">
-          {name}
-        </Text>
-        {children}
-      </section>
-    );
-  }
 
   return (
     <section>

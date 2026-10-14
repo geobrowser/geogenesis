@@ -6306,6 +6306,17 @@ describe('From this debate', () => {
   });
   /** The shared claim as the graph spells it, matched by geo-chat to a claim from the debate. */
   const matchedEntity = () => ({ ...sharedEntity(), id: hex(CLAIM_SHARED) });
+  /** The source debate as the room ran it: `count` turns of the standard format. */
+  const roomTurns = (count: number) => {
+    mocks.sourceDebate = {
+      claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 },
+      turn_format_id: 'standard',
+      turn_durations_ms: Array.from({ length: count }, () => 60_000),
+    };
+  };
+  /** The transcript's turns, alternating between the two speakers of `turns`. */
+  const transcriptTurns = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({ ...turns[index % 2], turn_index: index }));
   /** A minted claim from the debate, once the early publish has put it on the graph. */
   const publishedEntity = (id: string, name: string) => ({ ...sharedEntity(), id, name });
 
@@ -6316,6 +6327,7 @@ describe('From this debate', () => {
   }
 
   beforeEach(() => {
+    roomTurns(turns.length);
     mocks.entities = [matchedEntity()];
     mocks.claims = [sharedClaim()];
     // The graph's own spelling throughout, as production has it: positions and entities are both
@@ -6426,13 +6438,14 @@ describe('From this debate', () => {
   });
 
   it('groups the claims by round, in the order they were said, as new ones arrive', async () => {
+    roomTurns(4);
     mocks.entities = [
       matchedEntity(),
       publishedEntity(MINTED, 'Coffee dates save everyone’s time'),
       publishedEntity(MINTED_LATER, 'Dinner is a better first date'),
     ];
     mocks.extractedClaims = {
-      turns,
+      turns: transcriptTurns(4),
       claims: [
         extracted('A claim both participants chose', 0, { existing: hex(CLAIM_SHARED) }, 20_000),
         extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }, 70_000),
@@ -6447,11 +6460,18 @@ describe('From this debate', () => {
           /^(A claim both participants chose|Coffee dates save everyone’s time|Dinner is a better first date)$/
         )
         .map(node => node.textContent);
+    const headings = () =>
+      within(screen.getByTestId('from-this-debate-rounds'))
+        .getAllByRole('heading')
+        .map(heading => heading.textContent);
+    const coffeeCard = () => screen.getByText('Coffee dates save everyone’s time').closest('article');
     expect(order()).toEqual(['A claim both participants chose', 'Coffee dates save everyone’s time']);
+    expect(headings()).toEqual(['Round 1 · Opening']);
+    const cardBefore = coffeeCard();
 
-    // The final pass finds one said before everything listed, and one in the next round.
+    // The final pass finds one said before everything listed, and moves one to the next round.
     mocks.extractedClaims = {
-      turns: [...turns, { ...turns[0], turn_index: 2 }],
+      turns: transcriptTurns(4),
       claims: [
         extracted('A claim both participants chose', 0, { existing: hex(CLAIM_SHARED) }, 20_000),
         extracted('Coffee dates save everyone’s time', 2, { minted: MINTED }, 130_000),
@@ -6461,7 +6481,6 @@ describe('From this debate', () => {
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
     await settleTabSwap();
 
-    // A card that changed round leaves its old one with an exit animation, so wait it out.
     await waitFor(() =>
       expect(order()).toEqual([
         'Dinner is a better first date',
@@ -6469,15 +6488,25 @@ describe('From this debate', () => {
         'Coffee dates save everyone’s time',
       ])
     );
-    const rounds = screen.getByTestId('from-this-debate-rounds');
     // Named the way the room named them, from the source debate's turn count.
-    expect(
-      within(rounds)
-        .getAllByRole('heading')
-        .map(heading => heading.textContent)
-    ).toEqual(['Round 1 · Opening', 'Round 2 · Rebuttal']);
+    expect(headings()).toEqual(['Round 1 · Opening', 'Round 2 · Rebuttal']);
+    // The same card, moved rather than remounted, so its own state — a failed response's error, a
+    // response in flight — goes with it (Copilot, PR #2861).
+    expect(coffeeCard()).toBe(cardBefore);
     // Turns 0 and 2 are both the viewer's.
     expect(screen.getAllByText('Said by You')).toHaveLength(3);
+  });
+
+  it('draws no round headings when the transcript’s turns do not line up with the room’s', async () => {
+    // A silent turn: the transcript ran two turns where the room ran four, so its turn 1 is the
+    // room's turn 3, a rebuttal, and calling it the opening would be wrong (Copilot, PR #2861).
+    roomTurns(4);
+    mocks.entities = [matchedEntity(), publishedEntity(MINTED, 'Coffee dates save everyone’s time')];
+    await openTab();
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    expect(within(screen.getByTestId('from-this-debate-rounds')).queryAllByRole('heading')).toHaveLength(0);
   });
 
   it('says extraction is still running while the payload is empty, and stops saying so once it is final', async () => {
