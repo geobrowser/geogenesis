@@ -1082,8 +1082,42 @@ describe('useDebatePlayback — no invented turn schedule (GEO-2956)', () => {
     const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
 
     await waitFor(() => expect(result.current.ready).toBe(true));
-    expect(result.current.timelineSeconds).toBe(112);
-    expect(result.current.playbackBreaks.condensed).toHaveLength(1);
+    // On the recordings' clock: 5 s of picking after the last turn, then the 3 s reveal.
+    expect(result.current.timelineSeconds).toBe(118);
+    expect(result.current.playbackBreaks.breaks).toMatchObject([
+      { kind: 'final_end', decidingStartMs: 110_000, startMs: 115_000, endMs: 118_000 },
+    ]);
+  });
+
+  // GEO-3277: the response's times are the rendered video's, which an Open rounds render edits; the
+  // player plays the raw recordings, so a turn after an edit has to move back onto their clock.
+  it('places the turns after a condensed break where they are in the recordings', async () => {
+    mocks.turnSegments = [
+      { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 50_000, duration_ms: 50_000 },
+      { turn_index: 1, participant_slot: 2, output_start_ms: 52_000, output_end_ms: 112_000, duration_ms: 60_000 },
+    ];
+    // The 2 s rendered catch-up stands for 8 s of the recordings.
+    mocks.condensedBreaks = [
+      {
+        kind: 'lead_in',
+        round_index: 0,
+        next_round_index: 1,
+        output_start_ms: 50_000,
+        output_end_ms: 52_000,
+        duration_ms: 2_000,
+        source_start_ms: 50_000,
+        source_end_ms: 58_000,
+        speed: 4,
+      },
+    ];
+    const { result } = renderHook(() => useDebatePlayback(untimedDebate(), true));
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.turnSegments.map(segment => [segment.output_start_ms, segment.output_end_ms])).toEqual([
+      [0, 50_000],
+      [58_000, 118_000],
+    ]);
+    expect(result.current.timelineSeconds).toBe(118);
   });
 
   it('refuses to play and reports it when nothing recorded can place a turn', async () => {

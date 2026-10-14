@@ -1,209 +1,173 @@
 import { describe, expect, it } from 'vitest';
 
-import type {
-  Debate,
-  DebateMediaCondensedBreak,
-  DebateMediaEarlyEndGap,
-  DebateMediaRoundPick,
-  DebateMediaTurnSegment,
-} from './api';
+import type { Debate, DebateMediaTurnSegment } from './api';
+import { DEBATE_STARTED_AT, RENDERED_MEDIA } from './open-rounds-media-fixtures';
 import {
-  BREAK_FLIP_SHARE,
   EARLY_END_HOLD_MS,
   breakAnnouncesRound,
   breakCueAt,
   breaksEndMs,
   earlyEndCueAt,
   finalPicks,
-  inUncondensedLeadIn,
+  playbackBreaksFrom,
+  revealFlipMs,
+  silentAt,
 } from './playback-breaks';
+import { identityClock, playbackClockFrom, toPlaybackClock } from './playback-clock';
 
-// The Preston vs Adam debate (01a1369d…) as geo-chat's condensed render published it (GEO-3276).
-const BREAKS: DebateMediaCondensedBreak[] = [
-  {
-    kind: 'lead_in',
-    round_index: 0,
-    next_round_index: 1,
-    output_start_ms: 120_000,
-    output_end_ms: 121_600,
-    duration_ms: 1_600,
-    source_start_ms: 120_000,
-    source_end_ms: 128_000,
-    speed: 5,
-  },
-  {
-    kind: 'extend',
-    round_index: 1,
-    next_round_index: 2,
-    output_start_ms: 211_600,
-    output_end_ms: 214_000,
-    duration_ms: 2_400,
-    source_start_ms: 221_950,
-    source_end_ms: 229_950,
-    speed: 3.33,
-  },
-  {
-    kind: 'final_end',
-    round_index: 2,
-    output_start_ms: 301_430,
-    output_end_ms: 303_430,
-    duration_ms: 2_000,
-    source_start_ms: 320_000,
-    source_end_ms: 323_000,
-    speed: 1.5,
-  },
-];
+const openRounds = (leadInMs = 8_000) =>
+  ({
+    open_rounds: { required_rebuttal_rounds: 1, required_round_lead_in_ms: leadInMs, result_window_ms: 3_000 },
+  }) as unknown as Debate;
 
-const pick = (
-  round: number,
-  slot: 1 | 2,
-  value: 'extend' | 'end',
-  at: string,
-  previous: 'extend' | 'end' | null = null
-): DebateMediaRoundPick => ({
-  round_index: round,
-  participant_slot: slot,
-  pick: value,
-  previous_pick: previous,
-  turn_index: round * 2 + 1,
-  during_decision: true,
-  at,
-  output_ms: 0,
-});
+// The Preston vs Adam debate on the player's clock: the raw recordings, from the debate's start.
+const clock = playbackClockFrom(RENDERED_MEDIA);
+const segments = RENDERED_MEDIA.turn_segments!.map(segment => toPlaybackClock(segment, clock));
+const BREAKS = playbackBreaksFrom(openRounds(), RENDERED_MEDIA, segments, clock);
+const startedAtMs = Date.parse(DEBATE_STARTED_AT);
+const cueAt = (ms: number) =>
+  breakCueAt(BREAKS.breaks, BREAKS.picks, ms, { debateStartedAtMs: startedAtMs, flipMs: revealFlipMs(openRounds()) });
 
-const PICKS: DebateMediaRoundPick[] = [
-  pick(1, 1, 'extend', '2026-10-13T18:59:45.101Z'),
-  pick(1, 2, 'extend', '2026-10-13T18:59:47.680Z'),
-  // Adam never picked in round 2 (index); Preston changed his mind once.
-  pick(2, 1, 'end', '2026-10-13T19:01:20.000Z'),
-  pick(2, 1, 'extend', '2026-10-13T19:01:28.000Z', 'end'),
-];
-
-describe('breakCueAt', () => {
-  it('is nothing outside a break', () => {
-    expect(breakCueAt(BREAKS, PICKS, 119_999)).toBeNull();
-    expect(breakCueAt(BREAKS, PICKS, 121_600)).toBeNull();
-    expect(breakCueAt([], PICKS, 120_500)).toBeNull();
+describe('playbackBreaksFrom', () => {
+  it('puts each break at its real length, with the pick window in front of it', () => {
+    expect(BREAKS.breaks).toEqual([
+      // The 8 s lead-in into Round 2: no pick window, nobody picked.
+      { kind: 'lead_in', roundIndex: 0, nextRoundIndex: 1, decidingStartMs: 120_000, startMs: 120_000, endMs: 128_000 },
+      // Round 2 ended at 218 s; they picked until 221.95 s; reveal and count-in to 229.95 s.
+      { kind: 'extend', roundIndex: 1, nextRoundIndex: 2, decidingStartMs: 218_000, startMs: 221_950, endMs: 229_950 },
+      // Round 3 ended at 321.1 s; 9.4 s of picking (Adam never did); the 3 s reveal closes it.
+      {
+        kind: 'final_end',
+        roundIndex: 2,
+        nextRoundIndex: null,
+        decidingStartMs: 321_086,
+        startMs: 330_481,
+        endMs: 333_481,
+      },
+    ]);
+    expect(BREAKS.earlyEnds).toEqual([{ turnIndex: 4, nextTurnIndex: 5, startMs: 270_944, endMs: 274_650 }]);
   });
 
-  it('announces a required round at once, with no picks, since nobody picked', () => {
-    expect(breakCueAt(BREAKS, PICKS, 120_400)).toEqual({
+  it('finds an older render’s lead-in at the front of the round’s first turn, before its countdown', () => {
+    const older: DebateMediaTurnSegment[] = [
+      {
+        turn_index: 2,
+        participant_slot: 1,
+        output_start_ms: 120_000,
+        output_end_ms: 173_000,
+        duration_ms: 53_000,
+        countdown_start_ms: 128_000,
+      },
+    ];
+    expect(playbackBreaksFrom(openRounds(), { round_results: [] }, older, identityClock).breaks).toEqual([
+      { kind: 'lead_in', roundIndex: 0, nextRoundIndex: 1, decidingStartMs: 120_000, startMs: 120_000, endMs: 128_000 },
+    ]);
+    expect(playbackBreaksFrom(openRounds(0), { round_results: [] }, older, identityClock).breaks).toEqual([]);
+  });
+
+  it('is nothing for a fixed format or a debate with no media yet', () => {
+    expect(playbackBreaksFrom({} as Debate, { round_results: [] }, [], identityClock).breaks).toEqual([]);
+    expect(playbackBreaksFrom(openRounds(), undefined, segments, clock).breaks).toEqual([]);
+  });
+});
+
+describe('breakCueAt', () => {
+  it('is nothing inside a turn', () => {
+    expect(cueAt(119_999)).toBeNull();
+    expect(cueAt(128_000)).toBeNull();
+    expect(cueAt(217_999)).toBeNull();
+    expect(cueAt(333_481)).toBeNull();
+  });
+
+  it('asks the question while they pick, ticking each debater off as they pick and never saying which way', () => {
+    // Preston saved his pick 219.36 s in; Adam his at 221.94 s.
+    expect(cueAt(218_500)).toEqual({
+      phase: 'deciding',
+      roundIndex: 1,
+      nextRoundIndex: 2,
+      picked: { 1: false, 2: false },
+    });
+    expect(cueAt(220_000)).toMatchObject({ phase: 'deciding', picked: { 1: true, 2: false } });
+    expect(cueAt(221_945)).toMatchObject({ phase: 'deciding', picked: { 1: true, 2: true } });
+  });
+
+  it('turns the picks for the room’s share of its result window, then the next round takes over', () => {
+    expect(cueAt(222_500)).toMatchObject({
+      phase: 'reveal',
+      kind: 'extend',
+      elapsedMs: 550,
+      resultStartMs: 1_350,
+      picks: { 1: 'extend', 2: 'extend' },
+      nextRoundIndex: 2,
+    });
+  });
+
+  it('announces a required round for the whole lead-in, with no picks, since nobody picked', () => {
+    expect(cueAt(124_000)).toMatchObject({
+      phase: 'reveal',
       kind: 'lead_in',
-      elapsedMs: 400,
-      durationMs: 1_600,
       resultStartMs: 0,
       picks: null,
       nextRoundIndex: 1,
     });
   });
 
-  it('turns the picks for the first third of an Extend, then the next round takes over', () => {
-    const cue = breakCueAt(BREAKS, PICKS, 212_000);
-    expect(cue).toMatchObject({
-      kind: 'extend',
-      elapsedMs: 400,
-      picks: { 1: 'extend', 2: 'extend' },
-      nextRoundIndex: 2,
-    });
-    expect(cue?.resultStartMs).toBe(Math.round(2_400 * BREAK_FLIP_SHARE));
-  });
-
   it('reveals the final round with a missing pick as no pick, and leads nowhere', () => {
-    expect(breakCueAt(BREAKS, PICKS, 302_000)).toMatchObject({
+    expect(cueAt(331_000)).toMatchObject({
+      phase: 'reveal',
       kind: 'final_end',
       picks: { 1: 'extend', 2: null },
       nextRoundIndex: null,
     });
   });
+
+  it('shows nobody as picked when it cannot place the picks in time', () => {
+    const cue = breakCueAt(BREAKS.breaks, BREAKS.picks, 221_945, { debateStartedAtMs: null, flipMs: 1_350 });
+    expect(cue).toMatchObject({ phase: 'deciding', picked: { 1: false, 2: false } });
+  });
 });
 
 describe('finalPicks', () => {
   it('takes the last pick each debater saved, and none for a debater who never picked', () => {
-    expect(finalPicks(PICKS, 2)).toEqual({ 1: 'extend', 2: null });
-    expect(finalPicks(PICKS, 1)).toEqual({ 1: 'extend', 2: 'extend' });
-  });
-
-  it('does not depend on the order the picks arrive in', () => {
-    expect(finalPicks([...PICKS].reverse(), 2)).toEqual({ 1: 'extend', 2: null });
+    expect(finalPicks(BREAKS.picks, 2)).toEqual({ 1: 'extend', 2: null });
+    expect(finalPicks([...BREAKS.picks].reverse(), 2)).toEqual({ 1: 'extend', 2: null });
+    expect(finalPicks(BREAKS.picks, 1)).toEqual({ 1: 'extend', 2: 'extend' });
   });
 });
 
 describe('breakAnnouncesRound', () => {
   it('is the rounds a break leads into, and never the opening', () => {
-    expect(breakAnnouncesRound(BREAKS, 1)).toBe(true);
-    expect(breakAnnouncesRound(BREAKS, 2)).toBe(true);
-    expect(breakAnnouncesRound(BREAKS, 0)).toBe(false);
-    expect(breakAnnouncesRound([], 1)).toBe(false);
+    expect(breakAnnouncesRound(BREAKS.breaks, 1)).toBe(true);
+    expect(breakAnnouncesRound(BREAKS.breaks, 2)).toBe(true);
+    expect(breakAnnouncesRound(BREAKS.breaks, 0)).toBe(false);
   });
 });
 
 describe('earlyEndCueAt', () => {
-  // Preston ended round 3's first turn early; the render cut it to 0.6 s of quiet at 254.994 s.
-  const gaps: DebateMediaEarlyEndGap[] = [
-    {
-      turn_index: 4,
-      next_turn_index: 5,
-      output_ms: 254_994,
-      source_start_ms: 270_944,
-      source_end_ms: 274_650,
-      removed_ms: 3_706,
-      quiet_kept_ms: 300,
-    },
-  ];
-  const segments: DebateMediaTurnSegment[] = [
-    { turn_index: 4, participant_slot: 1, output_start_ms: 214_000, output_end_ms: 254_994, duration_ms: 40_994 },
-    { turn_index: 5, participant_slot: 2, output_start_ms: 254_994, output_end_ms: 299_994, duration_ms: 45_000 },
-  ];
-
-  it('covers the kept quiet before the cut and a short hold after it', () => {
-    expect(earlyEndCueAt(gaps, segments, 254_694)).toEqual({ endedSlot: 1, nextSlot: 2 });
-    expect(earlyEndCueAt(gaps, segments, 254_994 + EARLY_END_HOLD_MS - 1)).toEqual({ endedSlot: 1, nextSlot: 2 });
-    expect(earlyEndCueAt(gaps, segments, 254_693)).toBeNull();
-    expect(earlyEndCueAt(gaps, segments, 254_994 + EARLY_END_HOLD_MS)).toBeNull();
-  });
-
-  it('draws nothing when it cannot tell who spoke', () => {
-    expect(earlyEndCueAt(gaps, [], 254_994)).toBeNull();
+  it('covers the quiet between Preston’s last word and Adam’s first, and a moment past it', () => {
+    expect(earlyEndCueAt(BREAKS.earlyEnds, segments, 270_944)).toEqual({ endedSlot: 1, nextSlot: 2 });
+    expect(earlyEndCueAt(BREAKS.earlyEnds, segments, 274_650 + EARLY_END_HOLD_MS - 1)).toEqual({
+      endedSlot: 1,
+      nextSlot: 2,
+    });
+    expect(earlyEndCueAt(BREAKS.earlyEnds, segments, 270_943)).toBeNull();
+    expect(earlyEndCueAt(BREAKS.earlyEnds, segments, 274_650 + EARLY_END_HOLD_MS)).toBeNull();
+    expect(earlyEndCueAt(BREAKS.earlyEnds, [], 272_000)).toBeNull();
   });
 });
 
-describe('inUncondensedLeadIn', () => {
-  const openRounds = (leadInMs: number) =>
-    ({ open_rounds: { required_rebuttal_rounds: 1, required_round_lead_in_ms: leadInMs } }) as unknown as Debate;
-  // Before GEO-3276 the 8 s lead-in sits at the front of round 2's first turn, before its countdown.
-  const kept: DebateMediaTurnSegment[] = [
-    {
-      turn_index: 2,
-      participant_slot: 1,
-      output_start_ms: 120_000,
-      output_end_ms: 173_000,
-      duration_ms: 53_000,
-      countdown_start_ms: 128_000,
-    },
-  ];
-
-  it('is the stretch of a required round’s first turn before its countdown', () => {
-    expect(inUncondensedLeadIn(openRounds(8_000), kept, 120_000)).toBe(true);
-    expect(inUncondensedLeadIn(openRounds(8_000), kept, 127_999)).toBe(true);
-    expect(inUncondensedLeadIn(openRounds(8_000), kept, 128_000)).toBe(false);
-  });
-
-  it('never applies to a condensed render, a debate with no lead-in, or a fixed format', () => {
-    const condensed = [{ ...kept[0], output_start_ms: 121_600, countdown_start_ms: 121_600 }];
-    expect(inUncondensedLeadIn(openRounds(8_000), condensed, 121_600)).toBe(false);
-    expect(inUncondensedLeadIn(openRounds(0), kept, 124_000)).toBe(false);
-    expect(inUncondensedLeadIn({} as Debate, kept, 124_000)).toBe(false);
-  });
-
-  it('leaves an early end’s hand-off alone: that is the next speaker’s own turn', () => {
-    const handOff = [{ ...kept[0], turn_index: 5, participant_slot: 2 as const }];
-    expect(inUncondensedLeadIn(openRounds(8_000), handOff, 124_000)).toBe(false);
+describe('silentAt', () => {
+  it('is every stretch nobody holds a turn, and none of the turns', () => {
+    for (const ms of [120_000, 127_999, 218_000, 225_000, 272_000, 321_086, 333_000])
+      expect(silentAt(BREAKS, ms)).toBe(true);
+    for (const ms of [119_999, 128_000, 217_999, 229_950, 270_943, 274_650, 321_085])
+      expect(silentAt(BREAKS, ms)).toBe(false);
   });
 });
 
 describe('breaksEndMs', () => {
   it('is where the final End’s reveal ends, after the last turn', () => {
-    expect(breaksEndMs(BREAKS)).toBe(303_430);
+    expect(breaksEndMs(BREAKS.breaks)).toBe(333_481);
     expect(breaksEndMs([])).toBe(0);
   });
 });

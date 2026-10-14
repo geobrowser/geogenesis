@@ -10,7 +10,8 @@ import type { Debate } from './api';
 import { useDebateMedia, useDebateTranscript, useRecordingPlaybackUrl } from './hooks';
 import { type RecordingPlaybackVariant, recordingPlaybackVariant } from './mobile-rendition';
 import { debateTurnRoleForDebate, isOpenRoundsDebate } from './open-rounds';
-import { breaksEndMs } from './playback-breaks';
+import { breaksEndMs, playbackBreaksFrom } from './playback-breaks';
+import { playbackClockFrom, toPlaybackClock } from './playback-clock';
 import {
   PLAYBACK_END_EPSILON_SECONDS,
   type PlayBothOutcome,
@@ -348,21 +349,23 @@ export function useDebatePlayback(
   // than a second request; `turn_segments` is absent on older API replicas and on a debate whose
   // media job has not finished, and the allowance remains the fallback for both.
   const mediaQuery = useDebateMedia(debate.id, enabled);
+  /**
+   * The response's times are the rendered video's, which an Open rounds render edits; this player
+   * plays the raw recordings. Everything read from it goes through this clock first (GEO-3277).
+   */
+  const playbackClock = React.useMemo(() => playbackClockFrom(mediaQuery.data), [mediaQuery.data]);
   const turnSegments = React.useMemo(
-    () => sortTurnSegments(mediaQuery.data?.turn_segments ?? []),
-    [mediaQuery.data?.turn_segments]
+    () =>
+      sortTurnSegments((mediaQuery.data?.turn_segments ?? []).map(segment => toPlaybackClock(segment, playbackClock))),
+    [mediaQuery.data?.turn_segments, playbackClock]
   );
   /**
-   * The breaks between Open rounds and the early ends a condensed render cut down (GEO-3276), and
-   * the picks the breaks reveal. All empty on a fixed format and on an older render.
+   * The breaks between Open rounds and the early ends, at their real length on this clock, and the
+   * picks the breaks reveal. Empty on a fixed format.
    */
   const playbackBreaks = React.useMemo(
-    () => ({
-      condensed: mediaQuery.data?.condensed_breaks ?? [],
-      earlyEnds: mediaQuery.data?.early_end_gaps ?? [],
-      picks: mediaQuery.data?.round_picks ?? [],
-    }),
-    [mediaQuery.data?.condensed_breaks, mediaQuery.data?.early_end_gaps, mediaQuery.data?.round_picks]
+    () => playbackBreaksFrom(debate, mediaQuery.data, turnSegments, playbackClock),
+    [debate, mediaQuery.data, playbackClock, turnSegments]
   );
   /**
    * Every turn's place on the timeline, for anything that has to name a turn rather than time it.
@@ -411,11 +414,11 @@ export function useDebatePlayback(
     () =>
       turnSegments.length > 0
         ? // A final End's reveal plays after the last turn (GEO-3276).
-          Math.max(timelineSecondsForSegments(turnSegments), breaksEndMs(playbackBreaks.condensed) / 1_000)
+          Math.max(timelineSecondsForSegments(turnSegments), breaksEndMs(playbackBreaks.breaks) / 1_000)
         : turnDurations
           ? timelineSecondsFor(turnDurations)
           : 0,
-    [playbackBreaks.condensed, turnDurations, turnSegments]
+    [playbackBreaks.breaks, turnDurations, turnSegments]
   );
 
   /**
@@ -478,7 +481,15 @@ export function useDebatePlayback(
   const activeSlot = React.useMemo(() => turnStateAt(playheadSeconds)?.slot ?? null, [playheadSeconds, turnStateAt]);
 
   const transcriptQuery = useDebateTranscript(debate.id, 'json', enabled);
-  const transcriptSegments = transcriptQuery.data?.segments ?? NO_TRANSCRIPT_SEGMENTS;
+  const transcriptSegments = React.useMemo(
+    () =>
+      (transcriptQuery.data?.segments ?? NO_TRANSCRIPT_SEGMENTS).map(segment => ({
+        ...segment,
+        start_ms: playbackClock(segment.start_ms, 'start'),
+        end_ms: playbackClock(segment.end_ms, 'end'),
+      })),
+    [playbackClock, transcriptQuery.data?.segments]
+  );
   const subtitle = React.useMemo(() => {
     if (!activeSlot) return null;
     const playheadMs = playheadSeconds * 1_000;

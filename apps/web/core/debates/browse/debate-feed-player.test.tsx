@@ -183,7 +183,7 @@ function controllerFixture(overrides: {
     turnCount: 4,
     roundTurns: overrides.roundTurns ?? 4,
     turnSegments: overrides.turnSegments ?? [],
-    playbackBreaks: overrides.playbackBreaks ?? { condensed: [], earlyEnds: [], picks: [] },
+    playbackBreaks: overrides.playbackBreaks ?? { breaks: [], earlyEnds: [], picks: [] },
     activeSlot: speakingSlot,
     subtitle: overrides.subtitle ?? null,
     onPlaybackTick: vi.fn(),
@@ -1818,17 +1818,15 @@ describe('the pair becomes watchable together (GEO-2965)', () => {
 });
 
 describe('open rounds breaks in published playback (GEO-3277)', () => {
-  // Round 2's lead-in or reveal: a 2.4 s condensed break at 60 s, after round 1 (index) resolved Extend.
+  // On the player's clock: Round 1 (index) ends at 60 s, they pick until 64 s, then 8 s of reveal and
+  // count-in before Round 2 (index) starts at 72 s.
   const extendBreak = {
     kind: 'extend' as const,
-    round_index: 0,
-    next_round_index: 1,
-    output_start_ms: 60_000,
-    output_end_ms: 62_400,
-    duration_ms: 2_400,
-    source_start_ms: 70_000,
-    source_end_ms: 78_000,
-    speed: 3.33,
+    roundIndex: 0,
+    nextRoundIndex: 1,
+    decidingStartMs: 60_000,
+    startMs: 64_000,
+    endMs: 72_000,
   };
   const pick = (round: number, slot: 1 | 2, value: 'extend' | 'end', at: string) => ({
     round_index: round,
@@ -1838,42 +1836,55 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     turn_index: round * 2 + 1,
     during_decision: true,
     at,
-    output_ms: 60_000,
+    output_ms: 0,
   });
   const breaks = (overrides: Partial<DebatePlaybackController['playbackBreaks']>) => ({
-    condensed: [],
+    breaks: [],
     earlyEnds: [],
     picks: [],
     ...overrides,
   });
+  // Picks are placed on the player's clock from the debate's start.
+  const startedDebate = { ...debate, started_at: '2026-10-13T19:00:00.000Z' } as unknown as Debate;
+  const renderAt = (
+    playheadSeconds: number,
+    overrides: Parameters<typeof controllerFixture>[0] extends infer T ? Partial<T> : never
+  ) => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds, ...overrides });
+    return render(<DebateFeedPlayer debate={startedDebate} active />);
+  };
 
-  it('turns both picks over first, then announces the next round and who opens it', () => {
+  it('asks "Keep debating?" while they pick, ticking each debater off without saying which way', () => {
+    const playbackBreaks = breaks({ breaks: [extendBreak], picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z')] });
+    const { container } = renderAt(62, { playbackBreaks });
+
+    const card = container.querySelector('[data-debate-deciding]');
+    expect(card?.textContent).toContain('Keep debating?');
+    expect(card?.textContent).toContain('An Extend unlocks Round 2');
+    expect(container.querySelector('[data-debate-deciding-slot="1"]')?.getAttribute('data-picked')).toBe('true');
+    expect(container.querySelector('[data-debate-deciding-slot="2"]')?.getAttribute('data-picked')).toBe('false');
+    expect(card?.textContent).not.toMatch(/Extend\b.*Extend\b.*Extend/);
+    expect(container.querySelector('[data-open-round-reveal]')).toBeNull();
+  });
+
+  it('then turns both picks over, then announces the next round and who opens it', () => {
     const playbackBreaks = breaks({
-      condensed: [extendBreak],
-      picks: [pick(0, 1, 'extend', '2026-10-13T18:59:45Z'), pick(0, 2, 'extend', '2026-10-13T18:59:47Z')],
+      breaks: [extendBreak],
+      picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
     });
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 60.3, playbackBreaks });
-    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active />);
-
+    const { container, rerender } = renderAt(64.5, { playbackBreaks });
     const reveals = [...container.querySelectorAll('[data-open-round-reveal]')];
     expect(reveals.map(card => card.getAttribute('data-open-round-reveal'))).toEqual(['extend', 'extend']);
     expect(container.querySelector('[data-open-round-result]')).toBeNull();
 
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.5, playbackBreaks });
-    rerender(<DebateFeedPlayer debate={debate} active />);
-    const result = container.querySelector('[data-open-round-result="round"]');
-    expect(result?.textContent).toMatch(/^Round2.+opens$/);
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 68, playbackBreaks });
+    rerender(<DebateFeedPlayer debate={startedDebate} active />);
+    expect(container.querySelector('[data-open-round-result="round"]')?.textContent).toMatch(/^Round2.+opens$/);
     expect(container.querySelector('[data-open-round-reveal]')).toBeNull();
   });
 
-  it('holds the animations at the playhead, so a scrub into the break lands mid-graphic', () => {
-    mocks.controller = controllerFixture({
-      mutedByUser: false,
-      turnSlot: 1,
-      playheadSeconds: 61.5,
-      playbackBreaks: breaks({ condensed: [extendBreak] }),
-    });
-    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+  it('holds the animations at the playhead, so a scrub into the reveal lands mid-graphic', () => {
+    const { container } = renderAt(65.5, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
     const root = container.querySelector('[data-debate-break="extend"]') as HTMLElement;
     expect(root.style.getPropertyValue('--open-round-t')).toBe('1500');
     const slam = container.querySelector(
@@ -1883,84 +1894,44 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
   });
 
   it('does not announce a round twice: the round card stands down after a break that announced it', () => {
-    mocks.controller = controllerFixture({
-      mutedByUser: false,
-      turnSlot: 1,
-      playheadSeconds: 60.5,
-      playbackBreaks: breaks({ condensed: [{ ...extendBreak, output_start_ms: 57_600, output_end_ms: 60_000 }] }),
+    // The fixture's turns are 30 s each, so Round 2 (index 1) starts at 60 s.
+    const { container } = renderAt(60.5, {
+      playbackBreaks: breaks({ breaks: [{ ...extendBreak, decidingStartMs: 50_000, startMs: 52_000, endMs: 60_000 }] }),
     });
-    const { container } = render(<DebateFeedPlayer debate={debate} active />);
     expect(container.querySelector('[data-round-card]')).toBeNull();
   });
 
   it('keeps the picks up beside "That\'s a wrap" after the final End, and names a missing pick', () => {
-    const finalEnd = { ...extendBreak, kind: 'final_end' as const, round_index: 1, next_round_index: null };
-    mocks.controller = controllerFixture({
-      mutedByUser: false,
-      turnSlot: 1,
-      playheadSeconds: 61.8,
-      playbackBreaks: breaks({ condensed: [finalEnd], picks: [pick(1, 1, 'extend', '2026-10-13T19:01:30Z')] }),
+    const finalEnd = { ...extendBreak, kind: 'final_end' as const, roundIndex: 1, nextRoundIndex: null };
+    const { container } = renderAt(66, {
+      playbackBreaks: breaks({ breaks: [finalEnd], picks: [pick(1, 1, 'extend', '2026-10-13T19:01:01.000Z')] }),
     });
-    const { container } = render(<DebateFeedPlayer debate={debate} active />);
-
     expect(container.querySelector('[data-open-round-result="wrap"]')?.textContent).toMatch(/didn't pick in time$/);
     const reveals = [...container.querySelectorAll('[data-open-round-reveal]')];
     expect(reveals.map(card => card.getAttribute('data-open-round-reveal'))).toEqual(['extend', 'none']);
   });
 
-  it('shows "Ended early" and whose turn it is around an early end the render cut down', () => {
+  it('shows "Ended early" and whose turn it is over an early end’s quiet', () => {
     const turnSegments: DebateMediaTurnSegment[] = [
       { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000 },
-      { turn_index: 1, participant_slot: 2, output_start_ms: 30_000, output_end_ms: 60_000, duration_ms: 30_000 },
+      { turn_index: 1, participant_slot: 2, output_start_ms: 33_000, output_end_ms: 63_000, duration_ms: 30_000 },
     ];
-    const earlyEnd = {
-      turn_index: 0,
-      next_turn_index: 1,
-      output_ms: 30_000,
-      source_start_ms: 30_000,
-      source_end_ms: 33_000,
-      removed_ms: 3_000,
-      quiet_kept_ms: 300,
-    };
-    mocks.controller = controllerFixture({
-      mutedByUser: false,
-      turnSlot: 1,
-      playheadSeconds: 30.1,
+    const { container } = renderAt(31, {
       turnSegments,
-      playbackBreaks: breaks({ earlyEnds: [earlyEnd] }),
+      playbackBreaks: breaks({ earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000 }] }),
     });
-    const { container } = render(<DebateFeedPlayer debate={debate} active />);
-
     const labels = container.querySelector('[data-debate-early-end]');
     expect(labels?.textContent).toContain('Ended early');
     expect(labels?.textContent).toMatch(/’s turn$/);
   });
 
-  // Older renders keep a required round's lead-in at the front of its first turn, and both mics are
-  // open between rounds now: nothing said there may be heard or captioned.
-  it("keeps an older render's lead-in silent and uncaptioned, then plays the round", () => {
-    const openRoundsDebate = {
-      ...debate,
-      open_rounds: { required_rebuttal_rounds: 1, required_round_lead_in_ms: 8_000 },
-    } as unknown as Debate;
-    const turnSegments: DebateMediaTurnSegment[] = [
-      {
-        turn_index: 2,
-        participant_slot: 1,
-        output_start_ms: 60_000,
-        output_end_ms: 113_000,
-        duration_ms: 53_000,
-        countdown_start_ms: 68_000,
-      },
-    ];
-    mocks.controller = controllerFixture({
-      mutedByUser: false,
-      turnSlot: 1,
-      playheadSeconds: 62,
-      turnSegments,
-      subtitle: 'Talk between rounds',
+  // Both mics are open between rounds now: nothing said while nobody holds a turn may be heard or
+  // captioned, including an older render's lead-in kept at the front of the next turn.
+  it('keeps a break silent and uncaptioned, then plays the round', () => {
+    const playbackBreaks = breaks({
+      breaks: [{ ...extendBreak, decidingStartMs: 60_000, startMs: 60_000, endMs: 68_000 }],
     });
-    const { container, rerender } = render(<DebateFeedPlayer debate={openRoundsDebate} active />);
+    const { container, rerender } = renderAt(62, { playbackBreaks, subtitle: 'Talk between rounds' });
     const [slot1] = Array.from(container.querySelectorAll('video'));
     expect(slot1.muted).toBe(true);
     expect(container.textContent).not.toContain('Talk between rounds');
@@ -1969,10 +1940,10 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       mutedByUser: false,
       turnSlot: 1,
       playheadSeconds: 70,
-      turnSegments,
+      playbackBreaks,
       subtitle: 'The round itself',
     });
-    rerender(<DebateFeedPlayer debate={openRoundsDebate} active />);
+    rerender(<DebateFeedPlayer debate={startedDebate} active />);
     expect(slot1.muted).toBe(false);
     expect(container.textContent).toContain('The round itself');
   });

@@ -1,65 +1,189 @@
 import type {
   Debate,
-  DebateMediaCondensedBreak,
-  DebateMediaEarlyEndGap,
+  DebateMediaResponse,
   DebateMediaRoundPick,
   DebateMediaTurnSegment,
   OpenRoundPick,
   ParticipantSlot,
 } from './api';
+import { flipEndsMs } from './open-round-reveal';
 import { isOpenRoundsDebate, openRoundsRequiredRebuttalRounds } from './open-rounds';
+import type { PlaybackClock } from './playback-clock';
 
 /**
- * The breaks between Open rounds in a published video (GEO-3277), on the player's clock.
+ * The breaks between Open rounds in a published debate (GEO-3277), on the web player's clock.
  *
- * A render with condensed breaks (GEO-3276) plays each one as a short, sped-up, silent catch-up and
- * draws nothing into the video, so the player draws what the recording room drew there: the picks
- * turning over, then the next round or "That's a wrap". Everything here is a function of the
- * playhead, like `round-cues.ts`, so a viewer who scrubs into a break finds it where it would be.
+ * The player plays the raw recordings, so every break runs at its real length: the pick window
+ * after a round, then the reveal and the opener's count-in, or a required round's lead-in. Nobody
+ * holds a turn through any of it, so nothing is heard (both mics are open between rounds since
+ * #2838), and the player draws what the recording room showed there instead: "Keep debating?"
+ * while they pick, the picks turning over, then the next round or "That's a wrap". Everything is a
+ * function of the playhead, like `round-cues.ts`, so a viewer who scrubs in finds it where it was.
  */
+
+/** How long "Ended early" stays up after the next speaker's first word. */
+export const EARLY_END_HOLD_MS = 700;
+
+/** geo-chat's result window, for a debate whose payload does not carry its `open_rounds` block. */
+const DEFAULT_RESULT_WINDOW_MS = 3_000;
+
+/** How long the picks take to turn over: the room's own share of the debate's result window. */
+export function revealFlipMs(debate: Pick<Debate, 'open_rounds'>) {
+  return flipEndsMs(debate.open_rounds?.result_window_ms ?? DEFAULT_RESULT_WINDOW_MS);
+}
+
+export type PlayerBreak = {
+  kind: 'lead_in' | 'extend' | 'final_end';
+  /** The round that ended at the break, and the one it leads into (`null` after the final End). */
+  roundIndex: number;
+  nextRoundIndex: number | null;
+  /** When the round before it ended. The pick window runs from here to `startMs`; none for a lead-in. */
+  decidingStartMs: number;
+  /** The reveal, or the lead-in: from the round's resolution until the next round, or thanking, starts. */
+  startMs: number;
+  endMs: number;
+};
+
+/** The quiet of an early end inside a round: from the last word of the turn that ended to the next speaker's first. */
+export type PlayerEarlyEnd = { turnIndex: number; nextTurnIndex: number; startMs: number; endMs: number };
+
+export type PlaybackBreaks = {
+  breaks: PlayerBreak[];
+  earlyEnds: PlayerEarlyEnd[];
+  picks: DebateMediaRoundPick[];
+};
+
+export const NO_PLAYBACK_BREAKS: PlaybackBreaks = { breaks: [], earlyEnds: [], picks: [] };
 
 /**
- * The share of a break the picks have to turn before the result takes over. A third, so the
- * 2.4 s after an Extend gives the cards 0.8 s, which is what the approved mockup plays.
+ * Every break and early end in a debate, on the player's clock.
+ *
+ * `segments` must already be on that clock. A condensed render (GEO-3276) lists its breaks and early
+ * ends with their source positions. An older render lists only its kept Extend reveals, and keeps
+ * a required round's lead-in at the front of that round's first turn, before its countdown, which is
+ * where it is found here.
  */
-export const BREAK_FLIP_SHARE = 1 / 3;
+export function playbackBreaksFrom(
+  debate: Pick<Debate, 'open_rounds'>,
+  media: Pick<DebateMediaResponse, 'condensed_breaks' | 'early_end_gaps' | 'round_results' | 'round_picks'> | undefined,
+  segments: readonly DebateMediaTurnSegment[],
+  clock: PlaybackClock
+): PlaybackBreaks {
+  if (!media) return NO_PLAYBACK_BREAKS;
 
-/** How long "Ended early" stays up after the cut, so the incoming name is read before it goes. */
-export const EARLY_END_HOLD_MS = 700;
+  const breaks: PlayerBreak[] = (media.condensed_breaks ?? []).map(entry => ({
+    kind: entry.kind,
+    roundIndex: entry.round_index,
+    nextRoundIndex: entry.next_round_index ?? null,
+    decidingStartMs: entry.kind === 'lead_in' ? entry.source_start_ms : clock(entry.output_start_ms, 'end'),
+    startMs: entry.source_start_ms,
+    endMs: entry.source_end_ms,
+  }));
+
+  for (const result of media.round_results ?? []) {
+    if (breaks.some(entry => entry.kind === 'extend' && entry.roundIndex === result.round_index)) continue;
+    breaks.push({
+      kind: 'extend',
+      roundIndex: result.round_index,
+      nextRoundIndex: result.round_index + 1,
+      decidingStartMs: clock(result.output_start_ms, 'end'),
+      startMs: result.source_start_ms,
+      endMs: result.source_end_ms,
+    });
+  }
+
+  if (isOpenRoundsDebate(debate) && (debate.open_rounds.required_round_lead_in_ms ?? 0) > 0) {
+    const required = openRoundsRequiredRebuttalRounds(debate.open_rounds);
+    for (const segment of segments) {
+      const round = Math.floor(segment.turn_index / 2);
+      if (segment.turn_index % 2 !== 0 || round < 1 || round > required) continue;
+      if (breaks.some(entry => entry.kind === 'lead_in' && entry.nextRoundIndex === round)) continue;
+      const countdownStartMs = segment.countdown_start_ms ?? segment.output_start_ms;
+      if (countdownStartMs <= segment.output_start_ms) continue;
+      breaks.push({
+        kind: 'lead_in',
+        roundIndex: round - 1,
+        nextRoundIndex: round,
+        decidingStartMs: segment.output_start_ms,
+        startMs: segment.output_start_ms,
+        endMs: countdownStartMs,
+      });
+    }
+  }
+
+  return {
+    breaks: breaks.sort((a, b) => a.decidingStartMs - b.decidingStartMs),
+    earlyEnds: (media.early_end_gaps ?? []).map(gap => ({
+      turnIndex: gap.turn_index,
+      nextTurnIndex: gap.next_turn_index,
+      startMs: gap.source_start_ms,
+      endMs: gap.source_end_ms,
+    })),
+    picks: media.round_picks ?? [],
+  };
+}
 
 export type BreakPicks = Record<ParticipantSlot, OpenRoundPick | null>;
 
-export type BreakCue = {
-  kind: DebateMediaCondensedBreak['kind'];
-  /** How far into the break the playhead is. */
-  elapsedMs: number;
-  durationMs: number;
-  /** When the result (the round, or the wrap) takes over from the picks. */
-  resultStartMs: number;
-  /** Each debater's pick for the round that ended; `null` for a lead-in, where nobody picked. */
-  picks: BreakPicks | null;
-  /** The round the break leads into, or `null` after the final End. */
-  nextRoundIndex: number | null;
-};
+export type BreakCue =
+  | {
+      phase: 'deciding';
+      roundIndex: number;
+      nextRoundIndex: number | null;
+      /** Who has saved a pick so far. Never which: the picks stay blind until the reveal, as in the room. */
+      picked: Record<ParticipantSlot, boolean>;
+    }
+  | {
+      phase: 'reveal';
+      kind: PlayerBreak['kind'];
+      /** How far into the reveal, or lead-in, the playhead is. */
+      elapsedMs: number;
+      durationMs: number;
+      /** When the result (the round, or the wrap) takes over from the picks turning. */
+      resultStartMs: number;
+      /** Each debater's pick for the round that ended; `null` for a lead-in, where nobody picked. */
+      picks: BreakPicks | null;
+      nextRoundIndex: number | null;
+    };
 
-/** The break the playhead is inside, or `null`. */
+/**
+ * What the player shows at the playhead, or `null` outside every break.
+ *
+ * `debateStartedAtMs` places each saved pick on the player's clock, whose zero is the debate's
+ * start, for the "picked" ticks; without it nobody shows as having picked. `flipMs` is how long the
+ * picks take to turn: the room's share of its result window.
+ */
 export function breakCueAt(
-  breaks: readonly DebateMediaCondensedBreak[],
+  breaks: readonly PlayerBreak[],
   picks: readonly DebateMediaRoundPick[],
-  playheadMs: number
+  playheadMs: number,
+  { debateStartedAtMs, flipMs }: { debateStartedAtMs: number | null; flipMs: number }
 ): BreakCue | null {
-  const current = breaks.find(entry => playheadMs >= entry.output_start_ms && playheadMs < entry.output_end_ms);
+  const current = breaks.find(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs);
   if (!current) return null;
 
-  const durationMs = Math.max(1, current.output_end_ms - current.output_start_ms);
+  if (playheadMs < current.startMs) {
+    const picked: Record<ParticipantSlot, boolean> = { 1: false, 2: false };
+    if (debateStartedAtMs !== null) {
+      for (const entry of picks) {
+        if (entry.round_index === current.roundIndex && Date.parse(entry.at) - debateStartedAtMs <= playheadMs) {
+          picked[entry.participant_slot] = true;
+        }
+      }
+    }
+    return { phase: 'deciding', roundIndex: current.roundIndex, nextRoundIndex: current.nextRoundIndex, picked };
+  }
+
+  const durationMs = Math.max(1, current.endMs - current.startMs);
   const hasPicks = current.kind !== 'lead_in';
   return {
+    phase: 'reveal',
     kind: current.kind,
-    elapsedMs: playheadMs - current.output_start_ms,
+    elapsedMs: playheadMs - current.startMs,
     durationMs,
-    resultStartMs: hasPicks ? Math.round(durationMs * BREAK_FLIP_SHARE) : 0,
-    picks: hasPicks ? finalPicks(picks, current.round_index) : null,
-    nextRoundIndex: current.next_round_index ?? null,
+    resultStartMs: hasPicks ? Math.min(flipMs, durationMs) : 0,
+    picks: hasPicks ? finalPicks(picks, current.roundIndex) : null,
+    nextRoundIndex: current.nextRoundIndex,
   };
 }
 
@@ -80,9 +204,9 @@ export function finalPicks(picks: readonly DebateMediaRoundPick[], roundIndex: n
   return result;
 }
 
-/** Whether a condensed break already announced `roundIndex`, so the round card need not. */
-export function breakAnnouncesRound(breaks: readonly DebateMediaCondensedBreak[], roundIndex: number) {
-  return breaks.some(entry => entry.next_round_index === roundIndex);
+/** Whether a break already announced `roundIndex`, so the round card need not. */
+export function breakAnnouncesRound(breaks: readonly PlayerBreak[], roundIndex: number) {
+  return breaks.some(entry => entry.nextRoundIndex === roundIndex);
 }
 
 export type EarlyEndCue = {
@@ -91,52 +215,34 @@ export type EarlyEndCue = {
   nextSlot: ParticipantSlot;
 };
 
-/**
- * "Ended early" and the next speaker's turn, around an early end the render cut down to a short
- * quiet. From the start of the kept quiet before the cut until shortly after it, so it covers the
- * jump and is gone before the next speaker is well into their first sentence.
- */
+/** "Ended early" and whose turn it is, over an early end's quiet and a moment past it. */
 export function earlyEndCueAt(
-  gaps: readonly DebateMediaEarlyEndGap[],
+  earlyEnds: readonly PlayerEarlyEnd[],
   segments: readonly DebateMediaTurnSegment[],
   playheadMs: number
 ): EarlyEndCue | null {
-  const gap = gaps.find(
-    entry => playheadMs >= entry.output_ms - entry.quiet_kept_ms && playheadMs < entry.output_ms + EARLY_END_HOLD_MS
-  );
-  if (!gap) return null;
-  const ended = segments.find(segment => segment.turn_index === gap.turn_index);
-  const next = segments.find(segment => segment.turn_index === gap.next_turn_index);
+  const current = earlyEnds.find(entry => playheadMs >= entry.startMs && playheadMs < entry.endMs + EARLY_END_HOLD_MS);
+  if (!current) return null;
+  const ended = segments.find(segment => segment.turn_index === current.turnIndex);
+  const next = segments.find(segment => segment.turn_index === current.nextTurnIndex);
   if (!ended || !next) return null;
   return { endedSlot: ended.participant_slot, nextSlot: next.participant_slot };
 }
 
 /**
- * Whether the playhead is in a required round's lead-in that the render kept at full length, which
- * every Open rounds video rendered before GEO-3276 did. There the lead-in sits at the front of the
- * round's first turn, before its countdown, and with both mics open between rounds (#2838) it can
- * hold talk that was never meant to be published. A condensed render splits it out into a break,
- * so its turn starts at its countdown and this never applies to it.
+ * Whether the playhead is somewhere nobody holds a turn: a break, from its pick window on, or an
+ * early end's quiet. Nothing there is meant to be heard or captioned. Mostly that is already so,
+ * because these lie between turn segments; an older render's lead-in is the exception, kept at the
+ * front of the next turn.
  */
-export function inUncondensedLeadIn(
-  debate: Pick<Debate, 'open_rounds'>,
-  segments: readonly DebateMediaTurnSegment[],
-  playheadMs: number
-) {
-  if (!isOpenRoundsDebate(debate) || (debate.open_rounds.required_round_lead_in_ms ?? 0) <= 0) return false;
-  const required = openRoundsRequiredRebuttalRounds(debate.open_rounds);
-  return segments.some(segment => {
-    const round = Math.floor(segment.turn_index / 2);
-    if (segment.turn_index % 2 !== 0 || round < 1 || round > required) return false;
-    const countdownStartMs = segment.countdown_start_ms ?? segment.output_start_ms;
-    return playheadMs >= segment.output_start_ms && playheadMs < countdownStartMs;
-  });
+export function silentAt(breaks: PlaybackBreaks, playheadMs: number) {
+  return (
+    breaks.breaks.some(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs) ||
+    breaks.earlyEnds.some(entry => playheadMs >= entry.startMs && playheadMs < entry.endMs)
+  );
 }
 
-/**
- * Where the last break ends. A final End's reveal plays after the last turn, so the video runs on
- * past the last turn segment by this much.
- */
-export function breaksEndMs(breaks: readonly DebateMediaCondensedBreak[]) {
-  return breaks.reduce((latest, entry) => Math.max(latest, entry.output_end_ms), 0);
+/** Where the last break ends. A final End's reveal plays after the last turn, so the video runs on past it. */
+export function breaksEndMs(breaks: readonly PlayerBreak[]) {
+  return breaks.reduce((latest, entry) => Math.max(latest, entry.endMs), 0);
 }

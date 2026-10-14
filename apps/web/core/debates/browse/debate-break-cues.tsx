@@ -2,7 +2,10 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { ParticipantSlot } from '~/core/debates/api';
+import { DebateRoomOverlayCard } from '~/core/debates/debate-room-overlay-card';
 import { recordingLabelTextShadow } from '~/core/debates/debate-video-tile';
 import {
   OpenRoundPickReveal,
@@ -12,6 +15,9 @@ import {
 } from '~/core/debates/open-round-reveal';
 import { openRoundNumber } from '~/core/debates/open-rounds';
 import type { BreakCue, EarlyEndCue } from '~/core/debates/playback-breaks';
+
+import { Check } from '~/design-system/icons/check';
+import { Text } from '~/design-system/text';
 
 /** Each debater's name, by slot. Slot 1 is the top tile. */
 export type BreakNames = Record<ParticipantSlot, string>;
@@ -31,12 +37,14 @@ const TILE_CLASS: Record<ParticipantSlot, string> = {
  */
 const MAX_AHEAD_MS = 500;
 
+type RevealCue = Extract<BreakCue, { phase: 'reveal' }>;
+
 /**
- * Writes how far into the break the playhead is to `--open-round-t` on every frame, which is what
+ * Writes how far into the reveal the playhead is to `--open-round-t` on every frame, which is what
  * the reveal's held animations read (`heldAt` in `open-round-reveal.tsx`). Smoothed between the
  * player's playhead samples while playing, and held still while paused.
  */
-function useBreakClock(ref: React.RefObject<HTMLDivElement | null>, cue: BreakCue | null, playing: boolean) {
+function useRevealClock(ref: React.RefObject<HTMLDivElement | null>, cue: RevealCue | null, playing: boolean) {
   const sample = React.useRef({ elapsedMs: 0, at: 0 });
   const elapsedMs = cue?.elapsedMs ?? null;
   const durationMs = cue?.durationMs ?? 0;
@@ -63,16 +71,17 @@ function useBreakClock(ref: React.RefObject<HTMLDivElement | null>, cue: BreakCu
 }
 
 /**
- * What a break between Open rounds means, drawn over the condensed catch-up a published video plays
- * there (GEO-3277): the room's own reveal, at the pace of the break rather than the room's.
+ * What a break between Open rounds means, drawn over it in a published debate (GEO-3277): the
+ * moment the room put to both debaters, then the room's own reveal.
  *
+ * - While they pick: "Keep debating?", the question they were asked, with a tick as each one picks.
+ *   Never which way: the picks stay blind until the reveal, as they were for the debaters.
  * - After an Extend: the picks turn over, then "Round N" and who opens it.
  * - Before a required round: "Round N" and who opens it. Nobody picked, so there are no cards.
  * - After the final End: the picks turn over and stay up beside "That's a wrap", so a split, or a
  *   missing pick, explains itself, as in the room.
  *
- * `aria-hidden`, like the round card: the scrubber and the round badge carry the round, and the
- * picks are what the round's outcome already says.
+ * `aria-hidden`, like the round card: the round badge and the scrubber carry where the debate is.
  */
 export function DebateBreakOverlay({
   cue,
@@ -86,8 +95,10 @@ export function DebateBreakOverlay({
   playing: boolean;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
-  useBreakClock(ref, cue, playing);
+  const reveal = cue?.phase === 'reveal' ? cue : null;
+  useRevealClock(ref, reveal, playing);
   if (!cue) return null;
+  if (cue.phase === 'deciding') return <DebateDecidingCard cue={cue} names={names} />;
 
   const inResult = cue.elapsedMs >= cue.resultStartMs;
   const result: OpenRoundResult | null = !inResult
@@ -123,9 +134,47 @@ export function DebateBreakOverlay({
 }
 
 /**
- * Around an early end the render cut down to a short quiet: "Ended early" on the debater who ended
- * their turn, and whose turn it is on the other tile. The playback counterpart of the room's
- * "Ending turn…" and count-in, in the same type.
+ * The question the room asked both debaters, for a viewer who did not see it asked: the room's
+ * pick card surface and words, with each debater's state where the room had buttons.
+ */
+function DebateDecidingCard({ cue, names }: { cue: Extract<BreakCue, { phase: 'deciding' }>; names: BreakNames }) {
+  const next = cue.nextRoundIndex ?? cue.roundIndex + 1;
+  return (
+    // The card's own layer sits above the player's controls in the room; here it stays under them.
+    <div aria-hidden data-debate-deciding={cue.roundIndex} className="pointer-events-none absolute inset-0 z-[22]">
+      <DebateRoomOverlayCard className="w-[calc(100%-1.5rem)] max-w-[318px] gap-2.5 p-3">
+        <div className="min-w-0">
+          <p className="text-smallTitle text-text">Keep debating?</p>
+          <Text as="p" variant="footnote" color="grey-04" className="mt-1">
+            Each picks Extend or End in secret. An Extend unlocks Round {openRoundNumber(next)} unless either picks End.
+          </Text>
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          {SLOTS.map(slot => (
+            <div
+              key={slot}
+              data-debate-deciding-slot={slot}
+              data-picked={cue.picked[slot] ? 'true' : 'false'}
+              className={cx(
+                'flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-metadataMedium',
+                cue.picked[slot] ? 'bg-grey-01 text-text' : 'border border-dashed border-grey-03 text-grey-04'
+              )}
+            >
+              {cue.picked[slot] && <Check />}
+              <span className="min-w-0 truncate">{names[slot]}</span>
+              <span className="ml-auto shrink-0 font-normal">{cue.picked[slot] ? 'Picked' : 'Deciding…'}</span>
+            </div>
+          ))}
+        </div>
+      </DebateRoomOverlayCard>
+    </div>
+  );
+}
+
+/**
+ * Around an early end: "Ended early" on the debater who ended their turn, and whose turn it is on
+ * the other tile. The playback counterpart of the room's "Ending turn…" and count-in, in the same
+ * type.
  */
 export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; names: BreakNames }) {
   if (!cue) return null;

@@ -9,9 +9,11 @@ import { useClaimTimings } from './use-claim-timings';
 const transcript = vi.hoisted(() => ({
   calls: [] as { debateId: string; enabled: boolean }[],
   state: { data: undefined as unknown, isSuccess: false, isError: false },
+  media: undefined as unknown,
 }));
 
 vi.mock('./hooks', () => ({
+  useDebateMedia: () => ({ data: transcript.media, isPending: false, isLoading: false, error: null }),
   useDebateTranscript: (debateId: string, _format: string, enabled: boolean) => {
     transcript.calls.push({ debateId, enabled });
     return transcript.state;
@@ -52,6 +54,36 @@ describe('useClaimTimings', () => {
   beforeEach(() => {
     transcript.calls = [];
     transcript.state = { data: undefined, isSuccess: false, isError: false };
+    transcript.media = undefined;
+  });
+
+  // GEO-3277: claim times are the rendered video's, which an Open rounds render edits; the player
+  // plays the raw recordings, so a claim after a condensed break has to move back onto their clock.
+  it('places each claim on the recordings the player plays, not the edited video', () => {
+    transcript.media = {
+      condensed_breaks: [
+        {
+          kind: 'lead_in',
+          round_index: 0,
+          next_round_index: 1,
+          output_start_ms: 120_000,
+          output_end_ms: 121_600,
+          duration_ms: 1_600,
+          source_start_ms: 120_000,
+          source_end_ms: 128_000,
+          speed: 5,
+        },
+      ],
+    };
+    const { result } = renderHook(() =>
+      useClaimTimings(
+        'debate-1',
+        claims([claim('a', published(10_000, 12_000)), claim('b', published(130_000, 134_000))])
+      )
+    );
+
+    expect(result.current.timings.get('a')).toMatchObject({ startMs: 10_000, endMs: 12_000 });
+    expect(result.current.timings.get('b')).toMatchObject({ startMs: 136_400, endMs: 140_400 });
   });
 
   /**

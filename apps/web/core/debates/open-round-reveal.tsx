@@ -38,7 +38,8 @@ const OPEN_ROUND_FLIP_SHARE = 0.45;
  */
 const OPEN_ROUND_WRAP_HOLD_MS = 1_500;
 
-function flipEndsMs(windowMs: number) {
+/** How long the picks take to turn over in a result window this long. */
+export function flipEndsMs(windowMs: number) {
   return Math.round(windowMs * OPEN_ROUND_FLIP_SHARE);
 }
 

@@ -11,7 +11,7 @@ import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
-import { breakAnnouncesRound, breakCueAt, earlyEndCueAt, inUncondensedLeadIn } from '~/core/debates/playback-breaks';
+import { breakAnnouncesRound, breakCueAt, earlyEndCueAt, revealFlipMs, silentAt } from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -360,10 +360,10 @@ export function DebateFeedPlayer({
       playing && !reducedOverlays
         ? // A condensed break's own graphic already announced the round it leads into (GEO-3277).
           roundCardAt(turnSpans, roundTurns, playheadSeconds, round =>
-            breakAnnouncesRound(playbackBreaks.condensed, round)
+            breakAnnouncesRound(playbackBreaks.breaks, round)
           )
         : null,
-    [playbackBreaks.condensed, playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
+    [playbackBreaks.breaks, playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
   );
   const roundBadge = React.useMemo(
     () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, roundTurns, playheadSeconds) : null),
@@ -377,23 +377,25 @@ export function DebateFeedPlayer({
    * pauses or scrubs there sees the graphic held where the video is.
    */
   const playheadMs = playheadSeconds * 1_000;
+  const debateStartedAtMs = debate.started_at ? Date.parse(debate.started_at) : null;
+  const flipMs = revealFlipMs(debate);
   const breakCue = React.useMemo(
-    () => (reducedOverlays ? null : breakCueAt(playbackBreaks.condensed, playbackBreaks.picks, playheadMs)),
-    [playbackBreaks.condensed, playbackBreaks.picks, playheadMs, reducedOverlays]
+    () =>
+      reducedOverlays
+        ? null
+        : breakCueAt(playbackBreaks.breaks, playbackBreaks.picks, playheadMs, { debateStartedAtMs, flipMs }),
+    [debateStartedAtMs, flipMs, playbackBreaks.breaks, playbackBreaks.picks, playheadMs, reducedOverlays]
   );
   const earlyEndCue = React.useMemo(
     () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, turnSegments, playheadMs)),
     [playbackBreaks.earlyEnds, playheadMs, reducedOverlays, turnSegments]
   );
   /**
-   * A required round's lead-in that an older render kept inside the next turn. Both mics are open
-   * between rounds (#2838), so it can hold talk that was never meant to be published: nobody is
-   * audible through it, and it is not captioned.
+   * Nobody holds a turn: a break, from its pick window on, or an early end's quiet. Both mics are
+   * open between rounds (#2838), so this can hold talk that was never meant to be published: nobody
+   * is audible through it, and it is not captioned.
    */
-  const leadInSilent = React.useMemo(
-    () => inUncondensedLeadIn(debate, turnSegments, playheadMs),
-    [debate, playheadMs, turnSegments]
-  );
+  const betweenTurns = React.useMemo(() => silentAt(playbackBreaks, playheadMs), [playbackBreaks, playheadMs]);
   const breakNames = {
     1: slot1Participant ? speakerLabel(slot1Participant) : 'Debater',
     2: slot2Participant ? speakerLabel(slot2Participant) : 'Debater',
@@ -678,7 +680,7 @@ export function DebateFeedPlayer({
           videoRef={slot1VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
-          audible={playing && turnState?.slot === 1 && !leadInSilent}
+          audible={playing && turnState?.slot === 1 && !betweenTurns}
           countdown={playing && turnState?.slot === 1 ? turnState : null}
           roundBadge={turnState?.slot === 1 ? roundBadge : null}
           // Only this tile's: the card is centred on the seam, so it crosses the *top* tile's name
@@ -742,7 +744,7 @@ export function DebateFeedPlayer({
           videoRef={slot2VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
-          audible={playing && turnState?.slot === 2 && !leadInSilent}
+          audible={playing && turnState?.slot === 2 && !betweenTurns}
           countdown={playing && turnState?.slot === 2 ? turnState : null}
           roundBadge={turnState?.slot === 2 ? roundBadge : null}
           mutedByUser={mutedByUser}
@@ -833,7 +835,7 @@ export function DebateFeedPlayer({
         {subtitle &&
           !roundCard &&
           !breakCue &&
-          !leadInSilent &&
+          !betweenTurns &&
           !endCardShown &&
           (!reducedOverlays || (active && playing && mutedByUser)) && (
             <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">

@@ -172,6 +172,11 @@ export type DebateMediaTurnSegment = {
 };
 
 /**
+ * The media response's times are on the *rendered video's* clock: `output_*`, `turn_segments`,
+ * transcript lines and claim times. An Open rounds render cuts the pick window and condenses breaks,
+ * so that clock runs ahead of the raw recordings the web player plays. `playback-clock.ts`
+ * translates it back; `source_*` is already on the recordings' clock.
+ *
  * A break between two Open rounds as a condensed render plays it (GEO-3276): its source stretch
  * sped up to `duration_ms` with the sound muted, on the same output timeline as the turns.
  * `round_index` is the round that ended at the break; `next_round_index` the one whose first turn
@@ -200,6 +205,16 @@ export type DebateMediaEarlyEndGap = {
   quiet_kept_ms: number;
 };
 
+/** An Extend's reveal and count-in as the render kept it (GEO-3176), on both clocks. */
+export type DebateMediaRoundResult = {
+  round_index: number;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+};
+
 /** Every pick a debater saved for a round, in order; the last one per slot is what counted. */
 export type DebateMediaRoundPick = {
   round_index: number;
@@ -221,6 +236,7 @@ export type DebateMediaResponse = {
   condensed_breaks?: DebateMediaCondensedBreak[];
   early_end_gaps?: DebateMediaEarlyEndGap[];
   round_picks?: DebateMediaRoundPick[];
+  round_results?: DebateMediaRoundResult[];
   layout: DebateMediaRenderLayout;
   whisper_model_id: string;
 };
