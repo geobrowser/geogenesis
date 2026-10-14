@@ -240,23 +240,12 @@ describe('IncomingRequestPopup answers', () => {
  * the media it finds under any other key.
  */
 describe('IncomingRequestPopup media hand-off', () => {
-  it('promotes the open devices to the debate the accept created', () => {
+  it('leaves the hand-off to the mutation rather than a callback of its own', () => {
     render(<IncomingRequestPopup request={request} currentUserId="me" onNotNow={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    const options = mocks.accept.mock.calls[0][1];
-    options.onSuccess({ debate: { id: 'debate-9' } });
 
-    expect(mocks.promoteSession).toHaveBeenCalledWith('debate-request:request-1', 'debate:debate-9');
-  });
-
-  it('lets the devices go when the accept produced no debate', () => {
-    render(<IncomingRequestPopup request={request} currentUserId="me" onNotNow={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    mocks.accept.mock.calls[0][1].onSuccess({ debate: null });
-
-    expect(mocks.promoteSession).not.toHaveBeenCalled();
-    expect(mocks.releaseSession).toHaveBeenCalledWith('debate-request:request-1');
+    expect(mocks.accept).toHaveBeenCalledWith({ requestId: 'request-1' }, expect.anything());
+    expect(mocks.accept.mock.calls[0][1]?.onSuccess).toBeUndefined();
   });
 });
