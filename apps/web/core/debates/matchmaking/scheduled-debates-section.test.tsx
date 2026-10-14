@@ -6,10 +6,11 @@ import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { UpcomingRoomRow } from './scheduled-debates-section';
+import type { UpcomingLobbyRow } from './upcoming-lobby-rows';
 
 const mocks = vi.hoisted(() => ({
   respond: vi.fn(),
@@ -31,6 +32,8 @@ const mocks = vi.hoisted(() => ({
     avatar_cid: string | null;
   }[],
   graphLookupIds: [] as string[],
+  lobbyJoining: true,
+  lobbies: [] as DebateLobbySummary[],
 }));
 
 const ADA = {
@@ -55,6 +58,14 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
 vi.mock('~/core/debates/rooms/hooks', () => ({
   useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms }, error: mocks.roomsError }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
+}));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (flag: string) => (flag === 'lobbyJoining' ? mocks.lobbyJoining : false),
+}));
+
+vi.mock('~/core/debates/lobbies/hooks', () => ({
+  useDebateLobbies: (enabled: boolean) => ({ data: enabled ? { lobbies: mocks.lobbies } : undefined }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -130,6 +141,7 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
 const setup = (content: {
   answerable?: ScheduledDebateRequest[];
   upcoming?: UpcomingRoomRow[];
+  lobbies?: UpcomingLobbyRow[];
   people?: (typeof mocks.people)[number][];
   requestsError?: Error | null;
   roomsError?: Error | null;
@@ -140,6 +152,7 @@ const setup = (content: {
       content={{
         answerable: content.answerable ?? [],
         upcoming: content.upcoming ?? [],
+        lobbies: content.lobbies ?? [],
         people: content.people ?? [],
         requestsError: content.requestsError ?? null,
         roomsError: content.roomsError ?? null,
@@ -175,6 +188,8 @@ afterEach(() => {
   mocks.finishedRoomIds = new Set();
   mocks.graphPeople = [];
   mocks.graphLookupIds = [];
+  mocks.lobbyJoining = true;
+  mocks.lobbies = [];
 });
 
 describe('answering in the tab', () => {
@@ -712,5 +727,108 @@ describe('the slot in the header', () => {
 
   it('falls back to the start alone when the end is unusable', () => {
     expect(formatDebateSlot(at(11), 'not a time', now)).toMatch(/^Tomorrow at 11:00\s?AM$/);
+  });
+});
+
+describe('lobbies among the upcoming debates (GEO-3292)', () => {
+  const lobbyRow = (overrides: Partial<UpcomingLobbyRow> = {}): UpcomingLobbyRow => ({
+    lobbyId: 'lobby-1',
+    name: 'Should cities ban cars?',
+    startsAt: '2099-09-24T14:00:00Z',
+    opensAt: '2099-09-24T13:50:00Z',
+    open: false,
+    due: false,
+    hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
+    hosting: false,
+    onRoster: false,
+    ...overrides,
+  });
+
+  const lobbySummary = (overrides: Partial<DebateLobbySummary> = {}): DebateLobbySummary => ({
+    lobby_id: 'lobby-1',
+    name: 'Should cities ban cars?',
+    scheduled: true,
+    starts_at: '2099-09-24T14:00:00Z',
+    opens_at: '2099-09-24T13:50:00Z',
+    open: false,
+    hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
+    headcount: 0,
+    avatars: [],
+    debating_count: 0,
+    reminder_count: 3,
+    viewer_reminded: true,
+    viewer_on_roster: false,
+    ...overrides,
+  });
+
+  it('lists a lobby as a lobby, with its name and host, linking to its page', () => {
+    setup({ lobbies: [lobbyRow()] });
+
+    const card = screen.getByTestId('upcoming-lobby-card');
+    expect(card).toHaveTextContent('Debate lobby');
+    expect(card).toHaveTextContent('Should cities ban cars?');
+    expect(card).toHaveTextContent('Hosted by Bryan');
+    expect(card).toHaveTextContent(
+      `Opens at ${new Date('2099-09-24T13:50:00Z').toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+    );
+    expect(screen.getByRole('link', { name: 'View lobby' })).toHaveAttribute('href', '/debate/lobby-1');
+  });
+
+  it('offers Join once the lobby is open', () => {
+    setup({ lobbies: [lobbyRow({ open: true, due: true })] });
+
+    const card = screen.getByTestId('upcoming-lobby-card');
+    expect(card).toHaveTextContent('Starting now');
+    expect(card).toHaveTextContent('The lobby is open');
+    expect(screen.getByRole('link', { name: 'Join lobby' })).toHaveAttribute('href', '/debate/lobby-1');
+  });
+
+  it('tells a host it is theirs', () => {
+    setup({ lobbies: [lobbyRow({ hosting: true })] });
+
+    expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('You’re hosting');
+  });
+
+  it('orders lobbies and debates by start, as one list', () => {
+    setup({
+      upcoming: [
+        upcomingRow({ room_id: 'early', starts_at: '2099-09-24T13:00:00Z', joinable: false }),
+        upcomingRow({ room_id: 'late', starts_at: '2099-09-24T15:00:00Z', joinable: false }),
+      ],
+      lobbies: [lobbyRow({ startsAt: '2099-09-24T14:00:00Z' })],
+      people: [ADA],
+    });
+
+    const cards = screen.getAllByRole('article');
+    expect(cards).toHaveLength(3);
+    expect(cards[1]).toHaveAttribute('data-testid', 'upcoming-lobby-card');
+  });
+
+  it('builds Going lobbies from the upcoming rooms and names their host from the lobby list', () => {
+    mocks.rooms = [
+      room({ room_id: 'lobby-1', kind: 'lobby', name: 'Should cities ban cars?', joinable: false }),
+      room({ room_id: 'room-1' }),
+    ];
+    mocks.lobbies = [lobbySummary()];
+    const { result } = renderHook(() => useScheduledContent());
+
+    expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-1']);
+    expect(result.current.lobbies).toEqual([
+      expect.objectContaining({
+        lobbyId: 'lobby-1',
+        hosting: false,
+        hosts: [expect.objectContaining({ display_name: 'Bryan' })],
+      }),
+    ]);
+  });
+
+  it('lists nothing for lobbies with lobby joining off', () => {
+    mocks.lobbyJoining = false;
+    mocks.rooms = [room({ room_id: 'lobby-1', kind: 'lobby', name: 'Should cities ban cars?' })];
+    mocks.lobbies = [lobbySummary()];
+    const { result } = renderHook(() => useScheduledContent());
+
+    expect(result.current.lobbies).toEqual([]);
+    expect(result.current.upcoming).toEqual([]);
   });
 });

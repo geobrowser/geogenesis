@@ -57,7 +57,14 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 // The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
 vi.mock('./scheduled-debates-section', () => ({
   ScheduledDebatesSection: () => null,
-  useScheduledContent: () => ({ answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null }),
+  useScheduledContent: () => ({
+    answerable: [],
+    upcoming: [],
+    lobbies: [],
+    people: [],
+    requestsError: null,
+    roomsError: null,
+  }),
 }));
 
 vi.mock('next/navigation', () => ({

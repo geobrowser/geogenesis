@@ -13,6 +13,7 @@ import {
   type ScheduledDebateRequest,
   type UpcomingDebateRoom,
 } from '~/core/debates/api';
+import { useDebateLobbies } from '~/core/debates/lobbies/hooks';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
@@ -26,6 +27,7 @@ import {
   useScheduledDebates,
 } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { Date as DateIcon } from '~/design-system/icons/date';
@@ -39,6 +41,8 @@ import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
+import { UpcomingLobbyCard } from './upcoming-lobby-card';
+import { type UpcomingLobbyRow, byStart, upcomingLobbyRows } from './upcoming-lobby-rows';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
 
@@ -47,7 +51,7 @@ import { useRequestCountdown } from './use-request-countdown';
  * here, so neither depends on an email arriving or a popup being caught.
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
-  const { answerable, upcoming, people, requestsError, roomsError } = content;
+  const { answerable, upcoming, lobbies, people, requestsError, roomsError } = content;
   const respond = useRespondToScheduledDebate();
   const [conflict, setConflict] = React.useState<string | null>(null);
   const viewerId = useCurrentGeoChatUserId();
@@ -75,7 +79,13 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
-  if (answerable.length === 0 && upcoming.length === 0 && !requestsError && !roomsError) return null;
+  // Debates and lobbies as one week, soonest first (GEO-3292).
+  const upcomingItems = byStart([
+    ...upcoming.map(row => ({ kind: 'debate' as const, startsAt: row.room.starts_at, row })),
+    ...lobbies.map(row => ({ kind: 'lobby' as const, startsAt: row.startsAt, row })),
+  ]);
+
+  if (answerable.length === 0 && upcomingItems.length === 0 && !requestsError && !roomsError) return null;
 
   const answer = (requestId: string, accepted: boolean) => {
     setConflict(null);
@@ -94,19 +104,28 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
 
   return (
     <>
-      {(upcoming.length > 0 || roomsError) && (
+      {(upcomingItems.length > 0 || roomsError) && (
         <RequestSection label="Upcoming debates">
-          {upcoming.map(({ room, opponentUserId, scheduledEndAt, requestId }) => (
-            <UpcomingRow
-              key={room.room_id}
-              room={room}
-              requestId={requestId}
-              scheduledEndAt={scheduledEndAt}
-              opponent={lookUp(opponentUserId)}
-              viewer={viewer}
-              onReschedule={reschedulerFor(requestId, opponentUserId, 'requests_reschedule')}
-            />
-          ))}
+          {upcomingItems.map(item =>
+            item.kind === 'lobby' ? (
+              <UpcomingLobbyCard
+                key={item.row.lobbyId}
+                row={item.row}
+                formatTime={formatTime}
+                formatWhen={formatDebateTime}
+              />
+            ) : (
+              <UpcomingRow
+                key={item.row.room.room_id}
+                room={item.row.room}
+                requestId={item.row.requestId}
+                scheduledEndAt={item.row.scheduledEndAt}
+                opponent={lookUp(item.row.opponentUserId)}
+                viewer={viewer}
+                onReschedule={reschedulerFor(item.row.requestId, item.row.opponentUserId, 'requests_reschedule')}
+              />
+            )
+          )}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
         </RequestSection>
       )}
@@ -170,6 +189,8 @@ type Rescheduling = { requestId: string; opponentUserId: string; opponentName: s
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
+  /** Lobbies the viewer said Going to or hosts, listed with the debates. Empty without `lobbyJoining`. */
+  lobbies: UpcomingLobbyRow[];
   /** Who the requests' participants are, resolved from the graph. Empty until that lands. */
   people: DebateParticipantSummary[];
   /** Kept apart: one read failing must not hide what the other returned. */
@@ -190,6 +211,10 @@ export function useScheduledContent(): ScheduledContent {
   const requests = useScheduledDebates();
   const rooms = useUpcomingDebateRooms();
   const viewerId = useCurrentGeoChatUserId();
+  const lobbyJoining = useFeatureFlag('lobbyJoining');
+  // For hosts' names and the viewer's own scheduled lobbies. A fresh enough copy is fine here: the
+  // side panel card keeps the same entry current.
+  const lobbyList = useDebateLobbies(lobbyJoining, { staleTime: LOBBY_LIST_STALE_MS });
 
   const rows = requests.data?.requests;
 
@@ -201,7 +226,7 @@ export function useScheduledContent(): ScheduledContent {
   const upcoming = React.useMemo(
     () =>
       roomList
-        // Reminded lobbies share the list but are not scheduled debates (GEO-3133).
+        // Lobbies share the list and are listed as lobbies below.
         .filter(room => room.kind !== 'lobby' && !finishedRoomIds.has(room.room_id))
         .map(room => {
           const request = requestForRoom(rows, room.room_id);
@@ -215,6 +240,11 @@ export function useScheduledContent(): ScheduledContent {
     [finishedRoomIds, roomList, rows, viewerId]
   );
 
+  const lobbies = React.useMemo(
+    () => (lobbyJoining ? upcomingLobbyRows(roomList, lobbyList.data?.lobbies ?? [], viewerId) : []),
+    [lobbyJoining, lobbyList.data, roomList, viewerId]
+  );
+
   // The viewer included: their own side of the strip needs a face too.
   const participantIds = React.useMemo(
     () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
@@ -222,8 +252,17 @@ export function useScheduledContent(): ScheduledContent {
   );
   const people = useGeoChatUserSummaries(participantIds, true);
 
-  return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
+  return {
+    answerable,
+    upcoming,
+    lobbies,
+    people,
+    requestsError: requests.error ?? null,
+    roomsError: rooms.error ?? null,
+  };
 }
+
+const LOBBY_LIST_STALE_MS = 30_000;
 
 /**
  * Names come from the graph, since a geo-chat user id is their personal space's page entity. The

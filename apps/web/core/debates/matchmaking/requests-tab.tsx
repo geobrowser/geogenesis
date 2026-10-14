@@ -95,6 +95,7 @@ export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
   const hasScheduled =
     scheduled.answerable.length > 0 ||
     scheduled.upcoming.length > 0 ||
+    scheduled.lobbies.length > 0 ||
     availabilityRequests.length > 0 ||
     scheduled.requestsError !== null ||
     scheduled.roomsError !== null;
