@@ -73,7 +73,11 @@ type Session = {
 let session: Session | null = null;
 /** Earlier sessions by dashless lobby id, so a debate or request answered after moving on still counts. */
 const retained = new Map<string, Session>();
-let pendingEntry: { lobbyId: string; entry: LobbyEntry; at: number } | null = null;
+/** `answered` once a signed-out visitor's account prompt has taken the press (GEO-3289). */
+let pendingEntry: { lobbyId: string; entry: LobbyEntry; at: number; answered: boolean } | null = null;
+/** Bumped on every marked entry, so a page already showing that lobby hears the press. */
+let entryCount = 0;
+const entryListeners = new Set<() => void>();
 let releaseTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Analytics never gets in the way of the lobby. */
@@ -134,7 +138,25 @@ function newcomerProperty(isNewcomer: boolean | null) {
 
 /** Set by the control that leads into the lobby, before navigating or joining. */
 export function markLobbyEntry(lobbyId: string, entry: LobbyEntry) {
-  pendingEntry = { lobbyId: dashlessId(lobbyId), entry, at: Date.now() };
+  pendingEntry = { lobbyId: dashlessId(lobbyId), entry, at: Date.now(), answered: false };
+  entryCount += 1;
+  for (const listener of entryListeners) listener();
+}
+
+/** For `useSyncExternalStore`: changes on every marked entry. */
+export function subscribeLobbyEntries(listener: () => void) {
+  entryListeners.add(listener);
+  return () => void entryListeners.delete(listener);
+}
+
+export function lobbyEntryCount() {
+  return entryCount;
+}
+
+function freshEntryFor(lobbyId: string) {
+  const pending = pendingEntry;
+  if (!pending || !sameId(pending.lobbyId, lobbyId) || Date.now() - pending.at > ENTRY_TTL_MS) return null;
+  return pending;
 }
 
 /**
@@ -142,9 +164,18 @@ export function markLobbyEntry(lobbyId: string, entry: LobbyEntry) {
  * visitor's account prompt (GEO-3289), which tells a press in the navbar or panel from a link.
  */
 export function peekLobbyEntry(lobbyId: string): LobbyEntry {
-  const pending = pendingEntry;
-  if (!pending || !sameId(pending.lobbyId, lobbyId) || Date.now() - pending.at > ENTRY_TTL_MS) return 'link';
-  return pending.entry;
+  return freshEntryFor(lobbyId)?.entry ?? 'link';
+}
+
+/**
+ * Whether a press for this lobby is still waiting for the account prompt, answering it: true once
+ * per press. The entry itself stays for the join, so coming back with Back is not a second press.
+ */
+export function answerLobbyPress(lobbyId: string): boolean {
+  const pending = freshEntryFor(lobbyId);
+  if (!pending || pending.answered) return false;
+  pending.answered = true;
+  return true;
 }
 
 function takeEntry(lobbyId: string): LobbyEntry {

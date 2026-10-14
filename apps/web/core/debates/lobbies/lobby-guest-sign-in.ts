@@ -10,7 +10,13 @@ import { type PrivySignInCallOptions, usePrivySignIn } from '~/core/hooks/use-pr
 
 import { dashlessId } from '../api';
 import { debateRoomPath } from '../rooms/room-routes';
-import { LOBBY_LINK_VIA, peekLobbyEntry } from './lobby-analytics';
+import {
+  LOBBY_LINK_VIA,
+  answerLobbyPress,
+  lobbyEntryCount,
+  peekLobbyEntry,
+  subscribeLobbyEntries,
+} from './lobby-analytics';
 
 /** The lobby page's own attribution, the same the shared link's sign-in sends (GEO-3126). */
 export function lobbyAuthPage(lobbyId: string): AnalyticsProperties {
@@ -78,20 +84,24 @@ export function claimLobbySignInPrompt(lobbyId: string) {
  * claims the lobby's as it does; nothing orders that effect before this one.
  *
  * Pressing the lobby in the navbar or the debates panel (GEO-3289) asks again even if this tab was
- * asked before: once per tab is about a reload, and a press is somebody asking to join. The entry
- * goes with the attempt, so those sign-ups can be told from a shared link's.
+ * asked before: once per tab is about a reload, and a press is somebody asking to join. Each press
+ * is answered once, so Back to the lobby does not ask again, and a press on the lobby already on
+ * screen is heard through the entry count. The entry goes with the attempt, so those sign-ups can
+ * be told from a shared link's.
  */
 export function useLobbySignInPrompt(lobbyId: string, open: boolean) {
   const signIn = useLobbyGuestSignIn(lobbyId);
   const signInLink = useDeepLinkParams(SIGN_IN_MODAL);
+  const presses = React.useSyncExternalStore(subscribeLobbyEntries, lobbyEntryCount, () => 0);
   useEffectOnceWhen(
     open && !signInLink.requested,
     () => {
       const entry = peekLobbyEntry(lobbyId);
       const firstTime = claimLobbySignInPrompt(lobbyId);
-      if (!firstTime && entry === 'link') return;
+      const pressed = answerLobbyPress(lobbyId);
+      if (!firstTime && !pressed) return;
       signIn({ component: 'lobby_sign_in_prompt', auth_trigger: 'page_load', lobby_entry: entry });
     },
-    lobbyId
+    `${lobbyId}:${presses}`
   );
 }

@@ -1,4 +1,4 @@
-import { cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -134,5 +134,29 @@ describe('useLobbySignInPrompt', () => {
     renderHook(() => useLobbySignInPrompt('lobby-j', true));
 
     expect(mocks.signIn).toHaveBeenCalledTimes(1);
+  });
+
+  // Copilot on #2863: the press is answered once. Back to the lobby within the marker's minute is
+  // not another press, and must not reopen a prompt the visitor dismissed.
+  it('answers a press once, so coming back with Back does not ask again', () => {
+    markLobbyEntry('lobby-l', 'nav');
+    renderHook(() => useLobbySignInPrompt('lobby-l', true));
+    cleanup();
+    renderHook(() => useLobbySignInPrompt('lobby-l', true));
+
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
+  });
+
+  // And pressing Join for the lobby already on screen asks, though its page stays mounted.
+  it('asks for a press on the lobby whose page is open', () => {
+    renderHook(() => useLobbySignInPrompt('lobby-m', true));
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
+
+    act(() => markLobbyEntry('lobby-m', 'side_panel'));
+    expect(mocks.signIn).toHaveBeenCalledTimes(2);
+    expect(mocks.signIn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ lobby_entry: 'side_panel' }),
+      expect.anything()
+    );
   });
 });

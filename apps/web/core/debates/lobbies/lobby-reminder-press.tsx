@@ -9,6 +9,7 @@ import { Text } from '~/design-system/text';
 
 import { type DebateLobbySummary, GeoChatRequestError, dashlessId } from '../api';
 import { useGeoChatAuth } from '../hooks';
+import { sameId } from '../rooms/room-presence';
 import { useDebateLobbies, useDebateLobbyReminder, useLobbyReminderError } from './hooks';
 import { RSVP_FAILED, lobbyErrorMessage } from './lobby-format';
 
@@ -16,45 +17,69 @@ import { RSVP_FAILED, lobbyErrorMessage } from './lobby-format';
 const NO_LOBBY = { lobby_id: '', open: true };
 
 /**
- * Remind me on a lobby still to open, for anyone (GEO-3289). Signed in it sets or clears the
- * reminder. Signed out it is queued at the press and the account prompt opens; the reminder is set
- * once the new account can read its own lobby list, which is also when it can be told whether it
- * already holds one, and dropped if the lobby opened in the meantime.
- *
- * `reminded` draws a queued reminder as set, so the press shows while sign-up runs. A failure is
- * `error`, for {@link LobbyReminderError} beside the button, rather than the runner's retry toast.
+ * One queued reminder at a time, its lobby as the intent: a signed-out visitor signs up on their
+ * first press, and a second press only moves it.
  */
-export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id' | 'open' | 'viewer_reminded'> | null) {
-  const reminder = useDebateLobbyReminder();
-  const { mutate, mutateAsync, isPending } = reminder;
-  const error = useLobbyReminderError(reminder, lobby ?? NO_LOBBY);
-  const { authenticated } = useGeoChatAuth();
-  // Read only: whatever shows this lobby already holds the list. Loaded under the signed-in account
-  // is what says geo-chat knows it, which a brand-new one takes a minute or two to reach.
-  const accountList = useDebateLobbies(false);
-  const lobbyId = lobby ? dashlessId(lobby.lobby_id) : '';
+const QUEUED_REMINDER_ID = 'lobby-reminder';
 
-  const queued = useQueuedAction({
-    id: `lobby-reminder:${lobbyId}`,
+/**
+ * The queued reminder, replayed by whichever copy is mounted when the account can carry it out.
+ * Each decides from the account's own lobby list, by id, rather than from the card that was pressed:
+ * that list loading says geo-chat knows the new account, and it still answers once the card is gone
+ * (the panel closed, or the lobby opened and its card became Join). Set unless that list says it
+ * already is, the lobby opened, or it is no longer listed; a failure is left to the button's error
+ * rather than thrown, which the runner would turn into a retry toast.
+ */
+function useQueuedLobbyReminder(reminder: ReturnType<typeof useDebateLobbyReminder>) {
+  const { mutateAsync } = reminder;
+  const { authenticated } = useGeoChatAuth();
+  // Read only: the navbar's lineup already holds the list.
+  const lobbies = useDebateLobbies(false).data?.lobbies;
+
+  return useQueuedAction({
+    id: QUEUED_REMINDER_ID,
     component: 'debate_matchmaking',
     label: 'your lobby reminder',
     requires: 'auth',
-    // Decided from the lobby as the account sees it, never from the press's signed-out copy.
     liveOnly: true,
-    ready: authenticated && accountList.data !== undefined && lobby !== null,
-    run: async () => {
-      if (!lobby || lobby.open || lobby.viewer_reminded) return;
+    ready: authenticated && lobbies !== undefined,
+    run: async intent => {
+      const target = intent ? lobbies?.find(row => sameId(row.lobby_id, intent)) : undefined;
+      if (!target || target.open || target.viewer_reminded) return;
       try {
-        await mutateAsync({ lobbyId: lobby.lobby_id, reminded: true });
+        await mutateAsync({ lobbyId: target.lobby_id, reminded: true });
       } catch (error) {
         // Opened since: the list swaps in Join. Anything else is shown beside the button.
         if (error instanceof GeoChatRequestError && error.status === 409) return;
       }
     },
   });
+}
 
+/**
+ * Replays a queued reminder with no Remind me on screen. The navbar's Debate button holds it, so it
+ * is mounted on every page.
+ */
+export function useLobbyReminderReplay() {
+  useQueuedLobbyReminder(useDebateLobbyReminder());
+}
+
+/**
+ * Remind me on a lobby still to open, for anyone (GEO-3289). Signed in it sets or clears the
+ * reminder. Signed out it is queued at the press and the account prompt opens; see
+ * {@link useQueuedLobbyReminder} for when it is set.
+ *
+ * `reminded` draws a queued reminder as set, so the press shows while sign-up runs. A failure is
+ * `error`, for {@link LobbyReminderError} beside the button.
+ */
+export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id' | 'open' | 'viewer_reminded'> | null) {
+  const reminder = useDebateLobbyReminder();
+  const { mutate, isPending } = reminder;
+  const error = useLobbyReminderError(reminder, lobby ?? NO_LOBBY);
+  const { authenticated } = useGeoChatAuth();
+  const lobbyId = lobby ? dashlessId(lobby.lobby_id) : '';
+  const { queue, cancel, intent } = useQueuedLobbyReminder(reminder);
   const signIn = usePrivySignIn();
-  const { queue, cancel, isQueued } = queued;
 
   const press = React.useCallback(() => {
     if (!lobby) return;
@@ -62,7 +87,7 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
       mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded });
       return;
     }
-    queue();
+    queue(lobbyId);
     signIn(
       {
         component: 'debate_matchmaking',
@@ -78,7 +103,7 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
   }, [authenticated, cancel, lobby, lobbyId, mutate, queue, signIn]);
 
   return {
-    reminded: Boolean(lobby?.viewer_reminded) || isQueued,
+    reminded: Boolean(lobby?.viewer_reminded) || (lobby !== null && intent !== undefined && sameId(intent, lobbyId)),
     pending: isPending,
     error,
     press,
