@@ -72,6 +72,7 @@ function MediaPreview({
   const [missing, setMissing] = React.useState<{ mic: boolean; camera: boolean }>({ mic: false, camera: false });
   const [failure, setFailure] = React.useState<string | null>(null);
 
+  const chosenByViewer = React.useRef(false);
   const acquired = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
 
@@ -82,6 +83,7 @@ function MediaPreview({
     void readMediaPermission().then(answer => {
       if (!active) return;
       setPermission(answer);
+      if (chosenByViewer.current) return;
       setWant({ micOn: mayAutoStartPreview(answer.microphone), cameraOn: mayAutoStartPreview(answer.camera) });
     });
 
@@ -165,6 +167,7 @@ function MediaPreview({
   const toggle = (next: Partial<DebateJoinState>) => {
     if (next.micOn !== undefined && micBlocked) return;
     if (next.cameraOn !== undefined && cameraBlocked) return;
+    chosenByViewer.current = true;
     setFailure(null);
     setWant(current => ({ ...current, ...next }));
   };
