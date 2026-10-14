@@ -25,6 +25,17 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const watchedMocks = vi.hoisted(() => ({ markDebateWatched: vi.fn() }));
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({
+  FollowButton: (props: { target: { id: string }; variant?: string }) => (
+    <span data-testid="follow" data-id={props.target.id} data-variant={props.variant} />
+  ),
+}));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/debates/watched-debates', () => ({ markDebateWatched: watchedMocks.markDebateWatched }));
 
 // The card's data is its own hook's business, tested beside it. Here only *when* it is asked for.
@@ -243,6 +254,15 @@ afterEach(() => {
 });
 
 describe('player layout', () => {
+  it('offers Follow beside each debater, at the chip size, by their personal space (GEO-3236)', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    const follows = Array.from(container.querySelectorAll('[data-testid="follow"]'));
+    expect(follows.map(follow => follow.getAttribute('data-id'))).toEqual([SPACE_1_DASHED, SPACE_2]);
+    expect(follows.every(follow => follow.getAttribute('data-variant') === 'overlay')).toBe(true);
+  });
+
   it('keeps both stacked videos at the original aspect ratio', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     const { container } = render(<DebateFeedPlayer debate={debate} active />);

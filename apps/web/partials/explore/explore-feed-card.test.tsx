@@ -18,6 +18,13 @@ const { attribute } = vi.hoisted(() => ({ attribute: vi.fn() }));
 // import — and under Node's own webstorage, which shadows jsdom's with an object that has no
 // getItem, that import takes the whole suite down before a test runs. Mocked rather than worked
 // around in a setup file so the file stands on its own.
+// The meta row's Join/Follow offer reads the space type and the viewer (GEO-3236); both have their
+// own suites.
+vi.mock('~/core/hooks/use-is-personal-space', () => ({ useIsPersonalSpace: () => undefined }));
+vi.mock('~/core/hooks/use-personal-space-id', () => ({
+  usePersonalSpaceId: () => ({ personalSpaceId: null, isRegistered: false, isLoading: false }),
+}));
+
 vi.mock('~/core/state/pending-personal-space', () => ({
   usePendingPersonalSpace: () => ({ isPending: false, pending: null }),
   pendingPersonalSpaceId: (topicId: string) => `pending:${topicId}`,

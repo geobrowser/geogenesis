@@ -52,15 +52,27 @@ export type InterestedTopicRow = {
   objectId: string;
   /** The space the Interested was cast in. Clearing must name the same one. */
   spaceId: string;
+  /**
+   * What was followed (GEO-3236): a person, by their personal space id, or a topic. One query reads
+   * both, so the row carries which. Absent reads as a topic, which is all Interested was before.
+   */
+  kind?: FollowKind;
 };
+
+export type FollowKind = 'topic' | 'person';
 
 /**
  * The read rule with the flag on: a topic is followed exactly when the space holds a current
  * Interested on it. A `Following` relation counts for nothing (Preston, 6 Oct: old topic follows are
  * dropped). Held in several spaces, it is still one followed topic.
  */
-export function interestedTopicIds(interested: readonly Pick<InterestedTopicRow, 'objectId'>[]): Set<string> {
-  return new Set(interested.map(row => normId(row.objectId)));
+export function interestedTopicIds(
+  interested: readonly Pick<InterestedTopicRow, 'objectId' | 'kind'>[],
+  kind: FollowKind | 'any' = 'any'
+): Set<string> {
+  return new Set(
+    interested.filter(row => kind === 'any' || (row.kind ?? 'topic') === kind).map(row => normId(row.objectId))
+  );
 }
 
 export type InterestedCall = { to: Hex; data: Hex };
