@@ -50,7 +50,7 @@ import {
   useNotInterestedClaimIds,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useConsumeDebateReturnDestination, useLobbyRejoinOnLeave } from '~/core/debates/lobbies/lobby-return';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -125,6 +125,7 @@ import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
+import { RematchPublishCard } from './rematch-publish-card';
 import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
 import { rematchHideAgreedAtom, rematchHideMyPositionsAtom } from '~/atoms';
@@ -282,6 +283,7 @@ const ROOM_REJOIN_RETRY_MS = 15_000;
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const requestLobbyRejoinOnLeave = useLobbyRejoinOnLeave();
   // The room owns this session rather than the other way round, so two of the page's exits change
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
@@ -2508,6 +2510,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       return;
     }
     leaveRequestedRef.current = true;
+    // A flow that started in a lobby goes back to it, and the lobby joins on arrival rather than
+    // asking again — what the end card's "Back to <lobby>" row did before GEO-3301 removed it.
+    requestLobbyRejoinOnLeave();
     leaveSession.mutate(undefined, {
       onSuccess: returnFromSession,
       onError: () => {
@@ -2801,16 +2806,17 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     );
   }
 
+  // GEO-3301. A word rather than the arrow it used to be: people did not read the icon as a way out,
+  // and with the "Debate again?" step gone this is the only one the pair have. Red for leaving, the
+  // tinted fill so it stays quieter than the dark Request debate buttons the page is for.
   const leaveButton = (
     <button
       type="button"
-      aria-label="Leave debate"
-      title="Leave debate"
       onClick={leave}
       disabled={leaveSession.isPending}
-      className="grid size-8 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+      className="inline-flex min-h-7 shrink-0 items-center rounded-full bg-errorTertiary px-3 text-metadataMedium text-red-01 transition-colors hover:bg-red-01 hover:text-white disabled:opacity-50"
     >
-      <LeaveIcon />
+      Leave
     </button>
   );
 
@@ -2869,6 +2875,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               <div className="flex justify-end">{leaveButton}</div>
             )}
           </div>
+          {/* GEO-3301. The pair arrive straight from the debate, so the recording it left behind comes
+              with them: under the pair, inside the sticky block so the way to withdraw it stays on
+              screen while the list scrolls. A session from a profile challenge has no debate. */}
+          {sourceDebateQuery.data && currentUserId ? (
+            <div className="mb-4 empty:hidden">
+              <RematchPublishCard
+                debate={sourceDebateQuery.data}
+                currentUserId={currentUserId}
+                opponentName={remoteFirstName}
+              />
+            </div>
+          ) : null}
           <header className="mb-4">
             <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
               {pickerTabs.map(spec => (
@@ -3769,15 +3787,5 @@ function TabCount({
     >
       {pending ? <Skeleton radius="rounded-full" className="h-3 w-3" aria-label={pendingLabel} /> : count}
     </span>
-  );
-}
-
-function LeaveIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M9 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2" />
-      <path d="M13 12H3" />
-      <path d="M6 9l-3 3 3 3" />
-    </svg>
   );
 }

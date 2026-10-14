@@ -15,9 +15,19 @@ export type ThankingDebate = {
    * report an upload. The banner defers to the card only while the card is actually on screen.
    */
   showsPublishControl: boolean;
+  /**
+   * Whether geo-chat still accepts a cancel for this debate. Absent means open: the room only
+   * reports a debate while its thank-you period runs, which is the window itself.
+   *
+   * The claim picker (GEO-3301) reports the debate for as long as the viewer is in it, which can
+   * outlast the window, so it says when the window has closed. The coordinator keeps reporting the
+   * upload after that; it only stops offering the cancel.
+   */
+  cancelWindowOpen?: boolean;
 };
 
-// The debate whose post-debate thank-you screen the user is currently on. The room page also
+// The debate the user has just finished, while they are still on a surface that belongs to it: the
+// room's thank-you period, then the claim picker the pair move on to (GEO-3301). That surface also
 // carries the authoritative server recording state so the global banner survives a remount after
 // IndexedDB's completed upload row has been removed.
 const thankingDebateAtom = atom<ThankingDebate | null>(null);
@@ -47,9 +57,26 @@ export type PublishOptOutOffer = {
    * keep it dropped if the refetch failed.
    */
   cancelled: boolean;
+  /**
+   * Where the debate's own recording is on its way out, for a surface that reports it beside the
+   * cancel (GEO-3301). `preparing` is still being written to this device, `uploading` is in the
+   * queue, `uploaded` is out; null when there is no recording here to speak for, or it was
+   * withdrawn.
+   */
+  upload: 'preparing' | 'uploading' | 'uploaded' | null;
+  /** That recording's own upload progress, 0-100, or null while nothing is measurable. */
+  percent: number | null;
 };
 
-const publishOptOutOfferAtom = atom<PublishOptOutOffer>({ debateId: null, busy: false, cancelled: false });
+export const EMPTY_PUBLISH_OPT_OUT_OFFER: PublishOptOutOffer = {
+  debateId: null,
+  busy: false,
+  cancelled: false,
+  upload: null,
+  percent: null,
+};
+
+const publishOptOutOfferAtom = atom<PublishOptOutOffer>(EMPTY_PUBLISH_OPT_OUT_OFFER);
 
 export const usePublishOptOutOffer = () => useAtomValue(publishOptOutOfferAtom);
 

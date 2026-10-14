@@ -38,6 +38,7 @@ const mocks = vi.hoisted(() => ({
   // Whether the thank-you card is on screen carrying the publish switch. It changes which opt-out
   // control is drawn, not whether the banner reports the upload — it always does.
   thankingShowsPublishControl: false,
+  thankingCancelWindowOpen: undefined as boolean | undefined,
   publishOptOutOffer: null as { debateId: string | null; busy: boolean; cancelled: boolean } | null,
   publishOptOutRequest: null as string | null,
   // Set to hold the presigned PUT open, so a test can read the banner mid-transfer and drive
@@ -92,7 +93,13 @@ vi.mock('./hooks', () => ({
   useDebateActivity: () => ({ data: mocks.activityDebate ? { debate: mocks.activityDebate } : undefined }),
 }));
 
-const setPublishOptOutOffer = (offer: { debateId: string | null; busy: boolean; cancelled: boolean }) => {
+const setPublishOptOutOffer = (offer: {
+  debateId: string | null;
+  busy: boolean;
+  cancelled: boolean;
+  upload?: 'preparing' | 'uploading' | 'uploaded' | null;
+  percent?: number | null;
+}) => {
   mocks.publishOptOutOffer = offer;
 };
 const setPublishOptOutRequest = (debateId: string | null) => {
@@ -100,6 +107,7 @@ const setPublishOptOutRequest = (debateId: string | null) => {
 };
 
 vi.mock('./thanking-debate-store', () => ({
+  EMPTY_PUBLISH_OPT_OUT_OFFER: { debateId: null, busy: false, cancelled: false, upload: null, percent: null },
   useThankingDebate: () =>
     mocks.thankingDebateId
       ? {
@@ -108,6 +116,7 @@ vi.mock('./thanking-debate-store', () => ({
           hasUploadedRecording: mocks.thankingHasUploadedRecording,
           recordingCancelled: mocks.thankingRecordingCancelled,
           showsPublishControl: mocks.thankingShowsPublishControl,
+          cancelWindowOpen: mocks.thankingCancelWindowOpen,
         }
       : null,
   // Records what the coordinator offers the card, so a case can assert the opt-out is on offer
@@ -264,6 +273,7 @@ beforeEach(() => {
   mocks.thankingHasPendingLocalRecording = false;
   mocks.thankingRecordingCancelled = false;
   mocks.thankingShowsPublishControl = false;
+  mocks.thankingCancelWindowOpen = undefined;
   mocks.publishOptOutOffer = null;
   mocks.publishOptOutRequest = null;
   mocks.holdUpload = null;
@@ -1160,7 +1170,36 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.deleteUpload).toHaveBeenCalledWith(uploadId('debate-1'));
     expect(mocks.capture).toHaveBeenCalledWith(
       'debate_recording_upload_cancelled',
-      expect.objectContaining({ debate_id: 'debate-1', cancel_source: 'thanking_toggle' })
+      expect.objectContaining({ debate_id: 'debate-1', cancel_source: 'rematch_card' })
+    );
+  });
+
+  // GEO-3301. The claim picker carries the card past geo-chat's cancel deadline: it keeps the upload
+  // on screen, and nothing offers a cancel the server would refuse.
+  it('stops offering the cancel once the surface says the window has closed, but keeps reporting the upload', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingCancelWindowOpen = false;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() => expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ upload: 'uploading' })));
+    expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ debateId: null }));
+    expect(await screen.findByText('Uploading & publishing 1 debate')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull();
+  });
+
+  it('tells the card where the finished debate’s own upload is', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingShowsPublishControl = true;
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.publishOptOutOffer).toEqual(expect.objectContaining({ debateId: 'debate-1', upload: 'uploading' }))
     );
   });
 

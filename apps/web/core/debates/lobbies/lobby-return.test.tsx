@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -17,14 +17,14 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('./hooks', () => ({
-  useDebateLobby: (lobbyId: string) => {
-    mocks.useDebateLobby(lobbyId);
+  useDebateLobby: (lobbyId: string, enabled = true) => {
+    mocks.useDebateLobby(lobbyId, enabled);
     return { data: mocks.lobby };
   },
   useMyDebateLobby: () => mocks.mine,
 }));
 
-const { BackToLobbyRow, useConsumeDebateReturnDestination } = await import('./lobby-return');
+const { useConsumeDebateReturnDestination, useLobbyRejoinOnLeave } = await import('./lobby-return');
 const { consumeLobbyRejoin } = await import('./step-out');
 
 const member = (id: string, stepped_out = false): DebateLobbyMember => ({
@@ -60,73 +60,58 @@ beforeEach(() => {
 
 afterEach(cleanup);
 
-const backButton = () => screen.queryByRole('button', { name: /^Back to Onboarding with Adam/ });
+describe('useLobbyRejoinOnLeave', () => {
+  const leave = () => renderHook(() => useLobbyRejoinOnLeave()).result.current();
 
-describe('BackToLobbyRow', () => {
   // The case sessionStorage cannot cover: this tab never saw the lobby.
-  it('offers the lobby geo-chat says the viewer stepped out of, from another tab, and asks it to rejoin', () => {
+  it('asks the lobby geo-chat says the viewer stepped out of, from another tab, to rejoin', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    const onLeave = vi.fn();
-    render(<BackToLobbyRow onLeave={onLeave} />);
-
-    fireEvent.click(backButton()!);
-    expect(onLeave).toHaveBeenCalledTimes(1);
-    expect(mocks.useDebateLobby).toHaveBeenCalledWith('lobby1');
+    leave();
+    expect(mocks.useDebateLobby).toHaveBeenCalledWith('lobby1', true);
     expect(consumeLobbyRejoin('lobby1')).toBe(true);
-  });
-
-  it('names the lobby, counts it as the lobby header does, and shows faces of people in the room', () => {
-    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()?.textContent).toContain('5 here now');
-    // The faces stay out of the button and out of its name.
-    const faces = screen.getByTestId('back-to-lobby-faces');
-    expect(faces.getAttribute('aria-hidden')).toBe('true');
-    expect(faces.querySelectorAll('li')).toHaveLength(3);
-    expect(backButton()!.querySelector('ul, li, img')).toBeNull();
   });
 
   it('prefers geo-chat over this tab’s record', () => {
     rememberLobbyReturnDestination('lobby1');
     mocks.mine = { data: notInALobby, isError: false };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
+    leave();
+    expect(consumeLobbyRejoin('lobby1')).toBe(false);
   });
 
-  it('is hidden while geo-chat has not answered', () => {
+  it('asks nothing while geo-chat has not answered', () => {
     rememberLobbyReturnDestination('lobby1');
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
+    leave();
+    expect(consumeLobbyRejoin('lobby1')).toBe(false);
   });
 
   it('falls back to this tab’s record when the call failed', () => {
     mocks.mine = { data: undefined, isError: true };
     rememberLobbyReturnDestination('lobby1');
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).not.toBeNull();
+    leave();
+    expect(consumeLobbyRejoin('lobby1')).toBe(true);
   });
 
-  it('is hidden once the lobby has ended', () => {
+  it('asks nothing once the lobby has ended', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
     mocks.lobby = { ...admitted(), access: { status: 'closed', reason: 'ended' } };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
+    leave();
+    expect(consumeLobbyRejoin('lobby1')).toBe(false);
   });
 
   // GEO-3134: a removed viewer goes back by choice, from the lobby page's Rejoin.
-  it('is hidden while a host has the viewer removed', () => {
+  it('asks nothing while a host has the viewer removed', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
     mocks.lobby = admitted({ removed: true });
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
+    leave();
+    expect(consumeLobbyRejoin('lobby1')).toBe(false);
   });
 
-  it('is hidden for a debate that did not start from a lobby', () => {
+  it('asks nothing for a debate that did not start from a lobby', () => {
     rememberDebateReturnDestination('/space/my-space');
     mocks.mine = { data: notInALobby, isError: false };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
-    expect(mocks.useDebateLobby).not.toHaveBeenCalled();
+    leave();
+    expect(consumeLobbyRejoin('lobby1')).toBe(false);
+    expect(mocks.useDebateLobby).toHaveBeenCalledWith('', false);
   });
 });
 

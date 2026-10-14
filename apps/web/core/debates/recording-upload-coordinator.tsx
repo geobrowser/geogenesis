@@ -68,6 +68,8 @@ import {
   setDebateRecordingMultipart,
 } from './recording-upload-queue';
 import {
+  EMPTY_PUBLISH_OPT_OUT_OFFER,
+  type PublishOptOutOffer,
   usePublishOptOutRequest,
   useSetPublishOptOutOffer,
   useSetPublishOptOutRequest,
@@ -147,8 +149,13 @@ export const FAILED_RECORDING_UPLOAD_KEEP_MS = 30 * 24 * 60 * 60_000;
  */
 export const DEBATE_RECORDING_HELP_URL = 'https://discord.gg/Hcng2pURZ';
 
-/** Where a cancellation was asked for: the thank-you card's Publish switch, or the upload banner. */
-type RecordingCancelSource = 'thanking_toggle' | 'upload_banner';
+/**
+ * Where a cancellation was asked for: the claim picker's publishing card, or the upload banner.
+ *
+ * `thanking_toggle` was the thank-you card's Publish switch, which GEO-3301 removed; the card that
+ * replaced it reports as `rematch_card`.
+ */
+type RecordingCancelSource = 'rematch_card' | 'upload_banner';
 
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
@@ -754,9 +761,10 @@ export function DebateRecordingUploadCoordinator() {
     waitingReason = latestFailedUpload ? 'retry' : 'waiting';
   }
 
-  // Opting out of publishing is offered only during the thank-you period, and only for the debate
-  // whose thank-you screen the user is on. Every other queued upload keeps going. The target is the
-  // upload's own id, which is the form the queue and the cancel request use.
+  // Opting out of publishing is offered only for the debate the user has just finished, while geo-chat
+  // still accepts it, and only from the surface that debate's owner says it is on (the room, then
+  // the claim picker). Every other queued upload keeps going. The target is the upload's own id,
+  // which is the form the queue and the cancel request use.
   const thankingUpload =
     normalizedThankingDebateId &&
     !thankingDebate?.recordingCancelled &&
@@ -779,8 +787,12 @@ export function DebateRecordingUploadCoordinator() {
     Boolean(thankingDebate?.hasPendingLocalRecording) &&
     !thankingDebate?.recordingCancelled &&
     !cancelledDebateIds.has(normalizedThankingDebateId);
-  const cancellableDebateId =
-    thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null);
+  // The surface can stay up past the point geo-chat stops accepting a cancel — the claim picker does
+  // (GEO-3301) — and keeps the upload's progress on screen after it. Only the action goes.
+  const thankingCancelWindowOpen = thankingDebate?.cancelWindowOpen !== false;
+  const cancellableDebateId = !thankingCancelWindowOpen
+    ? null
+    : (thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null));
   const cancelPromptOpen = cancelTargetDebateId !== null;
 
   // "Debate uploaded" is the banner's line about the Cancel action beside it — the upload is done
@@ -817,13 +829,42 @@ export function DebateRecordingUploadCoordinator() {
     normalizedThankingDebateId !== null &&
     (cancelledDebateIds.has(normalizedThankingDebateId) || thankingDebate?.recordingCancelled === true);
   const setPublishOptOutOffer = useSetPublishOptOutOffer();
+  const thankingUploadStage: PublishOptOutOffer['upload'] = thankingOptedOut
+    ? null
+    : thankingRecordingPending
+      ? 'preparing'
+      : thankingUpload
+        ? 'uploading'
+        : thankingUploadFinished
+          ? 'uploaded'
+          : null;
+  // The finished debate's own share of the queue, not the banner's queue-wide figure: the card
+  // speaks for one debate. Null while nothing is measurable yet, as the banner's is.
+  const thankingUploadPercent = (() => {
+    if (!thankingUpload || thankingUpload.byteSize === 0) return null;
+    if (thankingUpload.stage === 'uploaded') return null;
+    const streamed = streamedRecordingBytes(thankingUpload);
+    const live = uploadProgress?.id === thankingUpload.id ? uploadProgress.loaded : 0;
+    const sent = Math.min(Math.max(streamed, live), thankingUpload.byteSize);
+    return sent >= thankingUpload.byteSize ? null : Math.round((sent / thankingUpload.byteSize) * 100);
+  })();
   React.useLayoutEffect(() => {
-    setPublishOptOutOffer({ debateId: cancellableDebateId, busy: cancelBusy, cancelled: thankingOptedOut });
-  }, [cancelBusy, cancellableDebateId, setPublishOptOutOffer, thankingOptedOut]);
-  React.useEffect(
-    () => () => setPublishOptOutOffer({ debateId: null, busy: false, cancelled: false }),
-    [setPublishOptOutOffer]
-  );
+    setPublishOptOutOffer({
+      debateId: cancellableDebateId,
+      busy: cancelBusy,
+      cancelled: thankingOptedOut,
+      upload: thankingUploadStage,
+      percent: thankingUploadPercent,
+    });
+  }, [
+    cancelBusy,
+    cancellableDebateId,
+    setPublishOptOutOffer,
+    thankingOptedOut,
+    thankingUploadPercent,
+    thankingUploadStage,
+  ]);
+  React.useEffect(() => () => setPublishOptOutOffer(EMPTY_PUBLISH_OPT_OUT_OFFER), [setPublishOptOutOffer]);
 
   // And take up what the card asks for. It opens the same confirmation the Cancel button did —
   // the ticket calls for a new control, not a new behaviour, and a switch is easier to hit by
@@ -843,7 +884,7 @@ export function DebateRecordingUploadCoordinator() {
     // there would swallow the flick and leave the switch off over a recording still uploading.
     if (cancellableDebateId === null) return;
     setPublishOptOutRequest(null);
-    cancelSourceRef.current = 'thanking_toggle';
+    cancelSourceRef.current = 'rematch_card';
     setCancelTargetDebateId(cancellableDebateId);
   }, [cancellableDebateId, normalizedThankingDebateId, publishOptOutRequest, setPublishOptOutRequest]);
 

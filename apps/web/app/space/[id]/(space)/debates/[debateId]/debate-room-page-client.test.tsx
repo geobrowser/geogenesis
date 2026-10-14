@@ -133,7 +133,7 @@ vi.mock('~/core/debates/api', async importOriginal => {
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async () => {
   const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
-  return { BackToLobbyRow: () => null, useConsumeDebateReturnDestination: () => consumeDebateReturnDestination };
+  return { useConsumeDebateReturnDestination: () => consumeDebateReturnDestination };
 });
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -3925,7 +3925,7 @@ describe('DebateRoomPageClient', () => {
     };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Debate again?')).toBeInTheDocument();
+    expect(await screen.findByText('Debate over')).toBeInTheDocument();
     expect(screen.queryByText('Ending turn…')).not.toBeInTheDocument();
   });
 
@@ -4190,20 +4190,21 @@ describe('DebateRoomPageClient', () => {
     expect(published?.showsPublishControl ?? false).toBe(false);
   });
 
-  it('offers the publish switch while the recording can still be pulled back', async () => {
+  // GEO-3301. The publish control moved to the claim picker. For the moment the room is still up
+  // after the last turn, the banner's Cancel is the way out, so the room never claims it.
+  it('leaves the publish control to the claim picker and, until then, the banner', async () => {
     thankingDebateAtFinalTurn();
     mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    const control = await screen.findByRole('switch', { name: 'Publish debate' });
-    expect(control).toHaveAttribute('aria-checked', 'true');
-    expect(screen.getByText('Publish debate?')).toBeInTheDocument();
-
-    fireEvent.click(control);
-
-    // The request, not the cancellation — the coordinator owns the confirmation and the upload.
-    expect(mocks.setPublishOptOutRequest).toHaveBeenCalledWith('debate-1');
+    await screen.findByText('Debate over');
+    expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull();
+    expect(screen.queryByText('Publish debate?')).toBeNull();
+    await waitFor(() =>
+      expect(mocks.setThankingDebate).toHaveBeenCalledWith(expect.objectContaining({ debateId: 'debate-1' }))
+    );
+    expect(mocks.setThankingDebate.mock.calls.every(([published]) => !published?.showsPublishControl)).toBe(true);
   });
 
   // GEO-3180. How far the two took it leads the card, above publish and rematch.
@@ -4221,76 +4222,17 @@ describe('DebateRoomPageClient', () => {
     };
   }
 
-  it('leads the end card with the rebuttal rounds the debaters unlocked', async () => {
+  // GEO-3301. The end card no longer carries the rounds the two unlocked, a publish row, a way back
+  // to a lobby or a "Debate again?" — only where the pair are going.
+  it('says only that the debate is over, whatever the format', async () => {
     mocks.debate = thankingOpenRoundsDebate(2);
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    const card = (await screen.findByText('Debate again?')).closest('section')!;
-    const rows = card.querySelectorAll(':scope > div:not(.bg-divider)');
-    expect(rows[0]).toHaveTextContent('2 rebuttal rounds');
-    expect(rows[0]?.querySelectorAll('[data-round-pip]')).toHaveLength(2);
-  });
-
-  it('says the debate stopped at the opening when nobody extended it', async () => {
-    mocks.debate = thankingOpenRoundsDebate(0);
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    expect(await screen.findByText('Opening only')).toBeInTheDocument();
-  });
-
-  it('leaves the rounds row off a fixed format', async () => {
-    thankingDebateAtFinalTurn();
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    await screen.findByText('Debate again?');
-    expect(screen.queryByText(/rebuttal round/)).toBeNull();
-    expect(screen.queryByText('Opening only')).toBeNull();
-  });
-
-  // The card's rows are separated by hairlines in the design, and the first one belongs to the
-  // publish row — without it the card would open on a rule with nothing above it.
-  it('rules off the publish row only when there is one', async () => {
-    thankingDebateAtFinalTurn();
-    mocks.publishOptOutOffer = { debateId: 'debate-1', busy: false, cancelled: false };
-
-    const { rerender } = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    await screen.findByRole('switch', { name: 'Publish debate' });
-    const card = screen.getByText('Debate again?').closest('section');
-    expect(card?.querySelectorAll('.bg-divider')).toHaveLength(2);
-
-    mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
-    rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    await waitFor(() => expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull());
-    expect(screen.getByText('Debate again?').closest('section')?.querySelectorAll('.bg-divider')).toHaveLength(1);
-  });
-
-  it('reads as off once the recording has been pulled back, rather than vanishing', async () => {
-    thankingDebateAtFinalTurn();
-    // Nothing left to cancel, because it already was — which the coordinator reports directly
-    // rather than leaving the card to infer it from a debate refetch that may not have landed.
-    mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: true };
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    const control = await screen.findByRole('switch', { name: 'Publish debate' });
-    expect(control).toHaveAttribute('aria-checked', 'false');
-    expect(control).toBeDisabled();
-  });
-
-  // A debate with no recording behind it has nothing to answer for, and a switch that cannot move
-  // reads as a broken one.
-  it('leaves the publish row off when there is no recording to opt out of', async () => {
-    thankingDebateAtFinalTurn();
-
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    expect(await screen.findByText('Debate again?')).toBeInTheDocument();
-    expect(screen.queryByRole('switch', { name: 'Publish debate' })).toBeNull();
+    const card = (await screen.findByText('Debate over')).closest('section')!;
+    expect(card).not.toHaveTextContent(/rebuttal round|Opening only|Debate again|Publish/);
+    expect(card.querySelectorAll('[data-round-pip]')).toHaveLength(0);
+    expect(within(card).queryAllByRole('button')).toHaveLength(0);
   });
 
   it('advances from the final turn to thanking without waiting for a debate refresh', async () => {
@@ -4318,9 +4260,8 @@ describe('DebateRoomPageClient', () => {
     expect(
       await screen.findByText((_, element) => element?.textContent === 'Nice debate!Say thanks')
     ).toBeInTheDocument();
-    expect(screen.getByText('Debate again?')).toBeInTheDocument();
-    expect(screen.getByText('Bri')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: "Let's go!" })).toBeEnabled();
+    expect(screen.getByText('Debate over')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "Let's go!" })).toBeNull();
     expect(document.querySelector('[data-inactive-speaker="local"]')).toHaveAttribute('data-visible', 'false');
     expect(document.querySelector('[data-inactive-speaker="remote"]')).toHaveAttribute('data-visible', 'false');
     expectNoMutedIndicator('local');
@@ -4348,9 +4289,9 @@ describe('DebateRoomPageClient', () => {
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(screen.queryByText('Debate again?')).not.toBeInTheDocument();
+    expect(screen.queryByText('Debate over')).not.toBeInTheDocument();
     await act(() => vi.advanceTimersByTimeAsync(101));
-    expect(screen.getByText('Debate again?')).toBeInTheDocument();
+    expect(screen.getByText('Debate over')).toBeInTheDocument();
     expect(mocks.refetchDebate).not.toHaveBeenCalled();
   });
 
@@ -4374,7 +4315,9 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.refetchDebate).not.toHaveBeenCalled();
   });
 
-  it('shows rematch consent during thanking and records local consent', async () => {
+  // GEO-3301. Nobody is asked: the room consents for its viewer the moment the debate ends, and
+  // says who it is waiting on until the other room has done the same.
+  it('consents to the next session as soon as the debate ends, and says who it is waiting on', async () => {
     installRecordingMocks();
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
@@ -4389,16 +4332,10 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('deciding');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    expect(await screen.findByText('Debate again?')).toBeInTheDocument();
-    expect(screen.getAllByText((_, element) => element?.textContent === 'Nice debate!Say thanks')).not.toHaveLength(0);
-    expect(screen.queryByLabelText('Phase timer: 20 seconds remaining')).not.toBeInTheDocument();
-    const consentButton = screen.getByRole('button', { name: "Let's go!" });
-    expect(consentButton).toHaveTextContent("Let's go!0:20");
-    expect(consentButton).toHaveAccessibleDescription('20 seconds remaining');
-    fireEvent.click(consentButton);
-    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalled());
-    expect(screen.getByRole('button', { name: 'Waiting...' })).toHaveTextContent('Waiting...0:20');
-    expect(screen.getByRole('button', { name: 'Waiting...' })).toHaveAccessibleDescription('20 seconds remaining');
+    expect(await screen.findByText('Debate over')).toBeInTheDocument();
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+    expect(screen.getByText('Waiting for Bri...')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: "Let's go!" })).toBeNull();
   });
 
   it('automatically consents shortly before the thank-you countdown ends', async () => {
@@ -4438,13 +4375,12 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
   });
 
-  // Five seconds left, so this is inside `rematchAutoConsentLeadSeconds` and either consent could
-  // be the automatic one. The room keeps the thank-you screen for its full length; a session that
-  // goes live earlier than that is two deliberate presses, and leaves early — covered below.
-  it('does not finalize a connected early-complete rematch before the thank-you deadline', async () => {
+  // GEO-3301. Both rooms consent as soon as the debate ends, so a live session is the signal to go,
+  // with whatever is left of the thank-you deadline.
+  it('leaves a connected early-complete rematch for the picker without waiting out the deadline', async () => {
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     installRecordingMocks();
-    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
     mocks.debate = {
@@ -4457,45 +4393,12 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    await act(async () => {
-      await Promise.resolve();
-    });
-    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
-
-    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 550));
-    });
+    // No tick is advanced: the clock is still inside the thank-you period.
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
   });
 
-  // Five seconds left, so this is inside `rematchAutoConsentLeadSeconds` and either consent could
-  // be the automatic one. The room keeps the thank-you screen for its full length; a session that
-  // goes live earlier than that is two deliberate presses, and leaves early — covered below.
-  it('does not redirect an idle early-complete rematch before the thank-you deadline', async () => {
-    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
-    const now = vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
-    mocks.debate = {
-      ...completedDebate(),
-      turn_started_at: '2026-07-02T00:00:20.000Z',
-      turn_ends_at: '2026-07-02T00:00:40.000Z',
-      completed_at: '2026-07-02T00:00:35.000Z',
-      rematch_session_id: 'rematch-1',
-    };
-    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
-    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    expect(screen.getByRole('dialog', { name: 'Debate recording' })).toBeInTheDocument();
-    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
-
-    now.mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
-    await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 550));
-    });
-    await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
-  });
-
-  it("redirects an idle room as soon as both debaters have pressed Let's go", async () => {
+  it('redirects an idle room as soon as both rooms have consented', async () => {
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
     mocks.debate = {
@@ -4508,12 +4411,12 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    // Fifteen seconds left, so the session went live on two presses. No tick is advanced here:
-    // the redirect has to come from the session, not from the clock running out.
+    // Fifteen seconds left. No tick is advanced here: the redirect has to come from the session, not
+    // from the clock running out.
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
-  it("enters the rematch browser as soon as the second Let's go lands, mid-countdown", async () => {
+  it('enters the rematch browser as soon as the other room consents, mid-countdown', async () => {
     installRecordingMocks();
     vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
     const view = await renderLiveDebate();
@@ -4529,11 +4432,10 @@ describe('DebateRoomPageClient', () => {
     mocks.rematch = rematchSession('deciding');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
-    fireEvent.click(await screen.findByRole('button', { name: "Let's go!" }));
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
     expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
 
-    // The other side presses it too, with fifteen seconds still on the clock.
+    // The other room consents too, with fifteen seconds still on the clock.
     mocks.debate = { ...mocks.debate, status: 'complete', completed_at: '2026-07-02T00:00:26.000Z' };
     mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
@@ -4603,11 +4505,12 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledTimes(2));
   });
 
+  // Leaving before the session has loaded: the room has not consented yet, and must not once it has.
   it('does not automatically consent after the user starts leaving', async () => {
     const persistence = deferred<void>();
     mocks.enqueueRecording.mockReturnValue(persistence.promise);
     installRecordingMocks();
-    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:34.000Z'));
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
     mocks.debate = {
@@ -4618,25 +4521,26 @@ describe('DebateRoomPageClient', () => {
       completed_at: null,
       rematch_session_id: 'rematch-1',
     };
-    mocks.rematch = rematchSession('deciding');
+    mocks.rematch = null;
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
     await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
 
-    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    mocks.rematch = rematchSession('deciding');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
     persistence.resolve();
     await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
   });
 
-  it('preserves the rematch opt-out when leaving fails near the automatic-consent boundary', async () => {
+  it('preserves the rematch opt-out when leaving fails before the session has loaded', async () => {
     mocks.enqueueRecording.mockRejectedValue(new Error('Storage unavailable'));
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     installRecordingMocks();
-    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:34.000Z'));
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
     mocks.debate = {
@@ -4647,13 +4551,14 @@ describe('DebateRoomPageClient', () => {
       completed_at: null,
       rematch_session_id: 'rematch-1',
     };
-    mocks.rematch = rematchSession('deciding');
+    mocks.rematch = null;
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
     expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
 
-    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    mocks.rematch = rematchSession('deciding');
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 550));
     });
@@ -4727,7 +4632,7 @@ describe('DebateRoomPageClient', () => {
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     mocks.leaveRematchMutateAsync.mockRejectedValue(new Error('Could not leave the rematch.'));
     installRecordingMocks();
-    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:35.100Z'));
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
     mocks.debate = {
@@ -4738,13 +4643,16 @@ describe('DebateRoomPageClient', () => {
       completed_at: null,
       rematch_session_id: 'rematch-1',
     };
-    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    // This room has consented on its own; the other has not yet.
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
     expect(await screen.findAllByText('Could not leave the rematch.')).not.toHaveLength(0);
 
-    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:40.100Z'));
+    // The other room's consent lands after the viewer asked to go.
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
     await act(async () => {
       await new Promise(resolve => setTimeout(resolve, 550));
     });
@@ -4761,19 +4669,19 @@ describe('DebateRoomPageClient', () => {
       ...completedDebate(),
       status: 'thanking',
       turn_started_at: '2026-07-02T00:00:20.000Z',
-      // Four seconds left, inside `rematchAutoConsentLeadSeconds`. A live session with more than
-      // that on the clock leaves for the picker by itself, so this is the only window in which a
-      // viewer is still on the thank-you screen with one to leave.
-      turn_ends_at: '2026-07-02T00:00:24.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
       completed_at: null,
       rematch_session_id: 'rematch-1',
     };
-    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    // A live session leaves for the picker by itself, so the viewer can only still be here to
+    // leave while the other room has yet to consent.
+    mocks.rematch = rematchSession('deciding', { localConsented: true });
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
     expect(await screen.findAllByText('Could not leave the rematch.')).not.toHaveLength(0);
 
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
     act(() => emitRoomEvent('disconnected', 99));
     mocks.debate = { ...completedDebate(), rematch_session_id: 'rematch-1' };
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
@@ -4837,28 +4745,6 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.routePrefetch).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
     expect(mocks.prefetchRematchClaims).toHaveBeenLastCalledWith('rematch-1', [], true);
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
-  });
-
-  it('disables rematch consent and shows waiting immediately after clicking yes', async () => {
-    const consent = deferred<DebateRematchSession>();
-    mocks.consentMutateAsync.mockReturnValue(consent.promise);
-    installRecordingMocks();
-    const view = await renderLiveDebate();
-    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
-    mocks.debate = {
-      ...completedDebate(),
-      status: 'thanking',
-      turn_started_at: '2026-07-02T00:00:20.000Z',
-      turn_ends_at: '2026-07-02T00:00:40.000Z',
-      completed_at: null,
-      rematch_session_id: 'rematch-1',
-    };
-    mocks.rematch = rematchSession('deciding');
-    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    fireEvent.click(await screen.findByRole('button', { name: "Let's go!" }));
-
-    expect(await screen.findByRole('button', { name: 'Waiting...' })).toBeDisabled();
   });
 
   it('returns to the previous page after leaving during the thank-you phase', async () => {
@@ -5548,12 +5434,12 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'max'));
       expect(result()).toHaveTextContent("That's the max10 rebuttal rounds");
-      expect(screen.queryByText('Debate again?')).not.toBeInTheDocument();
+      expect(screen.queryByText('Debate over')).not.toBeInTheDocument();
       expect(screen.queryByText('Say thanks')).not.toBeInTheDocument();
       expect(document.querySelector('[data-open-round-reveal]')).toBeNull();
 
       rerenderAt(view, OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 3_500, openRoundsCapRoundLastTurn());
-      await waitFor(() => expect(screen.getByText('Debate again?')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Debate over')).toBeInTheDocument());
       expect(result()).toBeNull();
     });
 
@@ -5564,11 +5450,11 @@ describe('DebateRoomPageClient', () => {
 
       await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'wrap'));
       expect(reveal('remote')).toHaveAttribute('data-open-round-reveal', 'end');
-      expect(screen.queryByText('Debate again?')).not.toBeInTheDocument();
+      expect(screen.queryByText('Debate over')).not.toBeInTheDocument();
       expect(screen.queryByText('Say thanks')).not.toBeInTheDocument();
 
       rerenderAt(view, '20:02:09.600', openRoundsThankingAfterEnd());
-      await waitFor(() => expect(screen.getByText('Debate again?')).toBeInTheDocument());
+      await waitFor(() => expect(screen.getByText('Debate over')).toBeInTheDocument());
       expect(result()).toBeNull();
       expect(reveal('remote')).toBeNull();
     });
