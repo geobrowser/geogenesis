@@ -21,6 +21,7 @@ type Props = {
   access: LobbyPageView['access'] | null;
   presence: LobbyPresenceState;
   guestStatus: GuestSessionState['status'];
+  fresh: boolean;
 };
 
 const ADMITTED: LobbyPageView['access'] = { status: 'admitted' };
@@ -34,7 +35,7 @@ function renderExit(initial: Props) {
   );
 }
 
-const joined: Props = { access: ADMITTED, presence: { status: 'joined' }, guestStatus: 'idle' };
+const joined: Props = { access: ADMITTED, presence: { status: 'joined' }, guestStatus: 'idle', fresh: true };
 
 beforeEach(() => {
   window.sessionStorage.clear();
@@ -86,6 +87,15 @@ describe('useExitLobbyWhenOut', () => {
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
+  it('takes only a view read on this page as the lobby having been open here, not a cached one', () => {
+    // Back on a lobby seen open a minute ago: the cache says open until the refetch says ended.
+    const arrival: Props = { access: ADMITTED, presence: { status: 'idle' }, guestStatus: 'idle', fresh: false };
+    const { result, rerender } = renderExit(arrival);
+    rerender({ ...arrival, access: ENDED, fresh: true });
+    expect(result.current).toBe(false);
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   it('keeps the removed notice for someone removed before this visit', () => {
     const { rerender } = renderExit({ ...joined, presence: { status: 'idle' } });
     rerender({ ...joined, presence: { status: 'dropped', reason: 'removed' } });
@@ -93,7 +103,7 @@ describe('useExitLobbyWhenOut', () => {
   });
 
   it('goes back when a host removes a listening guest, but not one removed on arrival', () => {
-    const guest: Props = { access: ADMITTED, presence: { status: 'idle' }, guestStatus: 'starting' };
+    const guest: Props = { access: ADMITTED, presence: { status: 'idle' }, guestStatus: 'starting', fresh: true };
     const arrival = renderExit(guest);
     arrival.rerender({ ...guest, guestStatus: 'removed' });
     expect(mocks.replace).not.toHaveBeenCalled();

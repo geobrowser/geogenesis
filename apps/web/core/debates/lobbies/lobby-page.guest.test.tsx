@@ -15,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   /** The member read failed for good, after its warm-up retries. */
   memberError: false,
   memberRefetch: vi.fn(),
+  /** The member view was read since the page mounted, rather than served from the cache. */
+  memberFresh: true,
   guestView: undefined as DebateLobbyGuestView | undefined,
   presenceStatus: 'idle',
   start: vi.fn(),
@@ -72,7 +74,12 @@ vi.mock('../matchmaking/hub-header-controls', () => ({
 }));
 vi.mock('./hooks', () => ({
   MAX_TIMEOUT_MS: 2_147_483_647,
-  useDebateLobby: () => ({ data: mocks.memberLobby, isError: mocks.memberError, refetch: mocks.memberRefetch }),
+  useDebateLobby: () => ({
+    data: mocks.memberLobby,
+    isError: mocks.memberError,
+    refetch: mocks.memberRefetch,
+    isFetchedAfterMount: mocks.memberFresh,
+  }),
   useLobbyPresence: (_id: string, admitted: boolean) => {
     mocks.presenceAdmitted.push(admitted);
     return {
@@ -221,6 +228,7 @@ beforeEach(() => {
   mocks.memberLobby = undefined;
   mocks.memberError = false;
   mocks.memberRefetch.mockReset();
+  mocks.memberFresh = true;
   mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
   mocks.presenceStatus = 'idle';
   mocks.onAudible = null;
@@ -714,6 +722,21 @@ describe('DebateLobbyPage banner and the guest room connection', () => {
 });
 
 describe('DebateLobbyPage state screens', () => {
+  it('shows the ended card, not a redirect, when a cached open lobby turns out to have ended', () => {
+    mocks.authenticated = true;
+    mocks.userId = 'adam';
+    mocks.memberFresh = false;
+    mocks.memberLobby = memberView;
+    const { rerender } = render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    mocks.memberFresh = true;
+    mocks.memberLobby = { ...memberView, access: { status: 'closed', reason: 'ended' } };
+    rerender(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('heading', { name: 'This lobby has ended' })).toBeInTheDocument();
+    expect(mocks.replace).not.toHaveBeenCalled();
+  });
+
   const adamPerson = { user_id: 'adam', profile_space_id: 'space-adam', display_name: 'Adam', avatar_cid: null };
   const listed = (overrides: Partial<DebateLobbySummary>): DebateLobbySummary => ({
     lobby_id: 'lobby1',

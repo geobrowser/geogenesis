@@ -40,6 +40,8 @@ type LobbyExitInput = {
   access: LobbyPageView['access'] | null;
   presence: LobbyPresenceState;
   guestStatus: GuestSessionState['status'];
+  /** The lobby view was read on this page, not taken from the cache of an earlier visit. */
+  fresh: boolean;
 };
 
 type LobbyExitSeen = {
@@ -53,7 +55,7 @@ type LobbyExitSeen = {
  * Why the viewer is out of a lobby they were in on this page, or null. Arriving at a lobby that
  * has already ended, banned them or removed them earlier keeps its own card.
  */
-function lobbyExitReason({ access, presence, guestStatus }: LobbyExitInput, seen: LobbyExitSeen) {
+function lobbyExitReason({ access, presence, guestStatus }: Omit<LobbyExitInput, 'fresh'>, seen: LobbyExitSeen) {
   if (presence.status === 'left') return 'left';
   if (seen.inside && presence.status === 'dropped') return presence.reason;
   if (seen.inside && guestStatus === 'removed') return 'removed';
@@ -84,11 +86,11 @@ function exitNotice(reason: LobbyExitReason, name: string) {
 export function useExitLobbyWhenOut(input: LobbyExitInput & { name: string | null; exitHref: string }) {
   const router = useRouter();
   const setToast = useSetToast();
-  const { access, presence, guestStatus, name, exitHref } = input;
+  const { access, presence, guestStatus, fresh, name, exitHref } = input;
 
   const [seen, setSeen] = React.useState<LobbyExitSeen>({ inside: false, open: false });
   const inside = seen.inside || presence.status === 'joined' || guestStatus === 'listening';
-  const open = seen.open || access?.status === 'admitted' || access?.status === 'not_yet_open';
+  const open = seen.open || ((fresh || inside) && (access?.status === 'admitted' || access?.status === 'not_yet_open'));
   if (inside !== seen.inside || open !== seen.open) setSeen({ inside, open });
 
   // Latched: once leaving, a later render cannot bring the lobby back before the route changes.

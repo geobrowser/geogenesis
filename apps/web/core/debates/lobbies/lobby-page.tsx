@@ -146,6 +146,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
     access: lobby?.access ?? null,
     presence: presence.state,
     guestStatus: guestSession.state.status,
+    fresh: (guest ? guestQuery : lobbyQuery).isFetchedAfterMount,
     name: lobby?.name ?? null,
     exitHref,
   });

@@ -72,6 +72,8 @@ export function clearDebateReturnDestination() {
 }
 
 const lastPageOutsideDebatesKey = 'geo.debates.last-page-outside';
+/** A page was recorded since this document loaded, so the stored one is from this visit. */
+let recordedInThisDocument = false;
 
 /**
  * Every page that is not a debate surface, so leaving a lobby lands where it was opened from. A
@@ -80,14 +82,29 @@ const lastPageOutsideDebatesKey = 'geo.debates.last-page-outside';
 export function rememberLastPageOutsideDebates(href = currentBrowserHref()) {
   const page = safeInternalHref(href);
   // Without storage, leaving a lobby falls back to Explore.
-  if (page && !isDebateFlowHref(page)) writeSession(lastPageOutsideDebatesKey, page);
+  if (!page || isDebateFlowHref(page)) return;
+  writeSession(lastPageOutsideDebatesKey, page);
+  recordedInThisDocument = true;
 }
 
-/** The last page this tab was on outside the debate surfaces, or null. */
+/**
+ * The last page this tab was on outside the debate surfaces, or null. A lobby opened straight from
+ * outside the app (a pasted or shared link) has none: the tab's page from an earlier visit is
+ * forgotten. A reload or Back into the lobby keeps it.
+ */
 export function lastPageOutsideDebates(): string | null {
+  if (!recordedInThisDocument && !documentRestored()) {
+    removeSession(lastPageOutsideDebatesKey);
+    return null;
+  }
   const stored = readSession(lastPageOutsideDebatesKey);
   const page = stored ? safeInternalHref(stored) : null;
   return page && !isDebateFlowHref(page) ? page : null;
+}
+
+function documentRestored() {
+  const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
+  return entry?.type === 'reload' || entry?.type === 'back_forward';
 }
 
 /** Session storage can be unavailable in privacy modes; these treat that as empty. */
