@@ -458,6 +458,25 @@ describe('room votes (GEO-3311)', () => {
     expect(events('lobby_room_vote_started')[0]).toMatchObject({ room_vote_id: 'v2', replaced: true });
   });
 
+  it('ends a running vote as lobby_ended when this tab hears another host ended the lobby', () => {
+    lobbyJoined(lobby, { isNewcomer: false, role: 'host', hosting: true });
+    lobbyRoomVoteSeen(lobby, vote('v4'));
+    lobbyLeft(lobby, 'lobby_ended');
+
+    expect(events('lobby_room_vote_ended')).toEqual([
+      expect.objectContaining({ room_vote_id: 'v4', end_reason: 'lobby_ended' }),
+    ]);
+  });
+
+  it('leaves a running vote alone when this tab leaves a lobby that goes on', () => {
+    lobbyJoined(lobby, { isNewcomer: false, role: 'host', hosting: true });
+    lobbyRoomVoteSeen(lobby, vote('v5'));
+    lobbyLeft(lobby, 'left');
+    lobbyLeft(lobby, 'unknown');
+
+    expect(events('lobby_room_vote_ended')).toEqual([]);
+  });
+
   it('ends a running vote as lobby_ended when the host ends the lobby', () => {
     lobbyRoomVoteSeen(lobby, vote('v3'));
     lobbyEnded(lobby, { scheduled: false, opensAt: '2026-10-08T11:00:00Z' });
@@ -569,6 +588,21 @@ describe('a reload (GEO-3311)', () => {
     duplicate.lobbyDebateSeen({ id: 'debate-elsewhere', lobby_id: 'b0000000000000000000000000000000' });
     const reloadedDuplicate = await reload();
     reloadedDuplicate.lobbyDebateSeen({ id: 'debate-in-both-tabs', lobby_id: lobby });
+
+    expect(events('lobby_debate_started')).toEqual([]);
+    reloadedDuplicate.resetLobbyAnalytics();
+  });
+
+  it('settles a duplicated tab’s copy on the app’s first render, even with no debate to look at', async () => {
+    lobbyJoined(lobby, { isNewcomer: false });
+    lobbySteppedOut(lobby);
+
+    // The duplicate opens on a page with no lobby and no debate: only the coordinator's hook runs.
+    const duplicate = await reload('back_forward');
+    const { unmount } = renderHook(() => duplicate.useLobbyDebateAnalytics(undefined));
+    unmount();
+    const reloadedDuplicate = await reload();
+    reloadedDuplicate.lobbyDebateSeen({ id: 'debate-pending-in-both-tabs', lobby_id: lobby });
 
     expect(events('lobby_debate_started')).toEqual([]);
     reloadedDuplicate.resetLobbyAnalytics();

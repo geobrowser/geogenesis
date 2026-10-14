@@ -360,6 +360,8 @@ export function lobbyHeadcountSeen(lobbyId: string, headcount: number) {
 /** Leave, or the server took them out. Also ends a stepped-out session. */
 export function lobbyLeft(lobbyId: string, exit: Exclude<LobbyExit, 'debate_started'>) {
   restore();
+  // Another host ended it: a vote this tab was following ended with it.
+  if (exit === 'lobby_ended') endRunningRoomVote(dashlessId(lobbyId));
   if (session && sameId(session.lobbyId, lobbyId)) end(exit);
 }
 
@@ -421,6 +423,8 @@ export function useLobbyDebateAnalytics(debate: Pick<Debate, 'id' | 'lobby_id'> 
   const debateId = debate?.id ?? null;
   const lobbyId = debate?.lobby_id ?? null;
   React.useEffect(() => {
+    // Mounted app-wide, so every load settles what a duplicated tab copied before it can reload.
+    restore();
     if (debateId && lobbyId) lobbyDebateSeen({ id: debateId, lobby_id: lobbyId });
   }, [debateId, lobbyId]);
 }
@@ -505,6 +509,12 @@ function endRoomVote(lobbyId: string, vote: DebateLobbyRoomVote, reason: LobbyRo
   });
 }
 
+/** The lobby ended with a room vote this tab was following still running. */
+function endRunningRoomVote(lobbyId: string) {
+  const running = runningRoomVotes.get(lobbyId);
+  if (running) endRoomVote(lobbyId, running, 'lobby_ended');
+}
+
 /**
  * The lobby's room vote as a hosting tab reads it. Keeps the latest tally of the running vote and,
  * when that vote is gone or another took its place, reports it ended with that tally. Every hosting
@@ -523,8 +533,7 @@ export function lobbyRoomVoteSeen(lobbyId: string, vote: DebateLobbyRoomVote | n
  */
 export function lobbyEnded(lobbyId: string, { scheduled, opensAt }: { scheduled: boolean; opensAt: string }) {
   const id = dashlessId(lobbyId);
-  const running = runningRoomVotes.get(id);
-  if (running) endRoomVote(id, running, 'lobby_ended');
+  endRunningRoomVote(id);
   const current = sessionFor(id, Date.now());
   const openMs = msSince(opensAt);
   send('lobby_ended', {
