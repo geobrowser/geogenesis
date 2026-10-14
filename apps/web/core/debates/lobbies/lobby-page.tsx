@@ -34,6 +34,7 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
+import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
 import {
   RSVP_FAILED,
   goingLabel,
@@ -94,7 +95,7 @@ export const LOBBY_COPY = {
   guestBeforeOpen: 'No account? You can still join and listen when it opens.',
   steppedOut: 'You stepped out to debate. You’re still on the roster.',
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
-  guestRemoved: 'A host removed you from this lobby.',
+  guestRemoved: LOBBY_STATE_COPY.removed,
   guestRemovedInvite: 'Create an account to come back and take part.',
   guestElsewhere: 'You’re listening in another tab.',
   guestListeningOff: 'Listening without an account has been turned off for this lobby. Create an account to join.',
@@ -142,6 +143,18 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   useMatchmakingScope(waitingOutside);
   // Only where the page shows the guest banner, which is how a closed prompt is opened again.
   useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
+  const exitHref = useLobbyExitHref();
+  const exiting = useExitLobbyWhenOut({
+    access: lobby?.access ?? null,
+    presence: presence.state,
+    guestStatus: guestSession.state.status,
+    fresh: (guest ? guestQuery : lobbyQuery).isFetchedAfterMount,
+    name: lobby?.name ?? null,
+    exitHref,
+  });
+
+  // Blank while the route changes, rather than a flash of the card being left.
+  if (exiting) return <div className="min-h-[calc(100dvh-2.75rem)]" data-testid="lobby-exiting" />;
 
   return (
     <LobbyGuestProvider value={guest}>
@@ -151,6 +164,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
         onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
         presence={presence}
         guestSession={guestSession}
+        exitHref={exitHref}
       />
     </LobbyGuestProvider>
   );
@@ -186,6 +200,7 @@ function LobbyAccess({
   onRetry,
   presence,
   guestSession,
+  exitHref,
 }: {
   lobby: LobbyPageView | null;
   failed: boolean;
@@ -193,6 +208,8 @@ function LobbyAccess({
   onRetry: () => void;
   presence: ReturnType<typeof useLobbyPresence>;
   guestSession: LobbyGuestSession;
+  /** Where leaving goes: the page the lobby was opened from. */
+  exitHref: string;
 }) {
   const guest = useIsLobbyGuest();
   if (!lobby) {
@@ -237,7 +254,7 @@ function LobbyAccess({
           </LobbyShell>
         );
       }
-      return <AdmittedLobby lobby={lobby} presence={presence} guestSession={guestSession} />;
+      return <AdmittedLobby lobby={lobby} presence={presence} guestSession={guestSession} exitHref={exitHref} />;
   }
 }
 
@@ -347,24 +364,24 @@ function AdmittedLobby({
   lobby,
   presence,
   guestSession,
+  exitHref,
 }: {
   lobby: LobbyPageView;
   presence: ReturnType<typeof useLobbyPresence>;
   guestSession: LobbyGuestSession;
+  exitHref: string;
 }) {
   const { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt } = presence;
 
-  // Until the refetch moves the page to the lobby's new access.
-  if (state.status === 'dropped') {
-    if (state.reason === 'removed') {
-      return (
-        <LobbyRemovedNotice
-          onRejoin={() => void join(false, true)}
-          unbanned={isMemberView(lobby) && lobby.viewer.last_moderation?.action === 'unban'}
-        />
-      );
-    }
-    return state.reason === 'banned' ? <LobbyBannedCard name={lobby.name} /> : <LobbyClosedCard lobby={lobby} ended />;
+  // Removed before this visit, or unbanned since. Dropped while in the lobby, and Leave, take the
+  // page back to where it was opened from (`useExitLobbyWhenOut`) before this renders.
+  if (state.status === 'dropped' && state.reason === 'removed') {
+    return (
+      <LobbyRemovedNotice
+        onRejoin={() => void join(false, true)}
+        unbanned={isMemberView(lobby) && lobby.viewer.last_moderation?.action === 'unban'}
+      />
+    );
   }
 
   if (state.status === 'confirm_leave_other') {
@@ -380,23 +397,6 @@ function AdmittedLobby({
   if (state.status === 'moved')
     return <MovedToOtherLobby lobby={lobby} otherLobbyId={state.otherLobbyId} onJoin={join} />;
 
-  if (state.status === 'left') {
-    return (
-      <LobbyShell>
-        <LobbyTitle lobby={lobby} />
-        <Text as="p" variant="metadata" color="grey-04">
-          You left this lobby.
-        </Text>
-        <div className="flex flex-wrap gap-2">
-          <HubPillButton variant="primary" analyticsLabel="Lobby rejoin" onClick={() => void join(false)}>
-            Rejoin
-          </HubPillButton>
-          <FindDebateLink />
-        </div>
-      </LobbyShell>
-    );
-  }
-
   return (
     <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
       <LobbyRoom
@@ -406,6 +406,7 @@ function AdmittedLobby({
         onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
         voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
         guestSession={guestSession}
+        exitHref={exitHref}
       />
     </LobbyQueuedRequestProvider>
   );
@@ -492,6 +493,7 @@ function LobbyRoom({
   onLeave,
   voice,
   guestSession,
+  exitHref,
 }: {
   lobby: LobbyPageView;
   state: LobbyPresenceState;
@@ -499,6 +501,7 @@ function LobbyRoom({
   onLeave: () => void;
   voice: { connectionId: string; setVoiceConnected: (connected: boolean) => void; awayAt: string | null };
   guestSession: LobbyGuestSession;
+  exitHref: string;
 }) {
   const guest = useIsLobbyGuest();
   const currentUserId = useCurrentGeoChatUserId();
@@ -578,7 +581,7 @@ function LobbyRoom({
       <LobbyHandControl lobby={memberLobby} />
     ) : null;
   const leave = guest ? (
-    <Link href={NavUtils.toExplore()} aria-label="Leave lobby" className={hubPillClassName('secondary', 'md:h-10')}>
+    <Link href={exitHref} replace aria-label="Leave lobby" className={hubPillClassName('secondary', 'md:h-10')}>
       <LeaveLabel />
     </Link>
   ) : (

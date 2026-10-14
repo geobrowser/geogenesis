@@ -21,6 +21,7 @@ import type { LobbyPageView } from './lobby-view';
 export const LOBBY_STATE_COPY = {
   banned: 'You can’t join this lobby',
   bannedFrom: (name: string) => `A host has blocked you from ${name}.`,
+  removed: 'A host removed you from this lobby.',
   ended: 'This lobby has ended',
   closed: 'This lobby has closed',
   findDebate: 'Find a debate',

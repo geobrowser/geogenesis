@@ -84,3 +84,42 @@ describe('debate return navigation', () => {
     expect(consumeDebateReturnDestination()).toBeNull();
   });
 });
+
+describe('the last page outside the debates', () => {
+  const key = 'geo.debates.last-page-outside';
+
+  afterEach(() => {
+    window.sessionStorage.removeItem(key);
+    vi.restoreAllMocks();
+    vi.resetModules();
+  });
+
+  /** A fresh module, as a new document loads it; `navigation` is how the browser got there. */
+  async function loadDocument(navigation?: 'navigate' | 'reload' | 'back_forward') {
+    vi.resetModules();
+    vi.spyOn(performance, 'getEntriesByType').mockReturnValue(
+      navigation ? ([{ type: navigation }] as unknown as PerformanceEntryList) : []
+    );
+    return import('./debate-return-navigation');
+  }
+
+  it('forgets a page from an earlier visit when the lobby is opened straight from outside the app', async () => {
+    window.sessionStorage.setItem(key, '/space/s1/profile');
+    const nav = await loadDocument('navigate');
+    expect(nav.lastPageOutsideDebates()).toBeNull();
+    // Forgotten, so a reload of this lobby does not bring it back either.
+    expect(window.sessionStorage.getItem(key)).toBeNull();
+  });
+
+  it('keeps the page across a reload or Back into the lobby', async () => {
+    window.sessionStorage.setItem(key, '/space/s1/profile');
+    expect((await loadDocument('reload')).lastPageOutsideDebates()).toBe('/space/s1/profile');
+    expect((await loadDocument('back_forward')).lastPageOutsideDebates()).toBe('/space/s1/profile');
+  });
+
+  it('uses a page recorded in this document, whatever loaded it', async () => {
+    const nav = await loadDocument('navigate');
+    nav.rememberLastPageOutsideDebates('/explore?tab=claims');
+    expect(nav.lastPageOutsideDebates()).toBe('/explore?tab=claims');
+  });
+});

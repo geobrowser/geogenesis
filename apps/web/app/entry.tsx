@@ -8,6 +8,7 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
+import { LastPageOutsideDebatesTracker } from '~/core/debates/lobbies/lobby-exit';
 import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
@@ -156,6 +157,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-[100dvh] items-stretch">
         <React.Suspense fallback={null}>
           <PageViewTracker />
+          <LastPageOutsideDebatesTracker />
         </React.Suspense>
         <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
