@@ -12,13 +12,17 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbySummary } from '../api';
-import { DAYS_IN_WEEK } from '../matchmaking/debate-calendar-model';
-import type { PinnedRow } from '../matchmaking/debate-calendar-week';
+import { DAYS_IN_WEEK, cellOf } from '../matchmaking/debate-calendar-model';
+import {
+  CALENDAR_BLOCK_CLASS_NAME,
+  CALENDAR_COMPACT_BLOCK_CLASS_NAME,
+  CALENDAR_MORE_BUTTON_CLASS_NAME,
+  type PinnedRow,
+} from '../matchmaking/debate-calendar-week';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbies } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
-import { localDaysFrom } from './lobby-format';
 import { LobbyByline } from './lobby-host-names';
 import {
   LOBBY_DARK_SURFACE_CLASS_NAME,
@@ -34,13 +38,18 @@ import { LobbyRsvpButton, lobbyBadgeTime } from './upcoming-lobbies';
 /** Chips drawn in a day before the rest collapse into "+N more", as the admin week's busy hours do. */
 const CHIPS_PER_DAY = 2;
 
-/** The week's lobbies by day, each day soonest first. */
+/**
+ * The week's lobbies by day, each day soonest first. `days` is the calendar's eight midnights, and a
+ * lobby goes on the day `cellOf` puts it, as the viewer's own debates do.
+ */
 export function lobbiesByDay(lobbies: DebateLobbySummary[], days: Date[]) {
-  return days.map(day =>
-    lobbies
-      .filter(lobby => localDaysFrom(day.getTime(), Date.parse(lobby.starts_at)) === 0)
-      .sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at))
-  );
+  const byDay = Array.from({ length: DAYS_IN_WEEK }, (): DebateLobbySummary[] => []);
+  const soonestFirst = [...lobbies].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
+  for (const lobby of soonestFirst) {
+    const cell = cellOf(Date.parse(lobby.starts_at), days);
+    if (cell) byDay[cell.day]!.push(lobby);
+  }
+  return byDay;
 }
 
 /**
@@ -56,7 +65,7 @@ export function useWeekLobbies(days: Date[]): DebateLobbySummary[][] | null {
   const { data } = useDebateLobbies(joining);
   return React.useMemo(() => {
     if (!joining || !data) return null;
-    const byDay = lobbiesByDay(data.lobbies, days.slice(0, DAYS_IN_WEEK));
+    const byDay = lobbiesByDay(data.lobbies, days);
     return byDay.some(day => day.length > 0) ? byDay : null;
   }, [data, days, joining]);
 }
@@ -98,7 +107,7 @@ function LobbyDayChips({ lobbies }: { lobbies: DebateLobbySummary[] }) {
             <button
               type="button"
               {...debateActionAnalyticsAttributes('calendar', 'Lobby chips more', 'open_lobby_card')}
-              className="self-start rounded-md px-1 text-footnoteMedium text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+              className={CALENDAR_MORE_BUTTON_CLASS_NAME}
             >
               +{hidden.length} more
             </button>
@@ -132,7 +141,8 @@ function LobbyChip({ lobby }: { lobby: DebateLobbySummary }) {
           {...debateActionAnalyticsAttributes('calendar', 'Lobby chip', 'open_lobby_card')}
           data-testid="lobby-chip"
           className={cx(
-            'flex w-full min-w-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text',
+            CALENDAR_BLOCK_CLASS_NAME,
+            CALENDAR_COMPACT_BLOCK_CLASS_NAME,
             lobby.open
               ? cx('border-transparent text-white', LOBBY_DARK_SURFACE_CLASS_NAME)
               : lobby.viewer_reminded

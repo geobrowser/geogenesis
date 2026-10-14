@@ -47,6 +47,18 @@ const CARD_CLOSE_DELAY_MS = 200;
 
 const GRID_COLUMNS = 'grid-cols-[4rem_repeat(7,minmax(0,1fr))]';
 
+/**
+ * A block in the week that opens a card: the admin week's debates, the pinned row's lobbies. Its
+ * fill, border and layout are the caller's.
+ */
+export const CALENDAR_BLOCK_CLASS_NAME =
+  'flex w-full min-w-0 rounded-md border px-2 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text';
+/** The compact block's one line, for a cell holding more than one. */
+export const CALENDAR_COMPACT_BLOCK_CLASS_NAME = 'items-center gap-1 py-0.5';
+/** "+N more" under a cell's blocks, opening everything in it. */
+export const CALENDAR_MORE_BUTTON_CLASS_NAME =
+  'self-start rounded-md px-1 text-footnoteMedium text-grey-04 transition-colors hover:bg-grey-01 hover:text-text';
+
 type RenderRow = (
   userKey: string,
   slots: FreeSlot[],
@@ -378,7 +390,7 @@ export function CalendarWeekFrame({
       <div
         role={role}
         aria-label={ariaLabel}
-        aria-rowcount={role === 'grid' ? HOURS_IN_DAY + 1 : undefined}
+        aria-rowcount={role === 'grid' ? HOURS_IN_DAY + 1 + (pinnedRow ? 1 : 0) : undefined}
         className="min-w-[900px]"
       >
         <div role="row" className={cx('grid border-b border-grey-02 bg-white', GRID_COLUMNS)}>

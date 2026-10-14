@@ -947,6 +947,8 @@ function DebateCalendarBody({
   const ownDebatesThisWeek = debates.some(debate => cellOf(debate.start, days) !== null);
   // The week's debate lobbies, pinned above the hours (GEO-3268); a week with one is not empty.
   const weekLobbies = useWeekLobbies(days);
+  const lobbyRow = React.useMemo(() => (weekLobbies ? lobbiesPinnedRow(weekLobbies) : undefined), [weekLobbies]);
+  const lobbyLeads = React.useMemo(() => (weekLobbies ? lobbyDayLeads(weekLobbies) : undefined), [weekLobbies]);
 
   // One set of props for both forms of the space filter: pills on a desktop, the hub's menu on a phone.
   const spaceFilter = {
@@ -1148,7 +1150,7 @@ function DebateCalendarBody({
                   debates={debates}
                   opponentName={opponentName}
                   renderRow={renderRow}
-                  dayLeads={weekLobbies ? lobbyDayLeads(weekLobbies) : undefined}
+                  dayLeads={lobbyLeads}
                 />
               ) : (
                 <CalendarWeek
@@ -1164,7 +1166,7 @@ function DebateCalendarBody({
                   opponentName={opponentName}
                   renderRow={renderRow}
                   now={now}
-                  pinnedRow={weekLobbies ? lobbiesPinnedRow(weekLobbies) : undefined}
+                  pinnedRow={lobbyRow}
                 />
               )}
             </HubQueryState>

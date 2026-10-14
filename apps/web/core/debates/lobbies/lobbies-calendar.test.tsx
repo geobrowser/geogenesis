@@ -48,7 +48,7 @@ const lobby = (overrides: Partial<DebateLobbySummary>): DebateLobbySummary => ({
 
 /** Wednesday's cell of the pinned row. */
 const renderWednesday = (lobbies: DebateLobbySummary[]) => {
-  const byDay = lobbiesByDay(lobbies, WEEK.slice(0, 7));
+  const byDay = lobbiesByDay(lobbies, WEEK);
   return render(<div data-testid="day">{lobbiesPinnedRow(byDay).renderDay(WEEK[3]!, 3)}</div>);
 };
 
@@ -71,7 +71,7 @@ describe('lobbiesByDay', () => {
     const early = lobby({ lobby_id: 'early', starts_at: at(14, 16) });
     const saturday = lobby({ lobby_id: 'sat', starts_at: at(17, 11) });
 
-    const byDay = lobbiesByDay([late, saturday, early], WEEK.slice(0, 7));
+    const byDay = lobbiesByDay([late, saturday, early], WEEK);
     expect(byDay[3]!.map(l => l.lobby_id)).toEqual(['early', 'late']);
     expect(byDay[6]!.map(l => l.lobby_id)).toEqual(['sat']);
     expect(byDay[0]).toEqual([]);
@@ -100,7 +100,7 @@ describe('useWeekLobbies', () => {
 
 describe('the pinned Lobbies row', () => {
   it('labels the row Lobbies and shows each lobby as its time and name', () => {
-    const byDay = lobbiesByDay([lobby({ name: 'NYC Debates' })], WEEK.slice(0, 7));
+    const byDay = lobbiesByDay([lobby({ name: 'NYC Debates' })], WEEK);
     expect(lobbiesPinnedRow(byDay).label).toBe('Lobbies');
 
     renderWednesday([lobby({ name: 'NYC Debates' })]);
@@ -149,7 +149,7 @@ describe('the pinned Lobbies row', () => {
   });
 
   it('draws nothing on a day without lobbies', () => {
-    const byDay = lobbiesByDay([lobby({})], WEEK.slice(0, 7));
+    const byDay = lobbiesByDay([lobby({})], WEEK);
     render(<div data-testid="day">{lobbiesPinnedRow(byDay).renderDay(WEEK[0]!, 0)}</div>);
     expect(screen.getByTestId('day')).toBeEmptyDOMElement();
   });
@@ -157,7 +157,7 @@ describe('the pinned Lobbies row', () => {
 
 describe('lobbyDayLeads', () => {
   it('gives the phone list each day’s lobbies as cards, and nothing for an empty day', () => {
-    const leads = lobbyDayLeads(lobbiesByDay([lobby({ name: 'NYC Debates' })], WEEK.slice(0, 7)));
+    const leads = lobbyDayLeads(lobbiesByDay([lobby({ name: 'NYC Debates' })], WEEK));
     expect(leads[0]).toBeNull();
     render(<>{leads[3]}</>);
     expect(screen.getByTestId('lobby-calendar-card')).toHaveTextContent('NYC Debates');

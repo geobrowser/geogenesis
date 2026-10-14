@@ -1716,6 +1716,8 @@ describe('DebateCalendar, lobbies pinned above the hours (GEO-3268)', () => {
     render(<DebateCalendar />);
 
     const grid = screen.getByRole('grid', { name: 'Who is free each hour this week' });
+    // The day headers, the Lobbies row and 24 hours.
+    expect(grid).toHaveAttribute('aria-rowcount', '26');
     const row = within(grid).getByRole('rowheader', { name: 'Lobbies' }).closest('[role="row"]')!;
     expect(within(row as HTMLElement).getByText('NYC Debates')).toBeInTheDocument();
     expect(row.closest('[role="rowgroup"]')).toBeNull();
