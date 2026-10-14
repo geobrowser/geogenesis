@@ -2509,6 +2509,37 @@ export async function listDebateLobbies(
   });
 }
 
+/** Where a lobby stands for the calendar (GEO-3271): `open` is not shown for an ended lobby. */
+export type DebateLobbyCalendarState = 'upcoming' | 'open' | 'ended';
+
+/** One lobby in `GET /debate-lobbies/calendar`: the list's row, plus its state and when it ended. */
+export type DebateLobbyCalendarRow = DebateLobbySummary & {
+  state: DebateLobbyCalendarState;
+  closed_at: string | null;
+};
+
+export type DebateLobbyCalendarResponse = { lobbies: DebateLobbyCalendarRow[] };
+
+/**
+ * Every lobby starting in `[from, to)`, soonest first (GEO-3271), with none of the list's caps and
+ * ended lobbies included. Account required. Up to 35 days; a lobby ended before it opened is left
+ * out by geo-chat, as a cancellation.
+ */
+export async function listDebateLobbyCalendar(
+  { from, to }: { from: Date; to: Date },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+  return geoChatRequest<DebateLobbyCalendarResponse>(`/debate-lobbies/calendar?${params.toString()}`, {
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
 /** 404 `lobby_not_found` for an id that is not a lobby, which includes a two-person room. */
 export async function getDebateLobby(
   lobbyId: string,

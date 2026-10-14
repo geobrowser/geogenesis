@@ -511,6 +511,73 @@ describe('DebateGatewayClient', () => {
       await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 5, '2026-10-07T12:00:02Z') });
       expectInvalidated(invalidateQueries, { queryKey: lobbyKey, refetchType: 'active' });
     });
+
+    // GEO-3300. The calendar's week reads its own range, under the list's key.
+    describe('on a calendar week', () => {
+      const weekKey = [...lobbiesKey, 'calendar', 1, 2];
+      const weekRow = (
+        lobbyId: string,
+        headcount: number,
+        state: 'upcoming' | 'open' | 'ended',
+        asOf: string | null = null
+      ) => ({
+        ...row(lobbyId, headcount, asOf),
+        open: state === 'open',
+        state,
+        closed_at: state === 'ended' ? '2026-10-07T13:00:00Z' : null,
+      });
+      const weekIds = () =>
+        queryClient
+          .getQueryData<{ lobbies: { lobby_id: string; headcount: number; state: string }[] }>(weekKey)
+          ?.lobbies.map(lobby => `${lobby.lobby_id}:${lobby.headcount}:${lobby.state}`);
+
+      it('patches a lobby in the week too, keeping the week’s order and the viewer’s own fields', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+        queryClient.setQueryData(weekKey, {
+          lobbies: [weekRow('bb', 1, 'upcoming'), { ...weekRow('aa', 3, 'open'), viewer_reminded: true }],
+        });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 7, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['bb:1:upcoming', 'aa:7:open']);
+        expect(
+          queryClient.getQueryData<{ lobbies: { viewer_reminded: boolean }[] }>(weekKey)?.lobbies[1]
+        ).toMatchObject({ viewer_reminded: true });
+      });
+
+      it('patches the week even when the list is not cached', async () => {
+        await started();
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open')] });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 4, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['aa:4:open']);
+      });
+
+      it('leaves an ended lobby ended', async () => {
+        await started();
+        queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'ended')] });
+
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 9, '2026-10-07T12:00:01Z') });
+
+        expect(weekIds()).toEqual(['aa:3:ended']);
+      });
+
+      it('lays a held patch over a week read before it', async () => {
+        await started();
+        queryClient.setQueryData(lobbiesKey, { lobbies: [row('aa', 3)] });
+        await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+        // A week fetched now, from a read taken before that patch.
+        await queryClient.fetchQuery({
+          queryKey: weekKey,
+          queryFn: async () => ({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] }),
+        });
+
+        expect(weekIds()).toEqual(['aa:8:open']);
+      });
+    });
   });
 
   describe('lobby guest count', () => {

@@ -14,6 +14,7 @@ import {
 
 import {
   type DebateLobbiesResponse,
+  type DebateLobbyCalendarResponse,
   type DebateLobbyView,
   GeoChatRequestError,
   type GeoChatSession,
@@ -24,7 +25,12 @@ import {
   getStoredGeoChatAccessToken,
   resetGeoChatSession,
 } from './api';
-import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
+import {
+  type DebateLobbyCardPatch,
+  applyLobbyCardPatch,
+  applyLobbyCardPatchToCalendar,
+  parseLobbyCardPatch,
+} from './lobbies/lobby-card-patch';
 import { parseLobbyClaimLists, withLobbyClaimLists } from './lobbies/lobby-claim-lists-state';
 import { type LobbyHighlightsState, parseLobbyHighlights, withLobbyHighlights } from './lobbies/lobby-highlights-state';
 
@@ -228,6 +234,10 @@ export class DebateGatewayClient {
     this.unsubscribeLobbyFetches ??= this.queryClient.getQueryCache().subscribe(event => {
       // A fetch's own success; the overlay's `setQueryData` is `manual` and does not come back here.
       if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
+      if (this.accountKey && isLobbyCalendarQueryKey(event.query.queryKey, this.accountKey)) {
+        // A calendar week read before a patch would otherwise undo it, as a list read would.
+        this.overlayHeldPatchesOnCalendars();
+      }
       if (this.accountKey && isLobbiesQueryKey(event.query.queryKey, this.accountKey)) {
         this.overlayHeldLobbyPatches(event.query.state.data as DebateLobbiesResponse | undefined);
       }
@@ -628,6 +638,7 @@ export class DebateGatewayClient {
   /** Lays held patches over the cached list. `fetched`, a GET's result, also drops those it has caught up with. */
   private overlayHeldLobbyPatches(fetched?: DebateLobbiesResponse) {
     if (!this.accountKey) return;
+    this.overlayHeldPatchesOnCalendars();
     const key = ['debates', 'account', this.accountKey, 'lobbies'];
     const list = this.queryClient.getQueryData<DebateLobbiesResponse>(key);
     if (!list) return;
@@ -643,6 +654,25 @@ export class DebateGatewayClient {
     let next = list;
     for (const patch of this.heldLobbyPatches.values()) next = applyLobbyCardPatch(next, patch);
     if (next !== list) this.queryClient.setQueryData(key, next);
+  }
+
+  /**
+   * Lays held patches over every cached calendar week (GEO-3300), so a lobby's headcount and who is
+   * going stay current there too. Weeks are pruned with the list: a held patch the list has caught
+   * up with is dropped, and a week's own row newer than a patch is left as it is.
+   */
+  private overlayHeldPatchesOnCalendars() {
+    if (!this.accountKey || this.heldLobbyPatches.size === 0) return;
+    const patches = [...this.heldLobbyPatches.values()];
+    this.queryClient.setQueriesData<DebateLobbyCalendarResponse>(
+      { queryKey: ['debates', 'account', this.accountKey, 'lobbies', 'calendar'] },
+      // `undefined` leaves a week untouched, so one no patch changes is not rewritten.
+      week => {
+        if (!week) return undefined;
+        const next = patches.reduce(applyLobbyCardPatchToCalendar, week);
+        return next === week ? undefined : next;
+      }
+    );
   }
 
   private queueMatchmakingSections(sections?: MatchmakingSection[]) {
@@ -1368,6 +1398,18 @@ function rateLimitRetryDelayMs(payload: unknown) {
 
 function isGatewayEnvelope(value: unknown): value is GatewayEnvelope {
   return isRecord(value) && value.v === 1 && typeof value.op === 'string' && 'payload' in value;
+}
+
+/** A calendar week of lobbies (GEO-3300): `debateQueryKeys.lobbyCalendar`, under the list's key. */
+function isLobbyCalendarQueryKey(queryKey: readonly unknown[], accountKey: string) {
+  return (
+    queryKey.length === 7 &&
+    queryKey[0] === 'debates' &&
+    queryKey[1] === 'account' &&
+    queryKey[2] === accountKey &&
+    queryKey[3] === 'lobbies' &&
+    queryKey[4] === 'calendar'
+  );
 }
 
 function isLobbiesQueryKey(queryKey: readonly unknown[], accountKey: string) {

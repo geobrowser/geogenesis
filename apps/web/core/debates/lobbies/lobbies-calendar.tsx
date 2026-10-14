@@ -11,7 +11,7 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbySummary } from '../api';
+import type { DebateLobbyCalendarRow } from '../api';
 import { DAYS_IN_WEEK, cellOf } from '../matchmaking/debate-calendar-model';
 import {
   CALENDAR_BLOCK_CLASS_NAME,
@@ -21,9 +21,9 @@ import {
 } from '../matchmaking/debate-calendar-week';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbies } from './hooks';
+import { useDebateLobbyCalendar } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
-import { LobbyByline } from './lobby-host-names';
+import { LobbyByline, LobbyHostNames } from './lobby-host-names';
 import {
   LOBBY_DARK_SURFACE_CLASS_NAME,
   LOBBY_DARK_SURFACE_STYLE,
@@ -44,8 +44,8 @@ const CHIPS_PER_DAY = 2;
  * The week's lobbies by day, each day soonest first. `days` is the calendar's eight midnights, and a
  * lobby goes on the day `cellOf` puts it, as the viewer's own debates do.
  */
-export function lobbiesByDay(lobbies: DebateLobbySummary[], days: Date[]) {
-  const byDay = Array.from({ length: DAYS_IN_WEEK }, (): DebateLobbySummary[] => []);
+export function lobbiesByDay<Lobby extends { starts_at: string }>(lobbies: Lobby[], days: Date[]) {
+  const byDay = Array.from({ length: DAYS_IN_WEEK }, (): Lobby[] => []);
   const soonestFirst = [...lobbies].sort((a, b) => Date.parse(a.starts_at) - Date.parse(b.starts_at));
   for (const lobby of soonestFirst) {
     const cell = cellOf(Date.parse(lobby.starts_at), days);
@@ -55,8 +55,8 @@ export function lobbiesByDay(lobbies: DebateLobbySummary[], days: Date[]) {
 }
 
 export type WeekLobbies = {
-  /** `null` behind `lobbyJoining`, before the list loads, or with none that week: nothing to draw. */
-  byDay: DebateLobbySummary[][] | null;
+  /** `null` behind `lobbyJoining`, before the week loads, or with none that week: nothing to draw. */
+  byDay: DebateLobbyCalendarRow[][] | null;
   /** The first read is in flight, so a week without people is not known to be empty yet. */
   isLoading: boolean;
   /** The read failed with nothing to show, for the calendar's partial-load note. */
@@ -69,12 +69,13 @@ export type WeekLobbies = {
  * and the phone's day list, with the read's state so the calendar can tell loading or failed from
  * a week without lobbies.
  *
- * Read from the panel's lobby list, which holds at most 20 upcoming lobbies and two per host, and
- * none that have ended (GEO-3271 asks geo-chat for the whole week).
+ * Read from geo-chat's calendar range (GEO-3271, GEO-3300): every lobby starting that week, ended
+ * ones included, without the panel list's caps of 20 upcoming and two per host. `days` is the
+ * calendar's eight midnights, so the read spans exactly the week drawn.
  */
 export function useWeekLobbies(days: Date[]): WeekLobbies {
   const joining = useFeatureFlag('lobbyJoining');
-  const { data, isLoading, error, refetch } = useDebateLobbies(joining);
+  const { data, isLoading, error, refetch } = useDebateLobbyCalendar(days[0]!, days[DAYS_IN_WEEK]!, joining);
   const byDay = React.useMemo(() => {
     if (!joining || !data) return null;
     const week = lobbiesByDay(data.lobbies, days);
@@ -91,7 +92,7 @@ export function useWeekLobbies(days: Date[]): WeekLobbies {
 }
 
 /** The row pinned under the calendar's day headers: each day's lobbies as chips. */
-export function lobbiesPinnedRow(byDay: DebateLobbySummary[][]): PinnedRow {
+export function lobbiesPinnedRow(byDay: DebateLobbyCalendarRow[][]): PinnedRow {
   return {
     label: 'Lobbies',
     renderDay: (_date, day) => <LobbyDayChips lobbies={byDay[day] ?? []} />,
@@ -99,7 +100,7 @@ export function lobbiesPinnedRow(byDay: DebateLobbySummary[][]): PinnedRow {
 }
 
 /** A day's lobbies on the phone's day list, as cards, above its people. `null` for a day with none. */
-export function lobbyDayLeads(byDay: DebateLobbySummary[][]): (React.ReactNode | null)[] {
+export function lobbyDayLeads(byDay: DebateLobbyCalendarRow[][]): (React.ReactNode | null)[] {
   return byDay.map(lobbies =>
     lobbies.length === 0 ? null : (
       <div className="flex flex-col gap-2" data-testid="lobby-day-cards">
@@ -111,7 +112,7 @@ export function lobbyDayLeads(byDay: DebateLobbySummary[][]): (React.ReactNode |
   );
 }
 
-function LobbyDayChips({ lobbies }: { lobbies: DebateLobbySummary[] }) {
+function LobbyDayChips({ lobbies }: { lobbies: DebateLobbyCalendarRow[] }) {
   if (lobbies.length === 0) return null;
   const shown = lobbies.slice(0, CHIPS_PER_DAY);
   const hidden = lobbies.slice(shown.length);
@@ -144,17 +145,20 @@ function LobbyDayChips({ lobbies }: { lobbies: DebateLobbySummary[] }) {
 
 /**
  * One lobby in the pinned row: its time and name, or Live and its name while open. Dark while live,
- * outlined while scheduled, the outline solid once the viewer is going. Opens the lobby's card.
+ * outlined while scheduled, the outline solid once the viewer is going, greyed once ended, as the
+ * admin week greys a closed debate. Opens the lobby's card.
  */
-function LobbyChip({ lobby }: { lobby: DebateLobbySummary }) {
-  const time = lobby.open ? 'Live' : lobbyBadgeTime(lobby.starts_at);
+function LobbyChip({ lobby }: { lobby: DebateLobbyCalendarRow }) {
+  const live = lobby.state === 'open';
+  const ended = lobby.state === 'ended';
+  const time = live ? 'Live' : lobbyBadgeTime(lobby.starts_at);
   return (
     <LobbyPopover
       label={lobby.name}
       trigger={
         <button
           type="button"
-          aria-label={[time, lobby.name, lobby.viewer_reminded && !lobby.open ? 'going' : null]
+          aria-label={[time, lobby.name, ended ? 'ended' : lobby.viewer_reminded && !live ? 'going' : null]
             .filter(Boolean)
             .join(', ')}
           title={lobby.name}
@@ -163,14 +167,16 @@ function LobbyChip({ lobby }: { lobby: DebateLobbySummary }) {
           className={cx(
             CALENDAR_BLOCK_CLASS_NAME,
             CALENDAR_COMPACT_BLOCK_CLASS_NAME,
-            lobby.open
+            live
               ? cx('border-transparent text-white', LOBBY_DARK_SURFACE_CLASS_NAME)
-              : lobby.viewer_reminded
-                ? 'border-text bg-white text-text'
-                : 'border-grey-02 bg-white text-text'
+              : ended
+                ? 'border-grey-02 bg-grey-01 text-grey-04'
+                : lobby.viewer_reminded
+                  ? 'border-text bg-white text-text'
+                  : 'border-grey-02 bg-white text-text'
           )}
         >
-          {lobby.open ? <LiveDot /> : null}
+          {live ? <LiveDot /> : null}
           <span className="shrink-0 font-medium tabular-nums">{time}</span>
           <span className="min-w-0 truncate">{lobby.name}</span>
         </button>
@@ -210,12 +216,40 @@ function LobbyPopover({
   );
 }
 
-/** A lobby's card: live and dark with Join, or its time and host over its name and RSVP. */
-export function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
+/**
+ * A lobby's card: live and dark with Join; its time and host over its name and RSVP; or, once ended,
+ * Ended and its host over its name, with nothing to press. The name still leads to the lobby's page,
+ * which says it has ended and points at the host's next one.
+ */
+export function LobbyCalendarCard({ lobby }: { lobby: DebateLobbyCalendarRow }) {
   const href = debateRoomPath(lobby.lobby_id);
   const enter = () => markLobbyEntry(lobby.lobby_id, 'calendar');
 
-  if (lobby.open) {
+  if (lobby.state === 'ended') {
+    return (
+      <div
+        className="flex flex-col gap-1.5 rounded-lg border border-grey-02 bg-grey-01 p-2.5"
+        data-testid="lobby-calendar-card"
+      >
+        <Text as="p" variant="footnote" color="grey-04" className="truncate">
+          <span className="font-medium">Ended</span>
+          {lobby.hosts.length > 0 ? (
+            <>
+              {' · '}
+              <LobbyHostNames hosts={lobby.hosts} analyticsLabel={CALENDAR_HOST_LABEL} />
+            </>
+          ) : null}
+        </Text>
+        <Link href={href} onClick={enter} className="min-w-0 hover:underline">
+          <Text as="span" variant="metadataMedium" color="grey-04" className="block truncate">
+            {lobby.name}
+          </Text>
+        </Link>
+      </div>
+    );
+  }
+
+  if (lobby.state === 'open') {
     return (
       <div
         className={cx('flex flex-col gap-2 rounded-lg p-2.5', LOBBY_DARK_SURFACE_CLASS_NAME)}

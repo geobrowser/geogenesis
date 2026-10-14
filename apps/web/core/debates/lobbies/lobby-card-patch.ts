@@ -1,4 +1,9 @@
-import { type DebateLobbiesResponse, type DebateLobbySummary, dashlessId } from '../api';
+import {
+  type DebateLobbiesResponse,
+  type DebateLobbyCalendarResponse,
+  type DebateLobbySummary,
+  dashlessId,
+} from '../api';
 
 /** `DebateLobbySummary` as broadcast: nothing about whoever receives it. */
 export type DebateLobbyCard = Omit<DebateLobbySummary, 'viewer_reminded' | 'viewer_on_roster' | 'as_of'>;
@@ -41,6 +46,33 @@ export function applyLobbyCardPatch(list: DebateLobbiesResponse, patch: DebateLo
   const others = list.lobbies.filter(other => dashlessId(other.lobby_id) !== id);
 
   return { lobbies: sortLobbies([...others, row]) };
+}
+
+/**
+ * The same patch laid over a calendar week (GEO-3300), or the same week when it changes nothing. As
+ * on the list, it only updates a row already there and newer than its `as_of`. The week keeps its
+ * own order, and an ended lobby stays ended: the patch is the lobby's card, which has no end.
+ */
+export function applyLobbyCardPatchToCalendar(
+  week: DebateLobbyCalendarResponse,
+  patch: DebateLobbyCardPatch
+): DebateLobbyCalendarResponse {
+  const id = dashlessId(patch.lobby.lobby_id);
+  let changed = false;
+  const lobbies = week.lobbies.map(row => {
+    if (dashlessId(row.lobby_id) !== id || row.state === 'ended') return row;
+    if (row.as_of && Date.parse(row.as_of) >= Date.parse(patch.asOf)) return row;
+    changed = true;
+    return {
+      ...patch.lobby,
+      viewer_reminded: row.viewer_reminded,
+      viewer_on_roster: row.viewer_on_roster,
+      as_of: patch.asOf,
+      state: patch.lobby.open ? ('open' as const) : ('upcoming' as const),
+      closed_at: null,
+    };
+  });
+  return changed ? { lobbies } : week;
 }
 
 /** geo-chat's order: open first, busiest first; upcoming soonest first; then by id. */
