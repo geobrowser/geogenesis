@@ -145,9 +145,9 @@ function MediaPreview({
     return () => {
       active = false;
     };
-    // Keyed on the wanted set, not on `session`, whose identity changes on every media event.
+    // Keyed on the wanted set and session key, not on `session`, whose identity changes on every media event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantKey]);
+  }, [sessionKey, wantKey]);
 
   const micOn = want.micOn && !missing.mic;
   const cameraOn = want.cameraOn && !missing.camera;
