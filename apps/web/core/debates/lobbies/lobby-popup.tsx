@@ -9,6 +9,8 @@ import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { BottomSheet } from '~/design-system/bottom-sheet';
 import { Menu, type MenuAlign } from '~/design-system/menu';
 
+import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
+
 type Handoff = {
   /** Inside a lobby popup. */
   inPopup: boolean;
@@ -84,5 +86,34 @@ export function LobbyPopup({
     >
       {content ? <div className={wide ? undefined : 'p-1.5'}>{content}</div> : null}
     </Menu>
+  );
+}
+
+/** One action in a host popup's list, as the claim and claim list menus draw them. */
+export function LobbyPopupMenuRow({
+  analyticsLabel,
+  analyticsIntent,
+  disabled,
+  danger = false,
+  onClick,
+  children,
+}: {
+  analyticsLabel: string;
+  analyticsIntent: string;
+  disabled: boolean;
+  danger?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      {...debateActionAnalyticsAttributes('hub', analyticsLabel, analyticsIntent)}
+      onClick={onClick}
+      className={`flex w-full items-center bg-white px-3 py-2.5 text-left text-button hover:bg-bg disabled:opacity-50 ${danger ? 'text-red-01' : 'text-text'}`}
+    >
+      {children}
+    </button>
   );
 }

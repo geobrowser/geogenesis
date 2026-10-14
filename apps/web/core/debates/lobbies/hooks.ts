@@ -34,6 +34,7 @@ import {
   lobbySteppedOut,
   markLobbyEntry,
 } from './lobby-analytics';
+import { settleFetchedLobbyClaimLists } from './lobby-claim-lists-state';
 import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
@@ -105,13 +106,22 @@ export const MAX_TIMEOUT_MS = 2_147_483_647;
  */
 export function useDebateLobby(lobbyId: string, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
+  const queryClient = useQueryClient();
 
   const query = useQuery({
     ...debateQueryNetworkOptions,
     // Waits out a new account geo-chat does not know yet; a guest signing in listens meanwhile.
     ...viewerReadRetryOptions(accountKey),
     queryKey: debateQueryKeys.lobby(accountKey, lobbyId),
-    queryFn: ({ signal }) => getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal),
+    // A list change that landed while this read was in flight is newer than what it read. The cache
+    // is read only once the response is in: read before, it would miss exactly that change.
+    queryFn: async ({ signal }) => {
+      const fetched = await getDebateLobby(lobbyId, getPrivyIdentityToken, accountKey, signal);
+      return settleFetchedLobbyClaimLists(
+        queryClient.getQueryData<DebateLobbyView>(debateQueryKeys.lobby(accountKey, lobbyId)),
+        fetched
+      );
+    },
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
   });
 

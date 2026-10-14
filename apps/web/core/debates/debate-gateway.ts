@@ -25,6 +25,7 @@ import {
   resetGeoChatSession,
 } from './api';
 import { type DebateLobbyCardPatch, applyLobbyCardPatch, parseLobbyCardPatch } from './lobbies/lobby-card-patch';
+import { parseLobbyClaimLists, withLobbyClaimLists } from './lobbies/lobby-claim-lists-state';
 import { type LobbyHighlightsState, parseLobbyHighlights, withLobbyHighlights } from './lobbies/lobby-highlights-state';
 
 export type DebateGatewaySession = GeoChatSession;
@@ -74,6 +75,8 @@ type DebateEventPayload = {
   lobby_card?: unknown;
   /** On `debate.lobby_highlights_changed`: the full state; see `parseLobbyHighlights`. */
   lobby_highlights?: unknown;
+  /** On `debate.lobby_claim_lists_changed`: the full state; see `parseLobbyClaimLists`. */
+  lobby_claim_lists?: unknown;
   /** On `debate.lobby_guests_changed`: visitors without an account. */
   guest_count?: unknown;
   claim_entity_ids?: string[];
@@ -569,6 +572,17 @@ export class DebateGatewayClient {
         const shown = query !== undefined && (query.state.fetchStatus === 'fetching' || query.getObserversCount() > 0);
         this.queryClient.setQueryData<LobbyHighlightsState>(key, current =>
           current || shown ? withLobbyHighlights(current, highlights) : current
+        );
+        break;
+      }
+      // GEO-3273. Full state to the roster: laid over the cached view when newer, never refetches.
+      // Guests get the lists from their polled guest view instead.
+      case 'debate.lobby_claim_lists_changed': {
+        const lists = parseLobbyClaimLists(identifiers.lobby_claim_lists);
+        if (!lists || !this.accountKey) break;
+        this.queryClient.setQueryData<DebateLobbyView>(
+          ['debates', 'account', this.accountKey, 'lobby', dashlessId(lists.lobby_id)],
+          current => (current ? withLobbyClaimLists(current, lists) : current)
         );
         break;
       }

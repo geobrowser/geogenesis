@@ -33,6 +33,7 @@ vi.mock('../hooks', async importOriginal => ({
 const { GeoChatRequestError } = await import('../api');
 const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useLobbyPresence } = await import('./hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
+const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
 const { lobbyDebateSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
 
@@ -549,6 +550,49 @@ describe('useDebateLobby', () => {
       await vi.advanceTimersByTimeAsync(6_000);
     });
     await waitFor(() => expect(result.current.data?.access.status).toBe('admitted'));
+  });
+});
+
+describe('useDebateLobby and claim lists (GEO-3274)', () => {
+  // A refetch that read the lobby before a list event landed must not put the older lists back.
+  it('keeps lists an event laid over the cache while its GET was in flight', async () => {
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const key = ['debates', 'account', 'acct', 'lobby', 'lobby1'];
+    const list = (entityId: string) => ({
+      entity_id: entityId,
+      space_id: 's1',
+      position: 0,
+      added_by: null,
+      added_at: '2026-10-13T12:00:00Z',
+    });
+    client.setQueryData(key, { ...view(false), claim_lists: [], claim_lists_as_of: '2026-10-13T12:00:01Z' });
+    let respond: (value: DebateLobbyView) => void = () => undefined;
+    api.getDebateLobby.mockImplementationOnce(() => new Promise<DebateLobbyView>(done => (respond = done)));
+
+    const { result } = renderHook(() => useDebateLobby('lobby1'), {
+      wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+    });
+    await waitFor(() => expect(api.getDebateLobby).toHaveBeenCalledTimes(1));
+
+    // The event, as the gateway lays it over the cache.
+    act(() => {
+      client.setQueryData<DebateLobbyView>(key, current =>
+        current
+          ? withLobbyClaimLists(current, {
+              lobby_id: 'lobby1',
+              as_of: '2026-10-13T12:00:03Z',
+              claim_lists: [list('newer')],
+            })
+          : current
+      );
+    });
+    // The GET read the lobby in between: newer than the cache it started on, older than the event.
+    await act(async () => {
+      respond({ ...view(false), claim_lists: [list('older')], claim_lists_as_of: '2026-10-13T12:00:02Z' });
+    });
+
+    await waitFor(() => expect(result.current.isFetching).toBe(false));
+    expect(result.current.data?.claim_lists?.map(row => row.entity_id)).toEqual(['newer']);
   });
 });
 

@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -22,6 +23,7 @@ import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button'
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { useScrollLock } from '../use-scroll-lock';
 import {
   type LobbyPresenceState,
   MAX_TIMEOUT_MS,
@@ -108,6 +110,8 @@ const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_STATE_COPY.f
  * A guest who signs in stays a guest until the member view loads, so audio never drops.
  */
 export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
+  // The lobby wants the width; the browse sidebar opens collapsed here and as it was elsewhere.
+  useBrowseSidebarPageDefault(false);
   const { ready, authenticated } = useGeoChatAuth();
   const signedOut = ready && !authenticated;
   const lobbyQuery = useDebateLobby(lobbyId);
@@ -560,7 +564,9 @@ function LobbyRoom({
   // Per-person disagreements ride on the claims read the claims panel already makes.
   const disagreements = useDebateLobbyClaims(lobby.lobby_id, showClaims).data?.disagreements ?? null;
   const highlights = useLobbyHighlights(lobby.lobby_id, phone && showClaims).data;
-  const claimsMark = useClaimsTabMark(highlights, phone && tab === 'claims');
+  // The desktop panel always shows the claims, so what arrives there is seen; only a phone on
+  // People builds up a mark.
+  const claimsMark = useClaimsTabMark(highlights, !phone || tab === 'claims', lobby.claim_lists);
   const tabbed = phone && showClaims;
   const tabIds = useTabIds();
   const onPeopleTab = !phone || !showClaims || tab === 'people';
@@ -595,6 +601,9 @@ function LobbyRoom({
   // A phone shows one tab at a time and keeps scrolling the page.
   const columns = showClaims && !phone;
   const columnScroll = columns && 'overflow-y-auto overscroll-contain';
+  // The columns fill the viewport and scroll themselves; the page around them must not, or a scroll
+  // outside them moves it onto blank space.
+  useScrollLock(columns);
 
   return (
     <LobbySlotsProvider value={slots.targets}>

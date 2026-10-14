@@ -548,6 +548,63 @@ describe('DebateGatewayClient', () => {
     });
   });
 
+  describe('lobby claim lists', () => {
+    const lobbyKey = ['debates', 'account', 'user-a', 'lobby', 'abcd'];
+    const list = (entityId: string, position: number) => ({
+      entity_id: entityId,
+      space_id: 's1',
+      position,
+      added_by: null,
+      added_at: '2026-10-13T12:00:00Z',
+    });
+
+    async function listsChanged(payload: Record<string, unknown>) {
+      client.start(
+        vi.fn(async () => 'privy-token'),
+        'user-a'
+      );
+      await vi.runAllTicks();
+      sockets[0]!.open();
+      sockets[0]!.receive('READY', readyPayload([]));
+      await flushInvalidations();
+      invalidateQueries.mockClear();
+      sockets[0]!.receive('EVENT', { event_id: 'lists-1', event_type: 'debate.lobby_claim_lists_changed', payload });
+      await flushInvalidations();
+    }
+
+    it('lays newer lists over the cached view and never refetches', async () => {
+      queryClient.setQueryData(lobbyKey, {
+        lobby_id: 'abcd',
+        claim_lists: [list('p1', 0)],
+        claim_lists_as_of: '2026-10-13T12:00:00.000100Z',
+      });
+      await listsChanged({
+        lobby_id: 'AB-CD',
+        lobby_claim_lists: {
+          lobby_id: 'AB-CD',
+          as_of: '2026-10-13T12:00:00.000200Z',
+          claim_lists: [list('p1', 0), list('p2', 1)],
+        },
+      });
+      expect(queryClient.getQueryData<{ claim_lists: unknown[] }>(lobbyKey)?.claim_lists).toHaveLength(2);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+
+    it.each([
+      ['an older state', { lobby_id: 'AB-CD', as_of: '2026-10-13T12:00:00Z', claim_lists: [] }],
+      ['an unreadable payload', { lobby_id: 'AB-CD', claim_lists: 'x' }],
+    ])('ignores %s', async (_label, lobbyClaimLists) => {
+      queryClient.setQueryData(lobbyKey, {
+        lobby_id: 'abcd',
+        claim_lists: [list('p1', 0)],
+        claim_lists_as_of: '2026-10-13T12:00:00.000100Z',
+      });
+      await listsChanged({ lobby_id: 'AB-CD', lobby_claim_lists: lobbyClaimLists });
+      expect(queryClient.getQueryData<{ claim_lists: unknown[] }>(lobbyKey)?.claim_lists).toHaveLength(1);
+      expect(invalidateQueries).not.toHaveBeenCalled();
+    });
+  });
+
   describe('lobby highlights', () => {
     const highlightsKey = ['debates', 'account', 'user-a', 'lobby-highlights', 'abcd'];
     const state = (asOf: string | null, agree: number) => ({
