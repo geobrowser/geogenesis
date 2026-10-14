@@ -703,8 +703,7 @@ export function FollowingRow({ spaceId }: { spaceId: string }) {
   // Names and faces only: what each id is comes from the follow itself.
   const { spaceFor, isLoading: isLoadingSpaces } = usePeopleSpaces(personIds);
   const { metadata, isLoading: isLoadingMetadata } = useTopicMetadata(topicIds);
-  // The list is Interested follows, so each kind unfollows as one, whatever the flag says.
-  const topicFollows = useFollowEntities({ kind: 'topic', interestedOnly: true });
+  const topicFollows = useFollowEntities({ kind: 'topic' });
   const personFollows = useFollowEntities({ kind: 'person' });
 
   // By name, so a long list reads like an index rather than in the order the votes were cast.
