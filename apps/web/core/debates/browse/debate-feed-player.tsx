@@ -9,6 +9,7 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
+import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
@@ -857,7 +858,7 @@ export function DebateFeedPlayer({
               roundTurns={roundTurns}
               playing={playing}
             />
-            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} />
+            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} stamped={isOpenRoundsDebate(debate)} />
           </>
         )}
 
