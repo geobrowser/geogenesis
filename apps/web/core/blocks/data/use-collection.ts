@@ -111,6 +111,9 @@ export function useCollection({ source, first, pageNumber = 0, after, offset, wh
     placeholderData: keepPreviousData,
     sort,
     orderBy,
+    // A row just added to the collection is local-only until published; the
+    // server page cannot contain it, so the hook prepends it on page one.
+    includeUnpublishedLocal: true,
   });
 
   const { entities: localCollectionItemsFallback } = useQueryEntities({

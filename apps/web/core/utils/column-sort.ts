@@ -1,9 +1,9 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
-import { EntitiesOrderBy } from '~/core/gql/graphql';
+import type { EntitiesOrderBy } from '~/core/gql/graphql';
 import { ID } from '~/core/id';
-import { BEST_ORDER_BY, NEWEST_ORDER_BY } from '~/core/io/entity-order-by';
+import { ENTITY_ORDER_BY } from '~/core/io/entity-order-by';
 import type { DataType, Property } from '~/core/types';
 
 export type SortDirection = 'asc' | 'desc';
@@ -44,16 +44,9 @@ export function builtInSortLabel(sort: BuiltInSort): string {
   return BUILT_IN_SORT_OPTIONS.find(option => option.sort === sort)?.label ?? sort;
 }
 
-/** Server ordering for a built-in sort; descending is the shared Best / Newest order. */
+/** Server ordering for a built-in sort, from the table the claims browse shares. */
 export function builtInSortOrderBy({ sort, direction }: BuiltInSortState): EntitiesOrderBy[] {
-  switch (sort) {
-    case 'best':
-      return direction === 'asc'
-        ? [EntitiesOrderBy.RankingScoreAsc, EntitiesOrderBy.UpdatedAtAsc, EntitiesOrderBy.IdAsc]
-        : BEST_ORDER_BY;
-    case 'created_at':
-      return direction === 'asc' ? [EntitiesOrderBy.CreatedAtAsc, EntitiesOrderBy.IdAsc] : NEWEST_ORDER_BY;
-  }
+  return ENTITY_ORDER_BY[sort][direction];
 }
 
 export const SORTABLE_DATA_TYPES: readonly DataType[] = [

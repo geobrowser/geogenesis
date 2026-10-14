@@ -14,7 +14,6 @@ import {
   ColumnSortState,
   DEFAULT_TABLE_SORT_PROPERTIES,
   SORTABLE_DATA_TYPES,
-  SortDirection,
   propertySortLabel,
   sortStateLabel,
 } from '~/core/utils/column-sort';
@@ -135,18 +134,13 @@ export function DataBlockSortMenu({
     }
   }, [directionPickTarget, pickedProperty]);
 
-  const builtInPickTarget = directionPickTarget?.kind === 'builtin' ? directionPickTarget : null;
-  const pendingSort = React.useMemo<((direction: SortDirection) => NonNullable<ColumnSortState>) | null>(() => {
-    if (builtInPickTarget) {
-      const sort = builtInPickTarget.sort;
-      return direction => ({ kind: 'builtin', sort, direction });
-    }
-    if (pickedProperty) {
-      const columnId = pickedProperty.id;
-      return direction => ({ kind: 'property', columnId, direction });
-    }
-    return null;
-  }, [builtInPickTarget, pickedProperty]);
+  // What Ascending / Descending will apply to: a built-in sort, or a property still in the list.
+  const pendingTarget: DirectionPickTarget | null =
+    directionPickTarget?.kind === 'builtin'
+      ? directionPickTarget
+      : pickedProperty
+        ? { kind: 'property', columnId: pickedProperty.id }
+        : null;
 
   const segmentSortReadOnly = Boolean(sortState !== null && !isEditing);
   const segmentTriggerDisabled = disabled || segmentSortReadOnly;
@@ -270,7 +264,7 @@ export function DataBlockSortMenu({
           className="z-1001 w-[200px] overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg"
         >
           <div className={listScrollClassName} onWheel={onListWheel}>
-            {pendingSort === null ? (
+            {pendingTarget === null ? (
               <>
                 {BUILT_IN_SORT_OPTIONS.map(option => {
                   const isActive = sortState?.kind === 'builtin' && sortState.sort === option.sort;
@@ -334,7 +328,10 @@ export function DataBlockSortMenu({
                   </div>
                 </MenuItem>
                 <div className="shrink-0 snap-none border-t border-grey-02" role="presentation" />
-                <MenuItem className={listRowClassName} onClick={() => applySortAndClose(pendingSort('asc'))}>
+                <MenuItem
+                  className={listRowClassName}
+                  onClick={() => applySortAndClose({ ...pendingTarget, direction: 'asc' })}
+                >
                   <div className="flex w-full items-center justify-between gap-2">
                     <span>Ascending</span>
                     <span className="shrink-0 text-text tabular-nums" aria-hidden>
@@ -342,7 +339,10 @@ export function DataBlockSortMenu({
                     </span>
                   </div>
                 </MenuItem>
-                <MenuItem className={listRowClassName} onClick={() => applySortAndClose(pendingSort('desc'))}>
+                <MenuItem
+                  className={listRowClassName}
+                  onClick={() => applySortAndClose({ ...pendingTarget, direction: 'desc' })}
+                >
                   <div className="flex w-full items-center justify-between gap-2">
                     <span>Descending</span>
                     <span className="shrink-0 text-text tabular-nums" aria-hidden>

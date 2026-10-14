@@ -203,6 +203,34 @@ describe('E.syncMany pagination', () => {
     expect(result.hasNextPage).toBe(true);
   });
 
+  it('drops empty relation targets and keeps unnamed members when an id list is ordered', async () => {
+    vi.mocked(getAllEntities).mockReturnValue(Effect.succeed({ entities: [], endCursor: null, hasNextPage: false }));
+    vi.mocked(getEntitiesOrderedByPropertyConnection).mockReturnValue(
+      Effect.succeed({ entities: [], endCursor: null, hasNextPage: false })
+    );
+
+    await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', '', 'entity-b'] } },
+      first: 9,
+      orderBy: [EntitiesOrderBy.CreatedAtDesc],
+    });
+    await E.syncMany({
+      store,
+      cache,
+      where: { id: { in: ['entity-a', '', 'entity-b'] } },
+      first: 9,
+      sort: { propertyId: 'score-property', direction: 'desc' },
+    });
+
+    const [orderedOptions] = vi.mocked(getAllEntities).mock.calls[0] ?? [];
+    const [sortedOptions] = vi.mocked(getEntitiesOrderedByPropertyConnection).mock.calls[0] ?? [];
+    // No '' in the list, and no `name` exclusion wrapped around an explicit id list.
+    expect(orderedOptions?.filter).toEqual({ id: { in: ['entity-a', 'entity-b'] } });
+    expect(sortedOptions?.filter).toEqual({ id: { in: ['entity-a', 'entity-b'] } });
+  });
+
   it.each([
     ['regular queries', {}],
     ['collection id queries', { id: { in: ['entity-a'] } }],
