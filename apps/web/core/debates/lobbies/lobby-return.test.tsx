@@ -13,11 +13,8 @@ const mocks = vi.hoisted(() => ({
   lobby: undefined as
     (Pick<DebateLobbyView, 'access' | 'name' | 'members'> & { viewer: { removed?: boolean } }) | undefined,
   useDebateLobby: vi.fn(),
-  lobbyJoining: true,
   mine: { data: undefined as DebateMyLobby | undefined, isError: false },
 }));
-
-vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.lobbyJoining }));
 
 vi.mock('./hooks', () => ({
   useDebateLobby: (lobbyId: string) => {
@@ -58,7 +55,6 @@ beforeEach(() => {
   consumeLobbyRejoin('');
   mocks.lobby = admitted();
   mocks.useDebateLobby.mockClear();
-  mocks.lobbyJoining = true;
   mocks.mine = { data: undefined, isError: false };
 });
 
@@ -103,11 +99,8 @@ describe('BackToLobbyRow', () => {
     expect(backButton()).toBeNull();
   });
 
-  it.each([
-    ['the call failed', () => (mocks.mine = { data: undefined, isError: true })],
-    ['the flag is off', () => (mocks.lobbyJoining = false)],
-  ])('falls back to this tab’s record when %s', (_label, arrange) => {
-    arrange();
+  it('falls back to this tab’s record when the call failed', () => {
+    mocks.mine = { data: undefined, isError: true };
     rememberLobbyReturnDestination('lobby1');
     render(<BackToLobbyRow onLeave={vi.fn()} />);
     expect(backButton()).not.toBeNull();

@@ -11,17 +11,16 @@ import { OpenLobbyDialog } from './open-lobby-dialog';
 import { UpcomingLobbiesRow } from './upcoming-lobbies';
 
 /**
- * Scheduled debate lobbies, under the debates panel's tabs (GEO-3133). Signed in and `lobbyJoining`
- * only. Kept current by `debate.lobbies_changed`, which needs the matchmaking scope.
+ * Scheduled debate lobbies, under the debates panel's tabs (GEO-3133). Signed in only. Kept current
+ * by `debate.lobbies_changed`, which needs the matchmaking scope.
  *
  * A row of date cards (GEO-3268). Live lobbies and the one opening soon belong to the spotlight
  * above the tabs, so this lists the rest and no lobby appears twice. With nothing to list it keeps
  * just Open a lobby for hosts, and otherwise goes.
  */
 export function UpcomingLobbiesCard() {
-  const joining = useFeatureFlag('lobbyJoining');
   const { authenticated } = useGeoChatAuth();
-  if (!joining || !authenticated) return null;
+  if (!authenticated) return null;
   return <UpcomingLobbiesCardBody />;
 }
 

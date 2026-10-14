@@ -2,8 +2,6 @@
 
 import * as React from 'react';
 
-import { useFeatureFlag } from '~/core/state/feature-flags';
-
 import type { DebateLobbySummary } from '../api';
 import { useMatchmakingScope } from '../matchmaking/hooks';
 import { useDebateLobbies } from './hooks';
@@ -94,18 +92,16 @@ function useLineupClock(lobbies: DebateLobbySummary[]) {
 
 /**
  * The lobby lineup, for the navbar's Debate button, the panel's spotlight and the Explore banner.
- * Behind `lobbyJoining`, like every lobby surface.
  *
  * It holds the matchmaking scope while mounted, which is what carries `debate.lobbies_changed`. The
  * Debate button mounts it on every page, so the list stays live with the panel closed. Signed out
  * it is empty: see `useDebateLobbies`.
  */
 export function useLobbyLineup(): LobbyLineup {
-  const joining = useFeatureFlag('lobbyJoining');
-  useMatchmakingScope(joining);
-  const { data } = useDebateLobbies(joining);
+  useMatchmakingScope(true);
+  const { data } = useDebateLobbies();
   const lobbies = data?.lobbies;
   const now = useLineupClock(lobbies ?? NO_LOBBIES);
 
-  return React.useMemo(() => (joining && lobbies ? lobbyLineup(lobbies, now) : EMPTY_LINEUP), [joining, lobbies, now]);
+  return React.useMemo(() => (lobbies ? lobbyLineup(lobbies, now) : EMPTY_LINEUP), [lobbies, now]);
 }
