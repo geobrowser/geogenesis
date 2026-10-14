@@ -60,7 +60,6 @@ vi.mock('~/core/debates/rooms/hooks', () => ({
   useFinishedRoomIds: () => mocks.finishedRoomIds,
 }));
 
-
 vi.mock('~/core/debates/lobbies/hooks', () => ({
   useDebateLobbies: (enabled: boolean) => ({
     data: enabled ? { lobbies: mocks.lobbies } : undefined,
