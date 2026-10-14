@@ -299,11 +299,10 @@ function DebatesHubSurface({ activeTab: requestedTab, onTabChange, onClose }: Su
         </HubHeaderControls>
       </div>
 
-      {lobbySpotlight ? (
-        <LobbySpotlight lineup={lobbyLineup} />
-      ) : (
-        <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} />
-      )}
+      {lobbySpotlight ? <LobbySpotlight lineup={lobbyLineup} /> : null}
+      {/* Kept mounted under the spotlight: it holds the schedule dialog, which a lobby going live
+          would otherwise close mid-edit. */}
+      <SetScheduleBanner scheduleButtonRef={scheduleButtonRef} hidden={lobbySpotlight} />
 
       {/* Hidden until Privy resolves, not just the body below it. `authenticated` is false during
           restoration, so a row drawn before then is the signed-out one — a returning viewer would

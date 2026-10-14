@@ -42,6 +42,12 @@ type Props = {
   surface?: 'hub' | 'calendar';
   /** Replaces the panel's spacing, for a page with its own gutters. */
   className?: string;
+  /**
+   * Something else has the banner's place, as a live lobby's spotlight does in the panel (GEO-3268).
+   * The callout goes, but the banner stays mounted: it holds the schedule dialog, and swapping it
+   * out would close that dialog on someone mid-edit.
+   */
+  hidden?: boolean;
 };
 
 export function SetScheduleBanner(props: Props) {
@@ -52,7 +58,7 @@ export function SetScheduleBanner(props: Props) {
   );
 }
 
-function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
+function Banner({ scheduleButtonRef, surface = 'hub', className, hidden = false }: Props) {
   const { authenticated } = useGeoChatAuth();
   const [modalOpen, setModalOpen] = React.useState(false);
   // Saved server-side (GEO-2932). The modal reads and saves the week itself; this only asks whether
@@ -63,12 +69,34 @@ function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
   // banner moments later, and focus parked on its button would go with it.
   const returnFocusRef = React.useRef<HTMLElement | null>(null);
 
+  // Hidden, the banner's own button is gone, so a dialog still open hands focus to the header's
+  // availability pill when it closes.
+  React.useEffect(() => {
+    if (hidden && scheduleButtonRef?.current) returnFocusRef.current = scheduleButtonRef.current;
+  }, [hidden, scheduleButtonRef]);
+
   // A schedule is keyed to the Privy account, so signed out the read stays disabled and the
   // modal it opens has nothing to resolve to.
   if (!authenticated) return null;
   // Waits for the read rather than defaulting to "unset": everyone who already has a schedule
   // would otherwise watch the banner appear and vanish each time the panel opens.
   if (data === undefined || hasUpcomingAvailability(blocks, data.schedule.timezone)) return null;
+
+  const modal = (
+    <OwnScheduleModal
+      open={modalOpen}
+      onOpenChange={setModalOpen}
+      openerRef={returnFocusRef}
+      surface={surface === 'calendar' ? 'calendar' : 'hub_banner'}
+      onSaved={saved => {
+        // A save with no upcoming time leaves the banner up, so focus comes back to its button.
+        if (scheduleButtonRef?.current && hasUpcomingAvailability(saved, localTimezone())) {
+          returnFocusRef.current = scheduleButtonRef.current;
+        }
+      }}
+    />
+  );
+  if (hidden) return modal;
 
   return (
     <div className={cx(className ?? 'mx-4 mb-3', 'rounded-lg bg-[#EFE2FF] p-4')}>
@@ -96,18 +124,7 @@ function Banner({ scheduleButtonRef, surface = 'hub', className }: Props) {
         of you. You can change it any time in the dropdown above.
       </Text>
 
-      <OwnScheduleModal
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        openerRef={returnFocusRef}
-        surface={surface === 'calendar' ? 'calendar' : 'hub_banner'}
-        onSaved={saved => {
-          // A save with no upcoming time leaves the banner up, so focus comes back to its button.
-          if (scheduleButtonRef?.current && hasUpcomingAvailability(saved, localTimezone())) {
-            returnFocusRef.current = scheduleButtonRef.current;
-          }
-        }}
-      />
+      {modal}
     </div>
   );
 }
