@@ -84,23 +84,6 @@ export function useOpenRoundRevealStep(
   return openRoundRevealStep(effectiveMs, outcome, windowMs, hasPicks);
 }
 
-/**
- * Holds one of the reveal's CSS animations at a point set from outside, for published playback
- * (GEO-3277): the player writes how far into the break the playhead is to `--open-round-t`, in ms,
- * and the animation sits paused at that time less `startMs`, the moment its own phase began. The
- * room's keyframes are reused as they are, and a viewer who scrubs or pauses mid-break finds the
- * motion exactly where the video is. `baseDelayMs` keeps a keyframe's own delay.
- */
-function heldAt(startMs: number, baseDelayMs = 0): React.CSSProperties {
-  return {
-    animationDelay: `calc(${startMs + baseDelayMs}ms - var(--open-round-t, 0) * 1ms)`,
-    animationPlayState: 'paused',
-  };
-}
-
-/** `--animate-open-round-flip`'s own delay, kept when the flip is held at the playhead. */
-const FLIP_DELAY_MS = 150;
-
 /** What each pick reads as, and its card's colour once it flips. A missing pick is neither choice. */
 const PICK_FACES: Record<OpenRoundPick | 'none', { word: string; surface: string }> = {
   extend: { word: 'Extend', surface: 'bg-purple' },
@@ -120,13 +103,10 @@ export function OpenRoundPickReveal({
   name,
   pick,
   placement = 'center',
-  heldAtMs,
 }: {
   name: string;
   pick: OpenRoundPick | null;
   placement?: 'center' | 'raised' | 'lowered';
-  /** Published playback: the flip is held at the playhead (see `heldAt`) rather than run on mount. */
-  heldAtMs?: number;
 }) {
   const face = PICK_FACES[pick ?? 'none'];
   return (
@@ -138,10 +118,7 @@ export function OpenRoundPickReveal({
         placement === 'raised' ? 'top-[36%]' : placement === 'lowered' ? 'top-[66%]' : 'top-1/2'
       )}
     >
-      <div
-        className="relative h-full w-full rotate-y-180 transform-3d motion-safe:animate-open-round-flip"
-        style={heldAtMs === undefined ? undefined : heldAt(heldAtMs, FLIP_DELAY_MS)}
-      >
+      <div className="relative h-full w-full rotate-y-180 transform-3d motion-safe:animate-open-round-flip">
         <div className="absolute inset-0 grid place-items-center rounded-lg bg-white bg-[repeating-linear-gradient(45deg,var(--color-grey-01)_0_6px,var(--color-white)_6px_12px)] px-2 shadow-card backface-hidden">
           <Text variant="metadataMedium" color="grey-04" className="max-w-full truncate">
             {name}
@@ -174,15 +151,7 @@ export type OpenRoundResult =
  * the end of the debate, or the cap. It sits on the gap between the tiles, which is where the
  * room's other cards go, and the tiles hide their chips while it is up so the two never meet.
  */
-export function OpenRoundResultOverlay({
-  result,
-  heldAtMs,
-}: {
-  result: OpenRoundResult;
-  /** Published playback: the slam and burst are held at the playhead (see `heldAt`). */
-  heldAtMs?: number;
-}) {
-  const held = heldAtMs === undefined ? undefined : heldAt(heldAtMs);
+export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) {
   const pill =
     result.kind === 'round'
       ? openRoundOpenerLine(result.opener)
@@ -194,23 +163,20 @@ export function OpenRoundResultOverlay({
     <div data-open-round-result={result.kind} className="pointer-events-none absolute inset-0 z-[45]">
       {result.kind === 'round' && (
         <div aria-hidden="true" className="absolute inset-0 overflow-hidden rounded-lg motion-reduce:hidden">
-          <div
-            className="absolute top-1/2 left-1/2 -mt-[260px] -ml-[260px] h-[520px] w-[520px] bg-[repeating-conic-gradient(from_0deg,rgb(104_51_255/0.5)_0_7deg,transparent_7deg_18deg)] [mask-image:radial-gradient(circle,#000_0_18%,transparent_55%)] motion-safe:animate-open-round-burst"
-            style={held}
-          />
+          <div className="absolute top-1/2 left-1/2 -mt-[260px] -ml-[260px] h-[520px] w-[520px] bg-[repeating-conic-gradient(from_0deg,rgb(104_51_255/0.5)_0_7deg,transparent_7deg_18deg)] [mask-image:radial-gradient(circle,#000_0_18%,transparent_55%)] motion-safe:animate-open-round-burst" />
         </div>
       )}
       <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
         <div
           className="text-recordingLabel text-text motion-safe:animate-open-round-slam"
-          style={{ ...recordingLabelTextShadow, ...held }}
+          style={recordingLabelTextShadow}
         >
           {result.kind === 'round' ? 'Round' : result.kind === 'wrap' ? "That's a wrap" : "That's the max"}
         </div>
         {result.kind === 'round' && (
           <div
             className="mt-1 text-[7.5rem] leading-[0.85] font-bold text-white motion-safe:animate-open-round-slam"
-            style={{ ...recordingOverlayTextShadow, ...held }}
+            style={recordingOverlayTextShadow}
           >
             {result.round}
           </div>
@@ -241,7 +207,7 @@ function openRoundOpenerLine(opener: string | null) {
 export function openRoundWrapNote(
   localPick: OpenRoundPick | null | undefined,
   remote: { name: string; pick: OpenRoundPick | null | undefined },
-  /** The first side's name where there is no "you", as in published playback. */
+  /** The first side's name where there is no "you", as in published playback (GEO-3277). */
   localName = 'You'
 ) {
   if (localPick === 'end' || remote.pick === 'end') return null;

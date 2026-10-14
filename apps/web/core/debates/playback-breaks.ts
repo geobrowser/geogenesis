@@ -16,20 +16,23 @@ import type { PlaybackClock } from './playback-clock';
  * after a round, then the reveal and the opener's count-in, or a required round's lead-in, eight to
  * twelve seconds of people looking at their screens. So the player plays only the first couple of
  * seconds of each, silent (nobody holds a turn; both mics are open between rounds since #2838),
- * under a compressed version of what the room showed — "Keep debating?", the picks turning over,
- * then the next round or "That's a wrap" — and then cuts to the next speaker, the graphic covering
- * the jump: the approved "hybrid" (GEO-3277). The cue is a function of the playhead, like
- * `round-cues.ts`, so a viewer who scrubs in finds it where it would be.
+ * under the approved "stamps" graphic — "Keep debating?", each pick stamped onto its debater, then
+ * a banner with the next round or "That's a wrap" — and then cuts to the next speaker, the graphic
+ * covering the jump (GEO-3277). The cue is a function of the playhead, like `round-cues.ts`, so a
+ * viewer who scrubs in finds it where it would be.
  */
 
 /** How long "Ended early" stays up after the next speaker's first word. */
 export const EARLY_END_HOLD_MS = 700;
 
-/** How long "Keep debating?" is up before the picks turn. */
+/** How long "Keep debating?" is up before the first pick is stamped. */
 export const BREAK_QUESTION_MS = 800;
 
-/** How long the picks take to turn over: the room's flip, 600 ms after its 150 ms delay. */
-export const BREAK_FLIP_MS = 750;
+/** How long after the first stamp the second lands. */
+export const BREAK_STAMP_GAP_MS = 280;
+
+/** When the banner wipes in after a pick: both stamps landed and settled. */
+export const BREAK_BANNER_AT_MS = BREAK_QUESTION_MS + 750;
 
 /**
  * How much of each break the player plays before cutting to what follows it: about two seconds,
@@ -38,8 +41,8 @@ export const BREAK_FLIP_MS = 750;
  */
 export const BREAK_PLAYED_MS: Record<'lead_in' | 'extend' | 'final_end', number> = {
   lead_in: 1_600,
-  extend: BREAK_QUESTION_MS + BREAK_FLIP_MS + 800,
-  final_end: BREAK_QUESTION_MS + BREAK_FLIP_MS + 1_000,
+  extend: BREAK_BANNER_AT_MS + 800,
+  final_end: BREAK_BANNER_AT_MS + 1_000,
 };
 
 export type PlayerBreak = {
@@ -135,34 +138,19 @@ export function playbackBreaksFrom(
 
 export type BreakPicks = Record<ParticipantSlot, OpenRoundPick | null>;
 
-export type BreakCue =
-  | {
-      phase: 'deciding';
-      roundIndex: number;
-      nextRoundIndex: number | null;
-      /** Who picked. Never which way: the picks stay blind until they turn over, as in the room. */
-      picked: Record<ParticipantSlot, boolean>;
-    }
-  | {
-      phase: 'reveal';
-      kind: PlayerBreak['kind'];
-      /** How far into the reveal the playhead is. */
-      elapsedMs: number;
-      durationMs: number;
-      /** When the result (the round, or the wrap) takes over from the picks turning. */
-      resultStartMs: number;
-      /** Each debater's pick for the round that ended; `null` for a lead-in, where nobody picked. */
-      picks: BreakPicks | null;
-      nextRoundIndex: number | null;
-    };
+export type BreakCue = {
+  kind: PlayerBreak['kind'];
+  /** How far into the played stretch the playhead is; past it, only a scrub or a pause, it holds at the end. */
+  elapsedMs: number;
+  /** The played stretch: how long the graphic runs before the player cuts. */
+  playedMs: number;
+  /** Each debater's pick for the round that ended; `null` for a lead-in, where nobody picked. */
+  picks: BreakPicks | null;
+  /** The round the break leads into, or `null` after the final End. */
+  nextRoundIndex: number | null;
+};
 
-/**
- * What the player shows at the playhead, or `null` outside every break.
- *
- * The steps run on the played stretch at the front of the break (`BREAK_PLAYED_MS`), not on its
- * real length: the question, then the picks turning, then the result. A playhead past that stretch,
- * which only a scrub or a pause can leave there, holds the last step.
- */
+/** What the player shows at the playhead, or `null` outside every break. */
 export function breakCueAt(
   breaks: readonly PlayerBreak[],
   picks: readonly DebateMediaRoundPick[],
@@ -170,37 +158,12 @@ export function breakCueAt(
 ): BreakCue | null {
   const current = breaks.find(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs);
   if (!current) return null;
-
   const playedMs = playedLengthMs(current);
-  const intoMs = Math.min(playheadMs - current.decidingStartMs, playedMs);
-  if (current.kind === 'lead_in') {
-    return {
-      phase: 'reveal',
-      kind: current.kind,
-      elapsedMs: intoMs,
-      durationMs: playedMs,
-      resultStartMs: 0,
-      picks: null,
-      nextRoundIndex: current.nextRoundIndex,
-    };
-  }
-
-  const finalRoundPicks = finalPicks(picks, current.roundIndex);
-  if (intoMs < BREAK_QUESTION_MS) {
-    return {
-      phase: 'deciding',
-      roundIndex: current.roundIndex,
-      nextRoundIndex: current.nextRoundIndex,
-      picked: { 1: finalRoundPicks[1] !== null, 2: finalRoundPicks[2] !== null },
-    };
-  }
   return {
-    phase: 'reveal',
     kind: current.kind,
-    elapsedMs: intoMs - BREAK_QUESTION_MS,
-    durationMs: playedMs - BREAK_QUESTION_MS,
-    resultStartMs: BREAK_FLIP_MS,
-    picks: finalRoundPicks,
+    elapsedMs: Math.min(playheadMs - current.decidingStartMs, playedMs),
+    playedMs,
+    picks: current.kind === 'lead_in' ? null : finalPicks(picks, current.roundIndex),
     nextRoundIndex: current.nextRoundIndex,
   };
 }

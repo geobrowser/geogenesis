@@ -3,9 +3,7 @@ import { describe, expect, it } from 'vitest';
 import type { Debate, DebateMediaTurnSegment } from './api';
 import { RENDERED_MEDIA } from './open-rounds-media-fixtures';
 import {
-  BREAK_FLIP_MS,
   BREAK_PLAYED_MS,
-  BREAK_QUESTION_MS,
   EARLY_END_HOLD_MS,
   breakAnnouncesRound,
   breakCueAt,
@@ -80,56 +78,27 @@ describe('breakCueAt', () => {
     expect(cueAt(333_481)).toBeNull();
   });
 
-  // Round 2 (index 1) ended at 218 s. The player plays its first couple of seconds: the question,
-  // the picks turning, then the round; then it cuts to Round 3 at 229.95 s.
-  it('asks the question first, ticking off whoever picked and never saying which way', () => {
-    expect(cueAt(218_000)).toEqual({
-      phase: 'deciding',
-      roundIndex: 1,
-      nextRoundIndex: 2,
-      picked: { 1: true, 2: true },
-    });
-    // In Round 3 Adam never picked.
-    expect(cueAt(321_100)).toMatchObject({ phase: 'deciding', picked: { 1: true, 2: false } });
-  });
-
-  it('then turns the picks over, then announces the next round', () => {
-    expect(cueAt(218_000 + BREAK_QUESTION_MS + 100)).toMatchObject({
-      phase: 'reveal',
+  // Round 2 (index 1) ended at 218 s; the player plays its first 2.35 s under the stamps, then cuts.
+  it('runs the stamps on the played stretch at the front of the break, with both picks', () => {
+    expect(cueAt(218_500)).toEqual({
       kind: 'extend',
-      elapsedMs: 100,
-      resultStartMs: BREAK_FLIP_MS,
-      durationMs: BREAK_PLAYED_MS.extend - BREAK_QUESTION_MS,
+      elapsedMs: 500,
+      playedMs: BREAK_PLAYED_MS.extend,
       picks: { 1: 'extend', 2: 'extend' },
       nextRoundIndex: 2,
     });
   });
 
-  it('holds the last step on a playhead past the played stretch, as a scrub or a pause leaves it', () => {
-    expect(cueAt(226_000)).toMatchObject({
-      phase: 'reveal',
-      elapsedMs: BREAK_PLAYED_MS.extend - BREAK_QUESTION_MS,
-    });
+  it('holds the end of the played stretch on a playhead past it, as a scrub or a pause leaves it', () => {
+    expect(cueAt(226_000)).toMatchObject({ elapsedMs: BREAK_PLAYED_MS.extend });
   });
 
-  it('announces a required round from the start of its lead-in, with no picks, since nobody picked', () => {
-    expect(cueAt(120_500)).toMatchObject({
-      phase: 'reveal',
-      kind: 'lead_in',
-      elapsedMs: 500,
-      resultStartMs: 0,
-      picks: null,
-      nextRoundIndex: 1,
-    });
+  it('has no picks for a required round’s lead-in, since nobody picked', () => {
+    expect(cueAt(120_500)).toMatchObject({ kind: 'lead_in', elapsedMs: 500, picks: null, nextRoundIndex: 1 });
   });
 
-  it('reveals the final round with a missing pick as no pick, and leads nowhere', () => {
-    expect(cueAt(321_086 + BREAK_QUESTION_MS + 100)).toMatchObject({
-      phase: 'reveal',
-      kind: 'final_end',
-      picks: { 1: 'extend', 2: null },
-      nextRoundIndex: null,
-    });
+  it('stamps a missing pick as no pick after the final round, and leads nowhere', () => {
+    expect(cueAt(321_500)).toMatchObject({ kind: 'final_end', picks: { 1: 'extend', 2: null }, nextRoundIndex: null });
   });
 });
 

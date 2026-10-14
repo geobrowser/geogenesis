@@ -4,27 +4,25 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { ParticipantSlot } from '~/core/debates/api';
-import { DebateRoomOverlayCard } from '~/core/debates/debate-room-overlay-card';
+import type { OpenRoundPick, ParticipantSlot } from '~/core/debates/api';
 import { recordingLabelTextShadow } from '~/core/debates/debate-video-tile';
-import {
-  OpenRoundPickReveal,
-  type OpenRoundResult,
-  OpenRoundResultOverlay,
-  openRoundWrapNote,
-} from '~/core/debates/open-round-reveal';
+import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import { openRoundNumber } from '~/core/debates/open-rounds';
-import type { BreakCue, BreakCut, EarlyEndCue } from '~/core/debates/playback-breaks';
-
-import { Check } from '~/design-system/icons/check';
-import { Text } from '~/design-system/text';
+import {
+  BREAK_BANNER_AT_MS,
+  BREAK_QUESTION_MS,
+  BREAK_STAMP_GAP_MS,
+  type BreakCue,
+  type BreakCut,
+  type EarlyEndCue,
+} from '~/core/debates/playback-breaks';
 
 /** Each debater's name, by slot. Slot 1 is the top tile. */
 export type BreakNames = Record<ParticipantSlot, string>;
 
 const SLOTS: ParticipantSlot[] = [1, 2];
 
-/** Each slot's tile, as a box the room's per-tile pieces can position themselves in. */
+/** Each slot's tile, as a box to centre a per-debater piece in. */
 const TILE_CLASS: Record<ParticipantSlot, string> = {
   1: 'absolute inset-x-0 top-0 h-1/2',
   2: 'absolute inset-x-0 bottom-0 h-1/2',
@@ -37,9 +35,7 @@ const TILE_CLASS: Record<ParticipantSlot, string> = {
  */
 const MAX_AHEAD_MS = 500;
 
-type RevealCue = Extract<BreakCue, { phase: 'reveal' }>;
-
-/** How far ahead of a cut its timer is set: the playhead arrives about four times a second. */
+/** How long ahead of a cut its timer is set: the playhead arrives about four times a second. */
 const CUT_LOOKAHEAD_MS = 1_000;
 
 /**
@@ -65,19 +61,19 @@ export function useBreakCuts(
 }
 
 /**
- * Writes how far into the reveal the playhead is to `--open-round-t` on every frame, which is what
- * the reveal's held animations read (`heldAt` in `open-round-reveal.tsx`). Smoothed between the
- * player's playhead samples while playing, and held still while paused.
+ * Writes how far into the break the playhead is to `--break-t` on every frame, which is what the
+ * held animations read (`heldAt`). Smoothed between the player's playhead samples while playing,
+ * and held still while paused.
  */
-function useRevealClock(ref: React.RefObject<HTMLDivElement | null>, cue: RevealCue | null, playing: boolean) {
+function useBreakClock(ref: React.RefObject<HTMLDivElement | null>, cue: BreakCue | null, playing: boolean) {
   const sample = React.useRef({ elapsedMs: 0, at: 0 });
   const elapsedMs = cue?.elapsedMs ?? null;
-  const durationMs = cue?.durationMs ?? 0;
+  const playedMs = cue?.playedMs ?? 0;
 
   React.useLayoutEffect(() => {
     if (elapsedMs === null) return;
     sample.current = { elapsedMs, at: performance.now() };
-    ref.current?.style.setProperty('--open-round-t', String(elapsedMs));
+    ref.current?.style.setProperty('--break-t', String(elapsedMs));
   }, [elapsedMs, ref]);
 
   const shown = elapsedMs !== null;
@@ -87,24 +83,43 @@ function useRevealClock(ref: React.RefObject<HTMLDivElement | null>, cue: Reveal
     const tick = () => {
       const { elapsedMs: sampled, at } = sample.current;
       const ahead = Math.min(performance.now() - at, MAX_AHEAD_MS);
-      ref.current?.style.setProperty('--open-round-t', String(Math.min(durationMs, sampled + ahead)));
+      ref.current?.style.setProperty('--break-t', String(Math.min(playedMs, sampled + ahead)));
       frame = requestAnimationFrame(tick);
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
-  }, [durationMs, playing, ref, shown]);
+  }, [playedMs, playing, ref, shown]);
 }
 
 /**
- * What a break between Open rounds means, drawn over it in a published debate (GEO-3277): the
- * moment the room put to both debaters, then the room's own reveal.
+ * Holds a CSS animation at the playhead: `--break-t`, ms into the break, less `startMs`, the moment
+ * the animation begins. The keyframes run as written, and a viewer who scrubs or pauses mid-break
+ * finds the motion exactly where the video is.
+ */
+function heldAt(startMs: number): React.CSSProperties {
+  return { animationDelay: `calc(${startMs}ms - var(--break-t, 0) * 1ms)`, animationPlayState: 'paused' };
+}
+
+const STAMP_WORD: Record<OpenRoundPick | 'none', string> = { extend: 'Extend', end: 'End', none: 'No pick' };
+const STAMP_INK: Record<OpenRoundPick | 'none', string> = {
+  extend: 'text-purple',
+  end: 'text-text',
+  none: 'border-dashed text-grey-04',
+};
+/** Each tile's stamp leans its own way, so the two read as two hands. */
+const STAMP_TILT: Record<ParticipantSlot, string> = { 1: '-8deg', 2: '6deg' };
+
+/**
+ * The break between two Open rounds in a published debate (GEO-3277): the approved "stamps".
  *
- * - While they pick: "Keep debating?", the question they were asked, with a tick as each one picks.
- *   Never which way: the picks stay blind until the reveal, as they were for the debaters.
- * - After an Extend: the picks turn over, then "Round N" and who opens it.
- * - Before a required round: "Round N" and who opens it. Nobody picked, so there are no cards.
- * - After the final End: the picks turn over and stay up beside "That's a wrap", so a split, or a
- *   missing pick, explains itself, as in the room.
+ * - The question the room asked, "Keep debating?", in the outlined type the video's labels wear.
+ * - Each pick stamped onto its debater, one after the other: Extend in the room's purple, End in
+ *   black, a missing pick as "No pick", grey and dashed.
+ * - A banner across the seam with what the picks mean: the next round and who opens it, or "That's
+ *   a wrap", with the missing-pick line where that is why.
+ *
+ * Before a required round nobody picked, so it is the banner alone. The tiles dim underneath, since
+ * the footage there is people looking at their screens.
  *
  * `aria-hidden`, like the round card: the round badge and the scrubber carry where the debate is.
  */
@@ -120,78 +135,78 @@ export function DebateBreakOverlay({
   playing: boolean;
 }) {
   const ref = React.useRef<HTMLDivElement>(null);
-  const reveal = cue?.phase === 'reveal' ? cue : null;
-  useRevealClock(ref, reveal, playing);
+  useBreakClock(ref, cue, playing);
   if (!cue) return null;
-  if (cue.phase === 'deciding') return <DebateDecidingCard cue={cue} names={names} />;
 
-  const inResult = cue.elapsedMs >= cue.resultStartMs;
-  const result: OpenRoundResult | null = !inResult
-    ? null
-    : cue.kind === 'final_end'
-      ? { kind: 'wrap', note: openRoundWrapNote(cue.picks?.[1], { name: names[2], pick: cue.picks?.[2] }, names[1]) }
-      : { kind: 'round', round: openRoundNumber(cue.nextRoundIndex ?? 0), opener: names[firstSlot] };
-  // A new round takes the tiles back for its own text; an End leaves the picks up beside the wrap.
-  const picks = cue.picks && (!inResult || cue.kind === 'final_end') ? cue.picks : null;
+  const picks = cue.picks;
+  const bannerAtMs = picks ? BREAK_BANNER_AT_MS : 0;
+  const wrap = cue.kind === 'final_end';
+  const note = wrap && picks ? openRoundWrapNote(picks[1], { name: names[2], pick: picks[2] }, names[1]) : null;
 
   return (
     <div
       ref={ref}
       aria-hidden
       data-debate-break={cue.kind}
-      className="pointer-events-none absolute inset-0 z-[22]"
-      style={{ '--open-round-t': String(cue.elapsedMs) } as React.CSSProperties}
+      className="pointer-events-none absolute inset-0 z-[22] bg-black/40"
+      style={{ '--break-t': String(cue.elapsedMs) } as React.CSSProperties}
     >
-      {picks &&
-        SLOTS.map(slot => (
-          <div key={slot} className={TILE_CLASS[slot]}>
-            <OpenRoundPickReveal
-              name={names[slot]}
-              pick={picks[slot]}
-              placement={inResult ? (slot === 1 ? 'raised' : 'lowered') : 'center'}
-              heldAtMs={0}
-            />
+      {picks && cue.elapsedMs < BREAK_QUESTION_MS && (
+        <div className="absolute inset-0 grid place-items-center px-4 text-center">
+          <div
+            data-debate-question
+            className="text-recordingLabel text-text motion-safe:animate-open-round-slam"
+            style={{ ...recordingLabelTextShadow, ...heldAt(0) }}
+          >
+            Keep debating?
           </div>
-        ))}
-      {result && <OpenRoundResultOverlay result={result} heldAtMs={cue.resultStartMs} />}
-    </div>
-  );
-}
+        </div>
+      )}
 
-/**
- * The question the room asked both debaters, for a viewer who did not see it asked: the room's
- * pick card surface and words, with each debater's state where the room had buttons.
- */
-function DebateDecidingCard({ cue, names }: { cue: Extract<BreakCue, { phase: 'deciding' }>; names: BreakNames }) {
-  const next = cue.nextRoundIndex ?? cue.roundIndex + 1;
-  return (
-    // The card's own layer sits above the player's controls in the room; here it stays under them.
-    <div aria-hidden data-debate-deciding={cue.roundIndex} className="pointer-events-none absolute inset-0 z-[22]">
-      <DebateRoomOverlayCard className="w-[calc(100%-1.5rem)] max-w-[318px] gap-2.5 p-3">
-        <div className="min-w-0">
-          <p className="text-smallTitle text-text">Keep debating?</p>
-          <Text as="p" variant="footnote" color="grey-04" className="mt-1">
-            Each picks Extend or End in secret. An Extend unlocks Round {openRoundNumber(next)} unless either picks End.
-          </Text>
-        </div>
-        <div className="grid grid-cols-2 gap-2">
-          {SLOTS.map(slot => (
-            <div
-              key={slot}
-              data-debate-deciding-slot={slot}
-              data-picked={cue.picked[slot] ? 'true' : 'false'}
-              className={cx(
-                'flex min-w-0 items-center gap-1.5 rounded-md px-2.5 py-2 text-metadataMedium',
-                cue.picked[slot] ? 'bg-grey-01 text-text' : 'border border-dashed border-grey-03 text-grey-04'
-              )}
-            >
-              {cue.picked[slot] && <Check />}
-              <span className="min-w-0 truncate">{names[slot]}</span>
-              <span className="ml-auto shrink-0 font-normal">{cue.picked[slot] ? 'Picked' : 'Deciding…'}</span>
+      {picks &&
+        SLOTS.map((slot, order) => {
+          const key = picks[slot] ?? 'none';
+          return (
+            <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
+              <span
+                data-debate-stamp={key}
+                className={cx(
+                  'rounded-[10px] border-[5px] border-current bg-white/92 px-4 pt-1.5 pb-1 text-[11cqw] leading-none font-bold tracking-[0.06em] whitespace-nowrap uppercase shadow-[0_10px_30px_rgba(0,0,0,0.35)] motion-safe:animate-debate-stamp',
+                  STAMP_INK[key]
+                )}
+                style={
+                  {
+                    '--stamp-rotate': STAMP_TILT[slot],
+                    transform: `rotate(${STAMP_TILT[slot]})`,
+                    ...heldAt(BREAK_QUESTION_MS + order * BREAK_STAMP_GAP_MS),
+                  } as React.CSSProperties
+                }
+              >
+                {STAMP_WORD[key]}
+              </span>
             </div>
-          ))}
+          );
+        })}
+
+      {cue.elapsedMs >= bannerAtMs && (
+        <div className="absolute inset-x-0 top-1/2 grid -translate-y-1/2 justify-items-center gap-2.5">
+          <div
+            data-debate-banner={wrap ? 'wrap' : 'round'}
+            className={cx(
+              'grid w-full place-items-center px-4 py-3 text-[7cqw] leading-none font-bold tracking-[0.05em] text-white uppercase shadow-[0_6px_24px_rgba(0,0,0,0.4)] motion-safe:animate-debate-banner',
+              wrap ? 'bg-text' : 'bg-purple'
+            )}
+            style={heldAt(bannerAtMs)}
+          >
+            {wrap ? 'That’s a wrap' : `Round ${openRoundNumber(cue.nextRoundIndex ?? 0)} · ${names[firstSlot]} opens`}
+          </div>
+          {note && (
+            <span className="rounded-xl border border-white/40 bg-black/70 px-3 py-1.5 text-metadata text-white">
+              {note}
+            </span>
+          )}
         </div>
-      </DebateRoomOverlayCard>
+      )}
     </div>
   );
 }

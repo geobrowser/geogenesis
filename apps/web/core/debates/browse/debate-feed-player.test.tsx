@@ -1855,43 +1855,42 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     return render(<DebateFeedPlayer debate={startedDebate} active />);
   };
 
-  it('asks "Keep debating?" while they pick, ticking each debater off without saying which way', () => {
-    const playbackBreaks = breaks({ breaks: [extendBreak], picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z')] });
-    const { container } = renderAt(60.3, { playbackBreaks });
+  const stamps = (container: HTMLElement) =>
+    [...container.querySelectorAll('[data-debate-stamp]')].map(stamp => stamp.getAttribute('data-debate-stamp'));
 
-    const card = container.querySelector('[data-debate-deciding]');
-    expect(card?.textContent).toContain('Keep debating?');
-    expect(card?.textContent).toContain('An Extend unlocks Round 2');
-    expect(container.querySelector('[data-debate-deciding-slot="1"]')?.getAttribute('data-picked')).toBe('true');
-    expect(container.querySelector('[data-debate-deciding-slot="2"]')?.getAttribute('data-picked')).toBe('false');
-    expect(card?.textContent).not.toMatch(/Extend\b.*Extend\b.*Extend/);
-    expect(container.querySelector('[data-open-round-reveal]')).toBeNull();
-  });
-
-  it('then turns both picks over, then announces the next round and who opens it', () => {
+  it('asks "Keep debating?" first, then stamps each pick onto its debater', () => {
     const playbackBreaks = breaks({
       breaks: [extendBreak],
       picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
     });
-    const { container, rerender } = renderAt(60.9, { playbackBreaks });
-    const reveals = [...container.querySelectorAll('[data-open-round-reveal]')];
-    expect(reveals.map(card => card.getAttribute('data-open-round-reveal'))).toEqual(['extend', 'extend']);
-    expect(container.querySelector('[data-open-round-result]')).toBeNull();
+    const { container, rerender } = renderAt(60.3, { playbackBreaks });
+    expect(container.querySelector('[data-debate-question]')?.textContent).toBe('Keep debating?');
+    expect(container.querySelector('[data-debate-banner]')).toBeNull();
 
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.8, playbackBreaks });
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.2, playbackBreaks });
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
-    expect(container.querySelector('[data-open-round-result="round"]')?.textContent).toMatch(/^Round2.+opens$/);
-    expect(container.querySelector('[data-open-round-reveal]')).toBeNull();
+    expect(container.querySelector('[data-debate-question]')).toBeNull();
+    expect(stamps(container)).toEqual(['extend', 'extend']);
+    expect(container.querySelector('[data-debate-banner]')).toBeNull();
   });
 
-  it('holds the animations at the playhead, so a scrub into the reveal lands mid-graphic', () => {
-    const { container } = renderAt(62, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
+  it('then says what the picks mean: the next round and who opens it', () => {
+    const playbackBreaks = breaks({
+      breaks: [extendBreak],
+      picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
+    });
+    const { container } = renderAt(61.8, { playbackBreaks });
+    expect(container.querySelector('[data-debate-banner="round"]')?.textContent).toMatch(/^Round 2 · .+ opens$/);
+    expect(stamps(container)).toEqual(['extend', 'extend']);
+  });
+
+  it('holds the animations at the playhead, so a scrub into the break lands mid-stamp', () => {
+    const { container } = renderAt(61.2, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
     const root = container.querySelector('[data-debate-break="extend"]') as HTMLElement;
-    expect(root.style.getPropertyValue('--open-round-t')).toBe('1200');
-    const slam = container.querySelector(
-      '[data-open-round-result] .motion-safe\\:animate-open-round-slam'
-    ) as HTMLElement;
-    expect(slam.style.animationPlayState).toBe('paused');
+    expect(root.style.getPropertyValue('--break-t')).toBe('1200');
+    const second = container.querySelectorAll('[data-debate-stamp]')[1] as HTMLElement;
+    expect(second.style.animationPlayState).toBe('paused');
+    expect(second.style.animationDelay).toContain('1080ms');
   });
 
   it('cuts to the next round after the first couple of seconds of a break, and not while paused', () => {
@@ -1923,14 +1922,23 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(container.querySelector('[data-round-card]')).toBeNull();
   });
 
-  it('keeps the picks up beside "That\'s a wrap" after the final End, and names a missing pick', () => {
+  it('stamps a missing pick as no pick after the final End, then wraps with the reason', () => {
     const finalEnd = { ...extendBreak, kind: 'final_end' as const, roundIndex: 1, nextRoundIndex: null };
-    const { container } = renderAt(66, {
+    const { container } = renderAt(61.8, {
       playbackBreaks: breaks({ breaks: [finalEnd], picks: [pick(1, 1, 'extend', '2026-10-13T19:01:01.000Z')] }),
     });
-    expect(container.querySelector('[data-open-round-result="wrap"]')?.textContent).toMatch(/didn't pick in time$/);
-    const reveals = [...container.querySelectorAll('[data-open-round-reveal]')];
-    expect(reveals.map(card => card.getAttribute('data-open-round-reveal'))).toEqual(['extend', 'none']);
+    expect(stamps(container)).toEqual(['extend', 'none']);
+    const banner = container.querySelector('[data-debate-banner="wrap"]');
+    expect(banner?.textContent).toBe('That’s a wrap');
+    expect(banner?.parentElement?.textContent).toMatch(/didn't pick in time$/);
+  });
+
+  it('announces a required round with the banner alone, since nobody picked', () => {
+    const leadIn = { ...extendBreak, kind: 'lead_in' as const, startMs: 60_000, endMs: 68_000 };
+    const { container } = renderAt(60.5, { playbackBreaks: breaks({ breaks: [leadIn] }) });
+    expect(container.querySelector('[data-debate-question]')).toBeNull();
+    expect(stamps(container)).toEqual([]);
+    expect(container.querySelector('[data-debate-banner="round"]')?.textContent).toMatch(/^Round 2 · /);
   });
 
   it('shows "Ended early" and whose turn it is over an early end’s quiet', () => {
