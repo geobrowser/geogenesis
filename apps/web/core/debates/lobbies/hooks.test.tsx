@@ -31,7 +31,7 @@ vi.mock('../hooks', async importOriginal => ({
   useGeoChatAuth: () => ({ ready: true, ...auth, getPrivyIdentityToken: vi.fn() }),
 }));
 
-const { GeoChatRequestError } = await import('../api');
+const { GeoChatRequestError, GeoChatSessionError } = await import('../api');
 const {
   LOBBY_HEARTBEAT_MS,
   SIGNED_OUT_LOBBIES_POLL_MS,
@@ -715,6 +715,33 @@ it('drops the account’s lobbies once the viewer signs out, for the anonymous l
     rerender();
     expect(result.current.data).toBeUndefined();
     await waitFor(() => expect(result.current.data?.lobbies[0]?.lobby_id).toBe('anonymous-view'));
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
+  }
+});
+
+// Copilot on #2863: a brand-new account is refused for a minute or two. The list waits that out
+// like the account's other reads, so the navbar and a queued reminder do not sit on a failed read.
+it('waits out a new account’s warm-up signed in, and reads once signed out', async () => {
+  const warmingUp = new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401));
+  api.listDebateLobbies.mockRejectedValueOnce(warmingUp).mockResolvedValueOnce({ lobbies: [] });
+  const client = new QueryClient();
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  try {
+    const signedIn = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true), { timeout: 3_000 });
+    expect(api.listDebateLobbies).toHaveBeenCalledTimes(2);
+    signedIn.unmount();
+
+    api.listDebateLobbies.mockReset().mockRejectedValue(new GeoChatRequestError('down', 'unavailable', 503));
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    const signedOut = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedOut.result.current.isError).toBe(true));
+    expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
   } finally {
     Object.assign(auth, { authenticated: true, accountKey: 'acct' });
     api.listDebateLobbies.mockReset();

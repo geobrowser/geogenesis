@@ -28,13 +28,17 @@ const QUEUED_REMINDER_ID = 'lobby-reminder';
  * that list loading says geo-chat knows the new account, and it still answers once the card is gone
  * (the panel closed, or the lobby opened and its card became Join). Set unless that list says it
  * already is, the lobby opened, or it is no longer listed. Any other failure is thrown for the
- * runner's Retry, since the copy replaying it may show no error for this lobby.
+ * runner's Retry, since the copy replaying it may show no error for this lobby. A list that failed
+ * for good (after its warm-up retries) is read again here, so Retry reads it again too. Taken back
+ * while waiting (`isCurrent`), it is never set.
  */
 function useQueuedLobbyReminder(reminder: ReturnType<typeof useDebateLobbyReminder>) {
   const { mutateAsync } = reminder;
   const { authenticated } = useGeoChatAuth();
-  // Read only: the navbar's lineup already holds the list.
-  const lobbies = useDebateLobbies(false).data?.lobbies;
+  // Read only: the navbar's lineup already holds the list. `refetch` ignores `enabled`.
+  const list = useDebateLobbies(false);
+  const lobbies = list.data?.lobbies;
+  const { refetch } = list;
 
   return useQueuedAction({
     id: QUEUED_REMINDER_ID,
@@ -42,10 +46,16 @@ function useQueuedLobbyReminder(reminder: ReturnType<typeof useDebateLobbyRemind
     label: 'your lobby reminder',
     requires: 'auth',
     liveOnly: true,
-    ready: authenticated && lobbies !== undefined,
-    run: async intent => {
-      const target = intent ? lobbies?.find(row => sameId(row.lobby_id, intent)) : undefined;
-      if (!target || target.open || target.viewer_reminded) return;
+    ready: authenticated && (lobbies !== undefined || list.isError),
+    run: async (intent, { isCurrent }) => {
+      let rows = lobbies;
+      if (!rows) {
+        const read = await refetch();
+        rows = read.data?.lobbies;
+        if (!rows) throw read.error ?? new Error('The lobby list could not be read.');
+      }
+      const target = intent ? rows.find(row => sameId(row.lobby_id, intent)) : undefined;
+      if (!target || target.open || target.viewer_reminded || !isCurrent()) return;
       try {
         await mutateAsync({ lobbyId: target.lobby_id, reminded: true });
       } catch (error) {
@@ -72,8 +82,9 @@ export function useLobbyReminderReplay() {
  * reminder. Signed out it is queued at the press and the account prompt opens; see
  * {@link useQueuedLobbyReminder} for when it is set.
  *
- * `reminded` draws a queued reminder as set, so the press shows while sign-up runs. A failure is
- * `error`, for {@link LobbyReminderError} beside the button.
+ * `reminded` draws a queued reminder as set, so the press shows while sign-up runs, and a press
+ * toggles what is drawn: taking back a queued one cancels it rather than setting it again. A
+ * failure is `error`, for {@link LobbyReminderError} beside the button.
  */
 export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id' | 'open' | 'viewer_reminded'> | null) {
   const reminder = useDebateLobbyReminder();
@@ -84,10 +95,18 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
   const { queue, cancel, intent } = useQueuedLobbyReminder(reminder);
   const signIn = usePrivySignIn();
 
+  const queuedHere = lobby !== null && intent !== undefined && sameId(intent, lobbyId);
+  const reminded = Boolean(lobby?.viewer_reminded) || queuedHere;
+
   const press = React.useCallback(() => {
     if (!lobby) return;
+    if (reminded) {
+      if (queuedHere) cancel();
+      if (lobby.viewer_reminded) mutate({ lobbyId: lobby.lobby_id, reminded: false });
+      return;
+    }
     if (authenticated) {
-      mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded });
+      mutate({ lobbyId: lobby.lobby_id, reminded: true });
       return;
     }
     queue(lobbyId);
@@ -103,10 +122,10 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
       // Walked away from: no reminder set on some later sign-in.
       { onCancel: cancel }
     );
-  }, [authenticated, cancel, lobby, lobbyId, mutate, queue, signIn]);
+  }, [authenticated, cancel, lobby, lobbyId, mutate, queue, queuedHere, reminded, signIn]);
 
   return {
-    reminded: Boolean(lobby?.viewer_reminded) || (lobby !== null && intent !== undefined && sameId(intent, lobbyId)),
+    reminded,
     pending: isPending,
     error,
     press,
