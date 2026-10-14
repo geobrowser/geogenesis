@@ -73,7 +73,7 @@ describe('fitPills', () => {
 
   it('stops at the line cap, leaving room for the trailing control', () => {
     // 100px pills with 8px gaps: three to a 320px line. All + 5 pills fill two lines exactly, so
-    // with "…" to fit as well, one pill has to go.
+    // with "more" to fit as well, one pill has to go.
     expect(
       fitPills({ leading: 100, items: unpicked(100, 100, 100, 100, 100, 100), trailing: 36, available: 320, lines: 2 })
     ).toBe(4);
@@ -81,15 +81,16 @@ describe('fitPills', () => {
 
   it('keeps picked pills wherever they sit, and gives way with the unpicked ones', () => {
     const items = [...unpicked(100, 100, 100, 100, 100), { width: 100, picked: true }];
-    // All, the pick at the end and "…" leave room for three of the five unpicked pills.
+    // All, the pick at the end and "more" leave room for three of the five unpicked pills.
     expect(fitPills({ leading: 100, items, trailing: 36, available: 320, lines: 2 })).toBe(3);
   });
 });
 
 describe('fitPills with options past the measured ones', () => {
-  it('reserves room for "…" even when every measured pill fits', () => {
-    // All + five pills fill two 320px lines exactly. With unmeasured options still to come, the "…"
-    // is drawn regardless, so a pill has to give way for it instead of "…" wrapping to a third line.
+  it('reserves room for "more" even when every measured pill fits', () => {
+    // All + five pills fill two 320px lines exactly. With unmeasured options still to come, the
+    // "more" is drawn regardless, so a pill has to give way for it instead of "more" wrapping to a
+    // third line.
     const items = unpicked(100, 100, 100, 100, 100);
     expect(fitPills({ leading: 100, items, trailing: 36, available: 320, lines: 2 })).toBe(5);
     expect(fitPills({ leading: 100, items, trailing: 36, available: 320, lines: 2, moreBeyond: true })).toBe(4);
@@ -119,12 +120,12 @@ describe('rowLines', () => {
 });
 
 describe('FacetFilterPills', () => {
-  it('draws All and a pill per option, with no "…" when everything fits', () => {
+  it('draws All and a pill per option, with no "more" when everything fits', () => {
     renderPills();
 
     expect(within(row()).getByRole('button', { name: 'All' })).toHaveAttribute('aria-pressed', 'true');
     expect(within(row()).getAllByRole('button')).toHaveLength(4);
-    expect(screen.queryByRole('button', { name: /All filters/ })).toBeNull();
+    expect(screen.queryByRole('button', { name: /More filters/ })).toBeNull();
   });
 
   it('draws spaces and topics in one row', () => {
@@ -152,22 +153,22 @@ describe('FacetFilterPills', () => {
     expect(within(row()).getByLabelText('Loading space name')).toBeInTheDocument();
   });
 
-  it('fits two lines and puts the rest behind "…"', () => {
+  it('fits two lines and puts the rest behind "more"', () => {
     layOut({ pill: 100, row: 320 });
     renderPills({ options: topics(10) });
 
-    // All, four pills and "…" fill two lines of three.
+    // All, four pills and "more" fill two lines of three.
     expect(within(row()).getAllByRole('button', { name: /^Topic/ })).toHaveLength(4);
-    expect(within(row()).getByRole('button', { name: 'All filters (10)' })).toBeInTheDocument();
+    expect(within(row()).getByRole('button', { name: 'More filters (10)' })).toBeInTheDocument();
   });
 
-  it('opens every option from "…", and picks from there', () => {
+  it('opens every option from "more", and picks from there', () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     layOut({ pill: 100, row: 320 });
     const options = topics(10);
     const { onToggle } = renderPills({ options });
 
-    fireEvent.click(within(row()).getByRole('button', { name: 'All filters (10)' }));
+    fireEvent.click(within(row()).getByRole('button', { name: 'More filters (10)' }));
     fireEvent.click(screen.getByRole('button', { name: /Topic 9/ }));
 
     expect(onToggle).toHaveBeenCalledWith(options[9]);
@@ -176,11 +177,11 @@ describe('FacetFilterPills', () => {
   it('grows a line when the picks take more than a line and a half', () => {
     layOut({ pill: 100, row: 320 });
     // Five picks after All run 1.65 lines, so the row gets three: picks, then one unpicked pill and
-    // "…" on the third line.
+    // "more" on the third line.
     renderPills({ options: topics(10), pickedIds: ['t0', 't1', 't2', 't3', 't4'] });
 
     expect(within(row()).getAllByRole('button', { name: /^Topic/ })).toHaveLength(7);
-    expect(within(row()).getByRole('button', { name: 'All filters (10)' })).toBeInTheDocument();
+    expect(within(row()).getByRole('button', { name: 'More filters (10)' })).toBeInTheDocument();
   });
 
   it('always draws every picked option, however full the row is', () => {
@@ -191,7 +192,7 @@ describe('FacetFilterPills', () => {
   });
 });
 
-describe('the "…" menu search', () => {
+describe('the "more" menu search', () => {
   it('offers a search field once the list runs past the menu, and narrows by it', () => {
     vi.stubGlobal('ResizeObserver', ResizeObserverStub);
     layOut({ pill: 100, row: 320 });
@@ -200,7 +201,7 @@ describe('the "…" menu search', () => {
     vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(300);
     renderPills({ options: [space('s1', 'Crypto', 9), ...topics(10)] });
 
-    fireEvent.click(within(row()).getByRole('button', { name: 'All filters (11)' }));
+    fireEvent.click(within(row()).getByRole('button', { name: 'More filters (11)' }));
     const field = screen.getByRole('textbox', { name: 'Search spaces and topics' });
     fireEvent.change(field, { target: { value: 'Topic 9' } });
 
