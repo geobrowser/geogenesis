@@ -914,8 +914,11 @@ function VoiceHeaderBody({
   })();
 
   const cameraMessage = cameraIntent && !cameraAllowed ? 'Video isn’t available in this call.' : null;
-  const localVideo = <TrackVideo track={cameraTrack?.track} />;
-  const opponentVideo = <TrackVideo track={opponentParticipant?.getTrackPublication(Track.Source.Camera)?.track} />;
+
+  const opponentCamera = opponentParticipant?.getTrackPublication(Track.Source.Camera);
+  const localVideo = cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} /> : null;
+  const opponentVideo =
+    opponentCamera?.track && !opponentCamera.isMuted ? <TrackVideo track={opponentCamera.track} /> : null;
 
   const opponentState: PairMicState = !opponentParticipant
     ? 'waiting'

@@ -77,9 +77,9 @@ const mocks = vi.hoisted(() => ({
   /** The published microphone, once there is one. */
   microphoneTrack: undefined as { track: Record<string, unknown> } | undefined,
   localCameraTrack: undefined as
-    { track: { attach: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> } } | undefined,
+    { track: { attach: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> }; isMuted?: boolean } | undefined,
   opponentCameraPublication: undefined as
-    { track: { attach: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> } } | undefined,
+    { track: { attach: ReturnType<typeof vi.fn>; detach: ReturnType<typeof vi.fn> }; isMuted?: boolean } | undefined,
   useKrispNoiseFilter: vi.fn(() => ({ setNoiseFilterEnabled: vi.fn(() => Promise.resolve()) })),
   capture: vi.fn(),
   personProfileOpened: vi.fn(),
@@ -2624,6 +2624,36 @@ describe('video in the header', () => {
     await flushOwnership();
 
     await waitFor(() => expect(mocks.opponentCameraPublication!.track.attach).toHaveBeenCalled());
+  });
+
+  it('shows the avatar rather than an empty circle when no camera is running', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const you = screen.getByTestId('rematch-you-card');
+    expect(you.querySelector('video')).toBeNull();
+    expect(you.querySelector('[data-testid="avatar"]')).not.toBeNull();
+  });
+
+  it('shows the avatar once a camera is muted in place', async () => {
+    mocks.localCameraTrack = { ...cameraTrack(), isMuted: true };
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const you = screen.getByTestId('rematch-you-card');
+    expect(you.querySelector('video')).toBeNull();
+    expect(you.querySelector('[data-testid="avatar"]')).not.toBeNull();
+  });
+
+  it('shows the other person’s avatar once theirs is muted', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentCameraPublication = { ...cameraTrack(), isMuted: true };
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    const them = screen.getByTestId('rematch-opponent-card');
+    expect(them.querySelector('video')).toBeNull();
+    expect(them.querySelector('[data-testid="avatar"]')).not.toBeNull();
   });
 
   it('leaves the avatar in place when no camera is running', async () => {
