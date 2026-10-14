@@ -2,13 +2,13 @@
 
 import * as React from 'react';
 
-import { useStore } from 'jotai';
+import { useAtomValue, useStore } from 'jotai';
 import { useSearchParams } from 'next/navigation';
 
 import { Text } from '~/design-system/text';
 
 import { useGeoChatAuth } from '../hooks';
-import { fromClaimsFilterSearch } from './claims-filter-params';
+import { fromClaimsFilterSearch, toClaimsFilterSearch } from './claims-filter-params';
 import { ClaimsTab, type ClaimsTabVariant, DEFAULT_WORKSPACE_LIST, VARIANT_ATOMS, readUrlSeed } from './claims-tab';
 import { HubFilterMenu, type HubFilterOption } from './hub-filter-menu';
 import { HubHeaderControls } from './hub-header-controls';
@@ -30,6 +30,13 @@ const LIST_OPTIONS: HubFilterOption<ClaimsTabVariant>[] = [
 const SIGNED_OUT_LISTS: ClaimsTabVariant[] = ['explore'];
 
 /**
+ * How long the list has to sit still before the URL is rewritten to match it. Typing in search
+ * would otherwise rewrite it per keystroke, and Safari throws once a page calls `replaceState` too
+ * often.
+ */
+export const URL_SYNC_DELAY_MS = 300;
+
+/**
  * Full-screen matchmaking hub (GEO-2726): claims centre, facet + live rails.
  * Named `@container/hub` collapse: facets first, then live; narrow falls back to panel menus.
  * Width is capped by the shell's 1200px `<main>`.
@@ -42,6 +49,9 @@ export function DebatesHubWorkspace() {
   const searchParams = useSearchParams();
   const store = useStore();
 
+  // The last query this workspace either applied or wrote itself. Writing one changes
+  // `searchParams` like a navigation does, and this is how the seed below knows not to read the
+  // workspace's own write back as a link — which would trim a trailing space off a search mid-word.
   const appliedQuery = React.useRef<string | undefined>(undefined);
   React.useEffect(() => {
     if (!searchParams) return;
@@ -79,6 +89,37 @@ export function DebatesHubWorkspace() {
   const shown = options.some(option => option.value === list) ? list : 'explore';
 
   const filtersReconciled = useHubFilterOwner(accountKey ?? null, ready);
+
+  // GEO-3298. The URL used to be read on arrival and never written, so it described the link that
+  // opened the page rather than the list on it — a link copied after any change shared a different
+  // setup. Now every change to the list or its filters is written back, so the address bar is
+  // always a link to what is on screen.
+  //
+  // `replaceState`, not a push: a history entry per keystroke or toggle would make Back step
+  // through every filter instead of leaving the hub. Held until Privy has restored the session and
+  // the filter bar has been handed to this account — before then `shown` is the signed-out
+  // fallback and the atoms may be about to be reset, and writing either would replace the link
+  // with something the viewer never chose.
+  //
+  // The delay also covers arrival: on the commit a URL is applied, this still sees the values from
+  // before it, and the re-render that brings the new ones cancels that write before it lands.
+  const atoms = VARIANT_ATOMS[shown];
+  const search = useAtomValue(atoms.search);
+  const spaceIds = useAtomValue(atoms.spaceIds);
+  const topicIds = useAtomValue(atoms.topicIds);
+  React.useEffect(() => {
+    if (!ready || !filtersReconciled || appliedQuery.current === undefined) return;
+
+    const query = toClaimsFilterSearch({ list: shown, search, spaceIds, topicIds }, DEFAULT_WORKSPACE_LIST);
+    if (query === window.location.search.replace(/^\?/, '')) return;
+
+    const timer = window.setTimeout(() => {
+      appliedQuery.current = query;
+      const { pathname } = window.location;
+      window.history.replaceState(null, '', query ? `${pathname}?${query}` : pathname);
+    }, URL_SYNC_DELAY_MS);
+    return () => window.clearTimeout(timer);
+  }, [ready, filtersReconciled, shown, search, spaceIds, topicIds]);
 
   const showList = React.useCallback((tab: DebatesHubTab) => {
     if (tab === 'explore' || tab === 'positions' || tab === 'lobby') setList(tab);

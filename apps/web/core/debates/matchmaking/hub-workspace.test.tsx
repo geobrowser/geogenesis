@@ -1,12 +1,12 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 
 import * as React from 'react';
 
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { DebatesHubWorkspace } from './hub-workspace';
+import { DebatesHubWorkspace, URL_SYNC_DELAY_MS } from './hub-workspace';
 import {
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
@@ -75,20 +75,29 @@ vi.mock('./hub-live-rail', () => ({ HubLiveRail: () => <div data-testid="hub-liv
 // Covered through the side panel's suite; here it only matters that the header draws them.
 vi.mock('./hub-header-controls', () => ({ HubHeaderControls: () => <div data-testid="hub-header-controls" /> }));
 
-const mocks = vi.hoisted(() => ({ ready: true, authenticated: true, search: '', mounts: [] as string[] }));
+const mocks = vi.hoisted(() => ({ ready: true, authenticated: true, mounts: [] as string[] }));
+
+/**
+ * The address bar, which is both what `useSearchParams` reads and what the workspace writes to. In
+ * the app Next re-renders on a `replaceState`; here a test rerenders when it wants the read.
+ */
+function setUrl(search: string) {
+  window.history.replaceState(null, '', search ? `/matchmaking?${search}` : '/matchmaking');
+}
+const currentSearch = () => window.location.search.replace(/^\?/, '');
 
 vi.mock('../hooks', () => ({
   useGeoChatAuth: () => ({ ready: mocks.ready, authenticated: mocks.authenticated, accountKey: 'user-a' }),
 }));
 
 // The picker reads it on arrival; these cases are about the picker itself.
-vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(mocks.search) }));
+vi.mock('next/navigation', () => ({ useSearchParams: () => new URLSearchParams(window.location.search) }));
 
 // The picker is a popover, which measures itself. jsdom has no layout and no observer to report it.
 beforeEach(() => {
   mocks.ready = true;
   mocks.authenticated = true;
-  mocks.search = '';
+  setUrl('');
   mocks.mounts = [];
   window.ResizeObserver ??= class {
     observe() {}
@@ -112,14 +121,14 @@ describe('when only the filters change, not the list', () => {
   /** Its own store, so what the workspace writes is readable and does not leak between cases. */
   function renderWithSearch(initial: string) {
     store = createStore();
-    mocks.search = initial;
+    setUrl(initial);
     const view = render(
       <Provider store={store}>
         <DebatesHubWorkspace />
       </Provider>
     );
     return (next: string) => {
-      mocks.search = next;
+      setUrl(next);
       view.rerender(
         <Provider store={store}>
           <DebatesHubWorkspace />
@@ -180,11 +189,11 @@ describe('when only the filters change, not the list', () => {
 
 describe('when the URL changes without a remount', () => {
   function renderWithSearch(initial: string) {
-    mocks.search = initial;
+    setUrl(initial);
     const view = render(<DebatesHubWorkspace />);
     /** A same-route navigation: new params, same mounted component. */
     return (next: string) => {
-      mocks.search = next;
+      setUrl(next);
       view.rerender(<DebatesHubWorkspace />);
     };
   }
@@ -208,7 +217,7 @@ describe('when the URL changes without a remount', () => {
     expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
   });
 
-  // The picker changes the list without touching the query.
+  // The workspace's own write is not a navigation, so it must not be read back as one.
   it('leaves a list the viewer picked alone while the URL is unchanged', () => {
     const navigate = renderWithSearch('list=positions');
 
@@ -225,7 +234,7 @@ describe('when the URL changes without a remount', () => {
 describe('before Privy has restored the session', () => {
   it('draws no list at all rather than coercing one to Explore', () => {
     mocks.ready = false;
-    mocks.search = 'list=positions&spaces=space-a';
+    setUrl('list=positions&spaces=space-a');
     render(<DebatesHubWorkspace />);
 
     expect(screen.queryByTestId('claims-tab-explore')).not.toBeInTheDocument();
@@ -234,7 +243,7 @@ describe('before Privy has restored the session', () => {
   });
 
   it('draws the list the URL named once it is ready', async () => {
-    mocks.search = 'list=positions&spaces=space-a';
+    setUrl('list=positions&spaces=space-a');
     render(<DebatesHubWorkspace />);
 
     expect(await screen.findByTestId('claims-tab-positions')).toBeInTheDocument();
@@ -255,7 +264,7 @@ describe('choosing which claim list the workspace shows', () => {
 
   // The label changed; the value links and the panel use did not.
   it('still opens Matches from a ?list=lobby link', () => {
-    mocks.search = 'list=lobby';
+    setUrl('list=lobby');
     render(<DebatesHubWorkspace />);
 
     expect(screen.getByTestId('lobby-tab')).toBeInTheDocument();
@@ -349,5 +358,130 @@ describe('the header', () => {
 
     const header = screen.getByRole('heading', { name: 'Debates' }).closest('header')!;
     expect(within(header).getByTestId('hub-header-controls')).toBeInTheDocument();
+  });
+});
+
+/**
+ * GEO-3298: the address bar is a link to what is on screen, so a copied URL opens the same setup.
+ */
+describe('keeping the URL in step with the list', () => {
+  let store: ReturnType<typeof createStore>;
+  let replaceState: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    store = createStore();
+    replaceState = vi.spyOn(window.history, 'replaceState');
+  });
+
+  afterEach(() => {
+    replaceState.mockRestore();
+    vi.useRealTimers();
+  });
+
+  function renderWorkspace() {
+    const ui = () => (
+      <Provider store={store}>
+        <DebatesHubWorkspace />
+      </Provider>
+    );
+    const view = render(ui());
+    return () => view.rerender(ui());
+  }
+
+  const settle = () => act(() => vi.advanceTimersByTime(URL_SYNC_DELAY_MS));
+
+  it('writes the list the viewer picks', () => {
+    renderWorkspace();
+
+    fireEvent.click(picker('Matches'));
+    fireEvent.click(screen.getByRole('button', { name: 'My positions' }));
+    settle();
+
+    expect(currentSearch()).toBe('list=positions');
+  });
+
+  it('writes search, spaces and topics once they settle, as one replace', () => {
+    setUrl('list=explore');
+    renderWorkspace();
+    replaceState.mockClear();
+
+    act(() => {
+      store.set(debatesHubExploreSearchAtom, 'clim');
+      store.set(debatesHubExploreSearchAtom, 'climate');
+      store.set(debatesHubExploreSpaceIdsAtom, ['space-a', 'space-b']);
+      store.set(debatesHubExploreTopicIdsAtom, ['t1']);
+    });
+    expect(replaceState).not.toHaveBeenCalled();
+
+    settle();
+
+    expect(replaceState).toHaveBeenCalledTimes(1);
+    expect(Object.fromEntries(new URLSearchParams(currentSearch()))).toEqual({
+      list: 'explore',
+      q: 'climate',
+      spaces: 'space-a,space-b',
+      topics: 't1',
+    });
+  });
+
+  // The link that opened the page is what is on screen, so there is nothing to write.
+  it('leaves the link it was opened from as it is', () => {
+    setUrl('list=explore&q=climate&spaces=space-a');
+    renderWorkspace();
+    replaceState.mockClear();
+
+    settle();
+
+    expect(replaceState).not.toHaveBeenCalled();
+    expect(store.get(debatesHubExploreSearchAtom)).toBe('climate');
+  });
+
+  it('drops a filter the viewer clears', () => {
+    setUrl('list=explore&q=climate');
+    const rerender = renderWorkspace();
+
+    act(() => store.set(debatesHubExploreSearchAtom, ''));
+    settle();
+    rerender();
+
+    expect(currentSearch()).toBe('list=explore');
+    expect(store.get(debatesHubExploreSearchAtom)).toBe('');
+  });
+
+  it('keeps an unfiltered Matches list a bare /matchmaking', () => {
+    renderWorkspace();
+    settle();
+
+    expect(replaceState).not.toHaveBeenCalled();
+    expect(currentSearch()).toBe('');
+  });
+
+  // Reading the write back would trim the space off a search the viewer is still typing.
+  it('does not read its own write back as a link', () => {
+    setUrl('list=explore');
+    const rerender = renderWorkspace();
+
+    act(() => store.set(debatesHubExploreSearchAtom, 'nuclear '));
+    settle();
+    rerender();
+
+    expect(currentSearch()).toBe('list=explore&q=nuclear');
+    expect(store.get(debatesHubExploreSearchAtom)).toBe('nuclear ');
+  });
+
+  // Before Privy restores the session the list is the signed-out fallback; writing it would turn a
+  // link to My positions into one to Explore.
+  it('writes nothing until the session is restored', () => {
+    mocks.ready = false;
+    mocks.authenticated = false;
+    setUrl('list=positions&spaces=space-a');
+    renderWorkspace();
+    replaceState.mockClear();
+
+    settle();
+
+    expect(replaceState).not.toHaveBeenCalled();
+    expect(currentSearch()).toBe('list=positions&spaces=space-a');
   });
 });
