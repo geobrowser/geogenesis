@@ -160,7 +160,9 @@ export function FollowButton({
   // of the way: a face that is already followed carries no badge at all. Both are read from shared
   // state — the queue and the pending write — not from a press this instance remembers, because a
   // queued follow outlives the control that queued it and a failed or cancelled press leaves no
-  // write behind. Only a follow seen in flight can land, so a face followed elsewhere stays bare.
+  // write behind. The pending write is per person, not per control: a follow pressed in the side
+  // panel ticks this face too, so the two never disagree about a follow that is happening. A follow
+  // that arrives with nothing in flight here — another tab or device, a refetch — stays bare.
   const inFlight = !followed && (saving || queuedFollow.isQueued);
   const [wasInFlight, setWasInFlight] = React.useState(inFlight);
   const [justLanded, setJustLanded] = React.useState(false);

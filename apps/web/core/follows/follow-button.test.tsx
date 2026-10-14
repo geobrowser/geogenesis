@@ -420,7 +420,7 @@ describe('the avatar badge (GEO-3305)', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('does not mistake a later follow for a press whose write failed', () => {
+  it('does not mistake a follow that arrives with nothing in flight for a press whose write failed', () => {
     vi.useFakeTimers();
     const { container, rerender } = renderBadge();
 
@@ -431,9 +431,31 @@ describe('the avatar badge (GEO-3305)', () => {
     rerender(badge());
     expect(screen.getByRole('button', { name: 'Follow Ada' })).toBeInTheDocument();
 
-    // Followed from the side panel, say: this badge saw no write of its own land.
+    // Followed from another tab or device, say: it reaches this one as a refetch, with no write here.
     mocks.followedIds = new Set([ADA_SPACE]);
     rerender(badge());
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  /**
+   * The pending write is shared by every Follow control for a person, deliberately: following from
+   * the side panel while their video plays ticks the face as well, so the badge never reads "+"
+   * beside a panel that says Following.
+   */
+  it('ticks for a follow pressed in another control for the same person, as it lands', () => {
+    vi.useFakeTimers();
+    const { container, rerender } = renderBadge();
+
+    mocks.pendingIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    expect(container.querySelector(TICK)).not.toBeNull();
+
+    mocks.pendingIds = new Set();
+    mocks.followedIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
     expect(container).toBeEmptyDOMElement();
   });
 
