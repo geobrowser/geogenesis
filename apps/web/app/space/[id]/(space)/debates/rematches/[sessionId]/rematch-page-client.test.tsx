@@ -6384,7 +6384,9 @@ describe('From this debate', () => {
     await openTab();
 
     expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
-    expect(screen.getByText(/Publishing the claims from your debate to Geo/)).toBeInTheDocument();
+    expect(
+      screen.getByText('1 claim from this debate is publishing to Geo. It appears here in a minute or two.')
+    ).toBeInTheDocument();
   });
 
   it('draws a claim with its controls and who said it once the graph has it, in the card’s meta row', async () => {

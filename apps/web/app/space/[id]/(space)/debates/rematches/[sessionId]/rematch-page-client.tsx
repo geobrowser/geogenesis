@@ -7,6 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 import { useRouter } from 'next/navigation';
+import pluralize from 'pluralize';
 
 import { capture } from '~/core/analytics';
 import { ANALYTICS_BUILD_ID } from '~/core/analytics-opportunities';
@@ -1378,12 +1379,16 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     notInterested.isLoading ||
     (debateClaimIds.length > 0 &&
       (debateEntitiesQuery.isLoading || debateRowsQuery.isLoading || publishabilityPending));
+  /** The claims the tab may list, published or not: the session's exclusions and "Not interested" out. */
+  const debateListShown = React.useMemo(
+    () => debateList.filter(claim => !isClaimExcluded(claim.id) && !notInterestedIds.has(claim.id)),
+    [debateList, isClaimExcluded, notInterestedIds]
+  );
   const debateItemsNow = React.useMemo<FromThisDebateItem[]>(
     () =>
       debateItemsSettling
         ? []
-        : debateList.flatMap((claim): FromThisDebateItem[] => {
-            if (isClaimExcluded(claim.id) || notInterestedIds.has(claim.id)) return [];
+        : debateListShown.flatMap((claim): FromThisDebateItem[] => {
             const entity = debateEntitiesById.get(claim.id);
             if (!entity || debateSpaceId === null) return [];
             const row = rowFromEntity(entity, debateSpaceId);
@@ -1392,16 +1397,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             }
             return [{ claim, row }];
           }),
-    [
-      canPublishDebateIn,
-      debateEntitiesById,
-      debateItemsSettling,
-      debateList,
-      debateSpaceId,
-      isClaimExcluded,
-      notInterestedIds,
-      rowFromEntity,
-    ]
+    [canPublishDebateIn, debateEntitiesById, debateItemsSettling, debateListShown, debateSpaceId, rowFromEntity]
   );
   const debateItems = useLastSettled(debateItemsNow, debateItemsSettling, sessionId);
   const debateClaimsSplit = React.useMemo(
@@ -1417,13 +1413,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
    * (GEO-3312). Zero while the lookup is in flight: "not answered" is not "not published".
    */
   const debatePublishingCount = React.useMemo(
-    () =>
-      debateItemsSettling
-        ? 0
-        : debateList.filter(
-            claim => !debateEntitiesById.has(claim.id) && !isClaimExcluded(claim.id) && !notInterestedIds.has(claim.id)
-          ).length,
-    [debateEntitiesById, debateItemsSettling, debateList, isClaimExcluded, notInterestedIds]
+    () => (debateItemsSettling ? 0 : debateListShown.filter(claim => !debateEntitiesById.has(claim.id)).length),
+    [debateEntitiesById, debateItemsSettling, debateListShown]
   );
   /** How the source debate names its rounds — the turn count the room labelled them by. */
   const debateTurnCount =
@@ -2702,29 +2693,32 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     createRequest,
   });
 
-  const renderClaimCard = (claim: DebateRematchClaim, previouslyDebated = false) => (
-    <RematchClaimCard
-      key={claim.claim.claim_entity_id}
-      claim={claim}
-      previouslyDebated={previouslyDebated}
-      context={debateSaidByFor(claim) ? null : topicMatchCaptionFor(claim)}
-      headerMeta={debateSaidByFor(claim)}
-      session={session}
-      currentUserId={currentUserId}
-      chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
-      readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
-      onRequest={() =>
-        createRequest.mutate({
-          source_space_id: claim.claim.space_id,
-          claim_id: claim.claim.claim_entity_id,
-          format_id: defaultDebateFormatId,
-        })
-      }
-      busy={createRequest.isPending || session?.status === 'request_pending'}
-      // Associate the shared mutation error with the claim that initiated it.
-      requestError={hasRequestTarget(claim) ? requestError : null}
-    />
-  );
+  const renderClaimCard = (claim: DebateRematchClaim, previouslyDebated = false) => {
+    const saidBy = debateSaidByFor(claim);
+    return (
+      <RematchClaimCard
+        key={claim.claim.claim_entity_id}
+        claim={claim}
+        previouslyDebated={previouslyDebated}
+        context={saidBy ? null : topicMatchCaptionFor(claim)}
+        headerMeta={saidBy}
+        session={session}
+        currentUserId={currentUserId}
+        chatPosition={chatPositionFor(claim.claim.claim_entity_id, claim.claim.space_id)}
+        readiness={readinessByClaimId.get(normId(claim.claim.claim_entity_id)) ?? null}
+        onRequest={() =>
+          createRequest.mutate({
+            source_space_id: claim.claim.space_id,
+            claim_id: claim.claim.claim_entity_id,
+            format_id: defaultDebateFormatId,
+          })
+        }
+        busy={createRequest.isPending || session?.status === 'request_pending'}
+        // Associate the shared mutation error with the claim that initiated it.
+        requestError={hasRequestTarget(claim) ? requestError : null}
+      />
+    );
+  };
 
   /**
    * "From this debate" as the debate ran: grouped by round, in the order each claim was said
@@ -3052,7 +3046,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
                           ? `${remoteName} hasn’t responded yet. When they do, those claims show up here.`
                           : tab === 'debate'
                             ? debatePublishingCount > 0
-                              ? 'Publishing the claims from your debate to Geo. They appear here in a minute or two.'
+                              ? debatePublishingMessage(debatePublishingCount, false)
                               : debateExtractionRunning
                                 ? 'Pulling the claims out of your debate. They appear here as they’re found.'
                                 : 'No claims from this debate are left to debate.'
@@ -3138,9 +3132,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             className="mt-4 text-center"
             data-testid="from-this-debate-publishing"
           >
-            {debatePublishingCount === 1
-              ? '1 more claim from this debate is publishing to Geo. It appears here in a minute or two.'
-              : `${debatePublishingCount} more claims from this debate are publishing to Geo. They appear here in a minute or two.`}
+            {debatePublishingMessage(debatePublishingCount, true)}
           </Text>
         ) : null}
 
@@ -3488,6 +3480,15 @@ function RematchClaimCard({
 /** A "From this debate" claim the graph has, and its picker row (GEO-2870, GEO-3312). */
 type FromThisDebateItem = { claim: FromThisDebateClaim; row: DebateRematchClaim };
 
+/**
+ * What "From this debate" says about claims still on their way to the graph (GEO-3312) — as the
+ * empty state, or under a list that already has some (`more`).
+ */
+function debatePublishingMessage(count: number, more: boolean): string {
+  const claims = `${count} ${more ? 'more ' : ''}${pluralize('claim', count)} from this debate`;
+  return `${claims} ${count === 1 ? 'is' : 'are'} publishing to Geo. ${count === 1 ? 'It appears' : 'They appear'} here in a minute or two.`;
+}
+
 /** How often the "From this debate" tab re-asks the graph for claims it does not have yet. */
 const DEBATE_CLAIM_PUBLISH_POLL_MS = 15_000;
 
@@ -3517,7 +3518,10 @@ function TopicMatchCaption({ names }: { names: string[] }) {
   );
 }
 
-/** One curated block, collapsible so a long page of recommendations stays scannable. */
+/**
+ * One titled block of claims, collapsible so a long list stays scannable: a curated page's data
+ * blocks, the already-debated fold, and "From this debate"'s rounds.
+ */
 function RecommendedSection({
   name,
   count,

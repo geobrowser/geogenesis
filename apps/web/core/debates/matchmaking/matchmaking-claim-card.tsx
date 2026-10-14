@@ -349,12 +349,10 @@ function ClaimHeader({
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
           {meta ? (
-            <>
-              <span aria-hidden="true" className="shrink-0 text-footnoteMedium text-grey-03">
-                ·
-              </span>
-              <span className="truncate text-footnoteMedium text-grey-04">{meta}</span>
-            </>
+            <span className="flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
+              <span aria-hidden>·</span>
+              <span className="truncate">{meta}</span>
+            </span>
           ) : null}
         </span>
         {endSlot}
@@ -768,7 +766,6 @@ function RespondableControls({
   hasFooter,
   noteFor,
 }: {
-  headerMeta?: React.ReactNode;
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
   readiness: MatchmakingReadiness;
@@ -801,6 +798,7 @@ function RespondableControls({
   allowsSignedOutVotes?: boolean;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
+  headerMeta?: React.ReactNode;
 }) {
   // One read for the card, and now the second half of what the card draws from. The header flags a
   // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response

@@ -5,7 +5,8 @@ import * as React from 'react';
 import { normId } from '~/core/utils/norm-id';
 import { validateEntityId } from '~/core/utils/utils';
 
-import { roundLabel } from './round-cues';
+import { openRoundIndexForTurn } from './open-rounds';
+import { roundLabel, roundParts } from './round-cues';
 import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
 
 /**
@@ -44,12 +45,19 @@ function startMsOf(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
 }
 
-/** Earlier first; a claim without a timing goes after the timed ones in its turn. */
-function startOrder(a: number | null, b: number | null): number {
-  if (a === b) return 0;
-  if (a === null) return 1;
-  if (b === null) return -1;
-  return a - b;
+/**
+ * When a claim was said: by turn, then by where in the turn, with an untimed claim after the timed
+ * ones in its turn. Ties are left to the caller, which breaks them by the order it was handed.
+ */
+function compareWhenSaid(
+  a: Pick<FromThisDebateClaim, 'turnIndex' | 'startMs'>,
+  b: Pick<FromThisDebateClaim, 'turnIndex' | 'startMs'>
+): number {
+  if (a.turnIndex !== b.turnIndex) return a.turnIndex - b.turnIndex;
+  if (a.startMs === b.startMs) return 0;
+  if (a.startMs === null) return 1;
+  if (b.startMs === null) return -1;
+  return a.startMs - b.startMs;
 }
 
 /**
@@ -74,14 +82,13 @@ export function fromThisDebateCandidates(
   const seen = new Set<string>();
   const candidates: FromThisDebateClaim[] = [];
   claims
-    .map((claim, order) => ({ claim, order }))
-    .sort(
-      (a, b) =>
-        (a.claim.turn_index ?? 0) - (b.claim.turn_index ?? 0) ||
-        startOrder(startMsOf(a.claim.start_ms), startMsOf(b.claim.start_ms)) ||
-        a.order - b.order
-    )
-    .forEach(({ claim }) => {
+    .map((claim, order) => ({
+      claim,
+      order,
+      said: { turnIndex: claim.turn_index ?? 0, startMs: startMsOf(claim.start_ms) },
+    }))
+    .sort((a, b) => compareWhenSaid(a.said, b.said) || a.order - b.order)
+    .forEach(({ claim, said }) => {
       if (claim.is_contestable === false) return;
       const text = typeof claim.text === 'string' ? claim.text.trim() : '';
       if (!text) return;
@@ -94,7 +101,7 @@ export function fromThisDebateCandidates(
         id,
         text,
         turnIndex: claim.turn_index,
-        startMs: startMsOf(claim.start_ms),
+        startMs: said.startMs,
         speakerName: turn?.speaker_name?.trim() || null,
         speakerSpaceId: turn?.attributed_space_id || null,
         matched: matchedId !== null,
@@ -185,20 +192,17 @@ export function groupFromThisDebateByRound<T>(
 ): FromThisDebateRound<T>[] {
   const sorted = items
     .map((item, order) => ({ item, claim: claimOf(item), order }))
-    .sort(
-      (a, b) =>
-        a.claim.turnIndex - b.claim.turnIndex || startOrder(a.claim.startMs, b.claim.startMs) || a.order - b.order
-    );
+    .sort((a, b) => compareWhenSaid(a.claim, b.claim) || a.order - b.order);
   const rounds: FromThisDebateRound<T>[] = [];
   for (const { item, claim } of sorted) {
-    const key = Math.max(0, Math.floor(claim.turnIndex / 2));
+    const key = openRoundIndexForTurn(claim.turnIndex);
     let round = rounds[rounds.length - 1];
     if (!round || round.key !== key) {
-      round = {
-        key,
-        label: numberedOnly || turnCount <= 0 ? `Round ${key + 1}` : roundLabel(key * 2, turnCount),
-        items: [],
-      };
+      // Without a turn count there is no format to name the round from, only its number.
+      const firstTurn = key * 2;
+      const label =
+        numberedOnly || turnCount <= 0 ? roundParts(firstTurn, turnCount).round : roundLabel(firstTurn, turnCount);
+      round = { key, label, items: [] };
       rounds.push(round);
     }
     round.items.push(item);
