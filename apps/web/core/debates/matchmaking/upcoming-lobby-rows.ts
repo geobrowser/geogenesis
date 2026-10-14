@@ -17,8 +17,6 @@ export type UpcomingLobbyRow = {
   opensAt: string;
   /** The door is open now. */
   open: boolean;
-  /** The scheduled start has passed. */
-  due: boolean;
   /** Empty when the lobby is not in the side panel list, which caps how many it returns. */
   hosts: DebateLobbyPerson[];
   hosting: boolean;
@@ -55,7 +53,6 @@ export function upcomingLobbyRows(
       startsAt: room.starts_at,
       opensAt: room.opens_at,
       open: room.joinable,
-      due: room.due,
       hosts: summary?.hosts ?? [],
       hosting: hostedBy(summary),
       onRoster: summary?.viewer_on_roster ?? false,
@@ -72,7 +69,6 @@ export function upcomingLobbyRows(
       startsAt: lobby.starts_at,
       opensAt: lobby.opens_at,
       open: lobby.open,
-      due: lobby.open && Date.parse(lobby.starts_at) <= Date.now(),
       hosts: lobby.hosts,
       hosting: true,
       onRoster: lobby.viewer_on_roster,

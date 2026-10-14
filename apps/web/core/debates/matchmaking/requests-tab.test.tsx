@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
     people: [],
     requestsError: null,
     roomsError: null,
+    lobbiesError: null,
   } as ScheduledContent,
 }));
 
@@ -445,6 +446,7 @@ const EMPTY_SCHEDULED: ScheduledContent = {
   people: [],
   requestsError: null,
   roomsError: null,
+  lobbiesError: null,
 };
 
 describe('dense (workspace rail) visibility', () => {
@@ -505,6 +507,14 @@ describe('dense (workspace rail) visibility', () => {
   it('appears for an upcoming room', () => {
     mocks.peerAvailability = true;
     mocks.scheduled = { ...EMPTY_SCHEDULED, upcoming: [{ id: 'room-1' }] as unknown as ScheduledContent['upcoming'] };
+    const { container } = render(<RequestsTab dense />);
+
+    expect(container.innerHTML).not.toBe('');
+  });
+
+  it('appears when the lobby list could not be read', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduled = { ...EMPTY_SCHEDULED, lobbiesError: new Error('nope') };
     const { container } = render(<RequestsTab dense />);
 
     expect(container.innerHTML).not.toBe('');

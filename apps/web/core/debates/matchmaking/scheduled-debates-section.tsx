@@ -17,6 +17,7 @@ import { useDebateLobbies } from '~/core/debates/lobbies/hooks';
 import { markLobbyEntry } from '~/core/debates/lobbies/lobby-analytics';
 import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
+import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
@@ -52,7 +53,7 @@ import { useRequestCountdown } from './use-request-countdown';
  * here, so neither depends on an email arriving or a popup being caught.
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
-  const { answerable, upcoming, lobbies, people, requestsError, roomsError } = content;
+  const { answerable, upcoming, lobbies, people, requestsError, roomsError, lobbiesError } = content;
   const respond = useRespondToScheduledDebate();
   const [conflict, setConflict] = React.useState<string | null>(null);
   const viewerId = useCurrentGeoChatUserId();
@@ -117,11 +118,13 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
       )}
 
       {/* Their own section, so a lobby is never read as a 1:1 (GEO-3292). */}
-      {lobbies.length > 0 && (
+      {(lobbies.length > 0 || lobbiesError) && (
         <RequestSection label="Upcoming lobbies">
           {lobbies.map(row => (
             <UpcomingLobbyRowCard key={row.lobbyId} row={row} />
           ))}
+          {/* The lobbies the viewer hosts come only from this read, so a failure is not "none". */}
+          {lobbiesError && <ReadFailed>Could not read your lobbies: {lobbiesError.message}</ReadFailed>}
         </RequestSection>
       )}
 
@@ -188,15 +191,23 @@ export type ScheduledContent = {
   lobbies: UpcomingLobbyRow[];
   /** Who the requests' participants are, resolved from the graph. Empty until that lands. */
   people: DebateParticipantSummary[];
-  /** Kept apart: one read failing must not hide what the other returned. */
+  /** Kept apart: one read failing must not hide what the others returned. */
   requestsError: Error | null;
   roomsError: Error | null;
+  /** The lobby list, which hosted lobbies and hosts' names come from. Null without `lobbyJoining`. */
+  lobbiesError: Error | null;
 };
 
 /** Anything for this section to show, a failed read included: one is not an empty schedule. */
-export function hasScheduledContent({ answerable, upcoming, lobbies, requestsError, roomsError }: ScheduledContent) {
+export function hasScheduledContent(content: ScheduledContent) {
+  const { answerable, upcoming, lobbies, requestsError, roomsError, lobbiesError } = content;
   return (
-    answerable.length > 0 || upcoming.length > 0 || lobbies.length > 0 || requestsError !== null || roomsError !== null
+    answerable.length > 0 ||
+    upcoming.length > 0 ||
+    lobbies.length > 0 ||
+    requestsError !== null ||
+    roomsError !== null ||
+    lobbiesError !== null
   );
 }
 
@@ -261,6 +272,7 @@ export function useScheduledContent(): ScheduledContent {
     people,
     requestsError: requests.error ?? null,
     roomsError: rooms.error ?? null,
+    lobbiesError: lobbyJoining ? (lobbyList.error ?? null) : null,
   };
 }
 
@@ -700,6 +712,8 @@ function DebateParties({
  * host where a debate has its strip.
  */
 function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
+  // From the clock, not from the reads: an empty lobby sends nothing when its start passes.
+  const now = useMinuteNow();
   const path = debateRoomPath(row.lobbyId);
   const hosts = hostsLabel(row.hosts);
   const [action, analyticsLabel, analyticsIntent] = row.open
@@ -711,7 +725,7 @@ function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
   return (
     <ScheduleCard
       testId="upcoming-lobby-card"
-      when={row.due ? 'Starting now' : formatDebateTime(row.startsAt)}
+      when={Date.parse(row.startsAt) <= now ? 'Starting now' : formatDebateTime(row.startsAt)}
       status={row.open ? 'The lobby is open' : `Opens at ${formatTime(row.opensAt)}`}
       parties={
         <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-grey-01 px-3 py-2.5">

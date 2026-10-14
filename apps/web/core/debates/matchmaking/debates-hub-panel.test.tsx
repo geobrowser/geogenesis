@@ -68,6 +68,7 @@ vi.mock('./scheduled-debates-section', () => ({
     people: [],
     requestsError: null,
     roomsError: null,
+    lobbiesError: null,
   }),
 }));
 

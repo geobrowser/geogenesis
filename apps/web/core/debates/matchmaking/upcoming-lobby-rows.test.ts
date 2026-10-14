@@ -52,9 +52,9 @@ describe('upcomingLobbyRows', () => {
   });
 
   it('takes the open door from the room, which is the read the join prompt uses', () => {
-    const rows = upcomingLobbyRows([lobbyRoom({ joinable: true, due: true })], [summary()], 'user-me');
+    const rows = upcomingLobbyRows([lobbyRoom({ joinable: true })], [summary({ open: false })], 'user-me');
 
-    expect(rows[0]).toEqual(expect.objectContaining({ open: true, due: true }));
+    expect(rows[0]!.open).toBe(true);
   });
 
   it('ignores two-person rooms', () => {

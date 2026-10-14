@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
@@ -34,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   graphLookupIds: [] as string[],
   lobbyJoining: true,
   lobbies: [] as DebateLobbySummary[],
+  lobbiesError: null as Error | null,
 }));
 
 const ADA = {
@@ -65,7 +66,11 @@ vi.mock('~/core/state/feature-flags', () => ({
 }));
 
 vi.mock('~/core/debates/lobbies/hooks', () => ({
-  useDebateLobbies: (enabled: boolean) => ({ data: enabled ? { lobbies: mocks.lobbies } : undefined }),
+  useDebateLobbies: (enabled: boolean) => ({
+    data: enabled ? { lobbies: mocks.lobbies } : undefined,
+    // Not gated: a disabled query keeps the error of its last failed read.
+    error: mocks.lobbiesError,
+  }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -145,6 +150,7 @@ const setup = (content: {
   people?: (typeof mocks.people)[number][];
   requestsError?: Error | null;
   roomsError?: Error | null;
+  lobbiesError?: Error | null;
 }) => ({
   user: userEvent.setup(),
   ...render(
@@ -156,6 +162,7 @@ const setup = (content: {
         people: content.people ?? [],
         requestsError: content.requestsError ?? null,
         roomsError: content.roomsError ?? null,
+        lobbiesError: content.lobbiesError ?? null,
       }}
     />
   ),
@@ -190,6 +197,7 @@ afterEach(() => {
   mocks.graphLookupIds = [];
   mocks.lobbyJoining = true;
   mocks.lobbies = [];
+  mocks.lobbiesError = null;
 });
 
 describe('answering in the tab', () => {
@@ -737,7 +745,6 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
     startsAt: '2099-09-24T14:00:00Z',
     opensAt: '2099-09-24T13:50:00Z',
     open: false,
-    due: false,
     hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
     hosting: false,
     onRoster: false,
@@ -775,7 +782,7 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
   });
 
   it('offers Join once the lobby is open', () => {
-    setup({ lobbies: [lobbyRow({ open: true, due: true })] });
+    setup({ lobbies: [lobbyRow({ open: true, startsAt: '2020-09-24T14:00:00Z' })] });
 
     const card = screen.getByTestId('upcoming-lobby-card');
     expect(card).toHaveTextContent('Starting now');
@@ -807,6 +814,44 @@ describe('lobbies among the upcoming debates (GEO-3292)', () => {
 
     expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
     expect(screen.queryByText('Upcoming debates')).not.toBeInTheDocument();
+  });
+
+  // An empty lobby sends nothing when its start passes, so only the clock can move the label.
+  it('says Starting now once the start passes, with no new read', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2099-09-24T13:59:30Z'));
+      setup({ lobbies: [lobbyRow({ open: true })] });
+      expect(screen.getByTestId('upcoming-lobby-card')).not.toHaveTextContent('Starting now');
+
+      act(() => vi.advanceTimersByTime(60_000));
+
+      expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('Starting now');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says Starting now once the start passes even if the door has not opened', () => {
+    setup({ lobbies: [lobbyRow({ open: false, startsAt: '2020-09-24T14:00:00Z' })] });
+
+    expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('Starting now');
+  });
+
+  // Hosted lobbies come only from the lobby list, so its failure must not read as "nothing hosted".
+  it('says the lobby list could not be read rather than showing nothing', () => {
+    setup({ lobbiesError: new Error('boom') });
+
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    expect(screen.getByText('Could not read your lobbies: boom')).toBeInTheDocument();
+  });
+
+  it('carries a failed lobby list read out of the hook, and drops it with lobby joining off', () => {
+    mocks.lobbiesError = new Error('boom');
+    expect(renderHook(() => useScheduledContent()).result.current.lobbiesError?.message).toBe('boom');
+
+    mocks.lobbyJoining = false;
+    expect(renderHook(() => useScheduledContent()).result.current.lobbiesError).toBeNull();
   });
 
   it('builds Going lobbies from the upcoming rooms and names their host from the lobby list', () => {
