@@ -5,8 +5,9 @@
  * cached on its own React Query key; a list mounts many of them in one commit, so their loads all
  * land before the next microtask and go out as `fetchBatch` calls of at most `maxBatchSize` keys.
  *
- * `fetchBatch` resolves a value per key it knows. A key it leaves out resolves as `missing(key)`. A
- * rejected batch rejects every load in it.
+ * `fetchBatch` resolves a value per key it knows. A key it leaves out resolves as `missing(key)`, or
+ * rejects with what `missing` throws, without touching the rest of the batch. A rejected batch
+ * rejects every load in it.
  */
 export function createBatchLoader<V>({
   fetchBatch,
@@ -31,8 +32,15 @@ export function createBatchLoader<V>({
       fetchBatch(chunk).then(
         values => {
           for (const key of chunk) {
-            const value = values.has(key) ? (values.get(key) as V) : missing(key);
-            for (const waiter of batch.get(key) ?? []) waiter.resolve(value);
+            const waiters = batch.get(key) ?? [];
+            let value: V;
+            try {
+              value = values.has(key) ? (values.get(key) as V) : missing(key);
+            } catch (error) {
+              for (const waiter of waiters) waiter.reject(error);
+              continue;
+            }
+            for (const waiter of waiters) waiter.resolve(value);
           }
         },
         error => {
