@@ -5,6 +5,7 @@ import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tan
 import * as React from 'react';
 
 import {
+  type CreateDebateLobbyRequest,
   type DebateLobbyHeartbeat,
   type DebateLobbyView,
   GeoChatRequestError,
@@ -167,8 +168,7 @@ export function useCreateDebateLobby() {
   const store = useStoreLobbyView();
 
   return useMutation({
-    mutationFn: (body: { name: string; starts_at?: string }) =>
-      createDebateLobby(body, getPrivyIdentityToken, accountKey),
+    mutationFn: (body: CreateDebateLobbyRequest) => createDebateLobby(body, getPrivyIdentityToken, accountKey),
     onSuccess: view => {
       store(view);
       lobbyCreated(view.lobby_id, { scheduled: view.scheduled });

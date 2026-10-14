@@ -2791,9 +2791,20 @@ export async function getMyDebateLobby(
   return geoChatRequest<DebateMyLobby>('/me/debate-lobby', { auth: true, getPrivyIdentityToken, accountKey, signal });
 }
 
+/**
+ * Without `starts_at` the lobby opens now. `claim_lists` are tabs it starts with, in pick order
+ * (GEO-3275); more than five is `409 lobby_claim_list_limit`, and a page given twice keeps its
+ * first place. Without the field the request is exactly the one before claim lists existed.
+ */
+export type CreateDebateLobbyRequest = {
+  name: string;
+  starts_at?: string;
+  claim_lists?: Array<{ entity_id: string; space_id: string }>;
+};
+
 /** Without `starts_at` the lobby opens now. A start opens it 10 minutes early. */
 export async function createDebateLobby(
-  body: { name: string; starts_at?: string },
+  body: CreateDebateLobbyRequest,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {
