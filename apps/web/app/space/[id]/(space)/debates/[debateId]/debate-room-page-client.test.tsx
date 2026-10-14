@@ -4412,6 +4412,27 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
+  // Copilot on #2853: a tab that never held the call (reloaded, or another tab had the room) has no
+  // recording to save, so finalizing there failed for good and stranded it on a save error.
+  it('sends an idle tab back when the session ended, without trying to save a recording', async () => {
+    setHistoryLength(2);
+    mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+    vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:25.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('ended', { localConsented: true });
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+    expect(screen.queryByText('No local recording was available to save.')).toBeNull();
+  });
+
   // GEO-3301. The room is hidden through the handoff, so an ended session must not leave the
   // viewer on a blank screen for the rest of the thank-you period.
   it('goes back as soon as the other debater ends the session, mid-countdown', async () => {
@@ -5495,6 +5516,29 @@ describe('DebateRoomPageClient', () => {
       rerenderAt(view, OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 3_500, openRoundsCapRoundLastTurn());
       await waitFor(() => expect(recordingSurface()).toHaveClass('invisible'));
       expect(result()).toBeNull();
+    });
+
+    // Copilot on #2853: both rooms consent the moment thanking starts, so a live session must not
+    // take the pair to the picker while the debate's last result is still up.
+    it('waits out "That\'s the max" before following a live session to the picker', async () => {
+      installRecordingMocks();
+      vi.spyOn(Date, 'now').mockReturnValue(OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 1_000);
+      mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+      const view = await renderLiveDebate({ ...openRoundsCapRoundLastTurn(), rematch_session_id: 'rematch-1' });
+
+      await waitFor(() => expect(result()).toHaveAttribute('data-open-round-result', 'max'));
+      // Long enough for the save and the navigation it would otherwise lead straight into.
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 1_000));
+      });
+      expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+      expect(result()).toHaveAttribute('data-open-round-result', 'max');
+
+      rerenderAt(view, OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 3_500, {
+        ...openRoundsCapRoundLastTurn(),
+        rematch_session_id: 'rematch-1',
+      });
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
     });
 
     it('holds "That\'s a wrap" into thanking before the handoff', async () => {

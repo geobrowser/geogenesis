@@ -88,7 +88,12 @@ import {
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
-import { OpenRoundPickReveal, OpenRoundResultOverlay, useOpenRoundReveal } from '~/core/debates/open-round-reveal';
+import {
+  OpenRoundPickReveal,
+  OpenRoundResultOverlay,
+  openRoundThankingHold,
+  useOpenRoundReveal,
+} from '~/core/debates/open-round-reveal';
 import {
   type OpenRoundGap,
   type OpenRoundsRoomPhase,
@@ -762,7 +767,20 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * room is hidden through the handoff (GEO-3301), so sitting out the rest of the period would be up
    * to 20 seconds of blank screen. Both the exit and its Retry save read this one answer.
    */
-  const handoffSettled = rematchReady || (countdown.effectiveStatus === 'thanking' && rematchSessionClosed);
+  const revealHold = debate
+    ? openRoundThankingHold({
+        debate,
+        phase: countdown.openRounds,
+        effectiveStatus: countdown.effectiveStatus,
+        elapsedMs: countdown.elapsedMs,
+        remainingSeconds: countdown.remainingSeconds,
+      })
+    : null;
+  // An Open rounds debate's last result ("That's the max", "That's a wrap") is still up in the first
+  // moments of thanking, which both rooms' immediate consent would otherwise cut short.
+  const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
+  const handoffSettled =
+    !revealHoldsExit && (rematchReady || (countdown.effectiveStatus === 'thanking' && rematchSessionClosed));
 
   // A completed debate with a live rematch session is a dead end while the room is idle:
   // DebateCoordinator defers to this page so the recording finalizes first, but finalization only
@@ -2218,10 +2236,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   // Leave as soon as the session has an answer rather than on the clock; see `handoffSettled`.
   // `finishLiveDebate` saves the recording, then follows the session to the picker or goes back.
+  //
+  // Only for a room holding the call. An idle tab (another tab had the room, or it reloaded) has no
+  // recording to save, and finalizing one there fails for good. It follows a live session through
+  // `idleRematchDestination` below; a closed one leaves it nowhere to go but back.
   React.useEffect(() => {
     if (!handoffSettled) return;
+    if (roomState === 'idle') {
+      if (rematchSessionClosed && !rematchLeaveRequestedRef.current) returnFromDebate();
+      return;
+    }
     void finishLiveDebate({ allowDuringThankYou: true });
-  }, [finishLiveDebate, handoffSettled]);
+  }, [finishLiveDebate, handoffSettled, rematchSessionClosed, returnFromDebate, roomState]);
 
   /**
    * GEO-2819. A tab that joined the room for the intro is already there when the second "I'm
