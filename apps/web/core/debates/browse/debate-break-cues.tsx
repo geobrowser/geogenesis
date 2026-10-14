@@ -11,6 +11,7 @@ import { openRoundNumber } from '~/core/debates/open-rounds';
 import {
   BREAK_BANNER_AT_MS,
   BREAK_QUESTION_MS,
+  BREAK_SETTLE_MS,
   BREAK_STAMP_GAP_MS,
   type BreakCue,
   type BreakCut,
@@ -88,8 +89,9 @@ export function advanceBreakClock(displayedMs: number, targetMs: number, frameMs
 
 /**
  * Writes how far into the break the playhead is to `--break-t` on every frame, which is what the
- * held animations read (`heldAt`): smoothly while playing (`advanceBreakClock`), exactly where the
- * playhead is while paused, and from the playhead on a break's first frame.
+ * held animations read (`heldAt`): smoothly while playing (`advanceBreakClock`), and exactly where
+ * the playhead is while paused or on a break's first sample. That sample lands up to a quarter of a
+ * second into the break, which is why nothing moves before `BREAK_SETTLE_MS`.
  */
 function useBreakClock(ref: React.RefObject<HTMLDivElement | null>, cue: BreakCue | null, playing: boolean) {
   const sample = React.useRef({ elapsedMs: 0, at: 0 });
@@ -179,7 +181,7 @@ export function DebateBreakOverlay({
   if (!cue) return null;
 
   const picks = cue.picks;
-  const bannerAtMs = picks ? BREAK_BANNER_AT_MS : 0;
+  const bannerAtMs = picks ? BREAK_BANNER_AT_MS : BREAK_SETTLE_MS;
   const wrap = cue.kind === 'final_end';
   const note = wrap && picks ? openRoundWrapNote(picks[1], { name: names[2], pick: picks[2] }, names[1]) : null;
   const round = openRoundNumber(cue.nextRoundIndex ?? 0);
@@ -194,12 +196,12 @@ export function DebateBreakOverlay({
       data-debate-break={cue.kind}
       className="pointer-events-none absolute inset-0 z-[22] bg-black/40"
     >
-      {picks && cue.elapsedMs < BREAK_QUESTION_MS && (
+      {picks && cue.elapsedMs < BREAK_SETTLE_MS + BREAK_QUESTION_MS && (
         <div className="absolute inset-0 grid place-items-center px-4 text-center">
           <div
             data-debate-question
             className="text-recordingLabel text-text motion-safe:animate-open-round-slam"
-            style={{ ...recordingLabelTextShadow, ...heldAt(0) }}
+            style={{ ...recordingLabelTextShadow, ...heldAt(BREAK_SETTLE_MS) }}
           >
             Keep debating?
           </div>
@@ -221,7 +223,7 @@ export function DebateBreakOverlay({
                   {
                     '--stamp-rotate': STAMP_TILT[slot],
                     transform: `rotate(${STAMP_TILT[slot]})`,
-                    ...heldAt(BREAK_QUESTION_MS + order * BREAK_STAMP_GAP_MS),
+                    ...heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS + order * BREAK_STAMP_GAP_MS),
                   } as React.CSSProperties
                 }
               >

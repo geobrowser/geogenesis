@@ -1819,8 +1819,8 @@ describe('the pair becomes watchable together (GEO-2965)', () => {
 
 describe('open rounds breaks in published playback (GEO-3277)', () => {
   // On the player's clock: Round 1 (index) ends at 60 s, they pick until 64 s, then 8 s of reveal and
-  // count-in before Round 2 (index) starts at 72 s. The player plays only its first 2.85 s: the
-  // question to 60.8 s, the stamps, the banner from 61.55 s, then cuts to 72 s.
+  // count-in before Round 2 (index) starts at 72 s. The player plays only its first 3.15 s: the dim
+  // alone to 60.3 s, the question to 61.1 s, the stamps, the banner from 61.85 s, then cuts to 72 s.
   const extendBreak = {
     kind: 'extend' as const,
     roundIndex: 0,
@@ -1863,11 +1863,11 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       breaks: [extendBreak],
       picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
     });
-    const { container, rerender } = renderAt(60.3, { playbackBreaks });
+    const { container, rerender } = renderAt(60.6, { playbackBreaks });
     expect(container.querySelector('[data-debate-question]')?.textContent).toBe('Keep debating?');
     expect(container.querySelector('[data-debate-banner]')).toBeNull();
 
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.2, playbackBreaks });
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 61.5, playbackBreaks });
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
     expect(container.querySelector('[data-debate-question]')).toBeNull();
     expect(stamps(container)).toEqual(['extend', 'extend']);
@@ -1879,17 +1879,26 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       breaks: [extendBreak],
       picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
     });
-    const { container } = renderAt(61.8, { playbackBreaks });
+    const { container } = renderAt(62.1, { playbackBreaks });
     expect(container.querySelector('[data-debate-banner="round"]')?.textContent).toMatch(/^Round 2 · .+ opens$/);
     expect(stamps(container)).toEqual(['extend', 'extend']);
+  });
+
+  // The playhead's first sample in a break lands up to a quarter of a second in, which skipped the
+  // banner's roll in before a required round: it seemed to appear, then roll out.
+  it('shows only the dim for the first moment of a break, so nothing starts before the clock does', () => {
+    const leadIn = { ...extendBreak, kind: 'lead_in' as const, startMs: 60_000, endMs: 68_000 };
+    const { container } = renderAt(60.2, { playbackBreaks: breaks({ breaks: [leadIn] }) });
+    expect(container.querySelector('[data-debate-break="lead_in"]')).not.toBeNull();
+    expect(container.querySelector('[data-debate-banner]')).toBeNull();
   });
 
   it('rolls the banner out over the last moment before the cut', () => {
     const { container } = renderAt(62.5, { playbackBreaks: breaks({ breaks: [extendBreak] }) });
     const out = container.querySelector('[data-debate-banner-out]') as HTMLElement;
     expect(out.className).toContain('animate-debate-banner-out');
-    // The cut is 2.85 s in; the roll-out takes the 0.3 s before it.
-    expect(out.style.animationDelay).toContain('2550ms');
+    // The cut is 3.15 s in; the roll-out takes the 0.3 s before it.
+    expect(out.style.animationDelay).toContain('2850ms');
     expect(out.style.animationPlayState).toBe('paused');
   });
 
@@ -1899,15 +1908,15 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(root.style.getPropertyValue('--break-t')).toBe('1200');
     const second = container.querySelectorAll('[data-debate-stamp]')[1] as HTMLElement;
     expect(second.style.animationPlayState).toBe('paused');
-    expect(second.style.animationDelay).toContain('1080ms');
+    expect(second.style.animationDelay).toContain('1380ms');
   });
 
   it('cuts to the next round after the first couple of seconds of a break, and not while paused', () => {
     vi.useFakeTimers();
     try {
       const seekBoth = vi.fn();
-      // The cut is 2.85 s in, at 62.85 s.
-      renderAt(62, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
+      // The cut is 3.15 s in, at 63.15 s.
+      renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
       vi.advanceTimersByTime(800);
       expect(seekBoth).not.toHaveBeenCalled();
       vi.advanceTimersByTime(100);
@@ -1915,7 +1924,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
 
       cleanup();
       const pausedSeek = vi.fn();
-      renderAt(62, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
+      renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
       vi.advanceTimersByTime(5_000);
       expect(pausedSeek).not.toHaveBeenCalled();
     } finally {
@@ -1933,7 +1942,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
 
   it('stamps a missing pick as no pick after the final End, then wraps with the reason', () => {
     const finalEnd = { ...extendBreak, kind: 'final_end' as const, roundIndex: 1, nextRoundIndex: null };
-    const { container } = renderAt(61.8, {
+    const { container } = renderAt(62.1, {
       playbackBreaks: breaks({ breaks: [finalEnd], picks: [pick(1, 1, 'extend', '2026-10-13T19:01:01.000Z')] }),
     });
     expect(stamps(container)).toEqual(['extend', 'none']);

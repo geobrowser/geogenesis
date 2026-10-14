@@ -26,6 +26,13 @@ import type { PlaybackClock } from './playback-clock';
 /** How long "Ended early" stays up after the next speaker's first word. */
 export const EARLY_END_HOLD_MS = 700;
 
+/**
+ * How long a break shows only its dim before anything moves. The player learns where the playhead is
+ * about four times a second, so its first sample of a break lands up to a quarter of a second in;
+ * motion that started at once lost its opening, which made the banner seem to appear and roll out.
+ */
+export const BREAK_SETTLE_MS = 300;
+
 /** How long "Keep debating?" is up before the first pick is stamped. */
 export const BREAK_QUESTION_MS = 800;
 
@@ -33,7 +40,7 @@ export const BREAK_QUESTION_MS = 800;
 export const BREAK_STAMP_GAP_MS = 280;
 
 /** When the banner wipes in after a pick: both stamps landed and settled. */
-export const BREAK_BANNER_AT_MS = BREAK_QUESTION_MS + 750;
+export const BREAK_BANNER_AT_MS = BREAK_SETTLE_MS + BREAK_QUESTION_MS + 750;
 
 /**
  * How much of each break the player plays before cutting to what follows it: about two seconds,
@@ -41,7 +48,7 @@ export const BREAK_BANNER_AT_MS = BREAK_QUESTION_MS + 750;
  * to read. The final End's holds "That's a wrap" a little longer, since nothing has to start after it.
  */
 export const BREAK_PLAYED_MS: Record<'lead_in' | 'extend' | 'final_end', number> = {
-  lead_in: 2_100,
+  lead_in: BREAK_SETTLE_MS + 2_100,
   extend: BREAK_BANNER_AT_MS + 1_300,
   final_end: BREAK_BANNER_AT_MS + 1_500,
 };
