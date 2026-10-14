@@ -235,6 +235,11 @@ export function ClaimListPicker({
           setQuery(event.target.value);
           setShown(SPACES_PER_STEP);
         }}
+        // Search is live, so Enter has nothing to do here. Left alone, it would submit a form the
+        // picker sits in: in the Open a debate lobby dialog, opening the lobby mid-search.
+        onKeyDown={event => {
+          if (event.key === 'Enter') event.preventDefault();
+        }}
       />
       <div {...{ [SCROLL_ATTRIBUTE]: '' }} className="-mx-3 max-h-[min(420px,55vh)] overflow-y-auto px-3">
         <HubQueryState

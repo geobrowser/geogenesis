@@ -1,10 +1,11 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimListCatalog } from '../claim-list-pages';
-import { ClaimListPickerContent, LobbyClaimListPicker } from './lobby-claim-list-picker';
+import { ClaimListPicker, ClaimListPickerContent, LobbyClaimListPicker } from './lobby-claim-list-picker';
 
 const mocks = vi.hoisted(() => ({
   catalog: {
@@ -142,5 +143,28 @@ describe('ClaimListPickerContent', () => {
     plus.dispatchEvent(press);
 
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Remove a list to add another');
+  });
+
+  // On desktop the picker renders in place, so in the Open a debate lobby dialog its search sits
+  // inside the dialog's form: Enter there must search, not open the lobby (GEO-3275).
+  it('never submits a form it sits in when Enter is pressed in its search', async () => {
+    mocks.catalog.data = catalog;
+    const submit = vi.fn((event: { preventDefault: () => void }) => event.preventDefault());
+    render(
+      <form onSubmit={submit}>
+        <input aria-label="Name" />
+        <ClaimListPicker addedIds={[]} analyticsLabel="Test pick" onPick={vi.fn()} />
+        <button type="submit">Open lobby</button>
+      </form>
+    );
+    const user = userEvent.setup();
+
+    await user.type(screen.getByRole('textbox', { name: 'Search claim lists' }), 'spicy{Enter}');
+    expect(submit).not.toHaveBeenCalled();
+    expect(screen.getByRole('textbox', { name: 'Search claim lists' })).toHaveValue('spicy');
+
+    // The harness does submit on Enter in an ordinary field, so the line above is not vacuous.
+    await user.type(screen.getByRole('textbox', { name: 'Name' }), 'AI night{Enter}');
+    expect(submit).toHaveBeenCalledTimes(1);
   });
 });
