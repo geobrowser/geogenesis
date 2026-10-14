@@ -158,6 +158,12 @@ export const DEBATE_RECORDING_HELP_URL = 'https://discord.gg/Hcng2pURZ';
  */
 type RecordingCancelSource = 'rematch_card' | 'upload_banner';
 
+/**
+ * What the cancel prompt says once geo-chat stops accepting a cancel. Its own refusal reads
+ * "through the end of the thank-you period", a screen the viewer no longer sees (GEO-3301).
+ */
+const RECORDING_CANCEL_TOO_LATE = 'It’s too late to cancel. This debate is already being published.';
+
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
 type RecordingUploadDependencies = {
@@ -814,6 +820,13 @@ export function DebateRecordingUploadCoordinator() {
     ? null
     : (thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null));
   const cancelPromptOpen = cancelTargetDebateId !== null;
+  // The prompt can be opened just before geo-chat's deadline and answered after it. The surface
+  // that opened it says when the window has closed; past that the prompt says so rather than
+  // sending a cancel the server will refuse.
+  const cancelPromptTooLate =
+    cancelTargetDebateId !== null &&
+    thankingDebate?.cancelWindowOpen === false &&
+    normalizeDebateId(cancelTargetDebateId) === normalizedThankingDebateId;
 
   // "Debate uploaded" is the banner's line about the Cancel action beside it — the upload is done
   // and still withdrawable — so it belongs to the banner only while the banner owns that action.
@@ -940,7 +953,7 @@ export function DebateRecordingUploadCoordinator() {
   }, [cancelBusy, cancelTargetDebateId]);
 
   const confirmCancel = React.useCallback(async () => {
-    if (!cancelTargetDebateId) return;
+    if (!cancelTargetDebateId || cancelPromptTooLate) return;
     const normalizedTargetDebateId = normalizeDebateId(cancelTargetDebateId);
     setCancelBusy(true);
     setCancelError(null);
@@ -1005,11 +1018,26 @@ export function DebateRecordingUploadCoordinator() {
         setCancelTargetDebateId(null);
       }
     } catch (error) {
-      if (mountedRef.current) setCancelError(error instanceof Error ? error.message : 'Could not cancel the upload.');
+      if (!mountedRef.current) return;
+      // The same deadline, reached on a clock this tab could not see — or from the room, which does
+      // not report the window closing.
+      if (error instanceof GeoChatRequestError && error.code === 'recording_not_cancellable') {
+        setCancelError(RECORDING_CANCEL_TOO_LATE);
+      } else {
+        setCancelError(error instanceof Error ? error.message : 'Could not cancel the upload.');
+      }
     } finally {
       if (mountedRef.current) setCancelBusy(false);
     }
-  }, [accountKey, cancelTargetDebateId, getPrivyIdentityToken, queryClient, uploadedDebateIds, uploads]);
+  }, [
+    accountKey,
+    cancelPromptTooLate,
+    cancelTargetDebateId,
+    getPrivyIdentityToken,
+    queryClient,
+    uploadedDebateIds,
+    uploads,
+  ]);
 
   // Close the prompt only when there is nothing left to cancel. The upload finishing mid-prompt
   // must not close it, since the backend still cancels an uploaded recording.
@@ -1100,7 +1128,8 @@ export function DebateRecordingUploadCoordinator() {
       {cancelPromptOpen && (
         <DebateCancelUploadDialog
           busy={cancelBusy}
-          error={cancelError}
+          error={cancelPromptTooLate ? RECORDING_CANCEL_TOO_LATE : cancelError}
+          canConfirm={!cancelPromptTooLate}
           onConfirm={confirmCancel}
           onClose={closeCancelPrompt}
         />
@@ -1263,11 +1292,14 @@ const bannerButtonClassName =
 export function DebateCancelUploadDialog({
   busy,
   error,
+  canConfirm = true,
   onConfirm,
   onClose,
 }: {
   busy: boolean;
   error: string | null;
+  /** False once there is nothing a confirmation could still do; `error` says why. */
+  canConfirm?: boolean;
   onConfirm: () => void;
   onClose: () => void;
 }) {
@@ -1305,7 +1337,7 @@ export function DebateCancelUploadDialog({
         <button
           type="button"
           onClick={onConfirm}
-          disabled={busy}
+          disabled={busy || !canConfirm}
           className="mt-5 flex min-h-7 w-full items-center justify-center rounded-full bg-red-01 px-4 text-metadata text-white transition-colors hover:bg-red-01/90 disabled:opacity-50"
         >
           {busy ? 'Removing...' : 'Delete debate forever'}

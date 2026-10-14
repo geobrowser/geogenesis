@@ -1326,6 +1326,52 @@ describe('DebateRecordingUploadCoordinator', () => {
     expect(mocks.queue).toHaveLength(1);
   });
 
+  // Copilot on #2853. A prompt opened just before geo-chat's deadline used to stay live after it,
+  // and confirming sent a cancel the server refused in its own words about a screen now gone.
+  it('stops a prompt opened before the deadline from confirming after it', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.thankingDebateId = 'debate-1';
+    mocks.thankingShowsPublishControl = true;
+    mocks.publishOptOutRequest = 'debate-1';
+    mocks.queue = [queuedRecording('debate-1')];
+
+    const view = render(<DebateRecordingUploadCoordinator />);
+    const confirm = await screen.findByRole('button', { name: 'Delete debate forever' });
+    expect(confirm).toBeEnabled();
+
+    mocks.thankingCancelWindowOpen = false;
+    mocks.thankingShowsPublishControl = false;
+    view.rerender(<DebateRecordingUploadCoordinator />);
+
+    expect(await screen.findByText('It’s too late to cancel. This debate is already being published.')).toBeVisible();
+    expect(confirm).toBeDisabled();
+    fireEvent.click(confirm);
+    expect(mocks.cancelRecording).not.toHaveBeenCalled();
+  });
+
+  it('says it is too late, in the app’s words, when geo-chat refuses a cancel past its deadline', async () => {
+    mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
+    mocks.cancelRecording.mockRejectedValue(
+      new GeoChatRequestError(
+        'recordings can only be cancelled through the end of the thank-you period',
+        'recording_not_cancellable',
+        400
+      )
+    );
+    mocks.queue = [queuedRecording('debate-1')];
+
+    render(<DebateRecordingUploadCoordinator />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete debate forever' }));
+
+    expect(
+      await screen.findByText('It’s too late to cancel. This debate is already being published.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/thank-you period/)).toBeNull();
+    expect(mocks.deleteUpload).not.toHaveBeenCalled();
+  });
+
   it('keeps publication cancelled when server cancellation succeeds but local cleanup fails', async () => {
     mocks.completeUpload.mockImplementation(() => new Promise<void>(() => undefined));
     mocks.deleteUpload.mockRejectedValue(new Error('IndexedDB unavailable'));

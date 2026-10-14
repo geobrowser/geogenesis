@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { consumeDebateReturnDestination, peekDebateReturnDestination } from '../debate-return-navigation';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
-import { useDebateLobby, useMyDebateLobby } from './hooks';
+import { useMyDebateLobby } from './hooks';
 import { requestLobbyRejoin } from './step-out';
 
 /**
@@ -15,19 +15,6 @@ function useServerLobbyReturn(): { lobbyId: string | null } | undefined {
   const mine = useMyDebateLobby();
   if (mine.isError || !mine.data) return undefined;
   return { lobbyId: mine.data.stepped_out ? mine.data.current_lobby_id : null };
-}
-
-/** The lobby this debate flow returns to; null when it did not start in one or that lobby is gone. */
-export function useRecordedLobby(): string | null {
-  const mine = useMyDebateLobby();
-  // This tab's record, read once per mount; used only when geo-chat cannot answer.
-  const [stored] = React.useState(() => {
-    const destination = peekDebateReturnDestination();
-    return destination ? debateRoomIdFromPath(destination) : null;
-  });
-
-  if (mine.isError) return stored;
-  return mine.data?.stepped_out ? mine.data.current_lobby_id : null;
 }
 
 /** The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. */
@@ -42,20 +29,31 @@ export function useConsumeDebateReturnDestination() {
 }
 
 /**
- * For a debate flow's Leave: when the flow started in a lobby that is still open to the viewer, has
- * the lobby join again on arrival rather than ask. Leaving still goes the usual way, through
+ * For a debate flow's Leave: when the flow is returning to a lobby, has the lobby join again on
+ * arrival rather than ask. Leaving still goes the usual way, through
  * `useConsumeDebateReturnDestination`; this only says what the lobby does once it gets there.
+ *
+ * Decided when Leave is pressed, from the same answer that destination is: geo-chat's lobby once it
+ * has replied, this tab's record until then. Nothing here waits on a lookup, so a Leave pressed the
+ * moment the picker opens still rejoins. Whether the viewer may rejoin (the lobby is open, a host
+ * has not removed them) is the lobby page's call, which it makes before honouring the request.
  *
  * The debate's end card used to offer this as its own "Back to <lobby>" row. GEO-3301 sends the
  * pair to the claim picker instead, whose Leave returns to the lobby anyway, so the rejoin rides on
  * that rather than on a second button for the same way out.
  */
 export function useLobbyRejoinOnLeave(): () => void {
-  const lobbyId = useRecordedLobby();
-  const lobby = useDebateLobby(lobbyId ?? '', lobbyId !== null).data;
-  // A host removed them, or the lobby is gone: going back is a choice made on the lobby page.
-  const rejoinable = lobbyId !== null && lobby?.access.status === 'admitted' && !lobby.viewer.removed;
+  const lobby = useServerLobbyReturn();
+  const known = lobby !== undefined;
+  const lobbyId = lobby?.lobbyId ?? null;
   return React.useCallback(() => {
-    if (rejoinable && lobbyId) requestLobbyRejoin(lobbyId);
-  }, [lobbyId, rejoinable]);
+    const destination = known ? lobbyId : storedLobbyId();
+    if (destination) requestLobbyRejoin(destination);
+  }, [known, lobbyId]);
+}
+
+/** The lobby in this tab's record of where the flow returns to, or null when it is a page. */
+function storedLobbyId(): string | null {
+  const destination = peekDebateReturnDestination();
+  return destination ? debateRoomIdFromPath(destination) : null;
 }
