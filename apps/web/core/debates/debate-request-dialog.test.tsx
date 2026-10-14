@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRequestDialogParticipant } from './debate-request-dialog';
 import { DebateRequestDialog } from './debate-request-dialog';
+import { debateFormatById, defaultDebateFormatId } from './formats';
 
 const media = vi.hoisted(() => ({
   releaseSession: vi.fn(),
@@ -113,6 +114,52 @@ describe('DebateRequestDialog', () => {
     const dialog = screen.getByRole('dialog', { name: 'The protocol should ship debates' });
     expect(within(dialog).getByText('Open rounds · at least 2 min')).toBeInTheDocument();
     expect(within(dialog).queryByText(/2 min total/)).not.toBeInTheDocument();
+  });
+
+  it('reads a request with no format id as the default, not as no time at all', () => {
+    const fallback = debateFormatById(defaultDebateFormatId)!;
+
+    render(
+      <DebateRequestDialog
+        media={{ kind: 'already-live' }}
+        claim="The protocol should ship debates"
+        participants={participants}
+        currentUserId="user-local"
+        formatId={null}
+        openRounds={null}
+        formatSummaryOnly
+        busy={false}
+        error={null}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'The protocol should ship debates' });
+    expect(within(dialog).getByText(new RegExp(fallback.label))).toBeInTheDocument();
+    expect(within(dialog).queryByText('0s total')).not.toBeInTheDocument();
+  });
+
+  it('names no format for an id it does not recognise', () => {
+    render(
+      <DebateRequestDialog
+        media={{ kind: 'already-live' }}
+        claim="The protocol should ship debates"
+        participants={participants}
+        currentUserId="user-local"
+        formatId="a-format-from-a-newer-server"
+        openRounds={null}
+        formatSummaryOnly
+        busy={false}
+        error={null}
+        onAccept={vi.fn()}
+        onReject={vi.fn()}
+      />
+    );
+
+    const dialog = screen.getByRole('dialog', { name: 'The protocol should ship debates' });
+    expect(within(dialog).getByText('0s total')).toBeInTheDocument();
+    expect(within(dialog).queryByText(new RegExp(debateFormatById(defaultDebateFormatId)!.label))).toBeNull();
   });
 
   it('states the Open rounds cap when the request carries one', () => {
