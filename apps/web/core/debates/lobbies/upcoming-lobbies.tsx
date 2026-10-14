@@ -19,7 +19,8 @@ import { useDebatesHub } from '../matchmaking/use-debates-hub';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbyReminder } from './hooks';
 import { type LobbyEntry, markLobbyEntry } from './lobby-analytics';
-import { RSVP_FAILED, goingLabel, hostsLabel, lobbyErrorMessage, rsvpLabel } from './lobby-format';
+import { RSVP_FAILED, goingLabel, lobbyErrorMessage, rsvpLabel } from './lobby-format';
+import { LobbyHostNames } from './lobby-host-names';
 
 /** How far one press of an edge arrow moves the row: most of a card, so the next one lands in view. */
 const SCROLL_STEP_RATIO = 0.8;
@@ -47,11 +48,23 @@ export function lobbyBadgeTime(iso: string) {
     : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-/** "Bryan · 6 going": the host, then the count once anyone has RSVP'd. */
-export function lobbyByline(lobby: Pick<DebateLobbySummary, 'hosts' | 'reminder_count'>) {
-  return [hostsLabel(lobby.hosts), lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null]
-    .filter(Boolean)
-    .join(' · ');
+/** "Bryan · 6 going": the host, a link to their space, then the count once anyone has RSVP'd. */
+export function LobbyByline({
+  lobby,
+  analyticsLabel,
+}: {
+  lobby: Pick<DebateLobbySummary, 'hosts' | 'reminder_count'>;
+  /** Names a click on a host, e.g. "Upcoming lobbies host". */
+  analyticsLabel: string;
+}) {
+  const going = lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null;
+  if (lobby.hosts.length === 0) return going;
+  return (
+    <>
+      <LobbyHostNames hosts={lobby.hosts} analyticsLabel={analyticsLabel} />
+      {going ? ` · ${going}` : null}
+    </>
+  );
 }
 
 /** RSVP, or Going once set: black, so a lobby the viewer is going to stands out in a row of them. */
@@ -87,12 +100,12 @@ export function LobbyRsvpButton({
   );
 }
 
-/** The date badge: the day over the start time. */
+/** The date badge: the day over the start time. At least square, wider for "Tomorrow" or "4:30 PM". */
 function DateBadge({ lobby }: { lobby: DebateLobbySummary }) {
   return (
     <div
       aria-hidden
-      className="flex size-11 shrink-0 flex-col items-center justify-center rounded-md bg-grey-01 text-center"
+      className="flex h-11 min-w-11 shrink-0 flex-col items-center justify-center rounded-md bg-grey-01 px-2 text-center"
     >
       <span className="text-footnoteMedium text-grey-04 uppercase">{lobbyDayLabel(lobby.starts_at)}</span>
       <span className="text-[16px] leading-[18px] font-semibold whitespace-nowrap">
@@ -103,11 +116,23 @@ function DateBadge({ lobby }: { lobby: DebateLobbySummary }) {
 }
 
 /** One scheduled lobby as a card in the row: its date, name, host and RSVP. */
-function UpcomingLobbyCard({ lobby, entry }: { lobby: DebateLobbySummary; entry: LobbyEntry }) {
+function UpcomingLobbyCard({
+  lobby,
+  entry,
+  alone,
+}: {
+  lobby: DebateLobbySummary;
+  entry: LobbyEntry;
+  /** The only card: it fills the row instead of leaving most of it empty. */
+  alone: boolean;
+}) {
   const when = [lobbyDayLabel(lobby.starts_at), lobbyBadgeTime(lobby.starts_at)].filter(Boolean).join(' ');
   return (
     <li
-      className="flex w-[300px] max-w-[80vw] shrink-0 snap-start items-center gap-3 rounded-lg border border-grey-02 bg-white p-3"
+      className={cx(
+        'flex shrink-0 snap-start items-center gap-3 rounded-lg border border-grey-02 bg-white p-3',
+        alone ? 'w-full' : 'w-[300px] max-w-[80vw]'
+      )}
       data-testid="upcoming-lobby-card"
     >
       <DateBadge lobby={lobby} />
@@ -123,7 +148,7 @@ function UpcomingLobbyCard({ lobby, entry }: { lobby: DebateLobbySummary; entry:
           </Text>
         </Link>
         <Text as="span" variant="footnote" color="grey-04" className="truncate">
-          {lobbyByline(lobby)}
+          <LobbyByline lobby={lobby} analyticsLabel="Upcoming lobbies host" />
         </Text>
       </div>
       <LobbyRsvpButton lobby={lobby} analyticsLabelPrefix="Upcoming lobbies" className="shrink-0" />
@@ -186,7 +211,7 @@ export function UpcomingLobbiesRow({
               className="no-scrollbar flex snap-x snap-mandatory scroll-px-4 gap-2 overflow-x-auto overscroll-x-contain px-4"
             >
               {lobbies.map(lobby => (
-                <UpcomingLobbyCard key={lobby.lobby_id} lobby={lobby} entry="side_panel" />
+                <UpcomingLobbyCard key={lobby.lobby_id} lobby={lobby} entry="side_panel" alone={lobbies.length === 1} />
               ))}
             </ul>
             {overflow.start ? <EdgeArrow side="start" onClick={() => scrollBy(-1)} /> : null}

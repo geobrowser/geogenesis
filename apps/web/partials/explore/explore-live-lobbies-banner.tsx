@@ -9,7 +9,7 @@ import { dashlessId } from '~/core/debates/api';
 import type { DebateLobbySummary } from '~/core/debates/api';
 import { useLobbyLineup } from '~/core/debates/lobbies/live-lobbies';
 import { markLobbyEntry } from '~/core/debates/lobbies/lobby-analytics';
-import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
+import { LobbyHostNames } from '~/core/debates/lobbies/lobby-host-names';
 import { LobbyAvatarStack } from '~/core/debates/lobbies/lobby-people';
 import {
   LiveMark,
@@ -60,7 +60,6 @@ function LiveLobbiesBanner() {
     const ids = shown.map(lobby => lobbyBannerNoticeId(lobby.lobby_id));
     setDismissedNotices(previous => [...previous, ...ids.filter(id => !previous.includes(id))]);
   };
-  const hosts = hostsLabel(lead.hosts);
 
   return (
     <section
@@ -79,7 +78,13 @@ function LiveLobbiesBanner() {
             <span className="truncate">{lead.name} is live</span>
           </h2>
           <p className="mt-2 text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
-            {[liveLobbyCounts(lead), hosts ? `Hosted by ${hosts}` : null].filter(Boolean).join(' · ')}
+            {liveLobbyCounts(lead)}
+            {lead.hosts.length > 0 ? (
+              <>
+                {' · Hosted by '}
+                <LobbyHostNames hosts={lead.hosts} analyticsLabel="Explore live lobby host" />
+              </>
+            ) : null}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-5">

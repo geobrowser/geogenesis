@@ -152,6 +152,17 @@ describe('LiveLobbiesCard', () => {
     expect(mocks.mutate).toHaveBeenCalledWith({ lobbyId: 'a', reminded: true });
   });
 
+  it('stretches a lone card across the row, and keeps several at card width', () => {
+    mocks.lineup = { live: [], soon: null, later: [scheduled({})] };
+    render(<LiveLobbiesCard />);
+    expect(screen.getByTestId('upcoming-lobby-card')).toHaveClass('w-full');
+    cleanup();
+
+    mocks.lineup = { live: [], soon: null, later: [scheduled({ lobby_id: 'a' }), scheduled({ lobby_id: 'b' })] };
+    render(<LiveLobbiesCard />);
+    for (const card of screen.getAllByTestId('upcoming-lobby-card')) expect(card).not.toHaveClass('w-full');
+  });
+
   it('links to the Calendar’s Lobbies view', () => {
     mocks.lineup = { live: [], soon: null, later: [scheduled({})] };
     render(<LiveLobbiesCard />);

@@ -97,17 +97,34 @@ describe('LobbiesCalendarBody', () => {
     expect(screen.getByRole('heading', { name: /· Today/ })).toBeInTheDocument();
     const card = within(screen.getByTestId('lobby-calendar-card'));
     expect(card.getByText('NYC Debates')).toBeInTheDocument();
-    expect(card.getByText('Bryan · 6 going')).toBeInTheDocument();
+    expect(screen.getByTestId('lobby-calendar-card')).toHaveTextContent('Bryan · 6 going');
     card.getByRole('button', { name: 'RSVP' }).click();
     expect(mocks.mutate).toHaveBeenCalledWith({ lobbyId: 'nyc', reminded: true });
   });
 
-  it('shows a live lobby with Join', () => {
+  it('draws the seven days of the week, not the next Sunday too', () => {
+    mocks.lobbies = [lobby({})];
+    render(<LobbiesCalendarBody isPhone={false} />);
+    expect(screen.getAllByRole('heading', { level: 3 })).toHaveLength(7);
+  });
+
+  it('puts the time and host on one line above the name', () => {
+    mocks.lobbies = [lobby({ name: 'NYC Debates' })];
+    render(<LobbiesCalendarBody isPhone={false} />);
+
+    const card = screen.getByTestId('lobby-calendar-card');
+    const time = new Date(2026, 9, 14, 16).toLocaleTimeString(undefined, { hour: 'numeric' });
+    expect(card).toHaveTextContent(`${time} · Bryan`);
+    expect(card.textContent!.indexOf('Bryan')).toBeLessThan(card.textContent!.indexOf('NYC Debates'));
+  });
+
+  it('shows a live lobby with Join, its headcount beside Live', () => {
     mocks.lobbies = [lobby({ lobby_id: 'live', name: 'Live now', open: true, headcount: 14 })];
     render(<LobbiesCalendarBody isPhone={false} />);
 
     const card = within(screen.getByTestId('lobby-calendar-card'));
     expect(card.getByText('Live')).toBeInTheDocument();
+    expect(card.getByText('· 14 here')).toBeInTheDocument();
     expect(card.getByRole('link', { name: 'Join' })).toHaveAttribute('href', '/debate/live');
   });
 

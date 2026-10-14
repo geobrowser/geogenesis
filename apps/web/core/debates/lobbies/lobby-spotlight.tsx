@@ -17,11 +17,11 @@ import {
   debatingLabel,
   goingLabel,
   hereLabel,
-  hostsLabel,
   lobbyErrorMessage,
   lobbyScheduleLabel,
   rsvpLabel,
 } from './lobby-format';
+import { LobbyHostNames } from './lobby-host-names';
 import { LobbyAvatarStack } from './lobby-people';
 
 /**
@@ -96,7 +96,6 @@ export function LobbySpotlight({ lineup }: { lineup: LobbyLineup }) {
 }
 
 function LiveSpotlight({ lead, others }: { lead: DebateLobbySummary; others: DebateLobbySummary[] }) {
-  const hosts = hostsLabel(lead.hosts);
   const href = debateRoomPath(lead.lobby_id);
 
   return (
@@ -111,9 +110,9 @@ function LiveSpotlight({ lead, others }: { lead: DebateLobbySummary; others: Deb
         <Text as="h3" variant="smallTitle" color="white" className="truncate">
           {lead.name}
         </Text>
-        {hosts ? (
+        {lead.hosts.length > 0 ? (
           <p className="truncate text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-grey-03">
-            Hosted by {hosts}
+            Hosted by <LobbyHostNames hosts={lead.hosts} analyticsLabel="Lobby spotlight host" />
           </p>
         ) : null}
       </div>
@@ -198,7 +197,6 @@ export function opensInLabel(msUntil: number | null) {
 function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
   const reminder = useDebateLobbyReminder();
   const msUntil = useMinuteCountdown(lobby.opens_at);
-  const hosts = hostsLabel(lobby.hosts);
   const schedule = lobbyScheduleLabel(lobby);
 
   return (
@@ -219,9 +217,13 @@ function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
       </div>
 
       <p className="text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-grey-03">
-        {[hosts ? `Hosted by ${hosts}` : null, lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null]
-          .filter(Boolean)
-          .join(' · ')}
+        {lobby.hosts.length > 0 ? (
+          <>
+            Hosted by <LobbyHostNames hosts={lobby.hosts} analyticsLabel="Lobby spotlight host" />
+          </>
+        ) : null}
+        {lobby.hosts.length > 0 && lobby.reminder_count > 0 ? ' · ' : null}
+        {lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null}
       </p>
 
       <button

@@ -25,6 +25,7 @@ import {
   lobbyScheduleLabel,
   rsvpLabel,
 } from './lobby-format';
+import { LobbyHostNames } from './lobby-host-names';
 import { LobbyAvatarStack } from './lobby-people';
 import { OpenLobbyDialog } from './open-lobby-dialog';
 import { UpcomingLobbiesRow } from './upcoming-lobbies';
@@ -148,9 +149,9 @@ export function LobbyRow({
         )}
       </div>
 
-      {lobby.open && hostedBy ? (
+      {lobby.open && lobby.hosts.length > 0 ? (
         <Text as="p" variant="footnote" color="grey-04" className="truncate">
-          {hostedBy}
+          Hosted by <LobbyHostNames hosts={lobby.hosts} analyticsLabel="Lobby row host" />
         </Text>
       ) : null}
       {reminderError ? (

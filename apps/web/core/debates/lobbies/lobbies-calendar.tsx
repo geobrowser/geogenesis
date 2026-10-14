@@ -11,7 +11,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbySummary } from '../api';
 import { CalendarWeekNav, useMinuteClock } from '../matchmaking/debate-calendar-controls';
-import { CALENDAR_WEEKS, weekDays, weekStart } from '../matchmaking/debate-calendar-model';
+import { CALENDAR_WEEKS, DAYS_IN_WEEK, weekDays, weekStart } from '../matchmaking/debate-calendar-model';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { HubQueryState } from '../matchmaking/hub-states';
 import { debateRoomPath } from '../rooms/room-routes';
@@ -19,7 +19,7 @@ import { useDebateLobbies } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
 import { LiveMark, SPOTLIGHT_ACTION_CLASS_NAME, joinLabel, liveLobbyCounts } from './lobby-spotlight';
 import { OpenLobbyDialog } from './open-lobby-dialog';
-import { LobbyRsvpButton, lobbyBadgeTime, lobbyByline } from './upcoming-lobbies';
+import { LobbyByline, LobbyRsvpButton, lobbyBadgeTime } from './upcoming-lobbies';
 
 const NO_LOBBIES: DebateLobbySummary[] = [];
 
@@ -54,7 +54,10 @@ export function LobbiesCalendarBody({ isPhone }: { isPhone: boolean }) {
   const lobbiesQuery = useDebateLobbies();
   const lobbies = lobbiesQuery.data?.lobbies ?? NO_LOBBIES;
 
-  const days = React.useMemo(() => weekDays(weekStart(new Date(now), weekOffset)), [now, weekOffset]);
+  // `weekDays` ends with the next week's first day, the week's exclusive bound; the nav takes it
+  // whole, the grid draws only the seven days.
+  const weekBounds = React.useMemo(() => weekDays(weekStart(new Date(now), weekOffset)), [now, weekOffset]);
+  const days = React.useMemo(() => weekBounds.slice(0, DAYS_IN_WEEK), [weekBounds]);
   const byDay = React.useMemo(() => lobbiesByDay(lobbies, days, goingOnly), [lobbies, days, goingOnly]);
   const isEmpty = byDay.every(day => day.length === 0);
   const goToWeek = (next: number) => setWeekOffset(Math.max(0, Math.min(CALENDAR_WEEKS - 1, next)));
@@ -62,7 +65,7 @@ export function LobbiesCalendarBody({ isPhone }: { isPhone: boolean }) {
   return (
     <div className="flex flex-col" data-testid="lobbies-calendar">
       <CalendarWeekNav
-        days={days}
+        days={weekBounds}
         weekOffset={weekOffset}
         onGoToWeek={goToWeek}
         isPhone={isPhone}
@@ -159,7 +162,7 @@ function DayHeading({ day, now }: { day: Date; now: number }) {
   );
 }
 
-/** A lobby in its day: live and dark with Join, or its time, name, host and RSVP. */
+/** A lobby in its day: live and dark with Join, or its time and host over its name and RSVP. */
 function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
   const href = debateRoomPath(lobby.lobby_id);
   const enter = () => markLobbyEntry(lobby.lobby_id, 'calendar');
@@ -171,12 +174,14 @@ function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
         style={{ '--avatar-group-ring': '#151515' } as React.CSSProperties}
         data-testid="lobby-calendar-card"
       >
-        <LiveMark count={1} />
+        <div className="flex min-w-0 items-center gap-1">
+          <LiveMark count={1} className="inline-flex shrink-0 items-center gap-1.5" />
+          <Text as="span" variant="footnote" color="grey-03" className="truncate">
+            · {liveLobbyCounts(lobby)}
+          </Text>
+        </div>
         <Text as="p" variant="metadataMedium" color="white" className="truncate">
           {lobby.name}
-        </Text>
-        <Text as="p" variant="footnote" color="grey-03" className="truncate">
-          {liveLobbyCounts(lobby)}
         </Text>
         <Link
           href={href}
@@ -196,17 +201,16 @@ function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
       className={cx('flex flex-col gap-1.5 rounded-lg border border-grey-02 bg-white p-2.5')}
       data-testid="lobby-calendar-card"
     >
-      <Text as="p" variant="footnoteMedium" color="grey-04">
-        {lobbyBadgeTime(lobby.starts_at)}
+      <Text as="p" variant="footnote" color="grey-04" className="truncate">
+        <span className="font-medium text-text">{lobbyBadgeTime(lobby.starts_at)}</span>
+        {lobby.hosts.length > 0 || lobby.reminder_count > 0 ? ' · ' : null}
+        <LobbyByline lobby={lobby} analyticsLabel="Lobby calendar host" />
       </Text>
       <Link href={href} onClick={enter} className="min-w-0 hover:underline">
         <Text as="span" variant="metadataMedium" className="block truncate">
           {lobby.name}
         </Text>
       </Link>
-      <Text as="p" variant="footnote" color="grey-04" className="truncate">
-        {lobbyByline(lobby)}
-      </Text>
       <LobbyRsvpButton lobby={lobby} analyticsLabelPrefix="Lobby calendar" className="items-stretch" />
     </li>
   );
