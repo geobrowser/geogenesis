@@ -48,8 +48,10 @@ afterEach(() => {
 
 describe('useExitLobbyWhenOut', () => {
   it('goes back on Leave, without a toast', () => {
-    const { rerender } = renderExit(joined);
+    const { result, rerender } = renderExit(joined);
+    expect(result.current).toBe(false);
     rerender({ ...joined, presence: { status: 'left' } });
+    expect(result.current).toBe(true);
     expect(mocks.replace).toHaveBeenCalledWith('/space/s1/e1');
     expect(mocks.toast).not.toHaveBeenCalled();
   });
@@ -77,9 +79,10 @@ describe('useExitLobbyWhenOut', () => {
   });
 
   it('leaves the card in place for a lobby that had already ended or banned them on arrival', () => {
-    const { rerender } = renderExit({ ...joined, access: null, presence: { status: 'idle' } });
+    const { result, rerender } = renderExit({ ...joined, access: null, presence: { status: 'idle' } });
     rerender({ ...joined, access: ENDED, presence: { status: 'idle' } });
     rerender({ ...joined, access: BANNED, presence: { status: 'idle' } });
+    expect(result.current).toBe(false);
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
@@ -101,10 +104,13 @@ describe('useExitLobbyWhenOut', () => {
     expect(mocks.replace).toHaveBeenCalledWith('/space/s1/e1');
   });
 
-  it('navigates only once', () => {
-    const { rerender } = renderExit(joined);
+  it('navigates only once, and stays leaving until the route changes', () => {
+    const { result, rerender } = renderExit(joined);
     rerender({ ...joined, presence: { status: 'dropped', reason: 'ended' } });
     rerender({ ...joined, presence: { status: 'dropped', reason: 'ended' }, access: ENDED });
+    // A refetch reopening the view must not bring the card back mid-navigation.
+    rerender({ ...joined, presence: { status: 'idle' } });
+    expect(result.current).toBe(true);
     expect(mocks.replace).toHaveBeenCalledTimes(1);
   });
 });

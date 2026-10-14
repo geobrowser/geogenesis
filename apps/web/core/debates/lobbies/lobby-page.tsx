@@ -142,13 +142,16 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   // Only where the page shows the guest banner, which is how a closed prompt is opened again.
   useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
   const exitHref = useLobbyExitHref();
-  useExitLobbyWhenOut({
+  const exiting = useExitLobbyWhenOut({
     access: lobby?.access ?? null,
     presence: presence.state,
     guestStatus: guestSession.state.status,
     name: lobby?.name ?? null,
     exitHref,
   });
+
+  // Blank while the route changes, rather than a flash of the card being left.
+  if (exiting) return <div className="min-h-[calc(100dvh-2.75rem)]" data-testid="lobby-exiting" />;
 
   return (
     <LobbyGuestProvider value={guest}>

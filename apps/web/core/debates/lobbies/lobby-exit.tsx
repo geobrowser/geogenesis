@@ -83,25 +83,33 @@ function exitNotice(reason: LobbyExitReason, name: string) {
 
 /**
  * Leaving, the lobby ending, or a host removing or banning the viewer takes them back to the page
- * they opened the lobby from, with a toast saying why when it was not their choice.
+ * they opened the lobby from, with a toast saying why when it was not their choice. Decided while
+ * rendering, so the page can draw nothing instead of flashing the lobby's last card while the
+ * route changes; returns whether it is leaving.
  */
 export function useExitLobbyWhenOut(input: LobbyExitInput & { name: string | null; exitHref: string }) {
   const router = useRouter();
   const setToast = useSetToast();
-  const seenRef = React.useRef<LobbyExitSeen>({ inside: false, open: false });
-  const exitedRef = React.useRef(false);
   const { access, presence, guestStatus, name, exitHref } = input;
 
+  const [seen, setSeen] = React.useState<LobbyExitSeen>({ inside: false, open: false });
+  const inside = seen.inside || presence.status === 'joined' || guestStatus === 'listening';
+  const open = seen.open || access?.status === 'admitted' || access?.status === 'not_yet_open';
+  if (inside !== seen.inside || open !== seen.open) setSeen({ inside, open });
+
+  // Latched: once leaving, a later render cannot bring the lobby back before the route changes.
+  const [reason, setReason] = React.useState<LobbyExitReason | null>(null);
+  const next = reason ?? lobbyExitReason({ access, presence, guestStatus }, { inside, open });
+  if (next !== reason) setReason(next);
+
+  const exitedRef = React.useRef(false);
   React.useEffect(() => {
-    if (exitedRef.current) return;
-    const seen = seenRef.current;
-    if (presence.status === 'joined' || guestStatus === 'listening') seen.inside = true;
-    if (access?.status === 'admitted' || access?.status === 'not_yet_open') seen.open = true;
-    const reason = lobbyExitReason({ access, presence, guestStatus }, seen);
-    if (!reason) return;
+    if (!reason || exitedRef.current) return;
     exitedRef.current = true;
     const notice = exitNotice(reason, name ?? 'this lobby');
     if (notice) setToast(<span>{notice}</span>);
     router.replace(exitHref);
-  }, [access, exitHref, guestStatus, name, presence, router, setToast]);
+  }, [exitHref, name, reason, router, setToast]);
+
+  return next !== null;
 }

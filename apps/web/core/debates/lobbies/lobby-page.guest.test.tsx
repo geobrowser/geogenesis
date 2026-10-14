@@ -306,6 +306,7 @@ describe('DebateLobbyPage for a visitor without an account', () => {
     vi.useRealTimers();
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/s1/e1'));
     expect(mocks.replace).toHaveBeenCalledTimes(1);
+    expect(screen.queryByText('A host removed you from this lobby.')).not.toBeInTheDocument();
   });
 
   // geo-chat's upgrade order: join (ends the guest), member token, member room up, then guest room down.
@@ -567,12 +568,14 @@ describe('DebateLobbyPage when guests are turned off mid-session', () => {
     expect(screen.queryByTestId('guest-room')).not.toBeInTheDocument();
   });
 
-  it('shows the closed lobby instead when the lobby itself ended', async () => {
+  it('leaves, without flashing the closed card, when the lobby itself ended', async () => {
     const { rerender } = await endSession();
     mocks.guestView = { ...mocks.guestView!, lobby: { ...lobbyFields, access: { status: 'closed', reason: 'ended' } } };
     rerender(<DebateLobbyPage lobbyId="lobby1" />);
 
-    expect(await screen.findByText('This lobby has ended')).toBeInTheDocument();
+    // Blank in the same render that sees the end, so the card never paints.
+    expect(screen.getByTestId('lobby-exiting')).toBeInTheDocument();
+    expect(screen.queryByText('This lobby has ended')).not.toBeInTheDocument();
     expect(screen.queryByText(/has been turned off/)).not.toBeInTheDocument();
     // Ended while they were in it, opened straight from a link: back to Explore.
     expect(mocks.replace).toHaveBeenCalledWith('/explore');
