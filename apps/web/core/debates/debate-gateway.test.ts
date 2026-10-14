@@ -644,6 +644,22 @@ describe('DebateGatewayClient', () => {
           expect(await aaStillHeld()).toBe(false);
         });
 
+        // Copilot on #2850: the week's catch-up was read after the overlay had already written the
+        // patch's own `as_of` into it, so a stale week looked caught up and released the patch.
+        it('judges a week’s catch-up by what the read returned, not by the patched cache', async () => {
+          await started();
+          queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });
+          await lobbiesChanged({ lobby_id: 'aa', lobby_card: card('aa', 8, '2026-10-07T12:00:05Z') });
+
+          // A week read from before the patch lands, with nothing else in flight.
+          await queryClient.fetchQuery({
+            queryKey: weekKey,
+            queryFn: async () => ({ lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] }),
+          });
+
+          expect(await aaStillHeld()).toBe(true);
+        });
+
         it('keeps a newer patch that arrived after the catch-up was remembered', async () => {
           await started();
           queryClient.setQueryData(weekKey, { lobbies: [weekRow('aa', 3, 'open', '2026-10-07T12:00:01Z')] });

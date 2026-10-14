@@ -241,10 +241,12 @@ export class DebateGatewayClient {
       // A fetch's own success; the overlay's `setQueryData` is `manual` and does not come back here.
       if (event.type !== 'updated' || event.action.type !== 'success' || event.action.manual) return;
       if (this.accountKey && isLobbyCalendarQueryKey(event.query.queryKey, this.accountKey)) {
+        // What the read returned, taken before the overlay rewrites the cache with patches' own
+        // `as_of`, which would make a stale week look caught up.
+        const week = event.query.state.data as DebateLobbyCalendarResponse | undefined;
         // A calendar week read before a patch would otherwise undo it, as a list read would.
         this.overlayHeldPatchesOnCalendars();
         // A week holds lobbies the capped list never returns, so its reads release patches too.
-        const week = event.query.state.data as DebateLobbyCalendarResponse | undefined;
         if (week) this.releaseCaughtUpPatches(week.lobbies);
       }
       if (this.accountKey && isLobbiesQueryKey(event.query.queryKey, this.accountKey)) {
