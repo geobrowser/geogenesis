@@ -97,6 +97,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
+  const wantedKindsRef = React.useRef({ audio: true, video: true });
   const audioOutputSelectionPromiseRef = React.useRef<Promise<void> | null>(null);
   const selectedAudioInputIdRef = React.useRef('');
   const selectedAudioOutputIdRef = React.useRef(systemDefaultAudioOutput.deviceId);
@@ -122,6 +123,9 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     (sessionKey: string) => {
       if (activeSessionKeyRef.current === sessionKey) return;
       stopMedia();
+      // A new surface has chosen nothing yet. `promoteSession` deliberately leaves this alone: a
+      // hand-off keeps the choice the card made.
+      wantedKindsRef.current = { audio: true, video: true };
       audioOutputSelectionFailedRef.current = false;
       setAudioOutputError(null);
       activeSessionKeyRef.current = sessionKey;
@@ -255,7 +259,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         const audioInputId = options.audioInputId ?? selectedAudioInputIdRef.current;
         const videoInputId = options.videoInputId ?? selectedVideoInputIdRef.current;
         const wantAudio = options.audio ?? true;
-        const wantVideo = options.video ?? true;
+        const wantVideo = options.video ?? wantedKindsRef.current.video;
+        wantedKindsRef.current = { audio: wantAudio, video: wantVideo };
         const tracks = (await livekit.createLocalTracks({
           audio: wantAudio ? (audioInputId ? { deviceId: audioInputId } : true) : false,
           video: wantVideo ? (videoInputId ? { deviceId: videoInputId } : true) : false,
