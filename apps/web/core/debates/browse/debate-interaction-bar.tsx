@@ -195,11 +195,6 @@ export function DebateInteractionBar({
   );
 }
 
-/** A horizontal pill's padding. */
-function pillPaddingClass(compact: boolean) {
-  return compact ? 'gap-1 px-1.5' : 'gap-1.5 px-2.5';
-}
-
 function CircleAction({
   label,
   icon,
@@ -292,7 +287,7 @@ function PillAction({
       onClick={onClick}
       className={cx(
         PILL_ACTION_CLASS,
-        compact && hideLabel ? 'size-7 justify-center px-0' : pillPaddingClass(compact),
+        compact && hideLabel ? 'size-7 justify-center px-0' : compact ? 'gap-1 px-1.5' : 'gap-1.5 px-2.5',
         className
       )}
     >
