@@ -164,17 +164,24 @@ export function DebateRoundBadge({
     <div
       data-round-badge={cue.label}
       className={cx(
-        'pointer-events-none absolute top-3 right-13 z-10 flex max-w-[calc(100%-6rem)] items-center leading-none text-white transition-[right] duration-300',
-        stamped
-          ? 'mt-1 h-6 rounded-[2px] bg-purple px-2 text-[0.6875rem] font-medium tracking-[0.04em] uppercase'
-          : 'h-8 rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem] font-medium'
+        'pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center leading-none font-medium text-white transition-[right] duration-300',
+        !stamped && 'rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem]'
       )}
-      style={{ opacity: cue.opacity, ...(stamped && LABEL_FONT), ...(rightPx !== undefined && { right: rightPx }) }}
+      style={{ opacity: cue.opacity, ...(rightPx !== undefined && { right: rightPx }) }}
     >
       <span className="sr-only">{cue.role ? `${cue.round}, ${cue.role}` : cue.round}</span>
       {/* Truncating rather than wrapping: the badge is one line beside a 32px circle, and a second
-          line would push it off the top of the tile. */}
-      <span aria-hidden className="truncate">
+          line would push it off the top of the tile. Open rounds' tag is the mockup's: sized to the
+          player, centred against the timer. */}
+      <span
+        aria-hidden
+        data-round-tag={stamped || undefined}
+        className={cx(
+          'truncate',
+          stamped && 'rounded-[2px] bg-purple px-[1.8cqw] py-[1cqw] text-[2.8cqw] tracking-[0.04em] uppercase'
+        )}
+        style={stamped ? LABEL_FONT : undefined}
+      >
         {cue.label}
       </span>
     </div>
@@ -206,7 +213,7 @@ function RoundBannerRun({ label, startAgeMs }: { label: string; startAgeMs: numb
     >
       <div
         // 1800ms is `ROUND_CARD_MS`: Tailwind reads class names from source, so it is written out.
-        className={cx(BANNER_CLASS, 'truncate motion-safe:animate-[debateBannerInOut_1800ms_linear_both]')}
+        className={cx(BANNER_CLASS, 'truncate text-[5cqw] motion-safe:animate-[debateBannerInOut_1800ms_linear_both]')}
         style={{ ...LABEL_FONT, animationDelay: `${delayMs}ms` }}
       >
         {label}

@@ -104,9 +104,10 @@
   --animate-open-round-burst: openRoundBurst 1400ms ease-out both;
   /* Published playback's break between Open rounds (GEO-3277): each pick stamped onto its debater,
      then the banner saying what the picks mean. Rest on their last frame, like the reveal. */
-  --animate-debate-stamp: debateStamp 300ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
-  --animate-debate-banner: debateBanner 300ms cubic-bezier(0.2, 0.8, 0.3, 1) both;
-  --animate-debate-banner-out: debateBannerOut 300ms cubic-bezier(0.6, 0, 0.8, 0.3) both;
+  --animate-debate-stamp: debateStampScale 216ms cubic-bezier(0.33, 1, 0.68, 1) both, debateStampFade 90ms linear both;
+  --animate-debate-slam: debateSlam 500ms linear both;
+  --animate-debate-banner: debateBanner 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
+  --animate-debate-banner-out: debateBannerOut 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
 
   /* Font Sizes */
   --text-mainPage: 3.25rem;
@@ -413,18 +414,37 @@
   }
 }
 
-/* Settles down from a little above full size, with no bounce or shake. `--stamp-rotate` sets its tilt. */
-@keyframes debateStamp {
-  0% {
-    opacity: 0;
-    transform: rotate(var(--stamp-rotate, 0deg)) scale(1.3);
+/* The design mockup's stamp, exactly: two motions on their own curves. It comes down from 1.3x to
+   its size over 216 ms on an ease-out cubic, and is fully opaque by 90 ms. No bounce or shake; its
+   tilt is the element's own `transform`, which `scale` composes with. */
+@keyframes debateStampScale {
+  from {
+    scale: 1.3;
   }
-  40% {
+  to {
+    scale: 1;
+  }
+}
+
+@keyframes debateStampFade {
+  from {
+    opacity: 0;
+  }
+  to {
     opacity: 1;
+  }
+}
+
+/* "Keep debating?" in the mockup: down from 2x, a touch past its size at 300 ms, settled by 500 ms. */
+@keyframes debateSlam {
+  0% {
+    scale: 2;
+  }
+  60% {
+    scale: 0.94;
   }
   100% {
-    opacity: 1;
-    transform: rotate(var(--stamp-rotate, 0deg)) scale(1);
+    scale: 1;
   }
 }
 
@@ -452,77 +472,94 @@
 @keyframes debateBannerInOut {
   0% {
     clip-path: inset(0 100% 0 0);
-    animation-timing-function: cubic-bezier(0.2, 0.8, 0.3, 1);
+    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
   }
   16.7% {
     clip-path: inset(0 0 0 0);
   }
   83.3% {
     clip-path: inset(0 0 0 0);
-    animation-timing-function: cubic-bezier(0.6, 0, 0.8, 0.3);
+    animation-timing-function: cubic-bezier(0.33, 1, 0.68, 1);
   }
   100% {
     clip-path: inset(0 0 0 100%);
   }
 }
 
-/* "+1 claim" rising out of the claim counter: from tucked behind it at half size, up and out, a
-   beat at the top, then gone. */
-@keyframes claimPlusOne {
+/* "+1 claim" coming out of the claim counter, three motions on three nested layers, as in the
+   mockup: it rises its own height plus a gap over 500 ms, grows from half size over 350 ms (both
+   ease-out cubic), and shows by 88 ms and fades from 800 ms to 1100 ms. */
+@keyframes claimPlusRise {
+  from {
+    translate: 0 0;
+  }
+  to {
+    translate: 0 calc(-100% - 1.4cqw);
+  }
+}
+
+@keyframes claimPlusGrow {
+  from {
+    scale: 0.55;
+  }
+  to {
+    scale: 1;
+  }
+}
+
+@keyframes claimPlusFade {
   0% {
     opacity: 0;
-    translate: 0 0;
-    scale: 0.55;
   }
   8% {
     opacity: 1;
   }
-  45% {
-    translate: 0 calc(-100% - 0.35rem);
-    scale: 1;
-  }
-  75% {
+  72.7% {
     opacity: 1;
-    translate: 0 calc(-100% - 0.35rem);
   }
   100% {
     opacity: 0;
-    translate: 0 calc(-100% - 0.35rem);
-    scale: 1;
   }
 }
 
-/* The counter's bump as the +1 leaves it. */
+/* The counter's bump as the +1 leaves it: a half sine up to 1.22x and back over 450 ms. */
 @keyframes claimCounterBump {
-  0%,
-  100% {
+  0% {
     scale: 1;
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
   }
-  45% {
+  50% {
     scale: 1.22;
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
   }
-}
-
-/* The turn timer's once-a-second swell over its last ten seconds, on top of its stepped size. */
-@keyframes turnTimerPulse {
-  0%,
   100% {
     scale: 1;
   }
-  45% {
-    scale: 1.08;
+}
+
+/* The turn timer's once-a-second swell, a half sine over its first 350 ms, on top of its stepped
+   size: +0.08x of its size while it grows (10 s to 5 s), +0.05x once it is red. */
+@keyframes turnTimerPulse {
+  0% {
+    scale: 1;
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    scale: var(--turn-timer-swell, 1.0615);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    scale: 1;
   }
 }
 
-/* The red ripple each second sends out over a turn's last five. */
-@keyframes turnTimerRipple {
+/* The red glow each of the last five seconds lands with, fading over the second. */
+@keyframes turnTimerGlow {
   from {
-    opacity: 0.75;
-    scale: 1;
+    filter: drop-shadow(0 0 0.6rem rgb(255 82 58 / 0.75));
   }
   to {
-    opacity: 0;
-    scale: 1.7;
+    filter: drop-shadow(0 0 0 rgb(255 82 58 / 0));
   }
 }
 

@@ -19,6 +19,7 @@ import {
   breakCuts,
   breakFirstName,
   earlyEndCueAt,
+  lastWordSlotAt,
   silentAt,
 } from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
@@ -35,7 +36,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
+import { DebateBreakOverlay, DebateEarlyEndLabels, LABEL_FONT, useBreakCuts } from './debate-break-cues';
 import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
@@ -398,6 +399,10 @@ export function DebateFeedPlayer({
   // out while it is up and come back with the next speaker, as they do for the round card.
   const bannerYield = breakBannerShown(breakCue) ? 1 : 0;
   useBreakCuts(cuts, { playheadMs, running: playing && !isScrubbing, seek: seekBothRaw });
+  const lastWordSlot = React.useMemo(
+    () => (stamped && !reducedOverlays ? lastWordSlotAt(playbackBreaks, turnSegments, playheadMs) : null),
+    [playbackBreaks, playheadMs, reducedOverlays, stamped, turnSegments]
+  );
   const earlyEndCue = React.useMemo(
     () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, turnSegments, playheadMs)),
     [playbackBreaks.earlyEnds, playheadMs, reducedOverlays, turnSegments]
@@ -525,8 +530,12 @@ export function DebateFeedPlayer({
    * leave the corner stuck open behind them.
    */
   const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
-    // An Open rounds counter answers to the pointer on itself, not the tile.
-    if (stamped || event.pointerType !== 'mouse') return;
+    if (event.pointerType !== 'mouse') return;
+    // An Open rounds counter opens its list while the pointer is anywhere on its debater's video.
+    if (stamped) {
+      setPointerOverSlot(current => (hovered ? slot : current === slot ? null : current));
+      return;
+    }
     const clearSlot = (current: number | null) => (current === slot ? null : current);
 
     if (!hovered) {
@@ -610,6 +619,7 @@ export function DebateFeedPlayer({
         <DebateClaimCounter
           history={history}
           playheadMs={playheadMs}
+          tileHovered={pointerOverSlot === slot}
           name={breakNames[slot as 1 | 2]}
           rowsByClaimId={ticker.rowsByClaimId}
           entitiesByClaimId={ticker.entitiesByClaimId}
@@ -726,6 +736,7 @@ export function DebateFeedPlayer({
           onExhausted={() => void refreshSlotUrl(1)}
           onToggle={toggleFromVideo}
           claims={claimsFor(1)}
+          lastWord={lastWordSlot === 1}
           claimsOpen={claimsOpenFor(1)}
           onClaimsHoverChange={onTileHover(1)}
           topLeft={
@@ -787,6 +798,7 @@ export function DebateFeedPlayer({
           onExhausted={() => void refreshSlotUrl(2)}
           onToggle={toggleFromVideo}
           claims={claimsFor(2)}
+          lastWord={lastWordSlot === 2}
           claimsOpen={claimsOpenFor(2)}
           stamped={stamped}
           onClaimsHoverChange={onTileHover(2)}
@@ -989,6 +1001,7 @@ function DebaterVideo({
   scrimClassName = 'h-14',
   inert = false,
   stamped = false,
+  lastWord = false,
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
@@ -1014,6 +1027,8 @@ function DebaterVideo({
   inert?: boolean;
   /** Open rounds: the agreed stamps design for the timer's last ten seconds and the round tag. */
   stamped?: boolean;
+  /** Open rounds: this debater speaks last before a pick, tagged beside their name as in the mockup. */
+  lastWord?: boolean;
   /**
    * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
@@ -1539,6 +1554,15 @@ function DebaterVideo({
               {participant && (
                 <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
               )}
+              {lastWord && (
+                <span
+                  data-last-word
+                  className="shrink-0 rounded-[2px] bg-purple px-[1.8cqw] py-[1cqw] text-[2.6cqw] leading-none font-medium tracking-[0.04em] text-white uppercase"
+                  style={LABEL_FONT}
+                >
+                  Last word
+                </span>
+              )}
             </span>
             {byline && (
               <span data-debate-byline title={byline} className="truncate text-[0.75rem] leading-4 text-white/80">
@@ -1581,51 +1605,53 @@ function CountdownBadge({
   // The ring shows time remaining, so it shrinks as the turn elapses rather than filling up.
   const remaining = 1 - Math.max(0, Math.min(1, progress));
   const whole = Math.ceil(seconds);
-  // Open rounds: from 10 s the timer pulses each second and grows; from 5 s it turns red, holds its
-  // size, and its rim drains over those five seconds with a ripple each second.
+  // Open rounds, as the design mockup has it: from 10 s the timer swells each second and grows a
+  // step with each swell; from 5 s it turns red at its full size and holds there, its rim draining
+  // over the last five seconds and each second landing with a red glow.
   const counting = buildUp && seconds <= 10 && seconds > 0;
   const final = counting && seconds <= 5;
+  const scale = buildUp ? turnTimerScale(seconds) : 1;
   const degrees = final ? (Math.max(0, seconds) / 5) * 360 : remaining * 360;
+  // The swell's height in the mockup is absolute: 0.08 of the timer's size while it grows, 0.05 once red.
+  const swell = 1 + (final ? 0.05 : 0.08) / scale;
+  // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
+  // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
+  const ringWidth = final ? '0.55cqw' : '2px';
+  const ringMask = `radial-gradient(farthest-side, transparent calc(100% - ${ringWidth}), #000 calc(100% - ${ringWidth}))`;
   return (
     <div
       data-turn-timer={final ? 'final' : counting ? 'building' : 'steady'}
-      className="absolute top-3 right-3 z-10 size-8 origin-top-right transition-[scale] duration-300 ease-out"
-      style={{ scale: buildUp ? turnTimerScale(seconds) : 1 }}
+      className="absolute top-3 right-3 z-10 size-8 origin-top-right transition-[scale] duration-[350ms] ease-[cubic-bezier(0.33,1,0.68,1)]"
+      style={{ scale }}
     >
       <div
-        // Re-mounted each second, which restarts its pulse.
+        // Re-mounted each second, which restarts its swell and glow.
         key={counting ? whole : 'steady'}
         className={cx(
-          'relative grid size-8 place-items-center rounded-full',
-          counting && 'motion-safe:animate-[turnTimerPulse_450ms_ease-out]',
+          'grid size-8 origin-top-right place-items-center rounded-full',
+          counting && !final && 'motion-safe:animate-[turnTimerPulse_350ms_linear]',
+          final && 'motion-safe:animate-[turnTimerPulse_350ms_linear,turnTimerGlow_1000ms_linear]',
           final ? 'bg-red-01' : 'bg-linear-to-b from-black/50 to-black/25'
         )}
+        style={{ '--turn-timer-swell': swell } as React.CSSProperties}
       >
-        {final && (
-          <span
-            aria-hidden
-            className="absolute inset-0 rounded-full ring-2 ring-red-01 motion-safe:animate-[turnTimerRipple_700ms_ease-out_both] motion-reduce:hidden"
-          />
-        )}
         <span
-          className="col-start-1 row-start-1 size-7 rounded-full transition-[--turn-timer-rim] duration-300 ease-linear"
+          className={cx(
+            'col-start-1 row-start-1 rounded-full transition-[--turn-timer-rim] duration-300 ease-linear',
+            final ? 'size-8' : 'size-7'
+          )}
           style={
             {
               '--turn-timer-rim': `${degrees}deg`,
-              backgroundImage: 'conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,0.3) 0deg)',
-              // Hollowed into a 2px ring so the badge's own translucent backing shows through the
-              // middle. The frame draws a stroked circle; a filled disc would print the number on a
-              // grey plate the design does not have.
-              maskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
-              WebkitMaskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
+              backgroundImage: `conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,${final ? 0.28 : 0.3}) 0deg)`,
+              maskImage: ringMask,
+              WebkitMaskImage: ringMask,
             } as React.CSSProperties
           }
         />
         <span
-          className={cx(
-            'col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none text-white tabular-nums',
-            final ? 'font-bold' : 'font-medium'
-          )}
+          className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums"
+          style={final ? { fontFamily: 'var(--font-geist-bold)', fontWeight: 700 } : undefined}
         >
           {whole}
         </span>

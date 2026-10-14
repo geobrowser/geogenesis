@@ -35,11 +35,25 @@ const said = (id: string, saidMs: number, text = `Claim ${id}`): StackedCard => 
   opacity: 1,
 });
 
+const counterAt = (history: StackedCard[], playheadMs: number, onSeeAll?: () => void, tileHovered = false) => (
+  <DebateClaimCounter
+    history={history}
+    playheadMs={playheadMs}
+    tileHovered={tileHovered}
+    name="Preston"
+    rowsByClaimId={new Map()}
+    entitiesByClaimId={new Map()}
+    onAnswered={() => {}}
+    onSeeAll={onSeeAll}
+  />
+);
+
 const renderCounter = (history: StackedCard[], playheadMs: number, onSeeAll?: () => void) =>
   render(
     <DebateClaimCounter
       history={history}
       playheadMs={playheadMs}
+      tileHovered={false}
       name="Preston"
       rowsByClaimId={new Map()}
       entitiesByClaimId={new Map()}
@@ -47,10 +61,6 @@ const renderCounter = (history: StackedCard[], playheadMs: number, onSeeAll?: ()
       onSeeAll={onSeeAll}
     />
   );
-
-const counter = (container: HTMLElement) => container.querySelector('[data-claim-counter]') as HTMLElement;
-const hover = (el: HTMLElement) => fireEvent.pointerEnter(el, { pointerType: 'mouse' });
-const leave = (el: HTMLElement) => fireEvent.pointerLeave(el, { pointerType: 'mouse' });
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -60,10 +70,10 @@ afterEach(() => vi.useRealTimers());
 
 describe('DebateClaimCounter (GEO-3317)', () => {
   it('shows the count from the start, at 0, and opens nothing with nothing said', () => {
-    const { container } = renderCounter([], 1_000);
+    const { container, rerender } = renderCounter([], 1_000);
     expect(container.querySelector('[data-claim-count]')?.getAttribute('data-claim-count')).toBe('0');
 
-    hover(counter(container));
+    rerender(counterAt([], 1_000, undefined, true));
     act(() => vi.advanceTimersByTime(500));
     expect(container.querySelector('[data-claim-list]')).toBeNull();
   });
@@ -82,35 +92,28 @@ describe('DebateClaimCounter (GEO-3317)', () => {
       container.querySelector('[data-claim-plus-one]')?.parentElement?.querySelector('[data-claim-count]')
     ).not.toBeNull();
 
-    rerender(
-      <DebateClaimCounter
-        history={history}
-        playheadMs={12_000}
-        name="Preston"
-        rowsByClaimId={new Map()}
-        entitiesByClaimId={new Map()}
-        onAnswered={() => {}}
-      />
-    );
+    rerender(counterAt(history, 12_000));
     expect(container.querySelector('[data-claim-plus-one]')).toBeNull();
   });
 
-  it('opens after a moment on the counter, holds while the pointer crosses into it, closes after it leaves', () => {
-    const { container } = renderCounter([said('a', 1_000), said('b', 2_000)], 30_000);
-    hover(counter(container));
+  // The pointer anywhere on the debater's video, which the player reports as `tileHovered`.
+  it('opens after a moment on the video, holds through a quick leave and return, closes after it leaves', () => {
+    const history = [said('a', 1_000), said('b', 2_000)];
+    const { container, rerender } = renderCounter(history, 30_000);
+    rerender(counterAt(history, 30_000, undefined, true));
     act(() => vi.advanceTimersByTime(100));
     expect(container.querySelector('[data-claim-list]')).toBeNull();
     act(() => vi.advanceTimersByTime(100));
     expect(container.querySelector('[data-claim-list]')).not.toBeNull();
 
-    leave(counter(container));
+    rerender(counterAt(history, 30_000));
     act(() => vi.advanceTimersByTime(150));
-    // Back in before it closed: still open.
-    hover(counter(container));
+    // Back on the video before it closed: still open.
+    rerender(counterAt(history, 30_000, undefined, true));
     act(() => vi.advanceTimersByTime(400));
     expect(container.querySelector('[data-claim-list]')).not.toBeNull();
 
-    leave(counter(container));
+    rerender(counterAt(history, 30_000));
     act(() => vi.advanceTimersByTime(300));
     expect(container.querySelector('[data-claim-list]')).toBeNull();
   });
@@ -154,8 +157,8 @@ describe('DebateClaimCounter (GEO-3317)', () => {
   it('tints the newest claim for a few seconds after its +1', () => {
     const { container } = renderCounter([said('a', 1_000), said('b', 20_000)], 21_000);
     fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
-    expect(container.querySelector('[data-claim-list-card="b"]')?.className).toContain('bg-purple');
-    expect(container.querySelector('[data-claim-list-card="a"]')?.className).not.toContain('bg-purple');
+    expect(container.querySelector('[data-claim-list-card="b"]')?.hasAttribute('data-fresh')).toBe(true);
+    expect(container.querySelector('[data-claim-list-card="a"]')?.hasAttribute('data-fresh')).toBe(false);
   });
 
   it('votes from the list', () => {

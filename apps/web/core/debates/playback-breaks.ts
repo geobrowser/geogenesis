@@ -272,6 +272,23 @@ export function earlyEndCueAt(
  * because these lie between turn segments; an older render's lead-in is the exception, kept at the
  * front of the next turn.
  */
+/**
+ * The debater with the last word: the speaker of a round's closing turn when a pick follows it, for
+ * as long as that turn runs. In the design mockup the player tags them "Last word" (GEO-3277).
+ * `segments` on the player's clock.
+ */
+export function lastWordSlotAt(
+  breaks: PlaybackBreaks,
+  segments: readonly DebateMediaTurnSegment[],
+  playheadMs: number
+): ParticipantSlot | null {
+  const turn = segments.find(segment => playheadMs >= segment.output_start_ms && playheadMs < segment.output_end_ms);
+  if (!turn || turn.turn_index % 2 !== 1) return null;
+  const round = (turn.turn_index - 1) / 2;
+  const picked = breaks.breaks.some(entry => entry.kind !== 'lead_in' && entry.roundIndex === round);
+  return picked ? turn.participant_slot : null;
+}
+
 export function silentAt(breaks: PlaybackBreaks, playheadMs: number) {
   return (
     breaks.breaks.some(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs) ||

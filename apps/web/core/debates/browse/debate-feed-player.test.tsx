@@ -105,8 +105,8 @@ vi.mock('./debate-claim-ticker', () => ({
 // The Open rounds counter has its own suite; here it stands in so the player's wiring is what is
 // under test: which corner each format draws, and what it is handed.
 vi.mock('./debate-claim-counter', () => ({
-  DebateClaimCounter: ({ history, name }: { history: unknown[]; name: string }) => (
-    <div data-testid="claim-counter" data-count={history.length} data-name={name} />
+  DebateClaimCounter: ({ history, name, tileHovered }: { history: unknown[]; name: string; tileHovered: boolean }) => (
+    <div data-testid="claim-counter" data-count={history.length} data-name={name} data-hovered={tileHovered} />
   ),
 }));
 
@@ -1990,7 +1990,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(banner?.textContent).toBe('That’s a wrap');
     // Purple like every other banner, so it stands out as much as a new round does.
     expect(banner?.className).toContain('bg-purple');
-    expect(banner?.parentElement?.textContent).toMatch(/didn't pick in time$/);
+    // The reason sits beneath the banner, where the mockup puts it.
+    expect(container.querySelector('[data-debate-break]')?.textContent).toMatch(/didn't pick in time$/);
   });
 
   it('announces a required round with the banner alone, since nobody picked', () => {
@@ -2060,11 +2061,11 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
   it('labels the round beside the timer as a purple tag', () => {
     mocks.controller = at(12);
     const open = render(<DebateFeedPlayer debate={openRounds} active />).container;
-    expect(open.querySelector('[data-round-badge]')?.className).toContain('bg-purple');
+    expect(open.querySelector('[data-round-badge] [data-round-tag]')?.className).toContain('bg-purple');
 
     mocks.controller = at(12);
     const fixed = render(<DebateFeedPlayer debate={debate} active />).container;
-    expect(fixed.querySelector('[data-round-badge]')?.className).not.toContain('bg-purple');
+    expect(fixed.querySelector('[data-round-badge] [data-round-tag]')).toBeNull();
   });
 
   it('builds the timer up over a turn’s last ten seconds and turns it red for the last five', () => {
@@ -2099,5 +2100,62 @@ describe('turnTimerScale', () => {
     expect(turnTimerScale(6.2)).toBeCloseTo(1.24);
     expect(turnTimerScale(5.5)).toBeCloseTo(1.3);
     expect(turnTimerScale(3)).toBe(1.3);
+  });
+});
+
+describe('Open rounds in-app player: hover and the last word (GEO-3317, GEO-3277)', () => {
+  const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+
+  it('opens a debater’s claims when the pointer is anywhere on their video', () => {
+    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 });
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const tile = container.querySelector('[data-debate-slot="1"]') as HTMLElement;
+    const counter = () => container.querySelector('[data-debate-slot="1"] [data-testid="claim-counter"]');
+
+    fireEvent.pointerEnter(tile, { pointerType: 'mouse' });
+    expect(counter()?.getAttribute('data-hovered')).toBe('true');
+    // The other debater's stays shut.
+    expect(
+      container.querySelector('[data-debate-slot="2"] [data-testid="claim-counter"]')?.getAttribute('data-hovered')
+    ).toBe('false');
+    fireEvent.pointerLeave(tile, { pointerType: 'mouse' });
+    expect(counter()?.getAttribute('data-hovered')).toBe('false');
+  });
+
+  it('tags the last speaker before a pick "Last word", and no one else', () => {
+    // Round 2's closing turn (index 3) ends at 120 s and an Extend pick follows it.
+    const turnSegments: DebateMediaTurnSegment[] = [
+      { turn_index: 2, participant_slot: 1, output_start_ms: 60_000, output_end_ms: 90_000, duration_ms: 30_000 },
+      { turn_index: 3, participant_slot: 2, output_start_ms: 90_000, output_end_ms: 120_000, duration_ms: 30_000 },
+    ];
+    const playbackBreaks = {
+      breaks: [
+        {
+          kind: 'extend' as const,
+          roundIndex: 1,
+          nextRoundIndex: 2,
+          decidingStartMs: 120_000,
+          startMs: 124_000,
+          endMs: 132_000,
+        },
+      ],
+      earlyEnds: [],
+      picks: [],
+    };
+    const tagAt = (seconds: number) => {
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds: seconds,
+        turnSegments,
+        playbackBreaks,
+      });
+      const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+      return [...container.querySelectorAll('[data-last-word]')].map(tag =>
+        tag.closest('[data-debate-slot]')?.getAttribute('data-debate-slot')
+      );
+    };
+    expect(tagAt(100)).toEqual(['2']);
+    expect(tagAt(70)).toEqual([]);
   });
 });

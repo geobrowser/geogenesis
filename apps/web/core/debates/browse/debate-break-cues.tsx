@@ -154,8 +154,13 @@ const STAMP_INK: Record<OpenRoundPick | 'none', string> = {
   end: 'text-text',
   none: 'border-dashed text-grey-04',
 };
-/** Each tile's stamp leans its own way, so the two read as two hands. */
-const STAMP_TILT: Record<ParticipantSlot, string> = { 1: '-3deg', 2: '2.5deg' };
+/** Each tile's stamp leans its own way, so the two read as two hands. The design mockup's tilts. */
+const STAMP_TILT: Record<ParticipantSlot, string> = { 1: '-3.2deg', 2: '2.4deg' };
+/** "Ended early" leans the other way from a pick. */
+const ENDED_TILT = '2deg';
+
+/** Shown, without a fade, from where a held animation starts: the mockup's dim and note appear at once. */
+const APPEAR = 'motion-safe:animate-[debateStampFade_1ms_linear_both]';
 
 /**
  * The stamps' shared look: Geist Bold on a solid white face, square-cornered, sized snugly around
@@ -168,9 +173,9 @@ const STAMP_FONT = { fontFamily: 'var(--font-geist-bold)' } as const;
 /** The banners' and the question's type: the recording timer's Geist. */
 export const LABEL_FONT = { fontFamily: 'var(--font-geist-medium)' } as const;
 
-/** A purple band across a box's width, the round and turn announcements. */
+/** A purple band across a box's width, the round and turn announcements. Sized where it is used. */
 export const BANNER_CLASS =
-  'w-full bg-purple px-4 py-[0.6em] text-center text-[5cqw] leading-none font-medium tracking-[0.04em] whitespace-nowrap text-white uppercase';
+  'w-full bg-purple px-[0.6em] py-[0.6em] text-center leading-none font-medium tracking-[0.04em] whitespace-nowrap text-white uppercase';
 
 /**
  * The break between two Open rounds in a published debate (GEO-3277): the approved "stamps".
@@ -219,16 +224,13 @@ export function DebateBreakOverlay({
   return (
     <div ref={ref} aria-hidden data-debate-break={cue.kind} className="pointer-events-none absolute inset-0 z-[22]">
       {/* The dim comes in with the first graphic, not ahead of it: the question, or a lead-in's banner. */}
-      <div
-        data-debate-dim
-        className="absolute inset-0 bg-black/40 motion-safe:animate-[fadeIn_300ms_ease-out_both]"
-        style={heldAt(BREAK_SETTLE_MS)}
-      />
+      <div data-debate-dim className={cx('absolute inset-0 bg-black/42', APPEAR)} style={heldAt(BREAK_SETTLE_MS)} />
       {picks && cue.elapsedMs < BREAK_SETTLE_MS + BREAK_QUESTION_MS && (
         <div className="absolute inset-0 grid place-items-center px-4 text-center">
           <div
             data-debate-question
-            className="text-[7cqw] leading-tight font-medium text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_24px_rgba(0,0,0,0.45)] motion-safe:animate-debate-stamp"
+            // Down from twice its size, a touch past, and settled: the mockup's slam. Hidden until then.
+            className="text-[7cqw] leading-[1.1] font-medium tracking-[-0.01em] text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_24px_rgba(0,0,0,0.45)] motion-safe:animate-[debateSlam_500ms_linear_both,debateStampFade_1ms_linear_both]"
             style={{ ...LABEL_FONT, ...heldAt(BREAK_SETTLE_MS) }}
           >
             Keep debating?
@@ -243,11 +245,10 @@ export function DebateBreakOverlay({
             <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
               <span
                 data-debate-stamp={key}
-                className={cx(STAMP_CLASS, 'text-[11cqw]', STAMP_INK[key])}
+                className={cx(STAMP_CLASS, 'text-[12cqw]', STAMP_INK[key])}
                 style={
                   {
                     ...STAMP_FONT,
-                    '--stamp-rotate': STAMP_TILT[slot],
                     transform: `rotate(${STAMP_TILT[slot]})`,
                     ...heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS + order * BREAK_STAMP_GAP_MS),
                   } as React.CSSProperties
@@ -262,13 +263,17 @@ export function DebateBreakOverlay({
       {cue.elapsedMs >= bannerAtMs - MOUNT_AHEAD_MS && (
         <div
           data-debate-banner-out
-          // Rolls on out, the way it rolled in, as the cut to the next speaker comes.
-          className="absolute inset-x-0 top-1/2 grid -translate-y-1/2 justify-items-center gap-2.5 motion-safe:animate-debate-banner-out"
-          style={heldAt(cue.playedMs - BREAK_BANNER_OUT_MS)}
+          // Rolls on out, the way it rolled in, as the cut to the next speaker comes. The wrap stays:
+          // the debate ends under it.
+          className={cx(
+            'absolute inset-x-0 top-1/2 -translate-y-1/2',
+            !wrap && 'motion-safe:animate-debate-banner-out'
+          )}
+          style={wrap ? undefined : heldAt(cue.playedMs - BREAK_BANNER_OUT_MS)}
         >
           <div
             data-debate-banner={wrap ? 'wrap' : 'round'}
-            className={cx(BANNER_CLASS, 'motion-safe:animate-debate-banner')}
+            className={cx(BANNER_CLASS, 'text-[5cqw] motion-safe:animate-debate-banner')}
             style={{ ...LABEL_FONT, ...heldAt(bannerAtMs) }}
           >
             <span className="block truncate">{title}</span>
@@ -281,11 +286,16 @@ export function DebateBreakOverlay({
               </span>
             )}
           </div>
-          {note && (
-            <span className="rounded-[3px] bg-black/70 px-3 py-1.5 text-metadata text-white" style={LABEL_FONT}>
-              {note}
-            </span>
-          )}
+        </div>
+      )}
+      {note && cue.elapsedMs >= bannerAtMs - MOUNT_AHEAD_MS && (
+        <div className={cx('absolute inset-x-0 top-[calc(50%+7.5cqw)] text-center', APPEAR)} style={heldAt(bannerAtMs)}>
+          <span
+            className="inline-block rounded-[3px] bg-black/72 px-[2.2cqw] py-[1.3cqw] text-[2.8cqw] leading-[1.2] font-medium tracking-[0.01em] text-white"
+            style={LABEL_FONT}
+          >
+            {note}
+          </span>
         </div>
       )}
     </div>
@@ -302,17 +312,12 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
 
   return (
     <div aria-hidden data-debate-early-end className="pointer-events-none absolute inset-0 z-[22]">
-      <div className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center')}>
+      {/* The debater who ended is dimmed under their stamp, as in the mockup. */}
+      <div className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center bg-black/42')}>
         <span
           data-debate-stamp="ended"
           className={cx(STAMP_CLASS, 'border-dashed text-[9cqw] text-grey-04')}
-          style={
-            {
-              ...STAMP_FONT,
-              '--stamp-rotate': STAMP_TILT[cue.endedSlot],
-              transform: `rotate(${STAMP_TILT[cue.endedSlot]})`,
-            } as React.CSSProperties
-          }
+          style={{ ...STAMP_FONT, transform: `rotate(${ENDED_TILT})` }}
         >
           Ended early
         </span>
@@ -320,7 +325,7 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
       <div className={cx(TILE_CLASS[cue.nextSlot], 'grid place-items-center')}>
         <div
           data-debate-banner="turn"
-          className={cx(BANNER_CLASS, 'truncate motion-safe:animate-debate-banner')}
+          className={cx(BANNER_CLASS, 'truncate text-[6cqw] motion-safe:animate-debate-banner')}
           style={LABEL_FONT}
         >
           {names[cue.nextSlot]}’s turn
