@@ -11,7 +11,7 @@ export type MediaDeviceOption = {
   label: string;
 };
 
-export type PreJoinMediaState = 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
+export type PreJoinMediaState = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
 
 export type LocalTrackLike = {
   mediaStreamTrack: MediaStreamTrack;
@@ -54,6 +54,7 @@ export type DebateMediaSession = {
   releaseSession: (sessionKey: string) => void;
   stopMedia: () => void;
   setPreviewStream: (stream: MediaStream | null) => void;
+  pendingPreview: () => Promise<LocalTrackLike[]> | null;
   ensurePreview: (options?: {
     forceRestart?: boolean;
     audioInputId?: string;
@@ -97,7 +98,18 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
+  /** What the in-flight acquisition asked for, so a call wanting something else is not handed it. */
   const localPreviewWantRef = React.useRef<{ audio: boolean; video: boolean } | null>(null);
+  /**
+   * The kinds this session last asked for, so a restart that names none asks for the same again.
+   *
+   * A restart from inside here — a device change, or picking a different microphone — carries device
+   * ids and no kinds, and defaulting those to "both" reopened a camera the card had been told to
+   * leave off: the light came on, the card went on saying the camera was off, and the room then
+   * inherited a track nobody chose. Reset per session, because a surface that has asked for nothing
+   * yet does want both.
+   */
+  const wantedKindsRef = React.useRef({ audio: true, video: true });
   const audioOutputSelectionPromiseRef = React.useRef<Promise<void> | null>(null);
   const selectedAudioInputIdRef = React.useRef('');
   const selectedAudioOutputIdRef = React.useRef(systemDefaultAudioOutput.deviceId);
@@ -124,6 +136,9 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     (sessionKey: string) => {
       if (activeSessionKeyRef.current === sessionKey) return;
       stopMedia();
+      // A new surface has chosen nothing yet. `promoteSession` deliberately leaves this alone: a
+      // hand-off keeps the choice the card made.
+      wantedKindsRef.current = { audio: true, video: true };
       audioOutputSelectionFailedRef.current = false;
       setAudioOutputError(null);
       activeSessionKeyRef.current = sessionKey;
@@ -206,6 +221,8 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
     return { audioInputId: nextAudioInputId, videoInputId: nextVideoInputId };
   }, []);
 
+  const pendingPreview = React.useCallback(() => localPreviewPromiseRef.current, []);
+
   const ensurePreview = React.useCallback(
     async (
       options: {
@@ -217,8 +234,9 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       } = {}
     ) => {
       if (!activeSessionKeyRef.current) return [];
-      const wantAudio = options.audio ?? true;
-      const wantVideo = options.video ?? true;
+      const wantAudio = options.audio ?? wantedKindsRef.current.audio;
+      const wantVideo = options.video ?? wantedKindsRef.current.video;
+      wantedKindsRef.current = { audio: wantAudio, video: wantVideo };
 
       if (localPreviewPromiseRef.current) {
         const inFlight = localPreviewWantRef.current;
@@ -298,6 +316,16 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         }
         const tracks = [...keep, ...opened];
         localTracksRef.current = tracks;
+
+        if (tracks.length === 0) {
+          localMediaStreamRef.current = null;
+          setPreviewStreamState(null);
+          await refreshMediaDevices();
+          if (!isCurrent()) return [];
+          setPreviewState('idle');
+          setPreviewBusy(false);
+          return tracks;
+        }
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         localMediaStreamRef.current = stream;
         setPreviewStreamState(stream);
@@ -495,6 +523,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       releaseSession,
       stopMedia,
       setPreviewStream,
+      pendingPreview,
       ensurePreview,
       changeAudioInput,
       changeAudioOutput,
@@ -512,6 +541,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       changeAudioOutput,
       changeVideoInput,
       ensurePreview,
+      pendingPreview,
       reportAudioOutputFailure,
       previewBusy,
       previewError,

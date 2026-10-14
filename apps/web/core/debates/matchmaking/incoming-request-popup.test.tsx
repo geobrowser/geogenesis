@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   dismissIsError: false,
   block: vi.fn(),
   promoteSession: vi.fn(),
+  releaseSession: vi.fn(),
 }));
 
 vi.mock('../media-session', async importOriginal => ({
@@ -19,7 +20,7 @@ vi.mock('../media-session', async importOriginal => ({
   useOptionalDebateMediaSession: () => ({
     promoteSession: mocks.promoteSession,
     beginSession: vi.fn(),
-    releaseSession: vi.fn(),
+    releaseSession: mocks.releaseSession,
     stopMedia: vi.fn(),
     ensurePreview: vi.fn(async () => []),
     previewStream: null,
@@ -99,6 +100,7 @@ beforeEach(() => {
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
   mocks.promoteSession.mockReset();
+  mocks.releaseSession.mockReset();
   mocks.dismissIsError = false;
   mocks.block.mockReset();
 
@@ -238,24 +240,12 @@ describe('IncomingRequestPopup answers', () => {
  * the media it finds under any other key.
  */
 describe('IncomingRequestPopup media hand-off', () => {
-  it('promotes the open devices to the debate the accept created', () => {
+  it('leaves the hand-off to the mutation rather than a callback of its own', () => {
     render(<IncomingRequestPopup request={request} currentUserId="me" onNotNow={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    const options = mocks.accept.mock.calls[0][1];
-    options.onSuccess({ debate: { id: 'debate-9' } });
 
-    expect(mocks.promoteSession).toHaveBeenCalledWith('debate-request:request-1', 'debate:debate-9');
-  });
-
-  // An accept that produced no debate has nothing to promote to, and guessing a key would stop the
-  // devices under one nothing is listening for.
-  it('promotes nothing when the accept produced no debate', () => {
-    render(<IncomingRequestPopup request={request} currentUserId="me" onNotNow={vi.fn()} />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
-    mocks.accept.mock.calls[0][1].onSuccess({ debate: null });
-
-    expect(mocks.promoteSession).not.toHaveBeenCalled();
+    expect(mocks.accept).toHaveBeenCalledWith({ requestId: 'request-1' }, expect.anything());
+    expect(mocks.accept.mock.calls[0][1]?.onSuccess).toBeUndefined();
   });
 });

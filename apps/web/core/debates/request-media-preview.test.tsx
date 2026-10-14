@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import * as React from 'react';
 
@@ -10,6 +10,7 @@ import { DebateRequestMediaPreview } from './request-media-preview';
 const mocks = vi.hoisted(() => ({
   /** What `permissions.query` answers for camera and microphone. */
   permission: 'prompt' as PermissionState | 'throw' | 'absent',
+  permissionGate: null as Promise<void> | null,
   /** Overrides for `permission`, one device at a time. */
   cameraPermission: null as PermissionState | null,
   micPermission: null as PermissionState | null,
@@ -56,6 +57,7 @@ vi.mock('~/design-system/avatar', () => ({ Avatar: () => <div data-testid="avata
 
 beforeEach(() => {
   mocks.permission = 'prompt';
+  mocks.permissionGate = null;
   mocks.cameraPermission = null;
   mocks.micPermission = null;
   mocks.previewState = 'idle';
@@ -95,6 +97,7 @@ function mount() {
         ? undefined
         : {
             query: vi.fn(async ({ name }: { name: string }) => {
+              if (mocks.permissionGate) await mocks.permissionGate;
               if (mocks.permission === 'throw') throw new Error('nope');
               const answer = name === 'camera' ? mocks.cameraPermission : mocks.micPermission;
               return { state: (answer ?? mocks.permission) as PermissionState };
@@ -110,6 +113,51 @@ describe('DebateRequestMediaPreview', () => {
    * and do not prompt otherwise. The second half is the one that matters — a permission prompt
    * nobody asked for is the one that gets denied by reflex and then has to be undone in settings.
    */
+  /*
+   * A choice made before the permission answer arrives outranks it.
+   *
+   * The toggles work from the first paint — there is nothing to wait for, and a dead control on
+   * every mount is a worse trade than this race.
+   */
+  it('keeps a press made while the permission query is still pending', async () => {
+    mocks.permission = 'prompt';
+    let answer!: () => void;
+    mocks.permissionGate = new Promise<void>(resolve => {
+      answer = resolve;
+    });
+    mount();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn microphone on' }));
+    expect(await screen.findByRole('button', { name: 'Turn microphone off' })).toBeInTheDocument();
+    mocks.stopMedia.mockClear();
+
+    await act(async () => {
+      answer();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByRole('button', { name: 'Turn microphone off' })).toBeInTheDocument();
+    // Nor was the device it had just opened taken away again.
+    expect(mocks.stopMedia).not.toHaveBeenCalled();
+  });
+
+  it('does not add a camera the viewer did not press, even where one is allowed', async () => {
+    mocks.permission = 'granted';
+    let answer!: () => void;
+    mocks.permissionGate = new Promise<void>(resolve => {
+      answer = resolve;
+    });
+    mount();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn microphone on' }));
+    await act(async () => {
+      answer();
+      await Promise.resolve();
+    });
+
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+  });
+
   it('starts the preview on open when the browser already allows it', async () => {
     mocks.permission = 'granted';
     mount();

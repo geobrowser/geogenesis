@@ -76,6 +76,7 @@ function MediaPreview({
   const [missing, setMissing] = React.useState<{ mic: boolean; camera: boolean }>({ mic: false, camera: false });
   const [failure, setFailure] = React.useState<string | null>(null);
 
+  const chosenByViewer = React.useRef(false);
   const acquired = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const initialJoinStateRef = React.useRef(initialJoinState);
@@ -88,7 +89,9 @@ function MediaPreview({
       if (!active) return;
       setPermission(answer);
 
-      if (initialJoinStateRef.current) return;
+      // Two ways a choice can already exist, and a default applies over neither: one arrived with
+      // the card, and one was made here while this query was still out.
+      if (initialJoinStateRef.current || chosenByViewer.current) return;
       setWant({
         micOn: mayAutoStartPreview(answer.microphone),
         cameraOn: mayAutoStartPreview(answer.camera),
@@ -153,9 +156,9 @@ function MediaPreview({
     return () => {
       active = false;
     };
-    // Keyed on the wanted set, not on `session`, whose identity changes on every media event.
+    // Keyed on the wanted set and session key, not on `session`, whose identity changes on every media event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantKey]);
+  }, [sessionKey, wantKey]);
 
   const micOn = want.micOn && !missing.mic;
   const cameraOn = want.cameraOn && !missing.camera;
@@ -181,6 +184,7 @@ function MediaPreview({
   const toggle = (next: Partial<DebateJoinState>) => {
     if (next.micOn !== undefined && micBlocked) return;
     if (next.cameraOn !== undefined && cameraBlocked) return;
+    chosenByViewer.current = true;
     setFailure(null);
     setWant(current => ({ ...current, ...next }));
   };

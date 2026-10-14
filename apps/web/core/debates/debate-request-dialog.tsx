@@ -14,6 +14,7 @@ import { DebateFormatSelector } from './format-selector';
 import {
   type DebateFormatId,
   debateFormatById,
+  defaultDebateFormatId,
   isOpenRoundsFormatId,
   openRoundsOpeningTurnDurationsMs,
 } from './formats';
@@ -107,6 +108,9 @@ export function DebateRequestDialog({
       ),
     [turnParticipants]
   );
+
+  const summaryFormat = debateFormatById(formatId || defaultDebateFormatId);
+
   const firstParticipant = positionParticipants[0];
   const secondParticipant = positionParticipants[1] ?? firstParticipant;
 
@@ -207,10 +211,10 @@ export function DebateRequestDialog({
                 <Text as="p" variant="footnote" color="grey-04" className="px-3 pb-2">
                   {describeFormatLine({
                     isOpenRounds: isOpenRoundsFormatId(formatId),
-                    label: isOpenRoundsFormatId(formatId) ? 'Open rounds' : (debateFormatById(formatId)?.label ?? null),
+                    label: isOpenRoundsFormatId(formatId) ? 'Open rounds' : (summaryFormat?.label ?? null),
                     turnDurationsMs: isOpenRoundsFormatId(formatId)
                       ? openRoundsOpeningTurnDurationsMs
-                      : (debateFormatById(formatId)?.turnDurationsMs ?? []),
+                      : (summaryFormat?.turnDurationsMs ?? []),
                     openRounds: openRounds
                       ? {
                           maxRebuttalRounds: openRounds.max_rebuttal_rounds ?? 0,
