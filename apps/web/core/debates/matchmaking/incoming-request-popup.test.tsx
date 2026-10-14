@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   dismissIsError: false,
   block: vi.fn(),
   promoteSession: vi.fn(),
+  releaseSession: vi.fn(),
 }));
 
 vi.mock('../media-session', async importOriginal => ({
@@ -19,7 +20,7 @@ vi.mock('../media-session', async importOriginal => ({
   useOptionalDebateMediaSession: () => ({
     promoteSession: mocks.promoteSession,
     beginSession: vi.fn(),
-    releaseSession: vi.fn(),
+    releaseSession: mocks.releaseSession,
     stopMedia: vi.fn(),
     ensurePreview: vi.fn(async () => []),
     previewStream: null,
@@ -99,6 +100,7 @@ beforeEach(() => {
   mocks.accept.mockReset();
   mocks.dismiss.mockReset();
   mocks.promoteSession.mockReset();
+  mocks.releaseSession.mockReset();
   mocks.dismissIsError = false;
   mocks.block.mockReset();
 
@@ -248,14 +250,13 @@ describe('IncomingRequestPopup media hand-off', () => {
     expect(mocks.promoteSession).toHaveBeenCalledWith('debate-request:request-1', 'debate:debate-9');
   });
 
-  // An accept that produced no debate has nothing to promote to, and guessing a key would stop the
-  // devices under one nothing is listening for.
-  it('promotes nothing when the accept produced no debate', () => {
+  it('lets the devices go when the accept produced no debate', () => {
     render(<IncomingRequestPopup request={request} currentUserId="me" onNotNow={vi.fn()} />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Accept' }));
     mocks.accept.mock.calls[0][1].onSuccess({ debate: null });
 
     expect(mocks.promoteSession).not.toHaveBeenCalled();
+    expect(mocks.releaseSession).toHaveBeenCalledWith('debate-request:request-1');
   });
 });

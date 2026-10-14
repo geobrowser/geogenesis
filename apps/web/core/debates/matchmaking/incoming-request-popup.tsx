@@ -76,11 +76,14 @@ export function IncomingRequestPopup({
               ...releaseAnswer,
               onSuccess: response => {
                 const debate = response.debate;
-                if (debate)
+                if (debate) {
                   mediaSession?.promoteSession(
                     debateRequestMediaSessionKey(request.id),
                     debateMediaSessionKey(debate.id)
                   );
+                } else {
+                  mediaSession?.releaseSession(debateRequestMediaSessionKey(request.id));
+                }
               },
             }
           )
