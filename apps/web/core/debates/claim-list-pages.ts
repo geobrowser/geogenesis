@@ -12,6 +12,7 @@ import { graphql } from '~/core/io/graphql-client';
 
 import { DEBATE_TAG_ID } from './ontology';
 import { tagDisplaySpaceId } from './tagged-claims';
+import { isSpaceDebatePublishable } from './use-debate-publishable-spaces';
 
 /**
  * Claim list pages for live lobby tabs (GEO-3274).
@@ -34,19 +35,16 @@ const RELATIONS_LIMIT = 500;
 /** Curation moves at human speed. */
 const CLAIM_LIST_STALE_TIME = 5 * 60_000;
 
-export type ClaimListClaim = {
-  id: string;
-  name: string;
-  description: string | null;
-  /**
-   * Where the claim is debated: the space its Debate tag sits in, which is where geo-chat keeps its
-   * row. A curator page only groups claims, and geo-chat has no rows in the curator's own space, so
-   * a card drawn there had no room sides, no requests and no host menu. The page's space when the
-   * claim is tagged there too, or when it is tagged nowhere.
-   */
-  spaceId: string;
-};
+/** A collected claim and the spaces its Debate tag sits in, which is where it can be debated. */
+export type ClaimListItem = { id: string; tagSpaceIds: string[] };
+
+export type ClaimListClaim = ClaimListItem & { name: string; description: string | null };
+
 export type ClaimListSection = { id: string; name: string; claims: ClaimListClaim[] };
+
+/** A claim as its card draws it: in the one space it is debated in. */
+export type PlacedClaimListClaim = ClaimListClaim & { spaceId: string };
+export type PlacedClaimListSection = Omit<ClaimListSection, 'claims'> & { claims: PlacedClaimListClaim[] };
 export type ClaimListPage = { entityId: string; spaceId: string; name: string; sections: ClaimListSection[] };
 
 /** A picker row: one page, as read from one space. */
@@ -54,9 +52,8 @@ export type ClaimListOption = {
   entityId: string;
   spaceId: string;
   name: string;
-  /** Collection blocks holding at least one claim. */
-  themeCount: number;
-  claimCount: number;
+  /** Each collection block's claims, so the picker counts what the tab will show; see {@link claimListCounts}. */
+  themes: ClaimListItem[][];
 };
 
 /** What the picker reads: every tagged page, and the score of each space they sit in. */
@@ -73,6 +70,60 @@ export type ClaimListSpaceGroup = {
   /** A to Z. */
   options: ClaimListOption[];
 };
+
+/**
+ * Where a list claim's card is drawn: a space its Debate tag sits in where a debate can be
+ * published, the page's own first, as Explore picks (`tagDisplaySpaceId`). `null` when there is
+ * none, and the claim is left out: geo-chat has no row for it there, so its card could not be
+ * debated, highlighted or voted on. Explore's other gate, the viewer's space allowlist, is not
+ * applied: a host-curated list is the same list for everyone in the room.
+ */
+export function claimListClaimSpace(
+  claim: Pick<ClaimListItem, 'tagSpaceIds'>,
+  pageSpaceId: string,
+  publishable: Set<string> | null
+): string | null {
+  return tagDisplaySpaceId(claim, [pageSpaceId], spaceId => isSpaceDebatePublishable(spaceId, publishable));
+}
+
+/**
+ * One theme as the tab shows it: each claim placed, once, and those with nowhere to be debated
+ * left out. The tab and the picker's counts both go through this, so they agree.
+ */
+function placeTheme<C extends ClaimListItem>(
+  claims: C[],
+  pageSpaceId: string,
+  publishable: Set<string> | null
+): Array<C & { spaceId: string }> {
+  const seen = new Set<string>();
+  return claims.flatMap(claim => {
+    const spaceId = claimListClaimSpace(claim, pageSpaceId, publishable);
+    if (!spaceId || seen.has(claim.id)) return [];
+    seen.add(claim.id);
+    return [{ ...claim, spaceId }];
+  });
+}
+
+/** The page's sections as the tab draws them; a section left with no claims is dropped. */
+export function placeClaimListSections(page: ClaimListPage, publishable: Set<string> | null): PlacedClaimListSection[] {
+  return page.sections.flatMap(section => {
+    const claims = placeTheme(section.claims, page.spaceId, publishable);
+    return claims.length > 0 ? [{ id: section.id, name: section.name, claims }] : [];
+  });
+}
+
+export type ClaimListCounts = { themeCount: number; claimCount: number };
+
+/** The picker row's "N themes · M claims", counted as the tab will draw them. */
+export function claimListCounts(
+  option: Pick<ClaimListOption, 'themes' | 'spaceId'>,
+  publishable: Set<string> | null
+): ClaimListCounts {
+  const themes = option.themes
+    .map(claims => placeTheme(claims, option.spaceId, publishable))
+    .filter(claims => claims.length > 0);
+  return { themeCount: themes.length, claimCount: themes.reduce((sum, claims) => sum + claims.length, 0) };
+}
 
 // ---------------------------------------------------------------------------------------------
 // The picker's catalog: every tagged page with its theme and claim counts, grouped by space.
@@ -113,7 +164,11 @@ const CATALOG_SOURCE = /* GraphQL */ `
               items: relationsList(first: $relationsLimit, filter: { typeId: { is: $itemTypeId } }) {
                 spaceId
                 toEntity {
+                  id
                   typeIds
+                  tagRelations: relationsList(filter: { typeId: { is: $tagPropertyId }, toEntityId: { is: $tagId } }) {
+                    spaceId
+                  }
                 }
               }
             }
@@ -134,7 +189,16 @@ type CatalogQuery = {
         name: string | null;
         blocks: Array<{
           spaceId: string;
-          toEntity: { items: Array<{ spaceId: string; toEntity: { typeIds: string[] | null } | null }> | null } | null;
+          toEntity: {
+            items: Array<{
+              spaceId: string;
+              toEntity: {
+                id: string;
+                typeIds: string[] | null;
+                tagRelations: Array<{ spaceId: string } | null> | null;
+              } | null;
+            }> | null;
+          } | null;
         }> | null;
       } | null;
     } | null> | null;
@@ -159,28 +223,25 @@ type SpaceScoresQuery = {
 
 const spaceScoresDocument = parse(SPACE_SCORES_SOURCE) as TypedDocumentNode<SpaceScoresQuery, Record<string, unknown>>;
 
-/** One catalog row's counts, from the blocks and items its tag's space holds. */
+/** One catalog row: the page as its tag's space holds it, each block's claims with their tag spaces. */
 export function catalogOptions(data: CatalogQuery): ClaimListOption[] {
   return (data.relationsConnection?.nodes ?? []).flatMap(node => {
     const page = node?.fromEntity;
     if (!node || !page) return [];
     const spaceId = uuidToHex(node.spaceId);
-    let themeCount = 0;
-    let claimCount = 0;
-    for (const block of page.blocks ?? []) {
-      if (uuidToHex(block.spaceId) !== spaceId) continue;
-      const claims = (block.toEntity?.items ?? []).filter(
-        item => uuidToHex(item.spaceId) === spaceId && isClaim(item.toEntity?.typeIds)
-      ).length;
-      if (claims === 0) continue;
-      themeCount += 1;
-      claimCount += claims;
-    }
+    const themes = (page.blocks ?? [])
+      .filter(block => uuidToHex(block.spaceId) === spaceId)
+      .map(block =>
+        (block.toEntity?.items ?? []).flatMap(item =>
+          item.toEntity && uuidToHex(item.spaceId) === spaceId && isClaim(item.toEntity.typeIds)
+            ? [{ id: uuidToHex(item.toEntity.id), tagSpaceIds: tagSpaceIdsOf(item.toEntity.tagRelations) }]
+            : []
+        )
+      )
+      .filter(claims => claims.length > 0);
     // A page with no claims in any block has nothing to show as a tab.
-    if (themeCount === 0) return [];
-    return [
-      { entityId: uuidToHex(page.id), spaceId, name: page.name?.trim() || 'Untitled list', themeCount, claimCount },
-    ];
+    if (themes.length === 0) return [];
+    return [{ entityId: uuidToHex(page.id), spaceId, name: page.name?.trim() || 'Untitled list', themes }];
   });
 }
 
@@ -383,15 +444,12 @@ export function decodeClaimListPage(data: PageQuery, spaceId: string): ClaimList
           const id = uuidToHex(claim.id);
           if (seen.has(id)) return [];
           seen.add(id);
-          const tagSpaceIds = [
-            ...new Set((claim.tagRelations ?? []).flatMap(tag => (tag ? [uuidToHex(tag.spaceId)] : []))),
-          ].sort();
           return [
             {
               id,
               name: claim.name?.trim() ?? '',
               description: claim.description ?? null,
-              spaceId: tagDisplaySpaceId({ tagSpaceIds }, [spaceId], () => true) ?? spaceId,
+              tagSpaceIds: tagSpaceIdsOf(claim.tagRelations),
             },
           ];
         });
@@ -428,6 +486,11 @@ export function useClaimListPage(entityId: string, spaceId: string) {
     staleTime: CLAIM_LIST_STALE_TIME,
     enabled: Boolean(id && space),
   });
+}
+
+/** Where a claim's Debate tag sits, once each and in a stable order. */
+function tagSpaceIdsOf(tags: Array<{ spaceId: string } | null> | null | undefined): string[] {
+  return [...new Set((tags ?? []).flatMap(tag => (tag ? [uuidToHex(tag.spaceId)] : [])))].sort();
 }
 
 function isClaim(typeIds: string[] | null | undefined) {

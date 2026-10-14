@@ -9,7 +9,7 @@ import { NavUtils } from '~/core/utils/utils';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyClaimList } from '../api';
-import { type ClaimListPage, type ClaimListSection, useClaimListPage } from '../claim-list-pages';
+import { type PlacedClaimListSection, placeClaimListSections, useClaimListPage } from '../claim-list-pages';
 import { useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import { claimRowKey } from '../matchmaking/claim-row-key';
 import { HubStickyControls } from '../matchmaking/claims-tab';
@@ -24,6 +24,7 @@ import {
   rowsByPlacedClaim,
   taggedClaimEntry,
 } from '../matchmaking/tagged-claim-entry';
+import { useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useRemoveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { LOBBY_CLAIMS_CONTROLS_TOP_CLASS, LOBBY_CLAIMS_SECTION_SCROLL_MARGIN_CLASS } from './lobby-claims-sticky';
 import { useLobbyRoomCardRenderer } from './lobby-explore-claims';
@@ -53,6 +54,11 @@ export function useClaimListName(list: Pick<DebateLobbyClaimList, 'entity_id' | 
 export function LobbyClaimListTab({ lobby, list }: { lobby: LobbyPageView; list: DebateLobbyClaimList }) {
   const { data: page, isLoading, error, refetch } = useClaimListPage(list.entity_id, list.space_id);
   const remove = useRemoveLobbyClaimList(lobby.lobby_id);
+  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  const sections = React.useMemo(
+    () => (page ? placeClaimListSections(page, publishableSpaceIds) : []),
+    [page, publishableSpaceIds]
+  );
   const gone = page === null;
 
   return (
@@ -61,7 +67,7 @@ export function LobbyClaimListTab({ lobby, list }: { lobby: LobbyPageView; list:
       isLoading={isLoading}
       error={error}
       onRetry={() => void refetch()}
-      isEmpty={!page || page.sections.length === 0}
+      isEmpty={sections.length === 0}
       emptyMessage={gone ? CLAIM_LIST_TAB_COPY.gone : CLAIM_LIST_TAB_COPY.empty}
       emptyAction={
         gone && lobby.viewer.hosting
@@ -69,7 +75,7 @@ export function LobbyClaimListTab({ lobby, list }: { lobby: LobbyPageView; list:
           : undefined
       }
     >
-      {page ? <ClaimListSections lobby={lobby} list={list} page={page} /> : null}
+      {page ? <ClaimListSections lobby={lobby} list={list} page={page} sections={sections} /> : null}
     </HubQueryState>
   );
 }
@@ -78,10 +84,12 @@ function ClaimListSections({
   lobby,
   list,
   page,
+  sections,
 }: {
   lobby: LobbyPageView;
   list: DebateLobbyClaimList;
-  page: ClaimListPage;
+  page: { entityId: string; spaceId: string };
+  sections: PlacedClaimListSection[];
 }) {
   const { authenticated, accountKey } = useGeoChatAuth();
 
@@ -91,17 +99,15 @@ function ClaimListSections({
     () =>
       authenticated && accountKey
         ? claimRowGroups(
-            page.sections.flatMap(section =>
-              section.claims.map(claim => ({ spaceId: claim.spaceId, claimId: claim.id }))
-            )
+            sections.flatMap(section => section.claims.map(claim => ({ spaceId: claim.spaceId, claimId: claim.id })))
           )
         : [],
-    [accountKey, authenticated, page.sections]
+    [accountKey, authenticated, sections]
   );
   const rows = useDebateClaimsBySpaces(groups);
   const entriesBySection = React.useMemo(() => {
     const byClaim = rowsByPlacedClaim(rows.claims);
-    return page.sections.map(section =>
+    return sections.map(section =>
       section.claims.map(claim =>
         taggedClaimEntry(
           claim,
@@ -110,17 +116,17 @@ function ClaimListSections({
         )
       )
     );
-  }, [page.sections, rows.claims]);
+  }, [sections, rows.claims]);
 
   // In page order, so a long page reads a section's room sides as it scrolls into view.
   const batches = React.useMemo(() => exploreRoomClaimBatches(entriesBySection.flat()), [entriesBySection]);
   const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
 
-  const sectionDomId = (section: ClaimListSection) => `lobby-claim-list-${page.entityId}-${section.id}`;
+  const sectionDomId = (section: PlacedClaimListSection) => `lobby-claim-list-${page.entityId}-${section.id}`;
   // Only the box the claims scroll in: `scrollIntoView` scrolls every ancestor, and moved the
   // whole lobby page along with the column on desktop.
   const hubScrollSelector = useHubScrollSelector();
-  const jumpTo = (section: ClaimListSection) => {
+  const jumpTo = (section: PlacedClaimListSection) => {
     const node = document.getElementById(sectionDomId(section));
     if (node) scrollToSection(node, hubScrollSelector ? node.closest<HTMLElement>(hubScrollSelector) : null);
   };
@@ -132,7 +138,7 @@ function ClaimListSections({
       <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 px-4">
         <Text as="p" variant="footnote" color="grey-04">
           {addedBy ? `Added by ${addedBy} · ` : ''}
-          {page.sections.length} {page.sections.length === 1 ? 'theme' : 'themes'}
+          {sections.length} {sections.length === 1 ? 'theme' : 'themes'}
         </Text>
         <Link
           href={NavUtils.toEntity(page.spaceId, page.entityId)}
@@ -142,13 +148,13 @@ function ClaimListSections({
           {CLAIM_LIST_TAB_COPY.openPage}
         </Link>
       </div>
-      {page.sections.length > 1 ? (
+      {sections.length > 1 ? (
         <HubStickyControls topClassName={LOBBY_CLAIMS_CONTROLS_TOP_CLASS}>
           <nav
             aria-label="Themes"
             className="no-scrollbar -mx-4 flex gap-1.5 overflow-x-auto overscroll-x-contain px-4"
           >
-            {page.sections.map(section => (
+            {sections.map(section => (
               <button
                 key={section.id}
                 type="button"
@@ -162,7 +168,7 @@ function ClaimListSections({
           </nav>
         </HubStickyControls>
       ) : null}
-      {page.sections.map((section, index) => (
+      {sections.map((section, index) => (
         <section
           key={section.id}
           id={sectionDomId(section)}

@@ -1,9 +1,10 @@
+import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimListCatalog } from '../claim-list-pages';
-import { ClaimListPickerContent } from './lobby-claim-list-picker';
+import { ClaimListPickerContent, LobbyClaimListPicker } from './lobby-claim-list-picker';
 
 const mocks = vi.hoisted(() => ({
   catalog: {
@@ -19,6 +20,10 @@ vi.mock('../claim-list-pages', async importOriginal => ({
   ...(await importOriginal<typeof import('../claim-list-pages')>()),
   useClaimListCatalog: () => mocks.catalog,
 }));
+vi.mock('../use-debate-publishable-spaces', async importOriginal => ({
+  ...(await importOriginal<typeof import('../use-debate-publishable-spaces')>()),
+  useDebatePublishableSpaces: () => ({ publishableSpaceIds: null, isLoading: false }),
+}));
 vi.mock('~/core/hooks/use-space-labels', () => ({
   useSpaceLabels: () => ({ labelsById: new Map(), isLoading: false }),
   spaceLabel: (_labels: unknown, spaceId: string) => ({ name: SPACE_NAMES[spaceId] }),
@@ -31,15 +36,24 @@ const CURATORS = '3be38bb922bc80c6a6503fbbba28d2b0';
 const POLITICS = '4582fbbee28a16589154f7e36f1ee3c5';
 const catalog: ClaimListCatalog = {
   options: [
-    { entityId: 'p-spicy', spaceId: CURATORS, name: 'Spicy debates', themeCount: 18, claimCount: 60 },
-    { entityId: 'p-ai', spaceId: CURATORS, name: 'AI highlights', themeCount: 15, claimCount: 79 },
-    { entityId: 'p-politics', spaceId: POLITICS, name: 'U.S. politics highlights', themeCount: 19, claimCount: 89 },
+    { entityId: 'p-spicy', spaceId: CURATORS, name: 'Spicy debates', themes: themesOf(18, 60) },
+    { entityId: 'p-ai', spaceId: CURATORS, name: 'AI highlights', themes: themesOf(15, 79) },
+    { entityId: 'p-politics', spaceId: POLITICS, name: 'U.S. politics highlights', themes: themesOf(19, 89) },
   ],
   scores: new Map([
     [CURATORS, 0.08],
     [POLITICS, 0.8],
   ]),
 };
+/** `themes` themes holding `claims` claims between them, each tagged where it can be debated. */
+function themesOf(themes: number, claims: number) {
+  return Array.from({ length: themes }, (_, theme) =>
+    Array.from({ length: Math.floor(claims / themes) + (theme < claims % themes ? 1 : 0) }, (_, index) => ({
+      id: `claim-${theme}-${index}`,
+      tagSpaceIds: ['41e851610e13a19441c4d980f2f2ce6b'],
+    }))
+  );
+}
 const SPACE_NAMES: Record<string, string> = { [CURATORS]: 'Geo Curator Program', [POLITICS]: 'US Politics' };
 
 const added = (entityId: string) => ({
@@ -54,6 +68,7 @@ afterEach(() => {
   cleanup();
   mocks.catalog = { data: undefined, isLoading: false, error: null, refetch: vi.fn() };
   mocks.mutate.mockClear();
+  vi.unstubAllGlobals();
 });
 
 describe('ClaimListPickerContent', () => {
@@ -105,5 +120,27 @@ describe('ClaimListPickerContent', () => {
     mocks.catalog.data = { options: [], scores: new Map() };
     render(<ClaimListPickerContent lobbyId="lobby-1" lists={[]} onAdded={vi.fn()} />);
     expect(await screen.findByText(/No claim lists yet/)).toBeTruthy();
+  });
+
+  // The full "+" is disabled, so on a phone a press is the only way to read why.
+  it('explains a full lobby on a touch press of the disabled +', async () => {
+    // jsdom has none; Radix sizes the open tooltip with it.
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      }
+    );
+    const full = ['a', 'b', 'c', 'd', 'e'].map(added);
+    render(<LobbyClaimListPicker lobbyId="lobby-1" lists={full} onAdded={vi.fn()} />);
+    const plus = screen.getByRole('button', { name: 'Remove a list to add another' });
+
+    const press = new Event('pointerdown', { bubbles: true, cancelable: true });
+    Object.assign(press, { pointerType: 'touch', pointerId: 1, button: 0 });
+    plus.dispatchEvent(press);
+
+    expect(await screen.findByRole('tooltip')).toHaveTextContent('Remove a list to add another');
   });
 });

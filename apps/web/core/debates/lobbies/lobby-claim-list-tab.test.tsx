@@ -23,7 +23,8 @@ vi.mock('next/link', () => ({
     </a>
   ),
 }));
-vi.mock('../claim-list-pages', () => ({
+vi.mock('../claim-list-pages', async importOriginal => ({
+  ...(await importOriginal<typeof import('../claim-list-pages')>()),
   useClaimListPage: () => ({ ...mocks.page, refetch: vi.fn() }),
 }));
 vi.mock('../hooks', () => ({
@@ -32,6 +33,10 @@ vi.mock('../hooks', () => ({
     mocks.groups = groups;
     return { claims: [], unresolvedSpaceIds: new Set() };
   },
+}));
+vi.mock('../use-debate-publishable-spaces', async importOriginal => ({
+  ...(await importOriginal<typeof import('../use-debate-publishable-spaces')>()),
+  useDebatePublishableSpaces: () => ({ publishableSpaceIds: null, isLoading: false }),
 }));
 vi.mock('./lobby-explore-claims-hooks', () => ({
   exploreRoomClaimBatches: (entries: { claim: { claim_entity_id: string } }[]) => [
@@ -81,7 +86,7 @@ describe('LobbyClaimListTab', () => {
               id: 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1',
               name: 'AI will create more jobs',
               description: null,
-              spaceId: OTHER_SPACE,
+              tagSpaceIds: [OTHER_SPACE],
             },
           ],
         },
@@ -93,13 +98,13 @@ describe('LobbyClaimListTab', () => {
               id: 'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2',
               name: 'No training on private chats',
               description: null,
-              spaceId: OTHER_SPACE,
+              tagSpaceIds: [OTHER_SPACE],
             },
             {
               id: 'c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3c3',
               name: 'Warrants for AI analysis',
               description: null,
-              spaceId: OTHER_SPACE,
+              tagSpaceIds: [OTHER_SPACE],
             },
           ],
         },
@@ -149,12 +154,12 @@ describe('LobbyClaimListTab', () => {
         {
           id: 'work',
           name: 'Work',
-          claims: [{ id: 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1', name: 'One', description: null, spaceId: SPACE }],
+          claims: [{ id: 'c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1c1', name: 'One', description: null, tagSpaceIds: [SPACE] }],
         },
         {
           id: 'privacy',
           name: 'Privacy',
-          claims: [{ id: 'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2', name: 'Two', description: null, spaceId: SPACE }],
+          claims: [{ id: 'c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2c2', name: 'Two', description: null, tagSpaceIds: [SPACE] }],
         },
       ],
     };

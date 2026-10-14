@@ -5,9 +5,11 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import {
   type ClaimListOption,
   catalogOptions,
+  claimListCounts,
   decodeClaimListPage,
   decodeSpaceScores,
   groupClaimListOptions,
+  placeClaimListSections,
   searchClaimListGroups,
 } from './claim-list-pages';
 
@@ -15,7 +17,13 @@ const CURATORS = '3be38bb922bc80c6a6503fbbba28d2b0';
 const POLITICS = '4582fbbee28a16589154f7e36f1ee3c5';
 const OTHER_TYPE = '11111111111111111111111111111111';
 
-const item = (spaceId: string, typeIds = [CLAIM_TYPE_ID]) => ({ spaceId, toEntity: { typeIds } });
+const DEBATED = '41e851610e13a19441c4d980f2f2ce6b';
+const UNPUBLISHABLE = '701a8b0000000000000000000000000a';
+let itemId = 0;
+const item = (spaceId: string, typeIds = [CLAIM_TYPE_ID], tagSpaceIds = [DEBATED], id = `c${++itemId}`) => ({
+  spaceId,
+  toEntity: { id, typeIds, tagRelations: tagSpaceIds.map(tagSpace => ({ spaceId: tagSpace })) },
+});
 
 describe('catalogOptions', () => {
   it('counts only the blocks and claims in the space the tag sits in', () => {
@@ -42,9 +50,11 @@ describe('catalogOptions', () => {
         ],
       },
     });
-    expect(options).toEqual([
-      { entityId: 'page1', spaceId: CURATORS, name: 'U.S. politics highlights', themeCount: 1, claimCount: 2 },
-    ]);
+    expect(options).toHaveLength(1);
+    expect(options[0]).toMatchObject({ entityId: 'page1', spaceId: CURATORS, name: 'U.S. politics highlights' });
+    // The two claims in the tag's space, in the one block that holds any.
+    expect(options[0]!.themes.map(claims => claims.length)).toEqual([2]);
+    expect(options[0]!.themes[0]![0]!.tagSpaceIds).toEqual([DEBATED]);
   });
 
   it('leaves out a page with no claims in that space', () => {
@@ -64,8 +74,7 @@ describe('groupClaimListOptions', () => {
     entityId,
     spaceId,
     name,
-    themeCount: 1,
-    claimCount: 1,
+    themes: [],
   });
   const scores = new Map([
     [CURATORS, 0.08],
@@ -116,14 +125,14 @@ describe('searchClaimListGroups', () => {
     {
       spaceId: POLITICS,
       spaceName: 'US Politics',
-      options: [{ entityId: 'p', spaceId: POLITICS, name: 'U.S. politics highlights', themeCount: 1, claimCount: 1 }],
+      options: [{ entityId: 'p', spaceId: POLITICS, name: 'U.S. politics highlights', themes: [] }],
     },
     {
       spaceId: CURATORS,
       spaceName: 'Geo Curator Program',
       options: [
-        { entityId: 'a', spaceId: CURATORS, name: 'AI highlights', themeCount: 1, claimCount: 1 },
-        { entityId: 's', spaceId: CURATORS, name: 'Spicy debates', themeCount: 1, claimCount: 1 },
+        { entityId: 'a', spaceId: CURATORS, name: 'AI highlights', themes: [] },
+        { entityId: 's', spaceId: CURATORS, name: 'Spicy debates', themes: [] },
       ],
     },
   ];
@@ -185,42 +194,59 @@ describe('decodeClaimListPage', () => {
     expect(page?.sections[1]!.claims.map(row => row.id)).toEqual(['1', '2']);
     expect(page?.sections[1]!.claims[0]!.name).toBe('Claim 1');
     // A claim collected twice in one theme is shown once.
-    expect(page?.sections[2]!.claims).toHaveLength(1);
     expect(page?.spaceId).toBe(CURATORS);
-  });
-
-  it('draws each claim in the space it is debated in, preferring the page’s own', () => {
-    const page = decodeClaimListPage(
-      {
-        entity: {
-          id: 'page',
-          name: 'AI highlights',
-          blocks: [
-            {
-              position: 'a',
-              toEntity: {
-                id: 'work',
-                name: 'Work',
-                items: [
-                  claim('elsewhere', 'a0', undefined, [POLITICS]),
-                  claim('both', 'a1', undefined, [POLITICS, CURATORS]),
-                  claim('untagged', 'a2'),
-                ],
-              },
-            },
-          ],
-        },
-      },
-      CURATORS
-    );
-    expect(page?.sections[0]!.claims.map(row => [row.id, row.spaceId])).toEqual([
-      ['elsewhere', POLITICS],
-      ['both', CURATORS],
-      ['untagged', CURATORS],
-    ]);
   });
 
   it('is null for a deleted page', () => {
     expect(decodeClaimListPage({ entity: null }, CURATORS)).toBeNull();
+  });
+});
+
+describe('placing a list’s claims', () => {
+  const claim = (id: string, tagSpaceIds: string[]) => ({ id, name: id, description: null, tagSpaceIds });
+  const page = {
+    entityId: 'page',
+    spaceId: CURATORS,
+    name: 'AI highlights',
+    sections: [
+      {
+        id: 'work',
+        name: 'Work',
+        claims: [
+          claim('elsewhere', [DEBATED]),
+          claim('both', [DEBATED, CURATORS]),
+          claim('untagged', []),
+          claim('stuck', [UNPUBLISHABLE]),
+          claim('elsewhere', [DEBATED]),
+        ],
+      },
+      { id: 'dead', name: 'Dead end', claims: [claim('stuck-too', [UNPUBLISHABLE])] },
+    ],
+  };
+  const publishable = new Set([DEBATED, CURATORS]);
+
+  it('draws each claim where it can be debated, the page’s space first, once per theme', () => {
+    const sections = placeClaimListSections(page, publishable);
+    expect(sections.map(section => section.id)).toEqual(['work']);
+    expect(sections[0]!.claims.map(row => [row.id, row.spaceId])).toEqual([
+      ['elsewhere', DEBATED],
+      ['both', CURATORS],
+    ]);
+  });
+
+  it('counts for the picker exactly what the tab draws', () => {
+    const counts = claimListCounts(
+      { spaceId: CURATORS, themes: page.sections.map(section => section.claims) },
+      publishable
+    );
+    expect(counts).toEqual({ themeCount: 1, claimCount: 2 });
+  });
+
+  it('places by tag alone while publishability is unknown, but never an untagged claim', () => {
+    const sections = placeClaimListSections(page, null);
+    expect(sections.map(section => section.claims.map(row => row.id))).toEqual([
+      ['elsewhere', 'both', 'stuck'],
+      ['stuck-too'],
+    ]);
   });
 });

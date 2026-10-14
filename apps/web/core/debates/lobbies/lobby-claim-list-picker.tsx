@@ -12,14 +12,17 @@ import { Tooltip } from '~/design-system/tooltip';
 
 import { type DebateLobbyClaimList, LOBBY_CLAIM_LISTS_MAX } from '../api';
 import {
+  type ClaimListCounts,
   type ClaimListOption,
   type ClaimListSpaceGroup,
+  claimListCounts,
   groupClaimListOptions,
   searchClaimListGroups,
   useClaimListCatalog,
 } from '../claim-list-pages';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubQueryState } from '../matchmaking/hub-states';
+import { useDebatePublishableSpaces } from '../use-debate-publishable-spaces';
 import { useSaveLobbyClaimList } from './lobby-claim-lists-hooks';
 import { moderationErrorMessage } from './lobby-format';
 import { LobbyPopup } from './lobby-popup';
@@ -61,6 +64,8 @@ export function LobbyClaimListPicker({
     return (
       <Tooltip
         label={CLAIM_LIST_PICKER_COPY.full}
+        // The button does nothing, so on a touchscreen a press is the only way to read why.
+        openOnPress
         trigger={
           <AddButton
             disabled
@@ -140,11 +145,22 @@ export function ClaimListPickerContent({
     [catalog.data]
   );
   const { labelsById } = useSpaceLabels(spaceIds);
+  const { publishableSpaceIds } = useDebatePublishableSpaces();
+  // Counted as the tab will draw them, and a page with nothing it could show is not offered.
+  const counted = React.useMemo(() => {
+    const counts = new Map<ClaimListOption, ClaimListCounts>();
+    for (const option of catalog.data?.options ?? []) counts.set(option, claimListCounts(option, publishableSpaceIds));
+    return counts;
+  }, [catalog.data, publishableSpaceIds]);
   const groups = React.useMemo(() => {
     if (!catalog.data) return [];
-    const ranked = groupClaimListOptions(catalog.data, spaceId => spaceLabel(labelsById, spaceId)?.name);
+    const options = catalog.data.options.filter(option => (counted.get(option)?.themeCount ?? 0) > 0);
+    const ranked = groupClaimListOptions(
+      { ...catalog.data, options },
+      spaceId => spaceLabel(labelsById, spaceId)?.name
+    );
     return searchClaimListGroups(ranked, query);
-  }, [catalog.data, labelsById, query]);
+  }, [catalog.data, counted, labelsById, query]);
   const visible = groups.slice(0, shown);
   const hasMore = groups.length > shown;
   const sentinel = useInfiniteScrollSentinel({
@@ -192,6 +208,7 @@ export function ClaimListPickerContent({
               <SpaceGroup
                 key={group.spaceId}
                 group={group}
+                counts={counted}
                 added={added}
                 picking={picking}
                 disabled={save.isPending}
@@ -213,12 +230,14 @@ export function ClaimListPickerContent({
 
 function SpaceGroup({
   group,
+  counts,
   added,
   picking,
   disabled,
   onPick,
 }: {
   group: ClaimListSpaceGroup;
+  counts: ReadonlyMap<ClaimListOption, ClaimListCounts>;
   added: ReadonlySet<string>;
   picking: string | null;
   disabled: boolean;
@@ -231,6 +250,7 @@ function SpaceGroup({
       </Text>
       {group.options.map(option => {
         const isAdded = added.has(ID.uuidToHex(option.entityId));
+        const { themeCount, claimCount } = counts.get(option) ?? { themeCount: 0, claimCount: 0 };
         return (
           <button
             key={option.entityId}
@@ -245,8 +265,8 @@ function SpaceGroup({
                 {option.name}
               </Text>
               <Text as="span" variant="footnote" color="grey-04">
-                {option.themeCount} {option.themeCount === 1 ? 'theme' : 'themes'} · {option.claimCount}{' '}
-                {option.claimCount === 1 ? 'claim' : 'claims'}
+                {themeCount} {themeCount === 1 ? 'theme' : 'themes'} · {claimCount}{' '}
+                {claimCount === 1 ? 'claim' : 'claims'}
               </Text>
             </span>
             {isAdded || picking === option.entityId ? (
