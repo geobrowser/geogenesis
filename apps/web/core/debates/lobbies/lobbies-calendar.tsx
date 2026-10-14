@@ -11,21 +11,30 @@ import { Text } from '~/design-system/text';
 
 import type { DebateLobbySummary } from '../api';
 import { CalendarWeekNav, useMinuteClock } from '../matchmaking/debate-calendar-controls';
-import { CALENDAR_WEEKS, DAYS_IN_WEEK, weekDays, weekStart } from '../matchmaking/debate-calendar-model';
+import { CALENDAR_WEEKS, DAYS_IN_WEEK, dayListLabel, weekDays, weekStart } from '../matchmaking/debate-calendar-model';
+import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { HubQueryState } from '../matchmaking/hub-states';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useDebateLobbies } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
-import { LiveMark, SPOTLIGHT_ACTION_CLASS_NAME, joinLabel, liveLobbyCounts } from './lobby-spotlight';
+import { localDaysFrom } from './lobby-format';
+import { LobbyByline } from './lobby-host-names';
+import {
+  LOBBY_DARK_SURFACE_CLASS_NAME,
+  LOBBY_DARK_SURFACE_STYLE,
+  LiveMark,
+  SPOTLIGHT_ACTION_CLASS_NAME,
+  joinLabel,
+  liveLobbyCounts,
+} from './lobby-spotlight';
 import { OpenLobbyDialog } from './open-lobby-dialog';
-import { LobbyByline, LobbyRsvpButton, lobbyBadgeTime } from './upcoming-lobbies';
+import { LobbyRsvpButton, lobbyBadgeTime } from './upcoming-lobbies';
 
 const NO_LOBBIES: DebateLobbySummary[] = [];
 
 function sameLocalDay(iso: string, day: Date) {
-  const at = new Date(iso);
-  return at.getFullYear() === day.getFullYear() && at.getMonth() === day.getMonth() && at.getDate() === day.getDate();
+  return localDaysFrom(day.getTime(), Date.parse(iso)) === 0;
 }
 
 /** The week's lobbies by day, each day soonest first. `goingOnly` keeps those the viewer RSVP'd to. */
@@ -152,12 +161,11 @@ export function LobbiesCalendarBody({ isPhone }: { isPhone: boolean }) {
   );
 }
 
+/** "Thu 8", or "Today, Thu 8", as the calendar's other views head a day. */
 function DayHeading({ day, now }: { day: Date; now: number }) {
-  const today = sameLocalDay(new Date(now).toISOString(), day);
-  const label = day.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric' });
   return (
-    <Text as="h3" variant="footnoteMedium" color={today ? 'text' : 'grey-04'}>
-      {today ? `${label} · Today` : label}
+    <Text as="h3" variant="footnoteMedium" color={localDaysFrom(now, day.getTime()) === 0 ? 'text' : 'grey-04'}>
+      {dayListLabel(day, new Date(now))}
     </Text>
   );
 }
@@ -170,8 +178,8 @@ function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
   if (lobby.open) {
     return (
       <li
-        className="flex flex-col gap-2 rounded-lg bg-[#151515] p-2.5"
-        style={{ '--avatar-group-ring': '#151515' } as React.CSSProperties}
+        className={cx('flex flex-col gap-2 rounded-lg p-2.5', LOBBY_DARK_SURFACE_CLASS_NAME)}
+        style={LOBBY_DARK_SURFACE_STYLE}
         data-testid="lobby-calendar-card"
       >
         <div className="flex min-w-0 items-center gap-1">
@@ -186,8 +194,11 @@ function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
         <Link
           href={href}
           onClick={enter}
-          data-geo-analytics-label={lobby.viewer_on_roster ? 'Lobby calendar Open' : 'Lobby calendar Join'}
-          data-geo-analytics-intent="join_lobby"
+          {...debateActionAnalyticsAttributes(
+            'calendar',
+            lobby.viewer_on_roster ? 'Lobby calendar Open' : 'Lobby calendar Join',
+            'join_lobby'
+          )}
           className={SPOTLIGHT_ACTION_CLASS_NAME}
         >
           {joinLabel(lobby, true)}
@@ -198,20 +209,25 @@ function LobbyCalendarCard({ lobby }: { lobby: DebateLobbySummary }) {
 
   return (
     <li
-      className={cx('flex flex-col gap-1.5 rounded-lg border border-grey-02 bg-white p-2.5')}
+      className="flex flex-col gap-1.5 rounded-lg border border-grey-02 bg-white p-2.5"
       data-testid="lobby-calendar-card"
     >
       <Text as="p" variant="footnote" color="grey-04" className="truncate">
         <span className="font-medium text-text">{lobbyBadgeTime(lobby.starts_at)}</span>
         {lobby.hosts.length > 0 || lobby.reminder_count > 0 ? ' · ' : null}
-        <LobbyByline lobby={lobby} analyticsLabel="Lobby calendar host" />
+        <LobbyByline lobby={lobby} analyticsLabel={debateAnalyticsLabel('calendar', 'Lobby calendar host')} />
       </Text>
       <Link href={href} onClick={enter} className="min-w-0 hover:underline">
         <Text as="span" variant="metadataMedium" className="block truncate">
           {lobby.name}
         </Text>
       </Link>
-      <LobbyRsvpButton lobby={lobby} analyticsLabelPrefix="Lobby calendar" className="items-stretch" />
+      <LobbyRsvpButton
+        lobby={lobby}
+        analyticsSurface="calendar"
+        analyticsLabelPrefix="Lobby calendar"
+        className="items-stretch"
+      />
     </li>
   );
 }

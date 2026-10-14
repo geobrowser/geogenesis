@@ -9,13 +9,14 @@ const mocks = vi.hoisted(() => ({ mutate: vi.fn(), markLobbyEntry: vi.fn() }));
 
 vi.mock('./hooks', () => ({
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
+  useLobbyReminderError: () => null,
 }));
 vi.mock('./lobby-analytics', () => ({ markLobbyEntry: mocks.markLobbyEntry }));
 vi.mock('./lobby-people', () => ({
   LobbyAvatarStack: ({ total }: { total: number }) => <span data-testid="avatar-stack">{total}</span>,
 }));
 
-const { LobbySpotlight, opensInLabel } = await import('./lobby-spotlight');
+const { LobbySpotlight } = await import('./lobby-spotlight');
 
 const host = { user_id: 'u1', profile_space_id: 's1', display_name: 'Bryan', avatar_cid: null };
 
@@ -101,14 +102,5 @@ describe('LobbySpotlight', () => {
     render(<LobbySpotlight lineup={{ live: [lobby({})], soon, later: [] }} />);
     expect(screen.getByRole('heading', { name: 'NYC Debates' })).toBeInTheDocument();
     expect(screen.queryByText('Open floor')).not.toBeInTheDocument();
-  });
-});
-
-describe('opensInLabel', () => {
-  it('rounds up to whole minutes, then says Opening now', () => {
-    expect(opensInLabel(12 * 60_000)).toBe('Opens in 12 min');
-    expect(opensInLabel(30_000)).toBe('Opens in 1 min');
-    expect(opensInLabel(0)).toBe('Opening now');
-    expect(opensInLabel(null)).toBe('Opening soon');
   });
 });

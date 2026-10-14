@@ -2,28 +2,31 @@
 
 import * as React from 'react';
 
-import { useAtom } from 'jotai';
+import cx from 'classnames';
 import Link from 'next/link';
 
 import { dashlessId } from '~/core/debates/api';
 import type { DebateLobbySummary } from '~/core/debates/api';
 import { useLobbyLineup } from '~/core/debates/lobbies/live-lobbies';
 import { markLobbyEntry } from '~/core/debates/lobbies/lobby-analytics';
-import { LobbyHostNames } from '~/core/debates/lobbies/lobby-host-names';
+import { LobbyByline } from '~/core/debates/lobbies/lobby-host-names';
 import { LobbyAvatarStack } from '~/core/debates/lobbies/lobby-people';
 import {
+  LOBBY_BODY_TEXT_CLASS_NAME,
+  LOBBY_DARK_SURFACE_STYLE,
+  LiveDot,
   LiveMark,
   SPOTLIGHT_SECONDARY_PILL_CLASS_NAME,
   joinLabel,
   liveLobbyCounts,
 } from '~/core/debates/lobbies/lobby-spotlight';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
+import { useDismissedNotices } from '~/core/hooks/use-dismissed-notice';
 
 import { ClientOnly } from '~/design-system/client-only';
-import { CloseSmall } from '~/design-system/icons/close-small';
 import { Text } from '~/design-system/text';
 
-import { dismissedNoticesAtom } from '~/atoms';
+import { EXPLORE_BANNER_CLASS_NAME, ExploreBannerCloseButton } from './explore-welcome-banner';
 
 /** The dismissed-notice id for one lobby's banner. Per lobby, so the next lobby to go live shows again. */
 export function lobbyBannerNoticeId(lobbyId: string) {
@@ -48,43 +51,31 @@ export function ExploreLiveLobbiesBanner() {
 
 function LiveLobbiesBanner() {
   const { live } = useLobbyLineup();
-  const [dismissedNotices, setDismissedNotices] = useAtom(dismissedNoticesAtom);
+  const { isDismissed, remember } = useDismissedNotices();
 
-  const shown = live.filter(
-    lobby => !lobby.viewer_on_roster && !dismissedNotices.includes(lobbyBannerNoticeId(lobby.lobby_id))
-  );
+  const shown = live.filter(lobby => !lobby.viewer_on_roster && !isDismissed(lobbyBannerNoticeId(lobby.lobby_id)));
   const [lead, ...others] = shown;
   if (!lead) return null;
 
-  const dismiss = () => {
-    const ids = shown.map(lobby => lobbyBannerNoticeId(lobby.lobby_id));
-    setDismissedNotices(previous => [...previous, ...ids.filter(id => !previous.includes(id))]);
-  };
+  const dismiss = () => remember(shown.map(lobby => lobbyBannerNoticeId(lobby.lobby_id)));
 
   return (
     <section
       aria-label={others.length > 0 ? 'Live debate lobbies' : 'Live debate lobby'}
-      className="relative mb-5 overflow-clip rounded-lg bg-[#151515]"
-      style={{ '--avatar-group-ring': '#151515' } as React.CSSProperties}
+      className={EXPLORE_BANNER_CLASS_NAME}
+      style={LOBBY_DARK_SURFACE_STYLE}
       data-testid="explore-live-lobbies-banner"
     >
       <div className="flex items-center gap-5 py-5 pr-14 pl-5 mobile:flex-col mobile:items-start mobile:gap-3 mobile:pr-5">
         <div className="min-w-0 flex-1">
           <h2 className="flex min-w-0 items-center gap-2 text-smallTitle text-white mobile:pr-9">
-            <span
-              aria-hidden
-              className="size-2 shrink-0 animate-pulse-strong rounded-full bg-green motion-reduce:animate-none"
-            />
+            <LiveDot className="size-2" />
             <span className="truncate">{lead.name} is live</span>
           </h2>
-          <p className="mt-2 text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
+          <p className={cx('mt-2 text-white', LOBBY_BODY_TEXT_CLASS_NAME)}>
             {liveLobbyCounts(lead)}
-            {lead.hosts.length > 0 ? (
-              <>
-                {' · Hosted by '}
-                <LobbyHostNames hosts={lead.hosts} analyticsLabel="Explore live lobby host" />
-              </>
-            ) : null}
+            {lead.hosts.length > 0 ? ' · ' : null}
+            <LobbyByline lobby={lead} analyticsLabel="Explore live lobby host" hostedBy />
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-5">
@@ -109,15 +100,11 @@ function LiveLobbiesBanner() {
         </ul>
       ) : null}
 
-      <button
-        type="button"
+      <ExploreBannerCloseButton
+        label={others.length > 0 ? 'Dismiss live lobbies' : 'Dismiss live lobby'}
+        analyticsLabel="Explore live lobby dismiss"
         onClick={dismiss}
-        aria-label={others.length > 0 ? 'Dismiss live lobbies' : 'Dismiss live lobby'}
-        data-geo-analytics-label="Explore live lobby dismiss"
-        className="absolute top-2.5 right-2.5 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"
-      >
-        <CloseSmall color="white" />
-      </button>
+      />
     </section>
   );
 }

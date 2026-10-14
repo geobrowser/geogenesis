@@ -6,8 +6,8 @@ import Link from 'next/link';
 
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 
-import type { DebateLobbyPerson } from '../api';
-import { personName } from './lobby-format';
+import type { DebateLobbyPerson, DebateLobbySummary } from '../api';
+import { goingLabel, personName } from './lobby-format';
 
 /**
  * The hosts as `hostsLabel` words them ("Bryan", "Bryan and Priya", "Bryan, Priya and 2 more"), each
@@ -33,6 +33,32 @@ export function LobbyHostNames({
         </React.Fragment>
       ))}
       {more > 0 ? ` and ${more} more` : null}
+    </>
+  );
+}
+
+/**
+ * A lobby's byline: "Bryan · 6 going", or "Hosted by Bryan · 6 going" with `hostedBy`, each host a
+ * link. The count only while the lobby is still to open, and once anyone has RSVP'd: a live lobby
+ * says who is there instead. `null` with nothing to say.
+ */
+export function LobbyByline({
+  lobby,
+  analyticsLabel,
+  hostedBy = false,
+}: {
+  lobby: Pick<DebateLobbySummary, 'hosts' | 'reminder_count' | 'open'>;
+  /** Names a click on a host. */
+  analyticsLabel: string;
+  hostedBy?: boolean;
+}) {
+  const going = !lobby.open && lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null;
+  if (lobby.hosts.length === 0) return going;
+  return (
+    <>
+      {hostedBy ? 'Hosted by ' : null}
+      <LobbyHostNames hosts={lobby.hosts} analyticsLabel={analyticsLabel} />
+      {going ? ` · ${going}` : null}
     </>
   );
 }

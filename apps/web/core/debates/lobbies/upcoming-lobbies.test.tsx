@@ -4,7 +4,8 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { lobbiesCalendarHref } from '../matchmaking/debate-calendar-route';
-import { LobbyByline, lobbyBadgeTime, lobbyDayLabel } from './upcoming-lobbies';
+import { LobbyByline } from './lobby-host-names';
+import { lobbyBadgeTime, lobbyDayLabel } from './upcoming-lobbies';
 
 afterEach(cleanup);
 
@@ -45,22 +46,34 @@ describe('LobbyByline', () => {
     );
 
   it('names the host, and adds who is going once anyone has RSVP’d', () => {
-    byline({ hosts: [host], reminder_count: 0 });
+    byline({ hosts: [host], reminder_count: 0, open: false });
     expect(screen.getByTestId('byline')).toHaveTextContent(/^Bryan$/);
     cleanup();
-    byline({ hosts: [host], reminder_count: 6 });
+    byline({ hosts: [host], reminder_count: 6, open: false });
     expect(screen.getByTestId('byline')).toHaveTextContent(/^Bryan · 6 going$/);
   });
 
   it('links each host to their space', () => {
-    byline({ hosts: [host, { ...host, user_id: 'u2', display_name: 'Priya' }], reminder_count: 0 });
+    byline({ hosts: [host, { ...host, user_id: 'u2', display_name: 'Priya' }], reminder_count: 0, open: false });
     expect(screen.getByTestId('byline')).toHaveTextContent(/^Bryan and Priya$/);
     expect(screen.getByRole('link', { name: 'Bryan' })).toHaveAttribute('href', expect.stringContaining(SPACE));
     expect(screen.getByRole('link', { name: 'Priya' })).toHaveAttribute('data-geo-analytics-label', 'Test host');
   });
 
+  it('says Hosted by when asked, and drops who is going once the lobby is live', () => {
+    byline({ hosts: [host], reminder_count: 6, open: true });
+    expect(screen.getByTestId('byline')).toHaveTextContent(/^Bryan$/);
+    cleanup();
+    render(
+      <p data-testid="byline">
+        <LobbyByline lobby={{ hosts: [host], reminder_count: 6, open: false }} analyticsLabel="Test host" hostedBy />
+      </p>
+    );
+    expect(screen.getByTestId('byline')).toHaveTextContent(/^Hosted by Bryan · 6 going$/);
+  });
+
   it('leaves a host without a valid space as plain text', () => {
-    byline({ hosts: [{ ...host, profile_space_id: 'not-a-space' }], reminder_count: 0 });
+    byline({ hosts: [{ ...host, profile_space_id: 'not-a-space' }], reminder_count: 0, open: false });
     expect(screen.getByTestId('byline')).toHaveTextContent('Bryan');
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });

@@ -8,31 +8,30 @@ import { usePathname, useSearchParams } from 'next/navigation';
 
 import { urlWithoutModal } from '~/core/deep-links/modal-deep-link';
 
-import { ChevronRight } from '~/design-system/icons/chevron-right';
 import { Text } from '~/design-system/text';
 import { useHorizontalOverflow } from '~/design-system/use-horizontal-overflow';
 
 import type { DebateLobbySummary } from '../api';
 import { lobbiesCalendarHref } from '../matchmaking/debate-calendar-route';
+import {
+  type DebateAnalyticsSurface,
+  debateAnalyticsLabel,
+  hubAnalyticsAttributes,
+} from '../matchmaking/hub-analytics';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { ScrollEdgeButton, scrollRowBy } from '../matchmaking/scrollable-tab-row';
 import { useDebatesHub } from '../matchmaking/use-debates-hub';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbyReminder } from './hooks';
+import { useDebateLobbyReminder, useLobbyReminderError } from './hooks';
 import { type LobbyEntry, markLobbyEntry } from './lobby-analytics';
-import { RSVP_FAILED, goingLabel, lobbyErrorMessage, rsvpLabel } from './lobby-format';
-import { LobbyHostNames } from './lobby-host-names';
-
-/** How far one press of an edge arrow moves the row: most of a card, so the next one lands in view. */
-const SCROLL_STEP_RATIO = 0.8;
+import { RSVP_FAILED, lobbyErrorMessage, localDaysFrom, rsvpLabel } from './lobby-format';
+import { LobbyByline } from './lobby-host-names';
 
 /** "Today", "Tomorrow", "Wed", then "Oct 21" past a week. Local time. */
 export function lobbyDayLabel(iso: string, now: number = Date.now()) {
   const at = new Date(iso);
   if (Number.isNaN(at.getTime())) return null;
-  const today = new Date(now);
-  const startOfToday = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime();
-  const startOfDay = new Date(at.getFullYear(), at.getMonth(), at.getDate()).getTime();
-  const days = Math.round((startOfDay - startOfToday) / 86_400_000);
+  const days = localDaysFrom(now, at.getTime());
   if (days === 0) return 'Today';
   if (days === 1) return 'Tomorrow';
   if (days > 1 && days < 7) return at.toLocaleDateString(undefined, { weekday: 'short' });
@@ -48,41 +47,26 @@ export function lobbyBadgeTime(iso: string) {
     : at.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
 
-/** "Bryan · 6 going": the host, a link to their space, then the count once anyone has RSVP'd. */
-export function LobbyByline({
-  lobby,
-  analyticsLabel,
-}: {
-  lobby: Pick<DebateLobbySummary, 'hosts' | 'reminder_count'>;
-  /** Names a click on a host, e.g. "Upcoming lobbies host". */
-  analyticsLabel: string;
-}) {
-  const going = lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null;
-  if (lobby.hosts.length === 0) return going;
-  return (
-    <>
-      <LobbyHostNames hosts={lobby.hosts} analyticsLabel={analyticsLabel} />
-      {going ? ` · ${going}` : null}
-    </>
-  );
-}
-
 /** RSVP, or Going once set: black, so a lobby the viewer is going to stands out in a row of them. */
 export function LobbyRsvpButton({
   lobby,
+  analyticsSurface = 'hub',
   analyticsLabelPrefix,
   className,
 }: {
-  lobby: Pick<DebateLobbySummary, 'lobby_id' | 'viewer_reminded'>;
-  /** Names the click for analytics, e.g. "Upcoming lobbies". */
+  lobby: Pick<DebateLobbySummary, 'lobby_id' | 'viewer_reminded' | 'open'>;
+  analyticsSurface?: DebateAnalyticsSurface;
+  /** Names the click for analytics, after the surface's prefix, e.g. "Upcoming lobby". */
   analyticsLabelPrefix: string;
   className?: string;
 }) {
   const reminder = useDebateLobbyReminder();
+  const error = useLobbyReminderError(reminder, lobby);
   return (
     <div className={cx('flex flex-col items-end gap-1', className)}>
       <HubPillButton
         variant={lobby.viewer_reminded ? 'primary' : 'secondary'}
+        analyticsSurface={analyticsSurface}
         analyticsLabel={`${analyticsLabelPrefix} ${lobby.viewer_reminded ? 'Going' : 'RSVP'}`}
         aria-pressed={lobby.viewer_reminded}
         pending={reminder.isPending}
@@ -91,9 +75,9 @@ export function LobbyRsvpButton({
       >
         {rsvpLabel(lobby.viewer_reminded)}
       </HubPillButton>
-      {reminder.isError ? (
+      {error ? (
         <Text as="p" variant="footnote" color="red-01" className="text-right">
-          {lobbyErrorMessage(reminder.error, RSVP_FAILED)}
+          {lobbyErrorMessage(error, RSVP_FAILED)}
         </Text>
       ) : null}
     </div>
@@ -148,10 +132,10 @@ function UpcomingLobbyCard({
           </Text>
         </Link>
         <Text as="span" variant="footnote" color="grey-04" className="truncate">
-          <LobbyByline lobby={lobby} analyticsLabel="Upcoming lobbies host" />
+          <LobbyByline lobby={lobby} analyticsLabel={debateAnalyticsLabel('hub', 'Upcoming lobby host')} />
         </Text>
       </div>
-      <LobbyRsvpButton lobby={lobby} analyticsLabelPrefix="Upcoming lobbies" className="shrink-0" />
+      <LobbyRsvpButton lobby={lobby} analyticsLabelPrefix="Upcoming lobby" className="shrink-0" />
     </li>
   );
 }
@@ -181,13 +165,6 @@ export function UpcomingLobbiesRow({
 
   if (lobbies.length === 0 && !canHost) return null;
 
-  const scrollBy = (direction: -1 | 1) => {
-    const scroller = scrollerRef.current;
-    if (!scroller) return;
-    const left = scroller.scrollLeft + direction * scroller.clientWidth * SCROLL_STEP_RATIO;
-    if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ left, behavior: 'smooth' });
-    else scroller.scrollLeft = left;
-  };
   const from = urlWithoutModal(pathname, searchParams, typeof window === 'undefined' ? '' : window.location.hash);
 
   return (
@@ -214,15 +191,31 @@ export function UpcomingLobbiesRow({
                 <UpcomingLobbyCard key={lobby.lobby_id} lobby={lobby} entry="side_panel" alone={lobbies.length === 1} />
               ))}
             </ul>
-            {overflow.start ? <EdgeArrow side="start" onClick={() => scrollBy(-1)} /> : null}
-            {overflow.end ? <EdgeArrow side="end" onClick={() => scrollBy(1)} /> : null}
+            {(['start', 'end'] as const).map(side =>
+              overflow[side] ? (
+                <ScrollEdgeButton
+                  key={side}
+                  side={side}
+                  ariaLabel={side === 'start' ? 'Show earlier lobbies' : 'Show more lobbies'}
+                  analyticsLabel={debateAnalyticsLabel(
+                    'hub',
+                    `Upcoming lobbies scroll ${side === 'start' ? 'left' : 'right'}`
+                  )}
+                  analyticsIntent="scroll_lobbies"
+                  onClick={() => {
+                    if (scrollerRef.current) scrollRowBy(scrollerRef.current, side === 'start' ? -1 : 1);
+                  }}
+                  className={cx('bottom-0 w-14', side === 'start' ? 'pl-2' : 'pr-2')}
+                  buttonClassName="size-7 border border-grey-02 bg-white text-text hover:bg-grey-01"
+                />
+              ) : null
+            )}
           </div>
           <div className="flex justify-end px-4">
             <Link
               href={lobbiesCalendarHref(from)}
               onClick={close}
-              data-geo-analytics-label="Upcoming lobbies See the week on Calendar"
-              data-geo-analytics-intent="open_debate_calendar"
+              {...hubAnalyticsAttributes('Upcoming lobbies See the week on Calendar', 'open_debate_calendar')}
               className="text-footnote text-grey-04 hover:text-text hover:underline"
             >
               See the week on Calendar →
@@ -231,30 +224,5 @@ export function UpcomingLobbiesRow({
         </>
       ) : null}
     </section>
-  );
-}
-
-function EdgeArrow({ side, onClick }: { side: 'start' | 'end'; onClick: () => void }) {
-  return (
-    <div
-      className={cx(
-        'pointer-events-none absolute top-0 bottom-0 flex w-14 items-center',
-        side === 'start' ? 'left-0 justify-start bg-linear-to-r pl-2' : 'right-0 justify-end bg-linear-to-l pr-2',
-        'from-white from-40% to-transparent'
-      )}
-    >
-      <button
-        type="button"
-        aria-label={side === 'start' ? 'Show earlier lobbies' : 'Show more lobbies'}
-        data-geo-analytics-label={`Upcoming lobbies scroll ${side === 'start' ? 'left' : 'right'}`}
-        data-geo-analytics-intent="scroll_lobbies"
-        onClick={onClick}
-        className="pointer-events-auto grid size-7 place-items-center rounded-full border border-grey-02 bg-white text-text transition-colors hover:bg-grey-01"
-      >
-        <span className={cx('grid place-items-center', side === 'start' && 'rotate-180')}>
-          <ChevronRight />
-        </span>
-      </button>
-    </div>
   );
 }

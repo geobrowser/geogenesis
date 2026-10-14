@@ -2,31 +2,13 @@
 
 import * as React from 'react';
 
-import Link from 'next/link';
-
 import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
-import type { DebateLobbySummary } from '../api';
 import { useGeoChatAuth } from '../hooks';
-import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
-import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbies, useDebateLobbyReminder, useLobbyReminderError } from './hooks';
+import { useDebateLobbies } from './hooks';
 import { useLobbyLineup } from './live-lobbies';
-import { type LobbyEntry, markLobbyEntry } from './lobby-analytics';
-import {
-  RSVP_FAILED,
-  debatingLabel,
-  goingLabel,
-  hereLabel,
-  hostsLabel,
-  lobbyErrorMessage,
-  lobbyScheduleLabel,
-  rsvpLabel,
-} from './lobby-format';
-import { LobbyHostNames } from './lobby-host-names';
-import { LobbyAvatarStack } from './lobby-people';
 import { OpenLobbyDialog } from './open-lobby-dialog';
 import { UpcomingLobbiesRow } from './upcoming-lobbies';
 
@@ -38,14 +20,14 @@ import { UpcomingLobbiesRow } from './upcoming-lobbies';
  * above the tabs, so this lists the rest and no lobby appears twice. With nothing to list it keeps
  * just Open a lobby for hosts, and otherwise goes.
  */
-export function LiveLobbiesCard() {
+export function UpcomingLobbiesCard() {
   const joining = useFeatureFlag('lobbyJoining');
   const { authenticated } = useGeoChatAuth();
   if (!joining || !authenticated) return null;
-  return <LiveLobbiesCardBody />;
+  return <UpcomingLobbiesCardBody />;
 }
 
-function LiveLobbiesCardBody() {
+function UpcomingLobbiesCardBody() {
   const hosting = useFeatureFlag('lobbyHosting');
   const lobbiesQuery = useDebateLobbies();
   const { live, soon, later } = useLobbyLineup();
@@ -67,98 +49,5 @@ function LiveLobbiesCardBody() {
       <UpcomingLobbiesRow lobbies={lobbies} canHost={hosting} onOpenLobby={() => setDialogOpen(true)} />
       {dialogOpen ? <OpenLobbyDialog onClose={() => setDialogOpen(false)} /> : null}
     </>
-  );
-}
-
-/**
- * One lobby: Live or its time, its name, who is there, and Join or RSVP. Shared by this card
- * and the Debate button's hover list; `entry` says which.
- */
-export function LobbyRow({
-  lobby,
-  entry = 'side_panel',
-  showLiveMark = true,
-}: {
-  lobby: DebateLobbySummary;
-  entry?: LobbyEntry;
-  /** Off where the heading already says every row is live, as the Debate button's hover list does. */
-  showLiveMark?: boolean;
-}) {
-  const reminder = useDebateLobbyReminder();
-  const reminderError = useLobbyReminderError(reminder, lobby);
-  const hosts = hostsLabel(lobby.hosts);
-  const schedule = lobbyScheduleLabel(lobby);
-
-  const href = debateRoomPath(lobby.lobby_id);
-  const enter = () => markLobbyEntry(lobby.lobby_id, entry);
-  const hostedBy = hosts ? `Hosted by ${hosts}` : null;
-
-  return (
-    <li className="flex flex-col gap-1.5 py-2.5 first:pt-0 last:pb-0" data-testid="lobby-row">
-      {lobby.open ? (
-        showLiveMark ? (
-          <span className="inline-flex items-center gap-1.5">
-            <span aria-hidden className="size-1.5 shrink-0 rounded-full bg-green" />
-            <Text as="span" variant="footnoteMedium" color="text">
-              Live
-            </Text>
-          </span>
-        ) : null
-      ) : schedule ? (
-        <Text as="p" variant="footnoteMedium" color="grey-04">
-          {schedule}
-        </Text>
-      ) : null}
-
-      <Link href={href} onClick={enter} className="min-w-0 hover:underline">
-        <Text as="p" variant="metadataMedium" className="truncate">
-          {lobby.name}
-        </Text>
-      </Link>
-
-      <div className="flex items-center gap-2.5">
-        {lobby.open ? <LobbyAvatarStack people={lobby.avatars} total={lobby.headcount} /> : null}
-        <Text as="span" variant="footnote" color={lobby.open ? 'text' : 'grey-04'} className="min-w-0 flex-1 truncate">
-          {lobby.open
-            ? [
-                hereLabel(lobby.headcount),
-                lobby.debating_count > 0 ? debatingLabel(lobby.debating_count) : null,
-                lobby.viewer_on_roster ? 'You’re here' : null,
-              ]
-                .filter(Boolean)
-                .join(' · ')
-            : [hostedBy, goingLabel(lobby.reminder_count)].filter(Boolean).join(' · ')}
-        </Text>
-        {lobby.open ? (
-          <Link
-            href={href}
-            onClick={enter}
-            className={hubPillClassName(lobby.viewer_on_roster ? 'secondary' : 'primary')}
-          >
-            {lobby.viewer_on_roster ? 'Open' : 'Join'}
-          </Link>
-        ) : (
-          <HubPillButton
-            analyticsLabel={lobby.viewer_reminded ? 'Lobby reminded' : 'Lobby remind me'}
-            pending={reminder.isPending}
-            aria-pressed={lobby.viewer_reminded}
-            onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded })}
-          >
-            {rsvpLabel(lobby.viewer_reminded)}
-          </HubPillButton>
-        )}
-      </div>
-
-      {lobby.open && lobby.hosts.length > 0 ? (
-        <Text as="p" variant="footnote" color="grey-04" className="truncate">
-          Hosted by <LobbyHostNames hosts={lobby.hosts} analyticsLabel="Lobby row host" />
-        </Text>
-      ) : null}
-      {reminderError ? (
-        <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminderError, RSVP_FAILED)}
-        </Text>
-      ) : null}
-    </li>
   );
 }

@@ -2,33 +2,40 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbySummary } from '../api';
-import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
+import { debateAnalyticsLabel, hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbyReminder } from './hooks';
+import { useDebateLobbyReminder, useLobbyReminderError } from './hooks';
 import type { LobbyLineup } from './live-lobbies';
 import { markLobbyEntry } from './lobby-analytics';
 import {
   RSVP_FAILED,
   debatingLabel,
-  goingLabel,
   hereLabel,
   lobbyErrorMessage,
   lobbyScheduleLabel,
   rsvpLabel,
+  untilLabel,
 } from './lobby-format';
-import { LobbyHostNames } from './lobby-host-names';
+import { LobbyByline } from './lobby-host-names';
 import { LobbyAvatarStack } from './lobby-people';
+import { useMinuteNow } from './use-minute-now';
 
 /**
- * The surface's own dark: the Explore welcome banner's and the navbar's black pill. The avatar
- * stack's ring takes it too, so faces are cut out of the card rather than haloed in white.
+ * The dark surface live lobbies are drawn on (GEO-3268): the Explore welcome banner's and the
+ * navbar's black pill. The avatar stack's ring takes it too, so faces are cut out of the card rather
+ * than haloed in white.
  */
-const SPOTLIGHT_SURFACE_STYLE = { '--avatar-group-ring': '#151515' } as React.CSSProperties;
+export const LOBBY_DARK_SURFACE_CLASS_NAME = 'bg-[#151515]';
+export const LOBBY_DARK_SURFACE_STYLE = { '--avatar-group-ring': '#151515' } as React.CSSProperties;
+
+/** The welcome banner's body line, which the lobby cards on the dark surface share. */
+export const LOBBY_BODY_TEXT_CLASS_NAME = 'text-[16px] leading-[18px] font-normal tracking-[-0.48px]';
 
 /**
  * The spotlight's one action: the dialog action button's full-width pill, in white for the dark
@@ -41,14 +48,21 @@ export const SPOTLIGHT_ACTION_CLASS_NAME =
 export const SPOTLIGHT_SECONDARY_PILL_CLASS_NAME =
   'inline-flex h-7 shrink-0 items-center justify-center rounded-full border border-white/30 px-3 text-metadata whitespace-nowrap text-white transition-colors hover:bg-white/10';
 
-/** The shared "Live" / "2 lobbies live" line: a pulsing green dot and its label. */
+/** The pulsing green dot that marks a lobby as live everywhere it is promoted. */
+export function LiveDot({ className = 'size-1.5' }: { className?: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cx('shrink-0 animate-pulse-strong rounded-full bg-green motion-reduce:animate-none', className)}
+    />
+  );
+}
+
+/** The shared "Live" / "2 lobbies live" line: the dot and its label. */
 export function LiveMark({ count, className }: { count: number; className?: string }) {
   return (
     <span className={className ?? 'inline-flex items-center gap-1.5'}>
-      <span
-        aria-hidden
-        className="size-1.5 shrink-0 animate-pulse-strong rounded-full bg-green motion-reduce:animate-none"
-      />
+      <LiveDot />
       <Text as="span" variant="footnoteMedium" color="white">
         {count > 1 ? `${count} lobbies live` : 'Live'}
       </Text>
@@ -66,6 +80,8 @@ export function liveLobbyCounts(lobby: DebateLobbySummary) {
     .filter(Boolean)
     .join(' · ');
 }
+
+const SPOTLIGHT_HOST_LABEL = debateAnalyticsLabel('hub', 'Lobby spotlight host');
 
 /** Join, or the way back in for someone already on the roster. */
 export function joinLabel(lobby: Pick<DebateLobbySummary, 'viewer_on_roster'>, short = false) {
@@ -101,8 +117,8 @@ function LiveSpotlight({ lead, others }: { lead: DebateLobbySummary; others: Deb
   return (
     <section
       aria-label={others.length > 0 ? 'Live debate lobbies' : 'Live debate lobby'}
-      className="flex flex-col gap-3 rounded-lg bg-[#151515] p-4"
-      style={SPOTLIGHT_SURFACE_STYLE}
+      className={cx('flex flex-col gap-3 rounded-lg p-4', LOBBY_DARK_SURFACE_CLASS_NAME)}
+      style={LOBBY_DARK_SURFACE_STYLE}
     >
       <LiveMark count={others.length + 1} />
 
@@ -111,17 +127,15 @@ function LiveSpotlight({ lead, others }: { lead: DebateLobbySummary; others: Deb
           {lead.name}
         </Text>
         {lead.hosts.length > 0 ? (
-          <p className="truncate text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-grey-03">
-            Hosted by <LobbyHostNames hosts={lead.hosts} analyticsLabel="Lobby spotlight host" />
+          <p className={cx('truncate text-grey-03', LOBBY_BODY_TEXT_CLASS_NAME)}>
+            <LobbyByline lobby={lead} analyticsLabel={SPOTLIGHT_HOST_LABEL} hostedBy />
           </p>
         ) : null}
       </div>
 
       <div className="flex min-w-0 items-center gap-2.5">
         <LobbyAvatarStack people={lead.avatars} total={lead.headcount} />
-        <p className="min-w-0 truncate text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-white">
-          {liveLobbyCounts(lead)}
-        </p>
+        <p className={cx('min-w-0 truncate text-white', LOBBY_BODY_TEXT_CLASS_NAME)}>{liveLobbyCounts(lead)}</p>
       </div>
 
       <Link
@@ -175,32 +189,18 @@ function LiveSpotlight({ lead, others }: { lead: DebateLobbySummary; others: Deb
   );
 }
 
-/** Re-renders every 15 seconds while mounted, for a countdown in whole minutes. */
-function useMinuteCountdown(iso: string) {
-  const [now, setNow] = React.useState(() => Date.now());
-  React.useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 15_000);
-    return () => clearInterval(interval);
-  }, []);
-  const at = Date.parse(iso);
-  return Number.isNaN(at) ? null : at - now;
-}
-
-/** "Opens in 12 min", "Opens in 1 min", then "Opening now" until geo-chat opens it. */
-export function opensInLabel(msUntil: number | null) {
-  if (msUntil === null) return 'Opening soon';
-  if (msUntil <= 0) return 'Opening now';
-  const minutes = Math.ceil(msUntil / 60_000);
-  return `Opens in ${minutes} min`;
-}
-
 function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
   const reminder = useDebateLobbyReminder();
-  const msUntil = useMinuteCountdown(lobby.opens_at);
-  const schedule = lobbyScheduleLabel(lobby);
+  const reminderError = useLobbyReminderError(reminder, lobby);
+  // Ticks so the countdown moves; passed in so the compiler sees it change.
+  const now = useMinuteNow();
+  const schedule = lobbyScheduleLabel(lobby, now);
 
   return (
-    <section aria-label="Upcoming debate lobby" className="flex flex-col gap-3 rounded-lg bg-[#151515] p-4">
+    <section
+      aria-label="Upcoming debate lobby"
+      className={cx('flex flex-col gap-3 rounded-lg p-4', LOBBY_DARK_SURFACE_CLASS_NAME)}
+    >
       {schedule ? (
         <Text as="p" variant="footnoteMedium" color="grey-03">
           {schedule}
@@ -208,22 +208,17 @@ function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
       ) : null}
 
       <div className="flex min-w-0 flex-col gap-1">
+        {/* "Opens in 12 min", then "Opens soon" until geo-chat opens it. */}
         <p className="text-largeTitle text-white tabular-nums" aria-live="polite">
-          {opensInLabel(msUntil)}
+          Opens {untilLabel(lobby.opens_at, now)}
         </p>
         <Text as="h3" variant="smallTitle" color="white" className="truncate">
           {lobby.name}
         </Text>
       </div>
 
-      <p className="text-[16px] leading-[18px] font-normal tracking-[-0.48px] text-grey-03">
-        {lobby.hosts.length > 0 ? (
-          <>
-            Hosted by <LobbyHostNames hosts={lobby.hosts} analyticsLabel="Lobby spotlight host" />
-          </>
-        ) : null}
-        {lobby.hosts.length > 0 && lobby.reminder_count > 0 ? ' · ' : null}
-        {lobby.reminder_count > 0 ? goingLabel(lobby.reminder_count) : null}
+      <p className={cx('text-grey-03', LOBBY_BODY_TEXT_CLASS_NAME)}>
+        <LobbyByline lobby={lobby} analyticsLabel={SPOTLIGHT_HOST_LABEL} hostedBy />
       </p>
 
       <button
@@ -237,9 +232,9 @@ function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
       >
         {rsvpLabel(lobby.viewer_reminded)}
       </button>
-      {reminder.isError ? (
+      {reminderError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, RSVP_FAILED)}
+          {lobbyErrorMessage(reminderError, RSVP_FAILED)}
         </Text>
       ) : null}
     </section>

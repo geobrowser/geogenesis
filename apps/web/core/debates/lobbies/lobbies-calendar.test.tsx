@@ -22,6 +22,7 @@ vi.mock('./hooks', () => ({
     refetch: vi.fn(),
   }),
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
+  useLobbyReminderError: () => null,
 }));
 vi.mock('./lobby-analytics', () => ({ markLobbyEntry: vi.fn() }));
 vi.mock('./lobby-people', () => ({ LobbyAvatarStack: () => null }));
@@ -94,7 +95,7 @@ describe('LobbiesCalendarBody', () => {
     mocks.lobbies = [lobby({ lobby_id: 'nyc', name: 'NYC Debates', reminder_count: 6 })];
     render(<LobbiesCalendarBody isPhone={false} />);
 
-    expect(screen.getByRole('heading', { name: /· Today/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /^Today, / })).toBeInTheDocument();
     const card = within(screen.getByTestId('lobby-calendar-card'));
     expect(card.getByText('NYC Debates')).toBeInTheDocument();
     expect(screen.getByTestId('lobby-calendar-card')).toHaveTextContent('Bryan · 6 going');
