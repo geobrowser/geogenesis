@@ -716,6 +716,14 @@ export function PersonRow({
             in a 4px ring. It carried the pills' 8px dot before, which on a face this size read as
             a speck rather than a badge. */}
         {schedule || away ? null : <OnlineDot faceSize={32} />}
+        {/* GEO-3236, as a "+" on the face (GEO-3310) the way the debate videos have it, rather than
+            a pill crowding the name. It draws nothing on the viewer's own row or once followed. */}
+        {profileHref ? (
+          <FollowButton
+            target={{ kind: 'person', id: person.profile_space_id, name: speakerLabel(person) }}
+            variant="avatar"
+          />
+        ) : null}
       </div>
       <div className="flex min-w-0 flex-col gap-0.5">
         {/* The name goes to their personal space, which is the profile page GEO-2611 settled on.
@@ -747,11 +755,6 @@ export function PersonRow({
               {speakerLabel(person)}
             </Text>
           )}
-          {/* GEO-3236. Beside the name rather than among the row's actions, which belong to debating
-              them; it draws nothing on the viewer's own row. */}
-          {profileHref ? (
-            <FollowButton target={{ kind: 'person', id: person.profile_space_id, name: speakerLabel(person) }} />
-          ) : null}
         </div>
         {/* One compact row: debates, positions, then the viewer-relative match count. The
             latter opens the exact claims without making every person row permanently taller. */}

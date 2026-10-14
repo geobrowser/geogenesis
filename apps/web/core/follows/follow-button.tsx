@@ -8,6 +8,7 @@ import cx from 'classnames';
 
 import { useActionContext } from '~/core/action-context-provider';
 import { runObservedAction } from '~/core/analytics-operations';
+import { tileChipSurface } from '~/core/debates/debate-video-tile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
@@ -16,6 +17,9 @@ import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useFollowEntities } from '~/core/topics/use-follow-topics';
 import { useFollowedEntities } from '~/core/topics/use-followed-topics';
 import { normId } from '~/core/utils/norm-id';
+
+import { CreateSmall } from '~/design-system/icons/create-small';
+import { TickSmall } from '~/design-system/icons/tick-small';
 
 /**
  * What a Follow button follows. A topic by its entity id (GEO-3191); a person by their personal
@@ -28,7 +32,17 @@ export type FollowButtonVariant = 'compact' | 'page' | 'secondary' | 'avatar';
 const NO_PERSONAL_SPACE_HINT = 'You need a personal space to follow';
 const UNREGISTERED_SPACE_HINT = 'Your personal space needs to finish setting up before you can follow';
 
-/** How long the avatar badge shows its tick after a follow before it goes. */
+/**
+ * The avatar badge takes the fill of the chips beside it. Over video that is the Agree / Disagree
+ * chip's `tileChipSurface`; on a page it is the compact Follow pill it stands in for, whose white
+ * would vanish against the page without the pill's grey rim.
+ */
+const AVATAR_SURFACE = {
+  video: cx(tileChipSurface, 'hover:bg-white'),
+  page: 'border border-grey-02 bg-white hover:border-grey-04',
+} as const;
+
+/** How long the avatar badge keeps its tick once a follow it saw in flight has landed. */
 const AVATAR_CONFIRM_MS = 1500;
 
 const BASE_CLASS =
@@ -42,7 +56,9 @@ const BASE_CLASS =
  *   page's main action (a profile's Request debate). Followed, it fills grey-01, the same settled
  *   state the compact pill takes.
  *
- * `avatar` is drawn separately (see `AvatarFollowBadge`): a "+" pinned to a face, not a pill.
+ * `avatar` is drawn separately: a "+" pinned to the bottom of a face, not a pill. It positions itself,
+ * so the caller's job is a `relative` box around the face. `surface` picks its fill — see
+ * `AVATAR_SURFACE`.
  */
 const VARIANT_CLASS: Record<
   Exclude<FollowButtonVariant, 'avatar'>,
@@ -104,10 +120,13 @@ const KIND = {
 export function FollowButton({
   target,
   variant = 'compact',
+  surface = 'page',
   className,
 }: {
   target: FollowTarget;
   variant?: FollowButtonVariant;
+  /** What an `avatar` badge sits on; other variants ignore it. */
+  surface?: keyof typeof AVATAR_SURFACE;
   className?: string;
 }) {
   const kind = KIND[target.kind];
@@ -123,21 +142,14 @@ export function FollowButton({
   const { isPending: isAccountSetupPending } = usePendingPersonalSpace();
   const getContext = useActionContext(kind.component, kind.targetType, targetId);
 
-  const followed = followedIds.has(targetId);
   // Nobody follows themselves. Read again when a queued press replays, since the press can come
   // before the account it belongs to is known: their own row, pressed signed out.
   const isSelf =
     target.kind === 'person' && Boolean(anyPersonalSpaceId) && normId(anyPersonalSpaceId ?? '') === targetId;
   const targetRef = React.useMemo(() => ({ id: targetId, name: target.name ?? null }), [targetId, target.name]);
 
-  // The avatar badge confirms a follow with a tick, then gets out of the way: a face that is
-  // already followed carries no badge at all, so the tick is only ever the answer to a press.
-  const [confirming, setConfirming] = React.useState(false);
-  React.useEffect(() => {
-    if (!confirming) return;
-    const timer = window.setTimeout(() => setConfirming(false), AVATAR_CONFIRM_MS);
-    return () => window.clearTimeout(timer);
-  }, [confirming]);
+  const followed = followedIds.has(targetId);
+  const saving = isPending(targetId);
 
   const observed = React.useCallback(
     (action: 'follow' | 'unfollow', write: () => Promise<boolean>) =>
@@ -162,6 +174,35 @@ export function FollowButton({
     },
   });
 
+  // The avatar badge ticks while a follow is on its way and for a moment once it lands, then gets out
+  // of the way: a face that is already followed carries no badge at all. Both are read from shared
+  // state — the queue and the pending write — not from a press this instance remembers, because a
+  // queued follow outlives the control that queued it and a failed or cancelled press leaves no
+  // write behind. The pending write is per person, not per control: a follow pressed in the side
+  // panel ticks this face too, so the two never disagree about a follow that is happening. A follow
+  // that arrives with nothing in flight here — another tab or device, a refetch — stays bare.
+  //
+  // Both pieces of state name the target they belong to, so a control handed a different person
+  // starts clean rather than reading the last one's follow as this one's landing.
+  const inFlight = !followed && (saving || queuedFollow.isQueued);
+  const [lastFlight, setLastFlight] = React.useState({ targetId, inFlight });
+  const [landedId, setLandedId] = React.useState<string | null>(null);
+  if (lastFlight.targetId !== targetId) {
+    // A new person: the last one's landing goes with them, or coming back to them later would
+    // replay a tick whose moment has passed.
+    setLastFlight({ targetId, inFlight });
+    setLandedId(null);
+  } else if (lastFlight.inFlight !== inFlight) {
+    setLastFlight({ targetId, inFlight });
+    if (lastFlight.inFlight && followed) setLandedId(targetId);
+  }
+  const justLanded = landedId === targetId;
+  React.useEffect(() => {
+    if (!justLanded) return;
+    const timer = window.setTimeout(() => setLandedId(null), AVATAR_CONFIRM_MS);
+    return () => window.clearTimeout(timer);
+  }, [justLanded]);
+
   const promptSignIn = usePrivySignIn(undefined, {
     analytics: {
       component: kind.component,
@@ -176,7 +217,6 @@ export function FollowButton({
   // Your own profile: there is nothing to follow.
   if (isSelf) return null;
 
-  const saving = isPending(targetId);
   const shownFollowed = followed || queuedFollow.isQueued;
   const signedIn = Boolean(smartAccount);
   // Not yet known to be signed out: Privy still starting, or signed in with the account still
@@ -196,16 +236,14 @@ export function FollowButton({
     if (saving || disabled) return;
 
     if (followed) {
-      setConfirming(false);
+      setLandedId(null);
       void observed('unfollow', () => unfollow([targetId]));
       return;
     }
     if (queuedFollow.isQueued) {
-      setConfirming(false);
       queuedFollow.cancel();
       return;
     }
-    if (variant === 'avatar') setConfirming(true);
     if (!signedIn) {
       queuedFollow.queue();
       promptSignIn(undefined, { onCancel: queuedFollow.cancel });
@@ -222,37 +260,35 @@ export function FollowButton({
   const name = target.name ?? kind.fallbackName;
   const hint = noPersonalSpace ? (anyPersonalSpaceId ? UNREGISTERED_SPACE_HINT : NO_PERSONAL_SPACE_HINT) : undefined;
 
+  const buttonProps = {
+    type: 'button',
+    'aria-pressed': shownFollowed,
+    'aria-label': shownFollowed ? `Unfollow ${name}` : `Follow ${name}`,
+    title: hint,
+    disabled,
+    'aria-busy': saving || undefined,
+    onClick: onPress,
+    'data-geo-analytics-label': shownFollowed ? kind.unfollow : kind.follow,
+  } satisfies React.ComponentPropsWithoutRef<'button'> & { 'data-geo-analytics-label': string };
+
   if (variant === 'avatar') {
-    if (shownFollowed && !confirming) return null;
+    // A queued follow keeps its tick so a second press can still withdraw it; a failed write leaves
+    // nothing in flight, so the "+" comes back.
+    const ticked = inFlight || queuedFollow.isQueued || justLanded;
+    if (followed && !ticked) return null;
     return (
       <button
-        type="button"
-        aria-pressed={shownFollowed}
-        aria-label={shownFollowed ? `Unfollow ${name}` : `Follow ${name}`}
-        title={hint}
-        disabled={disabled}
-        aria-busy={saving || undefined}
-        onClick={onPress}
-        data-geo-analytics-label={shownFollowed ? kind.unfollow : kind.follow}
+        {...buttonProps}
         className={cx(
-          // The badge is 16px; the pseudo-element widens what a thumb can hit without growing it.
-          // Filled like the Agree / Disagree chip beside it (`tileChipSurface`), so the two read
-          // as one set of labels over the video.
-          "relative grid size-4 place-items-center rounded-full bg-white/85 text-text transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:bg-white disabled:cursor-default",
+          // 16px, centred on the face's bottom edge with half of it hanging below. The pseudo-element
+          // widens what a thumb can hit without growing the badge.
+          "absolute -bottom-2 left-1/2 grid size-4 -translate-x-1/2 place-items-center rounded-full text-text transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] disabled:cursor-default",
+          AVATAR_SURFACE[surface],
           (saving || disabled) && 'opacity-60',
           className
         )}
       >
-        {shownFollowed || confirming ? (
-          <svg width={9} height={9} viewBox="0 0 12 12" fill="none" aria-hidden>
-            <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={2} />
-          </svg>
-        ) : (
-          <svg width={8} height={8} viewBox="0 0 13 13" fill="none" aria-hidden>
-            <path d="M6.5 0V13" stroke="currentColor" strokeWidth={2.2} />
-            <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={2.2} />
-          </svg>
-        )}
+        {ticked ? <TickSmall size={9} strokeWidth={2} /> : <CreateSmall size={8} strokeWidth={2.2} />}
       </button>
     );
   }
@@ -261,14 +297,7 @@ export function FollowButton({
 
   return (
     <button
-      type="button"
-      aria-pressed={shownFollowed}
-      aria-label={shownFollowed ? `Unfollow ${name}` : `Follow ${name}`}
-      title={hint}
-      disabled={disabled}
-      aria-busy={saving || undefined}
-      onClick={onPress}
-      data-geo-analytics-label={shownFollowed ? kind.unfollow : kind.follow}
+      {...buttonProps}
       className={cx(
         BASE_CLASS,
         styles.shape,
@@ -281,26 +310,18 @@ export function FollowButton({
       {shownFollowed ? (
         <>
           <span className={cx('inline-flex items-center', styles.innerGap, !saving && 'group-hover/follow:hidden')}>
-            <svg width={styles.tick} height={styles.tick} viewBox="0 0 12 12" fill="none" aria-hidden>
-              <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={1} />
-            </svg>
+            <TickSmall size={styles.tick} />
             Following
           </span>
           {!saving ? <span className="hidden group-hover/follow:inline">Unfollow</span> : null}
         </>
       ) : (
         <>
-          <svg
-            width={styles.plus}
-            height={styles.plus}
-            viewBox="0 0 13 13"
-            fill="none"
-            aria-hidden
+          <CreateSmall
+            size={styles.plus}
+            strokeWidth={1.3}
             className={variant === 'compact' || variant === 'secondary' ? 'text-grey-04' : undefined}
-          >
-            <path d="M6.5 0V13" stroke="currentColor" strokeWidth={1.3} />
-            <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={1.3} />
-          </svg>
+          />
           Follow
         </>
       )}
