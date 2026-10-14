@@ -5,6 +5,7 @@ import * as React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimListPage } from '../claim-list-pages';
+import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { LobbyClaimListTab } from './lobby-claim-list-tab';
 import type { LobbyPageView } from './lobby-view';
 
@@ -102,12 +103,42 @@ describe('LobbyClaimListTab', () => {
     // Room sides are batched over every card, in page order, and read as they near the viewport.
     expect(mocks.batches).toEqual([['c1', 'c2', 'c3']]);
 
-    const scrollIntoView = vi.fn();
-    document.getElementById(`lobby-claim-list-${list.entity_id}-privacy`)!.scrollIntoView = scrollIntoView;
+    // No scroll box of its own (phones): the theme scrolls the page, which is what scrolls there.
+    const windowScroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     fireEvent.click(
       within(screen.getByRole('navigation', { name: 'Themes' })).getByRole('button', { name: 'Privacy' })
     );
-    expect(scrollIntoView).toHaveBeenCalled();
+    expect(windowScroll).toHaveBeenCalledTimes(1);
+    windowScroll.mockRestore();
+  });
+
+  it('scrolls only the claims column to a theme, never the page around it', () => {
+    mocks.page.data = {
+      entityId: list.entity_id,
+      spaceId: SPACE,
+      name: 'AI highlights',
+      sections: [
+        { id: 'work', name: 'Work', claims: [{ id: 'c1', name: 'One', description: null, spaceId: SPACE }] },
+        { id: 'privacy', name: 'Privacy', claims: [{ id: 'c2', name: 'Two', description: null, spaceId: SPACE }] },
+      ],
+    };
+    const windowScroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    render(
+      <div data-debates-hub-scroll="" data-testid="column">
+        <HubScrollSelectorProvider value={HUB_SCROLL_SELECTOR}>
+          <LobbyClaimListTab lobby={lobbyFor(false)} list={list} />
+        </HubScrollSelectorProvider>
+      </div>
+    );
+    const column = screen.getByTestId('column');
+    column.scrollTo = vi.fn();
+
+    fireEvent.click(
+      within(screen.getByRole('navigation', { name: 'Themes' })).getByRole('button', { name: 'Privacy' })
+    );
+    expect(column.scrollTo).toHaveBeenCalledWith(expect.objectContaining({ behavior: 'smooth' }));
+    expect(windowScroll).not.toHaveBeenCalled();
+    windowScroll.mockRestore();
   });
 
   it('says a deleted page is gone, and lets only a host remove it', async () => {

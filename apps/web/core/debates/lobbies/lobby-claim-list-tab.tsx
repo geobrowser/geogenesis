@@ -16,6 +16,7 @@ import { claimRowKey } from '../matchmaking/claim-row-key';
 import { HubStickyControls } from '../matchmaking/claims-tab';
 import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubCardList } from '../matchmaking/hub-motion';
+import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import { HubQueryState } from '../matchmaking/hub-states';
 import { taggedClaimEntry } from '../matchmaking/tagged-claim-entry';
 import { useRemoveLobbyClaimList } from './lobby-claim-lists-hooks';
@@ -111,9 +112,12 @@ function ClaimListSections({
   const renderRoomCard = useLobbyRoomCardRenderer(lobby, batches);
 
   const sectionDomId = (section: ClaimListSection) => `lobby-claim-list-${page.entityId}-${section.id}`;
+  // Only the box the claims scroll in: `scrollIntoView` scrolls every ancestor, and moved the
+  // whole lobby page along with the column on desktop.
+  const hubScrollSelector = useHubScrollSelector();
   const jumpTo = (section: ClaimListSection) => {
     const node = document.getElementById(sectionDomId(section));
-    if (typeof node?.scrollIntoView === 'function') node.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (node) scrollToSection(node, hubScrollSelector ? node.closest<HTMLElement>(hubScrollSelector) : null);
   };
   const addedBy = list.added_by ? personName(list.added_by) : null;
 
@@ -181,4 +185,20 @@ function ClaimListSections({
       ))}
     </div>
   );
+}
+
+/**
+ * Brings `node` to the top of `scroller`, or of the page when the claims have no box of their own
+ * (phones), clear of whatever is pinned there: the offset is the section's own `scroll-margin-top`.
+ */
+export function scrollToSection(node: HTMLElement, scroller: HTMLElement | null) {
+  const margin = Number.parseFloat(getComputedStyle(node).scrollMarginTop) || 0;
+  const nodeTop = node.getBoundingClientRect().top;
+  if (scroller) {
+    const top = nodeTop - scroller.getBoundingClientRect().top + scroller.scrollTop - margin;
+    if (typeof scroller.scrollTo === 'function') scroller.scrollTo({ top, behavior: 'smooth' });
+    else scroller.scrollTop = top;
+    return;
+  }
+  window.scrollTo({ top: nodeTop + window.scrollY - margin, behavior: 'smooth' });
 }
