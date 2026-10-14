@@ -1,5 +1,5 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -312,5 +312,56 @@ describe('FollowTopicButton', () => {
 
     expect(mocks.writesKind).toBe('topic');
     expect(mocks.readsKind).toBe('topic');
+  });
+});
+
+describe('the avatar badge (GEO-3305)', () => {
+  const renderBadge = () =>
+    render(<FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada' }} variant="avatar" />);
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it('is a "+" with no label text, and follows on press', () => {
+    renderBadge();
+    const badge = screen.getByRole('button', { name: 'Follow Ada' });
+
+    expect(badge).not.toHaveTextContent('Follow');
+    fireEvent.click(badge);
+    expect(mocks.follow).toHaveBeenCalledWith([{ id: ADA_SPACE, name: 'Ada' }]);
+  });
+
+  it('draws nothing on a face the viewer already follows', () => {
+    mocks.followedIds = new Set([ADA_SPACE]);
+    const { container } = renderBadge();
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('confirms a follow with a tick, then goes', () => {
+    vi.useFakeTimers();
+    const { container, rerender } = renderBadge();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow Ada' }));
+    mocks.followedIds = new Set([ADA_SPACE]);
+    rerender(<FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada' }} variant="avatar" />);
+    expect(screen.getByRole('button', { name: 'Unfollow Ada' })).toHaveAttribute('aria-pressed', 'true');
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('comes back as a "+" when a follow it confirmed did not land', () => {
+    vi.useFakeTimers();
+    renderBadge();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow Ada' }));
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(screen.getByRole('button', { name: 'Follow Ada' })).toHaveAttribute('aria-pressed', 'false');
   });
 });

@@ -1,6 +1,7 @@
 import { SystemIds } from '@geoprotocol/geo-sdk/lite';
 
 import * as Effect from 'effect/Effect';
+import { after } from 'next/server';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
 import { SCORE_SYSTEM_PROPERTY } from '~/core/constants';
@@ -636,6 +637,43 @@ async function fetchCompleteEntitiesPage(args: {
 const freshListCache = createPromiseTtlCache<ExploreEntitiesPageResponse>({ ttlMs: 60_000, maxEntries: 48 });
 
 /**
+ * GEO-3279. The newest settled Fresh list per scope, so a new scroll can start from it at once while
+ * the current minute's list loads behind the response. The minute pin alone left every first
+ * request of a minute paying the ~4s Fresh query, and with sparse traffic that was most visitors.
+ */
+const latestFreshLists = new Map<string, FreshList>();
+const LATEST_FRESH_LISTS_MAX_ENTRIES = 48;
+
+/**
+ * How old a Fresh list a new scroll may start from. It only misses what was created since it was
+ * pinned, against a freshness window of hours; older than this, the scroll waits for a new one.
+ */
+export const FRESH_LIST_MAX_STALE_MS = 30 * 60_000;
+
+type FreshList = { asOfMs: number; page: ExploreEntitiesPageResponse };
+
+function rememberLatestFreshList(scopeKey: string, list: FreshList) {
+  const current = latestFreshLists.get(scopeKey);
+  if (current && current.asOfMs > list.asOfMs) return;
+  latestFreshLists.delete(scopeKey);
+  latestFreshLists.set(scopeKey, list);
+  while (latestFreshLists.size > LATEST_FRESH_LISTS_MAX_ENTRIES) {
+    const oldestKey = latestFreshLists.keys().next().value;
+    if (typeof oldestKey !== 'string') break;
+    latestFreshLists.delete(oldestKey);
+  }
+}
+
+/** Keeps a serverless instance alive for `work` after the response; outside a request, just runs it. */
+function runAfterResponse(work: () => Promise<unknown>) {
+  try {
+    after(work);
+  } catch {
+    void work();
+  }
+}
+
+/**
  * The Fresh list (GEO-3221): the newest eligible items created in `[asOf - freshnessHours, asOf]`,
  * newest first. It is New's own query — the same name, system-entity, block-type, debate-tag and
  * type rules, scoped to the same spaces — with a creation-time range, so nothing reaches the fresh
@@ -643,6 +681,10 @@ const freshListCache = createPromiseTtlCache<ExploreEntitiesPageResponse>({ ttlM
  *
  * The upper bound is what keeps it stable while someone scrolls: an item created after the scroll
  * began joins the next scroll, not this one.
+ *
+ * A scroll's first page may be served an older list of the same scope (GEO-3279), and the returned
+ * `asOfMs` is then that list's pin, which the scroll must carry so its later pages cut from the same
+ * list. A pinned page always gets exactly its own `asOfMs`.
  */
 async function fetchFreshEntitiesPage(args: {
   spaceIds: string[];
@@ -653,39 +695,60 @@ async function fetchFreshEntitiesPage(args: {
   entityFilter?: EntityFilter;
   asOfMs: number;
   freshnessHours: number;
-}): Promise<ExploreEntitiesPageResponse> {
-  const asOfSec = Math.floor(args.asOfMs / 1000);
-  const range: EntityFilter = {
-    createdAt: {
-      greaterThanOrEqualTo: String(asOfSec - args.freshnessHours * 3600),
-      lessThanOrEqualTo: String(asOfSec),
-    },
-  };
-  const key = JSON.stringify({
+  startsScroll: boolean;
+}): Promise<FreshList> {
+  const scopeKey = JSON.stringify({
     spaceIds: args.spaceIds.map(normId).sort(),
     time: args.time,
     typeIds: args.typeIds.map(normId).sort(),
     requireName: args.requireName ?? null,
     requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
     entityFilter: args.entityFilter ?? null,
-    asOfSec,
     freshnessHours: args.freshnessHours,
   });
-  return freshListCache.get(key, () =>
-    fetchExploreEntitiesPage({
-      spaceIds: args.spaceIds,
-      time: args.time,
-      limit: FRESH_SLOT_CANDIDATE_LIMIT,
-      after: null,
-      // The id breaks ties: whole batches of claims share one creation second, and the cursor's
-      // mask indexes this list, so its order must not vary between requests.
-      orderBy: [EntitiesOrderBy.CreatedAtDesc, EntitiesOrderBy.IdDesc],
-      typeIds: args.typeIds,
-      requireName: args.requireName,
-      requireDebateTagOnClaims: args.requireDebateTagOnClaims,
-      entityFilter: combineEntityFilters(args.entityFilter, range),
-    })
-  );
+
+  const load = async (asOfMs: number): Promise<FreshList> => {
+    const asOfSec = Math.floor(asOfMs / 1000);
+    const range: EntityFilter = {
+      createdAt: {
+        greaterThanOrEqualTo: String(asOfSec - args.freshnessHours * 3600),
+        lessThanOrEqualTo: String(asOfSec),
+      },
+    };
+    const page = await freshListCache.get(JSON.stringify({ scopeKey, asOfSec }), () =>
+      fetchExploreEntitiesPage({
+        spaceIds: args.spaceIds,
+        time: args.time,
+        limit: FRESH_SLOT_CANDIDATE_LIMIT,
+        after: null,
+        // The id breaks ties: whole batches of claims share one creation second, and the cursor's
+        // mask indexes this list, so its order must not vary between requests.
+        orderBy: [EntitiesOrderBy.CreatedAtDesc, EntitiesOrderBy.IdDesc],
+        typeIds: args.typeIds,
+        requireName: args.requireName,
+        requireDebateTagOnClaims: args.requireDebateTagOnClaims,
+        entityFilter: combineEntityFilters(args.entityFilter, range),
+      })
+    );
+    const list = { asOfMs, page };
+    rememberLatestFreshList(scopeKey, list);
+    return list;
+  };
+
+  if (args.startsScroll) {
+    const latest = latestFreshLists.get(scopeKey);
+    if (latest && latest.asOfMs <= args.asOfMs && args.asOfMs - latest.asOfMs <= FRESH_LIST_MAX_STALE_MS) {
+      if (latest.asOfMs < args.asOfMs) {
+        runAfterResponse(() =>
+          load(args.asOfMs).catch(error => {
+            console.error('explore fresh slot: background Fresh list refresh failed', error);
+          })
+        );
+      }
+      return latest;
+    }
+  }
+  return load(args.asOfMs);
 }
 
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.
@@ -1111,9 +1174,11 @@ export async function fetchExploreFeed(args: {
     (freshCursor.firstPage || freshCursor.pinned);
   const freshVersion = `${BEST_FEED_VERSION}+fresh.${args.freshSlot?.revision ?? 0}`;
   let freshRows: ExploreFeedRow[] | null = null;
+  // The scroll's pin; a first page served an older Fresh list takes that list's pin instead.
+  let freshAsOfMs = freshCursor.asOfMs;
   if (freshApplies) {
     try {
-      const freshPage = await fetchFreshEntitiesPage({
+      const fresh = await fetchFreshEntitiesPage({
         spaceIds: baseIds,
         time: args.time,
         typeIds: args.typeIds ?? [],
@@ -1122,8 +1187,10 @@ export async function fetchExploreFeed(args: {
         entityFilter: args.entityFilter,
         asOfMs: freshCursor.asOfMs,
         freshnessHours: freshConfig.freshnessHours,
+        startsScroll: freshCursor.firstPage,
       });
-      freshRows = windowRows(freshPage.entities);
+      freshAsOfMs = fresh.asOfMs;
+      freshRows = windowRows(fresh.page.entities);
     } catch (error) {
       // Best without the slot for this page; the cursor keeps the scroll's state for the next.
       console.error('explore fresh slot: fresh list failed, serving Best for this page', error);
@@ -1250,7 +1317,7 @@ export async function fetchExploreFeed(args: {
   const nextCursor =
     nextWindowCursor !== null && freshApplies
       ? encodeFreshSlotCursor({
-          asOfMs: freshCursor.asOfMs,
+          asOfMs: freshAsOfMs,
           shown: staysInWindow || !merged ? shownAtWindowStart : merged.shownAfter,
           inner: nextWindowCursor,
         })

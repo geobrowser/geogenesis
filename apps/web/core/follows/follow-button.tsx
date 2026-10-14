@@ -23,10 +23,13 @@ import { normId } from '~/core/utils/norm-id';
  */
 export type FollowTarget = { kind: 'topic' | 'person'; id: string; name?: string | null };
 
-export type FollowButtonVariant = 'compact' | 'page' | 'secondary' | 'overlay';
+export type FollowButtonVariant = 'compact' | 'page' | 'secondary' | 'avatar';
 
 const NO_PERSONAL_SPACE_HINT = 'You need a personal space to follow';
 const UNREGISTERED_SPACE_HINT = 'Your personal space needs to finish setting up before you can follow';
+
+/** How long the avatar badge shows its tick after a follow before it goes. */
+const AVATAR_CONFIRM_MS = 1500;
 
 const BASE_CLASS =
   'group/follow inline-flex shrink-0 items-center justify-center rounded-full border whitespace-nowrap transition-colors duration-150 disabled:cursor-default';
@@ -38,10 +41,11 @@ const BASE_CLASS =
  * - `secondary`: the same size as `page`, but white until followed, beside a black pill that is the
  *   page's main action (a profile's Request debate). Followed, it fills grey-01, the same settled
  *   state the compact pill takes.
- * - `overlay`: over video, at the height, type and fill of the Agree / Disagree chip beside it.
+ *
+ * `avatar` is drawn separately (see `AvatarFollowBadge`): a "+" pinned to a face, not a pill.
  */
 const VARIANT_CLASS: Record<
-  FollowButtonVariant,
+  Exclude<FollowButtonVariant, 'avatar'>,
   { shape: string; innerGap: string; idle: string; following: string; plus: number; tick: number }
 > = {
   compact: {
@@ -67,14 +71,6 @@ const VARIANT_CLASS: Record<
     following: 'min-w-[116px] border-grey-02 bg-grey-01 hover:border-text',
     plus: 11,
     tick: 12,
-  },
-  overlay: {
-    shape: 'h-4 gap-1 px-1.5 text-[0.75rem] leading-none',
-    innerGap: 'gap-1',
-    idle: 'border-transparent bg-white/85 text-text hover:bg-white',
-    following: 'min-w-[70px] border-transparent bg-white/25 text-white hover:bg-white/35',
-    plus: 8,
-    tick: 9,
   },
 };
 
@@ -134,6 +130,15 @@ export function FollowButton({
     target.kind === 'person' && Boolean(anyPersonalSpaceId) && normId(anyPersonalSpaceId ?? '') === targetId;
   const targetRef = React.useMemo(() => ({ id: targetId, name: target.name ?? null }), [targetId, target.name]);
 
+  // The avatar badge confirms a follow with a tick, then gets out of the way: a face that is
+  // already followed carries no badge at all, so the tick is only ever the answer to a press.
+  const [confirming, setConfirming] = React.useState(false);
+  React.useEffect(() => {
+    if (!confirming) return;
+    const timer = window.setTimeout(() => setConfirming(false), AVATAR_CONFIRM_MS);
+    return () => window.clearTimeout(timer);
+  }, [confirming]);
+
   const observed = React.useCallback(
     (action: 'follow' | 'unfollow', write: () => Promise<boolean>) =>
       runObservedAction(kind[action], getContext(), write, ok => (ok ? null : 'publish_failed')),
@@ -191,13 +196,16 @@ export function FollowButton({
     if (saving || disabled) return;
 
     if (followed) {
+      setConfirming(false);
       void observed('unfollow', () => unfollow([targetId]));
       return;
     }
     if (queuedFollow.isQueued) {
+      setConfirming(false);
       queuedFollow.cancel();
       return;
     }
+    if (variant === 'avatar') setConfirming(true);
     if (!signedIn) {
       queuedFollow.queue();
       promptSignIn(undefined, { onCancel: queuedFollow.cancel });
@@ -211,15 +219,52 @@ export function FollowButton({
     queuedFollow.queue();
   };
 
-  const styles = VARIANT_CLASS[variant];
   const name = target.name ?? kind.fallbackName;
+  const hint = noPersonalSpace ? (anyPersonalSpaceId ? UNREGISTERED_SPACE_HINT : NO_PERSONAL_SPACE_HINT) : undefined;
+
+  if (variant === 'avatar') {
+    if (shownFollowed && !confirming) return null;
+    return (
+      <button
+        type="button"
+        aria-pressed={shownFollowed}
+        aria-label={shownFollowed ? `Unfollow ${name}` : `Follow ${name}`}
+        title={hint}
+        disabled={disabled}
+        aria-busy={saving || undefined}
+        onClick={onPress}
+        data-geo-analytics-label={shownFollowed ? kind.unfollow : kind.follow}
+        className={cx(
+          // The badge is 16px; the pseudo-element widens what a thumb can hit without growing it.
+          // Filled like the Agree / Disagree chip beside it (`tileChipSurface`), so the two read
+          // as one set of labels over the video.
+          "relative grid size-4 place-items-center rounded-full bg-white/85 text-text transition-colors duration-150 before:absolute before:-inset-1.5 before:content-[''] hover:bg-white disabled:cursor-default",
+          (saving || disabled) && 'opacity-60',
+          className
+        )}
+      >
+        {shownFollowed || confirming ? (
+          <svg width={9} height={9} viewBox="0 0 12 12" fill="none" aria-hidden>
+            <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={2} />
+          </svg>
+        ) : (
+          <svg width={8} height={8} viewBox="0 0 13 13" fill="none" aria-hidden>
+            <path d="M6.5 0V13" stroke="currentColor" strokeWidth={2.2} />
+            <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={2.2} />
+          </svg>
+        )}
+      </button>
+    );
+  }
+
+  const styles = VARIANT_CLASS[variant];
 
   return (
     <button
       type="button"
       aria-pressed={shownFollowed}
       aria-label={shownFollowed ? `Unfollow ${name}` : `Follow ${name}`}
-      title={noPersonalSpace ? (anyPersonalSpaceId ? UNREGISTERED_SPACE_HINT : NO_PERSONAL_SPACE_HINT) : undefined}
+      title={hint}
       disabled={disabled}
       aria-busy={saving || undefined}
       onClick={onPress}
@@ -237,7 +282,7 @@ export function FollowButton({
         <>
           <span className={cx('inline-flex items-center', styles.innerGap, !saving && 'group-hover/follow:hidden')}>
             <svg width={styles.tick} height={styles.tick} viewBox="0 0 12 12" fill="none" aria-hidden>
-              <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={variant === 'overlay' ? 1.4 : 1} />
+              <path d="M1.5 6L4.5 9L10.5 3" stroke="currentColor" strokeWidth={1} />
             </svg>
             Following
           </span>
@@ -253,8 +298,8 @@ export function FollowButton({
             aria-hidden
             className={variant === 'compact' || variant === 'secondary' ? 'text-grey-04' : undefined}
           >
-            <path d="M6.5 0V13" stroke="currentColor" strokeWidth={variant === 'overlay' ? 1.6 : 1.3} />
-            <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={variant === 'overlay' ? 1.6 : 1.3} />
+            <path d="M6.5 0V13" stroke="currentColor" strokeWidth={1.3} />
+            <path d="M0 6.5L13 6.5" stroke="currentColor" strokeWidth={1.3} />
           </svg>
           Follow
         </>
