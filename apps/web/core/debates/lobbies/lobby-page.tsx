@@ -23,6 +23,7 @@ import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button'
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { useScrollLock } from '../use-scroll-lock';
 import {
   type LobbyPresenceState,
   MAX_TIMEOUT_MS,
@@ -600,6 +601,8 @@ function LobbyRoom({
         className={cx('flex flex-col', columns ? 'h-[calc(100dvh-2.75rem)]' : 'min-h-[calc(100dvh-2.75rem)]')}
         data-testid="debate-lobby"
       >
+        {/* The columns fill the viewport and scroll themselves; the page around them must not. */}
+        {columns ? <LockPageScroll /> : null}
         <LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />
         {tabbed ? <LobbyPhoneTabs ids={tabIds} tab={tab} onTab={setTab} claimsMark={claimsMark} /> : null}
 
@@ -940,4 +943,10 @@ function VoiceAwayWarning({ awayAt }: { awayAt: string | null }) {
       </LobbyToast>
     </LobbySlot>
   );
+}
+
+/** Holds the page still while mounted, so a scroll outside the lobby's own columns goes nowhere. */
+function LockPageScroll() {
+  useScrollLock();
+  return null;
 }
