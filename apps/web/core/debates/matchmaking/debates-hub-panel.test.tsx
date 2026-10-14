@@ -55,7 +55,7 @@ vi.mock('../rooms/scheduling-hooks', () => ({
 }));
 
 // The card has its own suite; here it only matters which tabs show it.
-vi.mock('../lobbies/lobbies-card', () => ({ LiveLobbiesCard: () => <div data-testid="live-lobbies-card" /> }));
+vi.mock('../lobbies/lobbies-card', () => ({ UpcomingLobbiesCard: () => <div data-testid="live-lobbies-card" /> }));
 
 // The scheduled section has its own suite and reads rooms and summaries this one does not stand up.
 vi.mock('./scheduled-debates-section', () => ({
@@ -100,6 +100,17 @@ vi.mock('../claim-picker-page', async importOriginal => ({
   ...(await importOriginal<typeof import('../claim-picker-page')>()),
   useClaimEntitiesByIds: () => ({ entities: [], isLoading: false, error: null }),
 }));
+
+// GEO-3268's lineup reads the lobby list and holds the matchmaking scope; nothing is live here.
+const lineup = vi.hoisted(() => ({ live: [] as { lobby_id: string }[], soon: null, later: [] }));
+vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => lineup }));
+// The banner's own suite covers what it draws; here, only whether the panel keeps it mounted.
+vi.mock('./set-schedule-banner', () => ({
+  SetScheduleBanner: ({ hidden }: { hidden?: boolean }) => (
+    <div data-testid="schedule-banner" data-hidden={String(Boolean(hidden))} />
+  ),
+}));
+vi.mock('../lobbies/lobby-spotlight', () => ({ LobbySpotlight: () => <div data-testid="lobby-spotlight" /> }));
 
 vi.mock('../hooks', () => ({
   // The set-schedule banner reads the saved calendar; these keep the mock complete rather than
@@ -216,6 +227,7 @@ function renderOpen(tab: DebatesHubTab = 'requests') {
 }
 
 beforeEach(() => {
+  lineup.live = [];
   mocks.ready = true;
   mocks.authenticated = true;
   mocks.accountKey = 'user-a';
@@ -972,5 +984,22 @@ describe('Requests badge', () => {
     ];
 
     expect(renderRequestsButton()).toHaveTextContent('2 pending requests');
+  });
+});
+
+// GEO-3268. A live lobby takes the schedule banner's place. The banner holds the schedule dialog,
+// so it stays mounted, hidden, rather than being swapped out under someone mid-edit.
+describe('DebatesHubPanel lobby spotlight', () => {
+  it('shows the schedule banner while nothing is live', () => {
+    renderOpen('explore');
+    expect(screen.getByTestId('schedule-banner')).toHaveAttribute('data-hidden', 'false');
+    expect(screen.queryByTestId('lobby-spotlight')).not.toBeInTheDocument();
+  });
+
+  it('puts the spotlight in its place while a lobby is live, keeping the banner mounted and hidden', () => {
+    lineup.live = [{ lobby_id: 'nyc' }];
+    renderOpen('explore');
+    expect(screen.getByTestId('lobby-spotlight')).toBeInTheDocument();
+    expect(screen.getByTestId('schedule-banner')).toHaveAttribute('data-hidden', 'true');
   });
 });

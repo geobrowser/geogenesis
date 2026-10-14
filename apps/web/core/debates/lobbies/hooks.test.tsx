@@ -24,9 +24,10 @@ vi.mock('~/core/analytics', async importOriginal => ({
 
 vi.mock('../api', async importOriginal => ({ ...(await importOriginal<typeof import('../api')>()), ...api }));
 
+const auth = vi.hoisted(() => ({ authenticated: true, accountKey: 'acct' as string | null }));
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
+  useGeoChatAuth: () => ({ ready: true, ...auth, getPrivyIdentityToken: vi.fn() }),
 }));
 
 const { GeoChatRequestError } = await import('../api');
@@ -639,6 +640,27 @@ it('moves a ban this tab heard to the removed screen once unbanned, and Rejoin c
   await act(() => result.current.join(false, true));
   expect(joins().at(-1)?.[1]).toMatchObject({ joined: true, rejoin: true });
   expect(result.current.state.status).toBe('joined');
+});
+
+// Copilot on #2836 asked for the list to be hidden once signed out. It already is: the key carries
+// the account, which Privy clears with the session, so a signed-out read is a different, empty entry.
+it('shows no lobbies once the viewer signs out', async () => {
+  api.listDebateLobbies.mockResolvedValue({ lobbies: [{ lobby_id: 'members-only' }] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  try {
+    const { result, rerender } = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(result.current.data?.lobbies).toHaveLength(1));
+
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    rerender();
+    expect(result.current.data).toBeUndefined();
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+  }
 });
 
 // Card patches stop while the panel is closed, so a reopen inside the stale window still reloads.

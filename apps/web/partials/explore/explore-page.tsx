@@ -12,6 +12,7 @@ import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-side
 import { EntityFeed } from '~/partials/feed/entity-feed';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
+import { ExploreLiveLobbiesBanner } from './explore-live-lobbies-banner';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
 
 /** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the skeleton up. */
@@ -109,6 +110,9 @@ export function ExplorePage({ sidePanel, signedIn = false }: Props) {
       <main className="min-w-0 pt-2">
         <div className="mx-auto w-full max-w-[880px]">
           <ExploreWelcomeBanner />
+          {/* Under the welcome note, which a first-time visitor needs to read before a lobby means
+              anything to them; it is dismissed for good, and the lobby banner then leads. */}
+          <ExploreLiveLobbiesBanner />
         </div>
         {forYouEnabled ? (
           <ExploreForYouFeed signedIn={signedIn} />

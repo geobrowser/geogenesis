@@ -71,6 +71,21 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('~/core/analytics', () => ({ capture: mocks.capture, personProfileOpened: mocks.personProfileOpened }));
+// GEO-3268. The week's lobbies, pinned above the hours; their own suite covers the chips and cards.
+const weekLobbies = vi.hoisted(() => ({
+  byDay: null as string[][] | null,
+  isLoading: false,
+  error: null as unknown,
+  refetch: vi.fn(),
+}));
+vi.mock('../lobbies/lobbies-calendar', () => ({
+  useWeekLobbies: () => ({ ...weekLobbies }),
+  lobbiesPinnedRow: (byDay: string[][]) => ({
+    label: 'Lobbies',
+    renderDay: (_date: Date, day: number) => byDay[day]!.map(name => <span key={name}>{name}</span>),
+  }),
+  lobbyDayLeads: (byDay: string[][]) => byDay.map(names => (names.length > 0 ? <span>{names.join(', ')}</span> : null)),
+}));
 function openSidePanel(target: { entityId: string } | null) {
   mocks.sidePanelTarget = target;
   for (const listener of mocks.sidePanelListeners) listener();
@@ -418,6 +433,7 @@ const ADMIN_MATCHES = [
 ];
 
 beforeEach(() => {
+  Object.assign(weekLobbies, { byDay: null, isLoading: false, error: null });
   vi.useFakeTimers({ toFake: ['Date'] });
   vi.setSystemTime(NOW);
   Object.assign(mocks, {
@@ -1691,5 +1707,73 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 
     expect(mocks.searchParams.get('claims')).toBe(`${SPACE}:${CLAIM_ONE}`);
     expect(screen.queryByRole('dialog', { name: 'Narrow the calendar' })).not.toBeInTheDocument();
+  });
+});
+
+describe('DebateCalendar, lobbies pinned above the hours (GEO-3268)', () => {
+  // Wednesday's lobby, in a week drawn Sunday to Saturday.
+  const withWednesdayLobby = () => {
+    weekLobbies.byDay = [[], [], [], ['NYC Debates'], [], [], []];
+  };
+
+  it('pins a Lobbies row under the day headers, outside the hours', () => {
+    withWednesdayLobby();
+    render(<DebateCalendar />);
+
+    const grid = screen.getByRole('grid', { name: 'Who is free each hour this week' });
+    // The day headers, the Lobbies row and 24 hours.
+    expect(grid).toHaveAttribute('aria-rowcount', '26');
+    const row = within(grid).getByRole('rowheader', { name: 'Lobbies' }).closest('[role="row"]')!;
+    expect(within(row as HTMLElement).getByText('NYC Debates')).toBeInTheDocument();
+    expect(row.closest('[role="rowgroup"]')).toBeNull();
+  });
+
+  it('draws no Lobbies row in a week without one', () => {
+    render(<DebateCalendar />);
+    expect(screen.queryByRole('rowheader', { name: 'Lobbies' })).not.toBeInTheDocument();
+  });
+
+  it('keeps a week with a lobby on screen when nobody is free in it', () => {
+    mocks.schedulable = response([]);
+    withWednesdayLobby();
+    render(<DebateCalendar />);
+
+    expect(screen.queryByText('Nobody has open times this week.')).not.toBeInTheDocument();
+    expect(screen.getByText('NYC Debates')).toBeInTheDocument();
+  });
+
+  it('lists a day’s lobbies first on a phone, a day with only a lobby included', () => {
+    mocks.isPhone = true;
+    mocks.schedulable = response([]);
+    withWednesdayLobby();
+    render(<DebateCalendar />);
+
+    expect(within(screen.getByRole('region', { name: /Wed/ })).getByText('NYC Debates')).toBeInTheDocument();
+  });
+
+  // Copilot on #2836: loading and failed both read as "no lobbies", so a week with only a lobby
+  // flashed the empty state, and kept it with no way back when the read failed.
+  it('waits for the lobbies before calling a week without people empty', () => {
+    mocks.schedulable = response([]);
+    weekLobbies.isLoading = true;
+    render(<DebateCalendar />);
+
+    expect(screen.queryByText('Nobody has open times this week.')).not.toBeInTheDocument();
+  });
+
+  it('still waits on nothing when people are free, so the week is not held up', () => {
+    weekLobbies.isLoading = true;
+    render(<DebateCalendar />);
+    expect(screen.getByRole('grid', { name: 'Who is free each hour this week' })).toBeInTheDocument();
+  });
+
+  it('says when the lobbies could not load, with a retry, and keeps the week up', () => {
+    weekLobbies.error = new Error('boom');
+    render(<DebateCalendar />);
+
+    expect(screen.getByText(/Couldn’t load lobbies, so they’re missing from the week./)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(weekLobbies.refetch).toHaveBeenCalled();
+    expect(screen.getByRole('grid', { name: 'Who is free each hour this week' })).toBeInTheDocument();
   });
 });

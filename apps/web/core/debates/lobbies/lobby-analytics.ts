@@ -14,8 +14,14 @@ import { debateRoomPath } from '../rooms/room-routes';
 export type LobbyEntry =
   /** No in-app control marked it: a pasted or shared link, a typed URL, a reload. */
   | 'link'
-  /** The lobbies card in the side panel. */
+  /** The lobbies card or the spotlight in the side panel. */
   | 'side_panel'
+  /** The Debate button's hover list in the navbar (GEO-3268). */
+  | 'nav'
+  /** The live lobby banner above the Explore feed (GEO-3268). */
+  | 'explore_banner'
+  /** A lobby's card on the debate calendar, from the row pinned above the hours (GEO-3268). */
+  | 'calendar'
   /** A lobby under Upcoming lobbies in the Requests tab (GEO-3292). */
   | 'requests'
   /** Go to lobby, right after creating it. */
