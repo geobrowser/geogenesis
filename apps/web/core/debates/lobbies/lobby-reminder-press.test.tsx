@@ -1,4 +1,5 @@
-import { act, renderHook } from '@testing-library/react';
+import '@testing-library/jest-dom/vitest';
+import { act, render, renderHook, screen } from '@testing-library/react';
 
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -22,12 +23,18 @@ const mocks = vi.hoisted(() => ({
   cancel: vi.fn(),
   queued: false,
   config: undefined as QueuedConfig | undefined,
+  error: null as unknown,
+  errorFor: [] as unknown[],
 }));
 
 vi.mock('../hooks', () => ({ useGeoChatAuth: () => ({ authenticated: mocks.authenticated }) }));
 vi.mock('./hooks', () => ({
   useDebateLobbies: () => ({ data: mocks.listLoaded ? { lobbies: [] } : undefined }),
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, mutateAsync: mocks.mutateAsync, isPending: false }),
+  useLobbyReminderError: (_reminder: unknown, target: unknown) => {
+    mocks.errorFor.push(target);
+    return mocks.error;
+  },
 }));
 vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.signIn }));
 vi.mock('~/core/state/pending-actions', () => ({
@@ -38,7 +45,7 @@ vi.mock('~/core/state/pending-actions', () => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { useLobbyReminderPress } = await import('./lobby-reminder-press');
+const { LobbyReminderError, useLobbyReminderPress } = await import('./lobby-reminder-press');
 
 const lobby = (overrides: Partial<DebateLobbySummary> = {}) =>
   ({ lobby_id: 'abc-123', open: false, viewer_reminded: false, ...overrides }) as DebateLobbySummary;
@@ -49,6 +56,8 @@ beforeEach(() => {
   mocks.listLoaded = true;
   mocks.queued = false;
   mocks.config = undefined;
+  mocks.error = null;
+  mocks.errorFor = [];
 });
 
 describe('useLobbyReminderPress', () => {
@@ -134,5 +143,25 @@ describe('useLobbyReminderPress', () => {
     act(() => result.current.press());
     expect(mocks.mutate).not.toHaveBeenCalled();
     expect(mocks.config?.ready).toBe(false);
+  });
+
+  // One place for the failure, so every Remind me shows it the same way.
+  it('passes the reminder’s failure through, with an open stand-in when there is no lobby', () => {
+    mocks.error = new GeoChatRequestError('down', 'unavailable', 503);
+    const { result } = renderHook(() => useLobbyReminderPress(lobby()));
+    expect(result.current.error).toBe(mocks.error);
+
+    renderHook(() => useLobbyReminderPress(null));
+    expect(mocks.errorFor.at(-1)).toMatchObject({ open: true });
+  });
+});
+
+describe('LobbyReminderError', () => {
+  it('says the failure under the button, and nothing without one', () => {
+    const { container } = render(<LobbyReminderError error={null} />);
+    expect(container).toBeEmptyDOMElement();
+
+    render(<LobbyReminderError error={new Error('boom')} className="text-right" />);
+    expect(screen.getByText(/RSVP|try again/i)).toHaveClass('text-right');
   });
 });

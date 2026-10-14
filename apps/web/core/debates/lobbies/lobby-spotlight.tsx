@@ -10,21 +10,12 @@ import { Text } from '~/design-system/text';
 import type { DebateLobbySummary } from '../api';
 import { debateAnalyticsLabel, hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useLobbyReminderError } from './hooks';
 import type { LobbyLineup } from './live-lobbies';
 import { markLobbyEntry } from './lobby-analytics';
-import {
-  RSVP_FAILED,
-  debatingLabel,
-  hereLabel,
-  lobbyErrorMessage,
-  lobbyScheduleLabel,
-  rsvpLabel,
-  untilLabel,
-} from './lobby-format';
+import { debatingLabel, hereLabel, lobbyScheduleLabel, rsvpLabel, untilLabel } from './lobby-format';
 import { LobbyByline } from './lobby-host-names';
 import { LobbyAvatarStack } from './lobby-people';
-import { useLobbyReminderPress } from './lobby-reminder-press';
+import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
 import { useMinuteNow } from './use-minute-now';
 
 /**
@@ -192,7 +183,6 @@ function LiveSpotlight({ lead, others }: { lead: DebateLobbySummary; others: Deb
 
 function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
   const remind = useLobbyReminderPress(lobby);
-  const reminderError = useLobbyReminderError(remind.reminder, lobby);
   // Ticks so the countdown moves; passed in so the compiler sees it change.
   const now = useMinuteNow();
   const schedule = lobbyScheduleLabel(lobby, now);
@@ -233,11 +223,7 @@ function SoonSpotlight({ lobby }: { lobby: DebateLobbySummary }) {
       >
         {rsvpLabel(remind.reminded)}
       </button>
-      {reminderError ? (
-        <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminderError, RSVP_FAILED)}
-        </Text>
-      ) : null}
+      <LobbyReminderError error={remind.error} />
     </section>
   );
 }

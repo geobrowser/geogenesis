@@ -5,9 +5,15 @@ import * as React from 'react';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { useQueuedAction } from '~/core/state/pending-actions';
 
+import { Text } from '~/design-system/text';
+
 import { type DebateLobbySummary, GeoChatRequestError, dashlessId } from '../api';
 import { useGeoChatAuth } from '../hooks';
-import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
+import { useDebateLobbies, useDebateLobbyReminder, useLobbyReminderError } from './hooks';
+import { RSVP_FAILED, lobbyErrorMessage } from './lobby-format';
+
+/** Stands in for no lobby, so the hooks below run the same either way; an open one shows no error. */
+const NO_LOBBY = { lobby_id: '', open: true };
 
 /**
  * Remind me on a lobby still to open, for anyone (GEO-3289). Signed in it sets or clears the
@@ -15,11 +21,13 @@ import { useDebateLobbies, useDebateLobbyReminder } from './hooks';
  * once the new account can read its own lobby list, which is also when it can be told whether it
  * already holds one, and dropped if the lobby opened in the meantime.
  *
- * `reminded` draws a queued reminder as set, so the press shows while sign-up runs. Failures land
- * on `reminder`, where the caller already shows them, rather than as the runner's retry toast.
+ * `reminded` draws a queued reminder as set, so the press shows while sign-up runs. A failure is
+ * `error`, for {@link LobbyReminderError} beside the button, rather than the runner's retry toast.
  */
 export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id' | 'open' | 'viewer_reminded'> | null) {
   const reminder = useDebateLobbyReminder();
+  const { mutate, mutateAsync, isPending } = reminder;
+  const error = useLobbyReminderError(reminder, lobby ?? NO_LOBBY);
   const { authenticated } = useGeoChatAuth();
   // Read only: whatever shows this lobby already holds the list. Loaded under the signed-in account
   // is what says geo-chat knows it, which a brand-new one takes a minute or two to reach.
@@ -37,7 +45,7 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
     run: async () => {
       if (!lobby || lobby.open || lobby.viewer_reminded) return;
       try {
-        await reminder.mutateAsync({ lobbyId: lobby.lobby_id, reminded: true });
+        await mutateAsync({ lobbyId: lobby.lobby_id, reminded: true });
       } catch (error) {
         // Opened since: the list swaps in Join. Anything else is shown beside the button.
         if (error instanceof GeoChatRequestError && error.status === 409) return;
@@ -51,7 +59,7 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
   const press = React.useCallback(() => {
     if (!lobby) return;
     if (authenticated) {
-      reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded });
+      mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded });
       return;
     }
     queue();
@@ -67,12 +75,22 @@ export function useLobbyReminderPress(lobby: Pick<DebateLobbySummary, 'lobby_id'
       // Walked away from: no reminder set on some later sign-in.
       { onCancel: cancel }
     );
-  }, [authenticated, cancel, lobby, lobbyId, queue, reminder, signIn]);
+  }, [authenticated, cancel, lobby, lobbyId, mutate, queue, signIn]);
 
   return {
-    reminder,
     reminded: Boolean(lobby?.viewer_reminded) || isQueued,
-    pending: reminder.isPending,
+    pending: isPending,
+    error,
     press,
   };
+}
+
+/** The reminder failure under a Remind me, from {@link useLobbyReminderPress}'s `error`. */
+export function LobbyReminderError({ error, className }: { error: unknown; className?: string }) {
+  if (!error) return null;
+  return (
+    <Text as="p" variant="footnote" color="red-01" className={className}>
+      {lobbyErrorMessage(error, RSVP_FAILED)}
+    </Text>
+  );
 }

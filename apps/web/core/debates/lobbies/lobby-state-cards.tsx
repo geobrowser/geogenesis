@@ -12,11 +12,10 @@ import { Text } from '~/design-system/text';
 import type { DebateLobbySummary } from '../api';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useLobbyReminderError } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
-import { RSVP_FAILED, lobbyErrorMessage, nextLobbyTimeLabel, personName, rsvpLabel } from './lobby-format';
+import { nextLobbyTimeLabel, personName, rsvpLabel } from './lobby-format';
 import { nextLobbyByHost, useListedLobbies } from './lobby-host-lobbies';
-import { useLobbyReminderPress } from './lobby-reminder-press';
+import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
 import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_STATE_COPY = {
@@ -123,7 +122,7 @@ export function LobbyClosedCard({
           {LOBBY_STATE_COPY.nextLobby(personName(next.host), next.lobby.name, time)}
         </Text>
       ) : null}
-      {next ? <ReminderError reminder={remind.reminder} lobby={next.lobby} /> : null}
+      <LobbyReminderError error={remind.error} />
     </LobbyStateCard>
   );
 }
@@ -160,22 +159,6 @@ function NextLobbyAction({
     >
       {rsvpLabel(reminded)}
     </HubPillButton>
-  );
-}
-
-function ReminderError({
-  reminder,
-  lobby,
-}: {
-  reminder: ReturnType<typeof useLobbyReminderPress>['reminder'];
-  lobby: DebateLobbySummary;
-}) {
-  const error = useLobbyReminderError(reminder, lobby);
-  if (!error) return null;
-  return (
-    <Text as="p" variant="footnote" color="red-01">
-      {lobbyErrorMessage(error, RSVP_FAILED)}
-    </Text>
   );
 }
 
@@ -233,7 +216,7 @@ function NextLobbyCard({ lobby }: { lobby: DebateLobbySummary }) {
         </div>
         <NextLobbyAction lobby={lobby} remind={remind} />
       </div>
-      <ReminderError reminder={remind.reminder} lobby={lobby} />
+      <LobbyReminderError error={remind.error} />
     </div>
   );
 }

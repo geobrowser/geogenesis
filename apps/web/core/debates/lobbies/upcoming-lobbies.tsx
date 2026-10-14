@@ -22,11 +22,10 @@ import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { ScrollEdgeButton, scrollRowBy } from '../matchmaking/scrollable-tab-row';
 import { useDebatesHub } from '../matchmaking/use-debates-hub';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useLobbyReminderError } from './hooks';
 import { type LobbyEntry, markLobbyEntry } from './lobby-analytics';
-import { RSVP_FAILED, lobbyErrorMessage, localDaysFrom, rsvpLabel } from './lobby-format';
+import { localDaysFrom, rsvpLabel } from './lobby-format';
 import { LobbyByline } from './lobby-host-names';
-import { useLobbyReminderPress } from './lobby-reminder-press';
+import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
 
 /** "Today", "Tomorrow", "Wed", then "Oct 21" past a week. Local time. */
 export function lobbyDayLabel(iso: string, now: number = Date.now()) {
@@ -62,7 +61,6 @@ export function LobbyRsvpButton({
   className?: string;
 }) {
   const remind = useLobbyReminderPress(lobby);
-  const error = useLobbyReminderError(remind.reminder, lobby);
   return (
     <div className={cx('flex flex-col items-end gap-1', className)}>
       <HubPillButton
@@ -80,11 +78,7 @@ export function LobbyRsvpButton({
       >
         {rsvpLabel(remind.reminded)}
       </HubPillButton>
-      {error ? (
-        <Text as="p" variant="footnote" color="red-01" className="text-right">
-          {lobbyErrorMessage(error, RSVP_FAILED)}
-        </Text>
-      ) : null}
+      <LobbyReminderError error={remind.error} className="text-right" />
     </div>
   );
 }

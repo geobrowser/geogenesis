@@ -821,6 +821,21 @@ describe('DebateLobbyPage state screens', () => {
     expect(screen.getByRole('link', { name: 'Find a debate' })).toBeInTheDocument();
   });
 
+  // GEO-3289. The list answers without an account, so a guest is pointed on too.
+  it('points a guest at the host’s next lobby when the lobby ended', () => {
+    mocks.guestView = {
+      lobby: { ...lobbyFields, access: { status: 'closed', reason: 'ended' } },
+      claims: null,
+      highlights: null,
+    };
+    mocks.lobbies = [listed({ lobby_id: 'next', name: 'Tuesday debate hour' })];
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('heading', { name: 'This lobby has ended' })).toBeInTheDocument();
+    expect(screen.getByText(/^Adam’s next lobby: Tuesday debate hour, .+\.$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
+  });
+
   it('shows an ended lobby with only Find a debate when the host has nothing next', () => {
     mocks.authenticated = true;
     mocks.memberLobby = { ...memberView, access: { status: 'closed', reason: 'ended' }, members: [] };
