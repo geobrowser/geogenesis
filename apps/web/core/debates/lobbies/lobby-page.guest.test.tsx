@@ -35,6 +35,8 @@ const mocks = vi.hoisted(() => ({
   /** The signed-in lobbies list. */
   lobbies: [] as DebateLobbySummary[],
   userId: null as string | null,
+  /** Whether the page asked for the account prompt, render by render (GEO-3270). */
+  signInPrompt: [] as boolean[],
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
@@ -153,7 +155,10 @@ vi.mock('./lobby-queued-request', () => ({
     dismissOutcome: vi.fn(),
   }),
 }));
-vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn() }));
+vi.mock('./lobby-guest-sign-in', () => ({
+  useLobbyGuestSignIn: () => vi.fn(),
+  useLobbySignInPrompt: (_lobbyId: string, open: boolean) => void mocks.signInPrompt.push(open),
+}));
 vi.mock('../matchmaking/hooks', () => ({ useMatchmakingScope: vi.fn() }));
 vi.mock('../use-current-geo-chat-user-id', () => ({ useCurrentGeoChatUserId: () => mocks.userId }));
 
@@ -217,6 +222,7 @@ beforeEach(() => {
   mocks.guestViewAt = 0;
   mocks.lobbies = [];
   mocks.userId = null;
+  mocks.signInPrompt = [];
   mocks.refetchGuestView.mockReset().mockImplementation(async () => {
     mocks.guestViewAt = Date.now() + 1;
   });
@@ -539,6 +545,34 @@ describe('DebateLobbyPage when guests are turned off mid-session', () => {
 
     expect(await screen.findByText('This lobby has ended')).toBeInTheDocument();
     expect(screen.queryByText(/has been turned off/)).not.toBeInTheDocument();
+  });
+});
+
+// GEO-3270. Only where the guest banner is there to open it again.
+describe('DebateLobbyPage account prompt', () => {
+  it('asks for it for a visitor in an open lobby', () => {
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.signInPrompt.at(-1)).toBe(true);
+  });
+
+  it('asks for it for a visitor before the lobby opens', () => {
+    mocks.guestView = {
+      ...mocks.guestView!,
+      lobby: { ...lobbyFields, access: { status: 'not_yet_open', opens_at: '2099-10-06T17:50:00Z' } },
+    };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.signInPrompt.at(-1)).toBe(true);
+  });
+
+  it('does not ask for an ended lobby or a signed-in viewer', () => {
+    mocks.guestView = { ...mocks.guestView!, lobby: { ...lobbyFields, access: { status: 'closed', reason: 'ended' } } };
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    cleanup();
+    mocks.guestView = { lobby: lobbyFields, claims: null, highlights: null };
+    mocks.authenticated = true;
+    mocks.memberLobby = memberView;
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+    expect(mocks.signInPrompt.every(open => !open)).toBe(true);
   });
 });
 

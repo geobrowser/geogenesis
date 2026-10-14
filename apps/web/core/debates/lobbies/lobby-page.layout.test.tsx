@@ -83,6 +83,7 @@ vi.mock('./lobby-claims-area', async () => {
   };
 });
 vi.mock('./lobby-room-claims-hooks', () => ({ useDebateLobbyClaims: () => ({ data: undefined }) }));
+vi.mock('./lobby-guest-sign-in', () => ({ useLobbyGuestSignIn: () => vi.fn(), useLobbySignInPrompt: vi.fn() }));
 vi.mock('./lobby-highlights-hooks', () => ({
   useLobbyHighlights: (_id: string, enabled: boolean) => {
     mocks.highlightsEnabled.push(enabled);
