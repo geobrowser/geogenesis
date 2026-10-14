@@ -124,6 +124,7 @@ const AddButton = React.forwardRef<
   );
 });
 
+/** The in-lobby picker: a pick adds the page to the lobby at once. */
 export function ClaimListPickerContent({
   lobbyId,
   lists,
@@ -133,13 +134,62 @@ export function ClaimListPickerContent({
   lists: DebateLobbyClaimList[];
   onAdded: (entityId: string) => void;
 }) {
+  const save = useSaveLobbyClaimList(lobbyId);
+  const [picking, setPicking] = React.useState<string | null>(null);
+  const addedIds = React.useMemo(() => lists.map(list => list.entity_id), [lists]);
+
+  return (
+    <ClaimListPicker
+      addedIds={addedIds}
+      pickingId={picking}
+      disabled={save.isPending}
+      analyticsLabel="Lobby pick claim list"
+      onPick={option => {
+        setPicking(option.entityId);
+        save.mutate(
+          { entityId: option.entityId, spaceId: option.spaceId },
+          { onSuccess: () => onAdded(option.entityId), onSettled: () => setPicking(null) }
+        );
+      }}
+      footer={
+        save.error ? (
+          <Text as="p" variant="footnote" color="red-01">
+            {moderationErrorMessage(save.error, CLAIM_LIST_PICKER_COPY.addFailed)}
+          </Text>
+        ) : null
+      }
+    />
+  );
+}
+
+/**
+ * The claim list picker itself: eligible pages grouped by space, highest-scored space first, A to Z
+ * within, searchable, each row counted as its tab will draw it. What a pick does is the caller's:
+ * the in-lobby "+" adds it to the lobby, the Open a debate lobby dialog collects it (GEO-3275).
+ */
+export function ClaimListPicker({
+  addedIds,
+  onPick,
+  pickingId = null,
+  disabled = false,
+  analyticsLabel,
+  footer,
+}: {
+  /** Pages already chosen, shown as added and not offered again. Any id spelling. */
+  addedIds: readonly string[];
+  onPick: (option: ClaimListOption) => void;
+  /** The page a pick is in flight for, which reads "Adding…". */
+  pickingId?: string | null;
+  disabled?: boolean;
+  /** Each row's click label, so the two places it is used can be told apart. */
+  analyticsLabel: string;
+  footer?: React.ReactNode;
+}) {
   const [query, setQuery] = React.useState('');
   const [shown, setShown] = React.useState(SPACES_PER_STEP);
   const catalog = useClaimListCatalog();
-  const save = useSaveLobbyClaimList(lobbyId);
-  const [picking, setPicking] = React.useState<string | null>(null);
 
-  const added = React.useMemo(() => new Set(lists.map(list => ID.uuidToHex(list.entity_id))), [lists]);
+  const added = React.useMemo(() => new Set(addedIds.map(id => ID.uuidToHex(id))), [addedIds]);
   const spaceIds = React.useMemo(
     () => [...new Set((catalog.data?.options ?? []).map(option => option.spaceId))],
     [catalog.data]
@@ -170,14 +220,6 @@ export function ClaimListPickerContent({
     rootSelector: `[${SCROLL_ATTRIBUTE}]`,
     rootMargin: '120px',
   });
-
-  const pick = (option: ClaimListOption) => {
-    setPicking(option.entityId);
-    save.mutate(
-      { entityId: option.entityId, spaceId: option.spaceId },
-      { onSuccess: () => onAdded(option.entityId), onSettled: () => setPicking(null) }
-    );
-  };
 
   return (
     <div className="flex flex-col gap-2 p-3" role="group" aria-label={CLAIM_LIST_PICKER_COPY.title}>
@@ -210,20 +252,17 @@ export function ClaimListPickerContent({
                 group={group}
                 counts={counted}
                 added={added}
-                picking={picking}
-                disabled={save.isPending}
-                onPick={pick}
+                picking={pickingId}
+                disabled={disabled}
+                analyticsLabel={analyticsLabel}
+                onPick={onPick}
               />
             ))}
             {hasMore ? <div ref={sentinel} className="h-1" aria-hidden /> : null}
           </div>
         </HubQueryState>
       </div>
-      {save.error ? (
-        <Text as="p" variant="footnote" color="red-01">
-          {moderationErrorMessage(save.error, CLAIM_LIST_PICKER_COPY.addFailed)}
-        </Text>
-      ) : null}
+      {footer}
     </div>
   );
 }
@@ -234,6 +273,7 @@ function SpaceGroup({
   added,
   picking,
   disabled,
+  analyticsLabel,
   onPick,
 }: {
   group: ClaimListSpaceGroup;
@@ -241,6 +281,7 @@ function SpaceGroup({
   added: ReadonlySet<string>;
   picking: string | null;
   disabled: boolean;
+  analyticsLabel: string;
   onPick: (option: ClaimListOption) => void;
 }) {
   return (
@@ -256,7 +297,7 @@ function SpaceGroup({
             key={option.entityId}
             type="button"
             disabled={isAdded || disabled}
-            {...debateActionAnalyticsAttributes('hub', 'Lobby pick claim list', 'add_lobby_claim_list')}
+            {...debateActionAnalyticsAttributes('hub', analyticsLabel, 'add_lobby_claim_list')}
             onClick={() => onPick(option)}
             className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-2 text-left transition-colors hover:bg-grey-01 disabled:hover:bg-transparent"
           >

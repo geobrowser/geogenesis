@@ -18,6 +18,7 @@ import { useScrollLock } from '../use-scroll-lock';
 import { useCreateDebateLobby } from './hooks';
 import { lobbyShareUrl, markLobbyEntry } from './lobby-analytics';
 import { MAX_SCHEDULE_AHEAD_DAYS, NAME_MAX_CHARS, lobbyErrorMessage, lobbyScheduleLabel } from './lobby-format';
+import { OpenLobbyClaimListsField, type PickedClaimList, claimListsRequestField } from './open-lobby-claim-lists';
 
 /** `<input type="datetime-local">` reads and writes local wall time without a zone. */
 export function toDateTimeLocalValue(at: Date) {
@@ -64,6 +65,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   const [startDate, setStartDate] = React.useState(initialStart.slice(0, 10));
   const [startTime, setStartTime] = React.useState(initialStart.slice(11));
   const [timeZone] = React.useState(localTimeZone);
+  const [claimLists, setClaimLists] = React.useState<PickedClaimList[]>([]);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
@@ -88,7 +90,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
       return;
     }
     setFormError(null);
-    create.mutate(request.body);
+    create.mutate({ ...request.body, ...claimListsRequestField(claimLists) });
   };
 
   const copy = async () => {
@@ -212,6 +214,8 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
                 </Text>
               </div>
             ) : null}
+
+            <OpenLobbyClaimListsField value={claimLists} onChange={setClaimLists} />
 
             {formError || create.error ? (
               <Text as="p" variant="footnote" color="red-01">

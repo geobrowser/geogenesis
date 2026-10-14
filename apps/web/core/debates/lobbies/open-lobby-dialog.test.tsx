@@ -1,14 +1,40 @@
+import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ mutate: vi.fn() }));
+const mocks = vi.hoisted(() => ({ mutate: vi.fn(), pickerAdded: [] as readonly string[] }));
 
 vi.mock('./hooks', () => ({
   useCreateDebateLobby: () => ({ mutate: mocks.mutate, data: undefined, error: null, isPending: false }),
 }));
 vi.mock('./lobby-analytics', () => ({ lobbyShareUrl: (id: string) => `/debate/${id}`, markLobbyEntry: vi.fn() }));
 vi.mock('../use-scroll-lock', () => ({ useScrollLock: () => {} }));
+// The real picker reads the graph; here it offers six pages and reports what it was told is added.
+vi.mock('./lobby-claim-list-picker', () => ({
+  ClaimListPicker: ({
+    addedIds,
+    onPick,
+  }: {
+    addedIds: readonly string[];
+    onPick: (option: { entityId: string; spaceId: string; name: string }) => void;
+  }) => {
+    mocks.pickerAdded = addedIds;
+    return (
+      <div>
+        {['a', 'b', 'c', 'd', 'e', 'f'].map(id => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => onPick({ entityId: `page-${id}`, spaceId: `space-${id}`, name: `List ${id}` })}
+          >
+            Pick list {id}
+          </button>
+        ))}
+      </div>
+    );
+  },
+}));
 // Radix measures the hidden input it adds to radios inside a form; jsdom has no ResizeObserver.
 vi.stubGlobal(
   'ResizeObserver',
@@ -20,6 +46,7 @@ vi.stubGlobal(
 );
 
 const { OpenLobbyDialog, lobbyRequestFor, localTimeZone, toDateTimeLocalValue } = await import('./open-lobby-dialog');
+const { claimListsRequestField } = await import('./open-lobby-claim-lists');
 
 afterEach(cleanup);
 
@@ -82,5 +109,65 @@ describe('OpenLobbyDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Schedule lobby' }));
 
     expect(mocks.mutate).toHaveBeenCalledWith({ name: 'Hour', starts_at: start.toISOString() });
+  });
+});
+
+describe('claim lists when opening a lobby (GEO-3275)', () => {
+  const pick = (id: string) => {
+    fireEvent.click(screen.getByRole('button', { name: 'Add a list' }));
+    fireEvent.click(screen.getByRole('button', { name: `Pick list ${id}` }));
+  };
+  const nameAndSubmit = () => {
+    fireEvent.change(screen.getByRole('textbox'), { target: { value: 'AI night' } });
+    fireEvent.click(screen.getByRole('button', { name: /Open lobby|Schedule lobby/ }));
+  };
+
+  it('sends nothing new when the field is skipped', () => {
+    mocks.mutate.mockClear();
+    render(<OpenLobbyDialog onClose={vi.fn()} />);
+    expect(screen.getByRole('group', { name: 'Claim lists' })).toHaveTextContent('Optional');
+    nameAndSubmit();
+    expect(mocks.mutate).toHaveBeenCalledWith({ name: 'AI night' });
+    expect(claimListsRequestField([])).toEqual({});
+  });
+
+  it('sends picked lists in pick order, without the ones removed', () => {
+    mocks.mutate.mockClear();
+    render(<OpenLobbyDialog onClose={vi.fn()} />);
+    pick('b');
+    pick('a');
+    pick('c');
+    fireEvent.click(screen.getByRole('button', { name: 'Add a list' }));
+    // Picked pages are passed back to the picker as added, so they cannot be picked twice.
+    expect(mocks.pickerAdded).toEqual(['page-b', 'page-a', 'page-c']);
+    fireEvent.click(screen.getByRole('button', { name: 'Close list picker' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove List a' }));
+
+    nameAndSubmit();
+    expect(mocks.mutate).toHaveBeenCalledWith({
+      name: 'AI night',
+      claim_lists: [
+        { entity_id: 'page-b', space_id: 'space-b' },
+        { entity_id: 'page-c', space_id: 'space-c' },
+      ],
+    });
+  });
+
+  it('carries the lists on a scheduled lobby too', () => {
+    mocks.mutate.mockClear();
+    render(<OpenLobbyDialog onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('radio', { name: 'Schedule a start time' }));
+    pick('a');
+    nameAndSubmit();
+    const body = mocks.mutate.mock.calls[0]![0];
+    expect(body.starts_at).toEqual(expect.any(String));
+    expect(body.claim_lists).toEqual([{ entity_id: 'page-a', space_id: 'space-a' }]);
+  });
+
+  it('stops offering more at five lists', () => {
+    render(<OpenLobbyDialog onClose={vi.fn()} />);
+    for (const id of ['a', 'b', 'c', 'd', 'e']) pick(id);
+    expect(screen.queryByRole('button', { name: 'Add a list' })).toBeNull();
+    expect(screen.getByText(/Up to 5 lists/)).toBeTruthy();
   });
 });
