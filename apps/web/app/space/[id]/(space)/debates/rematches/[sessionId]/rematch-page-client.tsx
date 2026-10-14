@@ -3115,7 +3115,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           ) : tab === 'debate' ? (
             <div className="flex flex-col gap-4" data-testid="from-this-debate-rounds">
               {visibleDebateRounds.map(round => (
-                <RecommendedSection key={`${sessionId}:${round.key}`} name={round.label} count={round.items.length}>
+                <RecommendedSection
+                  key={`${sessionId}:${round.key}`}
+                  name={round.label}
+                  count={round.items.length}
+                  collapsible={false}
+                >
                   <HubCardList>{round.items.map(item => renderClaimCard(item.row))}</HubCardList>
                 </RecommendedSection>
               ))}
@@ -3523,14 +3528,15 @@ function TopicMatchCaption({ names }: { names: string[] }) {
 }
 
 /**
- * One titled block of claims, collapsible so a long list stays scannable: a curated page's data
- * blocks, the already-debated fold, and "From this debate"'s rounds.
+ * One titled block of claims: a curated page's data blocks, the already-debated fold, and "From
+ * this debate"'s rounds. Collapsible so a long list stays scannable, unless `collapsible` is off.
  */
 function RecommendedSection({
   name,
   count,
   defaultOpen = true,
   showCount = false,
+  collapsible = true,
   children,
 }: {
   name: string;
@@ -3538,10 +3544,27 @@ function RecommendedSection({
   defaultOpen?: boolean;
   /** Draw the count beside the name. A closed section otherwise gives no hint of what is in it. */
   showCount?: boolean;
+  /**
+   * Off for "From this debate"'s rounds (GEO-3312). Closing a section unmounts its cards, and with
+   * them the inline error of a request sent from one, while the page still counts that card as on
+   * screen and holds its own alert back — so a refusal landing after the close was shown nowhere.
+   */
+  collapsible?: boolean;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
   const contentId = React.useId();
+
+  if (!collapsible) {
+    return (
+      <section>
+        <Text as="h2" variant="smallTitle" color="text" className="mb-2">
+          {name}
+        </Text>
+        {children}
+      </section>
+    );
+  }
 
   return (
     <section>

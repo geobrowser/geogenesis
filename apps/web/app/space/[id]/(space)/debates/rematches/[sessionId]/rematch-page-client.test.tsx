@@ -6494,6 +6494,20 @@ describe('From this debate', () => {
     expect(screen.getByText('No claims from this debate are left to debate.')).toBeInTheDocument();
   });
 
+  it('keeps a refused request on its card, in a round that cannot be collapsed out from under it', async () => {
+    // A collapsed round unmounted its cards while the page still counted the target as on screen,
+    // so a refusal landing after the collapse was shown nowhere (Copilot, PR #2861).
+    mocks.requestError = new Error('respond to this claim before requesting a rematch');
+    mocks.requestVariables = { claim_id: CLAIM_SHARED, source_space_id: SPACE_1 };
+    await openTab();
+
+    const rounds = screen.getByTestId('from-this-debate-rounds');
+    expect(within(rounds).getByRole('heading', { name: 'Round 1 · Opening' })).toBeInTheDocument();
+    expect(within(rounds).queryAllByRole('button', { expanded: true })).toHaveLength(0);
+    const card = screen.getByText('A claim both participants chose').closest('article');
+    expect(within(card!).getByRole('alert')).toHaveTextContent('respond to this claim before requesting a rematch');
+  });
+
   it('says more are publishing when every published claim is already debated, rather than that none are left', async () => {
     // Shared is published and debated; the minted one is still on its way to the graph.
     mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
