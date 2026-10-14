@@ -121,6 +121,7 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
+import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
 import { useLocalSpeechActivity } from '~/core/debates/use-local-speech-activity';
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
@@ -636,16 +637,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     !thankingRecordingCancelled &&
     (recordingStartedAtRef.current !== null || recordingPersistenceStartedRef.current === thankingDebateId)
   );
-  // Whether the thank-you card — and so the publish switch — is actually on screen. The countdown
-  // alone doesn't say: the card lives inside `DebateRecordingModal`, which the room drops the
-  // moment the connection goes idle, and an ownership conflict can do that mid-countdown. Read off
-  // the countdown alone, this claimed the card was carrying the control while it wasn't rendered,
-  // and the banner stood down for a debate nothing else was reporting — leaving no publish state
-  // and no way to opt out, over a recording still cancellable.
-  const showsPublishControl = false;
 
   // The global coordinator is a sibling of this page. Publish its state in a layout effect so the
-  // upload banner joins the rematch card in the same browser paint at the countdown boundary.
+  // upload banner's Cancel is there in the same browser paint as the countdown boundary.
   React.useLayoutEffect(() => {
     setThankingDebate(
       thankingDebateId
@@ -654,13 +648,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             hasPendingLocalRecording: thankingHasPendingLocalRecording,
             hasUploadedRecording: thankingHasUploadedRecording,
             recordingCancelled: thankingRecordingCancelled,
-            showsPublishControl,
+            // Never the room's: the claim picker draws the publish control (GEO-3301).
+            showsPublishControl: false,
           }
         : null
     );
   }, [
     setThankingDebate,
-    showsPublishControl,
     thankingDebateId,
     thankingHasPendingLocalRecording,
     thankingHasUploadedRecording,
@@ -3248,12 +3242,7 @@ function DebateRecordingModal({
 
           {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && !reveal.holdsEndCard && (
             <DebateEndingCard
-              opponentName={
-                remoteRematchParticipant?.display_name ||
-                remoteParticipant?.display_name ||
-                remoteParticipant?.profile_space_id ||
-                'the other debater'
-              }
+              opponentName={remoteName}
               waitingForOpponent={rematchSession !== null && !remoteConsented}
             />
           )}
@@ -4101,15 +4090,6 @@ export function countdownWindowForDebate(
     yieldedProgress: null,
     preservesExistingCountIn: false,
   };
-}
-
-export function isDebateInThankYouPeriod(
-  debate: Pick<Debate, 'status' | 'turn_ends_at' | 'completed_at'>,
-  now: number
-) {
-  if (debate.status !== 'thanking' && debate.status !== 'complete') return false;
-  const deadline = timestampMs(debate.turn_ends_at ?? debate.completed_at);
-  return deadline !== null && now < deadline;
 }
 
 function timedDebateCountdownWindow(

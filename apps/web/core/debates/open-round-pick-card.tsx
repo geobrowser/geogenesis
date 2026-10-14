@@ -40,7 +40,7 @@ type OpenRoundPickCardProps = {
 
 /**
  * Extend or End, after every Open rounds round but the cap (GEO-3178). Shares
- * `DebateRoomOverlayCard` with "Debate again?": same place over the tiles, radius and shadow.
+ * `DebateRoomOverlayCard` with "Debate over": same place over the tiles, radius and shadow.
  *
  * Picks are blind, so the card says nothing about the other debater's pick, not even whether they
  * have made one. It is open for the whole `deciding` phase and closes when the room moves to the

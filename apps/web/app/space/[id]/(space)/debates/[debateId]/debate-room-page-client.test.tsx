@@ -26,7 +26,7 @@ import {
 } from '~/core/debates/open-rounds-fixtures';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
-import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } from './debate-room-page-client';
+import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-client';
 
 const mocks = vi.hoisted(() => ({
   currentUserId: 'user-a',
@@ -533,36 +533,6 @@ afterEach(async () => {
   vi.restoreAllMocks();
   vi.unstubAllGlobals();
   Object.defineProperty(navigator, 'locks', { configurable: true, value: undefined });
-});
-
-describe('isDebateInThankYouPeriod', () => {
-  const deadline = Date.parse('2026-07-02T00:01:30.000Z');
-
-  it('keeps an early-completed debate in thanking until its authoritative deadline', () => {
-    expect(
-      isDebateInThankYouPeriod(
-        {
-          status: 'complete',
-          turn_ends_at: '2026-07-02T00:01:30.000Z',
-          completed_at: '2026-07-02T00:01:10.000Z',
-        },
-        deadline - 1
-      )
-    ).toBe(true);
-  });
-
-  it('ends thanking exactly at the authoritative deadline', () => {
-    expect(
-      isDebateInThankYouPeriod(
-        {
-          status: 'thanking',
-          turn_ends_at: '2026-07-02T00:01:30.000Z',
-          completed_at: null,
-        },
-        deadline
-      )
-    ).toBe(false);
-  });
 });
 
 describe('upcomingTurnLabel', () => {

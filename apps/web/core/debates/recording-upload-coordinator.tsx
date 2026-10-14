@@ -31,6 +31,7 @@ import {
   resolveCurrentGeoChatUserId,
   retryDebatePhaseBoundaryRequest,
 } from './api';
+import { DebateUploadProgressBar } from './debate-upload-progress-bar';
 import { debateQueryKeys, useDebateActivity, useGeoChatAuth } from './hooks';
 import {
   RECORDING_STREAM_ORPHAN_AFTER_MS,
@@ -310,6 +311,24 @@ export function streamedRecordingBytes(upload: DebateRecordingUpload): number {
   }, 0);
 }
 
+/**
+ * Bytes of a queued recording already out. A streamed recording arrives with most of its bytes
+ * already out, and a multipart attempt reports whole parts; count whichever is further along.
+ */
+function sentRecordingBytes(upload: DebateRecordingUpload, live: { id: string; loaded: number } | null): number {
+  if (upload.stage === 'uploaded') return upload.byteSize;
+  const liveBytes = live?.id === upload.id ? live.loaded : 0;
+  return Math.min(Math.max(streamedRecordingBytes(upload), liveBytes), upload.byteSize);
+}
+
+/**
+ * Bytes out of bytes queued, as a whole percentage. Null once every byte is out: the wait is then
+ * finalization, not transfer, and a pinned "100%" would look stuck.
+ */
+function transferPercent(sentBytes: number, totalBytes: number): number | null {
+  return totalBytes === 0 || sentBytes >= totalBytes ? null : Math.round((sentBytes / totalBytes) * 100);
+}
+
 export function recordingUploadRetryDelay(attemptCount: number) {
   return Math.min(maxRetryDelayMs, initialRetryDelayMs * 2 ** Math.max(0, attemptCount));
 }
@@ -397,8 +416,9 @@ export function DebateRecordingUploadCoordinator() {
     () => publishableUploads.filter(upload => failureReasonOf(upload) !== null),
     [failureReasonOf, publishableUploads]
   );
-  // The thank-you card carries the publish opt-out while it is on screen, so the banner doesn't
-  // draw a second control for the same debate (GEO-2773). It still speaks for that debate's
+  // The surface the debate's owner is on (the claim picker's publishing card, since GEO-3301) carries
+  // the publish opt-out while it is on screen, so the banner doesn't draw a second control for the
+  // same debate (GEO-2773). It still speaks for that debate's
   // upload: the card answers "will this be published?", the banner answers "how much is still
   // going out, and can I close the tab yet?" — and that second question is about the whole queue,
   // the thank-you debate included. Deriving the count from anything narrower is what made the
@@ -818,12 +838,12 @@ export function DebateRecordingUploadCoordinator() {
   // A failure is retryable unless the copy itself is gone; then all that is left is to get help.
   const failedRetryable = failedUploads.some(upload => failureReasonOf(upload) !== 'blob_unreadable');
 
-  // The thank-you card draws the opt-out now, so tell it what there is to offer. Published in a
-  // layout effect for the same reason the room publishes its side in one: the control and the
-  // banner have to agree within a single paint at the countdown boundary, or one of them shows a
-  // state the other has already left.
-  // `cancelled` is what this knows and the room does not yet: the server has accepted the opt-out,
-  // whether or not the room's debate query has caught up. Without it the card has no way to tell
+  // The claim picker's publishing card draws the opt-out, so tell it what there is to offer.
+  // Published in a layout effect for the same reason the card publishes its side in one: the
+  // control and the banner have to agree within a single paint, or one of them shows a state the
+  // other has already left.
+  // `cancelled` is what this knows and the card's debate query does not yet: the server has
+  // accepted the opt-out, whether or not that query has caught up. Without it the card has no way to tell
   // "withdrawn" from "never recorded" until that refetch lands, and drops the row in between.
   const thankingOptedOut =
     normalizedThankingDebateId !== null &&
@@ -840,14 +860,9 @@ export function DebateRecordingUploadCoordinator() {
           : null;
   // The finished debate's own share of the queue, not the banner's queue-wide figure: the card
   // speaks for one debate. Null while nothing is measurable yet, as the banner's is.
-  const thankingUploadPercent = (() => {
-    if (!thankingUpload || thankingUpload.byteSize === 0) return null;
-    if (thankingUpload.stage === 'uploaded') return null;
-    const streamed = streamedRecordingBytes(thankingUpload);
-    const live = uploadProgress?.id === thankingUpload.id ? uploadProgress.loaded : 0;
-    const sent = Math.min(Math.max(streamed, live), thankingUpload.byteSize);
-    return sent >= thankingUpload.byteSize ? null : Math.round((sent / thankingUpload.byteSize) * 100);
-  })();
+  const thankingUploadPercent = thankingUpload
+    ? transferPercent(sentRecordingBytes(thankingUpload, uploadProgress), thankingUpload.byteSize)
+    : null;
   React.useLayoutEffect(() => {
     setPublishOptOutOffer({
       debateId: cancellableDebateId,
@@ -866,15 +881,14 @@ export function DebateRecordingUploadCoordinator() {
   ]);
   React.useEffect(() => () => setPublishOptOutOffer(EMPTY_PUBLISH_OPT_OUT_OFFER), [setPublishOptOutOffer]);
 
-  // And take up what the card asks for. It opens the same confirmation the Cancel button did —
-  // the ticket calls for a new control, not a new behaviour, and a switch is easier to hit by
-  // accident than the button it replaces (GEO-2700 makes that expensive).
+  // And take up what the card asks for. It opens the same confirmation the banner's Cancel does: a
+  // new place for the control, not a new behaviour (GEO-2700 makes an accidental cancel expensive).
   const publishOptOutRequest = usePublishOptOutRequest();
   const setPublishOptOutRequest = useSetPublishOptOutRequest();
   React.useEffect(() => {
     if (!publishOptOutRequest) return;
-    // A request for some other debate is one whose moment has passed — the viewer has left that
-    // thank-you screen — so it is dropped rather than acted on.
+    // A request for some other debate is one whose moment has passed — the viewer has left the
+    // surface it came from — so it is dropped rather than acted on.
     if (normalizeDebateId(publishOptOutRequest) !== normalizedThankingDebateId) {
       setPublishOptOutRequest(null);
       return;
@@ -900,24 +914,16 @@ export function DebateRecordingUploadCoordinator() {
 
   // When the banner is showing upload progress, its percentage covers every queued recording.
   const queuedBytes = activeUploads.reduce((total, upload) => total + upload.byteSize, 0);
-  const transferredBytes = activeUploads.reduce((transferred, upload) => {
-    if (upload.stage === 'uploaded') return transferred + upload.byteSize;
-    // A streamed recording arrives with most of its bytes already out, and a multipart attempt
-    // reports whole parts; count whichever is further along.
-    const streamed = streamedRecordingBytes(upload);
-    const live = uploadProgress?.id === upload.id ? uploadProgress.loaded : 0;
-    return transferred + Math.min(Math.max(streamed, live), upload.byteSize);
-  }, 0);
-  // Once every byte is out the wait is finalization, not transfer. A pinned "100%" would look
-  // stuck, so fall back to the plain in-progress copy.
+  const transferredBytes = activeUploads.reduce(
+    (transferred, upload) => transferred + sentRecordingBytes(upload, uploadProgress),
+    0
+  );
+  // Once every byte is out, `transferPercent` falls back to the plain in-progress copy.
   //
   // A recording still being written to IndexedDB has no byte size yet, so while one is pending the
   // queue is not the whole of what the bar is counting and any figure off it is already wrong.
   // Indeterminate until its row lands, rather than a percentage that drops when it does.
-  const uploadPercent =
-    thankingRecordingPending || queuedBytes === 0 || transferredBytes >= queuedBytes
-      ? null
-      : Math.round((transferredBytes / queuedBytes) * 100);
+  const uploadPercent = thankingRecordingPending ? null : transferPercent(transferredBytes, queuedBytes);
 
   const closeCancelPrompt = React.useCallback(() => {
     if (cancelBusy) return;
@@ -1203,21 +1209,7 @@ export function DebateRecordingUploadBanner({
         {/* A grid item sizes to its content and spills out of its track, so `max-w-full` holds each
             side to its column for `truncate` to act on. */}
         <span className={cx('max-w-full min-w-0 truncate', showProgress && 'justify-self-end')}>{message}</span>
-        {showProgress && (
-          <div
-            role="progressbar"
-            aria-label={progressLabel}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={percent ?? undefined}
-            className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-grey-04"
-          >
-            <div
-              className={`h-full rounded-full bg-white transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
-              style={percent === null ? undefined : { width: `${percent}%` }}
-            />
-          </div>
-        )}
+        {showProgress && <DebateUploadProgressBar label={progressLabel} percent={percent} tone="dark" />}
         {(showKeepBrowserOpen || canCancel || showFailed || onRetryNow) && (
           <div
             className={cx('flex max-w-full min-w-0 shrink-0 items-center gap-2', showProgress && 'justify-self-start')}

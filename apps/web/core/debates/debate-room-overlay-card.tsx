@@ -3,8 +3,8 @@ import * as React from 'react';
 import cx from 'classnames';
 
 /**
- * The white card the debate room floats over the middle of its video tiles: the "Debate again?"
- * card at thanking and the Open rounds pick card after a round (GEO-3178). Only the placement and
+ * The white card the debate room floats over the middle of its video tiles: the "Debate over"
+ * card at the end of a debate and the Open rounds pick card after a round (GEO-3178). Only the placement and
  * surface are shared; each card sets its own width, padding and gap through `className`.
  */
 export function DebateRoomOverlayCard({ className, ...props }: React.ComponentPropsWithoutRef<'section'>) {

@@ -5,13 +5,17 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { Debate } from '~/core/debates/api';
+import { DebateUploadProgressBar } from '~/core/debates/debate-upload-progress-bar';
 import { useServerClock } from '~/core/debates/matchmaking/use-request-countdown';
+import { debateThankYouDeadlineMs } from '~/core/debates/thank-you-period';
 import {
+  type PublishOptOutOffer,
   usePublishOptOutOffer,
   useSetPublishOptOutRequest,
   useSetThankingDebate,
 } from '~/core/debates/thanking-debate-store';
 
+import { PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
 import { CloseSmall } from '~/design-system/icons/close-small';
 
@@ -93,7 +97,7 @@ export function RematchPublishCard({
           {state === 'publishing' && (
             <>
               <span>Publishing your debate</span>
-              <PublishProgress percent={offer.percent} />
+              <DebateUploadProgressBar label="Upload progress" percent={offer.percent} tone="light" />
             </>
           )}
           {state === 'published' && (
@@ -112,14 +116,14 @@ export function RematchPublishCard({
           )}
         </p>
         {showsCancel && (
-          <button
+          <SmallButton
             type="button"
+            className={PILL_BUTTON_SECONDARY_CLASS_NAME}
             onClick={() => offer.debateId && setPublishOptOutRequest(offer.debateId)}
             disabled={offer.busy || offer.debateId === null}
-            className="inline-flex min-h-7 shrink-0 items-center rounded-full border border-grey-02 bg-white px-3 text-metadata text-text transition-colors hover:border-grey-03 disabled:cursor-default disabled:opacity-50"
           >
             Cancel
-          </button>
+          </SmallButton>
         )}
         {done && (
           <button
@@ -150,7 +154,7 @@ export function publishCardState({
   currentUserId,
   hasUploadedRecording,
 }: {
-  offer: { cancelled: boolean; upload: 'preparing' | 'uploading' | 'uploaded' | null };
+  offer: Pick<PublishOptOutOffer, 'cancelled' | 'upload'>;
   recordingCancelled: boolean;
   cancelledBy: string | null;
   currentUserId: string;
@@ -164,54 +168,30 @@ export function publishCardState({
   return null;
 }
 
-/** The banner's bar, at the card's scale: a fill when the share is known, a pulse while it is not. */
-function PublishProgress({ percent }: { percent: number | null }) {
-  return (
-    <span
-      role="progressbar"
-      aria-label="Upload progress"
-      aria-valuemin={0}
-      aria-valuemax={100}
-      aria-valuenow={percent ?? undefined}
-      className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-grey-02"
-    >
-      <span
-        className={cx(
-          'block h-full rounded-full bg-text transition-[width]',
-          percent === null && 'w-1/3 animate-pulse'
-        )}
-        style={percent === null ? undefined : { width: `${percent}%` }}
-      />
-    </span>
-  );
-}
-
 /**
- * Whether geo-chat still accepts a cancel for this debate: through the end of its thank-you period,
- * which is `turn_ends_at` once the debate is thanking or complete (`completed_at` when the period
- * never ran). Read on the server's clock, and flipped by a timer at the deadline so the button goes
- * when the window does rather than on the next unrelated render.
+ * Whether geo-chat still accepts a cancel for this debate: through the end of its thank-you period
+ * (`debateThankYouDeadlineMs`, the deadline `recording_cancellation_allowed` checks). Read on the
+ * server's clock, and flipped by a timer at the deadline so the button goes when the window does
+ * rather than on the next unrelated render.
  */
 export function useRecordingCancelWindowOpen(
   debate: Pick<Debate, 'status' | 'turn_ends_at' | 'completed_at'>
 ): boolean {
-  const ended = debate.status === 'thanking' || debate.status === 'complete';
-  const deadlineMs = ended ? Date.parse(debate.turn_ends_at ?? debate.completed_at ?? '') : Number.NaN;
-  const clock = useServerClock(Number.isFinite(deadlineMs));
-  const read = React.useCallback(() => (clock ? clock.now() : Date.now()), [clock]);
-  const [open, setOpen] = React.useState(() => Number.isFinite(deadlineMs) && Date.now() <= deadlineMs);
+  const deadlineMs = debateThankYouDeadlineMs(debate);
+  const clock = useServerClock(deadlineMs !== null);
+  const [open, setOpen] = React.useState(() => deadlineMs !== null && Date.now() <= deadlineMs);
 
   React.useEffect(() => {
-    if (!Number.isFinite(deadlineMs)) {
+    if (deadlineMs === null) {
       setOpen(false);
       return;
     }
-    const remaining = deadlineMs - read();
+    const remaining = deadlineMs - (clock ? clock.now() : Date.now());
     setOpen(remaining >= 0);
     if (remaining < 0) return;
     const timer = window.setTimeout(() => setOpen(false), remaining + 1);
     return () => window.clearTimeout(timer);
-  }, [deadlineMs, read]);
+  }, [clock, deadlineMs]);
 
   return open;
 }

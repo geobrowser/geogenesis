@@ -2881,6 +2881,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
           {sourceDebateQuery.data && currentUserId ? (
             <div className="mb-4 empty:hidden">
               <RematchPublishCard
+                // Per debate: a dismissal belongs to the one it was about, not the next session's.
+                key={sourceDebateQuery.data.id}
                 debate={sourceDebateQuery.data}
                 currentUserId={currentUserId}
                 opponentName={remoteFirstName}

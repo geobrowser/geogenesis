@@ -8,11 +8,11 @@ export type ThankingDebate = {
   hasUploadedRecording: boolean;
   recordingCancelled: boolean;
   /**
-   * The room is showing the thank-you card, which carries the publish control itself.
+   * The surface is showing a publish control of its own: the claim picker's publishing card
+   * (GEO-3301). The room never does any more, so it always reports false.
    *
-   * Narrower than `debateId` being set: that also covers the server's thank-you window after the
-   * local countdown has run out, when the card is gone and the banner is the only thing left to
-   * report an upload. The banner defers to the card only while the card is actually on screen.
+   * Narrower than `debateId` being set: the surface can be up with nothing to cancel on screen.
+   * The banner defers to the card only while the card is actually showing its Cancel.
    */
   showsPublishControl: boolean;
   /**
