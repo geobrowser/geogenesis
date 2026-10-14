@@ -258,7 +258,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         if (!replacingReadyPreview) setPreviewStreamState(null);
         const audioInputId = options.audioInputId ?? selectedAudioInputIdRef.current;
         const videoInputId = options.videoInputId ?? selectedVideoInputIdRef.current;
-        const wantAudio = options.audio ?? true;
+        const wantAudio = options.audio ?? wantedKindsRef.current.audio;
         const wantVideo = options.video ?? wantedKindsRef.current.video;
         wantedKindsRef.current = { audio: wantAudio, video: wantVideo };
         const tracks = (await livekit.createLocalTracks({

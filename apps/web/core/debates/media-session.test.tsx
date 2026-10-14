@@ -122,6 +122,35 @@ describe('DebateMediaSessionProvider restarts it starts itself', () => {
     expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(expect.objectContaining({ video: false }));
   });
 
+  it('keeps the microphone shut through a device change over a camera-only session', async () => {
+    mocks.enumerateDevices.mockResolvedValue([
+      { deviceId: 'mic-1', groupId: 'audio', kind: 'audioinput', label: 'Studio mic' },
+      { deviceId: 'camera-1', groupId: 'video', kind: 'videoinput', label: 'Desk camera' },
+    ]);
+    mocks.createLocalTracks.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' }, stop: vi.fn() }]);
+
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure camera only' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    expect(mocks.createLocalTracks).toHaveBeenCalledWith(expect.objectContaining({ audio: false }));
+    mocks.createLocalTracks.mockClear();
+
+    mocks.enumerateDevices.mockResolvedValue([
+      { deviceId: 'mic-2', groupId: 'audio', kind: 'audioinput', label: 'New mic' },
+      { deviceId: 'camera-1', groupId: 'video', kind: 'videoinput', label: 'Desk camera' },
+    ]);
+    await fireDeviceChange();
+
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
+    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(expect.objectContaining({ audio: false }));
+  });
+
   it('asks for both again once a new surface takes the session', async () => {
     mocks.enumerateDevices.mockResolvedValue([
       { deviceId: 'mic-1', groupId: 'audio', kind: 'audioinput', label: 'Studio mic' },
