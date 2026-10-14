@@ -36,6 +36,8 @@ import { useClaimsTabMark } from './lobby-claims-mark';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
 import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
 import {
+  RSVP_FAILED,
+  goingLabel,
   hostAfterChange,
   hostWhoLeft,
   hostsLabel,
@@ -44,7 +46,7 @@ import {
   lobbyDateLabel,
   lobbyErrorMessage,
   notYetOpenLabel,
-  remindedLabel,
+  rsvpLabel,
 } from './lobby-format';
 import { LOBBY_GUEST_COPY, LobbyGuestBanner } from './lobby-guest';
 import {
@@ -299,7 +301,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
       </div>
       {lobby.reminder_count > 0 ? (
         <Text as="p" variant="metadata" color="grey-04">
-          {remindedLabel(lobby.reminder_count)}
+          {goingLabel(lobby.reminder_count)}
         </Text>
       ) : null}
       <div className="flex flex-wrap gap-2">
@@ -311,7 +313,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
             pending={reminder.isPending}
             onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
           >
-            {reminded ? 'Reminded' : 'Remind me'}
+            {rsvpLabel(reminded)}
           </HubPillButton>
         )}
         <FindDebateLink />
@@ -345,7 +347,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
       ) : null}
       {reminder.isError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, 'Could not update your reminder. Try again.')}
+          {lobbyErrorMessage(reminder.error, RSVP_FAILED)}
         </Text>
       ) : null}
       {guest ? (

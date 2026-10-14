@@ -11,6 +11,32 @@ import { CloseSmall } from '~/design-system/icons/close-small';
 // changing it would re-show the banner to everyone who has already dismissed it.
 const WELCOME_BANNER_ID = 'exploreWelcomeCurator';
 
+/** The dark shell the banners above the Explore feed share: this one, and live lobbies (GEO-3268). */
+export const EXPLORE_BANNER_CLASS_NAME = 'relative mb-5 overflow-clip rounded-lg bg-[#151515]';
+
+/** The close button in an Explore banner's top-right corner. */
+export function ExploreBannerCloseButton({
+  label,
+  analyticsLabel,
+  onClick,
+}: {
+  label: string;
+  analyticsLabel?: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-label={label}
+      data-geo-analytics-label={analyticsLabel}
+      className="absolute top-2.5 right-2.5 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"
+    >
+      <CloseSmall color="white" />
+    </button>
+  );
+}
+
 /**
  * "Welcome to Geo" banner shown above the explore feed. Dismissible via the close button in the
  * top-right; the dismissed state persists in localStorage.
@@ -32,7 +58,7 @@ function WelcomeBanner() {
   if (dismissed) return null;
 
   return (
-    <div className="relative mb-5 overflow-clip rounded-lg bg-[#151515]">
+    <div className={EXPLORE_BANNER_CLASS_NAME}>
       {/* Decorative fanned book covers, anchored to the right and bleeding off the top,
           bottom, and right edges (clipped by overflow-clip). Hidden on narrow screens. */}
       <div
@@ -57,14 +83,7 @@ function WelcomeBanner() {
         </p>
       </div>
 
-      <button
-        type="button"
-        onClick={handleDismiss}
-        aria-label="Dismiss welcome banner"
-        className="absolute top-2.5 right-2.5 z-20 rounded-full border border-white/30 bg-black/40 p-1.5 text-white backdrop-blur-sm transition-colors duration-200 ease-in-out hover:bg-black/60"
-      >
-        <CloseSmall color="white" />
-      </button>
+      <ExploreBannerCloseButton label="Dismiss welcome banner" onClick={handleDismiss} />
     </div>
   );
 }

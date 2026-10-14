@@ -13,7 +13,11 @@ import {
   type ScheduledDebateRequest,
   type UpcomingDebateRoom,
 } from '~/core/debates/api';
+import { useDebateLobbies } from '~/core/debates/lobbies/hooks';
+import { markLobbyEntry } from '~/core/debates/lobbies/lobby-analytics';
+import { hostsLabel } from '~/core/debates/lobbies/lobby-format';
 import { debateEntryClick } from '~/core/debates/lobbies/step-out';
+import { useMinuteNow } from '~/core/debates/lobbies/use-minute-now';
 import { useFinishedRoomIds, useUpcomingDebateRooms } from '~/core/debates/rooms/hooks';
 import { UNNAMED_OPPONENT } from '~/core/debates/rooms/room-copy';
 import { opponentName, opponentOf, requestForRoom } from '~/core/debates/rooms/room-opponent';
@@ -26,6 +30,7 @@ import {
   useScheduledDebates,
 } from '~/core/debates/rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '~/core/debates/use-current-geo-chat-user-id';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 import { normId } from '~/core/utils/norm-id';
 
 import { Date as DateIcon } from '~/design-system/icons/date';
@@ -39,6 +44,7 @@ import { HubCardList, hubCardMotion } from './hub-motion';
 import { HubPillButton, hubPillClassName } from './hub-pill-button';
 import { RequestParties } from './request-parties';
 import { RequestSection } from './request-section';
+import { type UpcomingLobbyRow, upcomingLobbyRows } from './upcoming-lobby-rows';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useRequestCountdown } from './use-request-countdown';
 
@@ -47,7 +53,7 @@ import { useRequestCountdown } from './use-request-countdown';
  * here, so neither depends on an email arriving or a popup being caught.
  */
 export function ScheduledDebatesSection({ content }: { content: ScheduledContent }) {
-  const { answerable, upcoming, people, requestsError, roomsError } = content;
+  const { answerable, upcoming, lobbies, people, requestsError, roomsError, lobbiesError } = content;
   const respond = useRespondToScheduledDebate();
   const [conflict, setConflict] = React.useState<string | null>(null);
   const viewerId = useCurrentGeoChatUserId();
@@ -75,7 +81,7 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
   // The strip's left-hand side. Resolved like anyone else, so it carries the viewer's own face.
   const viewer = lookUp(viewerId);
 
-  if (answerable.length === 0 && upcoming.length === 0 && !requestsError && !roomsError) return null;
+  if (!hasScheduledContent(content)) return null;
 
   const answer = (requestId: string, accepted: boolean) => {
     setConflict(null);
@@ -108,6 +114,17 @@ export function ScheduledDebatesSection({ content }: { content: ScheduledContent
             />
           ))}
           {roomsError && <ReadFailed>Could not read your upcoming debates: {roomsError.message}</ReadFailed>}
+        </RequestSection>
+      )}
+
+      {/* Their own section, so a lobby is never read as a 1:1 (GEO-3292). */}
+      {(lobbies.length > 0 || lobbiesError) && (
+        <RequestSection label="Upcoming lobbies">
+          {lobbies.map(row => (
+            <UpcomingLobbyRowCard key={row.lobbyId} row={row} />
+          ))}
+          {/* The lobbies the viewer hosts come only from this read, so a failure is not "none". */}
+          {lobbiesError && <ReadFailed>Could not read your lobbies: {lobbiesError.message}</ReadFailed>}
         </RequestSection>
       )}
 
@@ -170,12 +187,29 @@ type Rescheduling = { requestId: string; opponentUserId: string; opponentName: s
 export type ScheduledContent = {
   answerable: ScheduledDebateRequest[];
   upcoming: UpcomingRoomRow[];
+  /** Lobbies the viewer said Going to or hosts, soonest first. Empty without `lobbyJoining`. */
+  lobbies: UpcomingLobbyRow[];
   /** Who the requests' participants are, resolved from the graph. Empty until that lands. */
   people: DebateParticipantSummary[];
-  /** Kept apart: one read failing must not hide what the other returned. */
+  /** Kept apart: one read failing must not hide what the others returned. */
   requestsError: Error | null;
   roomsError: Error | null;
+  /** The lobby list, which hosted lobbies and hosts' names come from. Null without `lobbyJoining`. */
+  lobbiesError: Error | null;
 };
+
+/** Anything for this section to show, a failed read included: one is not an empty schedule. */
+export function hasScheduledContent(content: ScheduledContent) {
+  const { answerable, upcoming, lobbies, requestsError, roomsError, lobbiesError } = content;
+  return (
+    answerable.length > 0 ||
+    upcoming.length > 0 ||
+    lobbies.length > 0 ||
+    requestsError !== null ||
+    roomsError !== null ||
+    lobbiesError !== null
+  );
+}
 
 /** A room's opponent and scheduled end come from the request that booked it. */
 export type UpcomingRoomRow = {
@@ -190,6 +224,10 @@ export function useScheduledContent(): ScheduledContent {
   const requests = useScheduledDebates();
   const rooms = useUpcomingDebateRooms();
   const viewerId = useCurrentGeoChatUserId();
+  const lobbyJoining = useFeatureFlag('lobbyJoining');
+  // For hosts' names and the viewer's own scheduled lobbies. Kept current by
+  // `debate.lobbies_changed`, as on the side panel card, so a copy this fresh need not be refetched.
+  const lobbyList = useDebateLobbies(lobbyJoining, { staleTime: LOBBY_LIST_STALE_MS });
 
   const rows = requests.data?.requests;
 
@@ -201,7 +239,7 @@ export function useScheduledContent(): ScheduledContent {
   const upcoming = React.useMemo(
     () =>
       roomList
-        // Reminded lobbies share the list but are not scheduled debates (GEO-3133).
+        // Lobbies share the list and get their own section.
         .filter(room => room.kind !== 'lobby' && !finishedRoomIds.has(room.room_id))
         .map(room => {
           const request = requestForRoom(rows, room.room_id);
@@ -215,6 +253,11 @@ export function useScheduledContent(): ScheduledContent {
     [finishedRoomIds, roomList, rows, viewerId]
   );
 
+  const lobbies = React.useMemo(
+    () => (lobbyJoining ? upcomingLobbyRows(roomList, lobbyList.data?.lobbies ?? [], viewerId) : []),
+    [lobbyJoining, lobbyList.data, roomList, viewerId]
+  );
+
   // The viewer included: their own side of the strip needs a face too.
   const participantIds = React.useMemo(
     () => (rows ?? []).flatMap(request => request.participants.map(participant => participant.user_id)),
@@ -222,8 +265,18 @@ export function useScheduledContent(): ScheduledContent {
   );
   const people = useGeoChatUserSummaries(participantIds, true);
 
-  return { answerable, upcoming, people, requestsError: requests.error ?? null, roomsError: rooms.error ?? null };
+  return {
+    answerable,
+    upcoming,
+    lobbies,
+    people,
+    requestsError: requests.error ?? null,
+    roomsError: rooms.error ?? null,
+    lobbiesError: lobbyJoining ? (lobbyList.error ?? null) : null,
+  };
 }
+
+const LOBBY_LIST_STALE_MS = 30_000;
 
 /**
  * Names come from the graph, since a geo-chat user id is their personal space's page entity. The
@@ -278,8 +331,7 @@ function UpcomingRow({
 
   return (
     <ScheduleCard
-      opponent={opponent}
-      viewer={viewer}
+      parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={
         room.due
           ? `Starting now${scheduledEndAt ? ` · Ends at ${formatTime(scheduledEndAt)}` : ''}`
@@ -361,8 +413,7 @@ function ScheduledRow({
   return (
     <ScheduleCard
       ref={ref}
-      opponent={opponent}
-      viewer={viewer}
+      parties={<DebateParties viewer={viewer} opponent={opponent} />}
       when={formatDebateSlot(request.scheduled_start_at, request.scheduled_end_at)}
       status={`${
         request.viewer_must_answer
@@ -582,26 +633,26 @@ const HOUR_MS = 60 * 60_000;
 const JOIN_PILL = hubPillClassName('primary', 'w-full');
 
 /**
- * One shape for both kinds of card, laid out like the instant request card: a header carrying the
- * time and where things stand, the other debater in the same inset strip the request cards use,
- * then the actions.
+ * One shape for every card here, laid out like the instant request card: a header carrying the
+ * time and where things stand, who it is with in an inset strip, then the actions.
  *
  * The time leads because it is what a scheduled request is *about* — the one thing an instant
  * request never has — so it gets the header to itself rather than a footnote under the name.
  */
 function ScheduleCard({
-  opponent,
-  viewer,
+  parties,
   when,
   status,
   note = null,
   urgent = false,
   actions,
   ref,
+  testId,
 }: {
   ref?: React.Ref<HTMLElement>;
-  opponent: DebateParticipantSummary | null;
-  viewer: DebateParticipantSummary | null;
+  /** Who it is with: the "You vs Them" strip for a debate, the lobby's name and host for a lobby. */
+  parties: React.ReactNode;
+  testId?: string;
   when: string;
   status: string;
   /** A second line under the status, e.g. that the Geo team arranged the debate. */
@@ -614,6 +665,7 @@ function ScheduleCard({
       ref={ref}
       {...hubCardMotion}
       className="flex w-full flex-col gap-3 rounded-lg border border-grey-02 bg-white p-3"
+      data-testid={testId}
     >
       {/* The time on its own line, with where things stand under it: side by side, a slot and a
           sentence crowd each other out at this width, and it was the status that lost. */}
@@ -634,14 +686,84 @@ function ScheduleCard({
         </div>
       </div>
 
-      {/* The same "You vs Them" strip every other request card uses. No positions: a scheduled
-          debate is not about a claim yet, so there is no side to show. */}
-      <RequestParties viewer={viewer} opponent={opponent ?? UNKNOWN_OPPONENT} showPositions={false} />
+      {parties}
 
       {actions}
     </motion.article>
   );
 }
+
+/**
+ * The same "You vs Them" strip every other request card uses. No positions: a scheduled debate is
+ * not about a claim yet, so there is no side to show.
+ */
+function DebateParties({
+  viewer,
+  opponent,
+}: {
+  viewer: DebateParticipantSummary | null;
+  opponent: DebateParticipantSummary | null;
+}) {
+  return <RequestParties viewer={viewer} opponent={opponent ?? UNKNOWN_OPPONENT} showPositions={false} />;
+}
+
+/**
+ * A lobby under Upcoming lobbies (GEO-3292): a scheduled debate's header, with the lobby's name and
+ * host where a debate has its strip.
+ */
+function UpcomingLobbyRowCard({ row }: { row: UpcomingLobbyRow }) {
+  // From the clock, not from the reads: an empty lobby sends nothing when its start passes.
+  const now = useMinuteNow();
+  const path = debateRoomPath(row.lobbyId);
+  const hosts = hostsLabel(row.hosts);
+  const [action, analyticsLabel, analyticsIntent] = row.open
+    ? row.onRoster
+      ? LOBBY_ACTIONS.open
+      : LOBBY_ACTIONS.join
+    : LOBBY_ACTIONS.view;
+
+  return (
+    <ScheduleCard
+      testId="upcoming-lobby-card"
+      when={Date.parse(row.startsAt) <= now ? 'Starting now' : formatDebateTime(row.startsAt)}
+      status={row.open ? 'The lobby is open' : `Opens at ${formatTime(row.opensAt)}`}
+      parties={
+        <div className="flex min-w-0 flex-col gap-0.5 rounded-lg bg-grey-01 px-3 py-2.5">
+          <Text as="span" variant="footnoteMedium" color="grey-04">
+            Debate lobby
+          </Text>
+          <Text as="p" variant="metadataMedium" className="truncate">
+            {row.name}
+          </Text>
+          {(row.hosting || hosts) && (
+            <Text as="p" variant="footnote" color="grey-04" className="truncate">
+              {row.hosting ? 'You’re hosting' : `Hosted by ${hosts}`}
+            </Text>
+          )}
+        </div>
+      }
+      actions={
+        // Lobby to lobby, like the side panel card's links: marked so the join it leads to is
+        // attributed here, with no step-out, which is for entering a 1:1.
+        <Link
+          href={path}
+          onClick={() => markLobbyEntry(row.lobbyId, 'requests')}
+          className={row.open && !row.onRoster ? JOIN_PILL : hubPillClassName('secondary', 'w-full')}
+          {...hubAnalyticsAttributes(analyticsLabel, analyticsIntent)}
+        >
+          {action}
+        </Link>
+      }
+    />
+  );
+}
+
+/** The card's one button: its words, and its analytics label and intent. */
+const LOBBY_ACTIONS = {
+  view: ['View lobby', 'View scheduled lobby', 'view_scheduled_lobby'],
+  join: ['Join lobby', 'Join scheduled lobby', 'join_scheduled_lobby'],
+  open: ['Open lobby', 'Open scheduled lobby', 'open_scheduled_lobby'],
+} as const;
 
 /** Stands in until the graph or roster names them; its empty space id keeps it unlinked. */
 const UNKNOWN_OPPONENT: DebateParticipantSummary = {

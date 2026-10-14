@@ -21,6 +21,7 @@ import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-avail
 import { type DebatePerson, type ScheduledDebateRequest } from '../api';
 import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth } from '../hooks';
+import { lobbiesPinnedRow, lobbyDayLeads, useWeekLobbies } from '../lobbies/lobbies-calendar';
 import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
 import { useAdminScheduledDebates, useScheduledDebates } from '../rooms/scheduling-hooks';
@@ -944,6 +945,12 @@ function DebateCalendarBody({
 
   // The viewer's own debates keep the week on screen even with nobody else free in it.
   const ownDebatesThisWeek = debates.some(debate => cellOf(debate.start, days) !== null);
+  // The week's debate lobbies, pinned above the hours (GEO-3268); a week with one is not empty.
+  const weekLobbies = useWeekLobbies(days);
+  const lobbyDays = weekLobbies.byDay;
+  const emptyBesideLobbies = (nobodyFree || filteredOut) && !ownDebatesThisWeek;
+  const lobbyRow = React.useMemo(() => (lobbyDays ? lobbiesPinnedRow(lobbyDays) : undefined), [lobbyDays]);
+  const lobbyLeads = React.useMemo(() => (lobbyDays ? lobbyDayLeads(lobbyDays) : undefined), [lobbyDays]);
 
   // One set of props for both forms of the space filter: pills on a desktop, the hub's menu on a phone.
   const spaceFilter = {
@@ -1078,6 +1085,11 @@ function DebateCalendarBody({
               Couldn&rsquo;t load who&rsquo;s online, so everyone shows as offline.
             </PartialLoadNote>
           ) : null}
+          {weekLobbies.error ? (
+            <PartialLoadNote onRetry={weekLobbies.refetch}>
+              Couldn&rsquo;t load lobbies, so they&rsquo;re missing from the week.
+            </PartialLoadNote>
+          ) : null}
           {scheduled.error ? (
             <PartialLoadNote onRetry={() => void scheduled.refetch()}>
               Couldn&rsquo;t load your own debates, so they&rsquo;re missing from the week.
@@ -1111,12 +1123,14 @@ function DebateCalendarBody({
           <div className="px-6 pb-6 md:px-4">
             <HubQueryState
               analyticsSurface="calendar"
-              isLoading={loading || picksPending}
+              // A week with nobody free waits for the lobbies, which may be what is in it; one with
+              // people does not hold them up.
+              isLoading={loading || picksPending || (emptyBesideLobbies && weekLobbies.isLoading)}
               loadingFallback={<CalendarWeekSkeleton />}
               error={loadError}
               failureReason={schedulableQuery.failureReason}
               onRetry={() => void schedulableQuery.refetch()}
-              isEmpty={(nobodyFree || filteredOut) && !ownDebatesThisWeek}
+              isEmpty={emptyBesideLobbies && !lobbyDays}
               // Filters hiding everyone has an undo; nobody being free this week has somewhere to go.
               emptyMessage={
                 filteredOut
@@ -1145,6 +1159,7 @@ function DebateCalendarBody({
                   debates={debates}
                   opponentName={opponentName}
                   renderRow={renderRow}
+                  dayLeads={lobbyLeads}
                 />
               ) : (
                 <CalendarWeek
@@ -1160,6 +1175,7 @@ function DebateCalendarBody({
                   opponentName={opponentName}
                   renderRow={renderRow}
                   now={now}
+                  pinnedRow={lobbyRow}
                 />
               )}
             </HubQueryState>

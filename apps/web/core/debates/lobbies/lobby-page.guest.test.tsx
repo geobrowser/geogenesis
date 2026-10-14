@@ -773,7 +773,7 @@ describe('DebateLobbyPage state screens', () => {
     expect(screen.getByText('No account? You can still join and listen when it opens.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Create account' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Log in' })).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remind me' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'RSVP' })).not.toBeInTheDocument();
     // Without the view's hosts (older geo-chat) a visitor gets no host line: the list is members only.
     expect(screen.queryByText(/Hosted by/)).not.toBeInTheDocument();
   });
@@ -802,12 +802,12 @@ describe('DebateLobbyPage state screens', () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
 
     expect(screen.getByText('Hosted by Adam')).toBeInTheDocument();
-    expect(screen.getByText('3 reminded')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remind me' })).toBeInTheDocument();
+    expect(screen.getByText('3 going')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
     expect(screen.queryByText(/No account/)).not.toBeInTheDocument();
   });
 
-  it('points an ended lobby at the host’s next one, with Remind me', () => {
+  it('points an ended lobby at the host’s next one, with RSVP', () => {
     mocks.authenticated = true;
     mocks.memberLobby = { ...memberView, access: { status: 'closed', reason: 'ended' }, members: [] };
     mocks.lobbies = [listed({ lobby_id: 'next', name: 'Tuesday debate hour' })];
@@ -815,7 +815,7 @@ describe('DebateLobbyPage state screens', () => {
 
     expect(screen.getByRole('heading', { name: 'This lobby has ended' })).toBeInTheDocument();
     expect(screen.getByText(/^Adam’s next lobby: Tuesday debate hour, .+\.$/)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Remind me' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Find a debate' })).toBeInTheDocument();
   });
 
@@ -825,7 +825,7 @@ describe('DebateLobbyPage state screens', () => {
     render(<DebateLobbyPage lobbyId="lobby1" />);
 
     expect(screen.queryByText(/next lobby/)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Remind me' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'RSVP' })).not.toBeInTheDocument();
   });
 
   it('titles the banned card', () => {
