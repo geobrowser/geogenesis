@@ -21,11 +21,13 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 }));
 
 const { claimLobbySignInPrompt, useLobbySignInPrompt } = await import('./lobby-guest-sign-in');
+const { markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
 
 beforeEach(() => {
   window.sessionStorage.clear();
   mocks.signIn.mockReset();
   mocks.search = new URLSearchParams();
+  resetLobbyAnalytics();
 });
 
 afterEach(() => cleanup());
@@ -36,7 +38,7 @@ describe('useLobbySignInPrompt', () => {
 
     expect(mocks.signIn).toHaveBeenCalledTimes(1);
     expect(mocks.signIn).toHaveBeenCalledWith(
-      { component: 'lobby_sign_in_prompt', auth_trigger: 'page_load' },
+      { component: 'lobby_sign_in_prompt', auth_trigger: 'page_load', lobby_entry: 'link' },
       { redirectTo: '/debate/lobbya' }
     );
     expect(mocks.options?.analytics?.()).toMatchObject({
@@ -108,5 +110,29 @@ describe('useLobbySignInPrompt', () => {
     } finally {
       if (storage) Object.defineProperty(window, 'sessionStorage', storage);
     }
+  });
+
+  // GEO-3289. Pressed in the navbar or the debates panel: the entry goes with the attempt, and the
+  // press asks again in a tab that was already asked.
+  it('asks again for a press in the navbar or panel, naming where it came from', () => {
+    renderHook(() => useLobbySignInPrompt('lobby-i', true));
+    cleanup();
+    markLobbyEntry('lobby-i', 'side_panel');
+    renderHook(() => useLobbySignInPrompt('lobby-i', true));
+
+    expect(mocks.signIn).toHaveBeenCalledTimes(2);
+    expect(mocks.signIn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ lobby_entry: 'side_panel' }),
+      expect.anything()
+    );
+  });
+
+  it('does not ask again for a press marked for another lobby', () => {
+    renderHook(() => useLobbySignInPrompt('lobby-j', true));
+    cleanup();
+    markLobbyEntry('lobby-k', 'nav');
+    renderHook(() => useLobbySignInPrompt('lobby-j', true));
+
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
   });
 });

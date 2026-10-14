@@ -32,8 +32,14 @@ vi.mock('../hooks', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useDebateLobbyCalendar, useLobbyPresence } =
-  await import('./hooks');
+const {
+  LOBBY_HEARTBEAT_MS,
+  SIGNED_OUT_LOBBIES_POLL_MS,
+  useDebateLobbies,
+  useDebateLobby,
+  useDebateLobbyCalendar,
+  useLobbyPresence,
+} = await import('./hooks');
 const { debateQueryKeys } = await import('../hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
 const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
@@ -689,10 +695,13 @@ it('moves a ban this tab heard to the removed screen once unbanned, and Rejoin c
   expect(result.current.state.status).toBe('joined');
 });
 
-// Copilot on #2836 asked for the list to be hidden once signed out. It already is: the key carries
-// the account, which Privy clears with the session, so a signed-out read is a different, empty entry.
-it('shows no lobbies once the viewer signs out', async () => {
-  api.listDebateLobbies.mockResolvedValue({ lobbies: [{ lobby_id: 'members-only' }] });
+// Copilot on #2836 asked for the list to be hidden once signed out. The key carries the account,
+// which Privy clears with the session, so a signed-out read is a different entry: since GEO-3289
+// the anonymous list, never the account's.
+it('drops the account’s lobbies once the viewer signs out, for the anonymous list', async () => {
+  api.listDebateLobbies.mockImplementation(async (_token: unknown, accountKey: string | null) => ({
+    lobbies: [{ lobby_id: accountKey ? 'members-view' : 'anonymous-view' }],
+  }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -700,13 +709,44 @@ it('shows no lobbies once the viewer signs out', async () => {
 
   try {
     const { result, rerender } = renderHook(() => useDebateLobbies(), { wrapper });
-    await waitFor(() => expect(result.current.data?.lobbies).toHaveLength(1));
+    await waitFor(() => expect(result.current.data?.lobbies[0]?.lobby_id).toBe('members-view'));
 
     Object.assign(auth, { authenticated: false, accountKey: null });
     rerender();
     expect(result.current.data).toBeUndefined();
+    await waitFor(() => expect(result.current.data?.lobbies[0]?.lobby_id).toBe('anonymous-view'));
   } finally {
     Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
+  }
+});
+
+// GEO-3289. Signed out there is no gateway scope to patch the list, so it is polled.
+it('lists lobbies to a signed-out visitor and polls, and only then', async () => {
+  api.listDebateLobbies.mockResolvedValue({ lobbies: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const interval = (accountKey: string | null) =>
+    client.getQueryCache().find({ queryKey: debateQueryKeys.lobbies(accountKey) })?.observers[0]?.options
+      .refetchInterval;
+
+  try {
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    const signedOut = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedOut.result.current.isSuccess).toBe(true));
+    expect(api.listDebateLobbies).toHaveBeenCalledWith(expect.anything(), null, expect.anything());
+    expect(interval(null)).toBe(SIGNED_OUT_LOBBIES_POLL_MS);
+    signedOut.unmount();
+
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    const signedIn = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true));
+    expect(interval('acct')).toBeFalsy();
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
   }
 });
 

@@ -22,10 +22,11 @@ import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { ScrollEdgeButton, scrollRowBy } from '../matchmaking/scrollable-tab-row';
 import { useDebatesHub } from '../matchmaking/use-debates-hub';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbyReminder, useLobbyReminderError } from './hooks';
+import { useLobbyReminderError } from './hooks';
 import { type LobbyEntry, markLobbyEntry } from './lobby-analytics';
 import { RSVP_FAILED, lobbyErrorMessage, localDaysFrom, rsvpLabel } from './lobby-format';
 import { LobbyByline } from './lobby-host-names';
+import { useLobbyReminderPress } from './lobby-reminder-press';
 
 /** "Today", "Tomorrow", "Wed", then "Oct 21" past a week. Local time. */
 export function lobbyDayLabel(iso: string, now: number = Date.now()) {
@@ -60,24 +61,24 @@ export function LobbyRsvpButton({
   analyticsLabelPrefix: string;
   className?: string;
 }) {
-  const reminder = useDebateLobbyReminder();
-  const error = useLobbyReminderError(reminder, lobby);
+  const remind = useLobbyReminderPress(lobby);
+  const error = useLobbyReminderError(remind.reminder, lobby);
   return (
     <div className={cx('flex flex-col items-end gap-1', className)}>
       <HubPillButton
-        variant={lobby.viewer_reminded ? 'primary' : 'secondary'}
+        variant={remind.reminded ? 'primary' : 'secondary'}
         analyticsSurface={analyticsSurface}
         // Prefixed here: HubPillButton takes an explicit label as given, so the surface would not reach it.
         analyticsLabel={debateAnalyticsLabel(
           analyticsSurface,
-          `${analyticsLabelPrefix} ${lobby.viewer_reminded ? 'Going' : 'RSVP'}`
+          `${analyticsLabelPrefix} ${remind.reminded ? 'Going' : 'RSVP'}`
         )}
-        aria-pressed={lobby.viewer_reminded}
-        pending={reminder.isPending}
-        onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !lobby.viewer_reminded })}
+        aria-pressed={remind.reminded}
+        pending={remind.pending}
+        onClick={remind.press}
         className="w-full"
       >
-        {rsvpLabel(lobby.viewer_reminded)}
+        {rsvpLabel(remind.reminded)}
       </HubPillButton>
       {error ? (
         <Text as="p" variant="footnote" color="red-01" className="text-right">

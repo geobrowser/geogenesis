@@ -95,7 +95,7 @@ function useLineupClock(lobbies: DebateLobbySummary[]) {
  *
  * It holds the matchmaking scope while mounted, which is what carries `debate.lobbies_changed`. The
  * Debate button mounts it on every page, so the list stays live with the panel closed. Signed out
- * it is empty: see `useDebateLobbies`.
+ * there is no scope and the list polls instead: see `useDebateLobbies`.
  */
 export function useLobbyLineup(): LobbyLineup {
   useMatchmakingScope(true);

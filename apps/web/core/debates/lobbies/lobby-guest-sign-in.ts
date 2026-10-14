@@ -10,7 +10,7 @@ import { type PrivySignInCallOptions, usePrivySignIn } from '~/core/hooks/use-pr
 
 import { dashlessId } from '../api';
 import { debateRoomPath } from '../rooms/room-routes';
-import { LOBBY_LINK_VIA } from './lobby-analytics';
+import { LOBBY_LINK_VIA, peekLobbyEntry } from './lobby-analytics';
 
 /** The lobby page's own attribution, the same the shared link's sign-in sends (GEO-3126). */
 export function lobbyAuthPage(lobbyId: string): AnalyticsProperties {
@@ -76,6 +76,10 @@ export function claimLobbySignInPrompt(lobbyId: string) {
  *
  * Held while the URL carries the sign-in link, which opens its own prompt once Privy is ready and
  * claims the lobby's as it does; nothing orders that effect before this one.
+ *
+ * Pressing the lobby in the navbar or the debates panel (GEO-3289) asks again even if this tab was
+ * asked before: once per tab is about a reload, and a press is somebody asking to join. The entry
+ * goes with the attempt, so those sign-ups can be told from a shared link's.
  */
 export function useLobbySignInPrompt(lobbyId: string, open: boolean) {
   const signIn = useLobbyGuestSignIn(lobbyId);
@@ -83,7 +87,10 @@ export function useLobbySignInPrompt(lobbyId: string, open: boolean) {
   useEffectOnceWhen(
     open && !signInLink.requested,
     () => {
-      if (claimLobbySignInPrompt(lobbyId)) signIn({ component: 'lobby_sign_in_prompt', auth_trigger: 'page_load' });
+      const entry = peekLobbyEntry(lobbyId);
+      const firstTime = claimLobbySignInPrompt(lobbyId);
+      if (!firstTime && entry === 'link') return;
+      signIn({ component: 'lobby_sign_in_prompt', auth_trigger: 'page_load', lobby_entry: entry });
     },
     lobbyId
   );

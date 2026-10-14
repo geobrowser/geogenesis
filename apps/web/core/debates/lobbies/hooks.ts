@@ -65,13 +65,16 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
+/** How often a signed-out visitor's lobby list is read: they hold no gateway scope to patch it. */
+export const SIGNED_OUT_LOBBIES_POLL_MS = 30_000;
+
 /**
  * The lobby list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount in case
  * patches stopped while nothing held the matchmaking scope. With `staleTime`, reloaded on mount only
  * once that old.
  *
- * Signed in only. geo-chat lists lobbies to accounts alone, and a signed-out visitor cannot join one
- * yet, so every lobby surface stays hidden for them until both change (GEO-3268).
+ * Signed out too (GEO-3289): geo-chat answers with the list a new account sees (GEO-3291). With no
+ * gateway scope to carry `debate.lobbies_changed`, that list is polled instead.
  */
 export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: number } = {}) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
@@ -80,8 +83,9 @@ export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: nu
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && ready && authenticated,
+    enabled: enabled && ready,
     ...(staleTime === undefined ? { refetchOnMount: 'always' as const } : { staleTime }),
+    ...(authenticated ? {} : { refetchInterval: SIGNED_OUT_LOBBIES_POLL_MS }),
   });
 }
 

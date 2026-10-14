@@ -15,6 +15,13 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
 }));
 
+// The signed-out Remind me opens Privy, which needs the wallet provider (GEO-3289).
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
+// A signed-in viewer: the calendar is signed in only.
+vi.mock('../hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../hooks')>()),
+  useGeoChatAuth: () => ({ authenticated: true, ready: true, accountKey: 'acct' }),
+}));
 vi.mock('./hooks', () => ({
   useDebateLobbyCalendar: (from: Date, to: Date) => {
     mocks.calendarRange = { from, to };
@@ -22,6 +29,7 @@ vi.mock('./hooks', () => ({
       ? { data: undefined, isLoading: false, error: new Error('boom'), refetch: vi.fn() }
       : { data: { lobbies: mocks.lobbies }, isLoading: false, error: null, refetch: vi.fn() };
   },
+  useDebateLobbies: () => ({ data: undefined }),
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
 }));

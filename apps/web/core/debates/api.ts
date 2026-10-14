@@ -2502,7 +2502,9 @@ export async function listDebateLobbies(
   signal?: AbortSignal
 ) {
   return geoChatRequest<DebateLobbiesResponse>('/debate-lobbies', {
-    auth: true,
+    // Signed out, the list a new account sees (GEO-3291); `true` signed in, so a failed token
+    // exchange is an error rather than a quietly anonymous list.
+    auth: accountKey ? true : 'optional',
     getPrivyIdentityToken,
     accountKey,
     signal,

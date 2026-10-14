@@ -5,9 +5,16 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary } from '../api';
 
-const mocks = vi.hoisted(() => ({ mutate: vi.fn(), markLobbyEntry: vi.fn() }));
+const mocks = vi.hoisted(() => ({ mutate: vi.fn(), markLobbyEntry: vi.fn(), signIn: vi.fn(), authenticated: true }));
 
+// The signed-out Remind me opens Privy, which needs the wallet provider (GEO-3289).
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => mocks.signIn }));
+vi.mock('../hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('../hooks')>()),
+  useGeoChatAuth: () => ({ authenticated: mocks.authenticated, ready: true, accountKey: null }),
+}));
 vi.mock('./hooks', () => ({
+  useDebateLobbies: () => ({ data: undefined }),
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
 }));
@@ -40,6 +47,7 @@ const lobby = (overrides: Partial<DebateLobbySummary>): DebateLobbySummary => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  mocks.authenticated = true;
 });
 
 describe('LobbySpotlight', () => {
@@ -95,6 +103,20 @@ describe('LobbySpotlight', () => {
     card.getByRole('button', { name: 'RSVP' }).click();
     expect(mocks.mutate).toHaveBeenCalledWith({ lobbyId: 'nyc', reminded: true });
     vi.useRealTimers();
+  });
+
+  // GEO-3289. Signed out, Remind me opens the account prompt; the reminder waits for the account.
+  it('asks a signed-out visitor to sign in for RSVP rather than setting it', () => {
+    mocks.authenticated = false;
+    const soon = lobby({ open: false, scheduled: true, opens_at: '2099-10-13T18:00:00Z' });
+    render(<LobbySpotlight lineup={{ live: [], soon, later: [] }} />);
+
+    screen.getByRole('button', { name: 'RSVP' }).click();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+    expect(mocks.signIn).toHaveBeenCalledWith(
+      expect.objectContaining({ auth_control: 'remind_lobby', target_id: 'nyc' }),
+      expect.objectContaining({ onCancel: expect.any(Function) })
+    );
   });
 
   it('shows the live lobby, not the soon one, when both exist', () => {

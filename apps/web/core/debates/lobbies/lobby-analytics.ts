@@ -137,11 +137,20 @@ export function markLobbyEntry(lobbyId: string, entry: LobbyEntry) {
   pendingEntry = { lobbyId: dashlessId(lobbyId), entry, at: Date.now() };
 }
 
-function takeEntry(lobbyId: string): LobbyEntry {
+/**
+ * The entry marked for this lobby, left in place for the join that follows. For a signed-out
+ * visitor's account prompt (GEO-3289), which tells a press in the navbar or panel from a link.
+ */
+export function peekLobbyEntry(lobbyId: string): LobbyEntry {
   const pending = pendingEntry;
-  pendingEntry = null;
   if (!pending || !sameId(pending.lobbyId, lobbyId) || Date.now() - pending.at > ENTRY_TTL_MS) return 'link';
   return pending.entry;
+}
+
+function takeEntry(lobbyId: string): LobbyEntry {
+  const entry = peekLobbyEntry(lobbyId);
+  pendingEntry = null;
+  return entry;
 }
 
 /** The server put the viewer on the roster. Starts a session unless this one is still going. */
