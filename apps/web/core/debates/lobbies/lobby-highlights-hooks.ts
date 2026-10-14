@@ -85,7 +85,8 @@ function useStoreRoomVoteAction(lobbyId: string) {
   const store = useStoreLobbyHighlights(lobbyId);
   return (state: DebateLobbyHighlights) => {
     const current = store(state);
-    lobbyRoomVoteSeen(lobbyId, current?.room_vote ?? null);
+    // Always set after a store; an unknown state is never read as no vote running.
+    if (current) lobbyRoomVoteSeen(lobbyId, current.room_vote);
   };
 }
 

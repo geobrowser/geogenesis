@@ -11,6 +11,8 @@ import { type LobbyPageView, lobbyViewForGuest, lobbyViewForMember } from './lob
 
 const mocks = vi.hoisted(() => ({
   roomVote: null as DebateLobbyRoomVote | null,
+  /** False: nothing in the highlights cache yet, as before the first read or after it was evicted. */
+  cached: true,
   highlightsEnabled: [] as boolean[],
   lobbyHeadcountSeen: vi.fn(),
   lobbyRoomVoteSeen: vi.fn(),
@@ -21,7 +23,7 @@ vi.mock('./lobby-highlights-hooks', () => ({
   // Like a disabled query: no request, but whatever the cache holds.
   useLobbyHighlights: (_lobbyId: string, enabled: boolean) => {
     mocks.highlightsEnabled.push(enabled);
-    return { data: { room_vote: mocks.roomVote } };
+    return { data: mocks.cached ? { room_vote: mocks.roomVote } : undefined };
   },
 }));
 
@@ -104,6 +106,7 @@ afterEach(() => {
   cleanup();
   seen.length = 0;
   mocks.roomVote = null;
+  mocks.cached = true;
   mocks.highlightsEnabled.length = 0;
   vi.clearAllMocks();
 });
@@ -145,6 +148,29 @@ describe('LobbyAnalyticsScope', () => {
   it('never asks for the highlights itself', () => {
     renderScope(lobbyViewForMember(view({ hosting: true })));
     expect(mocks.highlightsEnabled).toEqual([false]);
+  });
+
+  it('does not read an empty highlights cache as the vote ending (GEO-3311)', () => {
+    mocks.roomVote = vote;
+    const lobby = lobbyViewForMember(view({ hosting: true }));
+    const { rerender } = renderScope(lobby);
+    // The host came back after the cache was evicted: nothing read yet.
+    mocks.cached = false;
+    rerender(
+      <LobbyAnalyticsScope lobby={{ ...lobby }}>
+        <VoteProbe claimId={CLAIM} />
+      </LobbyAnalyticsScope>
+    );
+    // The read lands with the same vote still running.
+    mocks.cached = true;
+    rerender(
+      <LobbyAnalyticsScope lobby={{ ...lobby }}>
+        <VoteProbe claimId={CLAIM} />
+      </LobbyAnalyticsScope>
+    );
+
+    expect(mocks.lobbyRoomVoteSeen.mock.calls.map(([, seen]) => seen)).not.toContain(null);
+    expect(mocks.lobbyRoomVoteSeen).toHaveBeenCalledWith(LOBBY.replaceAll('-', ''), vote);
   });
 
   it('reports nothing outside the room, but still scopes the lobby', () => {

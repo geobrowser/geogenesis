@@ -22,8 +22,10 @@ export function LobbyAnalyticsScope({ lobby, children }: { lobby: LobbyPageView;
   const inRoom = member?.viewer.connected ?? false;
   const hosting = member?.viewer.hosting ?? false;
   // Watches the cache only. In the room, the room vote card (desktop) or the phone's Claims mark
-  // already reads it, and gateway events keep it current; this adds no request.
-  const roomVote = useLobbyHighlights(lobby.lobby_id, false).data?.room_vote ?? null;
+  // already reads it, and gateway events keep it current; this adds no request. `undefined` until
+  // the cache holds highlights: unknown, which is not the same as `null`, no vote running.
+  const highlights = useLobbyHighlights(lobby.lobby_id, false).data;
+  const roomVote = highlights === undefined ? undefined : highlights.room_vote;
 
   const role = member?.viewer.role ?? null;
   const moderation = member?.viewer.last_moderation;
@@ -37,7 +39,7 @@ export function LobbyAnalyticsScope({ lobby, children }: { lobby: LobbyPageView;
   }, [headcount, inRoom, lobbyId]);
 
   React.useEffect(() => {
-    if (inRoom && hosting) lobbyRoomVoteSeen(lobbyId, roomVote);
+    if (inRoom && hosting && roomVote !== undefined) lobbyRoomVoteSeen(lobbyId, roomVote);
   }, [hosting, inRoom, lobbyId, roomVote]);
 
   const scope = React.useMemo(
