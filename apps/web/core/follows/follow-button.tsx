@@ -29,7 +29,7 @@ export type FollowButtonVariant = 'compact' | 'page' | 'secondary' | 'avatar';
 const NO_PERSONAL_SPACE_HINT = 'You need a personal space to follow';
 const UNREGISTERED_SPACE_HINT = 'Your personal space needs to finish setting up before you can follow';
 
-/** How long the avatar badge keeps its tick once a follow has landed. */
+/** How long the avatar badge keeps its tick once a follow it saw in flight has landed. */
 const AVATAR_CONFIRM_MS = 1500;
 
 const BASE_CLASS =
@@ -130,19 +130,8 @@ export function FollowButton({
     target.kind === 'person' && Boolean(anyPersonalSpaceId) && normId(anyPersonalSpaceId ?? '') === targetId;
   const targetRef = React.useMemo(() => ({ id: targetId, name: target.name ?? null }), [targetId, target.name]);
 
-  // The avatar badge answers its own press with a tick and then gets out of the way: a face that
-  // is already followed carries no badge at all. `confirming` is that press; the tick holds through
-  // the on-chain write, however long it takes, and the dismissal clock starts only once the follow
-  // has landed. Starting it at the press took the tick back mid-write on a slow follow.
-  const [confirming, setConfirming] = React.useState(false);
   const followed = followedIds.has(targetId);
   const saving = isPending(targetId);
-  const landed = confirming && followed && !saving;
-  React.useEffect(() => {
-    if (!landed) return;
-    const timer = window.setTimeout(() => setConfirming(false), AVATAR_CONFIRM_MS);
-    return () => window.clearTimeout(timer);
-  }, [landed]);
 
   const observed = React.useCallback(
     (action: 'follow' | 'unfollow', write: () => Promise<boolean>) =>
@@ -166,6 +155,24 @@ export function FollowButton({
       }
     },
   });
+
+  // The avatar badge ticks while a follow is on its way and for a moment once it lands, then gets out
+  // of the way: a face that is already followed carries no badge at all. Both are read from shared
+  // state — the queue and the pending write — not from a press this instance remembers, because a
+  // queued follow outlives the control that queued it and a failed or cancelled press leaves no
+  // write behind. Only a follow seen in flight can land, so a face followed elsewhere stays bare.
+  const inFlight = !followed && (saving || queuedFollow.isQueued);
+  const [wasInFlight, setWasInFlight] = React.useState(inFlight);
+  const [justLanded, setJustLanded] = React.useState(false);
+  if (inFlight !== wasInFlight) {
+    setWasInFlight(inFlight);
+    if (wasInFlight && followed) setJustLanded(true);
+  }
+  React.useEffect(() => {
+    if (!justLanded) return;
+    const timer = window.setTimeout(() => setJustLanded(false), AVATAR_CONFIRM_MS);
+    return () => window.clearTimeout(timer);
+  }, [justLanded]);
 
   const promptSignIn = usePrivySignIn(undefined, {
     analytics: {
@@ -200,16 +207,14 @@ export function FollowButton({
     if (saving || disabled) return;
 
     if (followed) {
-      setConfirming(false);
+      setJustLanded(false);
       void observed('unfollow', () => unfollow([targetId]));
       return;
     }
     if (queuedFollow.isQueued) {
-      setConfirming(false);
       queuedFollow.cancel();
       return;
     }
-    if (variant === 'avatar') setConfirming(true);
     if (!signedIn) {
       queuedFollow.queue();
       promptSignIn(undefined, { onCancel: queuedFollow.cancel });
@@ -238,9 +243,9 @@ export function FollowButton({
   } satisfies React.ComponentPropsWithoutRef<'button'> & { 'data-geo-analytics-label': string };
 
   if (variant === 'avatar') {
-    // A queued follow keeps its tick so a second press can still withdraw it; a failed write has
-    // neither, so the "+" comes back.
-    const ticked = queuedFollow.isQueued || (confirming && (saving || followed));
+    // A queued follow keeps its tick so a second press can still withdraw it; a failed write leaves
+    // nothing in flight, so the "+" comes back.
+    const ticked = inFlight || queuedFollow.isQueued || justLanded;
     if (followed && !ticked) return null;
     return (
       <button

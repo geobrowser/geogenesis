@@ -316,8 +316,10 @@ describe('FollowTopicButton', () => {
 });
 
 describe('the avatar badge (GEO-3305)', () => {
-  const renderBadge = () =>
-    render(<FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada' }} variant="avatar" />);
+  // A fresh element per render: React skips re-rendering an element it has already seen.
+  const badge = () => <FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada' }} variant="avatar" />;
+  const renderBadge = () => render(badge());
+  const TICK = 'path[d="M1.5 6L4.5 9L10.5 3"]';
 
   afterEach(() => {
     vi.useRealTimers();
@@ -344,8 +346,11 @@ describe('the avatar badge (GEO-3305)', () => {
     const { container, rerender } = renderBadge();
 
     fireEvent.click(screen.getByRole('button', { name: 'Follow Ada' }));
+    mocks.pendingIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    mocks.pendingIds = new Set();
     mocks.followedIds = new Set([ADA_SPACE]);
-    rerender(<FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada' }} variant="avatar" />);
+    rerender(badge());
     expect(screen.getByRole('button', { name: 'Unfollow Ada' })).toHaveAttribute('aria-pressed', 'true');
 
     act(() => {
@@ -356,9 +361,7 @@ describe('the avatar badge (GEO-3305)', () => {
 
   it('holds the tick through a write slower than the confirmation, then goes once it lands', () => {
     vi.useFakeTimers();
-    // A fresh element per render: React skips re-rendering an element it has already seen.
-    const badge = () => <FollowButton target={{ kind: 'person', id: ADA_SPACE, name: 'Ada' }} variant="avatar" />;
-    const { container, rerender } = render(badge());
+    const { container, rerender } = renderBadge();
 
     fireEvent.click(screen.getByRole('button', { name: 'Follow Ada' }));
     mocks.pendingIds = new Set([ADA_SPACE]);
@@ -366,12 +369,12 @@ describe('the avatar badge (GEO-3305)', () => {
     act(() => {
       vi.advanceTimersByTime(5000);
     });
-    expect(container.querySelector('path[d="M1.5 6L4.5 9L10.5 3"]')).not.toBeNull();
+    expect(container.querySelector(TICK)).not.toBeNull();
 
     mocks.pendingIds = new Set();
     mocks.followedIds = new Set([ADA_SPACE]);
     rerender(badge());
-    expect(container.querySelector('path[d="M1.5 6L4.5 9L10.5 3"]')).not.toBeNull();
+    expect(container.querySelector(TICK)).not.toBeNull();
     act(() => {
       vi.advanceTimersByTime(1500);
     });
@@ -388,6 +391,67 @@ describe('the avatar badge (GEO-3305)', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Unfollow Ada' }));
     expect(mocks.cancel).toHaveBeenCalledOnce();
+  });
+
+  /**
+   * The queue outlives the control that queued it. A badge that mounts while the follow is queued —
+   * scrolled back into view, or remounted by sign-in — never saw the press, and still owes the
+   * viewer the moment of confirmation when the replay lands.
+   */
+  it('confirms a queued follow that lands after the badge remounted', () => {
+    vi.useFakeTimers();
+    mocks.isQueued = true;
+    const { container, rerender } = renderBadge();
+    expect(container.querySelector(TICK)).not.toBeNull();
+
+    // The replay writes, then leaves the queue.
+    mocks.pendingIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    mocks.isQueued = false;
+    rerender(badge());
+    mocks.pendingIds = new Set();
+    mocks.followedIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    expect(container.querySelector(TICK)).not.toBeNull();
+
+    act(() => {
+      vi.advanceTimersByTime(1500);
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('does not mistake a later follow for a press whose write failed', () => {
+    vi.useFakeTimers();
+    const { container, rerender } = renderBadge();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow Ada' }));
+    mocks.pendingIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    mocks.pendingIds = new Set();
+    rerender(badge());
+    expect(screen.getByRole('button', { name: 'Follow Ada' })).toBeInTheDocument();
+
+    // Followed from the side panel, say: this badge saw no write of its own land.
+    mocks.followedIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('does not mistake a later follow for a press whose sign-in was dismissed', () => {
+    vi.useFakeTimers();
+    mocks.smartAccount = null;
+    mocks.authenticated = false;
+    const { container, rerender } = renderBadge();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Follow Ada' }));
+    expect(mocks.promptSignIn).toHaveBeenCalledOnce();
+
+    // Dismissed, then signed in to an account that already follows Ada.
+    mocks.smartAccount = {};
+    mocks.authenticated = true;
+    mocks.followedIds = new Set([ADA_SPACE]);
+    rerender(badge());
+    expect(container).toBeEmptyDOMElement();
   });
 
   it('comes back as a "+" when a follow it confirmed did not land', () => {
