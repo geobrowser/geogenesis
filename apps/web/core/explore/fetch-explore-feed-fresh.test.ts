@@ -7,6 +7,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { DEFAULT_FRESH_SLOT_CONFIG, type FreshSlotConfig } from './fresh-slot/fresh-slot-config';
+import { FRESH_SLOT_AS_OF_STEP_MS } from './fresh-slot/fresh-slot-cursor';
 
 /**
  * GEO-3221. The fresh slot inside the real feed: Best's ranked windows from the by-type connection,
@@ -181,7 +182,8 @@ describe('a whole scroll with the fresh slot on', () => {
   it('asks for items created inside the freshness window, pinned for the whole scroll', async () => {
     await scroll({ config: { ...ON, freshnessHours: 24 }, revision: 1 });
     const ranges = graph.freshCalls.map(variables => JSON.stringify(variables.filter));
-    const asOf = Math.floor(clock / 1000);
+    // GEO-3279: the scroll is pinned to the start of the minute it began in.
+    const asOf = Math.floor(clock / FRESH_SLOT_AS_OF_STEP_MS) * (FRESH_SLOT_AS_OF_STEP_MS / 1000);
     expect(ranges[0]).toContain(
       `"createdAt":{"greaterThanOrEqualTo":"${asOf - 24 * 3600}","lessThanOrEqualTo":"${asOf}"}`
     );
