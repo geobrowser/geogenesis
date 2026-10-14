@@ -1622,6 +1622,30 @@ describe('DebateRoomPageClient', () => {
     expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
   });
 
+  it('opens no devices for a hand-off that chose neither', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <ListeningOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('0'));
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <ListeningOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.getByText('Enable video and audio to start')).toBeInTheDocument();
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+  });
+
   it('waits for a hand-off still in flight rather than closing it', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     let open!: (tracks: unknown[]) => void;
@@ -5666,6 +5690,20 @@ function MicOnlyHandover() {
     started.current = true;
     media.beginSession(debateMediaSessionKey('debate-1'));
     void media.ensurePreview({ audio: true, video: false }).catch(() => undefined);
+  }, [media]);
+
+  return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;
+}
+
+/** A card that handed the room a session and opened nothing: the listening-only choice. */
+function ListeningOnlyHandover() {
+  const media = useDebateMediaSession();
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    media.beginSession(debateMediaSessionKey('debate-1'));
   }, [media]);
 
   return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;

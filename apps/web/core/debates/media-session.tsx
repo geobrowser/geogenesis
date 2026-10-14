@@ -11,7 +11,7 @@ export type MediaDeviceOption = {
   label: string;
 };
 
-export type PreJoinMediaState = 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
+export type PreJoinMediaState = 'idle' | 'requesting' | 'ready' | 'denied' | 'unavailable' | 'error';
 
 export type LocalTrackLike = {
   mediaStreamTrack: MediaStreamTrack;
@@ -316,6 +316,16 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         }
         const tracks = [...keep, ...opened];
         localTracksRef.current = tracks;
+
+        if (tracks.length === 0) {
+          localMediaStreamRef.current = null;
+          setPreviewStreamState(null);
+          await refreshMediaDevices();
+          if (!isCurrent()) return [];
+          setPreviewState('idle');
+          setPreviewBusy(false);
+          return tracks;
+        }
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         localMediaStreamRef.current = stream;
         setPreviewStreamState(stream);

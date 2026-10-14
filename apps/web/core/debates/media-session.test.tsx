@@ -514,6 +514,27 @@ describe('DebateMediaSessionProvider topping up a handed-over session', () => {
   });
 });
 
+describe('DebateMediaSessionProvider asked for nothing', () => {
+  it('does not report a preview it never opened', async () => {
+    mocks.enumerateDevices.mockResolvedValue([
+      { deviceId: 'mic-1', groupId: 'audio', kind: 'audioinput', label: 'Studio mic' },
+    ]);
+    mocks.createLocalTracks.mockResolvedValue([]);
+
+    render(
+      <DebateMediaSessionProvider>
+        <MediaSessionHarness />
+      </DebateMediaSessionProvider>
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Start match' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure neither' }));
+
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('idle'));
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+  });
+});
+
 describe('DebateMediaSessionProvider overlapping requests', () => {
   function deferredTracks() {
     let release!: (tracks: unknown[]) => void;
@@ -636,6 +657,12 @@ function MediaSessionHarness() {
         onClick={() => void media.ensurePreview({ audio: true, video: true }).catch(() => undefined)}
       >
         Ensure both
+      </button>
+      <button
+        type="button"
+        onClick={() => void media.ensurePreview({ audio: false, video: false }).catch(() => undefined)}
+      >
+        Ensure neither
       </button>
       <button
         type="button"
