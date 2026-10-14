@@ -2439,6 +2439,10 @@ export type DebateLobbyView = {
   debate_pairs?: DebateLobbyPair[];
   /** Live visitors without an account (GEO-3129); absent from a geo-chat that predates guests. */
   guest_count?: number;
+  /** Host-picked claim list pages, in tab order (GEO-3273). Absent from older geo-chat. */
+  claim_lists?: DebateLobbyClaimList[];
+  /** Orders `claim_lists` against `debate.lobby_claim_lists_changed`; `null` before the first list. */
+  claim_lists_as_of?: string | null;
   viewer: {
     /** `null` before the viewer's first join. */
     role: DebateLobbyRole | null;
@@ -2683,6 +2687,68 @@ export async function endDebateLobbyRoomVote(
   accountKey: string | null
 ) {
   return geoChatRequest<DebateLobbyHighlights>(`/debate-lobbies/${lobbyId}/room-vote/${voteId}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
+ * A claim list page on a lobby (GEO-3273): a Geo page whose collection blocks hold claims, shown as
+ * its own tab. geo-chat stores only which page, from which space, and where; the graph has the rest.
+ */
+export type DebateLobbyClaimList = {
+  /** 32 hex. */
+  entity_id: string;
+  /** 32 hex. The same page can hold different blocks in different spaces, so this picks the copy. */
+  space_id: string;
+  position: number;
+  /** `null` once that account is deleted. */
+  added_by: DebateLobbyPerson | null;
+  added_at: string;
+};
+
+/** Full state, as the GET, every host action and `debate.lobby_claim_lists_changed` carry it. */
+export type DebateLobbyClaimLists = {
+  lobby_id: string;
+  /** `null` before any list was saved. */
+  as_of: string | null;
+  /** In position order. */
+  claim_lists: DebateLobbyClaimList[];
+};
+
+/** geo-chat's `MAX_CLAIM_LISTS`; a sixth is `409 lobby_claim_list_limit`. */
+export const LOBBY_CLAIM_LISTS_MAX = 5;
+
+/**
+ * Host only, inside the room. Adds the page at `position` (appends when omitted), or moves it there
+ * when already saved. A different `space_id` for a saved page switches it to that space's copy.
+ */
+export async function saveDebateLobbyClaimList(
+  lobbyId: string,
+  entityId: string,
+  body: { space_id: string; position?: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyClaimLists>(`/debate-lobbies/${lobbyId}/claim-lists/${entityId}`, {
+    method: 'PUT',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Host only, inside the room. Idempotent; the lists after it move up. */
+export async function removeDebateLobbyClaimList(
+  lobbyId: string,
+  entityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyClaimLists>(`/debate-lobbies/${lobbyId}/claim-lists/${entityId}`, {
     method: 'DELETE',
     auth: true,
     getPrivyIdentityToken,

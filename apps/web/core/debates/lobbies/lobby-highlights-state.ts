@@ -35,7 +35,7 @@ export function viewerRoomVotePosition(state: LobbyHighlightsState | undefined):
  */
 export function parseLobbyHighlights(value: unknown): DebateLobbyHighlights | null {
   if (!isRecord(value) || typeof value.lobby_id !== 'string') return null;
-  if (value.as_of !== null && (typeof value.as_of !== 'string' || instantParts(value.as_of) === null)) return null;
+  if (value.as_of !== null && !isInstant(value.as_of)) return null;
   if (!Array.isArray(value.highlights) || !value.highlights.every(isHighlight)) return null;
   const vote = value.room_vote;
   if (vote !== null) {
@@ -189,12 +189,20 @@ export function createRoomVoteHintSender(send: (request: RoomVoteHintRequest) =>
  */
 export function isNewerInstant(next: string | null, previous: string | null) {
   if (next === null) return false;
-  if (previous === null) return true;
+  // Checked before the missing-previous case: an unreadable stamp taken as newer than none would be
+  // kept, and every valid one after it refused, since it cannot be compared with.
   const a = instantParts(next);
+  if (!a) return false;
+  if (previous === null) return true;
   const b = instantParts(previous);
-  if (!a || !b) return false;
+  if (!b) return false;
   if (a.ms !== b.ms) return a.ms > b.ms;
   return a.fraction > b.fraction;
+}
+
+/** A geo-chat stamp this module can order: what an event's `as_of` must be before it is cached. */
+export function isInstant(value: unknown): value is string {
+  return typeof value === 'string' && instantParts(value) !== null;
 }
 
 /** Whole milliseconds since the epoch, plus the sub-millisecond digits as a comparable string. */

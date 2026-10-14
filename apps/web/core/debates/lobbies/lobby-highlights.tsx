@@ -32,7 +32,7 @@ import {
   listedHighlights,
   viewerRoomVotePosition,
 } from './lobby-highlights-state';
-import { LobbyPopup } from './lobby-popup';
+import { LobbyPopup, LobbyPopupMenuRow } from './lobby-popup';
 import { LobbyClaimRequest, LobbyRoomClaims, lobbyRoomClaimFrom } from './lobby-room-claims';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { type LobbyRoomClaim, LobbyRoomClaimsList, type LobbyRoomOffer } from './lobby-room-claims-list';
@@ -306,7 +306,8 @@ export function LobbyClaimHostActions({
         </div>
       ) : (
         <>
-          <MenuRow
+          <LobbyPopupMenuRow
+            analyticsIntent="moderate_lobby_claim"
             analyticsLabel={highlighted ? 'Lobby remove highlight' : 'Lobby highlight claim'}
             disabled={pending}
             onClick={() =>
@@ -314,15 +315,16 @@ export function LobbyClaimHostActions({
             }
           >
             {highlighted ? LOBBY_HIGHLIGHTS_COPY.removeHighlight : LOBBY_HIGHLIGHTS_COPY.highlight}
-          </MenuRow>
+          </LobbyPopupMenuRow>
           {running?.claim.id === claim.id ? null : (
-            <MenuRow
+            <LobbyPopupMenuRow
+              analyticsIntent="moderate_lobby_claim"
               analyticsLabel="Lobby ask room to vote"
               disabled={pending}
               onClick={() => (running ? setReplacing(running.claim.claim) : start(false))}
             >
               {LOBBY_HIGHLIGHTS_COPY.askRoom}
-            </MenuRow>
+            </LobbyPopupMenuRow>
           )}
         </>
       )}
@@ -332,30 +334,6 @@ export function LobbyClaimHostActions({
         </Text>
       ) : null}
     </div>
-  );
-}
-
-function MenuRow({
-  analyticsLabel,
-  disabled,
-  onClick,
-  children,
-}: {
-  analyticsLabel: string;
-  disabled: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
-}) {
-  return (
-    <button
-      type="button"
-      disabled={disabled}
-      {...debateActionAnalyticsAttributes('hub', analyticsLabel, 'moderate_lobby_claim')}
-      onClick={onClick}
-      className="flex w-full items-center bg-white px-3 py-2.5 text-left text-button text-text hover:bg-bg disabled:opacity-50"
-    >
-      {children}
-    </button>
   );
 }
 

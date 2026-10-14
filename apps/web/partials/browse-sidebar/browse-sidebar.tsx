@@ -20,7 +20,7 @@ import { useGeoProfile } from '~/core/hooks/use-geo-profile';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSpaceId } from '~/core/hooks/use-space-id';
-import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
+import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import {
   activeRequestedSpacesForOwner,
@@ -310,7 +310,7 @@ type BrowseSidebarProps =
 
 export function BrowseSidebar(props: BrowseSidebarProps = {}) {
   const presentation = props.presentation ?? 'desktop';
-  const [open, setOpen] = useAtom(browseSidebarOpenAtom);
+  const [open, setOpen] = useAtom(browseSidebarShownAtom);
   const mobile = presentation === 'mobile';
   const onClose = props.presentation === 'mobile' ? props.onClose : undefined;
   const { personalSpaceId: personalSpaceIdFromHook } = usePersonalSpaceId();
