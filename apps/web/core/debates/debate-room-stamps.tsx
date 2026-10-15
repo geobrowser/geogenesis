@@ -140,7 +140,7 @@ function shown(node: React.ReactNode) {
  *
  * The wrapper is always rendered, a box over the whole of its container, so the moment is never
  * remounted on its way out and its entrance does not replay. It takes no pointer events: a moment
- * that needs them, like the pick panel, asks for them itself.
+ * that needs them, like the pick panel, asks for them itself, and only until it starts to leave.
  */
 export function RoomExit({
   children,
@@ -166,12 +166,17 @@ export function RoomExit({
 
   const content = shown(children) ? children : leaving;
   if (!shown(content)) return null;
+  const isLeaving = !shown(children);
   return (
     <div
-      data-room-leaving={shown(children) ? undefined : 'true'}
+      data-room-leaving={isLeaving ? 'true' : undefined}
+      // On its way out it is only a picture: a late tap on the pick panel must not send a pick after
+      // the round resolved, and a screen reader should not land on it.
+      inert={isLeaving}
+      aria-hidden={isLeaving || undefined}
       className={cx(
         'pointer-events-none absolute inset-0',
-        !shown(children) && [EXIT_CLASS[exit], 'motion-reduce:hidden'],
+        isLeaving && [EXIT_CLASS[exit], 'motion-reduce:hidden'],
         className
       )}
     >

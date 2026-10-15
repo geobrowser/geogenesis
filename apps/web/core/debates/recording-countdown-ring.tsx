@@ -61,6 +61,22 @@ export function turnTimerRimMask(width: string) {
   return `radial-gradient(farthest-side, transparent calc(100% - ${width}), #000 calc(100% - ${width}))`;
 }
 
+/**
+ * Restarts an element's own CSS animations each time `tick` changes, without remounting it, so
+ * whatever it holds (the timer's rim, mid-drain) carries on. `null` leaves them alone.
+ */
+function useRestartedEach(ref: React.RefObject<HTMLElement | null>, tick: number | null) {
+  React.useLayoutEffect(() => {
+    const element = ref.current;
+    if (tick === null || !element) return;
+    // A finished CSS animation is gone from `getAnimations()`, so it cannot be rewound: take the
+    // animations off, let the browser see it, and put them back. A child's transition runs on.
+    element.style.animation = 'none';
+    void element.offsetWidth;
+    element.style.animation = '';
+  }, [ref, tick]);
+}
+
 /** The room's red rim, at the disc's very edge. */
 const finalRimMask = turnTimerRimMask('3px');
 
@@ -83,6 +99,7 @@ export function RecordingCountdownRing({
   buildUp?: { remainingMs: number } | null;
 }) {
   const gradientId = React.useId();
+  const faceRef = React.useRef<HTMLDivElement>(null);
   const elapsedRatio = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
   const muted = variant === 'muted';
   const stage = turnTimerBuildUp(buildUp ? remainingSeconds : Infinity);
@@ -90,6 +107,7 @@ export function RecordingCountdownRing({
   const ringColor = muted ? 'rgba(190,190,190,0.92)' : variant === 'warning' ? COUNTDOWN_WARNING_COLOR : '#FFFFFF';
   const numberColor = muted ? 'var(--color-grey-02)' : '#FFFFFF';
   const dashOffset = COUNTDOWN_CIRCUMFERENCE * elapsedRatio;
+  useRestartedEach(faceRef, counting ? remainingSeconds : null);
   const rimDegrees = final && buildUp ? (Math.max(0, Math.min(5_000, buildUp.remainingMs)) / 5_000) * 360 : 0;
 
   return (
@@ -102,9 +120,10 @@ export function RecordingCountdownRing({
       style={{ width: COUNTDOWN_SIZE, height: COUNTDOWN_SIZE, ...(buildUp ? { scale: stage.scale } : null) }}
     >
       <div
-        // Re-mounted each second of the last ten, which restarts its swell and glow. Reduced motion
-        // keeps the colour and the draining rim, without the pulse or the glow.
-        key={counting ? remainingSeconds : 'steady'}
+        // Its swell and glow restart each second of the last ten (`useRestartedEach`), without
+        // remounting, so the rim keeps draining across the second. Reduced motion keeps the colour
+        // and the draining rim, without the pulse or the glow.
+        ref={faceRef}
         className={cx(
           'relative grid size-full place-items-center rounded-full',
           turnTimerPulseClass(stage),

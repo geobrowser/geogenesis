@@ -29,6 +29,23 @@ describe('RoomExit (GEO-3315)', () => {
     expect(screen.queryByText('Round 2')).not.toBeInTheDocument();
   });
 
+  it('takes no input and hides from assistive technology on its way out, so a late tap cannot pick', () => {
+    vi.useFakeTimers();
+    const view = render(
+      <RoomExit>
+        <button type="button">Extend</button>
+      </RoomExit>
+    );
+    const wrapper = screen.getByRole('button', { name: 'Extend' }).parentElement;
+    expect(wrapper).not.toHaveAttribute('inert');
+    expect(wrapper).not.toHaveAttribute('aria-hidden');
+
+    view.rerender(<RoomExit>{null}</RoomExit>);
+    expect(wrapper).toHaveAttribute('inert');
+    expect(wrapper).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.queryByRole('button', { name: 'Extend' })).not.toBeInTheDocument();
+  });
+
   it('brings a moment straight back if it returns while leaving', () => {
     vi.useFakeTimers();
     const view = render(<RoomExit>{<span>Go!</span>}</RoomExit>);
