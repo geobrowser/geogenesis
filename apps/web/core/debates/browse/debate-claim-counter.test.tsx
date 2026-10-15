@@ -254,4 +254,42 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     expect(container.querySelector('[data-claim-list]')).toBeNull();
     expect(document.activeElement).toBe(container.querySelector('[data-claim-count]'));
   });
+
+  // Copilot, #2843: a mask on the scroll box is a backdrop root, so the cards' blur stopped seeing
+  // the video. The fade is on the cards now, each with its own slice of it.
+  it('fades the top of a long list card by card, never on the box that scrolls', () => {
+    const rects = new Map<string, number>([
+      ['list', 100],
+      ['c', 95],
+      ['b', 140],
+      ['a', 185],
+    ]);
+    const spy = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      const key =
+        this.getAttribute('data-claim-list-card') ??
+        (this.firstElementChild?.hasAttribute('data-claim-list-card') ? 'list' : '');
+      return { top: rects.get(key) ?? 0 } as DOMRect;
+    });
+    // Cards 40px tall in a 300px-wide list: a 6cqw ramp at 76cqw wide is about 24px.
+    const height = vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockReturnValue(40);
+    const width = vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(300);
+    try {
+      const { container } = renderCounter([said('a', 1_000), said('b', 2_000), said('c', 3_000)], 30_000);
+      fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
+      const card = (id: string) => container.querySelector(`[data-claim-list-card="${id}"]`) as HTMLElement;
+      const box = card('c').parentElement as HTMLElement;
+
+      expect(box.className).not.toContain('mask-image');
+      expect(card('c').className).toContain('mask-image:var(--claim-ramp');
+      // The card crossing the top edge carries the ramp; ones well below it carry none.
+      expect(card('c').style.getPropertyValue('--claim-ramp')).toContain('linear-gradient');
+      expect(card('a').style.getPropertyValue('--claim-ramp')).toBe('none');
+    } finally {
+      spy.mockRestore();
+      height.mockRestore();
+      width.mockRestore();
+    }
+  });
 });

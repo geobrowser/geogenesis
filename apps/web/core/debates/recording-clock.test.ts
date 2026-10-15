@@ -78,6 +78,13 @@ describe('recordingTimeOf', () => {
     expect(recordingTimeOf(254_994, RENDERED_TURN_SEGMENTS, 'start')).toBe(274_650);
   });
 
+  // Copilot, #2843: the media's order is not promised, and the boundary must not depend on it.
+  it('picks the same side of a boundary whatever order the turns arrive in', () => {
+    const reversed = [...RENDERED_TURN_SEGMENTS].reverse();
+    expect(recordingTimeOf(254_994, reversed, 'end')).toBe(270_944);
+    expect(recordingTimeOf(254_994, reversed, 'start')).toBe(274_650);
+  });
+
   it('leaves a time outside every turn, or a render with no source times, where it is', () => {
     expect(recordingTimeOf(400_000, RENDERED_TURN_SEGMENTS, 'start')).toBe(400_000);
     expect(

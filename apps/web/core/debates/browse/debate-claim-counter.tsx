@@ -254,6 +254,13 @@ function ClaimList({
   // Newest first in the document, laid out bottom-up: the newest sits nearest the counter, and a
   // list taller than its cap opens scrolled to it, older claims above.
   const newestFirst = [...history].reverse();
+  const scrollRef = React.useRef<HTMLDivElement>(null);
+  const fades = history.length > 2;
+  const paint = React.useCallback(() => {
+    if (scrollRef.current) paintTopFade(scrollRef.current, fades);
+  }, [fades]);
+  // On every layout of the list (a claim arriving, a card tinting) and on every scroll.
+  React.useLayoutEffect(paint);
 
   return (
     <div data-claim-list className="grid w-[76cqw] gap-[1.2cqw]">
@@ -280,10 +287,9 @@ function ClaimList({
       {/* Never more than about two and a half cards tall: older claims scroll, fading at the top,
           and the list stays clear of the round tag and timer at the tile's top. */}
       <div
-        className={cx(
-          'flex max-h-[38cqw] [scrollbar-width:none] flex-col-reverse gap-[1.2cqw] overflow-y-auto',
-          history.length > 2 && '[mask-image:linear-gradient(rgba(0,0,0,0.15),#000_6cqw)]'
-        )}
+        ref={scrollRef}
+        onScroll={paint}
+        className="flex max-h-[38cqw] [scrollbar-width:none] flex-col-reverse gap-[1.2cqw] overflow-y-auto"
       >
         {newestFirst.map(card => (
           <ClaimListCard
@@ -298,6 +304,35 @@ function ClaimList({
       </div>
     </div>
   );
+}
+
+/** The fade at the top of a scrolling list, from 15% to full over its first 6cqw, as the mockup draws it. */
+const FADE_FROM_ALPHA = 0.15;
+const FADE_CQW = 6;
+/** The list's width in `cqw` (`w-[76cqw]`), which turns the fade's `cqw` into the list's own px. */
+const LIST_CQW = 76;
+
+/**
+ * Fades the top of the list, card by card: each card carries the slice of the ramp that falls across
+ * it, through `--claim-ramp`. Not one mask on the scroll box: a mask makes its element a backdrop
+ * root, and the cards' blur would stop seeing the video behind the list. A card's own mask does not
+ * blind its own blur. The live claim ticker solves it the same way (`debate-claim-ticker.tsx`); its
+ * version is not shared because it measures a list laid out top-down, and it serves fixed formats,
+ * which this PR leaves alone.
+ */
+function paintTopFade(list: HTMLElement, fades: boolean) {
+  const top = list.getBoundingClientRect().top;
+  const rampPx = (list.clientWidth * FADE_CQW) / LIST_CQW;
+  for (const card of Array.from(list.children) as HTMLElement[]) {
+    const fromTop = card.getBoundingClientRect().top - top;
+    const reached = fades && fromTop < rampPx && fromTop + card.offsetHeight > 0;
+    card.style.setProperty(
+      '--claim-ramp',
+      reached
+        ? `linear-gradient(to bottom, rgba(0,0,0,${FADE_FROM_ALPHA}) ${-fromTop}px, #000 ${rampPx - fromTop}px)`
+        : 'none'
+    );
+  }
 }
 
 function ClaimListCard(props: {
@@ -367,7 +402,7 @@ function ClaimListCardBody({
     <ActionSurfaceDiv
       data-claim-list-card={claim.id}
       data-fresh={freshness > 0 || undefined}
-      className="grid grid-cols-[1fr_auto] items-center gap-x-[2.4cqw] rounded-[4px] py-[1.4cqw] pr-[1.2cqw] pl-[2.6cqw] text-white backdrop-blur-[22px] transition-[background-color,box-shadow] duration-300"
+      className="grid grid-cols-[1fr_auto] items-center gap-x-[2.4cqw] rounded-[4px] [mask-image:var(--claim-ramp,none)] py-[1.4cqw] pr-[1.2cqw] pl-[2.6cqw] text-white backdrop-blur-[22px] transition-[background-color,box-shadow] duration-300 [-webkit-mask-image:var(--claim-ramp,none)]"
       // The newest claim's tint fades over its first three seconds, as in the mockup.
       style={
         freshness > 0

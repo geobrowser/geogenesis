@@ -55,9 +55,14 @@ export function recordingTimeOf(
   turns: readonly DebateMediaTurnSegment[],
   edge: 'start' | 'end'
 ): number {
-  const holding = turns.filter(
-    turn => turn.source_start_ms !== undefined && renderedMs >= turn.output_start_ms && renderedMs <= turn.output_end_ms
-  );
+  // In turn order, whatever order the media listed them in: on a shared boundary the later turn is
+  // the one that opens there and the earlier the one that closes.
+  const holding = turns
+    .filter(
+      turn =>
+        turn.source_start_ms !== undefined && renderedMs >= turn.output_start_ms && renderedMs <= turn.output_end_ms
+    )
+    .sort((a, b) => a.turn_index - b.turn_index);
   const turn = edge === 'start' ? holding.at(-1) : holding[0];
   return turn?.source_start_ms === undefined ? renderedMs : turn.source_start_ms + (renderedMs - turn.output_start_ms);
 }
