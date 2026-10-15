@@ -107,11 +107,11 @@ import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/deb
 import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
-import { useOpenClaimInSidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
+import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';

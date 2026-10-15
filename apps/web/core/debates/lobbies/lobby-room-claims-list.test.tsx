@@ -77,7 +77,7 @@ vi.mock('../matchmaking/matchmaking-claim-card', () => ({
 }));
 
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <span data-testid="avatar" /> }));
-vi.mock('~/core/hooks/use-entity-side-panel', () => ({ useOpenClaimInSidePanel: () => mocks.openClaim }));
+vi.mock('~/core/hooks/use-open-claim-in-side-panel', () => ({ useOpenClaimInSidePanel: () => mocks.openClaim }));
 
 afterEach(() => {
   cleanup();

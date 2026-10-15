@@ -4,9 +4,9 @@ import * as React from 'react';
 
 import { WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
-import { useOpenClaimInSidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
+import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';

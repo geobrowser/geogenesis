@@ -887,11 +887,6 @@ vi.mock('~/core/debates/use-claim-space-allowlist', () => ({
 
 vi.mock('~/core/hooks/use-entity-side-panel', () => ({
   useEntitySidePanel: () => ({ openSidePanel: mocks.openSidePanel, sidePanelTarget: null, closeSidePanel: vi.fn() }),
-  // The real hook's one call, onto the same spy, so claim opens are still asserted as panel opens.
-  useOpenClaimInSidePanel:
-    () =>
-    ({ claim_entity_id, space_id }: { claim_entity_id: string; space_id: string }) =>
-      mocks.openSidePanel(claim_entity_id, space_id, false, { forceRequestedSpace: true }),
 }));
 
 // useSpaceLabels reads the browse sidebar's cache before falling back to the mock below. These

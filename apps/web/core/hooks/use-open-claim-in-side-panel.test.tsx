@@ -3,7 +3,7 @@ import { act, renderHook } from '@testing-library/react';
 import { Provider, createStore } from 'jotai';
 import { describe, expect, it } from 'vitest';
 
-import { useOpenClaimInSidePanel } from './use-entity-side-panel';
+import { useOpenClaimInSidePanel } from './use-open-claim-in-side-panel';
 import { entitySidePanelAtom } from '~/atoms';
 
 describe('useOpenClaimInSidePanel', () => {
