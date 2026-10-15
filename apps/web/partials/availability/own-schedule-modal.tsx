@@ -2,6 +2,7 @@
 
 import type * as React from 'react';
 
+import type { AvailabilityBlock } from '~/core/availability/blocks';
 import type { ScheduleEditorSurface } from '~/core/availability/schedule-analytics';
 import { useDebateSchedule, useSaveDebateSchedule } from '~/core/debates/hooks';
 
@@ -23,7 +24,7 @@ export function OwnScheduleModal({
   onOpenChange: (open: boolean) => void;
   openerRef?: React.RefObject<HTMLElement | null>;
   /** After Save hands the week off, before the dialog closes and returns focus to `openerRef`. */
-  onSaved?: () => void;
+  onSaved?: (blocks: AvailabilityBlock[]) => void;
   /** Which control opened it, for the saved event. */
   surface: ScheduleEditorSurface;
 }) {
@@ -41,7 +42,7 @@ export function OwnScheduleModal({
       onRetry={() => refetch()}
       onSave={nextBlocks => {
         saveSchedule.mutate(nextBlocks);
-        onSaved?.();
+        onSaved?.(nextBlocks);
       }}
       openerRef={openerRef}
       headerAction={<CopyOwnAvailabilityLinkButton />}

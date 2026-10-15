@@ -483,9 +483,7 @@ async function buildDebateShareCard(
  * report claims for this debate) — the caller then falls back to the raw /transcript merge and
  * publishes with no claims. `turn_index` is expected 0-based and contiguous over non-empty turns.
  */
-export async function loadDebateClaims(
-  debateId: string
-): Promise<{
+export async function loadDebateClaims(debateId: string): Promise<{
   transcriptTurns: DebatePublishTurn[];
   claims: DebateClaimInput[];
   dedupPendingUntil: number | null;

@@ -28,4 +28,4 @@ export { getGeoChain } from './src/chain.js';
 export { useGeoLogin } from './src/use-login.js';
 // Mounted once for the life of the app. A headless login authenticates without creating the
 // embedded wallet the modal flow creates, and nothing downstream works without one.
-export { useEnsureEmbeddedWallet } from './src/use-ensure-embedded-wallet.js';
+export { retryEmbeddedWalletSetup, useEnsureEmbeddedWallet } from './src/use-ensure-embedded-wallet.js';

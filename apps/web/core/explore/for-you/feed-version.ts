@@ -67,4 +67,14 @@ export type FeedItemRanking = {
   exploration?: boolean;
   /** The chance it had of being picked for an exploration slot. */
   explorationProbability?: number | null;
+  /**
+   * GEO-3221. `fresh` when the card filled Best's fresh slot rather than earning its rank; Best's
+   * version then reads `best-1+fresh.<config revision>`.
+   */
+  slot?: 'fresh';
+  /**
+   * GEO-3234. Set in the browser: how many already-seen cards were hidden from this card's page. The
+   * page's cards' version then ends `+seen.<n>`.
+   */
+  seenHidden?: number;
 };

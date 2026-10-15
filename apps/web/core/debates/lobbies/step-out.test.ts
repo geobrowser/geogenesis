@@ -2,12 +2,24 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { debateEntryClick, registerLobbyStepOut, routeIntoDebate } from './step-out';
+import {
+  carryLobbyMic,
+  clearCarriedLobbyMic,
+  debateEntryClick,
+  forgetLobbyMic,
+  readCarriedLobbyMic,
+  registerLobbyStepOut,
+  reportLobbyMic,
+  routeIntoDebate,
+} from './step-out';
 
 let clear: (() => void) | null = null;
 afterEach(() => {
   clear?.();
   clear = null;
+  forgetLobbyMic();
+  clearCarriedLobbyMic();
+  vi.useRealTimers();
 });
 
 function click(overrides: Partial<{ button: number; metaKey: boolean; defaultPrevented: boolean }> = {}) {
@@ -38,6 +50,59 @@ describe('routeIntoDebate', () => {
     routeIntoDebate(() => order.push('go'));
     expect(order).toEqual(['step-out']);
     await vi.waitFor(() => expect(order).toEqual(['step-out', 'go']));
+  });
+});
+
+describe('carrying the lobby mic into a debate', () => {
+  /** A lobby whose step-out carries its mic, as the presence hook's does. */
+  function inLobbyWithMic(on: boolean | null) {
+    reportLobbyMic(on);
+    clear = registerLobbyStepOut(async () => carryLobbyMic());
+  }
+
+  it('carries an unmuted mic', () => {
+    inLobbyWithMic(true);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBe(true);
+  });
+
+  it('carries a muted mic', () => {
+    inLobbyWithMic(false);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBe(false);
+  });
+
+  it('carries nothing for a listener, after the lobby page is gone, or once spent', () => {
+    inLobbyWithMic(null);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBeNull();
+
+    reportLobbyMic(true);
+    forgetLobbyMic();
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBeNull();
+
+    reportLobbyMic(true);
+    routeIntoDebate(() => undefined);
+    clearCarriedLobbyMic();
+    expect(readCarriedLobbyMic()).toBeNull();
+  });
+
+  it('does not reach a debate entered from outside a lobby', () => {
+    inLobbyWithMic(true);
+    routeIntoDebate(() => undefined);
+    clear?.();
+    clear = null;
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBeNull();
+  });
+
+  it('expires after a minute', () => {
+    vi.useFakeTimers();
+    inLobbyWithMic(true);
+    routeIntoDebate(() => undefined);
+    vi.advanceTimersByTime(61_000);
+    expect(readCarriedLobbyMic()).toBeNull();
   });
 });
 
@@ -72,8 +137,15 @@ describe('every debate entry steps out of a lobby', () => {
   const root = join(__dirname, '../../..');
   // Not a debater entering a debate: lobby-to-lobby links, watching one live, sign-in, debug.
   const allowed = new Set([
-    'core/debates/lobbies/lobbies-card.tsx',
+    // GEO-3268: links into a lobby from the panel spotlight and row, the Debate button's hover list,
+    // the calendar and Explore.
+    'core/debates/lobbies/lobby-spotlight.tsx',
+    'core/debates/lobbies/live-lobbies-preview.tsx',
+    'core/debates/lobbies/upcoming-lobbies.tsx',
+    'core/debates/lobbies/lobbies-calendar.tsx',
+    'partials/explore/explore-live-lobbies-banner.tsx',
     'core/debates/lobbies/lobby-page.tsx',
+    'core/debates/lobbies/lobby-state-cards.tsx',
     'core/debates/lobbies/open-lobby-dialog.tsx',
     'core/claims/browse/claim-end-slot.tsx',
     'app/debate/[roomId]/room-page-client.tsx',

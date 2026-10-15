@@ -2,6 +2,7 @@
 
 import { type AnalyticsProperties, restorePrivySession, trackPrivyAuth } from './analytics';
 import {
+  type AuthAttemptOutcome,
   attemptProperties,
   beginAuthAttempt,
   captureAuthEvent,
@@ -11,7 +12,7 @@ import {
   resetAuthAttempt,
 } from './auth-attempt';
 import { clearSignInAbandoned, runSignInAbandoned } from './auth/sign-in-abandoned';
-import { beginSignupVisitor, clearSignupVisitor, signupVisitorProperties } from './auth/signup-visitor';
+import { beginSignupVisitor, clearSignupVisitor, createdSince, signupVisitorProperties } from './auth/signup-visitor';
 
 type Completion = Parameters<typeof trackPrivyAuth>[0];
 
@@ -29,15 +30,40 @@ export function beginPrivyAuth(
   return beginAuthAttempt(properties);
 }
 
-export function cancelPrivyAuth() {
-  finishAuthAttempt('closed');
+/** Privy's account when its flow was exited: the signed-in user, or null if nobody had signed in. */
+export type ExitedFlowAccount = { createdAt?: Date | string | null } | null;
+
+/**
+ * How an exited sign-in ended (GEO-3243). Exiting Privy's flow after the email code has been accepted
+ * still leaves an account behind — a new one, if this attempt created it — so it is not a sign-in the
+ * visitor gave up on, and recording it as `closed` hid every such account from the funnel.
+ *
+ * Only a lower bound on creation time, unlike `signupVisitorProperties`. A cap at "now plus skew" would
+ * misread a device whose clock runs slow: an account it just created carries the server's later
+ * timestamp, so every sign-up there would be counted as a sign-in. Without the cap, the miss is an
+ * account created within the skew window *before* this attempt — rarer, and still an account the
+ * visitor had only just made.
+ */
+function exitOutcome(account: ExitedFlowAccount): AuthAttemptOutcome {
+  if (!account) return 'closed';
+  const attempt = currentAuthAttempt();
+  return attempt && createdSince(account.createdAt, attempt.startedAt) ? 'left_after_sign_up' : 'left_after_sign_in';
+}
+
+export function cancelPrivyAuth(account: ExitedFlowAccount = null) {
+  finishAuthAttempt(exitOutcome(account));
   clearSignupVisitor();
   runSignInAbandoned();
 }
 
-export function resetPrivyAuthSession() {
+/**
+ * Signed out. `account` is whoever the open attempt had signed in, if anyone: Privy signs an exited
+ * flow's account out, and that sign-out can be seen before the exit itself, so it classifies the
+ * attempt the same way the exit would have.
+ */
+export function resetPrivyAuthSession(account: ExitedFlowAccount = null) {
   completedUserId = null;
-  cancelPrivyAuth();
+  cancelPrivyAuth(account);
   resetAuthAttempt();
 }
 

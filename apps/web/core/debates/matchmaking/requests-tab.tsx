@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { useDebateActivity } from '../hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { AvailabilityRequestNotice, useAvailabilityRequests } from './availability-request-notice';
 import { DebateChallengeCard } from './challenge-card';
 import { HubStickyControls, SpaceTopicFilters } from './claims-tab';
 import { useDebateRequests } from './hooks';
@@ -15,7 +16,7 @@ import { HubQueryState } from './hub-states';
 import { IncomingRequestCard } from './incoming-request-card';
 import { OutboundRequestCard } from './outbound-request-card';
 import { RequestSection } from './request-section';
-import { ScheduledDebatesSection, useScheduledContent } from './scheduled-debates-section';
+import { ScheduledDebatesSection, hasScheduledContent, useScheduledContent } from './scheduled-debates-section';
 import { countBy, orderFacetOptions, toggleId } from './topic-facets';
 import { useLiveRequest, useUnexpiredRequests } from './use-request-countdown';
 
@@ -37,6 +38,7 @@ const STATUS_OPTIONS: HubFilterOption<RequestStatusFilter>[] = [
  */
 export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
   const scheduled = useScheduledContent();
+  const availabilityRequests = useAvailabilityRequests();
   const [spaceIds, setSpaceIds] = React.useState<string[]>([]);
   const [status, setStatus] = React.useState<RequestStatusFilter>('all');
 
@@ -90,11 +92,7 @@ export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
   const outgoingChallenge = challengeRole === 'requester' && status !== 'received' ? challenge : null;
 
   const hasFilters = spaceIds.length > 0 || status !== 'all';
-  const hasScheduled =
-    scheduled.answerable.length > 0 ||
-    scheduled.upcoming.length > 0 ||
-    scheduled.requestsError !== null ||
-    scheduled.roomsError !== null;
+  const hasScheduled = hasScheduledContent(scheduled) || availabilityRequests.length > 0;
   const hasRequests = Boolean(sent || outgoingChallenge || received.length > 0 || incomingChallenge);
   const isEmpty = !hasRequests && !hasScheduled;
 
@@ -126,6 +124,7 @@ export function RequestsTab({ dense = false }: { dense?: boolean } = {}) {
       <div className={cx('flex flex-col gap-3 px-4', !dense && 'py-3')}>
         {/* Outside `HubQueryState`, which reports the instant-requests query: a debate that is due
             must not vanish because an unrelated read failed. */}
+        <AvailabilityRequestNotice requests={availabilityRequests} />
         <ScheduledDebatesSection content={scheduled} />
 
         {/* Dense with only scheduled debates to show, the requests list would be an empty box that

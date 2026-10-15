@@ -5,19 +5,13 @@ import { useQueries } from '@tanstack/react-query';
 import * as React from 'react';
 
 import type { ExploreFeedRow } from '~/core/explore/explore-card-item';
-import { fetchExploreRowsByIds } from '~/core/profile/explore-rows-by-ids';
-import { normId } from '~/core/utils/norm-id';
+import {
+  claimExploreRowPages,
+  claimExploreRowsQueryKey,
+  fetchClaimExploreRowsPage,
+} from './claim-explore-rows';
 
-export const CLAIM_RECORD_PAGE_SIZE = 20;
-
-/** Stable request-sized chunks, preserving the complete Best-ranked id order. */
-export function claimExploreRowPages(ids: readonly string[]): string[][] {
-  const pages: string[][] = [];
-  for (let start = 0; start < ids.length; start += CLAIM_RECORD_PAGE_SIZE) {
-    pages.push(ids.slice(start, start + CLAIM_RECORD_PAGE_SIZE));
-  }
-  return pages;
-}
+export { CLAIM_RECORD_PAGE_SIZE, claimExploreRowPages } from './claim-explore-rows';
 
 type ClaimExploreRowsQueryResult = {
   data?: ExploreFeedRow[];
@@ -45,19 +39,13 @@ function combineClaimExploreRows(queries: ClaimExploreRowsQueryResult[]) {
  * ever asking `fetchExploreRowsByIds` to materialize an unbounded id list.
  */
 export function useClaimExploreRows(ids: string[], spaceId: string, enabled = true) {
-  const normalizedSpaceId = normId(spaceId);
   const pages = React.useMemo(() => claimExploreRowPages(ids), [ids]);
 
   return useQueries({
     queries: pages.map(page => {
-      const normalizedIds = page.map(normId);
-
       return {
-        queryKey: ['claim', 'explore-rows', normalizedSpaceId, normalizedIds],
-        queryFn: ({ signal }: { signal: AbortSignal }) => {
-          const preferredSpaces = new Map(normalizedIds.map(id => [id, [spaceId]]));
-          return fetchExploreRowsByIds(page, signal, preferredSpaces);
-        },
+        queryKey: claimExploreRowsQueryKey(spaceId, page),
+        queryFn: ({ signal }: { signal: AbortSignal }) => fetchClaimExploreRowsPage(page, spaceId, signal),
         enabled,
         staleTime: 30_000,
       };

@@ -8,13 +8,14 @@ import { useAtomValue } from 'jotai';
 import dynamic from 'next/dynamic';
 
 import { DebateCoordinator } from '~/core/debates/debate-coordinator';
+import { LastPageOutsideDebatesTracker } from '~/core/debates/lobbies/lobby-exit';
 import { DebateMediaSessionProvider } from '~/core/debates/media-session';
 import { PlaybackDiagnostics } from '~/core/debates/playback-diagnostics';
 import { DebateRecordingUploadCoordinator } from '~/core/debates/recording-upload-coordinator';
 import { useGeoLogoutCleanup } from '~/core/hooks/use-geo-logout';
 import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
-import { browseSidebarOpenAtom } from '~/core/state/browse-sidebar-state';
+import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { useDiff } from '~/core/state/diff-store';
 import { Persistence } from '~/core/state/persistence';
 
@@ -23,22 +24,46 @@ import { SlideUpBodyState } from '~/design-system/slide-up-body-state';
 
 import { BrowseSidebar } from '~/partials/browse-sidebar/browse-sidebar';
 import { MobileBrowseDrawer } from '~/partials/browse-sidebar/mobile-browse-drawer';
-import { EntityCommentsPanelHost } from '~/partials/comments/entity-comments-panel-host';
-import { CreateSpaceDialog } from '~/partials/create-space/create-space-dialog';
-import { EntitySidePanel } from '~/partials/entity-page/entity-side-panel';
 import { EntityStickyHeaderHost } from '~/partials/entity-page/entity-sticky-header-host';
 import { PersonalProfileCreatePostSidePanelSync } from '~/partials/entity-page/personal-profile-create-post-side-panel-sync';
-import { FeatureFlagsDialog } from '~/partials/feature-flags/feature-flags-dialog';
 import { GovernanceReopenEditLoadingBar } from '~/partials/governance/governance-reopen-edit-loading-bar';
 import { Main } from '~/partials/main';
 import { Navbar } from '~/partials/navbar/navbar';
 import { PendingActionsRunner } from '~/partials/pending-actions-runner';
-import { FlowBar } from '~/partials/review/flow-bar';
-import { StatusBar } from '~/partials/review/status-bar';
-import { SearchDialog } from '~/partials/search';
+import { LocalVotesSaver } from '~/partials/save-votes/local-votes-saver';
 
 import { PageViewTracker } from '~/app/page-view-tracker';
 import { rankingFullscreenActiveAtom, rankingFullscreenFocusTargetAtom } from '~/atoms';
+
+// Opened on demand, so none of these is needed to paint or hydrate a page. Each renders nothing
+// until something opens it, which is also what the server rendered, so there is nothing to mismatch.
+const CreateSpaceDialog = dynamic(
+  () => import('~/partials/create-space/create-space-dialog').then(m => ({ default: m.CreateSpaceDialog })),
+  { ssr: false }
+);
+const EntitySidePanel = dynamic(
+  () => import('~/partials/entity-page/entity-side-panel').then(m => ({ default: m.EntitySidePanel })),
+  { ssr: false }
+);
+const EntityCommentsPanelHost = dynamic(
+  () => import('~/partials/comments/entity-comments-panel-host').then(m => ({ default: m.EntityCommentsPanelHost })),
+  { ssr: false }
+);
+const FeatureFlagsDialog = dynamic(
+  () => import('~/partials/feature-flags/feature-flags-dialog').then(m => ({ default: m.FeatureFlagsDialog })),
+  { ssr: false }
+);
+const FlowBar = dynamic(() => import('~/partials/review/flow-bar').then(m => ({ default: m.FlowBar })), { ssr: false });
+const StatusBar = dynamic(() => import('~/partials/review/status-bar').then(m => ({ default: m.StatusBar })), {
+  ssr: false,
+});
+const SaveVotesSheet = dynamic(
+  () => import('~/partials/save-votes/save-votes-sheet').then(m => ({ default: m.SaveVotesSheet })),
+  { ssr: false }
+);
+const SearchDialog = dynamic(() => import('~/partials/search').then(m => ({ default: m.SearchDialog })), {
+  ssr: false,
+});
 
 const OnboardingDialog = dynamic(
   () => import('~/partials/onboarding/dialog').then(m => ({ default: m.OnboardingDialog })),
@@ -98,7 +123,7 @@ export function App({ children }: { children: React.ReactNode }) {
   const [mobileBrowseOpen, setMobileBrowseOpen] = React.useState(false);
   const mobileBrowseButtonRef = React.useRef<HTMLButtonElement>(null);
   const navbarRef = React.useRef<HTMLElement>(null);
-  const sidebarOpen = useAtomValue(browseSidebarOpenAtom);
+  const sidebarOpen = useAtomValue(browseSidebarShownAtom);
   const fullscreenActive = useAtomValue(rankingFullscreenActiveAtom);
   const rankingFullscreenFocusTarget = useAtomValue(rankingFullscreenFocusTargetAtom);
 
@@ -132,6 +157,7 @@ export function App({ children }: { children: React.ReactNode }) {
       <div className="flex min-h-[100dvh] items-stretch">
         <React.Suspense fallback={null}>
           <PageViewTracker />
+          <LastPageOutsideDebatesTracker />
         </React.Suspense>
         <div className="mobile:hidden">{!fullscreenActive && <BrowseSidebar />}</div>
         <div className="flex min-w-0 flex-1 flex-col">
@@ -170,6 +196,11 @@ export function App({ children }: { children: React.ReactNode }) {
           <OnboardingDialog />
           <PendingPersonalSpaceRunner />
           <PendingActionsRunner />
+          <LocalVotesSaver />
+          {/* Suspense: onboarding preparation reads `useSearchParams`. */}
+          <React.Suspense fallback={null}>
+            <SaveVotesSheet />
+          </React.Suspense>
           <CreateSpaceDialog />
           <PendingCreatedSpaceRunner />
           <PendingCreatedSpaceStatus />

@@ -7,7 +7,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { capture } from '~/core/analytics';
-import { useAppBottomInset } from '~/core/app-bottom-inset';
+import { BOTTOM_STACK, useAppBottomInset } from '~/core/app-bottom-inset';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { SmallButton } from '~/design-system/button';
@@ -567,7 +567,10 @@ export function DebateRecordingUploadCoordinator() {
   }, [activeUploadId, activeUploads]);
 
   React.useEffect(() => {
-    if (!userId || !online || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
+    // Not gated on `navigator.onLine`. Chrome can report offline on a connection that works, and a
+    // recording held back by that waited forever with nothing reported (GEO-3171). An attempt that
+    // really is offline fails at once, is classified `offline`, and spends none of the retries.
+    if (!userId || activeUploadIdRef.current || Date.now() < lockRetryAtRef.current) return;
     const upload = activeUploads.find(
       candidate =>
         retryNowRef.current.has(candidate.id) ||
@@ -1015,7 +1018,12 @@ export function DebateRecordingUploadCoordinator() {
   //
   // Claimed before the early return below, since hooks cannot run conditionally, and gated on the
   // same two conditions that decide whether the banner actually paints.
-  useAppBottomInset('debate-upload-banner', DEBATE_UPLOAD_BANNER_HEIGHT_PX, bannerVisible && !inLiveDebate);
+  useAppBottomInset(
+    'debate-upload-banner',
+    DEBATE_UPLOAD_BANNER_HEIGHT_PX,
+    bannerVisible && !inLiveDebate,
+    BOTTOM_STACK.uploadBanner
+  );
 
   if ((!bannerVisible && !cancelPromptOpen) || inLiveDebate) {
     return null;

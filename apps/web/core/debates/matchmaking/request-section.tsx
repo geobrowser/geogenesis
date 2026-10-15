@@ -3,8 +3,8 @@ import type * as React from 'react';
 import { Text } from '~/design-system/text';
 
 /**
- * A labelled group in the requests list — "Upcoming debates", "Scheduled", "Sent", "Received". One
- * definition, so the headings stacked in the rail read as one kind of thing.
+ * A labelled group in the requests list — "Upcoming debates", "Upcoming lobbies", "Scheduled", "Sent",
+ * "Received". One definition, so the headings stacked in the rail read as one kind of thing.
  */
 export function RequestSection({ label, children }: { label: string; children: React.ReactNode }) {
   return (

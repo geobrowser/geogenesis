@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
+import { carryLobbyMic, clearCarriedLobbyMic, forgetLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
@@ -343,6 +344,13 @@ function stubMicrophoneApis() {
   });
 }
 
+/** What stepping out of a lobby whose mic is `on` leaves behind. */
+function stepOutOfLobbyWithMic(on: boolean) {
+  reportLobbyMic(on);
+  carryLobbyMic();
+  forgetLobbyMic();
+}
+
 beforeEach(() => {
   stubMicrophoneApis();
   // The settings popover measures its trigger to place itself; jsdom has no ResizeObserver.
@@ -409,6 +417,8 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  // A carry no picker mounted to spend must not reach the next test.
+  clearCarriedLobbyMic();
 });
 
 describe('RematchVoiceHeader', () => {
@@ -481,6 +491,31 @@ describe('RematchVoiceHeader', () => {
     expect(mocks.livekitRoomProps[0]?.audio).toBe(true);
     expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it('keeps the microphone live for a viewer who was unmuted in the lobby', async () => {
+    stepOutOfLobbyWithMic(true);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps[0]?.audio).toBe(true);
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+
+    // Spent on arrival: the next picker starts from its own default again.
+    cleanup();
+    render(<RematchVoiceHeader session={{ ...makeSession('browsing'), id: 'session-2' }} currentUserId="me" />);
+    await flushOwnership();
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
+  });
+
+  it('keeps the microphone off for a viewer who was muted in the lobby, over a default that would open it', async () => {
+    stepOutOfLobbyWithMic(false);
+    render(
+      <RematchVoiceHeader session={{ ...makeSession('browsing'), source_debate_id: 'debate-1' }} currentUserId="me" />
+    );
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
   });
 
   it('resets the microphone default when the route moves between rematch sessions', async () => {
@@ -2281,6 +2316,29 @@ describe('the mic inside a debate room', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Mute microphone' }));
     await waitFor(() => expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(false));
     mocks.setMicrophoneEnabled.mockClear();
+
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await new Promise(resolve => setTimeout(resolve, 20));
+    expect(lastAudio()).toBe(false);
+    expect(mocks.setMicrophoneEnabled).not.toHaveBeenCalledWith(true);
+  });
+
+  // GEO-3336. A mute carried from the lobby is a choice too, just as one made while waiting is.
+  it('leaves a mute carried from the lobby alone when the opponent arrives', async () => {
+    stepOutOfLobbyWithMic(false);
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await flushOwnership();
+    expect(lastAudio()).toBe(false);
 
     view.rerender(
       <DebateRoomProvider roomId="room-1" presence={presence(true)}>

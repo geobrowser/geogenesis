@@ -6,24 +6,52 @@ import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 
 import type { ScheduleEntry } from '~/core/availability/schedule-analytics';
 import { safeInternalHref } from '~/core/debates/debate-return-navigation';
-import { useMediaQuery } from '~/core/hooks/use-media-query';
+import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
-import { useSpaceLabels } from '~/core/hooks/use-space-labels';
+import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { normId } from '~/core/utils/norm-id';
 
-import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
 
 import { PeerAvailabilityBookingModal } from '~/partials/availability/peer-availability-booking-modal';
 
 import { type DebatePerson, type ScheduledDebateRequest } from '../api';
+import { useClaimEntitiesByIds } from '../claim-picker-page';
 import { useDebateActivity, useDebateSchedule, useGeoChatAuth } from '../hooks';
+import { lobbiesPinnedRow, lobbyDayLeads, useWeekLobbies } from '../lobbies/lobbies-calendar';
+import { useParticipantPositions } from '../participant-positions';
 import { speakerLabel } from '../playback-utils';
 import { useAdminScheduledDebates, useScheduledDebates } from '../rooms/scheduling-hooks';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { AdminDebatesBody, type CalendarView, CalendarViewSwitch } from './admin-debate-calendar';
+import {
+  CalendarNarrowPanelBody,
+  CalendarNarrowPills,
+  CalendarNarrowSheet,
+  type ClaimOpponent,
+  type NarrowTab,
+  type PanelClaim,
+  type PanelPerson,
+} from './calendar-narrow-panel';
+import {
+  type CalendarPicks,
+  NO_PICKS,
+  type PanelTopic,
+  calendarPicksKey,
+  claimListRows,
+  hasPicks,
+  hiddenPickReason,
+  hiddenPicksSentence,
+  narrowingSentence,
+  passesPicks,
+  personListRows,
+  splitClaimPickKey,
+  summarizeClaims,
+  withoutDeadMatchesOnly,
+} from './calendar-narrowing';
 import { DebateChallengeCard } from './challenge-card';
 import { SpaceTopicFilters } from './claims-tab';
 import {
@@ -54,12 +82,18 @@ import { CalendarWeek, CalendarWeekSkeleton } from './debate-calendar-week';
 import { DebateHoursNote } from './debate-hours-note';
 import { type ClaimMatch } from './disagreement-counts';
 import { useDebatePeople, useDebateRequests, useSchedulablePeople } from './hooks';
+import { debateSurfaceAnalyticsAttributes } from './hub-analytics';
 import { HubHeaderControls } from './hub-header-controls';
 import { HubPillButton } from './hub-pill-button';
 import { HubMessage, HubQueryState } from './hub-states';
-import { INLINE_SLOTS, PersonRow, type PersonSchedule, SetAvailabilityNotice, schedulableAsPerson } from './people-tab';
+import { INLINE_SLOTS, PersonRow, type PersonSchedule, schedulableAsPerson } from './people-tab';
 import { isExcludedFromPeopleTab } from './people-tab-exclusions';
+import { claimName } from './person-disagreements';
+import { isPersonId } from './person-records-document';
+import { SetScheduleBanner } from './set-schedule-banner';
 import { SpaceFilterPills } from './space-filter-pills';
+import { claimTopicsById, topicsFor } from './topic-facets';
+import { useCalendarPicks } from './use-calendar-picks';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
 import { useLiveRequestBlock } from './use-live-request-block';
 import { usePersonFacts } from './use-person-facts';
@@ -69,9 +103,6 @@ const EMPTY_MATCHES: ClaimMatch[] = [];
 const EMPTY_SPACE_IDS: string[] = [];
 const EMPTY_MATCH_COUNTS = new Map<string, number>();
 const EMPTY_REQUESTS: ScheduledDebateRequest[] = [];
-
-/** Matches `md:` in styles.css: phones get the list by day instead of the grid. */
-const PHONE_QUERY = '(max-width: 767px)';
 
 /**
  * A row's chips: the given half-hours, and whether they have more beyond them. `viewerIsFree` only
@@ -119,7 +150,8 @@ export function DebateCalendar() {
   const router = useRouter();
   const pathname = usePathname();
   const from = searchParams?.get(CALENDAR_FROM_PARAM);
-  const isPhone = useMediaQuery(PHONE_QUERY);
+  // Phones get the list by day instead of the grid.
+  const isPhone = useIsPhoneLayout();
 
   // Admins get a second view, of everyone's scheduled debates (GEO-2943). The admin list is also the
   // admin check, so it is read for every signed-in viewer and refused for all but the allowlist.
@@ -139,6 +171,7 @@ export function DebateCalendar() {
 
   const schedule = useDebateSchedule();
   const viewerHasSchedule = authenticated ? schedule.isSet : false;
+  const scheduleButtonRef = React.useRef<HTMLButtonElement | null>(null);
 
   // Once per visit, when what it reports is known: signed out, or signed in with the viewer's own
   // schedule read. Fired before that, `viewer_has_schedule` would be a guess.
@@ -160,7 +193,7 @@ export function DebateCalendar() {
         <Text as="h1" variant="largeTitle" className="md:text-smallTitle">
           Debate calendar
         </Text>
-        <HubHeaderControls analyticsSurface="calendar">
+        <HubHeaderControls analyticsSurface="calendar" scheduleButtonRef={scheduleButtonRef}>
           {admin.isAdmin ? <CalendarViewSwitch view={view} onChange={changeView} /> : null}
         </HubHeaderControls>
       </header>
@@ -187,7 +220,12 @@ export function DebateCalendar() {
       ) : view === 'debates' ? (
         <AdminDebatesBody isPhone={isPhone} admin={admin} />
       ) : (
-        <DebateCalendarBody isPhone={isPhone} viewerHasSchedule={viewerHasSchedule} schedule={schedule} />
+        <DebateCalendarBody
+          isPhone={isPhone}
+          viewerHasSchedule={viewerHasSchedule}
+          schedule={schedule}
+          scheduleButtonRef={scheduleButtonRef}
+        />
       )}
     </div>
   );
@@ -197,24 +235,45 @@ function DebateCalendarBody({
   isPhone,
   viewerHasSchedule,
   schedule,
+  scheduleButtonRef,
 }: {
   isPhone: boolean;
   viewerHasSchedule: boolean;
   schedule: ReturnType<typeof useDebateSchedule>;
+  scheduleButtonRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const peopleQuery = useDebatePeople(true);
   const { data: activity } = useDebateActivity(true);
   const { data: requests } = useDebateRequests(true);
   const scheduled = useScheduledDebates(true);
   const currentUserId = useCurrentGeoChatUserId();
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
   const popoverPortal = useElevatedPopoverPortal();
 
   const now = useMinuteClock();
 
   const [weekOffset, setWeekOffset] = React.useState(0);
-  const [search, setSearch] = React.useState('');
   const [spaceIds, setSpaceIds] = React.useState<string[]>(EMPTY_SPACE_IDS);
+
+  // The panel's picks (GEO-3220), mirrored to the URL so a narrowed week reloads and shares.
+  const [picks, setPicks] = useCalendarPicks();
+  const [panelTab, setPanelTab] = React.useState<NarrowTab | null>(null);
+  // Everyone's positions are read the first time the panel opens, not on page load: the calendar
+  // with nothing picked needs only the viewer's own claims. A link that arrives with a claim picked
+  // needs them from the start.
+  const [panelOpened, setPanelOpened] = React.useState(false);
+  // On a phone the panel is a modal sheet above everything, the entity side panel included. A name
+  // in it opens a profile there, so the sheet steps aside once the side panel has opened — after,
+  // not before: the name's lookup is lazy and finishes the open itself, so unmounting it at the
+  // press would drop the open entirely.
+  const { sidePanelTarget } = useEntitySidePanel();
+  const shownSidePanelTarget = React.useRef(sidePanelTarget);
+  React.useEffect(() => {
+    if (sidePanelTarget === shownSidePanelTarget.current) return;
+    shownSidePanelTarget.current = sidePanelTarget;
+    if (sidePanelTarget && isPhone) setPanelTab(null);
+  }, [isPhone, sidePanelTarget]);
+  const wantAllPositions = panelOpened || picks.claims.length > 0;
 
   // The full list caps how many people it considers. Past the cap a space selection is sent to
   // geo-chat, which can reach the people the cap left out; below it, everyone is already in hand.
@@ -269,6 +328,9 @@ function DebateCalendarBody({
   const {
     matchAnalysis,
     matchesKnown,
+    viewerHasPositions,
+    matchesLoading,
+    matchesUnavailable,
     matchingSpaceIds,
     matchingClaimNamesById,
     matchingClaimsLoading,
@@ -281,32 +343,162 @@ function DebateCalendarBody({
     authenticated: true,
     rosterUnavailable: peopleQuery.data === undefined || schedulableQuery.data === undefined,
   });
-  const matchCount = React.useCallback(
-    (person: DebatePerson) => matchAnalysis.byProfile.get(normId(person.profile_space_id))?.length ?? 0,
+
+  const profileMatchCount = React.useCallback(
+    (profileKey: string) => matchAnalysis.byProfile.get(profileKey)?.length ?? 0,
     [matchAnalysis]
   );
+  const matchCount = React.useCallback(
+    (person: DebatePerson) => profileMatchCount(normId(person.profile_space_id)),
+    [profileMatchCount]
+  );
 
-  // Search narrows who is drawn; the space filter narrows it client-side unless the
-  // server already did, in which case its membership answer stands.
-  const searchTerm = search.trim().toLowerCase();
-  const passesSearch = React.useCallback(
-    (person: DebatePerson) => !searchTerm || speakerLabel(person).toLowerCase().includes(searchTerm),
-    [searchTerm]
+  // Everyone's positions, for the Claims tab and for claim picks: who holds which claim, on which
+  // side. The People tab's read above only knows the claims the viewer answered.
+  const viewerProfileSpaceId = personalSpaceId && isPersonId(personalSpaceId) ? personalSpaceId : null;
+  // The roster's positions whether or not the viewer has a personal space of their own: someone
+  // still setting one up can pick a claim and see who holds it, just not who opposes them.
+  // Not before the viewer's own space has settled: a read started without them and then re-keyed
+  // with them holds the viewer-less answer as placeholder data, and opponents judged on it are
+  // nobody — a `claims=…&matches=1` link briefly emptied the week (Copilot on #2770).
+  const allPositionParticipants = React.useMemo(
+    () =>
+      wantAllPositions && !personalSpaceLoading
+        ? [
+            ...(viewerProfileSpaceId ? [{ profile_space_id: viewerProfileSpaceId }] : []),
+            ...allPeople.flatMap(person =>
+              isPersonId(person.profile_space_id) ? [{ profile_space_id: person.profile_space_id }] : []
+            ),
+          ]
+        : [],
+    [allPeople, personalSpaceLoading, viewerProfileSpaceId, wantAllPositions]
   );
-  const effectiveSpaceIds = spaceActivityUnavailable && !serverNarrowed ? EMPTY_SPACE_IDS : spaceIds;
-  const include = React.useCallback(
-    (userKey: string) => {
-      const person = peopleByUser.get(userKey);
-      if (!person || !passesSearch(person)) return false;
-      if (effectiveSpaceIds.length > 0 && !serverNarrowed) {
-        const theirs = debateSpacesByPerson.get(person.profile_space_id) ?? [];
-        const wanted = new Set(effectiveSpaceIds.map(normId));
-        if (!theirs.some(spaceId => wanted.has(spaceId))) return false;
+  const allPositions = useParticipantPositions(allPositionParticipants, viewerProfileSpaceId);
+  /**
+   * Where everyone's positions stand, for anything that narrows on them.
+   *
+   * `ready` once a first answer has landed, and not again after: the read is keyed on everyone on
+   * the calendar, online people included, and that list is polled, so the key moves whenever someone
+   * comes or goes. Waiting on `isPlaceholderData` too sent the week back to its skeleton on every such
+   * change (GEO-3220 review: "two cycles of the calendar reloading"); the held answer is drawn instead.
+   *
+   * `failed` is a read that errored with nothing in hand, which is not an answer of "nobody holds
+   * it": the picks it would judge are set aside and the page says so, while the read's poll retries.
+   * An empty roster, once it has loaded, is an answer.
+   */
+  const allPositionsState: 'idle' | 'pending' | 'ready' | 'failed' = !wantAllPositions
+    ? 'idle'
+    : personalSpaceLoading
+      ? 'pending'
+      : allPositionParticipants.length === 0
+        ? schedulableQuery.data === undefined
+          ? 'pending'
+          : 'ready'
+        : allPositions.isLoading
+          ? 'pending'
+          : allPositions.error !== null && !allPositions.hasFetchedData
+            ? 'failed'
+            : 'ready';
+  const allPositionsReady = allPositionsState === 'ready';
+  const pool = React.useMemo(() => new Set(allPeople.map(person => normId(person.profile_space_id))), [allPeople]);
+
+  // Picked people as last seen on the roster. Someone can drop off it — offline with no open times
+  // left, or past a capped list — and their pick still narrows the week, so it keeps a name and a row
+  // to untick rather than turning into "Someone you picked".
+  const [seenPicked, setSeenPicked] = React.useState<ReadonlyMap<string, DebatePerson>>(() => new Map());
+  React.useEffect(() => {
+    setSeenPicked(current => {
+      const next = new Map<string, DebatePerson>();
+      for (const profileKey of picks.people) {
+        const person =
+          allPeople.find(candidate => normId(candidate.profile_space_id) === profileKey) ?? current.get(profileKey);
+        if (person) next.set(profileKey, person);
       }
-      return true;
-    },
-    [debateSpacesByPerson, effectiveSpaceIds, passesSearch, peopleByUser, serverNarrowed]
+      // Compared on what is shown of them: the roster rebuilds its person objects on every poll, and
+      // swapping in an equal one would only render again, and again.
+      const shown = (person: DebatePerson | undefined) =>
+        person ? `${speakerLabel(person)}|${person.avatar_cid}` : '';
+      const same =
+        next.size === current.size && [...next].every(([key, person]) => shown(current.get(key)) === shown(person));
+      return same ? current : next;
+    });
+  }, [allPeople, picks.people]);
+  const absentPickIds = React.useMemo(
+    () => picks.people.filter(profileKey => !pool.has(profileKey)),
+    [picks.people, pool]
   );
+  const claimSummaries = React.useMemo(
+    () => summarizeClaims(allPositions.byClaim, viewerProfileSpaceId, pool),
+    [allPositions.byClaim, pool, viewerProfileSpaceId]
+  );
+
+  /** Matches only stays off for a viewer with no positions, on the page and in a phone's draft. */
+  const guardPicks = React.useCallback(
+    (withPicks: CalendarPicks) => withoutDeadMatchesOnly(withPicks, viewerHasPositions),
+    [viewerHasPositions]
+  );
+  const effectivePicks = React.useMemo(() => guardPicks(picks), [guardPicks, picks]);
+  /**
+   * The picks as far as the data in hand can judge them. A read that failed leaves its picks unjudged
+   * rather than judging them against nothing — which hid everyone. The panel still shows them ticked.
+   */
+  const judgeable = React.useCallback(
+    (withPicks: CalendarPicks): CalendarPicks => {
+      // With a claim picked, Matches only means "on the other side of that claim": it rides on the
+      // claim's judgement, so a claim set aside takes it along rather than falling back to "anyone
+      // you have a match with", a different filter the viewer never asked for.
+      const claimsSetAside = allPositionsState === 'failed' && withPicks.claims.length > 0;
+      const claims = claimsSetAside ? [] : withPicks.claims;
+      const matchesOnly = withPicks.matchesOnly && !claimsSetAside && !(matchesUnavailable && claims.length === 0);
+      return claims === withPicks.claims && matchesOnly === withPicks.matchesOnly
+        ? withPicks
+        : { ...withPicks, claims, matchesOnly };
+    },
+    [allPositionsState, matchesUnavailable]
+  );
+  const judgedPicks = React.useMemo(() => judgeable(effectivePicks), [effectivePicks, judgeable]);
+  /**
+   * Whether picks are waiting on data that has not arrived: claims on everyone's positions, Matches
+   * only alone on the viewer's matches. One answer for the week, the panel's lists and a phone's
+   * "Show N people", so none of them reads "nobody" while the rest still waits.
+   */
+  const picksPendingFor = React.useCallback(
+    (withPicks: CalendarPicks) => {
+      const judged = judgeable(guardPicks(withPicks));
+      return (
+        (judged.claims.length > 0 && allPositionsState === 'pending') ||
+        (judged.matchesOnly && judged.claims.length === 0 && matchesLoading)
+      );
+    },
+    [allPositionsState, guardPicks, judgeable, matchesLoading]
+  );
+  const picksPending = picksPendingFor(picks);
+
+  // The space filter narrows client-side unless the server already did, in which case its
+  // membership answer stands.
+  const effectiveSpaceIds = spaceActivityUnavailable && !serverNarrowed ? EMPTY_SPACE_IDS : spaceIds;
+  // Space pills picked, but who is active where has not landed, so they narrow nothing yet. The week
+  // has always drawn unnarrowed meanwhile; what is decided once — the next-week jump — and what says
+  // why someone is hidden must wait for them (review on #2770).
+  const spacesPending = spaceIds.length > 0 && spaceActivityUnavailable && !serverNarrowed;
+  const inSpaces = React.useCallback(
+    (person: DebatePerson) => {
+      if (effectiveSpaceIds.length === 0 || serverNarrowed) return true;
+      const theirs = debateSpacesByPerson.get(person.profile_space_id) ?? [];
+      const wanted = new Set(effectiveSpaceIds.map(normId));
+      return theirs.some(spaceId => wanted.has(spaceId));
+    },
+    [debateSpacesByPerson, effectiveSpaceIds, serverNarrowed]
+  );
+  const includeWith = React.useCallback(
+    (withPicks: CalendarPicks) => (userKey: string) => {
+      const person = peopleByUser.get(userKey);
+      if (!person || !inSpaces(person)) return false;
+      return passesPicks(normId(person.profile_space_id), judgeable(withPicks), claimSummaries, profileMatchCount);
+    },
+    [claimSummaries, inSpaces, judgeable, peopleByUser, profileMatchCount]
+  );
+  const include = React.useMemo(() => includeWith(effectivePicks), [effectivePicks, includeWith]);
 
   // Most matches first, as the People tab orders people (GEO-3152 decision 8); then whoever can be
   // asked now, then whoever is free soonest, so rows keep still as data lands.
@@ -390,7 +582,7 @@ function DebateCalendarBody({
   const offeredSpaces = React.useMemo(() => {
     const counts = new Map<string, number>();
     for (const person of allPeople) {
-      if (!passesSearch(person) || !slotsByUser.has(normId(person.user_id))) continue;
+      if (!slotsByUser.has(normId(person.user_id))) continue;
       for (const spaceId of debateSpacesByPerson.get(person.profile_space_id) ?? []) {
         counts.set(spaceId, (counts.get(spaceId) ?? 0) + 1);
       }
@@ -398,7 +590,7 @@ function DebateCalendarBody({
     // A space picked past the cap may have nobody left in hand to count; it stays offered.
     for (const spaceId of spaceIds) if (!counts.has(normId(spaceId))) counts.set(normId(spaceId), 0);
     return [...counts].map(([id, count]) => ({ id, name: null, count }));
-  }, [allPeople, debateSpacesByPerson, passesSearch, slotsByUser, spaceIds]);
+  }, [allPeople, debateSpacesByPerson, slotsByUser, spaceIds]);
   const changeFilter = (filter: CalendarFilter) => calendarFilterChanged(filter);
   const { facetSpaces, onSpaceToggle, onSpacesClear } = useSpaceFilterMenu({
     offeredSpaces,
@@ -412,26 +604,21 @@ function DebateCalendarBody({
   });
   const { labelsById } = useSpaceLabels(
     React.useMemo(
-      () => [...new Set([...facetSpaces.map(space => space.id), ...spaceIds, ...matchingSpaceIds])],
-      [facetSpaces, matchingSpaceIds, spaceIds]
+      // Absent picks never seen on the roster are named from their personal space, in the same read.
+      () => [
+        ...new Set([
+          ...facetSpaces.map(space => space.id),
+          ...spaceIds,
+          ...matchingSpaceIds,
+          ...absentPickIds.filter(profileKey => !seenPicked.has(profileKey)),
+          // Every claim row's own space, a claim pinned from a link included.
+          ...[...claimSummaries.byKey.values()].map(summary => summary.spaceId),
+          ...picks.claims.flatMap(key => splitClaimPickKey(key)?.spaceId ?? []),
+        ]),
+      ],
+      [absentPickIds, claimSummaries, facetSpaces, matchingSpaceIds, picks.claims, seenPicked, spaceIds]
     )
   );
-
-  // Search changes on every keystroke; one event per search, when it settles.
-  const searchReported = React.useRef('');
-  React.useEffect(() => {
-    // Cleared, it forgets what it reported: the same words typed again later are a new search.
-    if (!searchTerm) {
-      searchReported.current = '';
-      return;
-    }
-    if (searchReported.current === searchTerm) return;
-    const timer = setTimeout(() => {
-      searchReported.current = searchTerm;
-      changeFilter('search');
-    }, 1_000);
-    return () => clearTimeout(timer);
-  }, [searchTerm]);
 
   const [booking, setBooking] = React.useState<Booking | null>(null);
   const bookingOpenerRef = React.useRef<HTMLElement | null>(null);
@@ -451,9 +638,22 @@ function DebateCalendarBody({
     [matchCount, matchesKnown, peopleByUser]
   );
 
-  /** One person's row, the People tab's, with the half-hours this place offers as its chips. */
+  /**
+   * One person's row, the People tab's, with the half-hours this place offers as its chips. The
+   * People panel adds a checkbox, and a portal of its own inside a phone's sheet.
+   */
   const renderRow = React.useCallback(
-    (userKey: string, slots: FreeSlot[], entry: ScheduleEntry) => {
+    (
+      userKey: string,
+      slots: FreeSlot[],
+      entry: ScheduleEntry,
+      options?: {
+        pick?: { selected: boolean; hidden: boolean; onToggle: () => void };
+        portal?: HTMLElement | null;
+        /** Set by the week's hour popover and hover card; see `PersonRow`'s `hidePopoversWhenDetached`. */
+        insidePopover?: boolean;
+      }
+    ) => {
       const person = peopleByUser.get(userKey);
       if (!person) return null;
       const all = slotsByUser.get(userKey);
@@ -479,7 +679,11 @@ function DebateCalendarBody({
           record={records.get(person.profile_space_id) ?? null}
           spaceIds={debateSpacesByPerson.get(person.profile_space_id) ?? EMPTY_SPACE_IDS}
           labelsById={labelsById}
-          popoverPortal={popoverPortal}
+          popoverPortal={options?.portal === undefined ? popoverPortal : options.portal}
+          hidePopoversWhenDetached={!options?.insidePopover}
+          pick={options?.pick}
+          // The calendar is the work: a name opens the profile beside it rather than leaving it.
+          openProfileInSidePanel
           disabled={buttonsDisabled}
           disabledReason={blockedReason ?? 'You have a debate request awaiting a reply.'}
           onSeeTimes={(_peer, opener, rowEntry, initialStart) => openBooking(userKey, opener, rowEntry, initialStart)}
@@ -509,10 +713,230 @@ function DebateCalendarBody({
     calendarWeekChanged(direction);
   };
   const clearFilters = () => {
-    setSearch('');
     onSpacesClear();
+    setPicks(NO_PICKS);
     changeFilter('clear');
   };
+  /**
+   * One event per kind of pick that changed. A desktop press changes one; a phone's "Show N people"
+   * applies a whole draft at once, and reporting only the first kind under-counted the rest.
+   */
+  const changePicks = (next: CalendarPicks) => {
+    if (next.matchesOnly !== picks.matchesOnly) changeFilter('matches_only');
+    if (next.claims.join() !== picks.claims.join()) changeFilter('claim');
+    if (next.people.join() !== picks.people.join()) changeFilter('person');
+    setPicks(next);
+  };
+  const togglePanel = (tab: NarrowTab) => {
+    setPanelOpened(true);
+    setPanelTab(current => (current === tab ? null : tab));
+  };
+
+  // What the panel's lists need, over everyone the calendar knows of.
+  const profileToUser = React.useMemo(() => {
+    const byProfile = new Map<string, { userKey: string; person: DebatePerson }>();
+    for (const [userKey, person] of peopleByUser) byProfile.set(normId(person.profile_space_id), { userKey, person });
+    return byProfile;
+  }, [peopleByUser]);
+  const panelClaimIds = React.useMemo(() => {
+    if (!wantAllPositions) return EMPTY_SPACE_IDS;
+    const ids = new Set([...claimSummaries.byKey.values()].map(summary => normId(summary.claimId)));
+    for (const key of picks.claims) {
+      const pick = splitClaimPickKey(key);
+      if (pick) ids.add(pick.claimId);
+    }
+    return [...ids].sort();
+  }, [claimSummaries, picks.claims, wantAllPositions]);
+  const { entities: panelClaimEntities, isLoading: panelClaimEntitiesLoading } = useClaimEntitiesByIds(panelClaimIds);
+  const panelClaimNames = React.useMemo(
+    () => new Map(panelClaimEntities.map(claim => [normId(claim.id), claim.name])),
+    [panelClaimEntities]
+  );
+  // Each claim's topics in its own space, for the panel's topic menus. People carry no topics, so
+  // the People tab reads them through the claims each person holds.
+  const claimTopics = React.useMemo(() => {
+    const byClaimId = claimTopicsById(panelClaimEntities);
+    const byKey = new Map<string, PanelTopic[]>();
+    for (const summary of claimSummaries.byKey.values()) {
+      const topics = topicsFor(byClaimId, summary.claimId, summary.spaceId);
+      if (topics) byKey.set(summary.key, topics);
+    }
+    return byKey;
+  }, [claimSummaries, panelClaimEntities]);
+  const personFacts = React.useMemo(
+    () =>
+      allPeople.map(person => {
+        const profileKey = normId(person.profile_space_id);
+        return {
+          profileKey,
+          matchCount: profileMatchCount(profileKey),
+          firstFree: slotsByUser.get(normId(person.user_id))?.[0]?.start ?? null,
+          inSpaces: inSpaces(person),
+          person,
+          matches: matchAnalysis.byProfile.get(profileKey) ?? EMPTY_MATCHES,
+        };
+      }),
+    [allPeople, inSpaces, matchAnalysis, profileMatchCount, slotsByUser]
+  );
+  const panelRowsFor = React.useCallback(
+    (withPicks: CalendarPicks): { claims: PanelClaim[]; people: PanelPerson[] } => {
+      // Judged as the week judges them, so a failed read hides nobody in the lists either.
+      const guarded = judgeable(guardPicks(withPicks));
+      const opponentsOf = (profileKeys: ReadonlySet<string>): ClaimOpponent[] =>
+        [...profileKeys]
+          .flatMap(profileKey => {
+            const known = profileToUser.get(profileKey);
+            return known ? [{ ...known, slots: slotsByUser.get(known.userKey) ?? [] }] : [];
+          })
+          .sort((left, right) => (left.slots[0]?.start ?? Infinity) - (right.slots[0]?.start ?? Infinity));
+      return {
+        claims: claimListRows(claimSummaries, guarded, spaceIds).map(row => ({
+          ...row,
+          name: claimName(row.summary.claimId, panelClaimNames, panelClaimEntitiesLoading),
+          opponents: opponentsOf(row.summary.opponents),
+        })),
+        people: personListRows(personFacts, guarded, claimSummaries),
+      };
+    },
+    [
+      claimSummaries,
+      guardPicks,
+      judgeable,
+      panelClaimEntitiesLoading,
+      panelClaimNames,
+      personFacts,
+      profileToUser,
+      slotsByUser,
+      spaceIds,
+    ]
+  );
+  const panelRows = React.useMemo(() => panelRowsFor(picks), [panelRowsFor, picks]);
+  /** An absent pick's name: as last seen on the roster, else their personal space's. */
+  const absentName = React.useCallback(
+    (profileKey: string) => {
+      const seen = seenPicked.get(profileKey);
+      return seen ? speakerLabel(seen) : spaceLabel(labelsById, profileKey)?.name?.trim() || 'Someone you picked';
+    },
+    [labelsById, seenPicked]
+  );
+  const absentPeople = absentPickIds.map(profileKey => ({
+    profileKey,
+    name: absentName(profileKey),
+    avatarUrl: seenPicked.get(profileKey)?.avatar_cid ?? spaceLabel(labelsById, profileKey)?.image ?? null,
+  }));
+
+  // Who the week draws, and how many a phone's draft would.
+  const drawnUsers = React.useMemo(() => {
+    const users = new Set<string>();
+    for (const people of cells.values()) for (const person of people) users.add(person.userKey);
+    return users;
+  }, [cells]);
+  // The calendar holds two weeks. Picks often fit only the other one — late in a week most people's
+  // next free time is next week — so what the other week holds is worth knowing on this one.
+  const otherWeekOffset = weekOffset === 0 ? 1 : 0;
+  const weekLabel = (offset: number) => (offset === 0 ? 'this week' : 'next week');
+  // Each week's bounds, worked out once a minute rather than once per person asked about.
+  const weekRanges = React.useMemo(
+    () =>
+      Array.from({ length: CALENDAR_WEEKS }, (_, offset) => {
+        const bounds = weekDays(weekStart(new Date(now), offset));
+        return [bounds[0].getTime(), bounds[bounds.length - 1].getTime()] as const;
+      }),
+    [now]
+  );
+  const freeInWeek = React.useCallback(
+    (userKey: string, offset: number) => {
+      const [start, end] = weekRanges[offset];
+      return (slotsByUser.get(userKey) ?? []).some(slot => slot.start >= start && slot.start < end);
+    },
+    [slotsByUser, weekRanges]
+  );
+  const drawnInWeek = React.useCallback(
+    (offset: number, passes: (userKey: string) => boolean) => {
+      let count = 0;
+      for (const userKey of slotsByUser.keys()) if (freeInWeek(userKey, offset) && passes(userKey)) count += 1;
+      return count;
+    },
+    [freeInWeek, slotsByUser]
+  );
+  // Unknown while a draft's picks still wait on their data, rather than a 0.
+  const shownCountFor = (withPicks: CalendarPicks) =>
+    picksPendingFor(withPicks) ? null : drawnInWeek(weekOffset, includeWith(guardPicks(withPicks)));
+  const drawnInOtherWeek = React.useMemo(
+    () => drawnInWeek(otherWeekOffset, include),
+    [drawnInWeek, include, otherWeekOffset]
+  );
+
+  // When a change of picks leaves the week on screen empty and the other week does not, move to it:
+  // picking someone free only next week should show them, not an empty week. Once per change, so
+  // moving back by hand afterwards sticks. Only after everything the picks are judged on has landed,
+  // or a week still loading would read as empty.
+  const picksKey = calendarPicksKey(effectivePicks);
+  const settledPicksKey = React.useRef<string | null>(null);
+  // Settled only on picks the data could judge: a failed read must not use up the one move it gets.
+  const picksSettled =
+    !schedulableQuery.isLoading &&
+    schedulableQuery.data !== undefined &&
+    !picksPending &&
+    !spacesPending &&
+    judgedPicks === effectivePicks;
+  React.useEffect(() => {
+    if (!picksSettled || settledPicksKey.current === picksKey) return;
+    settledPicksKey.current = picksKey;
+    if (hasPicks(effectivePicks) && drawnUsers.size === 0 && drawnInOtherWeek > 0) setWeekOffset(otherWeekOffset);
+  }, [drawnInOtherWeek, drawnUsers.size, effectivePicks, otherWeekOffset, picksKey, picksSettled]);
+
+  // The line above the week: what is narrowing it, and any pick it is hiding. Only with something
+  // picked, so the calendar with nothing picked reads exactly as it did; and not while the picks
+  // still wait on their data, when the empty week under the skeleton is no result to report.
+  //
+  // Space pills still waiting on who is active where narrow nothing yet, so the line names only what
+  // is applied: no "in AI" until it is. Only that half waits — the activity read behind it does not
+  // re-poll after an error, and the rest of the line does not depend on it (review on #2770).
+  const narrowNote = picksPending
+    ? null
+    : narrowingSentence({
+        picks: judgedPicks,
+        shownCount: drawnUsers.size,
+        spaceNames: spacesPending
+          ? []
+          : spaceIds.map(spaceId => spaceLabel(labelsById, spaceId)?.name?.trim() || 'a space'),
+      });
+  // Each picked person the week is not showing, and why: one classification, read by both the line
+  // and its "Show next week" link, so the link is offered exactly when the line says that week has them.
+  const hiddenPicks = React.useMemo(
+    () =>
+      picks.people
+        .flatMap(profileKey => {
+          const known = profileToUser.get(profileKey);
+          if (known && drawnUsers.has(known.userKey)) return [];
+          return [
+            {
+              name: known ? speakerLabel(known.person) : absentName(profileKey),
+              reason: hiddenPickReason({
+                onRoster: Boolean(known),
+                passesFilters: known ? include(known.userKey) : false,
+                freeOtherWeek: known ? freeInWeek(known.userKey, otherWeekOffset) : false,
+              }),
+            },
+          ];
+        })
+        // Someone who passes every filter but spaces still waiting to apply may yet be excluded by
+        // them, so their week-based reason is not known: they are left out until it is. "Absent" and
+        // "doesn't match your other filters" are true whatever the spaces turn out to say.
+        .filter(pick => !spacesPending || pick.reason === 'absent' || pick.reason === 'filtered'),
+    [absentName, drawnUsers, freeInWeek, include, otherWeekOffset, picks.people, profileToUser, spacesPending]
+  );
+  const hiddenNote = picksPending
+    ? null
+    : hiddenPicksSentence({
+        hiddenPeople: hiddenPicks,
+        hiddenClaimCount: allPositionsReady ? panelRows.claims.filter(row => row.hidden).length : 0,
+        weekLabel: weekLabel(weekOffset),
+        otherWeekLabel: weekLabel(otherWeekOffset),
+      });
+  const pickFreeOtherWeek = hiddenNote !== null && hiddenPicks.some(pick => pick.reason === 'other-week');
+  const goToOtherWeek = () => goToWeek(otherWeekOffset, otherWeekOffset > weekOffset ? 'next' : 'previous');
 
   const loading = schedulableQuery.isLoading || (peopleQuery.isLoading && !schedulableQuery.data);
   const loadError = schedulableQuery.error && !schedulableQuery.data ? schedulableQuery.error : null;
@@ -521,6 +945,12 @@ function DebateCalendarBody({
 
   // The viewer's own debates keep the week on screen even with nobody else free in it.
   const ownDebatesThisWeek = debates.some(debate => cellOf(debate.start, days) !== null);
+  // The week's debate lobbies, pinned above the hours (GEO-3268); a week with one is not empty.
+  const weekLobbies = useWeekLobbies(days);
+  const lobbyDays = weekLobbies.byDay;
+  const emptyBesideLobbies = (nobodyFree || filteredOut) && !ownDebatesThisWeek;
+  const lobbyRow = React.useMemo(() => (lobbyDays ? lobbiesPinnedRow(lobbyDays) : undefined), [lobbyDays]);
+  const lobbyLeads = React.useMemo(() => (lobbyDays ? lobbyDayLeads(lobbyDays) : undefined), [lobbyDays]);
 
   // One set of props for both forms of the space filter: pills on a desktop, the hub's menu on a phone.
   const spaceFilter = {
@@ -537,17 +967,52 @@ function DebateCalendarBody({
     },
     countsPending: peopleQuery.isLoading || publishableSpacesPending || personRecordsPending,
   } as const;
-  const searchField = (
-    <div className="w-[260px] shrink-0 md:w-full">
-      <Input
-        withSearchIcon
-        value={search}
-        onChange={event => setSearch(event.currentTarget.value)}
-        placeholder="Search people"
-        aria-label="Search people"
+  const narrowPills = <CalendarNarrowPills picks={effectivePicks} openTab={panelTab} onToggle={togglePanel} />;
+  const panelBody = (
+    withPicks: CalendarPicks,
+    onPicksChange: (next: CalendarPicks) => void,
+    portal: HTMLElement | null,
+    onLeave: () => void
+  ) => {
+    const rows = withPicks === picks ? panelRows : panelRowsFor(withPicks);
+    return (
+      <CalendarNarrowPanelBody
+        tab={panelTab ?? 'people'}
+        onTabChange={setPanelTab}
+        onClose={() => setPanelTab(null)}
+        picks={guardPicks(withPicks)}
+        onPicksChange={onPicksChange}
+        claims={rows.claims}
+        people={rows.people}
+        // The draft's absent picks on a phone, the page's otherwise: those it still holds.
+        absentPeople={absentPeople.filter(absent => withPicks.people.includes(absent.profileKey))}
+        // The Claims list is everyone's positions; the People list waits only on what its picks need.
+        loading={panelTab === 'claims' ? allPositionsState === 'pending' : picksPendingFor(withPicks)}
+        unavailable={panelTab === 'claims' && allPositionsState === 'failed'}
+        viewerHasPositions={viewerHasPositions}
+        labelsById={labelsById}
+        popoverPortal={portal}
+        claimTopics={claimTopics}
+        heldByPerson={claimSummaries.heldByPerson}
+        topicsPending={!allPositionsReady || panelClaimEntitiesLoading}
+        renderPerson={(row, onToggle) =>
+          renderRow(
+            normId(row.person.person.user_id),
+            slotsByUser.get(normId(row.person.person.user_id)) ?? [],
+            'calendar_people_panel',
+            {
+              pick: { selected: row.selected, hidden: row.hidden, onToggle },
+              portal,
+            }
+          )
+        }
+        onPickTime={(userKey, start, opener) => {
+          onLeave();
+          openBooking(userKey, isPhone ? null : opener, 'calendar_claim_match', start);
+        }}
       />
-    </div>
-  );
+    );
+  };
 
   return (
     <div className="flex flex-col">
@@ -555,115 +1020,196 @@ function DebateCalendarBody({
         {outboundChallenge ? (
           <DebateChallengeCard challenge={outboundChallenge} role="requester" analyticsSurface="calendar" />
         ) : null}
-        {/* A row of pills needs a desktop's width; a phone keeps the menu, under a full-width search. */}
+        {/* A row of pills needs a desktop's width; a phone keeps the menu. */}
         {isPhone ? (
-          <SpaceTopicFilters {...spaceFilter} leading={searchField} />
+          <SpaceTopicFilters {...spaceFilter} trailing={narrowPills} />
         ) : (
-          <div className="flex items-center gap-3">
-            <SpaceFilterPills
-              {...spaceFilter}
-              className="min-w-0 flex-1"
-              loading={peopleQuery.isLoading || publishableSpacesPending}
-            />
-            {searchField}
-          </div>
+          <SpaceFilterPills
+            {...spaceFilter}
+            className="min-w-0"
+            loading={peopleQuery.isLoading || publishableSpacesPending}
+          />
         )}
       </div>
 
-      {!viewerHasSchedule && !schedule.isLoading ? (
-        <div className="px-6 pt-3 md:px-4">
-          <SetAvailabilityNotice
-            message={
-              isPhone
-                ? 'Set your availability so others can book you too.'
-                : 'Set your availability so others can book you too, and to see which of these times you share.'
-            }
-            surface="calendar"
-          />
+      <div className="flex items-stretch">
+        <div className="flex min-w-0 flex-1 flex-col">
+          {/* The debates panel's own callout, so the prompt reads the same wherever it is met. It hides
+              itself while the viewer's schedule offers upcoming time. */}
+          <SetScheduleBanner surface="calendar" scheduleButtonRef={scheduleButtonRef} className="mx-6 mt-3 md:mx-4" />
+
+          <CalendarWeekNav
+            days={days}
+            weekOffset={weekOffset}
+            onGoToWeek={goToWeek}
+            isPhone={isPhone}
+            analyticsLabelPrefix="Debate calendar"
+          >
+            {/* On a desktop the pills sit on the week's own row, beside the panel they open, and the
+                legend moves under the grid. While the panel is open its tabs are the switch, so the
+                pills step aside rather than offer the same two choices twice. A phone keeps its
+                legend here and its pills in the filter row, where they open the sheet. */}
+            {isPhone ? <Legend viewerHasSchedule={viewerHasSchedule} /> : panelTab ? null : narrowPills}
+          </CalendarWeekNav>
+
+          {narrowNote || hiddenNote ? (
+            <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4" aria-live="polite">
+              {[narrowNote, hiddenNote].filter(Boolean).join(' ')}{' '}
+              {pickFreeOtherWeek ? (
+                <>
+                  <button
+                    type="button"
+                    {...debateSurfaceAnalyticsAttributes('calendar', 'Show other week')}
+                    className="underline transition-colors hover:text-text"
+                    onClick={goToOtherWeek}
+                  >
+                    Show {weekLabel(otherWeekOffset)}
+                  </button>{' '}
+                  ·{' '}
+                </>
+              ) : null}
+              <button
+                type="button"
+                {...debateSurfaceAnalyticsAttributes('calendar', 'Clear filters', 'filter')}
+                className="underline transition-colors hover:text-text"
+                onClick={clearFilters}
+              >
+                Clear filters
+              </button>
+            </Text>
+          ) : null}
+          {/* Not the error state: everyone's free time loaded and can still be booked. These are the
+              reads that only add to it, so a failure says what is missing and the week stays up. */}
+          {peopleQuery.error ? (
+            <PartialLoadNote onRetry={() => void peopleQuery.refetch()}>
+              Couldn&rsquo;t load who&rsquo;s online, so everyone shows as offline.
+            </PartialLoadNote>
+          ) : null}
+          {weekLobbies.error ? (
+            <PartialLoadNote onRetry={weekLobbies.refetch}>
+              Couldn&rsquo;t load lobbies, so they&rsquo;re missing from the week.
+            </PartialLoadNote>
+          ) : null}
+          {scheduled.error ? (
+            <PartialLoadNote onRetry={() => void scheduled.refetch()}>
+              Couldn&rsquo;t load your own debates, so they&rsquo;re missing from the week.
+            </PartialLoadNote>
+          ) : null}
+          {/* Only when a claim is picked: otherwise claims are narrowing nothing, and the Claims tab says
+              the read failed itself. */}
+          {allPositionsState === 'failed' && effectivePicks.claims.length > 0 ? (
+            <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
+              Couldn&rsquo;t load everyone&rsquo;s positions, so claims can&rsquo;t narrow the week yet.
+            </Text>
+          ) : null}
+          {/* Only for Matches only on its own: with a claim picked it was set aside with the claim, and
+              the positions line above already says why. */}
+          {effectivePicks.matchesOnly && effectivePicks.claims.length === 0 && matchesUnavailable ? (
+            <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
+              Couldn&rsquo;t load your matches, so Matches only can&rsquo;t narrow the week yet.
+            </Text>
+          ) : null}
+          {blockedReason ? (
+            <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
+              {blockedReason}
+            </Text>
+          ) : null}
+          {schedulableQuery.data?.truncated && !serverNarrowed ? (
+            <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
+              Showing the {schedulableQuery.data.people.length} people you have the most matches with. Narrow by space
+              to see others.
+            </Text>
+          ) : null}
+          <div className="px-6 pb-6 md:px-4">
+            <HubQueryState
+              analyticsSurface="calendar"
+              // A week with nobody free waits for the lobbies, which may be what is in it; one with
+              // people does not hold them up.
+              isLoading={loading || picksPending || (emptyBesideLobbies && weekLobbies.isLoading)}
+              loadingFallback={<CalendarWeekSkeleton />}
+              error={loadError}
+              failureReason={schedulableQuery.failureReason}
+              onRetry={() => void schedulableQuery.refetch()}
+              isEmpty={emptyBesideLobbies && !lobbyDays}
+              // Filters hiding everyone has an undo; nobody being free this week has somewhere to go.
+              emptyMessage={
+                filteredOut
+                  ? drawnInOtherWeek > 0
+                    ? `Nobody who matches those filters is free ${weekLabel(weekOffset)}, but ${drawnInOtherWeek} ${
+                        drawnInOtherWeek === 1 ? 'is' : 'are'
+                      } ${weekLabel(otherWeekOffset)}.`
+                    : `Nobody who matches those filters is free ${weekLabel(weekOffset)}.`
+                  : 'Nobody has open times this week.'
+              }
+              emptyNote={filteredOut ? undefined : <DebateHoursNote live />}
+              emptyAction={
+                filteredOut && drawnInOtherWeek > 0
+                  ? { label: `Show ${weekLabel(otherWeekOffset)}`, onClick: goToOtherWeek }
+                  : filteredOut
+                    ? { label: 'Clear filters', onClick: clearFilters }
+                    : weekOffset < CALENDAR_WEEKS - 1
+                      ? { label: 'Next week', onClick: () => goToWeek(weekOffset + 1, 'next') }
+                      : undefined
+              }
+            >
+              {isPhone ? (
+                <CalendarDayList
+                  days={days}
+                  cells={cells}
+                  debates={debates}
+                  opponentName={opponentName}
+                  renderRow={renderRow}
+                  dayLeads={lobbyLeads}
+                />
+              ) : (
+                <CalendarWeek
+                  // A week of its own: the open hour, the card and its timer, and the focused cell all
+                  // belong to the week they were opened on, so moving weeks starts them afresh.
+                  key={days[0].getTime()}
+                  days={days}
+                  cells={cells}
+                  debates={debates}
+                  viewerFreeCells={viewerHasSchedule ? viewerFreeCells : null}
+                  peopleByUser={peopleByUser}
+                  slotsByUser={slotsByUser}
+                  opponentName={opponentName}
+                  renderRow={renderRow}
+                  now={now}
+                  pinnedRow={lobbyRow}
+                />
+              )}
+            </HubQueryState>
+            {isPhone ? null : (
+              <div className="mt-3 flex justify-end">
+                <Legend viewerHasSchedule={viewerHasSchedule} />
+              </div>
+            )}
+          </div>
         </div>
-      ) : null}
 
-      <CalendarWeekNav
-        days={days}
-        weekOffset={weekOffset}
-        onGoToWeek={goToWeek}
-        isPhone={isPhone}
-        analyticsLabelPrefix="Debate calendar"
-      >
-        <Legend viewerHasSchedule={viewerHasSchedule} />
-      </CalendarWeekNav>
-
-      {/* Not the error state: everyone's free time loaded and can still be booked. These are the
-          reads that only add to it, so a failure says what is missing and the week stays up. */}
-      {peopleQuery.error ? (
-        <PartialLoadNote onRetry={() => void peopleQuery.refetch()}>
-          Couldn&rsquo;t load who&rsquo;s online, so everyone shows as offline.
-        </PartialLoadNote>
-      ) : null}
-      {scheduled.error ? (
-        <PartialLoadNote onRetry={() => void scheduled.refetch()}>
-          Couldn&rsquo;t load your own debates, so they&rsquo;re missing from the week.
-        </PartialLoadNote>
-      ) : null}
-      {blockedReason ? (
-        <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
-          {blockedReason}
-        </Text>
-      ) : null}
-      {schedulableQuery.data?.truncated && !serverNarrowed ? (
-        <Text as="p" variant="footnote" color="grey-04" className="px-6 pb-2 md:px-4">
-          Showing the {schedulableQuery.data.people.length} people you have the most matches with. Narrow by space to
-          see others.
-        </Text>
-      ) : null}
-      <div className="px-6 pb-6 md:px-4">
-        <HubQueryState
-          analyticsSurface="calendar"
-          isLoading={loading}
-          loadingFallback={<CalendarWeekSkeleton />}
-          error={loadError}
-          failureReason={schedulableQuery.failureReason}
-          onRetry={() => void schedulableQuery.refetch()}
-          isEmpty={(nobodyFree || filteredOut) && !ownDebatesThisWeek}
-          // Filters hiding everyone has an undo; nobody being free this week has somewhere to go.
-          emptyMessage={
-            filteredOut ? 'Nobody who matches those filters is free this week.' : 'Nobody has open times this week.'
-          }
-          emptyNote={filteredOut ? undefined : <DebateHoursNote live />}
-          emptyAction={
-            filteredOut
-              ? { label: 'Clear filters', onClick: clearFilters }
-              : weekOffset < CALENDAR_WEEKS - 1
-                ? { label: 'Next week', onClick: () => goToWeek(weekOffset + 1, 'next') }
-                : undefined
-          }
-        >
-          {isPhone ? (
-            <CalendarDayList
-              days={days}
-              cells={cells}
-              debates={debates}
-              opponentName={opponentName}
-              renderRow={renderRow}
-            />
-          ) : (
-            <CalendarWeek
-              // A week of its own: the open hour, the card and its timer, and the focused cell all
-              // belong to the week they were opened on, so moving weeks starts them afresh.
-              key={days[0].getTime()}
-              days={days}
-              cells={cells}
-              debates={debates}
-              viewerFreeCells={viewerHasSchedule ? viewerFreeCells : null}
-              peopleByUser={peopleByUser}
-              slotsByUser={slotsByUser}
-              opponentName={opponentName}
-              renderRow={renderRow}
-              now={now}
-            />
-          )}
-        </HubQueryState>
+        {/* Docked beside the week on a desktop, the height of the window while the page scrolls. */}
+        {!isPhone && panelTab ? (
+          <aside
+            aria-label="Narrow the calendar"
+            className="sticky top-0 flex max-h-dvh w-[380px] shrink-0 flex-col self-start border-l border-grey-02 bg-white pt-1"
+          >
+            {panelBody(picks, changePicks, popoverPortal, () => undefined)}
+          </aside>
+        ) : null}
       </div>
+
+      {isPhone ? (
+        <CalendarNarrowSheet
+          open={panelTab !== null}
+          onOpenChange={open => {
+            if (!open) setPanelTab(null);
+          }}
+          picks={picks}
+          onApply={changePicks}
+          shownCount={shownCountFor}
+          renderBody={(draft, setDraft, portal) => panelBody(draft, setDraft, portal, () => setPanelTab(null))}
+        />
+      ) : null}
 
       <PeerAvailabilityBookingModal
         open={booking !== null}

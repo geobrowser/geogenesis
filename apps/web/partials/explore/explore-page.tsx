@@ -2,12 +2,9 @@
 
 import * as React from 'react';
 
-import type { ExploreCall } from '~/core/community-calls/fetch-community-calls';
 import { DEFAULT_EXPLORE_TYPE_IDS, EXPLORE_ENTITY_TYPES } from '~/core/explore/explore-constants';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
-import type { FeaturedRanking } from '~/core/io/subgraph/fetch-featured-rankings';
-import type { FeaturedSpace } from '~/core/io/subgraph/fetch-featured-spaces';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { useFollowedTopics } from '~/core/topics/use-followed-topics';
 
@@ -15,7 +12,7 @@ import { EntityPageSidebarLayout } from '~/partials/entity-page/entity-page-side
 import { EntityFeed } from '~/partials/feed/entity-feed';
 
 import { ExploreEmailCapturePopup } from './email-capture-popup';
-import { ExploreSidePanel } from './explore-side-panel';
+import { ExploreLiveLobbiesBanner } from './explore-live-lobbies-banner';
 import { ExploreWelcomeBanner } from './explore-welcome-banner';
 
 /** Bounds the wait for a signed-in account, so a stale wallet cookie can't hold the skeleton up. */
@@ -80,25 +77,18 @@ function ExploreForYouFeed({ signedIn }: { signedIn: boolean }) {
 }
 
 type Props = {
-  featuredSpaces: FeaturedSpace[];
-  featuredRankings: FeaturedRanking[];
-  pendingMembershipSpaceIds: string[];
-  memberOrEditorSpaceIds: string[];
-  communityCalls: ExploreCall[];
+  /**
+   * The rail, rendered by the route as a streamed server component (`ExploreSidePanelContainer`
+   * inside Suspense) so its data never holds up the page.
+   */
+  sidePanel: React.ReactNode;
   /** Whether the request carried a wallet cookie. */
   signedIn?: boolean;
 };
 
-export function ExplorePage({
-  featuredSpaces,
-  featuredRankings,
-  pendingMembershipSpaceIds,
-  memberOrEditorSpaceIds,
-  communityCalls,
-  signedIn = false,
-}: Props) {
+export function ExplorePage({ sidePanel, signedIn = false }: Props) {
   // GEO-2914. Hidden, not removed: the panel and everything in it is still built and still fed by
-  // the page's own queries, so turning the flag on restores it without a deploy — and the tickets
+  // the route's own queries, so turning the flag on restores it without a deploy — and the tickets
   // still open against its contents have somewhere to land.
   //
   // The layout needs nothing else. `auto-sidebar` widens the container through `has-[aside]:`, so
@@ -110,19 +100,7 @@ export function ExplorePage({
   const forYouEnabled = FOR_YOU_ENABLED_FOR_EVERYONE || forYouFlag;
 
   return (
-    <EntityPageSidebarLayout
-      sidebar={
-        sidePanelEnabled ? (
-          <ExploreSidePanel
-            featuredSpaces={featuredSpaces}
-            featuredRankings={featuredRankings}
-            pendingMembershipSpaceIds={pendingMembershipSpaceIds}
-            memberOrEditorSpaceIds={memberOrEditorSpaceIds}
-            communityCalls={communityCalls}
-          />
-        ) : null
-      }
-    >
+    <EntityPageSidebarLayout sidebar={sidePanelEnabled ? sidePanel : null}>
       {/* Fixed-position, so it sits outside the column rather than in the feed's flow — and ahead
           of it in the DOM, because that is where it is on screen. Mounted after the feed it was
           reachable only by tabbing an infinite list to the end, which for a keyboard reader is not
@@ -132,6 +110,9 @@ export function ExplorePage({
       <main className="min-w-0 pt-2">
         <div className="mx-auto w-full max-w-[880px]">
           <ExploreWelcomeBanner />
+          {/* Under the welcome note, which a first-time visitor needs to read before a lobby means
+              anything to them; it is dismissed for good, and the lobby banner then leads. */}
+          <ExploreLiveLobbiesBanner />
         </div>
         {forYouEnabled ? (
           <ExploreForYouFeed signedIn={signedIn} />

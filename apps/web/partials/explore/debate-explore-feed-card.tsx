@@ -16,8 +16,10 @@ import { useDebateTranscriptClaims } from '~/core/debates/use-debate-transcript-
 import type { ExploreFeedItem } from '~/core/explore/fetch-explore-feed';
 import { useCommentCount } from '~/core/hooks/use-comment-count';
 import { useEntityCommentsPanel } from '~/core/hooks/use-entity-comments-panel';
+import { useIsMobileLayout } from '~/core/hooks/use-is-mobile-layout';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
 import { ID } from '~/core/id';
+import { useCoveredByMobileSheet } from '~/core/state/mobile-sheet-cover';
 import { NavUtils } from '~/core/utils/utils';
 
 import { FullscreenLink } from '~/design-system/fullscreen-link';
@@ -167,11 +169,15 @@ export function DebateExploreFeedCard({
   // report at the 0.4 threshold deactivates rather than landing ambiguously inside the band —
   // a ratio reported exactly at a threshold is the normal case, not an edge case.
   const [active, setActive] = React.useState(false);
+  // Any part of the card on screen. The observer reports crossing in and out of view as well as
+  // its two thresholds, so this needs no threshold of its own.
+  const [onScreen, setOnScreen] = React.useState(false);
   React.useEffect(() => {
     if (!container) return;
     const observer = new IntersectionObserver(
       entries => {
         for (const entry of entries) {
+          setOnScreen(entry.isIntersecting);
           setActive(current => {
             if (!entry.isIntersecting) return false;
             if (entry.intersectionRatio >= ACTIVATE_RATIO) return true;
@@ -191,6 +197,15 @@ export function DebateExploreFeedCard({
   // is this one's turn. A card that is allowed but scrolled away still stops,
   // because its own judgement above is unchanged.
   const playbackAllowed = useDebatePlaybackAllowed(debateId);
+  // A card nobody can see stops playing and lets go of its media: behind a mobile sheet (the side
+  // panel, the Debates hub), or off screen on the mobile layout. Paused video still holds its
+  // decoders and buffered frames, and on a phone that adds up to a reloaded tab. The card keeps its
+  // signed URLs, so it reattaches quickly (GEO-3067's `releaseMedia`). Cards inside a sheet, like a
+  // profile's Activity gallery, are not covered by it. Desktop keeps off-screen cards loaded so
+  // the next one starts at once.
+  const coveredBySheet = useCoveredByMobileSheet();
+  const isMobileLayout = useIsMobileLayout();
+  const releaseMedia = coveredBySheet || (isMobileLayout && !onScreen);
 
   const debateQuery = useDebate(debateId, nearViewport);
   const debate = debateQuery.data;
@@ -368,6 +383,7 @@ export function DebateExploreFeedCard({
             <div className="ml-auto flex shrink-0 items-center gap-1">
               {endSlot}
               <FullscreenLink
+                requiresFullPage
                 href={NavUtils.toEntity(item.spaceId, item.entityId)}
                 entityId={item.entityId}
                 spaceId={item.spaceId}
@@ -394,7 +410,8 @@ export function DebateExploreFeedCard({
             // that same window unmounts this subtree instead of retaining two paused videos forever.
             <DebateCardVideos
               debate={readyDebate}
-              active={active && playbackAllowed}
+              active={active && playbackAllowed && !coveredBySheet}
+              releaseMedia={releaseMedia}
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
             />
@@ -453,11 +470,13 @@ export function DebateExploreFeedCard({
 const DebateCardVideos = React.memo(function DebateCardVideos({
   debate,
   active,
+  releaseMedia,
   reducedOverlays,
   onOpenClaims,
 }: {
   debate: Debate;
   active: boolean;
+  releaseMedia: boolean;
   reducedOverlays: boolean;
   onOpenClaims: () => void;
 }) {
@@ -466,6 +485,7 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
       debate={debate}
       active={active}
       preload
+      releaseMedia={releaseMedia}
       reducedOverlays={reducedOverlays}
       onOpenClaims={onOpenClaims}
     />

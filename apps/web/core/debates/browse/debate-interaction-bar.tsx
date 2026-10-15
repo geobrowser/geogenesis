@@ -12,7 +12,7 @@ import { Text } from '~/design-system/text';
 import { EntityVoteButtons } from '~/partials/entity-page/entity-vote-buttons';
 
 import { Comment, Share } from './icons';
-import { PILL_ACTION_CLASS } from './pill-action';
+import { CIRCLE_ACTION_CLASS, PILL_ACTION_CLASS } from './pill-action';
 
 type InteractionBarProps = {
   orientation: 'vertical' | 'horizontal';
@@ -235,7 +235,7 @@ function CircleAction({
         aria-expanded={expanded ?? open}
         data-entity-comments-opener={commentsPanelOpener ? '' : undefined}
         onClick={onClick}
-        className="grid size-9 place-items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text"
+        className={CIRCLE_ACTION_CLASS}
       >
         {icon}
       </button>
@@ -287,7 +287,7 @@ function PillAction({
       onClick={onClick}
       className={cx(
         PILL_ACTION_CLASS,
-        compact ? (hideLabel ? 'size-7 justify-center px-0' : 'gap-1 px-1.5') : 'gap-1.5 px-2.5',
+        compact && hideLabel ? 'size-7 justify-center px-0' : compact ? 'gap-1 px-1.5' : 'gap-1.5 px-2.5',
         className
       )}
     >

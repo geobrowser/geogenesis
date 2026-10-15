@@ -97,7 +97,7 @@ const RADIO_STEPS: Record<string, (index: number, count: number) => number> = {
 };
 
 /**
- * Two or three exclusive options as one pill: the calendar's Availability | Debates, New match's
+ * Two or three exclusive options as one pill: the calendar's Availability | Admin, New match's
  * Recommended | Pick any time. A radio group, so it behaves as one: a single tab stop on the
  * checked option, and the arrow keys move the choice and the focus together.
  */

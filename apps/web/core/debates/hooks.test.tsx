@@ -31,6 +31,7 @@ import {
   useDebateClaims,
   useDebateClaimsBySpaces,
   useDebateExtractedClaims,
+  useDebateMedia,
   useDebateProfile,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
@@ -38,6 +39,7 @@ import {
   useGeoChatAuth,
   useLeaveDebateRematch,
   useMarkDebateReady,
+  useSaveOpenRoundPick,
   useSpaceDebates,
   useUpdateDebateAvailability,
 } from './hooks';
@@ -58,6 +60,7 @@ const mocks = vi.hoisted(() => ({
   listDebateRematchClaims: vi.fn(),
   listDebateSharePrompts: vi.fn(),
   markDebateReady: vi.fn(),
+  saveOpenRoundPick: vi.fn(),
   pathname: '/space/space-1/debates/debate-1',
   push: vi.fn(),
   back: vi.fn(),
@@ -118,8 +121,46 @@ vi.mock('./api', async importOriginal => {
     listDebateRematchClaims: mocks.listDebateRematchClaims,
     listDebateSharePrompts: mocks.listDebateSharePrompts,
     markDebateReady: mocks.markDebateReady,
+    saveOpenRoundPick: mocks.saveOpenRoundPick,
     updateDebateAvailability: mocks.updateDebateAvailability,
   };
+});
+
+const DASHED_DEBATE_ID = '01A0448A-61D3-7101-8434-A20FDADF6F97';
+const DASHLESS_DEBATE_ID = '01a0448a61d371018434a20fdadf6f97';
+
+describe('per-debate query keys', () => {
+  it("spell the debate id one way, so both of geo-chat's spellings share an entry", () => {
+    expect(debateQueryKeys.debate(DASHED_DEBATE_ID)).toEqual(debateQueryKeys.debate(DASHLESS_DEBATE_ID));
+    expect(debateQueryKeys.media(DASHED_DEBATE_ID)).toEqual(['debates', 'media', DASHLESS_DEBATE_ID]);
+    expect(debateQueryKeys.extractedClaims(DASHED_DEBATE_ID)).toEqual(
+      debateQueryKeys.extractedClaims(DASHLESS_DEBATE_ID)
+    );
+    expect(debateQueryKeys.transcript(DASHED_DEBATE_ID, 'json')).toEqual(
+      debateQueryKeys.transcript(DASHLESS_DEBATE_ID, 'json')
+    );
+  });
+
+  it("fetches a debate's media once when callers hold different spellings of its id", async () => {
+    mocks.authenticated = false;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    setCachedIdentityToken(null);
+    mocks.getDebateMedia.mockReset().mockResolvedValue({ job: null, artifacts: [] });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () => [useDebateMedia(DASHED_DEBATE_ID, true), useDebateMedia(DASHLESS_DEBATE_ID, true)] as const,
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current[1].data).toBeDefined());
+    expect(result.current[0].data).toBe(result.current[1].data);
+    expect(mocks.getDebateMedia).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**
@@ -1232,6 +1273,84 @@ describe('authoritative mutation reconciliation', () => {
       act(() => result.current.mutateAsync({ turnIndex: 0, endedAtMs: 1_784_542_272_505 }))
     ).rejects.toMatchObject({ code: 'turn_yield_stale', status: 400 });
     expect(mocks.endDebateTurn).toHaveBeenCalledOnce();
+  });
+
+  // GEO-3178.
+  describe('useSaveOpenRoundPick', () => {
+    const renderSavePick = () => {
+      const queryClient = new QueryClient({
+        defaultOptions: { mutations: { retryDelay: 0 }, queries: { retry: false } },
+      });
+      const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+      const wrapper = ({ children }: { children: ReactNode }) => (
+        <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+      );
+      const { result } = renderHook(() => useSaveOpenRoundPick('debate-1'), { wrapper });
+      return { queryClient, invalidateQueries, result };
+    };
+
+    beforeEach(() => {
+      mocks.saveOpenRoundPick.mockReset();
+    });
+
+    it('saves the pick for its round and applies the debate it answers with', async () => {
+      const debate = { id: 'debate-1', status: 'in_progress' } as unknown as Debate;
+      mocks.saveOpenRoundPick.mockResolvedValue(debate);
+      const { queryClient, invalidateQueries, result } = renderSavePick();
+
+      await act(() => result.current.mutateAsync({ roundIndex: 2, pick: 'extend' }));
+
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledWith('debate-1', 2, 'extend', expect.any(Function), 'user-a');
+      expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(debate);
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
+    });
+
+    it('treats a round that resolved mid-save as done, and re-reads the debate for its outcome', async () => {
+      mocks.saveOpenRoundPick.mockRejectedValue(
+        new GeoChatRequestError('Round already resolved', 'round_already_resolved', 409)
+      );
+      const { invalidateQueries, result } = renderSavePick();
+
+      await expect(act(() => result.current.mutateAsync({ roundIndex: 0, pick: 'end' }))).resolves.toBeNull();
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.debate('debate-1') });
+    });
+
+    it('sends a later pick only once the earlier one has answered, so the last tap is saved last', async () => {
+      const extendDebate = { id: 'debate-1', open_rounds: { my_pick: 'extend' } } as unknown as Debate;
+      const endDebate = { id: 'debate-1', open_rounds: { my_pick: 'end' } } as unknown as Debate;
+      let answerFirst!: (debate: Debate) => void;
+      mocks.saveOpenRoundPick
+        .mockReturnValueOnce(new Promise<Debate>(resolve => (answerFirst = resolve)))
+        .mockResolvedValueOnce(endDebate);
+      const { queryClient, result } = renderSavePick();
+
+      let saves!: Promise<unknown>;
+      act(() => {
+        saves = Promise.all([
+          result.current.mutateAsync({ roundIndex: 0, pick: 'extend' }),
+          result.current.mutateAsync({ roundIndex: 0, pick: 'end' }),
+        ]);
+      });
+      await act(async () => undefined);
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledOnce();
+
+      await act(async () => {
+        answerFirst(extendDebate);
+        await saves;
+      });
+      expect(mocks.saveOpenRoundPick.mock.calls.map(call => call[2])).toEqual(['extend', 'end']);
+      expect(queryClient.getQueryData(debateQueryKeys.debate('debate-1'))).toEqual(endDebate);
+    });
+
+    it('rejects any other failure once, without retrying', async () => {
+      mocks.saveOpenRoundPick.mockRejectedValue(new GeoChatRequestError('Unavailable', 'service_unavailable', 503));
+      const { result } = renderSavePick();
+
+      await expect(act(() => result.current.mutateAsync({ roundIndex: 0, pick: 'end' }))).rejects.toMatchObject({
+        status: 503,
+      });
+      expect(mocks.saveOpenRoundPick).toHaveBeenCalledOnce();
+    });
   });
 });
 

@@ -6,7 +6,7 @@ import * as React from 'react';
 import { Effect } from 'effect';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { usePersonalSpaceId } from './use-personal-space-id';
+import { markPersonalProfilePublished, usePersonalSpaceId } from './use-personal-space-id';
 
 const ADDRESS = '0x5D6d0E45D76D360AB4F94941CE9a005b0AEa2ebD';
 const SPACE_ID = 'd4bee0928fb5405baba3b1513f085835';
@@ -28,6 +28,7 @@ function wrapper({ children }: { children: React.ReactNode }) {
 
 beforeEach(() => {
   getSpaceByAddress.mockReset();
+  window.localStorage.clear();
 });
 
 afterEach(() => {
@@ -42,6 +43,36 @@ describe('usePersonalSpaceId', () => {
 
     await waitFor(() => expect(result.current.isRegistered).toBe(true));
     expect(result.current.personalSpaceId).toBe(SPACE_ID);
+  });
+
+  it('reports a registered personal space with no profile as needing one', async () => {
+    // hi@techfren.net, 2026-10-14: registration landed, the profile publish never did.
+    // The account counted as registered, so onboarding never came back for it.
+    getSpaceByAddress.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: false }));
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.isRegistered).toBe(true));
+    expect(result.current.needsProfile).toBe(true);
+  });
+
+  it('does not ask for a profile the space already has', async () => {
+    getSpaceByAddress.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: true }));
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.isRegistered).toBe(true));
+    expect(result.current.needsProfile).toBe(false);
+  });
+
+  it('trusts a profile this browser just published over an index that has not caught up', async () => {
+    markPersonalProfilePublished(ADDRESS.toLowerCase());
+    getSpaceByAddress.mockReturnValue(Effect.succeed({ id: SPACE_ID, type: 'PERSONAL', hasProfile: false }));
+
+    const { result } = renderHook(() => usePersonalSpaceId(), { wrapper });
+
+    await waitFor(() => expect(result.current.isRegistered).toBe(true));
+    expect(result.current.needsProfile).toBe(false);
   });
 
   it('keeps polling until the space appears, then reports it', async () => {

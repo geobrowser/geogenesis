@@ -17,8 +17,9 @@ export const dynamic = 'force-dynamic';
 const MAX_PUBLISH_ATTEMPTS_PER_SWEEP = 8;
 
 // No publish starts after this point in the run. A publish interrupted by `maxDuration` after its
-// proposal lands leaves no Debate entity for the idempotency check, so the next tick would create
-// duplicate media and transcript entities. The remaining time is headroom for the publish in flight.
+// vote is sent leaves no Debate entity for the idempotency check until the indexer catches up; the
+// publish lease and the draft's derived ids keep the next tick from duplicating it. The remaining
+// time is headroom for the publish in flight.
 const PUBLISH_START_DEADLINE_MS = 180_000;
 
 // How long to wait for the early claims sweep to release the signing lock. The wait comes out of
@@ -79,6 +80,8 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
   const failed: Array<{ debateId: string; error: string }> = [];
   let attempted = 0;
   let alreadyPublished = 0;
+  // Submitted on an earlier tick and not in the graph yet (indexer lag). Not a slot: nothing is sent.
+  let submissionPending = 0;
   let notEditor = 0;
   let pending = 0;
   let skipped = 0;
@@ -102,6 +105,10 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
         const result = await publishDebateAsAcceptor(debateId);
         if (result.status === 'already_published') {
           alreadyPublished += 1;
+          continue;
+        }
+        if (result.status === 'submission_pending') {
+          submissionPending += 1;
           continue;
         }
         if (result.status === 'not_editor') {
@@ -148,6 +155,7 @@ async function runSweep(acceptorSpaceId: string, startedAt: number) {
     ok: true,
     published,
     alreadyPublished,
+    submissionPending,
     notEditor,
     pending,
     // Every unpublishable debate the sweep saw, by id, on every tick — so the answer to "how many

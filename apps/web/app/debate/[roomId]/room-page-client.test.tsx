@@ -16,20 +16,42 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   access: { status: 'admitted' } as { status: string; opens_at?: string },
   kind: 'debate' as 'debate' | 'lobby',
-  lobbyJoining: false,
+  authenticated: true,
+  search: new URLSearchParams(),
+  /** The guest view's answer: a lobby, not one (404), or still loading. */
+  guestView: { data: undefined, isPending: true, fetchStatus: 'idle' } as {
+    data: object | undefined;
+    isPending: boolean;
+    fetchStatus: string;
+  },
+  guestViewEnabled: [] as boolean[],
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({ useFeatureFlag: () => mocks.lobbyJoining }));
+vi.mock('~/core/debates/lobbies/lobby-guest-hooks', () => ({
+  useDebateLobbyGuestView: (_lobbyId: string, { enabled }: { enabled: boolean }) => {
+    mocks.guestViewEnabled.push(enabled);
+    return enabled || mocks.guestView.data
+      ? mocks.guestView
+      : { data: undefined, isPending: true, fetchStatus: 'idle' };
+  },
+}));
 
 vi.mock('~/core/debates/lobbies/lobby-page', () => ({
   DebateLobbyPage: ({ lobbyId }: { lobbyId: string }) => <div>lobby {lobbyId}</div>,
-  LobbiesUnavailable: () => <div>Lobbies are not available right now.</div>,
 }));
 
-vi.mock('next/navigation', () => ({ useRouter: () => ({ replace: mocks.replace, push: vi.fn() }) }));
+vi.mock('next/navigation', () => ({
+  useRouter: () => ({ replace: mocks.replace, push: vi.fn() }),
+  useSearchParams: () => mocks.search,
+}));
 
 vi.mock('~/core/debates/hooks', () => ({
-  useGeoChatAuth: () => ({ ready: true, authenticated: true, accountKey: 'acct', getPrivyIdentityToken: vi.fn() }),
+  useGeoChatAuth: () => ({
+    ready: true,
+    authenticated: mocks.authenticated,
+    accountKey: 'acct',
+    getPrivyIdentityToken: vi.fn(),
+  }),
 }));
 
 vi.mock('~/core/debates/rooms/hooks', () => ({
@@ -72,28 +94,82 @@ afterEach(() => {
   mocks.replace.mockReset();
   mocks.access = { status: 'admitted' };
   mocks.kind = 'debate';
-  mocks.lobbyJoining = false;
+  mocks.authenticated = true;
+  mocks.search = new URLSearchParams();
+  mocks.guestView = { data: undefined, isPending: true, fetchStatus: 'idle' };
+  mocks.guestViewEnabled = [];
 });
 
 describe('DebateRoomPageClient', () => {
+  it('signs a signed-out visitor in as a room visitor', () => {
+    mocks.authenticated = false;
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(screen.getByText('Sign in to join your debate.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/debate/room-1?modal=signin&via=room'
+    );
+  });
+
+  // GEO-3126. Signed out, the room's kind is unknown; a lobby's shared link carries `via=lobby`.
+  it('signs a visitor from a lobby’s shared link in as a lobby visitor', () => {
+    mocks.authenticated = false;
+    mocks.search = new URLSearchParams('via=lobby');
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(screen.getByText('Sign in to join the lobby.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Sign in' })).toHaveAttribute(
+      'href',
+      '/debate/room-1?modal=signin&via=lobby'
+    );
+  });
+
+  // GEO-3129. Signed out, the guest view says whether the room is a lobby.
+  it('opens the lobby page for a signed-out visitor when the guest view finds a lobby', () => {
+    mocks.authenticated = false;
+    mocks.guestView = { data: { lobby: {} }, isPending: false, fetchStatus: 'idle' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(screen.getByText('lobby room-1')).toBeInTheDocument();
+  });
+
+  it('waits on the guest view before offering sign-in', () => {
+    mocks.authenticated = false;
+    mocks.guestView = { data: undefined, isPending: true, fetchStatus: 'fetching' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(screen.getByText('Opening…')).toBeInTheDocument();
+  });
+
+  it('offers sign-in when the guest view finds no lobby', () => {
+    mocks.authenticated = false;
+    mocks.guestView = { data: undefined, isPending: false, fetchStatus: 'idle' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(screen.getByText('Sign in to join your debate.')).toBeInTheDocument();
+  });
+
+  it('reads the guest view only while signed out', () => {
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(mocks.guestViewEnabled.every(enabled => !enabled)).toBe(true);
+    cleanup();
+    mocks.guestViewEnabled = [];
+    mocks.authenticated = false;
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(mocks.guestViewEnabled.every(enabled => enabled)).toBe(true);
+  });
+
+  // A guest who signs in keeps the lobby page while the member read catches up.
+  it('keeps the lobby page through sign-in on the guest view it already has', () => {
+    mocks.guestView = { data: { lobby: {} }, isPending: false, fetchStatus: 'idle' };
+    render(<DebateRoomPageClient roomId="room-1" />);
+    expect(screen.getByText('lobby room-1')).toBeInTheDocument();
+  });
+
   // GEO-3131. A lobby's room view is `not_a_participant`, which must not redirect.
-  it('opens the lobby page for a lobby when joining is on', () => {
+  // GEO-3270. Open to anyone with the link, a brand-new account included.
+  it('opens the lobby page for a lobby', () => {
     mocks.kind = 'lobby';
     mocks.access = { status: 'not_a_participant' };
-    mocks.lobbyJoining = true;
     render(<DebateRoomPageClient roomId="room-1" />);
 
     expect(screen.getByText('lobby room-1')).toBeInTheDocument();
-    expect(mocks.replace).not.toHaveBeenCalled();
-  });
-
-  it('says lobbies are unavailable when joining is off', () => {
-    mocks.kind = 'lobby';
-    mocks.access = { status: 'not_a_participant' };
-    render(<DebateRoomPageClient roomId="room-1" />);
-
-    expect(screen.getByText('Lobbies are not available right now.')).toBeInTheDocument();
-    expect(screen.queryByText(/lobby room-1/)).not.toBeInTheDocument();
     expect(mocks.replace).not.toHaveBeenCalled();
   });
 
