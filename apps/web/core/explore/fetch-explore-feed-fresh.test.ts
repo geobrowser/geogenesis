@@ -7,6 +7,7 @@ import { CLAIM_TYPE_ID } from '~/core/claims/ontology';
 import { DEBATE_TYPE_ID } from '~/core/debates/ontology';
 
 import { DEFAULT_FRESH_SLOT_CONFIG, type FreshSlotConfig } from './fresh-slot/fresh-slot-config';
+import { FRESH_SLOT_AS_OF_STEP_MS, decodeFreshSlotCursor } from './fresh-slot/fresh-slot-cursor';
 
 /**
  * GEO-3221. The fresh slot inside the real feed: Best's ranked windows from the by-type connection,
@@ -46,7 +47,7 @@ vi.mock('~/core/io/graphql-client', () => ({
 vi.mock('~/core/io/subgraph', () => ({ fetchProfile: () => Effect.succeed(null) }));
 vi.mock('~/core/io/subgraph/fetch-proposed-members', () => ({ fetchActiveMemberRequest: async () => null }));
 
-const { fetchExploreFeed } = await import('./fetch-explore-feed');
+const { FRESH_LIST_MAX_STALE_MS, fetchExploreFeed } = await import('./fetch-explore-feed');
 const { encodeExploreWindowCursor } = await import('./explore-window-cursor');
 
 const SPACE = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
@@ -181,12 +182,68 @@ describe('a whole scroll with the fresh slot on', () => {
   it('asks for items created inside the freshness window, pinned for the whole scroll', async () => {
     await scroll({ config: { ...ON, freshnessHours: 24 }, revision: 1 });
     const ranges = graph.freshCalls.map(variables => JSON.stringify(variables.filter));
-    const asOf = Math.floor(clock / 1000);
+    // GEO-3279: the scroll is pinned to the start of the minute it began in.
+    const asOf = Math.floor(clock / FRESH_SLOT_AS_OF_STEP_MS) * (FRESH_SLOT_AS_OF_STEP_MS / 1000);
     expect(ranges[0]).toContain(
       `"createdAt":{"greaterThanOrEqualTo":"${asOf - 24 * 3600}","lessThanOrEqualTo":"${asOf}"}`
     );
     // Later pages ran hours later and still asked for the same range (or were served from cache).
     expect(new Set(ranges).size).toBe(1);
+  });
+});
+
+// GEO-3279. A new scroll starts from the newest Fresh list this instance holds, and the current
+// minute's list loads behind the response for the next one.
+describe('a new scroll while an older Fresh list is held', () => {
+  const minute = (at: number) => Math.floor(at / FRESH_SLOT_AS_OF_STEP_MS) * FRESH_SLOT_AS_OF_STEP_MS;
+  const firstPage = (now: number) =>
+    fetchExploreFeed({
+      browse,
+      sort: 'best',
+      time: 'all',
+      spaceFilterIds: null,
+      cursor: null,
+      memberOrEditorSpaceIds: [],
+      typeIds: [DEBATE_TYPE_ID, CLAIM_TYPE_ID],
+      freshSlot: { config: ON, revision: 1, now },
+    });
+  const freshItems = (page: Awaited<ReturnType<typeof fetchExploreFeed>>) =>
+    page.items.filter(item => item.ranking?.slot === 'fresh').map(item => item.entityId);
+  const pinOf = (page: Awaited<ReturnType<typeof fetchExploreFeed>>) =>
+    decodeFreshSlotCursor(page.nextCursor, 0).asOfMs;
+  const upperBounds = () =>
+    graph.freshCalls.map(variables => JSON.stringify(variables.filter).match(/"lessThanOrEqualTo":"(\d+)"/)?.[1]);
+
+  it('serves the held list at once, pins the scroll to it, and refreshes behind the response', async () => {
+    const before = await firstPage(clock);
+    expect(upperBounds()).toEqual([String(minute(clock) / 1000)]);
+
+    // An item created since: the held list does not have it.
+    const newest = id('n', 1);
+    graph.fresh = [entity(newest, CLAIM_TYPE_ID), ...graph.fresh];
+    const later = clock + 5 * FRESH_SLOT_AS_OF_STEP_MS;
+
+    const served = await firstPage(later);
+    expect(freshItems(served)).toEqual(freshItems(before));
+    expect(freshItems(served)).not.toContain(newest);
+    expect(pinOf(served)).toBe(minute(clock));
+
+    await vi.waitFor(() => expect(upperBounds()).toEqual([minute(clock), minute(later)].map(ms => String(ms / 1000))));
+    // Let the background load settle before the next scroll reads what it left.
+    await new Promise(resolve => setTimeout(resolve, 0));
+
+    const next = await firstPage(later + 1_000);
+    expect(freshItems(next)).toContain(newest);
+    expect(pinOf(next)).toBe(minute(later));
+    expect(graph.freshCalls).toHaveLength(2);
+  });
+
+  it('waits for a new list when the held one is too old', async () => {
+    await firstPage(clock);
+    const later = clock + FRESH_LIST_MAX_STALE_MS + FRESH_SLOT_AS_OF_STEP_MS;
+    const page = await firstPage(later);
+    expect(pinOf(page)).toBe(minute(later));
+    expect(upperBounds()).toEqual([minute(clock), minute(later)].map(ms => String(ms / 1000)));
   });
 });
 

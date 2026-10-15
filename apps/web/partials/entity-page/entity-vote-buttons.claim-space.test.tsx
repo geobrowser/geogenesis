@@ -109,7 +109,7 @@ vi.mock('~/core/sync/use-store', () => ({
 }));
 
 vi.mock('~/partials/entity-page/claim-voter-avatars', () => ({ ClaimResponderAvatars: () => null }));
-vi.mock('~/core/topics/follow-topic-button', () => ({
+vi.mock('~/core/follows/follow-button', () => ({
   FollowTopicButton: (props: { topic: { id: string; name?: string | null } }) => (
     <button type="button" data-testid="follow-button" data-topic={props.topic.id}>
       Follow {props.topic.name}

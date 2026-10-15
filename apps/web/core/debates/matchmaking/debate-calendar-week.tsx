@@ -47,6 +47,18 @@ const CARD_CLOSE_DELAY_MS = 200;
 
 const GRID_COLUMNS = 'grid-cols-[4rem_repeat(7,minmax(0,1fr))]';
 
+/**
+ * A block in the week that opens a card: the admin week's debates, the pinned row's lobbies. Its
+ * fill, border and layout are the caller's.
+ */
+export const CALENDAR_BLOCK_CLASS_NAME =
+  'flex w-full min-w-0 rounded-md border px-2 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text';
+/** The compact block's one line, for a cell holding more than one. */
+export const CALENDAR_COMPACT_BLOCK_CLASS_NAME = 'items-center gap-1 py-0.5';
+/** "+N more" under a cell's blocks, opening everything in it. */
+export const CALENDAR_MORE_BUTTON_CLASS_NAME =
+  'self-start rounded-md px-1 text-footnoteMedium text-grey-04 transition-colors hover:bg-grey-01 hover:text-text';
+
 type RenderRow = (
   userKey: string,
   slots: FreeSlot[],
@@ -66,9 +78,14 @@ type Props = {
   opponentName: (userId: string | null) => string | null;
   renderRow: RenderRow;
   now: number;
+  /** A row pinned under the day headers, such as the week's debate lobbies (GEO-3268). */
+  pinnedRow?: PinnedRow;
 };
 
 type Card = { key: string; userKey: string; slots: FreeSlot[] };
+
+/** A labelled row under the day headers, with something drawn for each day. */
+export type PinnedRow = { label: string; renderDay: (date: Date, day: number) => React.ReactNode };
 
 /**
  * The week as a grid (GEO-3152): a column per day, a row per hour, and in each cell the faces of
@@ -91,6 +108,7 @@ export function CalendarWeek({
   opponentName,
   renderRow,
   now,
+  pinnedRow,
 }: Props) {
   const cellRefs = React.useRef(new Map<string, HTMLDivElement>());
 
@@ -184,6 +202,7 @@ export function CalendarWeek({
       firstBusy={firstBusy}
       role="grid"
       ariaLabel="Who is free each hour this week"
+      pinnedRow={pinnedRow}
       renderCell={(date, day, hour) => {
         const key = cellKey(day, hour);
         const people = cells.get(key) ?? [];
@@ -326,6 +345,7 @@ export function CalendarWeekFrame({
   role,
   ariaLabel,
   renderCell,
+  pinnedRow,
   children,
 }: {
   /** Eight local midnights: the week's seven days and the one that closes it. */
@@ -337,6 +357,8 @@ export function CalendarWeekFrame({
   ariaLabel: string;
   /** One cell, carrying its own key. */
   renderCell: (date: Date, day: number, hour: number) => React.ReactNode;
+  /** Drawn under the day headers, outside the hours' scroll, so it stays in view as they move. */
+  pinnedRow?: PinnedRow;
   /** Rendered after the grid, inside its frame: a card anchored somewhere in it. */
   children?: React.ReactNode;
 }) {
@@ -368,7 +390,7 @@ export function CalendarWeekFrame({
       <div
         role={role}
         aria-label={ariaLabel}
-        aria-rowcount={role === 'grid' ? HOURS_IN_DAY + 1 : undefined}
+        aria-rowcount={role === 'grid' ? HOURS_IN_DAY + 1 + (pinnedRow ? 1 : 0) : undefined}
         className="min-w-[900px]"
       >
         <div role="row" className={cx('grid border-b border-grey-02 bg-white', GRID_COLUMNS)}>
@@ -403,6 +425,23 @@ export function CalendarWeekFrame({
             </div>
           ))}
         </div>
+
+        {pinnedRow ? (
+          <div role="row" className={cx('grid border-b border-grey-02 bg-white', GRID_COLUMNS)}>
+            <div role="rowheader" className="border-r border-grey-01 px-2 py-1.5 text-footnote text-grey-04">
+              {pinnedRow.label}
+            </div>
+            {days.slice(0, DAYS_IN_WEEK).map((date, day) => (
+              <div
+                key={date.getTime()}
+                role={role === 'grid' ? 'gridcell' : 'cell'}
+                className="flex min-w-0 flex-col gap-1 border-r border-grey-01 px-1.5 py-1.5 last:border-r-0"
+              >
+                {pinnedRow.renderDay(date, day)}
+              </div>
+            ))}
+          </div>
+        ) : null}
 
         <div ref={scrollRef} className="max-h-[max(24rem,calc(100vh-22rem))] overflow-y-auto" role="rowgroup">
           {Array.from({ length: HOURS_IN_DAY }, (_, hour) => (

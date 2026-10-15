@@ -12,15 +12,16 @@ import { Text } from '~/design-system/text';
 import type { DebateLobbySummary } from '../api';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbyReminder, useLobbyReminderError } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
-import { lobbyErrorMessage, nextLobbyTimeLabel, personName } from './lobby-format';
+import { nextLobbyTimeLabel, personName, rsvpLabel } from './lobby-format';
 import { nextLobbyByHost, useListedLobbies } from './lobby-host-lobbies';
+import { LobbyReminderError, useLobbyReminderPress } from './lobby-reminder-press';
 import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_STATE_COPY = {
   banned: 'You can’t join this lobby',
   bannedFrom: (name: string) => `A host has blocked you from ${name}.`,
+  removed: 'A host removed you from this lobby.',
   ended: 'This lobby has ended',
   closed: 'This lobby has closed',
   findDebate: 'Find a debate',
@@ -29,8 +30,6 @@ export const LOBBY_STATE_COPY = {
   emptyDetail: 'You’re the first one here. Share the link, or come back for the next lobby.',
   whoIsFree: 'See who’s free this week',
 } as const;
-
-const REMINDER_FAILED = 'Could not update your reminder. Try again.';
 
 /** The centered card every full-page lobby state sits in; `className` sets its width and spacing. */
 export function LobbyCardFrame({
@@ -105,14 +104,14 @@ export function LobbyClosedCard({
 }) {
   const next = nextLobbyByHost(useListedLobbies(), lobby.created_by, lobby.lobby_id);
   const time = next ? nextLobbyTimeLabel(next.lobby) : null;
-  const reminder = useDebateLobbyReminder();
+  const remind = useLobbyReminderPress(next?.lobby ?? null);
 
   return (
     <LobbyStateCard
       title={ended ? LOBBY_STATE_COPY.ended : LOBBY_STATE_COPY.closed}
       actions={
         <>
-          {next ? <NextLobbyAction lobby={next.lobby} reminder={reminder} primary /> : null}
+          {next ? <NextLobbyAction lobby={next.lobby} remind={remind} primary /> : null}
           <FindDebateLink primary={!next} />
         </>
       }
@@ -123,19 +122,19 @@ export function LobbyClosedCard({
           {LOBBY_STATE_COPY.nextLobby(personName(next.host), next.lobby.name, time)}
         </Text>
       ) : null}
-      {next ? <ReminderError reminder={reminder} lobby={next.lobby} /> : null}
+      <LobbyReminderError error={remind.error} />
     </LobbyStateCard>
   );
 }
 
-/** Remind me on a lobby still to open; Join on one already open. */
+/** RSVP on a lobby still to open; Join on one already open. */
 function NextLobbyAction({
   lobby,
-  reminder,
+  remind,
   primary = false,
 }: {
   lobby: DebateLobbySummary;
-  reminder: LobbyReminder;
+  remind: ReturnType<typeof useLobbyReminderPress>;
   primary?: boolean;
 }) {
   if (lobby.open) {
@@ -149,29 +148,17 @@ function NextLobbyAction({
       </Link>
     );
   }
-  const reminded = lobby.viewer_reminded;
+  const { reminded } = remind;
   return (
     <HubPillButton
       variant={primary && !reminded ? 'primary' : 'secondary'}
       analyticsLabel={reminded ? 'Lobby next reminded' : 'Lobby next remind me'}
       aria-pressed={reminded}
-      pending={reminder.isPending}
-      onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
+      pending={remind.pending}
+      onClick={remind.press}
     >
-      {reminded ? 'Reminded' : 'Remind me'}
+      {rsvpLabel(reminded)}
     </HubPillButton>
-  );
-}
-
-type LobbyReminder = ReturnType<typeof useDebateLobbyReminder>;
-
-function ReminderError({ reminder, lobby }: { reminder: LobbyReminder; lobby: DebateLobbySummary }) {
-  const error = useLobbyReminderError(reminder, lobby);
-  if (!error) return null;
-  return (
-    <Text as="p" variant="footnote" color="red-01">
-      {lobbyErrorMessage(error, REMINDER_FAILED)}
-    </Text>
   );
 }
 
@@ -215,7 +202,7 @@ export function LobbyEmptyRoom({
 
 function NextLobbyCard({ lobby }: { lobby: DebateLobbySummary }) {
   const time = nextLobbyTimeLabel(lobby);
-  const reminder = useDebateLobbyReminder();
+  const remind = useLobbyReminderPress(lobby);
   return (
     <div className="mt-3 flex w-full flex-col gap-1">
       <div className="flex w-full items-center gap-3 rounded-xl border border-grey-02 p-3 text-left">
@@ -227,9 +214,9 @@ function NextLobbyCard({ lobby }: { lobby: DebateLobbySummary }) {
             {lobby.name}
           </Text>
         </div>
-        <NextLobbyAction lobby={lobby} reminder={reminder} />
+        <NextLobbyAction lobby={lobby} remind={remind} />
       </div>
-      <ReminderError reminder={reminder} lobby={lobby} />
+      <LobbyReminderError error={remind.error} />
     </div>
   );
 }

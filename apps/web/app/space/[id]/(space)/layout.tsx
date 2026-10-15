@@ -208,7 +208,7 @@ export default async function Layout(props0: LayoutProps) {
                   }
                   actionsComponent={
                     isProfile ? (
-                      <ProfileActions spaceId={spaceId} personEntityId={props.id} />
+                      <ProfileActions spaceId={spaceId} name={props.space?.entity?.name ?? null} />
                     ) : typeIds.includes(SystemIds.PERSON_TYPE) ? (
                       <ProfileDebateButton spaceId={spaceId} />
                     ) : null

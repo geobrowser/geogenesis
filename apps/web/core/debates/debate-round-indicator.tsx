@@ -30,8 +30,8 @@ function RoundPipRow({ children, className }: { children: React.ReactNode; class
 }
 
 /**
- * The rounds a finished debate unlocked (GEO-3180), one pip each, in the current text colour so
- * the end card draws them dark and the feed's rounds pill purple. Smaller than the room's counter,
+ * The rounds a finished debate unlocked (GEO-3180), one pip each, in the current text colour, so
+ * the end card sets it. Smaller than the room's counter,
  * which is the row's headline; here they sit beside a label.
  */
 export function DebateRoundPips({ rounds, className }: { rounds: number; className?: string }) {

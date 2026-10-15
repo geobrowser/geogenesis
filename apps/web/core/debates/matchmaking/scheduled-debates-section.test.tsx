@@ -1,15 +1,16 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, render, renderHook, screen } from '@testing-library/react';
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import type { ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
+import type { DebateLobbySummary, ScheduledDebateRequest, UpcomingDebateRoom } from '~/core/debates/api';
 import { NavUtils } from '~/core/utils/utils';
 
 import type { UpcomingRoomRow } from './scheduled-debates-section';
+import type { UpcomingLobbyRow } from './upcoming-lobby-rows';
 
 const mocks = vi.hoisted(() => ({
   respond: vi.fn(),
@@ -31,6 +32,8 @@ const mocks = vi.hoisted(() => ({
     avatar_cid: string | null;
   }[],
   graphLookupIds: [] as string[],
+  lobbies: [] as DebateLobbySummary[],
+  lobbiesError: null as Error | null,
 }));
 
 const ADA = {
@@ -55,6 +58,14 @@ vi.mock('~/core/debates/rooms/scheduling-hooks', () => ({
 vi.mock('~/core/debates/rooms/hooks', () => ({
   useUpcomingDebateRooms: () => ({ data: { rooms: mocks.rooms }, error: mocks.roomsError }),
   useFinishedRoomIds: () => mocks.finishedRoomIds,
+}));
+
+vi.mock('~/core/debates/lobbies/hooks', () => ({
+  useDebateLobbies: (enabled: boolean) => ({
+    data: enabled ? { lobbies: mocks.lobbies } : undefined,
+    // Not gated: a disabled query keeps the error of its last failed read.
+    error: mocks.lobbiesError,
+  }),
 }));
 
 vi.mock('./hooks', () => ({
@@ -130,9 +141,11 @@ const room = (overrides: Partial<UpcomingDebateRoom> = {}): UpcomingDebateRoom =
 const setup = (content: {
   answerable?: ScheduledDebateRequest[];
   upcoming?: UpcomingRoomRow[];
+  lobbies?: UpcomingLobbyRow[];
   people?: (typeof mocks.people)[number][];
   requestsError?: Error | null;
   roomsError?: Error | null;
+  lobbiesError?: Error | null;
 }) => ({
   user: userEvent.setup(),
   ...render(
@@ -140,9 +153,11 @@ const setup = (content: {
       content={{
         answerable: content.answerable ?? [],
         upcoming: content.upcoming ?? [],
+        lobbies: content.lobbies ?? [],
         people: content.people ?? [],
         requestsError: content.requestsError ?? null,
         roomsError: content.roomsError ?? null,
+        lobbiesError: content.lobbiesError ?? null,
       }}
     />
   ),
@@ -175,6 +190,8 @@ afterEach(() => {
   mocks.finishedRoomIds = new Set();
   mocks.graphPeople = [];
   mocks.graphLookupIds = [];
+  mocks.lobbies = [];
+  mocks.lobbiesError = null;
 });
 
 describe('answering in the tab', () => {
@@ -712,5 +729,137 @@ describe('the slot in the header', () => {
 
   it('falls back to the start alone when the end is unusable', () => {
     expect(formatDebateSlot(at(11), 'not a time', now)).toMatch(/^Tomorrow at 11:00\s?AM$/);
+  });
+});
+
+describe('lobbies among the upcoming debates (GEO-3292)', () => {
+  const lobbyRow = (overrides: Partial<UpcomingLobbyRow> = {}): UpcomingLobbyRow => ({
+    lobbyId: 'lobby-1',
+    name: 'Should cities ban cars?',
+    startsAt: '2099-09-24T14:00:00Z',
+    opensAt: '2099-09-24T13:50:00Z',
+    open: false,
+    hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
+    hosting: false,
+    onRoster: false,
+    ...overrides,
+  });
+
+  const lobbySummary = (overrides: Partial<DebateLobbySummary> = {}): DebateLobbySummary => ({
+    lobby_id: 'lobby-1',
+    name: 'Should cities ban cars?',
+    scheduled: true,
+    starts_at: '2099-09-24T14:00:00Z',
+    opens_at: '2099-09-24T13:50:00Z',
+    open: false,
+    hosts: [{ user_id: 'user-host', profile_space_id: 'space-host', display_name: 'Bryan', avatar_cid: null }],
+    headcount: 0,
+    avatars: [],
+    debating_count: 0,
+    reminder_count: 3,
+    viewer_reminded: true,
+    viewer_on_roster: false,
+    ...overrides,
+  });
+
+  it('lists a lobby as a lobby, with its name and host, linking to its page', () => {
+    setup({ lobbies: [lobbyRow()] });
+
+    const card = screen.getByTestId('upcoming-lobby-card');
+    expect(card).toHaveTextContent('Debate lobby');
+    expect(card).toHaveTextContent('Should cities ban cars?');
+    expect(card).toHaveTextContent('Hosted by Bryan');
+    expect(card).toHaveTextContent(
+      `Opens at ${new Date('2099-09-24T13:50:00Z').toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}`
+    );
+    expect(screen.getByRole('link', { name: 'View lobby' })).toHaveAttribute('href', '/debate/lobby-1');
+  });
+
+  it('offers Join once the lobby is open', () => {
+    setup({ lobbies: [lobbyRow({ open: true, startsAt: '2020-09-24T14:00:00Z' })] });
+
+    const card = screen.getByTestId('upcoming-lobby-card');
+    expect(card).toHaveTextContent('Starting now');
+    expect(card).toHaveTextContent('The lobby is open');
+    expect(screen.getByRole('link', { name: 'Join lobby' })).toHaveAttribute('href', '/debate/lobby-1');
+  });
+
+  it('tells a host it is theirs', () => {
+    setup({ lobbies: [lobbyRow({ hosting: true })] });
+
+    expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('You’re hosting');
+  });
+
+  it('lists lobbies under their own heading, apart from the debates', () => {
+    setup({
+      upcoming: [upcomingRow({ room_id: 'room-1', joinable: false })],
+      lobbies: [lobbyRow()],
+      people: [ADA],
+    });
+
+    expect(screen.getByText('Upcoming debates')).toBeInTheDocument();
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    const lobbies = screen.getByText('Upcoming lobbies').closest('section') ?? document.body;
+    expect(lobbies).toContainElement(screen.getByTestId('upcoming-lobby-card'));
+  });
+
+  it('shows only Upcoming lobbies when lobbies are all there is', () => {
+    setup({ lobbies: [lobbyRow()] });
+
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    expect(screen.queryByText('Upcoming debates')).not.toBeInTheDocument();
+  });
+
+  // An empty lobby sends nothing when its start passes, so only the clock can move the label.
+  it('says Starting now once the start passes, with no new read', () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2099-09-24T13:59:30Z'));
+      setup({ lobbies: [lobbyRow({ open: true })] });
+      expect(screen.getByTestId('upcoming-lobby-card')).not.toHaveTextContent('Starting now');
+
+      act(() => vi.advanceTimersByTime(60_000));
+
+      expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('Starting now');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('says Starting now once the start passes even if the door has not opened', () => {
+    setup({ lobbies: [lobbyRow({ open: false, startsAt: '2020-09-24T14:00:00Z' })] });
+
+    expect(screen.getByTestId('upcoming-lobby-card')).toHaveTextContent('Starting now');
+  });
+
+  // Hosted lobbies come only from the lobby list, so its failure must not read as "nothing hosted".
+  it('says the lobby list could not be read rather than showing nothing', () => {
+    setup({ lobbiesError: new Error('boom') });
+
+    expect(screen.getByText('Upcoming lobbies')).toBeInTheDocument();
+    expect(screen.getByText('Could not read your lobbies: boom')).toBeInTheDocument();
+  });
+
+  it('carries a failed lobby list read out of the hook', () => {
+    mocks.lobbiesError = new Error('boom');
+    expect(renderHook(() => useScheduledContent()).result.current.lobbiesError?.message).toBe('boom');
+  });
+
+  it('builds Going lobbies from the upcoming rooms and names their host from the lobby list', () => {
+    mocks.rooms = [
+      room({ room_id: 'lobby-1', kind: 'lobby', name: 'Should cities ban cars?', joinable: false }),
+      room({ room_id: 'room-1' }),
+    ];
+    mocks.lobbies = [lobbySummary()];
+    const { result } = renderHook(() => useScheduledContent());
+
+    expect(result.current.upcoming.map(row => row.room.room_id)).toEqual(['room-1']);
+    expect(result.current.lobbies).toEqual([
+      expect.objectContaining({
+        lobbyId: 'lobby-1',
+        hosting: false,
+        hosts: [expect.objectContaining({ display_name: 'Bryan' })],
+      }),
+    ]);
   });
 });

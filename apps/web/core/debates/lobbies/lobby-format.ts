@@ -10,6 +10,7 @@ import {
   type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
+  LOBBY_CLAIM_LISTS_MAX,
   dashlessId,
 } from '../api';
 
@@ -76,8 +77,7 @@ export function untilLabel(iso: string, now: number) {
   const at = Date.parse(iso);
   if (Number.isNaN(at) || at <= now) return 'soon';
   if (at - now < 3_600_000) return `in ${Math.ceil((at - now) / 60_000)} min`;
-  // Rounded: a daylight saving change makes a calendar day 23 or 25 hours.
-  const days = Math.round((startOfLocalDay(at) - startOfLocalDay(now)) / 86_400_000);
+  const days = localDaysFrom(now, at);
   if (days === 0) return 'today';
   if (days === 1) return 'tomorrow';
   return `in ${days} days`;
@@ -87,6 +87,12 @@ function startOfLocalDay(ms: number) {
   const day = new Date(ms);
   day.setHours(0, 0, 0, 0);
   return day.getTime();
+}
+
+/** Calendar days from `from` to `to` in local time: 0 the same day, 1 the next, -1 the one before. */
+export function localDaysFrom(from: number, to: number) {
+  // Rounded: a daylight saving change makes a calendar day 23 or 25 hours.
+  return Math.round((startOfLocalDay(to) - startOfLocalDay(from)) / 86_400_000);
 }
 
 /** "Opens at 17:50 · in 2 days", for the lobby page before the door opens. */
@@ -108,6 +114,11 @@ export function nextLobbyTimeLabel(lobby: Pick<DebateLobbySummary, 'open' | 'sta
  */
 export function lobbyHeadcount(lobby: Pick<DebateLobbyView, 'members'>) {
   return lobby.members.length;
+}
+
+/** Everyone in the room: who the header counts as here, plus guests listening without an account. */
+export function lobbyRoomHeadcount(lobby: Pick<DebateLobbyView, 'members' | 'guest_count'>) {
+  return lobbyHeadcount(lobby) + (lobby.guest_count ?? 0);
 }
 
 export function hereLabel(headcount: number) {
@@ -182,9 +193,19 @@ export function pairSubject(pair: DebateLobbyPair, members: DebateLobbyMember[])
   return null;
 }
 
-export function remindedLabel(count: number) {
-  return `${count} reminded`;
+/**
+ * A lobby reminder is called an RSVP on screen, as community calls word it (GEO-3268): "RSVP" to
+ * set it, "Going" once set, "6 going" for the count. geo-chat still calls it a reminder.
+ */
+export function rsvpLabel(going: boolean) {
+  return going ? 'Going' : 'RSVP';
 }
+
+export function goingLabel(count: number) {
+  return `${count} going`;
+}
+
+export const RSVP_FAILED = 'Could not update your RSVP. Try again.';
 
 export const ROLE_LABEL: Record<DebateLobbyRole, string> = {
   host: 'Host',
@@ -286,6 +307,10 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
       return typeof limit === 'number'
         ? `You already have ${limit} lobbies open or scheduled. End one to open another.`
         : 'You have too many lobbies open or scheduled. End one to open another.';
+    }
+    case 'lobby_claim_list_limit': {
+      const limit = error.details?.limit;
+      return `This lobby already has ${typeof limit === 'number' ? limit : LOBBY_CLAIM_LISTS_MAX} claim lists. Remove one to add another.`;
     }
     case 'lobby_host_required':
       return 'Only a host can do that.';

@@ -2402,7 +2402,7 @@ export async function listUpcomingDebateRooms(
   accountKey: string | null,
   signal?: AbortSignal
 ) {
-  // Lobby rows are opt-in, so bundles that predate lobbies never see them; `lobbyJoining` gates them here.
+  // Lobby rows are opt-in, so bundles that predate lobbies never see them.
   return geoChatRequest<UpcomingDebateRoomsResponse>('/me/debate-rooms?include=lobbies', {
     auth: true,
     getPrivyIdentityToken,
@@ -2510,6 +2510,10 @@ export type DebateLobbyView = {
   debate_pairs?: DebateLobbyPair[];
   /** Live visitors without an account (GEO-3129); absent from a geo-chat that predates guests. */
   guest_count?: number;
+  /** Host-picked claim list pages, in tab order (GEO-3273). Absent from older geo-chat. */
+  claim_lists?: DebateLobbyClaimList[];
+  /** Orders `claim_lists` against `debate.lobby_claim_lists_changed`; `null` before the first list. */
+  claim_lists_as_of?: string | null;
   viewer: {
     /** `null` before the viewer's first join. */
     role: DebateLobbyRole | null;
@@ -2569,6 +2573,39 @@ export async function listDebateLobbies(
   signal?: AbortSignal
 ) {
   return geoChatRequest<DebateLobbiesResponse>('/debate-lobbies', {
+    // Signed out, the list a new account sees (GEO-3291); `true` signed in, so a failed token
+    // exchange is an error rather than a quietly anonymous list.
+    auth: accountKey ? true : 'optional',
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** Where a lobby stands for the calendar (GEO-3271). An ended lobby's `open` is false, so this tells it from upcoming. */
+export type DebateLobbyCalendarState = 'upcoming' | 'open' | 'ended';
+
+/** One lobby in `GET /debate-lobbies/calendar`: the list's row, plus its state and when it ended. */
+export type DebateLobbyCalendarRow = DebateLobbySummary & {
+  state: DebateLobbyCalendarState;
+  closed_at: string | null;
+};
+
+export type DebateLobbyCalendarResponse = { lobbies: DebateLobbyCalendarRow[] };
+
+/**
+ * Every lobby starting in `[from, to)`, soonest first (GEO-3271), with none of the list's caps and
+ * ended lobbies included. Account required. Up to 35 days; a lobby ended before it opened is left
+ * out by geo-chat, as a cancellation.
+ */
+export async function listDebateLobbyCalendar(
+  { from, to }: { from: Date; to: Date },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+  return geoChatRequest<DebateLobbyCalendarResponse>(`/debate-lobbies/calendar?${params.toString()}`, {
     auth: true,
     getPrivyIdentityToken,
     accountKey,
@@ -2762,6 +2799,68 @@ export async function endDebateLobbyRoomVote(
 }
 
 /**
+ * A claim list page on a lobby (GEO-3273): a Geo page whose collection blocks hold claims, shown as
+ * its own tab. geo-chat stores only which page, from which space, and where; the graph has the rest.
+ */
+export type DebateLobbyClaimList = {
+  /** 32 hex. */
+  entity_id: string;
+  /** 32 hex. The same page can hold different blocks in different spaces, so this picks the copy. */
+  space_id: string;
+  position: number;
+  /** `null` once that account is deleted. */
+  added_by: DebateLobbyPerson | null;
+  added_at: string;
+};
+
+/** Full state, as the GET, every host action and `debate.lobby_claim_lists_changed` carry it. */
+export type DebateLobbyClaimLists = {
+  lobby_id: string;
+  /** `null` before any list was saved. */
+  as_of: string | null;
+  /** In position order. */
+  claim_lists: DebateLobbyClaimList[];
+};
+
+/** geo-chat's `MAX_CLAIM_LISTS`; a sixth is `409 lobby_claim_list_limit`. */
+export const LOBBY_CLAIM_LISTS_MAX = 5;
+
+/**
+ * Host only, inside the room. Adds the page at `position` (appends when omitted), or moves it there
+ * when already saved. A different `space_id` for a saved page switches it to that space's copy.
+ */
+export async function saveDebateLobbyClaimList(
+  lobbyId: string,
+  entityId: string,
+  body: { space_id: string; position?: number },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyClaimLists>(`/debate-lobbies/${lobbyId}/claim-lists/${entityId}`, {
+    method: 'PUT',
+    body,
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/** Host only, inside the room. Idempotent; the lists after it move up. */
+export async function removeDebateLobbyClaimList(
+  lobbyId: string,
+  entityId: string,
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null
+) {
+  return geoChatRequest<DebateLobbyClaimLists>(`/debate-lobbies/${lobbyId}/claim-lists/${entityId}`, {
+    method: 'DELETE',
+    auth: true,
+    getPrivyIdentityToken,
+    accountKey,
+  });
+}
+
+/**
  * Counts the viewer's side in the tally while their on-chain write indexes; `null` is a removed
  * side. Withdrawn (`position: undefined`) when the write fails. The response-indexed report
  * replaces it either way.
@@ -2796,9 +2895,20 @@ export async function getMyDebateLobby(
   return geoChatRequest<DebateMyLobby>('/me/debate-lobby', { auth: true, getPrivyIdentityToken, accountKey, signal });
 }
 
+/**
+ * Without `starts_at` the lobby opens now. `claim_lists` are tabs it starts with, in pick order
+ * (GEO-3275); more than five is `409 lobby_claim_list_limit`, and a page given twice keeps its
+ * first place. Without the field the request is exactly the one before claim lists existed.
+ */
+export type CreateDebateLobbyRequest = {
+  name: string;
+  starts_at?: string;
+  claim_lists?: Array<{ entity_id: string; space_id: string }>;
+};
+
 /** Without `starts_at` the lobby opens now. A start opens it 10 minutes early. */
 export async function createDebateLobby(
-  body: { name: string; starts_at?: string },
+  body: CreateDebateLobbyRequest,
   getPrivyIdentityToken: GetPrivyIdentityToken,
   accountKey: string | null
 ) {

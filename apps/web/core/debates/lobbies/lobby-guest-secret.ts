@@ -4,10 +4,13 @@ import { dashlessId } from '../api';
 
 const secretKey = (lobbyId: string) => `geo.debates.lobby-guest.${dashlessId(lobbyId)}`;
 
-/** Kept per lobby for the tab's life, so a reload resumes the same guest and a removed one stays removed. */
+/**
+ * Kept per lobby and shared by every tab, so a reload or another tab resumes the same guest (one
+ * place per browser) and a removed one stays removed.
+ */
 export function readGuestSecret(lobbyId: string): string | null {
   try {
-    return window.sessionStorage.getItem(secretKey(lobbyId));
+    return window.localStorage.getItem(secretKey(lobbyId));
   } catch {
     return null;
   }
@@ -15,7 +18,7 @@ export function readGuestSecret(lobbyId: string): string | null {
 
 export function storeGuestSecret(lobbyId: string, secret: string) {
   try {
-    window.sessionStorage.setItem(secretKey(lobbyId), secret);
+    window.localStorage.setItem(secretKey(lobbyId), secret);
   } catch {
     // Without storage a reload takes a new place; the old one lapses in 90s.
   }
@@ -23,7 +26,7 @@ export function storeGuestSecret(lobbyId: string, secret: string) {
 
 export function clearGuestSecret(lobbyId: string) {
   try {
-    window.sessionStorage.removeItem(secretKey(lobbyId));
+    window.localStorage.removeItem(secretKey(lobbyId));
   } catch {
     // Nothing stored.
   }

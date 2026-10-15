@@ -14,6 +14,49 @@ import { useSmartAccount } from './use-smart-account';
  */
 const UNREGISTERED_POLL_INTERVAL_MS = 3_000;
 
+/**
+ * How long after this browser sends a profile publish we keep trusting it over an index
+ * that still shows no profile. The indexer runs seconds to a minute behind the chain;
+ * without this, a reload in that window would read "registered, no profile" and reopen
+ * onboarding for an account whose profile is already on its way.
+ */
+const PROFILE_PUBLISH_GRACE_MS = 10 * 60 * 1000;
+
+function profilePublishStorageKey(address: string) {
+  return `personalProfilePublishedAt:${address.toLowerCase()}`;
+}
+
+/** Record that this browser just sent the personal profile publish for `address`. */
+export function markPersonalProfilePublished(address: string) {
+  try {
+    window.localStorage.setItem(profilePublishStorageKey(address), String(Date.now()));
+  } catch {
+    // Storage can be unavailable (private mode, blocked site data); the grace is a nicety.
+  }
+}
+
+function recentlyPublishedProfile(address: string) {
+  try {
+    const at = Number(window.localStorage.getItem(profilePublishStorageKey(address)));
+    return Number.isFinite(at) && Date.now() - at < PROFILE_PUBLISH_GRACE_MS;
+  } catch {
+    return false;
+  }
+}
+
+export type PersonalSpaceIdData = {
+  isRegistered: boolean;
+  personalSpaceId: string | null;
+  personalEntityId: string | null;
+  /**
+   * Registered on-chain, but the profile publish never landed: no topic, no page, no
+   * name. Re-running onboarding fixes it — `createPersonalSpaceOnChain` skips the
+   * registration it already has and only publishes the profile. Optional so cache seeds
+   * that predate it read as "has a profile".
+   */
+  needsProfile?: boolean;
+};
+
 export function personalSpaceIdQueryKey(address: string | null | undefined) {
   return ['personal-space-id', address] as const;
 }
@@ -25,7 +68,7 @@ export function usePersonalSpaceId() {
 
   const { data, isLoading, isFetched } = useQuery({
     queryKey: personalSpaceIdQueryKey(address),
-    queryFn: async () => {
+    queryFn: async (): Promise<PersonalSpaceIdData | null> => {
       if (!address) return null;
 
       const space = await Effect.runPromise(getSpaceByAddress(address));
@@ -34,7 +77,12 @@ export function usePersonalSpaceId() {
         return { isRegistered: false, personalSpaceId: null, personalEntityId: null };
       }
 
-      return { isRegistered: true, personalSpaceId: space.id, personalEntityId: space.topicId ?? null };
+      return {
+        isRegistered: true,
+        personalSpaceId: space.id,
+        personalEntityId: space.topicId ?? null,
+        needsProfile: space.type === 'PERSONAL' && !space.hasProfile && !recentlyPublishedProfile(address),
+      };
     },
     enabled: !!address,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
@@ -60,6 +108,7 @@ export function usePersonalSpaceId() {
     personalSpaceId: data?.personalSpaceId ?? null,
     personalEntityId: data?.personalEntityId ?? null,
     isRegistered: data?.isRegistered ?? false,
+    needsProfile: data?.needsProfile ?? false,
     // TanStack's isLoading can read false for a tick after the query becomes enabled but
     // before it dispatches a fetch — same gap a disabled query has pre-address. isFetched
     // doesn't lag: it stays false until a fetch for this queryKey actually completes.

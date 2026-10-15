@@ -7,6 +7,7 @@ import { motion } from 'framer-motion';
 import Link from 'next/link';
 
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
+import { useBrowseSidebarPageDefault } from '~/core/state/browse-sidebar-state';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Avatar } from '~/design-system/avatar';
@@ -22,6 +23,7 @@ import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button'
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
+import { useScrollLock } from '../use-scroll-lock';
 import {
   type LobbyPresenceState,
   MAX_TIMEOUT_MS,
@@ -34,7 +36,10 @@ import { markLobbyEntry } from './lobby-analytics';
 import { LobbyClaimsArea } from './lobby-claims-area';
 import { useClaimsTabMark } from './lobby-claims-mark';
 import { LobbyControlBar, LobbyHandControl } from './lobby-control-bar';
+import { useExitLobbyWhenOut, useLobbyExitHref } from './lobby-exit';
 import {
+  RSVP_FAILED,
+  goingLabel,
   hostAfterChange,
   hostWhoLeft,
   hostsLabel,
@@ -43,7 +48,7 @@ import {
   lobbyDateLabel,
   lobbyErrorMessage,
   notYetOpenLabel,
-  remindedLabel,
+  rsvpLabel,
 } from './lobby-format';
 import { LOBBY_GUEST_COPY, LobbyGuestBanner } from './lobby-guest';
 import {
@@ -60,6 +65,7 @@ import { usePreOpenHosts } from './lobby-host-lobbies';
 import { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
 import { type LobbyGuestNotice, type LobbyHandoffNotice, LobbyNotices, LobbyToast } from './lobby-notices';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
+import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LobbyPeople } from './lobby-roster';
 import { LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
@@ -92,9 +98,10 @@ export const LOBBY_COPY = {
   guestBeforeOpen: 'No account? You can still join and listen when it opens.',
   steppedOut: 'You stepped out to debate. You’re still on the roster.',
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
-  guestRemoved: 'A host removed you from this lobby.',
+  guestRemoved: LOBBY_STATE_COPY.removed,
   guestRemovedInvite: 'Create an account to come back and take part.',
   guestElsewhere: 'You’re listening in another tab.',
+  guestPaused: 'You’re not listening in this tab.',
   guestListeningOff: 'Listening without an account has been turned off for this lobby. Create an account to join.',
 } as const;
 
@@ -105,6 +112,8 @@ const findDebateAction = { href: NavUtils.toExplore(), label: LOBBY_STATE_COPY.f
  * A guest who signs in stays a guest until the member view loads, so audio never drops.
  */
 export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
+  // The lobby wants the width; the browse sidebar opens collapsed here and as it was elsewhere.
+  useBrowseSidebarPageDefault(false);
   const { ready, authenticated } = useGeoChatAuth();
   const signedOut = ready && !authenticated;
   const lobbyQuery = useDebateLobby(lobbyId);
@@ -140,6 +149,19 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   useMatchmakingScope(waitingOutside);
   // Only where the page shows the guest banner, which is how a closed prompt is opened again.
   useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
+  const exitHref = useLobbyExitHref();
+  const exiting = useExitLobbyWhenOut({
+    lobbyId,
+    access: lobby?.access ?? null,
+    presence: presence.state,
+    guestStatus: guestSession.state.status,
+    fresh: (guest ? guestQuery : lobbyQuery).isFetchedAfterMount,
+    name: lobby?.name ?? null,
+    exitHref,
+  });
+
+  // Blank while the route changes, rather than a flash of the card being left.
+  if (exiting) return <div className="min-h-[calc(100dvh-2.75rem)]" data-testid="lobby-exiting" />;
 
   return (
     <LobbyGuestProvider value={guest}>
@@ -149,6 +171,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
         onRetry={() => void (guest ? guestQuery : lobbyQuery).refetch()}
         presence={presence}
         guestSession={guestSession}
+        exitHref={exitHref}
       />
     </LobbyGuestProvider>
   );
@@ -184,6 +207,7 @@ function LobbyAccess({
   onRetry,
   presence,
   guestSession,
+  exitHref,
 }: {
   lobby: LobbyPageView | null;
   failed: boolean;
@@ -191,6 +215,8 @@ function LobbyAccess({
   onRetry: () => void;
   presence: ReturnType<typeof useLobbyPresence>;
   guestSession: LobbyGuestSession;
+  /** Where leaving goes: the page the lobby was opened from. */
+  exitHref: string;
 }) {
   const guest = useIsLobbyGuest();
   if (!lobby) {
@@ -235,7 +261,7 @@ function LobbyAccess({
           </LobbyShell>
         );
       }
-      return <AdmittedLobby lobby={lobby} presence={presence} guestSession={guestSession} />;
+      return <AdmittedLobby lobby={lobby} presence={presence} guestSession={guestSession} exitHref={exitHref} />;
   }
 }
 
@@ -282,7 +308,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
       </div>
       {lobby.reminder_count > 0 ? (
         <Text as="p" variant="metadata" color="grey-04">
-          {remindedLabel(lobby.reminder_count)}
+          {goingLabel(lobby.reminder_count)}
         </Text>
       ) : null}
       <div className="flex flex-wrap gap-2">
@@ -294,7 +320,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
             pending={reminder.isPending}
             onClick={() => reminder.mutate({ lobbyId: lobby.lobby_id, reminded: !reminded })}
           >
-            {reminded ? 'Reminded' : 'Remind me'}
+            {rsvpLabel(reminded)}
           </HubPillButton>
         )}
         <FindDebateLink />
@@ -328,7 +354,7 @@ function NotYetOpen({ lobby }: { lobby: LobbyPageView }) {
       ) : null}
       {reminder.isError ? (
         <Text as="p" variant="footnote" color="red-01">
-          {lobbyErrorMessage(reminder.error, 'Could not update your reminder. Try again.')}
+          {lobbyErrorMessage(reminder.error, RSVP_FAILED)}
         </Text>
       ) : null}
       {guest ? (
@@ -345,24 +371,24 @@ function AdmittedLobby({
   lobby,
   presence,
   guestSession,
+  exitHref,
 }: {
   lobby: LobbyPageView;
   presence: ReturnType<typeof useLobbyPresence>;
   guestSession: LobbyGuestSession;
+  exitHref: string;
 }) {
   const { state, join, leave, leaveSteppedOut, connectionId, setVoiceConnected, voiceAwayAt } = presence;
 
-  // Until the refetch moves the page to the lobby's new access.
-  if (state.status === 'dropped') {
-    if (state.reason === 'removed') {
-      return (
-        <LobbyRemovedNotice
-          onRejoin={() => void join(false, true)}
-          unbanned={isMemberView(lobby) && lobby.viewer.last_moderation?.action === 'unban'}
-        />
-      );
-    }
-    return state.reason === 'banned' ? <LobbyBannedCard name={lobby.name} /> : <LobbyClosedCard lobby={lobby} ended />;
+  // Removed before this visit, or unbanned since. Dropped while in the lobby, and Leave, take the
+  // page back to where it was opened from (`useExitLobbyWhenOut`) before this renders.
+  if (state.status === 'dropped' && state.reason === 'removed') {
+    return (
+      <LobbyRemovedNotice
+        onRejoin={() => void join(false, true)}
+        unbanned={isMemberView(lobby) && lobby.viewer.last_moderation?.action === 'unban'}
+      />
+    );
   }
 
   if (state.status === 'confirm_leave_other') {
@@ -378,34 +404,20 @@ function AdmittedLobby({
   if (state.status === 'moved')
     return <MovedToOtherLobby lobby={lobby} otherLobbyId={state.otherLobbyId} onJoin={join} />;
 
-  if (state.status === 'left') {
-    return (
-      <LobbyShell>
-        <LobbyTitle lobby={lobby} />
-        <Text as="p" variant="metadata" color="grey-04">
-          You left this lobby.
-        </Text>
-        <div className="flex flex-wrap gap-2">
-          <HubPillButton variant="primary" analyticsLabel="Lobby rejoin" onClick={() => void join(false)}>
-            Rejoin
-          </HubPillButton>
-          <FindDebateLink />
-        </div>
-      </LobbyShell>
-    );
-  }
-
   return (
-    <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
-      <LobbyRoom
-        lobby={lobby}
-        state={state}
-        onRetry={() => void join(false)}
-        onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
-        voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
-        guestSession={guestSession}
-      />
-    </LobbyQueuedRequestProvider>
+    <LobbyAnalyticsScope lobby={lobby}>
+      <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
+        <LobbyRoom
+          lobby={lobby}
+          state={state}
+          onRetry={() => void join(false)}
+          onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
+          voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
+          guestSession={guestSession}
+          exitHref={exitHref}
+        />
+      </LobbyQueuedRequestProvider>
+    </LobbyAnalyticsScope>
   );
 }
 
@@ -490,6 +502,7 @@ function LobbyRoom({
   onLeave,
   voice,
   guestSession,
+  exitHref,
 }: {
   lobby: LobbyPageView;
   state: LobbyPresenceState;
@@ -497,6 +510,7 @@ function LobbyRoom({
   onLeave: () => void;
   voice: { connectionId: string; setVoiceConnected: (connected: boolean) => void; awayAt: string | null };
   guestSession: LobbyGuestSession;
+  exitHref: string;
 }) {
   const guest = useIsLobbyGuest();
   const currentUserId = useCurrentGeoChatUserId();
@@ -535,7 +549,10 @@ function LobbyRoom({
     : guestSession.state.status === 'refused'
       ? { message: guestSession.state.message, retry: guestSession.state.retryable ? 'Try again' : null }
       : guestSession.state.status === 'superseded'
-        ? { message: LOBBY_COPY.guestElsewhere, retry: 'Listen here' }
+        ? {
+            message: guestSession.otherTabListening ? LOBBY_COPY.guestElsewhere : LOBBY_COPY.guestPaused,
+            retry: 'Listen here',
+          }
         : guestEnded && guestEndedAt !== null && guestViewAt >= guestEndedAt
           ? { message: LOBBY_COPY.guestListeningOff, retry: null }
           : null;
@@ -555,7 +572,9 @@ function LobbyRoom({
   // Per-person disagreements ride on the claims read the claims panel already makes.
   const disagreements = useDebateLobbyClaims(lobby.lobby_id, showClaims).data?.disagreements ?? null;
   const highlights = useLobbyHighlights(lobby.lobby_id, phone && showClaims).data;
-  const claimsMark = useClaimsTabMark(highlights, phone && tab === 'claims');
+  // The desktop panel always shows the claims, so what arrives there is seen; only a phone on
+  // People builds up a mark.
+  const claimsMark = useClaimsTabMark(highlights, !phone || tab === 'claims', lobby.claim_lists);
   const tabbed = phone && showClaims;
   const tabIds = useTabIds();
   const onPeopleTab = !phone || !showClaims || tab === 'people';
@@ -576,7 +595,7 @@ function LobbyRoom({
       <LobbyHandControl lobby={memberLobby} />
     ) : null;
   const leave = guest ? (
-    <Link href={NavUtils.toExplore()} aria-label="Leave lobby" className={hubPillClassName('secondary', 'md:h-10')}>
+    <Link href={exitHref} replace aria-label="Leave lobby" className={hubPillClassName('secondary', 'md:h-10')}>
       <LeaveLabel />
     </Link>
   ) : (
@@ -590,6 +609,9 @@ function LobbyRoom({
   // A phone shows one tab at a time and keeps scrolling the page.
   const columns = showClaims && !phone;
   const columnScroll = columns && 'overflow-y-auto overscroll-contain';
+  // The columns fill the viewport and scroll themselves; the page around them must not, or a scroll
+  // outside them moves it onto blank space.
+  useScrollLock(columns);
 
   return (
     <LobbySlotsProvider value={slots.targets}>

@@ -1,4 +1,9 @@
-import { type DebateLobbiesResponse, type DebateLobbySummary, dashlessId } from '../api';
+import {
+  type DebateLobbiesResponse,
+  type DebateLobbyCalendarResponse,
+  type DebateLobbySummary,
+  dashlessId,
+} from '../api';
 
 /** `DebateLobbySummary` as broadcast: nothing about whoever receives it. */
 export type DebateLobbyCard = Omit<DebateLobbySummary, 'viewer_reminded' | 'viewer_on_roster' | 'as_of'>;
@@ -23,24 +28,53 @@ export function parseLobbyCardPatch(value: unknown): DebateLobbyCardPatch | null
 }
 
 /**
+ * A cached row with a patch applied, keeping what is the viewer's own; `null` when the patch is no
+ * newer than the row's `as_of`, so it changes nothing. Shared by the list and the calendar's weeks.
+ */
+function patchedRow(cached: DebateLobbySummary, patch: DebateLobbyCardPatch): DebateLobbySummary | null {
+  if (cached.as_of && Date.parse(cached.as_of) >= Date.parse(patch.asOf)) return null;
+  return {
+    ...patch.lobby,
+    viewer_reminded: cached.viewer_reminded,
+    viewer_on_roster: cached.viewer_on_roster,
+    as_of: patch.asOf,
+  };
+}
+
+/**
  * The cached list with one patch applied, or the same list when it changes nothing. Patches only
  * update a row already listed, and only when newer than that row's `as_of`.
  */
 export function applyLobbyCardPatch(list: DebateLobbiesResponse, patch: DebateLobbyCardPatch): DebateLobbiesResponse {
   const id = dashlessId(patch.lobby.lobby_id);
   const cached = list.lobbies.find(row => dashlessId(row.lobby_id) === id);
-  if (!cached) return list;
-  if (cached.as_of && Date.parse(cached.as_of) >= Date.parse(patch.asOf)) return list;
-
-  const row: DebateLobbySummary = {
-    ...patch.lobby,
-    viewer_reminded: cached.viewer_reminded,
-    viewer_on_roster: cached.viewer_on_roster,
-    as_of: patch.asOf,
-  };
+  const row = cached ? patchedRow(cached, patch) : null;
+  if (!row) return list;
   const others = list.lobbies.filter(other => dashlessId(other.lobby_id) !== id);
 
   return { lobbies: sortLobbies([...others, row]) };
+}
+
+/**
+ * The same patch laid over a calendar week (GEO-3300), or the same week when it changes nothing. As
+ * on the list, it only updates a row already there and newer than its `as_of`. The week keeps its
+ * own order, and an ended lobby stays ended: the patch is the lobby's card, which has no end, and
+ * the calendar hides ended lobbies, so one revived here would reappear.
+ */
+export function applyLobbyCardPatchToCalendar(
+  week: DebateLobbyCalendarResponse,
+  patch: DebateLobbyCardPatch
+): DebateLobbyCalendarResponse {
+  const id = dashlessId(patch.lobby.lobby_id);
+  let changed = false;
+  const lobbies = week.lobbies.map(row => {
+    if (dashlessId(row.lobby_id) !== id || row.state === 'ended') return row;
+    const patched = patchedRow(row, patch);
+    if (!patched) return row;
+    changed = true;
+    return { ...patched, state: patched.open ? ('open' as const) : ('upcoming' as const), closed_at: null };
+  });
+  return changed ? { lobbies } : week;
 }
 
 /** geo-chat's order: open first, busiest first; upcoming soonest first; then by id. */

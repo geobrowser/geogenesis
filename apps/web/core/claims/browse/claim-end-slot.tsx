@@ -14,6 +14,7 @@ import { debatePath } from '~/core/debates/debate-routes';
 import { RematchClaimEndSlot } from '~/core/debates/rematch-claim-end-slot';
 import { useRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { RequestDebateControl, claimSlotPillClass } from '~/core/debates/request-debate-control';
+import { WATCH_LIVE_ENABLED } from '~/core/debates/watch-live';
 
 import { useClaimMatchup } from './use-claim-matchup';
 
@@ -29,7 +30,7 @@ import { useClaimMatchup } from './use-claim-matchup';
  * Priority, most actionable first:
  *
  *   1. Request debate — someone is standing ready on the side opposite the viewer's.
- *   2. Watch live     — a debate is running on this claim.
+ *   2. Watch live     — a debate is running on this claim. Off for now; see `WATCH_LIVE_ENABLED`.
  *   3. Nothing        — the row simply ends, which is the common case and must cost no layout.
  *
  * A fourth state, "Watch the debate" for a recorded one, was specified and built and then had no
@@ -162,7 +163,7 @@ function MatchmakingClaimEndSlot({
     );
   }
 
-  if (activeDebate) {
+  if (WATCH_LIVE_ENABLED && activeDebate) {
     return <WatchLiveLink activeDebate={activeDebate} spaceId={spaceId} variant={variant} className={className} />;
   }
 

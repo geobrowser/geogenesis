@@ -12,6 +12,7 @@ import {
 } from '~/core/explore/explore-card-item';
 import { exploreCardNodeFields, exploreCardPropertyFragment } from '~/core/explore/explore-card-selection';
 import { EntitiesOrderBy, type EntityFilter, type RelationFilter } from '~/core/gql/graphql';
+import { BEST_ORDER_BY, NEWEST_ORDER_BY } from '~/core/io/entity-order-by';
 import { graphql } from '~/core/io/graphql-client';
 import { normId } from '~/core/utils/norm-id';
 
@@ -248,8 +249,8 @@ export const CLAIM_RECORD_CANDIDATE_LIMIT = 1000;
 export type ClaimRecordSort = 'best' | 'top' | 'new';
 
 export function claimRecordOrderBy(sort: ClaimRecordSort): EntitiesOrderBy[] {
-  if (sort === 'new') return [EntitiesOrderBy.CreatedAtDesc, EntitiesOrderBy.IdAsc];
-  return [EntitiesOrderBy.RankingScoreDesc, EntitiesOrderBy.UpdatedAtDesc, EntitiesOrderBy.IdAsc];
+  if (sort === 'new') return NEWEST_ORDER_BY;
+  return BEST_ORDER_BY;
 }
 
 export type ClaimRecordFilters = {

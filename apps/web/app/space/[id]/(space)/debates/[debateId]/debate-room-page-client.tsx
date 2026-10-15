@@ -137,6 +137,7 @@ import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-polic
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { useFeatureFlag } from '~/core/state/feature-flags';
 import { reportError } from '~/core/telemetry/logger';
+import { currentNavigationType } from '~/core/utils/navigation-type';
 
 import { Button } from '~/design-system/button';
 import { Check } from '~/design-system/icons/check';
@@ -4055,12 +4056,6 @@ function captureDebateRoomConnectionFailure({
   } catch {
     // Diagnostics are best-effort and must never interfere with room cleanup or retry.
   }
-}
-
-function currentNavigationType() {
-  if (typeof performance === 'undefined' || typeof performance.getEntriesByType !== 'function') return 'unknown';
-  const navigation = performance.getEntriesByType('navigation')[0] as PerformanceNavigationTiming | undefined;
-  return navigation?.type ?? 'unknown';
 }
 
 // Mobile browsers behind cellular/symmetric NAT can take several seconds to establish the publisher

@@ -70,6 +70,17 @@ const mocks = vi.hoisted(() => ({
   personProfileOpened: vi.fn(),
 }));
 
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({
+  FollowButton: (props: { target: { id: string }; variant?: string }) => (
+    <span data-testid="follow" data-id={props.target.id} data-variant={props.variant} />
+  ),
+}));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/analytics', () => ({ personProfileOpened: mocks.personProfileOpened, capture: mocks.capture }));
 
 // The real one reaches for the sync engine and the router; a plain anchor is what the assertions
@@ -384,6 +395,19 @@ vi.stubGlobal('ResizeObserver', ResizeObserverStub);
 afterEach(cleanup);
 
 describe('PeopleTab', () => {
+  it('offers Follow on each face, by personal space, and not on rows without one (GEO-3236, GEO-3310)', () => {
+    mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
+
+    render(<PeopleTab onTabChange={mocks.onTabChange} />);
+
+    const follows = screen.getAllByTestId('follow');
+    expect(follows.map(follow => follow.getAttribute('data-id'))).toEqual([PROFILE_SPACE_IDS['user-them']]);
+    expect(follows[0].getAttribute('data-variant')).toBe('avatar');
+    // On the face, not in the name's row.
+    expect(follows[0].parentElement?.querySelector('.overflow-hidden.rounded-full')).not.toBeNull();
+    expect(within(follows[0].parentElement as HTMLElement).queryByText('Arturas')).toBeNull();
+  });
+
   it('keeps malformed roster IDs out of the shared position query', () => {
     mocks.people = [person('user-them', 'Arturas'), person('user-without-space', 'Nameless')];
 

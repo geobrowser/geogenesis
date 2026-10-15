@@ -25,6 +25,13 @@ const mocks = vi.hoisted(() => ({
 
 // Stands in for the claims panel so a test can see whether it is remounted or merely handed a new
 // debate: only a mount appends. Its content has its own suite.
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({ FollowButton: () => null }));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/debates/browse/debate-claims-panel', async () => {
   const React = await import('react');
   return {

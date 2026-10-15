@@ -43,7 +43,7 @@ vi.mock('~/partials/entity-page/entity-row-actions', () => ({
 }));
 
 const followers = vi.hoisted(() => ({ count: null as number | null }));
-vi.mock('~/core/topics/use-topic-follower-count', () => ({
+vi.mock('~/core/follows/use-follower-count', () => ({
   useTopicFollowerCount: () => followers.count,
 }));
 

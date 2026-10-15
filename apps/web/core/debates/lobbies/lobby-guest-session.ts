@@ -16,7 +16,7 @@ export type GuestSessionState =
   | { status: 'refused'; attempt: number; message: string; retryAt: number | null; retryable: boolean }
   | { status: 'removed'; attempt: number }
   | { status: 'ended'; attempt: number }
-  /** A later admission (a reload, another tab) holds the session; the secret is theirs now. */
+  /** Another tab in this browser listens, or a later admission holds the session. Waits on a press. */
   | { status: 'superseded'; attempt: number };
 
 export type GuestSessionEvent =
@@ -28,6 +28,8 @@ export type GuestSessionEvent =
   | { type: 'removed' }
   | { type: 'ended' }
   | { type: 'superseded' }
+  /** Another tab in this browser listens, or took listening from this one; `sameLobby` when it's this lobby. */
+  | { type: 'elsewhere'; sameLobby: boolean }
   /** The lease lapsed, or the room needs a fresh token: start again on the same secret. */
   | { type: 'restart' }
   | { type: 'memberJoined' }
@@ -113,6 +115,19 @@ export function transition(
     case 'superseded':
       // No leave and no clear: the session and its secret belong to the newer page.
       return state.status === 'listening'
+        ? { next: { status: 'superseded', attempt: state.attempt }, commands: [] }
+        : stay(state);
+
+    case 'elsewhere':
+      // Another lobby: free this place. This lobby: no leave, which could land before the other
+      // tab's start and end the session; that start supersedes this admission.
+      if (state.status === 'listening') {
+        return {
+          next: { status: 'superseded', attempt: state.attempt },
+          commands: event.sameLobby ? [] : [leaveFor(state.session)],
+        };
+      }
+      return state.status === 'idle' || state.status === 'starting' || state.status === 'refused'
         ? { next: { status: 'superseded', attempt: state.attempt }, commands: [] }
         : stay(state);
 
