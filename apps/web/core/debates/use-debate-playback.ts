@@ -345,9 +345,9 @@ export function useDebatePlayback(
 
   // GEO-2949. `turn_durations_ms` is the format's allowance, not what the render cut. Debaters
   // end turns early, so switching the audible panel on the allowance runs late on every turn.
-  // The media query is the same one the feed card already issues, so this is a cache read rather
-  // than a second request; `turn_segments` is absent on older API replicas and on a debate whose
-  // media job has not finished, and the allowance remains the fallback for both.
+  // Shares the feed card's media cache entry, since `debateQueryKeys.media` is dashless whichever
+  // spelling the caller holds. `turn_segments` is absent on older API replicas and on a debate
+  // whose media job has not finished, and the allowance remains the fallback for both.
   const mediaQuery = useDebateMedia(debate.id, enabled);
   /**
    * This player plays the raw recordings, so it reads every time on their clock: the source times
