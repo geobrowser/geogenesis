@@ -2,12 +2,21 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
-import { LABEL_FONT, STAMP_INK, STAMP_TILT, STAMP_WORD } from './browse/stamp-styles';
-import { RoomBanner, RoomStamp, RoomTag } from './debate-room-stamps';
+import { LABEL_FONT, NOTE_CLASS, STAMP_INK, STAMP_TILT, STAMP_WORD } from './browse/stamp-styles';
+import { RoomMiddleBanner, RoomTag, RoomTileStamp } from './debate-room-stamps';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
-import { type OpenRoundsRoomPhase, openRoundCountInMs, openRoundNumber, openRoundRevealedPicks } from './open-rounds';
+import {
+  type OpenRoundsRoomPhase,
+  debateTurnRoleForDebate,
+  openRoundCountInMs,
+  openRoundNumber,
+  openRoundRevealedPicks,
+} from './open-rounds';
 import { BREAK_STAMP_GAP_MS } from './playback-breaks';
+import { roundLabel } from './round-cues';
 
 /**
  * The Open rounds reveal (GEO-3179): the result window after a round resolves (`result_window_ms`,
@@ -94,26 +103,23 @@ export function useOpenRoundRevealStep(
 export function OpenRoundPickStamp({ pick, order }: { pick: OpenRoundPick | null; order: 'first' | 'second' }) {
   const key = pick ?? 'none';
   return (
-    <div
-      aria-hidden="true"
-      data-open-round-reveal={key}
-      className="pointer-events-none absolute inset-0 z-[35] grid place-items-center"
-    >
-      <RoomStamp
+    <div aria-hidden="true" data-open-round-reveal={key} className="pointer-events-none absolute inset-0 z-[35]">
+      <RoomTileStamp
         ink={STAMP_INK[key]}
         sizeCqw={12}
         tilt={STAMP_TILT[order === 'first' ? 1 : 2]}
         delayMs={order === 'first' ? 0 : BREAK_STAMP_GAP_MS}
       >
         {STAMP_WORD[key]}
-      </RoomStamp>
+      </RoomTileStamp>
     </div>
   );
 }
 
 export type OpenRoundResult =
   /** `opener` is the opener's name, or `null` when it is you. */
-  | { kind: 'round'; round: number; opener: string | null }
+  /** `label` is the round in the player's words, "Round 2 · Rebuttal". */
+  | { kind: 'round'; round: number; label: string; opener: string | null }
   | { kind: 'wrap'; note: string | null }
   | { kind: 'max'; rounds: number };
 
@@ -126,25 +132,16 @@ export type OpenRoundResult =
 export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) {
   return (
     <div data-open-round-result={result.kind} className="pointer-events-none absolute inset-0 z-[45]">
-      <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-        <RoomBanner
-          sizeCqw={5}
-          data-open-round-banner
-          sub={result.kind === 'round' ? openRoundOpenerLine(result.opener) : undefined}
-        >
-          {result.kind === 'round'
-            ? `Round ${result.round} · Rebuttal`
-            : result.kind === 'wrap'
-              ? 'That’s a wrap'
-              : 'That’s the max'}
-        </RoomBanner>
-      </div>
+      <RoomMiddleBanner
+        sizeCqw={5}
+        data-open-round-banner
+        sub={result.kind === 'round' ? openRoundOpenerLine(result.opener) : undefined}
+      >
+        {result.kind === 'round' ? result.label : result.kind === 'wrap' ? 'That’s a wrap' : 'That’s the max'}
+      </RoomMiddleBanner>
       {result.kind === 'wrap' && result.note && (
         <div className="absolute inset-x-0 top-[calc(50%+7.5cqw)] px-4 text-center">
-          <span
-            className="inline-block max-w-full rounded-[3px] bg-black/72 px-[2.2cqw] py-[1.3cqw] text-[2.8cqw] leading-[1.2] font-medium tracking-[0.01em] text-balance text-white"
-            style={LABEL_FONT}
-          >
+          <span className={cx(NOTE_CLASS, 'max-w-full text-balance')} style={LABEL_FONT}>
             {result.note}
           </span>
         </div>
@@ -274,7 +271,12 @@ export function useOpenRoundReveal({
     result =
       outcome === 'extend'
         ? // The first slot opens every round, and is one of the two debaters.
-          { kind: 'round', round: openRoundNumber(roundIndex + 1), opener: localOpens ? null : remote.name }
+          {
+            kind: 'round',
+            round: openRoundNumber(roundIndex + 1),
+            label: roundLabel((roundIndex + 1) * 2, turnIndex => debateTurnRoleForDebate(debate, turnIndex)),
+            opener: localOpens ? null : remote.name,
+          }
         : { kind: 'wrap', note: openRoundWrapNote(localPick?.pick, { name: remote.name, pick: remotePick?.pick }) };
   }
 

@@ -19,8 +19,10 @@ import { type TurnCount, roundLabel } from '~/core/debates/round-cues';
 
 import {
   BANNER_CLASS,
+  BANNER_SUB_CLASS,
   ENDED_TILT,
   LABEL_FONT,
+  NOTE_CLASS,
   STAMP_CLASS,
   STAMP_FONT,
   STAMP_INK,
@@ -263,10 +265,7 @@ export function DebateBreakOverlay({
           >
             <span className="block truncate">{title}</span>
             {opener && (
-              <span
-                data-debate-banner-sub
-                className="mt-[0.35em] block truncate text-[0.6em] tracking-[0.02em] normal-case opacity-85"
-              >
+              <span data-debate-banner-sub className={BANNER_SUB_CLASS}>
                 {opener}
               </span>
             )}
@@ -275,10 +274,7 @@ export function DebateBreakOverlay({
       )}
       {note && cue.elapsedMs >= bannerAtMs - MOUNT_AHEAD_MS && (
         <div className={cx('absolute inset-x-0 top-[calc(50%+7.5cqw)] text-center', APPEAR)} style={heldAt(bannerAtMs)}>
-          <span
-            className="inline-block rounded-[3px] bg-black/72 px-[2.2cqw] py-[1.3cqw] text-[2.8cqw] leading-[1.2] font-medium tracking-[0.01em] text-white"
-            style={LABEL_FONT}
-          >
+          <span className={NOTE_CLASS} style={LABEL_FONT}>
             {note}
           </span>
         </div>

@@ -4,8 +4,8 @@ import type { OpenRoundPick, ParticipantSlot } from '~/core/debates/api';
  * The agreed "stamps" design's shared pieces (GEO-3277), as the design mockup has them: its two
  * faces, the stamp, the purple banner and the purple tag. Used by the breaks between rounds, the
  * round banner and tag, the claim counter and "Last word", and the recording room's moments
- * (GEO-3315). Each is sized where it is used, in `cqw`,
- * so it keeps its proportions from a feed card to fullscreen.
+ * (GEO-3315). Each is sized where it is used, in `cqw`, so it keeps its proportions from a feed card
+ * to fullscreen.
  */
 
 /** The banners', tags' and question's type: the recording timer's Geist. */
@@ -24,6 +24,13 @@ export const STAMP_CLASS =
 /** A purple band across a box's width: the round and turn announcements. */
 export const BANNER_CLASS =
   'w-full bg-purple px-[0.6em] py-[0.6em] text-center leading-none font-medium tracking-[0.04em] whitespace-nowrap text-white uppercase';
+
+/** A banner's smaller second line, where a long name truncates rather than shrinking the banner. */
+export const BANNER_SUB_CLASS = 'mt-[0.35em] block truncate text-[0.6em] tracking-[0.02em] normal-case opacity-85';
+
+/** The dark note under "That's a wrap" saying who didn't pick in time. */
+export const NOTE_CLASS =
+  'inline-block rounded-[3px] bg-black/72 px-[2.2cqw] py-[1.3cqw] text-[2.8cqw] leading-[1.2] font-medium tracking-[0.01em] text-white';
 
 /** A small purple tag: the round label, the claim counter, "Last word". */
 export const TAG_CLASS =

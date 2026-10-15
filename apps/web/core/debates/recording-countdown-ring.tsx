@@ -4,6 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { LABEL_FONT, STAMP_FONT } from './browse/stamp-styles';
+
 const COUNTDOWN_SIZE = 51;
 const COUNTDOWN_CENTER = COUNTDOWN_SIZE / 2;
 const COUNTDOWN_RADIUS = 21;
@@ -25,9 +27,42 @@ export function turnTimerScale(seconds: number) {
   return 1 + (0.3 * Math.min(5, 11 - Math.ceil(seconds))) / 5;
 }
 
-/** The rim of the red timer, at the disc's very edge. */
-const FINAL_RIM_PX = 3;
-const finalRimMask = `radial-gradient(farthest-side, transparent calc(100% - ${FINAL_RIM_PX}px), #000 calc(100% - ${FINAL_RIM_PX}px))`;
+/**
+ * Where an Open rounds turn timer is in its last ten seconds, shared by the room's timer and the
+ * published player's: `building` from 10 s, growing a step with each pulse; `final` from 5 s, red at
+ * its full size. `swell` is the once-a-second pulse's peak, relative to `scale`: the mockup's swell is
+ * absolute, 0.08 of the timer's size while it grows and 0.05 once red.
+ */
+export function turnTimerBuildUp(seconds: number) {
+  const counting = seconds <= 10 && seconds > 0;
+  const final = counting && seconds <= 5;
+  const scale = turnTimerScale(seconds);
+  return {
+    phase: final ? 'final' : counting ? 'building' : 'steady',
+    counting,
+    final,
+    scale,
+    swell: 1 + (final ? 0.05 : 0.08) / scale,
+  } as const;
+}
+
+/** Grows from the timer's corner, so it stays inside its tile at its largest. */
+export const TURN_TIMER_SCALE_CLASS =
+  'origin-top-right transition-[scale] duration-[350ms] ease-[cubic-bezier(0.33,1,0.68,1)]';
+
+/** The pulse each of the last ten seconds lands with, and the red glow of the last five. */
+export function turnTimerPulseClass(buildUp: ReturnType<typeof turnTimerBuildUp>) {
+  if (buildUp.final) return 'motion-safe:animate-[turnTimerPulse_350ms_linear,turnTimerGlow_1000ms_linear]';
+  return buildUp.counting ? 'motion-safe:animate-[turnTimerPulse_350ms_linear]' : undefined;
+}
+
+/** Hollows a disc into a ring `width` thick at its edge. */
+export function turnTimerRimMask(width: string) {
+  return `radial-gradient(farthest-side, transparent calc(100% - ${width}), #000 calc(100% - ${width}))`;
+}
+
+/** The room's red rim, at the disc's very edge. */
+const finalRimMask = turnTimerRimMask('3px');
 
 export function RecordingCountdownRing({
   remainingSeconds,
@@ -50,14 +85,11 @@ export function RecordingCountdownRing({
   const gradientId = React.useId();
   const elapsedRatio = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
   const muted = variant === 'muted';
-  const counting = buildUp !== null && remainingSeconds <= 10 && remainingSeconds > 0;
-  const final = counting && remainingSeconds <= 5;
+  const stage = turnTimerBuildUp(buildUp ? remainingSeconds : Infinity);
+  const { counting, final } = stage;
   const ringColor = muted ? 'rgba(190,190,190,0.92)' : variant === 'warning' ? COUNTDOWN_WARNING_COLOR : '#FFFFFF';
   const numberColor = muted ? 'var(--color-grey-02)' : '#FFFFFF';
   const dashOffset = COUNTDOWN_CIRCUMFERENCE * elapsedRatio;
-  const scale = buildUp ? turnTimerScale(remainingSeconds) : 1;
-  // The swell's height in the mockup is absolute: 0.08 of the timer's size while it grows, 0.05 once red.
-  const swell = 1 + (final ? 0.05 : 0.08) / scale;
   const rimDegrees = final && buildUp ? (Math.max(0, Math.min(5_000, buildUp.remainingMs)) / 5_000) * 360 : 0;
 
   return (
@@ -65,12 +97,9 @@ export function RecordingCountdownRing({
       aria-label={`Phase timer: ${remainingSeconds} seconds remaining`}
       data-muted-timer={muted ? 'true' : 'false'}
       data-timer-progress={progress}
-      data-turn-timer={buildUp ? (final ? 'final' : counting ? 'building' : 'steady') : undefined}
-      className={cx(
-        'relative grid shrink-0 place-items-center',
-        buildUp && 'origin-top-right transition-[scale] duration-[350ms] ease-[cubic-bezier(0.33,1,0.68,1)]'
-      )}
-      style={{ width: COUNTDOWN_SIZE, height: COUNTDOWN_SIZE, ...(buildUp ? { scale } : null) }}
+      data-turn-timer={buildUp ? stage.phase : undefined}
+      className={cx('relative grid shrink-0 place-items-center', buildUp && TURN_TIMER_SCALE_CLASS)}
+      style={{ width: COUNTDOWN_SIZE, height: COUNTDOWN_SIZE, ...(buildUp ? { scale: stage.scale } : null) }}
     >
       <div
         // Re-mounted each second of the last ten, which restarts its swell and glow. Reduced motion
@@ -78,10 +107,10 @@ export function RecordingCountdownRing({
         key={counting ? remainingSeconds : 'steady'}
         className={cx(
           'relative grid size-full place-items-center rounded-full',
-          counting && !final && 'motion-safe:animate-[turnTimerPulse_350ms_linear]',
-          final && 'bg-red-01 motion-safe:animate-[turnTimerPulse_350ms_linear,turnTimerGlow_1000ms_linear]'
+          turnTimerPulseClass(stage),
+          final && 'bg-red-01'
         )}
-        style={counting ? ({ '--turn-timer-swell': swell } as React.CSSProperties) : undefined}
+        style={counting ? ({ '--turn-timer-swell': stage.swell } as React.CSSProperties) : undefined}
       >
         {final ? (
           <span
@@ -141,7 +170,7 @@ export function RecordingCountdownRing({
           className="relative z-10"
           style={{
             color: numberColor,
-            fontFamily: final ? 'var(--font-geist-bold)' : 'var(--font-geist-medium)',
+            fontFamily: (final ? STAMP_FONT : LABEL_FONT).fontFamily,
             fontSize: 22,
             fontWeight: final ? 700 : 500,
             lineHeight: 1,

@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { BANNER_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './browse/stamp-styles';
+import { BANNER_CLASS, BANNER_SUB_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './browse/stamp-styles';
 
 /**
  * The recording room's moments in an Open rounds debate, in the stamps design the published player
@@ -23,10 +23,11 @@ export function RoomStamp({
   tilt,
   delayMs = 0,
   className,
+  style,
   ...props
 }: React.ComponentPropsWithoutRef<'span'> & {
-  /** The text colour, which the border takes too. */
-  ink: string;
+  /** The text colour as a class, which the border takes too. A style's `color` can stand in for it. */
+  ink?: string;
   sizeCqw: number;
   tilt: string;
   delayMs?: number;
@@ -40,6 +41,7 @@ export function RoomStamp({
         fontSize: `${sizeCqw}cqw`,
         transform: `rotate(${tilt})`,
         animationDelay: delayMs ? `${delayMs}ms` : undefined,
+        ...style,
       }}
     >
       {children}
@@ -47,10 +49,16 @@ export function RoomStamp({
   );
 }
 
-/**
- * A purple banner rolling in across its box's full width. `sub` is a smaller second line, where a
- * long name truncates rather than shrinking the banner.
- */
+/** A stamp in the middle of its tile: the pick, "Go!", "Wrap it up", "Turn ended". */
+export function RoomTileStamp(props: React.ComponentProps<typeof RoomStamp>) {
+  return (
+    <div className="absolute inset-0 grid place-items-center">
+      <RoomStamp {...props} />
+    </div>
+  );
+}
+
+/** A purple banner rolling in across its box's full width, with an optional smaller second line. */
 export function RoomBanner({
   children,
   sub,
@@ -70,9 +78,16 @@ export function RoomBanner({
       style={{ ...LABEL_FONT, fontSize: `${sizeCqw}cqw`, animationDelay: delayMs ? `${delayMs}ms` : undefined }}
     >
       <span className="block truncate">{children}</span>
-      {sub && (
-        <span className="mt-[0.35em] block truncate text-[0.6em] tracking-[0.02em] normal-case opacity-85">{sub}</span>
-      )}
+      {sub && <span className={BANNER_SUB_CLASS}>{sub}</span>}
+    </div>
+  );
+}
+
+/** A banner across the middle of its box: a tile, or the seam between the two. */
+export function RoomMiddleBanner(props: React.ComponentProps<typeof RoomBanner>) {
+  return (
+    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
+      <RoomBanner {...props} />
     </div>
   );
 }

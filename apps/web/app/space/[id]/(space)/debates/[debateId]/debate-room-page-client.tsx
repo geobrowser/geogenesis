@@ -225,6 +225,8 @@ type RoomLike = {
 export type DebateCountdown = {
   label: string;
   remainingSeconds: number;
+  /** What is left of the window exactly, which the Open rounds timer's red rim drains by. */
+  remainingMs: number;
   progress: number;
   activeSlot: ParticipantSlot | null;
   effectiveStatus: Debate['status'];
@@ -3041,9 +3043,9 @@ function DebateRecordingModal({
     </DebateTileChip>
   );
   const localUpcomingSeconds = reveal.holdsCountIn ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
-  const localUpcomingLabel = stamps
-    ? openRoundsUpcomingTurnLabel(debate, countdown)
-    : countdown.yieldingSlot && !countdown.preservesExistingCountIn
+  // Open rounds names the turn after an early end too, so an opening is still "You're up in".
+  const localUpcomingLabel =
+    !stamps && countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
       : (upcomingTurnLabel(debate, countdown) ?? "You're up in");
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
@@ -3058,15 +3060,17 @@ function DebateRecordingModal({
   );
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
-  // The speaker's last five seconds, when an Open rounds timer and tile outline turn red (GEO-3315).
-  const finalSeconds = stamps && speakingTurn && countdown.remainingSeconds > 0 && countdown.remainingSeconds <= 5;
+  // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
+  // turns red with it (GEO-3315).
+  const speakerFinalSeconds = speakingTurn && countdown.remainingSeconds > 0 && countdown.remainingSeconds <= 5;
+  const finalSeconds = stamps && speakerFinalSeconds;
   const countdownRing =
     countdown.remainingSeconds > 0 ? (
       <RecordingCountdownRing
         remainingSeconds={countdown.remainingSeconds}
         progress={countdown.progress}
-        variant={speakingTurn && countdown.remainingSeconds <= 5 ? 'warning' : 'default'}
-        buildUp={stamps && speakingTurn ? { remainingMs: turnRemainingMs(countdown) } : null}
+        variant={speakerFinalSeconds ? 'warning' : 'default'}
+        buildUp={stamps && speakingTurn ? { remainingMs: countdown.remainingMs } : null}
       />
     ) : null;
   const yieldedCountdownRing =
@@ -3093,10 +3097,10 @@ function DebateRecordingModal({
     : countdown.activeSlot === localSlot
       ? countdownRing
       : sharedPhaseCountdown;
+  // In Open rounds the "Turn ended" stamp says it, as in the mockup, without the spent timer.
   const remoteCountdown =
     countdown.yieldingSlot === remoteParticipant?.participant_slot
-      ? // In Open rounds the "Turn ended" stamp says it, as in the mockup, without the spent timer.
-        stamps
+      ? stamps
         ? null
         : yieldedCountdownRing
       : countdown.activeSlot === remoteParticipant?.participant_slot
@@ -3114,13 +3118,12 @@ function DebateRecordingModal({
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
-  // You ended the first turn of a round: theirs is next, which they are counted into on their own
-  // screen. Ending a round's last turn leads to the pick instead.
+  // You ended your turn and theirs follows straight on, which they are counted into on their own
+  // screen. Otherwise the pick, a lead-in or the end comes next.
   const remoteTurnIsNext =
     stamps &&
     localEndingTurn &&
-    countdown.turnIndex !== null &&
-    countdown.turnIndex % 2 === 0 &&
+    openRoundRunsStraightOn(debate, countdown.turnIndex) &&
     countdown.incomingSlot !== null &&
     countdown.incomingSlot === remoteParticipant?.participant_slot;
   const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
@@ -3581,27 +3584,13 @@ function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | n
   );
 }
 
-/** The exact time left in the countdown's window, which the Open rounds timer's red rim drains by. */
-function turnRemainingMs(countdown: DebateCountdown) {
-  if (countdown.progress <= 0) return countdown.remainingSeconds * 1_000;
-  return Math.max(0, countdown.elapsedMs / countdown.progress - countdown.elapsedMs);
-}
-
-/**
- * The count-in's words in Open rounds (GEO-3315): "You're up in" before your opening, and "Your turn
- * in" before every later turn, whatever its role. Fixed formats keep `upcomingTurnLabel`.
- */
-export function openRoundsUpcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
-  if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return "You're up in";
-  return debateTurnRoleForDebate(debate, countdown.turnIndex + 1) === 'opening' ? "You're up in" : 'Your turn in';
-}
-
 /**
  * Names the turn you are counting into, when it is one the format gives a distinct purpose.
  *
  * `null` falls back to the generic "You're up in". The closing round exists to address the
  * audience rather than the opponent (GEO-2852), and the countdown is the only moment the room can
- * say so before someone starts talking — so it says it in full rather than abbreviating.
+ * say so before someone starts talking — so it says it in full rather than abbreviating. Open rounds
+ * says "Your turn in" before every turn after the opening, a word everyone knows (GEO-3315).
  */
 export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
@@ -3611,7 +3600,7 @@ export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
   if (nextTurnIndex >= debate.turn_durations_ms.length) return null;
   switch (debateTurnRoleForDebate(debate, nextTurnIndex)) {
     case 'rebuttal':
-      return 'Rebut in';
+      return isOpenRoundsDebate(debate) ? 'Your turn in' : 'Rebut in';
     case 'closing':
       return 'Closing argument in';
     default:
@@ -3866,15 +3855,11 @@ export function localTurnStartsInSeconds(
   }
 
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
-  // A required round's lead-in follows this turn and counts its opener in itself, so counting them in
-  // over this turn's end as well, or over its hand-off when it ends early, would count twice.
-  if (countdown.openRounds?.phase === 'speaking' && openRoundLeadInAfterTurn(debate, countdown.turnIndex) > 0) {
-    return null;
-  }
-  // While a turn with the last word runs, or is handed over early, what follows is the pick or the
-  // end, not the next turn, even when that turn is already appended (GEO-3315). The result window
-  // after an Extend still counts the opener in.
-  if (countdown.openRounds?.phase === 'speaking' && openRoundLastWord(debate, countdown.turnIndex) !== null) {
+  // While a turn runs, or is handed over early, count into the next only when it follows straight on.
+  // A required round's lead-in counts its opener in itself, and a last word leads to the pick or the
+  // end, even when the next turn is already appended (GEO-3315). The result window after an Extend
+  // still counts the opener in.
+  if (countdown.openRounds?.phase === 'speaking' && !openRoundRunsStraightOn(debate, countdown.turnIndex)) {
     return null;
   }
   if (countdown.yieldingSlot !== null) {
@@ -3890,6 +3875,15 @@ export function localTurnStartsInSeconds(
   return participantSlotForTurn(debate.first_participant_slot, nextTurnIndex) === localSlot
     ? countdown.remainingSeconds
     : null;
+}
+
+/**
+ * Whether the next turn starts as this one ends: not after a pick, a required round's lead-in or the
+ * end of the debate. Always for a fixed format.
+ */
+function openRoundRunsStraightOn(debate: Debate, turnIndex: number | null) {
+  if (turnIndex === null) return false;
+  return openRoundLastWord(debate, turnIndex) === null && openRoundLeadInAfterTurn(debate, turnIndex) === 0;
 }
 
 function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {
@@ -4135,6 +4129,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
     return {
       label: formatCountdownClock(0),
       remainingSeconds: 0,
+      remainingMs: 0,
       progress: 0,
       activeSlot: countdownWindow?.activeSlot ?? null,
       effectiveStatus: countdownWindow?.effectiveStatus ?? debate?.status ?? 'ready',
@@ -4159,6 +4154,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
   return {
     label: formatCountdownClock(seconds),
     remainingSeconds: seconds,
+    remainingMs,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
     activeSlot: countdownWindow.activeSlot,
     effectiveStatus: countdownWindow.effectiveStatus,

@@ -8,9 +8,10 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Text } from '~/design-system/text';
 
-import { ENDED_TILT } from './browse/stamp-styles';
+import { ENDED_TILT, STAMP_INK } from './browse/stamp-styles';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
-import { RoomBanner, RoomDim, RoomExit, RoomStamp } from './debate-room-stamps';
+import { RoomBanner, RoomDim, RoomExit, RoomMiddleBanner, RoomStamp, RoomTileStamp } from './debate-room-stamps';
+import { COUNTDOWN_WARNING_COLOR } from './recording-countdown-ring';
 
 export const recordingOverlayTextShadow = {
   textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
@@ -261,28 +262,26 @@ export function DebateVideoTile({
         <>
           <RoomExit exit="roll" className="z-30">
             {closingMessage && (
-              <RoomSeamBanner sizeCqw={5.6} data-room-banner="thanks">
+              <RoomMiddleBanner sizeCqw={5.6} data-room-banner="thanks">
                 Nice debate! Say thanks
-              </RoomSeamBanner>
+              </RoomMiddleBanner>
             )}
           </RoomExit>
 
           <RoomExit className="z-30">
             {endingTurn && (
-              <div className="absolute inset-0 grid place-items-center">
-                <RoomStamp data-room-stamp="ended" ink="border-dashed text-grey-04" sizeCqw={9} tilt={ENDED_TILT}>
-                  Turn ended
-                </RoomStamp>
-              </div>
+              <RoomTileStamp data-room-stamp="ended" ink={STAMP_INK.none} sizeCqw={9} tilt={ENDED_TILT}>
+                Turn ended
+              </RoomTileStamp>
             )}
           </RoomExit>
 
           <RoomExit exit="roll" className="z-30">
             {nextTurnName && (
               // After the stamp on the tile that ended has landed, as in the mockup.
-              <RoomSeamBanner sizeCqw={6} delayMs={600} data-room-banner="turn">
+              <RoomMiddleBanner sizeCqw={6} delayMs={600} data-room-banner="turn">
                 {nextTurnName}’s turn
-              </RoomSeamBanner>
+              </RoomMiddleBanner>
             )}
           </RoomExit>
 
@@ -312,30 +311,30 @@ export function DebateVideoTile({
 
           <RoomExit className="z-30">
             {showGo && (
-              <div className="absolute inset-0 grid place-items-center">
-                <RoomStamp data-room-stamp="go" ink="text-purple" sizeCqw={15} tilt="-3.2deg">
-                  Go!
-                </RoomStamp>
-              </div>
+              <RoomTileStamp data-room-stamp="go" ink="text-purple" sizeCqw={15} tilt="-3.2deg">
+                Go!
+              </RoomTileStamp>
             )}
           </RoomExit>
 
           <RoomExit className="z-30">
             {showWrapItUp && (
-              <div className="absolute inset-0 grid place-items-center">
-                {/* The warning red the timer turns, `COUNTDOWN_WARNING_COLOR`. */}
-                <RoomStamp data-room-stamp="wrap-it-up" ink="text-[#FF4A26]" sizeCqw={9} tilt="-2deg">
-                  Wrap it up
-                </RoomStamp>
-              </div>
+              <RoomTileStamp
+                data-room-stamp="wrap-it-up"
+                sizeCqw={9}
+                tilt="-2deg"
+                style={{ color: COUNTDOWN_WARNING_COLOR }}
+              >
+                Wrap it up
+              </RoomTileStamp>
             )}
           </RoomExit>
 
           <RoomExit exit="roll" className="z-30">
             {showDebateEndsSoon && (
-              <RoomSeamBanner sizeCqw={6.6} data-room-banner="ends-soon">
+              <RoomMiddleBanner sizeCqw={6.6} data-room-banner="ends-soon">
                 Debate ends soon
-              </RoomSeamBanner>
+              </RoomMiddleBanner>
             )}
           </RoomExit>
 
@@ -429,14 +428,5 @@ export function DebateVideoTile({
         </div>
       )}
     </section>
-  );
-}
-
-/** A banner across the middle of a tile. */
-function RoomSeamBanner(props: React.ComponentProps<typeof RoomBanner>) {
-  return (
-    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
-      <RoomBanner {...props} />
-    </div>
   );
 }
