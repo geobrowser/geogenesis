@@ -122,7 +122,7 @@ export function LobbyDisagreementsList({
     <div
       role="group"
       aria-label={LOBBY_DISAGREEMENTS_COPY.heading(name)}
-      className="flex max-h-[60vh] flex-col overflow-y-auto"
+      className="flex max-h-[60vh] flex-col overflow-y-auto text-left"
       data-testid="lobby-disagreements"
     >
       <Text as="p" variant="metadataMedium" className="px-3 pt-3 pb-1">
