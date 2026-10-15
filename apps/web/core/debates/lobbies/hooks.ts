@@ -1,6 +1,13 @@
 'use client';
 
-import { type UseQueryResult, useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type UseQueryResult,
+  replaceEqualDeep,
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import * as React from 'react';
 
@@ -137,6 +144,18 @@ const OPENS_REFETCH_MIN_MS = 5_000;
 export const MAX_TIMEOUT_MS = 2_147_483_647;
 
 /**
+ * Structural sharing that still hands out a new `members` on every full read, a refetch or a stored
+ * view, even one equal to the last: a stepped-out page waits for a roster read since its step-out,
+ * and tells one by that. Patches (claim lists, guest counts) spread the cached view and keep it.
+ */
+function shareLobbyViewWithFreshRoster(previous: unknown, next: unknown): unknown {
+  const shared = replaceEqualDeep(previous, next) as DebateLobbyView | undefined;
+  const members = (next as DebateLobbyView | undefined)?.members;
+  if (!shared || !members || shared.members === members) return shared;
+  return { ...shared, members };
+}
+
+/**
  * One lobby. Kept current by `debate.lobby_changed` and the heartbeat's own view. That event only
  * reaches people in the lobby, so a lobby not yet open is refetched at `opens_at`.
  */
@@ -159,6 +178,7 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
       );
     },
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
+    structuralSharing: shareLobbyViewWithFreshRoster,
   });
 
   const access = query.data?.access;
@@ -316,7 +336,8 @@ export type LobbyPresenceState =
   | { status: 'moved'; otherLobbyId: string | null }
   /**
    * Out to debate, still on the roster. Stepped out by a debate in another tab, it joins again once a
-   * newer roster shows that debate over, or ends as `left` once one shows the viewer gone.
+   * newer roster shows that debate over. It ends as `left` once one shows the viewer gone, or as
+   * `dropped` when a host removes them meanwhile.
    */
   | { status: 'stepped_out' }
   /** Taken out by the server; the refetched access says the rest. */
@@ -547,7 +568,13 @@ export function useLobbyPresence(
   // the viewer means they left from another tab, and this one leaves with them.
   React.useEffect(() => {
     const shownAtStepOut = stepOutRosterRef.current;
-    if (status !== 'stepped_out' || !shownAtStepOut || !admitted || removed || !roster) return;
+    if (status !== 'stepped_out' || !shownAtStepOut || !admitted) return;
+    // A host removed them meanwhile: the removed screen, as for a page still in the room.
+    if (removed) {
+      stopWithout({ status: 'dropped', reason: 'removed' });
+      return;
+    }
+    if (!roster) return;
     if (roster.members === shownAtStepOut.members) return;
     const own = roster.members.find(member => sameId(member.user_id, roster.viewerId));
     if (!own) stopWithout({ status: 'left' });

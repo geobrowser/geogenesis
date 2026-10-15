@@ -333,9 +333,9 @@ describe('useLobbyPresence', () => {
 
     function renderOpenPage(initial: LobbyPresenceRoster | undefined) {
       return renderHook(
-        ({ roster }: { roster: LobbyPresenceRoster | undefined }) =>
-          useLobbyPresence('lobby1', true, false, false, false, roster),
-        { wrapper, initialProps: { roster: initial } }
+        ({ roster, removed = false }: { roster: LobbyPresenceRoster | undefined; removed?: boolean }) =>
+          useLobbyPresence('lobby1', true, false, false, removed, roster),
+        { wrapper, initialProps: { roster: initial } as { roster: LobbyPresenceRoster | undefined; removed?: boolean } }
       );
     }
 
@@ -390,6 +390,61 @@ describe('useLobbyPresence', () => {
       rerender({ roster: read(null) });
       await waitFor(() => expect(result.current.state.status).toBe('left'));
       expect(joins()).toHaveLength(1);
+    });
+
+    // The page's removed screen, as for a page still in the room; nothing else would bring it.
+    it('takes the removed screen when a host removes the viewer meanwhile', async () => {
+      const { result, rerender, shown } = await steppedOutByAnotherTab();
+      rerender({ roster: shown, removed: true });
+      await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+      expect(joins()).toHaveLength(1);
+    });
+
+    it('does not turn a page on its way into its own debate to the removed screen', async () => {
+      const shown = read(me(false));
+      const { result, rerender } = renderOpenPage(shown);
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      act(() => routeIntoDebate(vi.fn()));
+      await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+
+      rerender({ roster: shown, removed: true });
+      expect(result.current.state.status).toBe('stepped_out');
+    });
+
+    // Structural sharing keeps an equal array across refetches; a read equal to the last still counts.
+    it('rejoins on a refetch equal to the roster it was stepped out on, from the real lobby query', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const lobbyView = (connected: boolean): DebateLobbyView => ({ ...view(connected), members: [me(false)] });
+      api.getDebateLobby.mockImplementation(async () => lobbyView(false));
+      api.setDebateLobbyPresence.mockImplementation(async (_id: string, body: { joined: boolean }) =>
+        lobbyView(body.joined)
+      );
+      api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+        connection_alive: false,
+        voice_away_at: null,
+        reason: 'stepped_out',
+        current_lobby_id: null,
+      });
+      // One client across renders, as in the app, so the cache and its sharing are real.
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { result } = renderHook(
+        () => {
+          const members = useDebateLobby('lobby1').data?.members;
+          const roster = React.useMemo(() => (members ? { members, viewerId: 'me' } : undefined), [members]);
+          return useLobbyPresence('lobby1', true, false, false, false, roster);
+        },
+        { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> }
+      );
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      const reads = api.getDebateLobby.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+      });
+      // The step-out rereads the lobby, which answers with the same roster: the debate is already over.
+      await waitFor(() => expect(api.getDebateLobby.mock.calls.length).toBeGreaterThan(reads));
+      await waitFor(() => expect(joins()).toHaveLength(2));
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
     });
 
     it('waits while it cannot tell whose row is the viewer’s', async () => {
