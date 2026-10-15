@@ -107,31 +107,11 @@ export function LobbyRoomClaimCard({
   // The card holds its own response reads until it is near the viewport; this one follows it.
   const hubScrollSelector = useHubScrollSelector();
   const { ref, nearViewport } = useNearViewport({ rootSelector: hubScrollSelector });
-  const indexing = useEntityResponseIndexingSnapshot({
-    entityId: claim.claim_entity_id,
-    entityName: claim.claim,
-    spaceId: claim.space_id,
-    responseKind: CLAIM_RESPONSE_KIND,
-  });
-  const summary = useClaimResponseSummary(
-    claim.claim_entity_id,
-    claim.space_id,
-    CLAIM_RESPONSE_KIND,
-    nearViewport && isResolvableClaim(claim)
+  const { viewerPosition, indexedPosition, indexingDelayed } = useLobbyViewerPosition(
+    claim,
+    entry.readiness,
+    nearViewport
   );
-  const indexedPosition = trustedIndexedPosition(
-    summary,
-    indexing.status === 'reconciling' || indexing.status === 'delayed'
-  );
-  // The viewer's own response while it publishes and indexes; then geo-chat's. The chain's only for a
-  // withdrawn row the viewer has re-answered, the one gap the backfill below repairs.
-  const retaken = entry.readiness.readiness_disabled_reason === 'claim_response_withdrawn';
-  const viewerPosition =
-    indexing.status !== 'idle' && indexing.pending
-      ? indexing.pending.expectedResponse === null
-        ? null
-        : indexing.pending.expectedResponse === 'positive'
-      : (entry.readiness.viewer_response?.position ?? (retaken ? indexedPosition : null));
   // A held side geo-chat hasn't marked ready can't send or receive a request.
   useBackfillReadinessForHeldPosition({
     readiness: entry.readiness,
@@ -150,7 +130,7 @@ export function LobbyRoomClaimCard({
           viewerPosition,
           requestableCount,
           indexedPosition,
-          indexingDelayed: indexing.status === 'delayed',
+          indexingDelayed,
         })
       : null;
   const menu = renderMenu?.(entry);
@@ -194,6 +174,38 @@ export function LobbyRoomClaimCard({
       }
     />
   );
+}
+
+/**
+ * The viewer's side on a room claim: their own response while it publishes and indexes, then
+ * geo-chat's. The chain's only for a withdrawn row the viewer has re-answered, the one gap
+ * `useBackfillReadinessForHeldPosition` repairs. `readChain` gates the chain read.
+ */
+export function useLobbyViewerPosition(claim: DebateClaimSummary, readiness: MatchmakingReadiness, readChain: boolean) {
+  const indexing = useEntityResponseIndexingSnapshot({
+    entityId: claim.claim_entity_id,
+    entityName: claim.claim,
+    spaceId: claim.space_id,
+    responseKind: CLAIM_RESPONSE_KIND,
+  });
+  const summary = useClaimResponseSummary(
+    claim.claim_entity_id,
+    claim.space_id,
+    CLAIM_RESPONSE_KIND,
+    readChain && isResolvableClaim(claim)
+  );
+  const indexedPosition = trustedIndexedPosition(
+    summary,
+    indexing.status === 'reconciling' || indexing.status === 'delayed'
+  );
+  const retaken = readiness.readiness_disabled_reason === 'claim_response_withdrawn';
+  const viewerPosition =
+    indexing.status !== 'idle' && indexing.pending
+      ? indexing.pending.expectedResponse === null
+        ? null
+        : indexing.pending.expectedResponse === 'positive'
+      : (readiness.viewer_response?.position ?? (retaken ? indexedPosition : null));
+  return { viewerPosition, indexedPosition, indexingDelayed: indexing.status === 'delayed' };
 }
 
 /** The side opposite the viewer's, or null when they hold none. */

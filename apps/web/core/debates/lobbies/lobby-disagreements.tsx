@@ -14,15 +14,15 @@ import { personName } from './lobby-format';
 import { LobbyPopup } from './lobby-popup';
 import { LobbyClaimRequest, lobbyRoomClaimFrom } from './lobby-room-claims';
 import { RECIPIENT_UNAVAILABLE_MESSAGE, useDebateLobbyClaims } from './lobby-room-claims-hooks';
-import { roomSideOpposing } from './lobby-room-claims-list';
+import { roomSideOpposing, useLobbyViewerPosition } from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_DISAGREEMENTS_COPY = {
   disagreesOn: (count: number) => `Disagrees on ${count}`,
   heading: (name: string) => `You and ${name} disagree on`,
   /** geo-chat lists at most 8 people per side, so a busy claim can leave someone off its list. */
-  unlisted: (count: number) => `${count} more ${count === 1 ? 'claim isn’t' : 'claims aren’t'} listed here.`,
-  none: 'These claims aren’t listed here yet.',
+  unlisted: (count: number, more: boolean) =>
+    `${count} ${more ? 'more ' : ''}${count === 1 ? 'claim isn’t' : 'claims aren’t'} listed here.`,
 } as const;
 
 /** A claim the viewer and one person hold opposite sides on, with the request that person can take. */
@@ -37,16 +37,26 @@ export type LobbyDisagreement = {
 
 /**
  * The room's claims where the viewer holds one side and `userId` is listed on the other, in the
- * server's order. Each side lists at most 8 people, so this can fall short of the count geo-chat
- * gives in `disagreements`.
+ * server's order. Each side lists at most 8 people, requestable first, so this can fall short of the
+ * count geo-chat gives in `disagreements`. A row in `previous` that a full list no longer names is
+ * kept, unrequestable: a refusal can push the person off the list, and the row holds that refusal.
  */
-export function lobbyDisagreements(claims: DebateLobbyClaim[], userId: string): LobbyDisagreement[] {
+export function lobbyDisagreements(
+  claims: DebateLobbyClaim[],
+  userId: string,
+  previous: readonly LobbyDisagreement[] = []
+): LobbyDisagreement[] {
   return claims.flatMap(row => {
     const viewer = row.viewer_response;
     if (!viewer) return [];
     const theirs = roomSideOpposing(row.positions, viewer.position);
-    const person = theirs?.participants.find(participant => sameId(participant.user_id, userId));
-    if (!theirs || !person) return [];
+    if (!theirs) return [];
+    const person = theirs.participants.find(participant => sameId(participant.user_id, userId));
+    if (!person) {
+      const kept = previous.find(entry => entry.row.claim.id === row.claim.id);
+      const cutOff = theirs.participants.length < theirs.total_in_room;
+      return kept && cutOff && kept.viewerPosition === viewer.position ? [{ ...kept, row, requestable: false }] : [];
+    }
     return [
       {
         row,
@@ -124,17 +134,26 @@ export function LobbyDisagreementsList({
 }) {
   const query = useDebateLobbyClaims(lobby.lobby_id);
   const name = personName(member);
-  const rows = React.useMemo(
-    () => lobbyDisagreements(query.data?.claims ?? [], member.user_id),
-    [query.data?.claims, member.user_id]
-  );
+  const claims = query.data?.claims;
+  // The last rows shown, so a refresh can keep one a refusal pushed off a full list.
+  const [shown, setShown] = React.useState(() => ({
+    claims,
+    rows: lobbyDisagreements(claims ?? [], member.user_id),
+  }));
+  let rows = shown.rows;
+  if (shown.claims !== claims) {
+    rows = lobbyDisagreements(claims ?? [], member.user_id, shown.rows);
+    setShown({ claims, rows });
+  }
   const unlisted = Math.max(0, count - rows.length);
 
   return (
     <div
       role="group"
       aria-label={LOBBY_DISAGREEMENTS_COPY.heading(name)}
-      className="flex max-h-[60vh] flex-col overflow-y-auto text-left"
+      // No scroll of its own: the menu and the sheet each scroll their content, and a nested scroller
+      // inside the menu's wheel trap could not be wheeled.
+      className="flex flex-col text-left"
       data-testid="lobby-disagreements"
     >
       <Text as="p" variant="metadataMedium" className="px-3 pt-3 pb-1">
@@ -148,7 +167,7 @@ export function LobbyDisagreementsList({
           failureReason={query.failureReason}
           onRetry={() => void query.refetch()}
           isEmpty={rows.length === 0}
-          emptyMessage={LOBBY_DISAGREEMENTS_COPY.none}
+          emptyMessage={LOBBY_DISAGREEMENTS_COPY.unlisted(count, false)}
           loadingFallback={<HubSkeleton rows={2} />}
         >
           <ul className="flex flex-col">
@@ -160,7 +179,7 @@ export function LobbyDisagreementsList({
           </ul>
           {unlisted > 0 ? (
             <Text as="p" variant="footnote" color="grey-04" className="pt-1">
-              {LOBBY_DISAGREEMENTS_COPY.unlisted(unlisted)}
+              {LOBBY_DISAGREEMENTS_COPY.unlisted(unlisted, true)}
             </Text>
           ) : null}
         </HubQueryState>
@@ -180,6 +199,12 @@ function DisagreementRow({
 }) {
   const name = personName(member);
   const claim = React.useMemo(() => lobbyRoomClaimFrom(entry.row), [entry.row]);
+  // The side being published wins over geo-chat's cached one, as on the room's claim cards.
+  const { viewerPosition, indexedPosition, indexingDelayed } = useLobbyViewerPosition(
+    claim.claim,
+    claim.readiness,
+    true
+  );
   // Latched once offered: a refusal refreshes the list, which can clear `requestable`, and
   // unmounting the control then would drop the refusal before anyone read it.
   const [offered, setOffered] = React.useState(entry.requestable);
@@ -194,17 +219,17 @@ function DisagreementRow({
         <Text as="p" variant="footnote" color="grey-04">
           You: {entry.viewerLabel} · {name}: {entry.theirLabel}
         </Text>
-        {offered ? (
+        {offered && viewerPosition !== null ? (
           <LobbyClaimRequest
             lobbyId={lobbyId}
             recipientUserId={member.user_id}
             unavailableReason={entry.requestable ? null : RECIPIENT_UNAVAILABLE_MESSAGE}
             offer={{
               entry: claim,
-              viewerPosition: entry.viewerPosition,
+              viewerPosition,
               requestableCount: 1,
-              indexedPosition: null,
-              indexingDelayed: false,
+              indexedPosition,
+              indexingDelayed,
             }}
           />
         ) : null}

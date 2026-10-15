@@ -14,6 +14,19 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   requestError: null as Error | null,
   phone: false,
+  snapshot: { status: 'idle', pending: null, runId: null } as {
+    status: string;
+    pending: { expectedResponse: 'positive' | 'negative' | null } | null;
+    runId: string | null;
+  },
+}));
+
+vi.mock('~/core/hooks/use-entity-vote', () => ({
+  useEntityResponseIndexingSnapshot: () => mocks.snapshot,
+}));
+
+vi.mock('~/core/claims/browse/claim-response-summary', () => ({
+  useClaimResponseSummary: () => ({ indexedViewerDirection: null, isViewerResponseLoading: false }),
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
@@ -53,6 +66,7 @@ window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver
 const { LobbyDisagreementsTrigger, lobbyDisagreements } = await import('./lobby-disagreements');
 const { GeoChatRequestError } = await import('../api');
 const { RECIPIENT_UNAVAILABLE_MESSAGE } = await import('./lobby-room-claims-hooks');
+const { REQUEST_PENDING_LABEL } = await import('../request-gate');
 
 afterEach(() => {
   cleanup();
@@ -62,6 +76,7 @@ afterEach(() => {
   mocks.refetch.mockReset();
   mocks.mutate.mockReset();
   mocks.requestError = null;
+  mocks.snapshot = { status: 'idle', pending: null, runId: null };
   mocks.phone = false;
 });
 
@@ -82,7 +97,8 @@ function row(
   id: string,
   viewerPosition: boolean | null,
   against: ReturnType<typeof participant>[],
-  ready = true
+  /** Everyone on the other side; above `against.length` when geo-chat cut the list off. */
+  inRoom = against.length
 ): DebateLobbyClaim {
   return {
     claim: { id, space_id: 'space-1', claim_entity_id: `entity-${id}`, claim: `Claim ${id}`, description: null },
@@ -91,13 +107,13 @@ function row(
       viewerPosition === null
         ? null
         : { position: viewerPosition, position_label: viewerPosition ? 'Agree' : 'Disagree' },
-    viewer_debate_ready: ready,
+    viewer_debate_ready: true,
     readiness_disabled_reason: null,
     active_debate: false,
     positions: [true, false].map(position => ({
       position,
       position_label: position ? 'Agree' : 'Disagree',
-      total_in_room: against.length,
+      total_in_room: inRoom,
       requestable_count: against.filter(person => person.requestable).length,
       participants: viewerPosition !== null && position !== viewerPosition ? against : [],
     })),
@@ -166,6 +182,75 @@ describe('LobbyDisagreementsTrigger', () => {
     const disagreement = screen.getByTestId('lobby-disagreement');
     expect(within(disagreement).getByRole('alert')).toHaveTextContent(RECIPIENT_UNAVAILABLE_MESSAGE);
     expect(within(disagreement).getByRole('button', { name: 'Request debate' })).toBeDisabled();
+  });
+
+  it('keeps a refused row a refresh drops from a full list, and drops it from one that is not full', () => {
+    const others = Array.from({ length: 7 }, (_, index) => participant(`other${index}`));
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [row('a', true, [participant('daniel1'), ...others], 9), row('b', true, [participant('daniel1')])],
+    };
+    const { rerender } = render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={2} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 2 claims with Daniel' }));
+    fireEvent.click(
+      within(screen.getAllByTestId('lobby-disagreement')[0]!).getByRole('button', { name: 'Request debate' })
+    );
+
+    // Refused; the refresh lists eight others on a, so Daniel no longer fits. On b he has left the side.
+    mocks.requestError = new GeoChatRequestError('unavailable', 'recipient_not_available', 409);
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [row('a', true, [...others, participant('other7')], 9), row('b', true, [])],
+    };
+    rerender(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={2} variant="pill" />);
+
+    const rows = screen.getAllByTestId('lobby-disagreement');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Claim a');
+    expect(within(rows[0]!).getByRole('alert')).toHaveTextContent(RECIPIENT_UNAVAILABLE_MESSAGE);
+  });
+
+  it('holds the offer while a changed vote publishes, and drops it while a cleared one does', () => {
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [row('a', true, [participant('daniel1')])],
+    };
+    mocks.snapshot = { status: 'publishing', pending: { expectedResponse: 'negative' }, runId: 'run' };
+    const { rerender } = render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claims with Daniel' }));
+
+    // geo-chat still says Agree; the viewer just switched to Disagree, so no request goes out on Agree.
+    const held = screen.getByRole('button', { name: REQUEST_PENDING_LABEL });
+    expect(held).toBeDisabled();
+    expect(screen.queryByRole('button', { name: 'Request debate' })).toBeNull();
+
+    mocks.snapshot = { status: 'publishing', pending: { expectedResponse: null }, runId: 'run' };
+    rerender(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+    expect(screen.queryByRole('button', { name: REQUEST_PENDING_LABEL })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Request debate' })).toBeNull();
+    expect(mocks.mutate).not.toHaveBeenCalled();
+  });
+
+  it('counts the claims it can’t list when the person is on none of the lists', () => {
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, [participant('elena')], 9)] };
+    render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={3} variant="pill" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 3 claims with Daniel' }));
+    expect(screen.getByTestId('lobby-disagreements')).toHaveTextContent('3 claims aren’t listed here.');
+  });
+
+  it('leaves scrolling to the menu or sheet around it', () => {
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, [participant('daniel1')])] };
+    render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claims with Daniel' }));
+    const list = screen.getByTestId('lobby-disagreements');
+    // A scroller nested in the menu's wheel trap can't be wheeled; jsdom can't wheel, so check for one.
+    expect(list.className).not.toMatch(/overflow-y-(auto|scroll)/);
+    expect(list.querySelector('[class*="overflow-y-auto"]')).toBeNull();
   });
 
   it('offers a retry when the claims fail to load, rather than calling them unlisted', () => {
