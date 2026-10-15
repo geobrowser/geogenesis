@@ -33,6 +33,7 @@ import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/d
 import { useCarriedLobbyMic } from '~/core/debates/lobbies/lobby-return';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
+import { useVoiceCallTelemetry } from '~/core/debates/use-voice-call-telemetry';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
@@ -597,6 +598,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
       className="contents"
     >
       <VoiceHeaderBody
+        sessionId={session.id}
         pair={pair}
         exiting={exiting}
         onRoomLive={handleRoomLive}
@@ -672,6 +674,7 @@ function useVoiceAnalytics(sessionId: string, micIntent: boolean) {
 type VoiceAnalytics = ReturnType<typeof useVoiceAnalytics>;
 
 function VoiceHeaderBody({
+  sessionId,
   pair,
   exiting,
   onRoomLive,
@@ -685,6 +688,7 @@ function VoiceHeaderBody({
   onDismissNotice,
   analytics,
 }: {
+  sessionId: string;
   pair: PairContext;
   exiting: boolean;
   /** Tells the header above that a room has come up — what makes holding one open on exit legal. */
@@ -700,6 +704,8 @@ function VoiceHeaderBody({
   analytics: VoiceAnalytics;
 }) {
   const room = useRoomContext();
+  // GEO-3340. One per room: a retry remounts this with a fresh room and starts a new call.
+  useVoiceCallTelemetry(room, 'picker', sessionId);
   React.useEffect(() => {
     roomRef.current = room;
     return () => {
