@@ -47,7 +47,7 @@ const {
   useLobbyReminderSaving,
 } = await import('./hooks');
 const { debateQueryKeys } = await import('../hooks');
-const { routeIntoDebate } = await import('./step-out');
+const { readCarriedLobbyMic, reportLobbyMic, routeIntoDebate } = await import('./step-out');
 const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
 const { lobbyDebateSeen, lobbyRoomVoteSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
@@ -287,8 +287,10 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(result.current.state.status).toBe('joined'));
 
     const go = vi.fn();
+    reportLobbyMic(true);
     act(() => routeIntoDebate(go));
     await waitFor(() => expect(go).toHaveBeenCalled());
+    expect(readCarriedLobbyMic()).toBe(true);
     expect(api.stepOutOfDebateLobby).toHaveBeenCalledWith(
       'lobby1',
       { connection_id: expect.any(String) },
@@ -505,9 +507,12 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
 
     const go = vi.fn();
+    // Stands in for the mic the voice reported before the server's step-out unmounted it.
+    reportLobbyMic(true);
     act(() => routeIntoDebate(go));
     await waitFor(() => expect(go).toHaveBeenCalled());
     expect(consumeDebateReturnDestination()).toBe('/debate/lobby1');
+    expect(readCarriedLobbyMic()).toBe(true);
     expect(api.stepOutOfDebateLobby).not.toHaveBeenCalled();
   });
 
@@ -539,9 +544,11 @@ describe('useLobbyPresence', () => {
     await act(() => result.current.leave());
 
     const go = vi.fn();
+    reportLobbyMic(true);
     act(() => routeIntoDebate(go));
     await waitFor(() => expect(go).toHaveBeenCalled());
     expect(consumeDebateReturnDestination()).toBeNull();
+    expect(readCarriedLobbyMic()).toBeNull();
   });
 
   it('reports voice from the tab that holds it', async () => {

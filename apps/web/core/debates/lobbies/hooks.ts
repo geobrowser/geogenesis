@@ -57,7 +57,7 @@ import {
   otherLobbyIdFrom,
 } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
-import { registerLobbyStepOut } from './step-out';
+import { carryLobbyMic, forgetLobbyMic, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
@@ -521,6 +521,7 @@ export function useLobbyPresence(
     if (!sentRef.current && !steppedOutAlready) return;
     lobbySteppedOut(lobbyId);
     rememberLobbyReturnDestination(lobbyId);
+    carryLobbyMic();
     if (!sentRef.current) return;
     stopWithout({ status: 'stepped_out' });
     try {
@@ -686,6 +687,7 @@ export function useLobbyPresence(
     return () => {
       window.removeEventListener('pagehide', close);
       lobbyPageUnmounted(lobbyId);
+      forgetLobbyMic();
     };
   }, [lobbyId]);
 

@@ -31,6 +31,7 @@ import {
   resolveCurrentGeoChatUserId,
   retryDebatePhaseBoundaryRequest,
 } from './api';
+import { DebateUploadProgressBar } from './debate-upload-progress-bar';
 import { debateQueryKeys, useDebateActivity, useGeoChatAuth } from './hooks';
 import {
   RECORDING_STREAM_ORPHAN_AFTER_MS,
@@ -68,6 +69,8 @@ import {
   setDebateRecordingMultipart,
 } from './recording-upload-queue';
 import {
+  EMPTY_PUBLISH_OPT_OUT_OFFER,
+  type PublishOptOutOffer,
   usePublishOptOutRequest,
   useSetPublishOptOutOffer,
   useSetPublishOptOutRequest,
@@ -147,8 +150,19 @@ export const FAILED_RECORDING_UPLOAD_KEEP_MS = 30 * 24 * 60 * 60_000;
  */
 export const DEBATE_RECORDING_HELP_URL = 'https://discord.gg/Hcng2pURZ';
 
-/** Where a cancellation was asked for: the thank-you card's Publish switch, or the upload banner. */
-type RecordingCancelSource = 'thanking_toggle' | 'upload_banner';
+/**
+ * Where a cancellation was asked for: the claim picker's publishing card, or the upload banner.
+ *
+ * `thanking_toggle` was the thank-you card's Publish switch, which GEO-3301 removed; the card that
+ * replaced it reports as `rematch_card`.
+ */
+type RecordingCancelSource = 'rematch_card' | 'upload_banner';
+
+/**
+ * What the cancel prompt says once geo-chat stops accepting a cancel. Its own refusal reads
+ * "through the end of the thank-you period", a screen the viewer no longer sees (GEO-3301).
+ */
+const RECORDING_CANCEL_TOO_LATE = 'It’s too late to cancel. This debate is already being published.';
 
 type DebateRecordingUploadWaitingReason = 'offline' | 'retry' | 'waiting' | null;
 
@@ -303,6 +317,24 @@ export function streamedRecordingBytes(upload: DebateRecordingUpload): number {
   }, 0);
 }
 
+/**
+ * Bytes of a queued recording already out. A streamed recording arrives with most of its bytes
+ * already out, and a multipart attempt reports whole parts; count whichever is further along.
+ */
+function sentRecordingBytes(upload: DebateRecordingUpload, live: { id: string; loaded: number } | null): number {
+  if (upload.stage === 'uploaded') return upload.byteSize;
+  const liveBytes = live?.id === upload.id ? live.loaded : 0;
+  return Math.min(Math.max(streamedRecordingBytes(upload), liveBytes), upload.byteSize);
+}
+
+/**
+ * Bytes out of bytes queued, as a whole percentage. Null once every byte is out: the wait is then
+ * finalization, not transfer, and a pinned "100%" would look stuck.
+ */
+function transferPercent(sentBytes: number, totalBytes: number): number | null {
+  return totalBytes === 0 || sentBytes >= totalBytes ? null : Math.round((sentBytes / totalBytes) * 100);
+}
+
 export function recordingUploadRetryDelay(attemptCount: number) {
   return Math.min(maxRetryDelayMs, initialRetryDelayMs * 2 ** Math.max(0, attemptCount));
 }
@@ -344,6 +376,9 @@ export function DebateRecordingUploadCoordinator() {
   const cancelSourceRef = React.useRef<RecordingCancelSource>('upload_banner');
   const [cancelBusy, setCancelBusy] = React.useState(false);
   const [cancelError, setCancelError] = React.useState<string | null>(null);
+  // geo-chat refused a cancel for this debate as past its deadline. Terminal: asking again cannot
+  // get a different answer, so the prompt treats it exactly as a window it saw close.
+  const [cancelRefusedDebateId, setCancelRefusedDebateId] = React.useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = React.useState<{ id: string; loaded: number } | null>(null);
   // Debates whose recording finished uploading in this session and is still publishable. The queue
   // row is deleted as soon as an upload completes, so nothing else can keep the banner and its
@@ -390,8 +425,9 @@ export function DebateRecordingUploadCoordinator() {
     () => publishableUploads.filter(upload => failureReasonOf(upload) !== null),
     [failureReasonOf, publishableUploads]
   );
-  // The thank-you card carries the publish opt-out while it is on screen, so the banner doesn't
-  // draw a second control for the same debate (GEO-2773). It still speaks for that debate's
+  // The surface the debate's owner is on (the claim picker's publishing card, since GEO-3301) carries
+  // the publish opt-out while it is on screen, so the banner doesn't draw a second control for the
+  // same debate (GEO-2773). It still speaks for that debate's
   // upload: the card answers "will this be published?", the banner answers "how much is still
   // going out, and can I close the tab yet?" — and that second question is about the whole queue,
   // the thank-you debate included. Deriving the count from anything narrower is what made the
@@ -754,9 +790,10 @@ export function DebateRecordingUploadCoordinator() {
     waitingReason = latestFailedUpload ? 'retry' : 'waiting';
   }
 
-  // Opting out of publishing is offered only during the thank-you period, and only for the debate
-  // whose thank-you screen the user is on. Every other queued upload keeps going. The target is the
-  // upload's own id, which is the form the queue and the cancel request use.
+  // Opting out of publishing is offered only for the debate the user has just finished, while geo-chat
+  // still accepts it, and only from the surface that debate's owner says it is on (the room, then
+  // the claim picker). Every other queued upload keeps going. The target is the upload's own id,
+  // which is the form the queue and the cancel request use.
   const thankingUpload =
     normalizedThankingDebateId &&
     !thankingDebate?.recordingCancelled &&
@@ -779,15 +816,30 @@ export function DebateRecordingUploadCoordinator() {
     Boolean(thankingDebate?.hasPendingLocalRecording) &&
     !thankingDebate?.recordingCancelled &&
     !cancelledDebateIds.has(normalizedThankingDebateId);
-  const cancellableDebateId =
-    thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null);
+  // The surface can stay up past the point geo-chat stops accepting a cancel — the claim picker does
+  // (GEO-3301) — and keeps the upload's progress on screen after it. Only the action goes.
+  const thankingCancelWindowOpen = thankingDebate?.cancelWindowOpen !== false;
+  const cancellableDebateId = !thankingCancelWindowOpen
+    ? null
+    : (thankingUpload?.debateId ?? (thankingUploadFinished || thankingRecordingPending ? thankingDebateId : null));
   const cancelPromptOpen = cancelTargetDebateId !== null;
+  // The prompt can be opened just before geo-chat's deadline and answered after it. The surface
+  // that opened it says when the window has closed, and geo-chat says so itself when this tab could
+  // not see it (the room, or a skewed clock); past either the prompt says so rather than sending a
+  // cancel the server will refuse.
+  const cancelPromptTooLate =
+    cancelTargetDebateId !== null &&
+    ((thankingDebate?.cancelWindowOpen === false &&
+      normalizeDebateId(cancelTargetDebateId) === normalizedThankingDebateId) ||
+      normalizeDebateId(cancelTargetDebateId) === cancelRefusedDebateId);
 
   // "Debate uploaded" is the banner's line about the Cancel action beside it — the upload is done
   // and still withdrawable — so it belongs to the banner only while the banner owns that action.
-  // While the card does, the banner has nothing left to say about a finished upload and falls back
-  // to reporting whatever else is still going out.
-  const bannerThankingUploadFinished = !cardOwnsPublishControl && thankingUploadFinished;
+  // While the card does, or once the window has closed and there is no action left (the claim
+  // picker keeps reporting the debate past it, GEO-3301), the banner has nothing left to say about
+  // a finished upload and falls back to reporting whatever else is still going out, failures
+  // included.
+  const bannerThankingUploadFinished = !cardOwnsPublishControl && thankingCancelWindowOpen && thankingUploadFinished;
   // Everything still on its way out of this browser, counted as debates rather than queue rows.
   // The thank-you recording is counted before it reaches IndexedDB — persisting the blob takes a
   // moment and the banner has to be up for the whole thank-you period, not from partway through.
@@ -806,34 +858,59 @@ export function DebateRecordingUploadCoordinator() {
   // A failure is retryable unless the copy itself is gone; then all that is left is to get help.
   const failedRetryable = failedUploads.some(upload => failureReasonOf(upload) !== 'blob_unreadable');
 
-  // The thank-you card draws the opt-out now, so tell it what there is to offer. Published in a
-  // layout effect for the same reason the room publishes its side in one: the control and the
-  // banner have to agree within a single paint at the countdown boundary, or one of them shows a
-  // state the other has already left.
-  // `cancelled` is what this knows and the room does not yet: the server has accepted the opt-out,
-  // whether or not the room's debate query has caught up. Without it the card has no way to tell
+  // The claim picker's publishing card draws the opt-out, so tell it what there is to offer.
+  // Published in a layout effect for the same reason the card publishes its side in one: the
+  // control and the banner have to agree within a single paint, or one of them shows a state the
+  // other has already left.
+  // `cancelled` is what this knows and the card's debate query does not yet: the server has
+  // accepted the opt-out, whether or not that query has caught up. Without it the card has no way to tell
   // "withdrawn" from "never recorded" until that refetch lands, and drops the row in between.
   const thankingOptedOut =
     normalizedThankingDebateId !== null &&
     (cancelledDebateIds.has(normalizedThankingDebateId) || thankingDebate?.recordingCancelled === true);
   const setPublishOptOutOffer = useSetPublishOptOutOffer();
+  const thankingUploadStage: PublishOptOutOffer['upload'] = thankingOptedOut
+    ? null
+    : thankingRecordingPending
+      ? 'preparing'
+      : thankingUpload
+        ? failureReasonOf(thankingUpload) === null
+          ? 'uploading'
+          : 'failed'
+        : thankingUploadFinished
+          ? 'uploaded'
+          : null;
+  // The finished debate's own share of the queue, not the banner's queue-wide figure: the card
+  // speaks for one debate. Null while nothing is measurable yet, as the banner's is.
+  const thankingUploadPercent = thankingUpload
+    ? transferPercent(sentRecordingBytes(thankingUpload, uploadProgress), thankingUpload.byteSize)
+    : null;
   React.useLayoutEffect(() => {
-    setPublishOptOutOffer({ debateId: cancellableDebateId, busy: cancelBusy, cancelled: thankingOptedOut });
-  }, [cancelBusy, cancellableDebateId, setPublishOptOutOffer, thankingOptedOut]);
-  React.useEffect(
-    () => () => setPublishOptOutOffer({ debateId: null, busy: false, cancelled: false }),
-    [setPublishOptOutOffer]
-  );
+    setPublishOptOutOffer({
+      debateId: cancellableDebateId,
+      busy: cancelBusy,
+      cancelled: thankingOptedOut,
+      upload: thankingUploadStage,
+      percent: thankingUploadPercent,
+    });
+  }, [
+    cancelBusy,
+    cancellableDebateId,
+    setPublishOptOutOffer,
+    thankingOptedOut,
+    thankingUploadPercent,
+    thankingUploadStage,
+  ]);
+  React.useEffect(() => () => setPublishOptOutOffer(EMPTY_PUBLISH_OPT_OUT_OFFER), [setPublishOptOutOffer]);
 
-  // And take up what the card asks for. It opens the same confirmation the Cancel button did —
-  // the ticket calls for a new control, not a new behaviour, and a switch is easier to hit by
-  // accident than the button it replaces (GEO-2700 makes that expensive).
+  // And take up what the card asks for. It opens the same confirmation the banner's Cancel does: a
+  // new place for the control, not a new behaviour (GEO-2700 makes an accidental cancel expensive).
   const publishOptOutRequest = usePublishOptOutRequest();
   const setPublishOptOutRequest = useSetPublishOptOutRequest();
   React.useEffect(() => {
     if (!publishOptOutRequest) return;
-    // A request for some other debate is one whose moment has passed — the viewer has left that
-    // thank-you screen — so it is dropped rather than acted on.
+    // A request for some other debate is one whose moment has passed — the viewer has left the
+    // surface it came from — so it is dropped rather than acted on.
     if (normalizeDebateId(publishOptOutRequest) !== normalizedThankingDebateId) {
       setPublishOptOutRequest(null);
       return;
@@ -843,7 +920,7 @@ export function DebateRecordingUploadCoordinator() {
     // there would swallow the flick and leave the switch off over a recording still uploading.
     if (cancellableDebateId === null) return;
     setPublishOptOutRequest(null);
-    cancelSourceRef.current = 'thanking_toggle';
+    cancelSourceRef.current = 'rematch_card';
     setCancelTargetDebateId(cancellableDebateId);
   }, [cancellableDebateId, normalizedThankingDebateId, publishOptOutRequest, setPublishOptOutRequest]);
 
@@ -859,24 +936,16 @@ export function DebateRecordingUploadCoordinator() {
 
   // When the banner is showing upload progress, its percentage covers every queued recording.
   const queuedBytes = activeUploads.reduce((total, upload) => total + upload.byteSize, 0);
-  const transferredBytes = activeUploads.reduce((transferred, upload) => {
-    if (upload.stage === 'uploaded') return transferred + upload.byteSize;
-    // A streamed recording arrives with most of its bytes already out, and a multipart attempt
-    // reports whole parts; count whichever is further along.
-    const streamed = streamedRecordingBytes(upload);
-    const live = uploadProgress?.id === upload.id ? uploadProgress.loaded : 0;
-    return transferred + Math.min(Math.max(streamed, live), upload.byteSize);
-  }, 0);
-  // Once every byte is out the wait is finalization, not transfer. A pinned "100%" would look
-  // stuck, so fall back to the plain in-progress copy.
+  const transferredBytes = activeUploads.reduce(
+    (transferred, upload) => transferred + sentRecordingBytes(upload, uploadProgress),
+    0
+  );
+  // Once every byte is out, `transferPercent` falls back to the plain in-progress copy.
   //
   // A recording still being written to IndexedDB has no byte size yet, so while one is pending the
   // queue is not the whole of what the bar is counting and any figure off it is already wrong.
   // Indeterminate until its row lands, rather than a percentage that drops when it does.
-  const uploadPercent =
-    thankingRecordingPending || queuedBytes === 0 || transferredBytes >= queuedBytes
-      ? null
-      : Math.round((transferredBytes / queuedBytes) * 100);
+  const uploadPercent = thankingRecordingPending ? null : transferPercent(transferredBytes, queuedBytes);
 
   const closeCancelPrompt = React.useCallback(() => {
     if (cancelBusy) return;
@@ -893,7 +962,7 @@ export function DebateRecordingUploadCoordinator() {
   }, [cancelBusy, cancelTargetDebateId]);
 
   const confirmCancel = React.useCallback(async () => {
-    if (!cancelTargetDebateId) return;
+    if (!cancelTargetDebateId || cancelPromptTooLate) return;
     const normalizedTargetDebateId = normalizeDebateId(cancelTargetDebateId);
     setCancelBusy(true);
     setCancelError(null);
@@ -958,11 +1027,26 @@ export function DebateRecordingUploadCoordinator() {
         setCancelTargetDebateId(null);
       }
     } catch (error) {
-      if (mountedRef.current) setCancelError(error instanceof Error ? error.message : 'Could not cancel the upload.');
+      if (!mountedRef.current) return;
+      // The same deadline, reached on a clock this tab could not see — or from the room, which does
+      // not report the window closing.
+      if (error instanceof GeoChatRequestError && error.code === 'recording_not_cancellable') {
+        setCancelRefusedDebateId(normalizedTargetDebateId);
+      } else {
+        setCancelError(error instanceof Error ? error.message : 'Could not cancel the upload.');
+      }
     } finally {
       if (mountedRef.current) setCancelBusy(false);
     }
-  }, [accountKey, cancelTargetDebateId, getPrivyIdentityToken, queryClient, uploadedDebateIds, uploads]);
+  }, [
+    accountKey,
+    cancelPromptTooLate,
+    cancelTargetDebateId,
+    getPrivyIdentityToken,
+    queryClient,
+    uploadedDebateIds,
+    uploads,
+  ]);
 
   // Close the prompt only when there is nothing left to cancel. The upload finishing mid-prompt
   // must not close it, since the backend still cancels an uploaded recording.
@@ -1053,7 +1137,8 @@ export function DebateRecordingUploadCoordinator() {
       {cancelPromptOpen && (
         <DebateCancelUploadDialog
           busy={cancelBusy}
-          error={cancelError}
+          error={cancelPromptTooLate ? RECORDING_CANCEL_TOO_LATE : cancelError}
+          canConfirm={!cancelPromptTooLate}
           onConfirm={confirmCancel}
           onClose={closeCancelPrompt}
         />
@@ -1162,21 +1247,7 @@ export function DebateRecordingUploadBanner({
         {/* A grid item sizes to its content and spills out of its track, so `max-w-full` holds each
             side to its column for `truncate` to act on. */}
         <span className={cx('max-w-full min-w-0 truncate', showProgress && 'justify-self-end')}>{message}</span>
-        {showProgress && (
-          <div
-            role="progressbar"
-            aria-label={progressLabel}
-            aria-valuemin={0}
-            aria-valuemax={100}
-            aria-valuenow={percent ?? undefined}
-            className="h-1 w-10 shrink-0 overflow-hidden rounded-full bg-grey-04"
-          >
-            <div
-              className={`h-full rounded-full bg-white transition-[width] ${percent === null ? 'w-1/3 animate-pulse' : ''}`}
-              style={percent === null ? undefined : { width: `${percent}%` }}
-            />
-          </div>
-        )}
+        {showProgress && <DebateUploadProgressBar label={progressLabel} percent={percent} tone="dark" />}
         {(showKeepBrowserOpen || canCancel || showFailed || onRetryNow) && (
           <div
             className={cx('flex max-w-full min-w-0 shrink-0 items-center gap-2', showProgress && 'justify-self-start')}
@@ -1230,11 +1301,14 @@ const bannerButtonClassName =
 export function DebateCancelUploadDialog({
   busy,
   error,
+  canConfirm = true,
   onConfirm,
   onClose,
 }: {
   busy: boolean;
   error: string | null;
+  /** False once there is nothing a confirmation could still do; `error` says why. */
+  canConfirm?: boolean;
   onConfirm: () => void;
   onClose: () => void;
 }) {
@@ -1272,7 +1346,7 @@ export function DebateCancelUploadDialog({
         <button
           type="button"
           onClick={onConfirm}
-          disabled={busy}
+          disabled={busy || !canConfirm}
           className="mt-5 flex min-h-7 w-full items-center justify-center rounded-full bg-red-01 px-4 text-metadata text-white transition-colors hover:bg-red-01/90 disabled:opacity-50"
         >
           {busy ? 'Removing...' : 'Delete debate forever'}

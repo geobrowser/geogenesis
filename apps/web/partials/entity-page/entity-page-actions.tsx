@@ -30,6 +30,8 @@ interface EntityPageActionsProps {
   compact?: boolean;
   /** The entity's own primary action, ahead of the votes — a topic's Follow, which replaces them. */
   leading?: React.ReactNode;
+  /** The edit-mode create link. Off where the row is the entity's own controls only, as on a claim. */
+  showCreate?: boolean;
 }
 
 /** Votes, create, history, and menu — separate from type metadata */
@@ -39,6 +41,7 @@ export function EntityPageActions({
   isVoteable = false,
   compact = false,
   leading,
+  showCreate = true,
 }: EntityPageActionsProps) {
   const [isHistoryOpen, setIsHistoryOpen] = React.useState(false);
   const editable = useUserIsEditing(spaceId);
@@ -59,7 +62,7 @@ export function EntityPageActions({
     <div className={cx('ml-auto flex shrink-0 items-center', compact ? 'gap-4' : 'gap-5')}>
       {leading}
       {isVoteable && <EntityVoteButtons entityId={entityId} spaceId={spaceId} />}
-      {editable && (
+      {editable && showCreate && (
         // The label keeps this icon-only link from announcing as its bare URL. `PrefetchLink`
         // matches the space header and includes hover prefetching.
         <Link

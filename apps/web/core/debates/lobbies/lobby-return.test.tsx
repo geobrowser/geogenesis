@@ -1,8 +1,8 @@
-import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import { cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyMember, DebateLobbyView, DebateMyLobby } from '../api';
+import type { DebateMyLobby } from '../api';
 import {
   clearDebateReturnDestination,
   rememberDebateReturnDestination,
@@ -10,41 +10,12 @@ import {
 } from '../debate-return-navigation';
 
 const mocks = vi.hoisted(() => ({
-  lobby: undefined as
-    (Pick<DebateLobbyView, 'access' | 'name' | 'members'> & { viewer: { removed?: boolean } }) | undefined,
-  useDebateLobby: vi.fn(),
   mine: { data: undefined as DebateMyLobby | undefined, isError: false },
 }));
 
-vi.mock('./hooks', () => ({
-  useDebateLobby: (lobbyId: string) => {
-    mocks.useDebateLobby(lobbyId);
-    return { data: mocks.lobby };
-  },
-  useMyDebateLobby: () => mocks.mine,
-}));
+vi.mock('./hooks', () => ({ useMyDebateLobby: () => mocks.mine }));
 
-const { BackToLobbyRow, useConsumeDebateReturnDestination } = await import('./lobby-return');
-
-const member = (id: string, stepped_out = false): DebateLobbyMember => ({
-  user_id: id,
-  profile_space_id: `space-${id}`,
-  display_name: id,
-  avatar_cid: null,
-  role: 'speaker',
-  creator: false,
-  acting_host: false,
-  on_roster_since: '2026-10-12T10:00:00Z',
-  stepped_out,
-  in_debate: stepped_out,
-});
-
-const admitted = (viewer: { removed?: boolean } = {}) => ({
-  access: { status: 'admitted' } as const,
-  name: 'Onboarding with Adam',
-  members: [member('me', true), member('ana'), member('ben'), member('cy'), member('dee')],
-  viewer,
-});
+const { useConsumeDebateReturnDestination } = await import('./lobby-return');
 
 const steppedOutOf = (lobbyId: string): DebateMyLobby => ({ current_lobby_id: lobbyId, stepped_out: true });
 const notInALobby: DebateMyLobby = { current_lobby_id: null, stepped_out: false };
@@ -52,100 +23,10 @@ const backIn = (lobbyId: string): DebateMyLobby => ({ current_lobby_id: lobbyId,
 
 beforeEach(() => {
   clearDebateReturnDestination();
-  mocks.lobby = admitted();
-  mocks.useDebateLobby.mockClear();
   mocks.mine = { data: undefined, isError: false };
 });
 
 afterEach(cleanup);
-
-const backButton = () => screen.queryByRole('button', { name: /^Back to Onboarding with Adam/ });
-
-describe('BackToLobbyRow', () => {
-  // The case sessionStorage cannot cover: this tab never saw the lobby.
-  it('offers the lobby geo-chat says the viewer stepped out of, from another tab', () => {
-    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    const onLeave = vi.fn();
-    render(<BackToLobbyRow onLeave={onLeave} />);
-
-    fireEvent.click(backButton()!);
-    expect(onLeave).toHaveBeenCalledTimes(1);
-    expect(mocks.useDebateLobby).toHaveBeenCalledWith('lobby1');
-  });
-
-  it('names the lobby, counts it as the lobby header does, and shows faces of people in the room', () => {
-    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()?.textContent).toContain('5 here now');
-    // The faces stay out of the button and out of its name.
-    const faces = screen.getByTestId('back-to-lobby-faces');
-    expect(faces.getAttribute('aria-hidden')).toBe('true');
-    expect(faces.querySelectorAll('li')).toHaveLength(3);
-    expect(backButton()!.querySelector('ul, li, img')).toBeNull();
-  });
-
-  it('prefers geo-chat over this tab’s record', () => {
-    rememberLobbyReturnDestination('lobby1');
-    mocks.mine = { data: notInALobby, isError: false };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
-  });
-
-  it('is hidden while geo-chat has not answered', () => {
-    rememberLobbyReturnDestination('lobby1');
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
-  });
-
-  it('falls back to this tab’s record when the call failed', () => {
-    mocks.mine = { data: undefined, isError: true };
-    rememberLobbyReturnDestination('lobby1');
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).not.toBeNull();
-  });
-
-  it('is hidden once the lobby has ended', () => {
-    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    mocks.lobby = { ...admitted(), access: { status: 'closed', reason: 'ended' } };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
-  });
-
-  // GEO-3134: a removed viewer goes back by choice, from the lobby page's Rejoin.
-  it('is hidden while a host has the viewer removed', () => {
-    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    mocks.lobby = admitted({ removed: true });
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
-  });
-
-  // GEO-3337: a lobby tab left open rejoins once the debate is over, which ends the step-out while
-  // this flow is still on its end card.
-  it('stays when a rejoin from another tab ends the step-out', () => {
-    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    const { rerender } = render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).not.toBeNull();
-
-    mocks.mine = { data: backIn('lobby1'), isError: false };
-    rerender(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).not.toBeNull();
-  });
-
-  it('is hidden for a lobby the viewer is in that this flow never stepped out of', () => {
-    rememberDebateReturnDestination('/space/my-space');
-    mocks.mine = { data: backIn('lobby1'), isError: false };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
-  });
-
-  it('is hidden for a debate that did not start from a lobby', () => {
-    rememberDebateReturnDestination('/space/my-space');
-    mocks.mine = { data: notInALobby, isError: false };
-    render(<BackToLobbyRow onLeave={vi.fn()} />);
-    expect(backButton()).toBeNull();
-    expect(mocks.useDebateLobby).not.toHaveBeenCalled();
-  });
-});
 
 describe('useConsumeDebateReturnDestination', () => {
   const consume = () => renderHook(() => useConsumeDebateReturnDestination()).result.current();
@@ -167,6 +48,8 @@ describe('useConsumeDebateReturnDestination', () => {
     expect(consume()).toBe('/space/my-space');
   });
 
+  // GEO-3337: a lobby tab left open rejoins once the debate is over, which ends the step-out while
+  // this flow can still be in the picker.
   it('still returns to the lobby once a rejoin from another tab ends the step-out', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
     const hook = renderHook(() => useConsumeDebateReturnDestination());
@@ -182,6 +65,12 @@ describe('useConsumeDebateReturnDestination', () => {
     mocks.mine = { data: notInALobby, isError: false };
     hook.rerender();
     expect(hook.result.current()).toBe('/space/my-space');
+  });
+
+  it('does not return to a lobby the viewer is in that this flow never stepped out of', () => {
+    rememberDebateReturnDestination('/space/my-space');
+    mocks.mine = { data: backIn('lobby1'), isError: false };
+    expect(consume()).toBe('/space/my-space');
   });
 
   it('uses this tab’s record when geo-chat cannot answer, and clears it', () => {
