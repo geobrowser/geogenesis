@@ -5297,12 +5297,11 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
       await renderLiveDebate(openRoundsListening());
 
-      const toggle = soundToggle();
-      expect(toggle).toHaveAttribute('aria-pressed', 'true');
-      expect(toggle?.parentElement).toContainElement(screen.getByRole('button', { name: 'Leave debate' }));
+      const toggle = screen.getByRole('button', { name: 'Turn sound effects off' });
+      expect(toggle.parentElement).toContainElement(screen.getByRole('button', { name: 'Leave debate' }));
 
-      fireEvent.click(toggle!);
-      expect(screen.getByRole('button', { name: 'Turn sound effects on' })).toHaveAttribute('aria-pressed', 'false');
+      fireEvent.click(toggle);
+      expect(screen.getByRole('button', { name: 'Turn sound effects on' })).toBeInTheDocument();
       expect(values.get('geogenesis.debates.room-sound-effects.v1')).toBe('off');
     });
 

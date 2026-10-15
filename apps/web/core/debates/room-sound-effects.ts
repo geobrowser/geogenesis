@@ -1,5 +1,8 @@
 import * as React from 'react';
 
+import type { OpenRoundPick } from './api';
+import { audioContextClass } from './debate-request-alert';
+
 /**
  * Short sound effects for the Open rounds recording room (GEO-3319).
  *
@@ -21,29 +24,6 @@ import * as React from 'react';
  * Everything passes one bus — a gentle top cut and a compressor — so two sounds landing together
  * (two stamps into a banner) never clip, and every sound sits at a similar level under the voices.
  */
-
-export type RoomSound =
-  | 'tickSoft'
-  | 'tockSoft'
-  | 'tick'
-  | 'tock'
-  | 'tickLast'
-  | 'go'
-  | 'hurry'
-  | 'handoff'
-  | 'question'
-  | 'pickTick'
-  | 'pickExtend'
-  | 'pickEnd'
-  | 'stampExtend'
-  | 'stampEnd'
-  | 'stampNone'
-  | 'roundUp'
-  | 'wrap'
-  | 'max'
-  | 'endsoon'
-  | 'thanks'
-  | 'ready';
 
 const NOTE = { G4: 392, C5: 523.25, E5: 659.25, G5: 783.99, A5: 880, C6: 1046.5 } as const;
 
@@ -153,7 +133,7 @@ function wrap(voice: Voice) {
   );
 }
 
-export const ROOM_SOUNDS: Record<RoomSound, (voice: Voice) => void> = {
+const ROOM_SOUNDS = {
   // Count-in: the first two ticks quieter, so it builds toward the turn.
   tickSoft: voice => clockTick(voice, 0, true, 0.5),
   tockSoft: voice => clockTick(voice, 0, false, 0.5),
@@ -216,10 +196,12 @@ export const ROOM_SOUNDS: Record<RoomSound, (voice: Voice) => void> = {
     tone(voice, NOTE.E5, 0.1, { gain: 0.07 });
     tone(voice, NOTE.A5, 0.25, { gain: 0.07, at: 0.1 });
   },
-};
+} satisfies Record<string, (voice: Voice) => void>;
+
+export type RoomSound = keyof typeof ROOM_SOUNDS;
 
 /** The stamp a pick lands with. */
-export function stampSound(pick: 'extend' | 'end' | null | undefined): RoomSound {
+export function stampSound(pick: OpenRoundPick | null | undefined): RoomSound {
   return pick === 'extend' ? 'stampExtend' : pick === 'end' ? 'stampEnd' : 'stampNone';
 }
 
@@ -244,15 +226,6 @@ export type RoomSoundEngine = {
   dispose: () => void;
 };
 
-type AudioContextConstructor = typeof AudioContext;
-
-function audioContextClass(): AudioContextConstructor | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return (
-    window.AudioContext ?? (window as unknown as { webkitAudioContext?: AudioContextConstructor }).webkitAudioContext
-  );
-}
-
 /**
  * Connects `stream` to itself through two local peer connections and returns what comes out the far
  * side. Host candidates only: both ends are this page, so no server is involved.
@@ -271,10 +244,11 @@ async function loopback(stream: MediaStream): Promise<{ stream: MediaStream; clo
     receiver.onicecandidate = event => {
       if (event.candidate) void sender.addIceCandidate(event.candidate).catch(() => undefined);
     };
+    let timeout: ReturnType<typeof setTimeout> | undefined;
     const received = new Promise<MediaStream>((resolve, reject) => {
       receiver.ontrack = event => resolve(event.streams[0] ?? new MediaStream([event.track]));
-      setTimeout(() => reject(new Error('Sound effect loopback timed out.')), 5_000);
-    });
+      timeout = setTimeout(() => reject(new Error('Sound effect loopback timed out.')), 5_000);
+    }).finally(() => clearTimeout(timeout));
     for (const track of stream.getAudioTracks()) sender.addTrack(track, stream);
     const offer = await sender.createOffer();
     await sender.setLocalDescription(offer);
@@ -293,9 +267,7 @@ async function loopback(stream: MediaStream): Promise<{ stream: MediaStream; clo
  * Starts the room's sound output. Resolves to null wherever it cannot be made safe — no Web Audio,
  * no WebRTC, or the loopback failed — and the room is then silent, as it was before.
  */
-export async function createRoomSoundEngine({
-  outputDeviceId,
-}: { outputDeviceId?: string } = {}): Promise<RoomSoundEngine | null> {
+export async function createRoomSoundEngine(): Promise<RoomSoundEngine | null> {
   const AudioContextClass = audioContextClass();
   if (!AudioContextClass || typeof RTCPeerConnection === 'undefined') return null;
 
@@ -328,11 +300,9 @@ export async function createRoomSoundEngine({
     element = new Audio();
     element.autoplay = true;
     element.srcObject = looped.stream;
-    const setSink = (deviceId: string) => {
-      const sinkable = element as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
-      if (sinkable?.setSinkId && deviceId) void sinkable.setSinkId(deviceId).catch(() => undefined);
-    };
-    if (outputDeviceId) setSink(outputDeviceId);
+    const sinkable = element as HTMLAudioElement & { setSinkId?: (id: string) => Promise<void> };
+    // An empty id is the system default, which is also how a debater switches back to it.
+    const setSink = (deviceId: string) => void sinkable.setSinkId?.(deviceId).catch(() => undefined);
     void element.play().catch(() => undefined);
 
     const voice: Voice = { context, bus, noise: buffer };
@@ -377,9 +347,11 @@ export function useRoomSoundEffects({ enabled, outputDeviceId }: { enabled: bool
   React.useEffect(() => {
     if (!enabled) return;
     let cancelled = false;
-    void createRoomSoundEngine({ outputDeviceId: outputDeviceIdRef.current }).then(engine => {
-      if (cancelled) engine?.dispose();
-      else engineRef.current = engine;
+    void createRoomSoundEngine().then(engine => {
+      if (cancelled) return engine?.dispose();
+      // Read once the loopback is up, so a speaker picked while it connected is not missed.
+      engine?.setOutputDevice(outputDeviceIdRef.current);
+      engineRef.current = engine;
     });
     return () => {
       cancelled = true;
@@ -422,6 +394,7 @@ export function setRoomSoundEffectsEnabled(enabled: boolean): void {
   if (typeof window === 'undefined') return;
   try {
     window.localStorage.setItem(ROOM_SOUND_EFFECTS_STORAGE_KEY, enabled ? 'on' : 'off');
+    memoryPreference = null;
   } catch {
     // Private mode or quota: the choice holds for this page, through the listeners below.
     memoryPreference = enabled;

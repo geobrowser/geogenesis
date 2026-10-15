@@ -10,7 +10,6 @@ export function RecordingCircleButton({
   onClick,
   disabled,
   active = false,
-  pressed,
   analyticsLabel,
   className,
   children,
@@ -20,8 +19,6 @@ export function RecordingCircleButton({
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
-  /** For a toggle: whether it is on. */
-  pressed?: boolean;
   analyticsLabel?: string;
   className?: string;
   children: React.ReactNode;
@@ -33,7 +30,6 @@ export function RecordingCircleButton({
       title={title}
       onClick={onClick}
       disabled={disabled}
-      aria-pressed={pressed}
       data-geo-analytics-label={analyticsLabel}
       className={cx(
         'grid size-10 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-light transition disabled:opacity-50',

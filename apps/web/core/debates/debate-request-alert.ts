@@ -73,11 +73,16 @@ function safeStorage(): Storage | null {
 
 let audioContext: AudioContext | null = null;
 
+/** The page's `AudioContext` constructor, including WebKit's prefixed one, or nothing. */
+export function audioContextClass(): typeof AudioContext | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+}
+
 /** Two short rising notes: distinct from a message ding, and quiet. */
 export function playRequestTone() {
   try {
-    const AudioContextClass =
-      window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    const AudioContextClass = audioContextClass();
     if (!AudioContextClass) return;
     audioContext ??= new AudioContextClass();
     const context = audioContext;

@@ -3144,14 +3144,19 @@ function DebateRecordingModal({
   // sticks across debates.
   const [soundEffectsOn, setSoundEffectsOn] = useRoomSoundEffectsEnabled();
   const playSound = useRoomSoundEffects({ enabled: stamps && soundEffectsOn, outputDeviceId: soundOutputDeviceId });
-  const remoteWrapItUp = wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true);
+  // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
+  // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
+  const showRemoteWrapItUp =
+    stamps &&
+    !showLocalDebateEndsSoon &&
+    wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true);
   const flippingRound =
     reveal.step === 'flip' && countdown.openRounds?.phase === 'result' ? countdown.openRounds.roundIndex : null;
   useOpenRoundsRoomSounds(
     {
       countInSeconds: localUpcomingSeconds,
       goTurn: showLocalGo ? countdown.turnIndex : null,
-      wrapItUpTurn: showLocalWrapItUp || (!showLocalDebateEndsSoon && remoteWrapItUp) ? countdown.turnIndex : null,
+      wrapItUpTurn: showLocalWrapItUp || showRemoteWrapItUp ? countdown.turnIndex : null,
       endsSoonTurn: showLocalDebateEndsSoon ? countdown.turnIndex : null,
       endedTurn: countdown.yieldingSlot !== null ? countdown.turnIndex : null,
       decidingRound: openRoundDeciding?.roundIndex ?? null,
@@ -3265,13 +3270,7 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
-      // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
-      // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
-      showWrapItUp={
-        stamps &&
-        !showLocalDebateEndsSoon &&
-        wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true)
-      }
+      showWrapItUp={showRemoteWrapItUp}
       endingTurn={remoteEndingTurn}
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
@@ -3348,7 +3347,6 @@ function DebateRecordingModal({
               ariaLabel={soundEffectsOn ? 'Turn sound effects off' : 'Turn sound effects on'}
               title={soundEffectsOn ? 'Sound effects on' : 'Sound effects off'}
               onClick={() => setSoundEffectsOn(!soundEffectsOn)}
-              pressed={soundEffectsOn}
               analyticsLabel="Debate room Sound effects"
               className="ml-auto shrink-0"
             >
