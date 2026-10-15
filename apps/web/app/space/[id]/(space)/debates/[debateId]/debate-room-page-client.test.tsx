@@ -17,6 +17,7 @@ import {
   revealEnd as openRoundsRevealEnd,
   roundOneSpeaking as openRoundsRoundOneSpeaking,
 } from '~/core/debates/open-rounds-fixtures';
+import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } from './debate-room-page-client';
@@ -343,6 +344,7 @@ vi.mock('~/core/debates/use-related-debate-claims', () => ({
 }));
 
 beforeEach(() => {
+  clearRematchJoinIntents();
   mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
   mocks.setPublishOptOutRequest.mockReset();
   mocks.prefetchAllowlist.mockReset();
@@ -1620,6 +1622,61 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
     expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
     expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
+  });
+
+  it('arrives in the state the picker was in', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    rememberRematchJoinIntent('debate-1', { micOn: false, cameraOn: false });
+
+    render(
+      <DebateMediaSessionProvider>
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+  });
+
+  it('prefers what a card handed over to what a picker recorded', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    rememberRematchJoinIntent('debate-1', { micOn: false, cameraOn: false });
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack()]);
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('1'));
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument());
+    expect(await screen.findByText('Enable video to start')).toBeInTheDocument();
+  });
+
+  it('keeps its own defaults when no picker chose for it', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockResolvedValue([
+      createLocalAudioTrack(),
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    render(
+      <DebateMediaSessionProvider>
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
   });
 
   it('opens no devices for a hand-off that chose neither', async () => {

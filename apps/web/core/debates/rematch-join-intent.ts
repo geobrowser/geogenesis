@@ -22,6 +22,18 @@ export function rememberRematchJoinIntent(sessionId: string, state: DebateRematc
   joinIntentBySessionId.set(sessionId, state);
 }
 
+/**
+ * The same record, carried onto the debate a picker converted into.
+ *
+ * A picker's call is its own LiveKit room rather than the app-wide media session, so it has no
+ * devices to hand the debate room — only the choice. Keyed by debate id here, because that is all
+ * the room knows about where it came from.
+ */
+export function carryJoinIntentIntoDebate(sessionId: string, debateId: string) {
+  const chosen = readRematchJoinIntent(sessionId);
+  if (chosen) rememberRematchJoinIntent(debateId, chosen);
+}
+
 export function readRematchJoinIntent(sessionId: string): DebateRematchJoinIntent | null {
   if (!sessionId) return null;
   return joinIntentBySessionId.get(sessionId) ?? null;

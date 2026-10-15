@@ -82,6 +82,7 @@ import {
   useParticipantPositions,
 } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { carryJoinIntentIntoDebate } from '~/core/debates/rematch-join-intent';
 import { RequestDebateControl } from '~/core/debates/request-debate-control';
 import { REQUEST_PENDING_LABEL, debateRequestGate } from '~/core/debates/request-gate';
 import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
@@ -2453,6 +2454,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       const spaceId = validateSpaceId(session.source_space_id) ? session.source_space_id : remembered;
       if (!spaceId) return;
       const debateId = session.converted_debate_id;
+
+      carryJoinIntentIntoDebate(session.id, debateId);
       if (enteringConvertedDebateRef.current === debateId) return;
       enteringConvertedDebateRef.current = debateId;
       const path = `/space/${spaceId}/debates/${debateId}`;

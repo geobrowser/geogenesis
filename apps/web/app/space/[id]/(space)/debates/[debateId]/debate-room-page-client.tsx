@@ -103,6 +103,7 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
+import { readRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { inheritedJoinState, joinStateNeedsOpening, kindsForJoinState } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import {
@@ -420,8 +421,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    */
   const handedOverSession = mediaSession.activeSessionKey === mediaSessionKey;
   const handedOverAtMount = React.useRef(handedOverSession);
+
+  // First render only, with `inherited` below, and for the same reason.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const chosenBeforeArriving = React.useMemo(() => (handedOverSession ? null : readRematchJoinIntent(debateId)), []);
+  /** The picker's choice as a join state, or null when no picker preceded this room. */
+  const carriedJoinState = React.useMemo(
+    () =>
+      chosenBeforeArriving
+        ? { audioMuted: !chosenBeforeArriving.micOn, videoEnabled: chosenBeforeArriving.cameraOn }
+        : null,
+    [chosenBeforeArriving]
+  );
+
   const inherited = React.useMemo(
     () =>
+      carriedJoinState ??
       inheritedJoinState(
         inheritedTracks.map(track => track.mediaStreamTrack.kind),
         handedOverSession
@@ -2497,7 +2512,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
       const settled = joinStateChosenHere.current
         ? { audioMuted, videoEnabled }
-        : inheritedJoinState(liveKinds, handedOverAtMount.current);
+        : (carriedJoinState ?? inheritedJoinState(liveKinds, handedOverAtMount.current));
 
       if (!joinStateChosenHere.current) {
         setAudioMuted(settled.audioMuted);
@@ -2510,7 +2525,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     return () => {
       cancelled = true;
     };
-  }, [debate, ensureLocalPreview, inherited, mediaSession.localTracksRef, mediaSession.pendingPreview, roomState]);
+  }, [
+    carriedJoinState,
+    debate,
+    ensureLocalPreview,
+    inherited,
+    mediaSession.localTracksRef,
+    mediaSession.pendingPreview,
+    roomState,
+  ]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;

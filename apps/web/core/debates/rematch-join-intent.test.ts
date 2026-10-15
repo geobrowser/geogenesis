@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
+  carryJoinIntentIntoDebate,
   clearRematchJoinIntents,
   hasAnsweredRematchJoin,
   markRematchAnswered,
@@ -56,5 +57,21 @@ describe('rematch join intent', () => {
 
     expect(readRematchJoinIntent('session-0')).toEqual({ micOn: false, cameraOn: true });
     expect(readRematchJoinIntent('session-19')).not.toBeNull();
+  });
+});
+
+describe('carryJoinIntentIntoDebate', () => {
+  it('copies the picker’s choice onto the debate it became', () => {
+    rememberRematchJoinIntent('session-9', { micOn: false, cameraOn: false });
+
+    carryJoinIntentIntoDebate('session-9', 'debate-9');
+
+    expect(readRematchJoinIntent('debate-9')).toEqual({ micOn: false, cameraOn: false });
+  });
+
+  it('records nothing for a session that chose nothing', () => {
+    carryJoinIntentIntoDebate('session-unknown', 'debate-10');
+
+    expect(readRematchJoinIntent('debate-10')).toBeNull();
   });
 });
