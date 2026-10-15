@@ -311,6 +311,9 @@ export function DebateCoordinator() {
   const roomsKnown =
     upcomingRoomsQuery.isSuccess || (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
 
+  const rematchSenderUserId =
+    activity?.rematch?.participants.find(participant => participant.participant_slot === 1)?.user_id ?? null;
+
   const promptedRematchSender =
     hasAttention &&
     activity?.rematch &&
@@ -322,7 +325,7 @@ export function DebateCoordinator() {
     roomsKnown &&
     validateSpaceId(activity.rematch.source_space_id) &&
     pathname !== debateRematchPath(activity.rematch) &&
-    activity.rematch.participants.find(participant => participant.participant_slot === 1)?.user_id === currentUserId
+    rematchSenderUserId === currentUserId
       ? activity.rematch
       : null;
 
@@ -428,7 +431,13 @@ export function DebateCoordinator() {
     /*
      * A profile challenge waits for its sender to say how they want to join.
      */
-    if (!rematch.source_debate_id && !hasAnsweredRematchJoin(rematch.id) && rematch.participants.length >= 2) return;
+    if (
+      !rematch.source_debate_id &&
+      rematchSenderUserId === currentUserId &&
+      !hasAnsweredRematchJoin(rematch.id) &&
+      rematch.participants.length >= 2
+    )
+      return;
     // Past that guard there is no room to hand off from — a session with no source debate comes
     // from the matchmaking hub or a profile challenge, so this coordinator is the only thing that
     // can route the viewer in, and it must. But it runs in *every* tab, and the guard above only
@@ -474,6 +483,7 @@ export function DebateCoordinator() {
   }, [
     activity,
     atRoom,
+    currentUserId,
     hasAttention,
     hasRoomAwaitingSession,
     joinableRooms,
@@ -481,6 +491,7 @@ export function DebateCoordinator() {
     roomsKnown,
     roomSessionsReported,
     refetchUpcomingRooms,
+    rematchSenderUserId,
     roomSessionIds,
     roomsChecked,
     router,

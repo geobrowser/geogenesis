@@ -591,6 +591,40 @@ describe('DebateCoordinator', () => {
     expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: false, cameraOn: false });
   });
 
+  it('walks the person who accepted into the picker without a card', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+    expect(screen.queryByRole('button', { name: 'Explore claims' })).toBeNull();
+  });
+
+  it('still walks them in when nothing remembers the answer', async () => {
+    mocks.currentUserId = 'user-recipient';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+    clearRematchJoinIntents();
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  });
+
+  it('holds the sender until they choose', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/space/space-1/claims';
+    mocks.activity = challengeRematchActivity();
+
+    render(<DebateCoordinator />);
+
+    await screen.findByRole('button', { name: 'Explore claims' });
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
   it('shows no card to the person who accepted', async () => {
     mocks.currentUserId = 'user-recipient';
     mocks.pathname = '/space/space-1/claims';
