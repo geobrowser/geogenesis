@@ -1029,25 +1029,20 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     for (const space of taggedSpaceFacet.spaces) ids.add(space.id);
     return [...ids];
   }, [catalogEntities, taggedSpaceFacet.spaces]);
-  const {
-    spacesById: candidateSpaces,
-    isLoading: candidateSpacesPending,
-    isPlaceholderData: candidateSpacesHeldOver,
-  } = useSpacesByIds(candidateSpaceIds);
+  const { spacesById: candidateSpaces, isLoading: candidateSpacesPending } = useSpacesByIds(candidateSpaceIds);
   const spaceTypePublishable = React.useMemo(() => debatePublishableSpacePredicate(candidateSpaces), [candidateSpaces]);
   /**
    * Whether {@link canPublishDebateIn} can be trusted yet.
    *
    * An unresolved type reads as publishable — deliberately, so a slow lookup doesn't empty the
    * picker — so while this is true the predicate admits spaces it will go on to reject, a personal
-   * space among them. Held-over counts: `useSpacesByIds` answers from the previous id set rather
-   * than blanking, and it knows nothing about an id it was never asked for.
+   * space among them. `useSpacesByIds` reports loading while any candidate id is unresolved.
    *
    * Named here rather than at the reader, because this is the lookup that decides it. The picker
    * has a second `useSpacesByIds` for the allowlist, whose pending state `scope.pending` carries;
    * they are different questions about different ids and neither covers the other.
    */
-  const publishabilityPending = candidateSpacesPending || candidateSpacesHeldOver;
+  const publishabilityPending = candidateSpacesPending;
   const canPublishDebateIn = React.useCallback(
     (spaceId: string | null | undefined) =>
       isSpaceDebatePublishable(spaceId, publishableSpaceIds) && spaceTypePublishable(spaceId),

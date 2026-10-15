@@ -3,7 +3,7 @@ import { QueryClient } from '@tanstack/react-query';
 import { describe, expect, it, vi } from 'vitest';
 
 import type { Space } from '~/core/io/dto/spaces';
-import { profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
+import { profilesBySpaceIdsQueryKey, spaceByIdQueryKey } from '~/core/io/query-keys';
 import type { Profile } from '~/core/types';
 
 import {
@@ -184,7 +184,7 @@ describe('claim response summaries', () => {
       ])
     ).toHaveLength(205);
     expect(queryClient.getQueryData(profilesBySpaceIdsQueryKey(responderIds))).toBeInstanceOf(Map);
-    expect(queryClient.getQueryData(spacesByIdsQueryKey(responderIds))).toHaveLength(205);
+    expect(responderIds.every(id => queryClient.getQueryData(spaceByIdQueryKey(id)))).toBe(true);
   });
 
   it('keeps response caches usable when avatar metadata fails and reuses successful metadata on retry', async () => {
