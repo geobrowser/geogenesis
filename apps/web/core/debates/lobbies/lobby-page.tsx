@@ -21,11 +21,11 @@ import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
-import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useScrollLock } from '../use-scroll-lock';
 import {
+  type LobbyPresenceRoster,
   type LobbyPresenceState,
   MAX_TIMEOUT_MS,
   useDebateLobby,
@@ -131,19 +131,19 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const memberViewer = lobby && isMemberView(lobby) ? lobby.viewer : null;
   const admitted = lobby?.access.status === 'admitted';
   const currentUserId = useCurrentGeoChatUserId();
-  // Their own roster row; geo-chat keeps `stepped_out` for a while after the debate ends.
-  const debating =
-    memberViewer !== null &&
-    currentUserId !== null &&
-    (lobby?.members.some(member => member.in_debate && sameId(member.user_id, currentUserId)) ?? false);
+  // The member roster, for a page stepped out by a debate in another tab to read how it went.
+  const members = guest ? undefined : memberData?.members;
+  const roster = React.useMemo<LobbyPresenceRoster | undefined>(
+    () => (members && currentUserId ? { members, viewerId: currentUserId } : undefined),
+    [members, currentUserId]
+  );
   const presence = useLobbyPresence(
     lobbyId,
     admitted && !guest,
     memberViewer?.stepped_out ?? false,
     memberViewer?.connected ?? false,
     memberViewer?.removed ?? false,
-    debating,
-    lobbyQuery.dataUpdatedAt
+    roster
   );
   const guestSession = useLobbyGuestSession(lobbyId, {
     listen: signedOut && admitted,

@@ -7,6 +7,7 @@ import * as React from 'react';
 import {
   type CreateDebateLobbyRequest,
   type DebateLobbyHeartbeat,
+  type DebateLobbyMember,
   type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
@@ -27,6 +28,7 @@ import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
 import { useConnectionId } from '../rooms/hooks';
+import { sameId } from '../rooms/room-presence';
 import {
   lobbyCreated,
   lobbyEnded,
@@ -312,12 +314,18 @@ export type LobbyPresenceState =
   | { status: 'confirm_leave_other'; otherLobbyId: string | null; rejoin?: true }
   /** Joined another lobby from another tab, which dropped this one; no automatic rejoin. */
   | { status: 'moved'; otherLobbyId: string | null }
-  /** Out debating from another tab, still on the roster; joins again once the debate is over. */
+  /**
+   * Out to debate, still on the roster. Stepped out by a debate in another tab, it joins again once a
+   * newer roster shows that debate over, or ends as `left` once one shows the viewer gone.
+   */
   | { status: 'stepped_out' }
   /** Taken out by the server; the refetched access says the rest. */
   | { status: 'dropped'; reason: 'ended' | 'banned' | 'removed' }
   | { status: 'left' }
   | { status: 'failed'; message: string };
+
+/** A lobby view's roster, with the viewer's id to find their own row in it. */
+export type LobbyPresenceRoster = { members: readonly DebateLobbyMember[]; viewerId: string };
 
 /**
  * Presence in one lobby: joins once admitted, heartbeats while joined, and leaves on unmount,
@@ -329,10 +337,8 @@ export function useLobbyPresence(
   steppedOut = false,
   connected = false,
   removed = false,
-  /** The viewer's own roster row says they are in a debate. */
-  debating = false,
-  /** When the view `debating` comes from was stored, as react-query's `dataUpdatedAt`. */
-  viewUpdatedAt = 0
+  /** The view's roster and whose row is the viewer's; undefined while either is unknown. */
+  roster?: LobbyPresenceRoster
 ) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -465,21 +471,29 @@ export function useLobbyPresence(
     }
   }, [enqueue, lobbyId, sendLeave, setState, store]);
 
-  // When this tab was last stepped out; only a view stored after it can say the debate is over.
-  const steppedOutAtRef = React.useRef(0);
   // Out of the lobby without a leave: stops the heartbeat and the unmount's leave.
   const stopWithout = React.useCallback(
     (next: LobbyPresenceState) => {
       generationRef.current += 1;
       sentRef.current = false;
       joinedRef.current = false;
-      if (next.status === 'stepped_out') steppedOutAtRef.current = Date.now();
       setState(next);
     },
     [setState]
   );
 
+  // The latest roster, and the one shown when a debate in another tab stepped this page out. Only a
+  // roster read since can say how that debate went: patches to the view (claim lists, guest counts)
+  // keep the same `members`. Null when nothing is to be recovered, as when this tab left to debate.
+  const rosterRef = React.useRef(roster);
+  React.useEffect(() => {
+    rosterRef.current = roster;
+  }, [roster]);
+  const stepOutRosterRef = React.useRef<{ members: readonly DebateLobbyMember[] | undefined } | null>(null);
+
   const stepOut = React.useCallback(async () => {
+    // This tab is going to the debate itself: its own step-out is never one to come back from here.
+    stepOutRosterRef.current = null;
     // The server can step the viewer out first (the debate's start reaches the heartbeat before
     // the routing), and the lobby must still be where the debate returns to.
     const steppedOutAlready = statusRef.current === 'stepped_out';
@@ -528,13 +542,17 @@ export function useLobbyPresence(
     void join(false);
   }, [admitted, join, lobbyId, removed, setState, status, steppedOut]);
 
-  // Stepped out while this page stayed open, by a debate in another tab: back in once it is over.
-  // Only a view stored after the step-out counts: one from before it predates the debate, and the
-  // debate can end before this tab ever sees it running.
+  // Stepped out while this page stayed open, by a debate in another tab: back in once a roster read
+  // since shows the debate over, which can be before this tab ever saw it running. A roster without
+  // the viewer means they left from another tab, and this one leaves with them.
   React.useEffect(() => {
-    if (status !== 'stepped_out' || !admitted || removed || debating) return;
-    if (viewUpdatedAt > steppedOutAtRef.current) void join(false);
-  }, [admitted, debating, join, removed, status, viewUpdatedAt]);
+    const shownAtStepOut = stepOutRosterRef.current;
+    if (status !== 'stepped_out' || !shownAtStepOut || !admitted || removed || !roster) return;
+    if (roster.members === shownAtStepOut.members) return;
+    const own = roster.members.find(member => sameId(member.user_id, roster.viewerId));
+    if (!own) stopWithout({ status: 'left' });
+    else if (!own.in_debate) void join(false);
+  }, [admitted, join, removed, roster, status, stopWithout]);
 
   // Unbanned after a ban this tab heard: the view is admitted again with `removed`, so the
   // viewer gets the removed screen and its Rejoin rather than a stale ban.
@@ -557,6 +575,7 @@ export function useLobbyPresence(
           return;
         case 'stepped_out':
           lobbySteppedOut(lobbyId);
+          stepOutRosterRef.current = { members: rosterRef.current?.members };
           stopWithout({ status: 'stepped_out' });
           void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobby(accountKey, lobbyId) });
           return;

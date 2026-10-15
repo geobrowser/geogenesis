@@ -5,7 +5,8 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyView } from '../api';
+import type { DebateLobbyMember, DebateLobbyView } from '../api';
+import type { LobbyPresenceRoster } from './hooks';
 
 const api = vi.hoisted(() => ({
   setDebateLobbyPresence: vi.fn(),
@@ -312,6 +313,32 @@ describe('useLobbyPresence', () => {
 
   // A debate started from another tab steps this open page out; it comes back once that is over.
   describe('a page left open while the viewer debates in another tab', () => {
+    const me = (inDebate: boolean): DebateLobbyMember => ({
+      user_id: 'me',
+      profile_space_id: 'space-me',
+      display_name: 'Me',
+      avatar_cid: null,
+      role: 'speaker',
+      creator: false,
+      acting_host: false,
+      on_roster_since: '2026-10-05T10:00:00Z',
+      stepped_out: inDebate,
+      in_debate: inDebate,
+    });
+    /** A roster as read from geo-chat: a fresh `members` array, with or without the viewer's row. */
+    const read = (own: DebateLobbyMember | null): LobbyPresenceRoster => ({
+      members: own ? [own] : [],
+      viewerId: 'me',
+    });
+
+    function renderOpenPage(initial: LobbyPresenceRoster | undefined) {
+      return renderHook(
+        ({ roster }: { roster: LobbyPresenceRoster | undefined }) =>
+          useLobbyPresence('lobby1', true, false, false, false, roster),
+        { wrapper, initialProps: { roster: initial } }
+      );
+    }
+
     async function steppedOutByAnotherTab() {
       vi.useFakeTimers({ shouldAdvanceTime: true });
       api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
@@ -320,48 +347,81 @@ describe('useLobbyPresence', () => {
         reason: 'stepped_out',
         current_lobby_id: null,
       });
-      const viewBefore = Date.now();
-      const hook = renderHook(
-        ({ debating, viewUpdatedAt }) => useLobbyPresence('lobby1', true, false, false, false, debating, viewUpdatedAt),
-        { wrapper, initialProps: { debating: false, viewUpdatedAt: viewBefore } }
-      );
+      const shown = read(me(false));
+      const hook = renderOpenPage(shown);
       await waitFor(() => expect(hook.result.current.state.status).toBe('joined'));
       await act(async () => {
         await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
       });
       await waitFor(() => expect(hook.result.current.state.status).toBe('stepped_out'));
-      // Views stored from here on postdate the step-out.
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(1);
-      });
-      return { ...hook, viewBefore };
+      return { ...hook, shown };
     }
 
-    it('stays out on a view from before the step-out, which predates the debate', async () => {
-      const { result, rerender, viewBefore } = await steppedOutByAnotherTab();
-      rerender({ debating: false, viewUpdatedAt: viewBefore });
+    // `debate.lobby_claim_lists_changed` and `debate.lobby_guests_changed` patch the view, not the roster.
+    it('stays out on a patch to the view, whose roster is still the one from before the debate', async () => {
+      const { result, rerender, shown } = await steppedOutByAnotherTab();
+      rerender({ roster: { members: shown.members, viewerId: 'me' } });
       expect(result.current.state.status).toBe('stepped_out');
       expect(joins()).toHaveLength(1);
     });
 
-    it('stays out while a later view shows the debate, and rejoins once one shows it over', async () => {
+    it('stays out while a newer roster shows the debate, and rejoins once one shows it over', async () => {
       const { result, rerender } = await steppedOutByAnotherTab();
-      rerender({ debating: true, viewUpdatedAt: Date.now() });
+      rerender({ roster: read(me(true)) });
       expect(result.current.state.status).toBe('stepped_out');
       expect(joins()).toHaveLength(1);
 
-      rerender({ debating: false, viewUpdatedAt: Date.now() + 1 });
+      rerender({ roster: read(me(false)) });
       await waitFor(() => expect(result.current.state.status).toBe('joined'));
       expect(joins()).toHaveLength(2);
       expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['link', 'back_after_debate']);
     });
 
-    // The debate can end before this tab sees it running: the first view after the step-out says over.
+    // The debate can end before this tab sees it running: the first roster after the step-out says over.
     it('rejoins when the debate was over before this tab ever saw it', async () => {
       const { result, rerender } = await steppedOutByAnotherTab();
-      rerender({ debating: false, viewUpdatedAt: Date.now() });
+      rerender({ roster: read(me(false)) });
       await waitFor(() => expect(result.current.state.status).toBe('joined'));
       expect(joins()).toHaveLength(2);
+    });
+
+    it('leaves with the viewer, without joining, when a newer roster no longer lists them', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      rerender({ roster: read(null) });
+      await waitFor(() => expect(result.current.state.status).toBe('left'));
+      expect(joins()).toHaveLength(1);
+    });
+
+    it('waits while it cannot tell whose row is the viewer’s', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      rerender({ roster: undefined });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+    });
+
+    // A scheduled room's debate has not started when the step-out answers, and navigation can lag.
+    it('never comes back from a step-out this tab made to go to the debate', async () => {
+      const { result, rerender, unmount } = renderOpenPage(read(me(false)));
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      act(() => routeIntoDebate(vi.fn()));
+      await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+
+      rerender({ roster: read(me(false)) });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+      unmount();
+      await act(async () => {});
+      expect(leaves()).toHaveLength(0);
+    });
+
+    it('nor once this tab goes to a debate the server already stepped it out for', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      act(() => routeIntoDebate(vi.fn()));
+      await act(async () => {});
+
+      rerender({ roster: read(me(false)) });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
     });
   });
 
