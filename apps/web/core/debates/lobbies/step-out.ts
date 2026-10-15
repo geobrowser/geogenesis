@@ -38,25 +38,6 @@ export function debateEntryClick(navigate: () => void) {
   };
 }
 
-const rejoinKey = 'geo.debates.lobby-rejoin';
-
-/** Back to the room was pressed: the lobby page joins on arrival instead of asking again. */
-export function requestLobbyRejoin(lobbyId: string) {
-  // Without storage the lobby asks once more.
-  writeSession(rejoinKey, lobbyId);
-}
-
-/** Whether a rejoin was requested for this lobby; clears it either way. */
-export function consumeLobbyRejoin(lobbyId: string): boolean {
-  const requested = readSession(rejoinKey);
-  clearLobbyRejoin();
-  return requested === lobbyId;
-}
-
-export function clearLobbyRejoin() {
-  removeSession(rejoinKey);
-}
-
 /**
  * The viewer's mic in this page's lobby: on, off, or null without a mic of their own there. Outlives
  * the voice connection, which a step-out from the server can take down before the route runs.
