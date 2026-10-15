@@ -34,8 +34,14 @@ function claim(
   };
 }
 
-function item(id: string, text: string, turnIndex = 0, startMs: number | null = null): FromThisDebateClaim {
-  return { id, text, turnIndex, startMs, speakerName: null, speakerSpaceId: null, matched: false };
+function item(
+  id: string,
+  text: string,
+  turnIndex = 0,
+  startMs: number | null = null,
+  roomTurnIndex: number | null = null
+): FromThisDebateClaim {
+  return { id, text, turnIndex, roomTurnIndex, startMs, speakerName: null, speakerSpaceId: null, matched: false };
 }
 
 describe('fromThisDebateCandidates', () => {
@@ -115,6 +121,23 @@ describe('fromThisDebateCandidates', () => {
 
     expect(first).toMatchObject({ speakerName: 'Daniel', speakerSpaceId: 'space-daniel' });
     expect(second).toMatchObject({ speakerName: 'Susan', speakerSpaceId: 'space-susan' });
+  });
+
+  it('reads the room turn geo-chat placed a claim in, and null where it placed none', () => {
+    const candidates = fromThisDebateCandidates({
+      turns,
+      claims: [
+        { ...claim('Placed', 0, { minted: MINTED_A }), room_turn_index: 2 },
+        { ...claim('Unplaced', 1, { minted: MINTED_B }), room_turn_index: null },
+        claim('Older read', 1, { minted: MINTED_C }),
+      ],
+    });
+
+    expect(candidates.map(candidate => [candidate.text, candidate.roomTurnIndex])).toEqual([
+      ['Placed', 2],
+      ['Unplaced', null],
+      ['Older read', null],
+    ]);
   });
 
   it('reads an empty or missing payload as no claims', () => {
@@ -214,6 +237,39 @@ describe('groupFromThisDebateByRound', () => {
     });
 
     expect(rounds).toEqual([{ key: -1, label: null, items: [listed[1], listed[0]] }]);
+  });
+
+  it('draws rounds from the room turns geo-chat placed the claims in, whatever the transcript counted', () => {
+    // The room's turn 2 went silent, so the transcript merged turns 1 and 3: by `turnIndex` the
+    // rebuttal would read as round 1. Its room turn puts it in round 2.
+    const listed = [
+      item(MINTED_A, 'Rebuttal', 1, 200_000, 3),
+      item(MINTED_B, 'Opening', 0, 5_000, 0),
+      item(MINTED_C, 'Reply', 1, 70_000, 1),
+    ];
+
+    const rounds = groupFromThisDebateByRound(listed, claim => claim, {
+      roomTurnCount: 4,
+      extractedTurnCount: 2,
+      numberedOnly: false,
+    });
+
+    expect(rounds.map(round => [round.label, round.items.map(claim => claim.text)])).toEqual([
+      ['Round 1 · Opening', ['Opening', 'Reply']],
+      ['Round 2 · Rebuttal', ['Rebuttal']],
+    ]);
+  });
+
+  it('falls back to the transcript’s turns when any claim listed has no room turn', () => {
+    const listed = [item(MINTED_A, 'Rebuttal', 1, 200_000, 3), item(MINTED_B, 'Opening', 0, 5_000, null)];
+
+    expect(
+      groupFromThisDebateByRound(listed, claim => claim, {
+        roomTurnCount: 4,
+        extractedTurnCount: 2,
+        numberedOnly: false,
+      })
+    ).toEqual([{ key: -1, label: null, items: [listed[1], listed[0]] }]);
   });
 
   it('leaves out a round with nothing in it', () => {

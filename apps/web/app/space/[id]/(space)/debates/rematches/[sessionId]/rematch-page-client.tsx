@@ -52,7 +52,7 @@ import {
   useNotInterestedClaimIds,
   useRejectDebateRematchRequest,
 } from '~/core/debates/hooks';
-import { useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useConsumeDebateReturnDestination, useLobbyRejoinOnLeave } from '~/core/debates/lobbies/lobby-return';
 import { claimRowKey } from '~/core/debates/matchmaking/claim-row-key';
 import { SpaceTopicFilters } from '~/core/debates/matchmaking/claims-tab';
 import { type AnsweredState, useCollapseAnswered } from '~/core/debates/matchmaking/collapse-answered';
@@ -107,11 +107,11 @@ import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/deb
 import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
+import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
@@ -121,12 +121,14 @@ import { getTopRankedSpaceId } from '~/core/utils/space/space-ranking';
 import { NavUtils, validateSpaceId } from '~/core/utils/utils';
 import { validateEntityId } from '~/core/utils/utils';
 
+import { PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { Input } from '~/design-system/input';
 import { Skeleton } from '~/design-system/skeleton';
 import { tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
 
+import { RematchPublishCard } from './rematch-publish-card';
 import { RematchRequestCard } from './rematch-request-card';
 import { RematchVoiceHeader } from './rematch-voice';
 import { rematchHideAgreedAtom, rematchHideMyPositionsAtom } from '~/atoms';
@@ -284,6 +286,7 @@ const ROOM_REJOIN_RETRY_MS = 15_000;
 export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const router = useRouter();
   const consumeDebateReturnDestination = useConsumeDebateReturnDestination();
+  const requestLobbyRejoinOnLeave = useLobbyRejoinOnLeave();
   // The room owns this session rather than the other way round, so two of the page's exits change
   // shape inside one: see the terminal-status effect and `leave` below.
   const inDebateRoom = useInDebateRoom();
@@ -2520,6 +2523,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       return;
     }
     leaveRequestedRef.current = true;
+    // A flow that started in a lobby goes back to it, and the lobby joins on arrival rather than
+    // asking again — what the end card's "Back to <lobby>" row did before GEO-3301 removed it.
+    requestLobbyRejoinOnLeave();
     leaveSession.mutate(undefined, {
       onSuccess: returnFromSession,
       onError: () => {
@@ -2824,17 +2830,18 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     );
   }
 
+  // GEO-3301. A word rather than the arrow it used to be: people did not read the icon as a way out,
+  // and with the "Debate again?" step gone this is the only one the pair have. The design system's
+  // secondary pill, so it reads as a plain action beside the dark Request debate buttons.
   const leaveButton = (
-    <button
+    <SmallButton
       type="button"
-      aria-label="Leave debate"
-      title="Leave debate"
       onClick={leave}
       disabled={leaveSession.isPending}
-      className="grid size-8 shrink-0 place-items-center rounded-full border border-grey-02 text-grey-04 transition-colors hover:text-text disabled:opacity-50"
+      className={PILL_BUTTON_SECONDARY_CLASS_NAME}
     >
-      <LeaveIcon />
-    </button>
+      Leave
+    </SmallButton>
   );
 
   return (
@@ -2875,7 +2882,9 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
               this button is the only way off it. Signed out, mid identity exchange, or on a failed
               session lookup there is no pair to draw — and a picker with no exit is worse than one
               with no header. */}
-          <div className="mb-4">
+          {/* One stack, so the publishing row sits the header's own 12px under the pair and its
+              notices, and takes no space at all when there is nothing to draw. */}
+          <div className="mb-4 flex flex-col gap-3">
             {session && currentUserId ? (
               <RematchVoiceHeader
                 session={session}
@@ -2891,6 +2900,19 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
             ) : (
               <div className="flex justify-end">{leaveButton}</div>
             )}
+            {/* GEO-3301. The pair arrive straight from the debate, so the recording it left behind
+                comes with them: under the pair, inside the sticky block so the way to withdraw it
+                stays on screen while the list scrolls. A session from a profile challenge has no
+                debate. */}
+            {sourceDebateQuery.data && currentUserId ? (
+              <RematchPublishCard
+                // Per debate: a dismissal belongs to the one it was about, not the next session's.
+                key={sourceDebateQuery.data.id}
+                debate={sourceDebateQuery.data}
+                currentUserId={currentUserId}
+                opponentName={remoteFirstName}
+              />
+            ) : null}
           </div>
           <header className="mb-4">
             <ScrollableTabRow activeKey={activeTab} analyticsLabelPrefix="Debate rematch" className="gap-6">
@@ -3395,7 +3417,7 @@ function RematchClaimCard({
         ? null
         : inFlightResponse === 'positive';
 
-  const { openSidePanel } = useEntitySidePanel();
+  const openClaim = useOpenClaimInSidePanel();
 
   const positions = React.useMemo(() => rematchPositionSummaries(claim, session), [claim, session]);
 
@@ -3489,9 +3511,7 @@ function RematchClaimCard({
       reconcileWithIndexedResponse={false}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
-      onOpenClaim={() =>
-        openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false, { forceRequestedSpace: true })
-      }
+      onOpenClaim={() => openClaim(claim.claim)}
     />
   );
 }
@@ -3803,15 +3823,5 @@ function TabCount({
     >
       {pending ? <Skeleton radius="rounded-full" className="h-3 w-3" aria-label={pendingLabel} /> : count}
     </span>
-  );
-}
-
-function LeaveIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
-      <path d="M9 7V5a2 2 0 0 1 2-2h7v18h-7a2 2 0 0 1-2-2v-2" />
-      <path d="M13 12H3" />
-      <path d="M6 9l-3 3 3 3" />
-    </svg>
   );
 }

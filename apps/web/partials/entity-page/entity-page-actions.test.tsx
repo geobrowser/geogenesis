@@ -161,4 +161,13 @@ describe('EntityPageActions', () => {
 
     expect(screen.queryByRole('link', { name: 'Create new entity' })).toBeNull();
   });
+
+  it('leaves the create link out while editing when the host opts out, keeping history and the menu', () => {
+    mocks.isEditing = true;
+    render(<EntityPageActions entityId="entity-1" spaceId="space-1" showCreate={false} />);
+
+    expect(screen.queryByRole('link', { name: 'Create new entity' })).toBeNull();
+    expect(screen.getByTestId('history')).toBeInTheDocument();
+    expect(screen.getByTestId('context-menu')).toBeInTheDocument();
+  });
 });

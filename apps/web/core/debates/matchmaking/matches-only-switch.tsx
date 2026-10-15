@@ -35,7 +35,7 @@ export function MatchesOnlySwitch({ checked, onChange, analyticsSurface, disable
  * "Hide my positions" (GEO-2863) — the claims the viewer has already taken a side on, out of the
  * way of the ones they have not.
  *
- * The two surfaces disagree about its default and about what happens to a claim answered under the
+ * The surfaces disagree about its default and about what happens to a claim answered under the
  * viewer — see the atoms — but they are the same setting, said the same way. Which is exactly what
  * a shared label is for.
  */

@@ -22,3 +22,40 @@ describe('Privy login methods', () => {
     expect(methods.filter(method => !SAME_DOCUMENT_LOGIN_METHODS.includes(method))).toEqual([]);
   });
 });
+
+describe('Privy wallet list', () => {
+  // Listing any of these makes Privy fetch explorer-api.walletconnect.com/v3/wallets on every page load.
+  // Mirrors Privy 3.32.2's registry slugs; re-check on Privy upgrades.
+  const REGISTRY_WALLETS = [
+    'wallet_connect',
+    'backpack',
+    'binance',
+    'binanceus',
+    'bitget_wallet',
+    'bybit_wallet',
+    'cryptocom',
+    'haha_wallet',
+    'jupiter',
+    'metamask',
+    'okx_wallet',
+    'phantom',
+    'rabby_wallet',
+    'rainbow',
+    'ronin_wallet',
+    'safe',
+    'solflare',
+    'uniswap',
+    'zerion',
+    'kraken_wallet',
+  ];
+
+  // Registry wallets are off because nothing signs in with or picks a wallet. Fails when wallet login
+  // is added, so whoever adds it lists the wallets it needs and accepts the fetch.
+  it('keeps registry wallets off while sign-in has no wallet method', () => {
+    const list = privyConfig.appearance?.walletList;
+
+    expect(privyConfig.loginMethods).not.toContain('wallet');
+    expect(list).toBeDefined();
+    expect(list!.filter(entry => REGISTRY_WALLETS.includes(entry))).toEqual([]);
+  });
+});

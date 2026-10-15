@@ -23,6 +23,7 @@ import {
   getServerTime,
   startLocalRecordingMultipart,
 } from '~/core/debates/api';
+import { DebateNotice } from '~/core/debates/debate-notice';
 import { DebatePreScreen } from '~/core/debates/debate-pre-join-screen';
 import {
   preferredRecordingMimeType,
@@ -42,7 +43,6 @@ import {
   DebateRoomHoldingScreen,
   DebateRoomLoadingState,
 } from '~/core/debates/debate-room-holding-screens';
-import { DebateRoomOverlayCard } from '~/core/debates/debate-room-overlay-card';
 import {
   type DebateRoomOwnershipCoordinationMode,
   type DebateRoomOwnershipCoordinator,
@@ -50,7 +50,8 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
-import { DebateRoundIndicator, DebateRoundPips, rebuttalRoundsLabel } from '~/core/debates/debate-round-indicator';
+import { RoomExit, RoomTag } from '~/core/debates/debate-room-stamps';
+import { DebateRoundIndicator } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
   type DebateTabClaimKey,
@@ -78,7 +79,11 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import { BackToLobbyRow, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import {
+  useCarriedLobbyMic,
+  useConsumeDebateReturnDestination,
+  useLobbyRejoinOnLeave,
+} from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -88,7 +93,12 @@ import {
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
-import { OpenRoundPickReveal, OpenRoundResultOverlay, useOpenRoundReveal } from '~/core/debates/open-round-reveal';
+import {
+  OpenRoundPickStamp,
+  OpenRoundResultOverlay,
+  openRoundThankingHold,
+  useOpenRoundReveal,
+} from '~/core/debates/open-round-reveal';
 import {
   type OpenRoundGap,
   type OpenRoundsRoomPhase,
@@ -96,7 +106,7 @@ import {
   debateTurnRoleForDebate,
   isBetweenOpenRounds,
   isDebatesLastTurn,
-  openRebuttalRoundCount,
+  isOpenRoundsDebate,
   openRoundGapAfterTurn,
   openRoundLastWord,
   openRoundLeadInAfterTurn,
@@ -122,11 +132,8 @@ import {
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
-import {
-  usePublishOptOutOffer,
-  useSetPublishOptOutRequest,
-  useSetThankingDebate,
-} from '~/core/debates/thanking-debate-store';
+import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
+import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
 import { useLocalSpeechActivity } from '~/core/debates/use-local-speech-activity';
 import { usePrefetchClaimSpaceAllowlist } from '~/core/debates/use-prefetch-claim-space-allowlist';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
@@ -137,10 +144,9 @@ import { useFeatureFlag } from '~/core/state/feature-flags';
 import { reportError } from '~/core/telemetry/logger';
 import { currentNavigationType } from '~/core/utils/navigation-type';
 
-import { Button } from '~/design-system/button';
-import { Check } from '~/design-system/icons/check';
+import { Button, PILL_BUTTON_SECONDARY_CLASS_NAME, SmallButton } from '~/design-system/button';
+import { Time } from '~/design-system/icons/time';
 import { Text } from '~/design-system/text';
-import { Toggle } from '~/design-system/toggle';
 
 type DebateRoomPageClientProps = {
   spaceId: string;
@@ -224,6 +230,8 @@ type RoomLike = {
 export type DebateCountdown = {
   label: string;
   remainingSeconds: number;
+  /** What is left of the window exactly, which the Open rounds timer's red rim drains by. */
+  remainingMs: number;
   progress: number;
   activeSlot: ParticipantSlot | null;
   effectiveStatus: Debate['status'];
@@ -262,10 +270,13 @@ type DebateRecordingModalRoomState = Exclude<DebateRoomState, 'idle'> | 'transit
 type DebateRemotePresence = 'absent' | 'present' | 'left';
 
 const debateThankingDurationMs = 20_000;
-// The rematch decision expires with the thank-you phase. Reserve a small network window so both
-// clients can record their automatic consent before the server closes the session at that same
-// boundary; the room itself stays visible until the countdown reaches zero.
-const rematchAutoConsentLeadSeconds = 5;
+/**
+ * How long the room stays blank between the last turn and the claim picker before it says what it
+ * is waiting on (GEO-3301). Both rooms consent and save their recordings in that gap, which is
+ * usually under this; past it the other room is likely gone, and a blank screen with no way out
+ * would read as a hang.
+ */
+const debateHandoffQuietMs = 3_000;
 const debatePreflightDurationMs = 5_000;
 const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
@@ -423,13 +434,21 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [connectStarting, setConnectStarting] = React.useState(false);
   const connectStartingGenerationRef = React.useRef(0);
   const [rematchConsentRequested, setRematchConsentRequested] = React.useState(false);
+  /** An idle tab's save failed on its way out of the room, and the exit it was taking. */
+  const [idleSaveFailed, setIdleSaveFailed] = React.useState(false);
+  const idleExitRef = React.useRef<(() => void | Promise<void>) | null>(null);
+  /** Bumped by each idle exit, so only the newest may navigate or record a failed save. */
+  const idleExitAttemptRef = React.useRef(0);
+  /** `leave`, for Retry save, which is declared before it. */
+  const leaveRef = React.useRef<(() => Promise<void>) | null>(null);
   const autoRematchConsentAttemptRef = React.useRef<{ debateId: string; remainingSeconds: number } | null>(null);
   const rematchConsentInFlightRef = React.useRef<Promise<boolean> | null>(null);
   const rematchConsentPublishedRef = React.useRef(false);
   const rematchLeaveRequestedRef = React.useRef(false);
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
-  const [audioMuted, setAudioMuted] = React.useState(false);
+  const carriedMic = useCarriedLobbyMic();
+  const [audioMuted, setAudioMuted] = React.useState(carriedMic === false);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);
@@ -633,7 +652,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [rematchQuery.data, router]);
 
   // Publish opt-out in the global upload banner is only offered while the user is on this
-  // debate's thank-you screen, so tell the banner which debate that is.
+  // debate's thank-you screen, so tell the banner which debate that is. The room no longer draws a
+  // publish control of its own (GEO-3301): the claim picker does, and for the moment the room is
+  // still up between the last turn and the picker, the banner's Cancel is the way out.
   const setThankingDebate = useSetThankingDebate();
   const locallyThanking = countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0;
   const thankingDebateId =
@@ -646,16 +667,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     !thankingRecordingCancelled &&
     (recordingStartedAtRef.current !== null || recordingPersistenceStartedRef.current === thankingDebateId)
   );
-  // Whether the thank-you card — and so the publish switch — is actually on screen. The countdown
-  // alone doesn't say: the card lives inside `DebateRecordingModal`, which the room drops the
-  // moment the connection goes idle, and an ownership conflict can do that mid-countdown. Read off
-  // the countdown alone, this claimed the card was carrying the control while it wasn't rendered,
-  // and the banner stood down for a debate nothing else was reporting — leaving no publish state
-  // and no way to opt out, over a recording still cancellable.
-  const showsPublishControl = locallyThanking && roomState !== 'idle';
 
   // The global coordinator is a sibling of this page. Publish its state in a layout effect so the
-  // upload banner joins the rematch card in the same browser paint at the countdown boundary.
+  // upload banner's Cancel is there in the same browser paint as the countdown boundary.
   React.useLayoutEffect(() => {
     setThankingDebate(
       thankingDebateId
@@ -664,13 +678,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             hasPendingLocalRecording: thankingHasPendingLocalRecording,
             hasUploadedRecording: thankingHasUploadedRecording,
             recordingCancelled: thankingRecordingCancelled,
-            showsPublishControl,
+            // Never the room's: the claim picker draws the publish control (GEO-3301).
+            showsPublishControl: false,
           }
         : null
     );
   }, [
     setThankingDebate,
-    showsPublishControl,
     thankingDebateId,
     thankingHasPendingLocalRecording,
     thankingHasUploadedRecording,
@@ -754,22 +768,36 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   /** Where a session both debaters have accepted sends them; null while the decision is open. */
   const liveRematchDestination = rematchDestination(rematchQuery.data);
   /**
-   * Both debaters pressed Let's go, so the thank-you period has nothing left to ask (GEO-3025).
+   * Both rooms have consented to the debate-again session, so the room has nothing left to show.
    *
-   * Read off the clock rather than off this tab's own click, because the decision belongs to both
-   * sides and only one of them is visible from here. A destination exists only once the server has
-   * both consents, and the consent this page gives on the viewer's behalf is never given earlier
-   * than `rematchAutoConsentLeadSeconds` — so a session that goes live with more than that left is
-   * necessarily two people who reached for the button.
-   *
-   * Inside the lead window the room still sits out the rest of the countdown. Either consent there
-   * may be the automatic one, `consented_at` does not say which, and leaving on it would both cut
-   * the last seconds off every debate and walk out on a debater who never asked to go anywhere.
+   * GEO-3301. The thank-you screen is gone: each room consents on its viewer's behalf the moment
+   * the debate ends, and the pair go straight to the claim picker once the server has both. A
+   * destination exists only once it does, so this is read off the session rather than this tab's
+   * own consent — the other room may still be finishing its recording.
    */
-  const bothPressedDebateAgain =
-    countdown.effectiveStatus === 'thanking' &&
-    countdown.remainingSeconds > rematchAutoConsentLeadSeconds &&
-    liveRematchDestination !== null;
+  const rematchReady = countdown.effectiveStatus === 'thanking' && liveRematchDestination !== null;
+  /** The other debater left the session, so there is no picker to go to. */
+  const rematchSessionClosed = rematchSessionStatus === 'ended' || rematchSessionStatus === 'expired';
+  /**
+   * The session has its answer, so the thank-you period no longer holds the exit: both rooms
+   * consented and the pair go to the picker, or it ended without them and the viewer goes back. The
+   * room is hidden through the handoff (GEO-3301), so sitting out the rest of the period would be up
+   * to 20 seconds of blank screen. Both the exit and its Retry save read this one answer.
+   */
+  const revealHold = debate
+    ? openRoundThankingHold({
+        debate,
+        phase: countdown.openRounds,
+        effectiveStatus: countdown.effectiveStatus,
+        elapsedMs: countdown.elapsedMs,
+        remainingSeconds: countdown.remainingSeconds,
+      })
+    : null;
+  // An Open rounds debate's last result ("That's the max", "That's a wrap") is still up in the first
+  // moments of thanking, which both rooms' immediate consent would otherwise cut short.
+  const revealHoldsExit = Boolean(revealHold?.maxReached || revealHold?.wrapHeld);
+  const handoffSettled =
+    !revealHoldsExit && (rematchReady || (countdown.effectiveStatus === 'thanking' && rematchSessionClosed));
 
   // A completed debate with a live rematch session is a dead end while the room is idle:
   // DebateCoordinator defers to this page so the recording finalizes first, but finalization only
@@ -796,8 +824,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   // Keep the recording surface over the app while that prefetched route replaces it; swapping to
   // the generic "Leaving the debate" spinner here is the extra screen the user sees between the
   // thank-you period and the claim picker.
-  const showRecordingModal = roomState !== 'idle' || idleRematchDestination !== null;
-  const recordingModalRoomState: DebateRecordingModalRoomState = roomState === 'idle' ? 'transitioning' : roomState;
+  // An idle tab whose save failed on its way out keeps the room up, unlocked, so the error and its
+  // Retry save can be reached (see `leaveIdleRoom`).
+  const showRecordingModal = roomState !== 'idle' || idleRematchDestination !== null || idleSaveFailed;
+  const recordingModalRoomState: DebateRecordingModalRoomState =
+    roomState === 'idle' ? (idleSaveFailed ? 'connected' : 'transitioning') : roomState;
 
   // Between the intro and the recording view, the debate connection has not set `roomState` yet:
   // either the auto-connect effect has not run, or `connect` is waiting on tab ownership. A spent
@@ -2100,11 +2131,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [localMediaStreamRef, localTracksRef, persistStoppedLocalRecording]);
 
   const finishLiveDebate = React.useCallback(
-    async ({ allowDuringThankYou = false }: { allowDuringThankYou?: boolean } = {}) => {
+    async ({
+      allowDuringThankYou = false,
+      explicitLeave = false,
+    }: {
+      allowDuringThankYou?: boolean;
+      /**
+       * Leave itself is finishing the debate. The leave-requested guard below exists to stop the
+       * automatic exits once Leave has been asked for, not Leave: after a Leave that failed before
+       * its opt-out landed and a session that then closed, it is Leave that has to get out.
+       */
+      explicitLeave?: boolean;
+    } = {}) => {
       if (
         !debate ||
         (!allowDuringThankYou && locallyThanking) ||
-        rematchLeaveRequestedRef.current ||
+        (rematchLeaveRequestedRef.current && !explicitLeave) ||
         finalizedDebateRef.current === debate.id
       ) {
         return;
@@ -2147,11 +2189,78 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     ]
   );
 
+  /**
+   * This tab still holds what it recorded of this debate and has not saved it: a recorder, its
+   * chunks, a stopped recording or a save already under way. True of any room still in the call, and
+   * of one whose call dropped, which tears the room down without saving. False for a tab that never
+   * held the call (another tab had the room, or it reloaded), where a save could only fail.
+   */
+  const holdsUnsavedRecording = React.useCallback(
+    () =>
+      persistedRecordingDebateIdRef.current !== debate?.id &&
+      (recorderRef.current !== null ||
+        stoppedRecordingRef.current !== null ||
+        recordingChunksRef.current.length > 0 ||
+        recordingPersistencePromiseRef.current !== null),
+    [debate?.id]
+  );
+
+  /**
+   * How an idle tab leaves the room, for either of its ways out (back, or on to the picker).
+   *
+   * Idle covers two different tabs. One never held the call (another tab had the room, or it
+   * reloaded) and has nothing to save; finalizing there fails for good, so it just goes. The other
+   * held it until the call dropped, which tears the room down without saving: it can still hold
+   * what it recorded, in memory only, and leaving would unmount it away. That one saves first. If the
+   * save fails it stays, with the room up to show the error and a Retry save that picks the same exit
+   * back up (`idleExitRef`); the automatic exits hold off meanwhile, so a broken save cannot loop.
+   */
+  const leaveIdleRoom = React.useCallback(
+    async (go: () => void | Promise<void>) => {
+      const attempt = ++idleExitAttemptRef.current;
+      // A newer exit started while this one's save ran: the session moved on (it ended while the
+      // tab was on its way to the picker, say), and only the newest exit speaks for it.
+      const superseded = () => attempt !== idleExitAttemptRef.current;
+      idleExitRef.current = go;
+      setIdleSaveFailed(false);
+      if (holdsUnsavedRecording()) {
+        try {
+          await persistStoppedLocalRecording();
+        } catch (error) {
+          if (superseded()) return;
+          setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
+          setIdleSaveFailed(true);
+          return;
+        }
+      }
+      if (superseded()) return;
+      idleExitRef.current = null;
+      // Leave pressed while that save ran is the newer choice, and makes its own way out.
+      if (rematchLeaveRequestedRef.current) return;
+      await go();
+    },
+    [holdsUnsavedRecording, persistStoppedLocalRecording]
+  );
+
   const retryLiveDebateFinalization = React.useCallback(() => {
+    // Leave was asked for and its save failed: retrying finishes Leave, which saves, publishes its
+    // opt-out and goes. Every automatic exit stands down once Leave is asked for, so retrying one
+    // of them would save and then do nothing.
+    if (rematchLeaveRequestedRef.current && leaveRef.current) {
+      void leaveRef.current();
+      return;
+    }
+    // An idle tab's save failed on its way out: retry that save, then take the same exit.
+    if (idleSaveFailed && idleExitRef.current) {
+      setRoomError(null);
+      void leaveIdleRoom(idleExitRef.current);
+      return;
+    }
     // A retry inside the thank-you period is only a save, because the countdown still owns the
-    // exit. Once both debaters have accepted it owns the exit too: the early finalize is what
-    // failed, and taking the save-only branch here would consume nothing and leave them stranded.
-    if (debate?.status === 'thanking' && !bothPressedDebateAgain) {
+    // exit. Once the handoff has settled (both rooms consented, or the session ended) the retry owns
+    // the exit too: the early finalize is what failed, and taking the save-only branch here would
+    // consume nothing and leave them stranded.
+    if (debate?.status === 'thanking' && !handoffSettled) {
       setRoomError(null);
       setRoomState('saving');
       recordingPersistenceStartedRef.current = debate.id;
@@ -2168,21 +2277,30 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       return;
     }
     finalizedDebateRef.current = null;
-    void finishLiveDebate({ allowDuringThankYou: bothPressedDebateAgain });
-  }, [bothPressedDebateAgain, debate?.id, debate?.status, finishLiveDebate, persistStoppedLocalRecording]);
+    void finishLiveDebate({ allowDuringThankYou: handoffSettled });
+  }, [
+    handoffSettled,
+    debate?.id,
+    debate?.status,
+    finishLiveDebate,
+    idleSaveFailed,
+    leaveIdleRoom,
+    persistStoppedLocalRecording,
+  ]);
 
   const requestRematch = React.useCallback(async () => {
     if (rematchConsentRequested) return;
-    setRoomError(null);
     setRematchConsentRequested(true);
     const request = (async () => {
       try {
         await consentToRematch.mutateAsync();
         rematchConsentPublishedRef.current = true;
         return true;
-      } catch (error) {
+      } catch {
+        // Automatic since GEO-3301, so there is nobody to show an error to: the effect below tries
+        // again on the next displayed second. The likeliest refusal is this room's clock reaching
+        // the end of the last turn a moment before the server's.
         setRematchConsentRequested(false);
-        setRoomError(error instanceof Error ? error.message : 'Could not request another debate.');
         return false;
       }
     })();
@@ -2192,22 +2310,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     return consented;
   }, [consentToRematch, rematchConsentRequested]);
 
-  const requestRematchManually = React.useCallback(() => {
-    // A failed Leave can leave the thank-you screen interactive. A later explicit Let's go is a
-    // new choice and may replace that opt-out; automatic consent never clears it.
-    rematchLeaveRequestedRef.current = false;
-    void requestRematch();
-  }, [requestRematch]);
-
   const localRematchParticipant = rematchQuery.data?.participants.find(
     participant => participant.user_id === currentUserId
   );
   React.useEffect(() => {
-    if (!debate || !['thanking', 'complete'].includes(debate.status) || countdown.effectiveStatus !== 'thanking') {
-      return;
-    }
-    if (countdown.remainingSeconds <= 0 || countdown.remainingSeconds > rematchAutoConsentLeadSeconds) return;
-    if (rematchQuery.data?.status !== 'deciding') return;
+    if (!debate || debate.status === 'cancelled' || countdown.effectiveStatus !== 'thanking') return;
+    // GEO-3301. Straight away rather than in the last seconds: there is no thank-you screen to sit
+    // through, and the server moves the pair on to the picker as soon as both rooms have said so.
+    if (countdown.remainingSeconds <= 0) return;
+    // On the room's own clock, not on the debate payload saying `thanking`: nothing refreshes that
+    // payload as the last turn ends, and waiting for it (and for the session it names) held the
+    // pair on a blank screen. Consenting needs only the debate: the server moves it into thanking
+    // and returns the session, which also tells this room where the picker is.
+    if (rematchSessionStatus !== null && rematchSessionStatus !== 'deciding') return;
     if (rematchLeaveRequestedRef.current) return;
     if (localRematchParticipant?.consented_at || rematchConsentRequested || consentToRematch.isPending) return;
     const attempted = autoRematchConsentAttemptRef.current;
@@ -2223,22 +2338,33 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate,
     localRematchParticipant?.consented_at,
     rematchConsentRequested,
-    rematchQuery.data?.status,
+    rematchSessionStatus,
     requestRematch,
   ]);
 
-  // Leave on the second Let's go rather than on the clock; see `bothPressedDebateAgain`.
+  // Leave as soon as the session has an answer rather than on the clock; see `handoffSettled`.
+  // `finishLiveDebate` saves the recording, then follows the session to the picker or goes back.
+  //
+  // Only for a room holding the call: an idle tab follows a live session through
+  // `idleRematchDestination` below, and a closed one leaves it nowhere to go but back. Either way it
+  // leaves through `leaveIdleRoom`, which saves anything it still holds first.
   React.useEffect(() => {
-    if (countdown.effectiveStatus !== 'thanking') return;
-    if (countdown.remainingSeconds > 0 && !bothPressedDebateAgain) return;
-    if (!liveRematchDestination) return;
+    if (!handoffSettled) return;
+    if (roomState === 'idle') {
+      if (rematchSessionClosed && !rematchLeaveRequestedRef.current && !idleSaveFailed) {
+        void leaveIdleRoom(returnFromDebate);
+      }
+      return;
+    }
     void finishLiveDebate({ allowDuringThankYou: true });
   }, [
-    bothPressedDebateAgain,
-    countdown.effectiveStatus,
-    countdown.remainingSeconds,
     finishLiveDebate,
-    liveRematchDestination,
+    handoffSettled,
+    idleSaveFailed,
+    leaveIdleRoom,
+    rematchSessionClosed,
+    returnFromDebate,
+    roomState,
   ]);
 
   /**
@@ -2319,10 +2445,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           rematchSessionStatus === 'browsing' ||
           rematchSessionStatus === 'request_pending';
         if (consentAlreadyPublished) await publishRematchLeave();
-        // A cancelled recording was discarded the moment the cancellation landed, and an idle
-        // room is the disconnected/reloaded path with no live recording to finalize. Insisting on
-        // persistence in either case fails every time and turns this opt-out into a fake exit.
-        if (debate.recording_cancelled_at === null && roomState !== 'idle') {
+        // A cancelled recording was discarded the moment the cancellation landed, and a tab that
+        // never held the call has nothing to finalize. Insisting on persistence in either case
+        // fails every time and turns this opt-out into a fake exit. An idle tab whose call dropped
+        // is different: it can still hold the recording (GEO-3301), and leaving would lose it. A
+        // room still in the call always saves first, as it always has.
+        if (debate.recording_cancelled_at === null && (roomState !== 'idle' || holdsUnsavedRecording())) {
           const persisted = await persistStoppedLocalRecording();
           if (!persisted) {
             throw new Error('Could not save the local recording. Please try leaving again.');
@@ -2332,8 +2460,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRoomState('idle');
-      } else if (debate.status === 'complete') {
-        await finishLiveDebate({ allowDuringThankYou: true });
+      } else if (debate.status === 'complete' || debate.status === 'thanking') {
+        // The debate is over, with no live session to opt out of: save and go, as the automatic
+        // exit does. Before GEO-3301 a thanking debate fell through to the mid-debate branch below,
+        // which discards the recording and aborts the debate; with the room now leaving on an ended
+        // session, a failed save there put Leave one press from losing the recording. Cleared as
+        // Retry save clears it: the automatic exit marks the debate finalized before its save, and
+        // a save that failed would otherwise leave this press doing nothing.
+        finalizedDebateRef.current = null;
+        await finishLiveDebate({ allowDuringThankYou: true, explicitLeave: true });
         return;
       } else if (debate.status === 'cancelled') {
         await discardLocalRecorder();
@@ -2357,6 +2492,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate,
     discardLocalRecorder,
     finishLiveDebate,
+    holdsUnsavedRecording,
     localMediaStreamRef,
     localTracksRef,
     localRematchParticipant?.consented_at,
@@ -2366,6 +2502,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     returnFromDebate,
     roomState,
   ]);
+
+  React.useLayoutEffect(() => {
+    leaveRef.current = leave;
+  }, [leave]);
 
   const handleConnectionFailure = React.useCallback(() => {
     if (connectionFailureHandledRef.current) return;
@@ -2474,16 +2614,25 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [returnFromDebate, shouldReturnFromTerminalDebate]);
 
   React.useEffect(() => {
-    if (!idleRematchDestination) return;
-    // Same rule as the connected room above: hold the thank-you screen for its full countdown
-    // unless both debaters have already pressed Let's go.
-    if (locallyThanking && !bothPressedDebateAgain) return;
+    if (!idleRematchDestination || idleSaveFailed) return;
+    // Same rule as the connected room above: go once the handoff has settled, which also waits out
+    // an Open rounds debate's last result.
+    if (locallyThanking && !handoffSettled) return;
     const session = rematchQuery.data;
     if (!session) return;
     // This tab is idle in the room — another tab held it, or it dropped — so it follows only if no
-    // tab nearer the viewer has already gone on (GEO-3149).
-    void followDestination(idleRematchDestination, debateRematchDestinationClaimKey(session));
-  }, [bothPressedDebateAgain, followDestination, idleRematchDestination, locallyThanking, rematchQuery.data]);
+    // tab nearer the viewer has already gone on (GEO-3149), and saves what a dropped call left it
+    // holding before it does.
+    void leaveIdleRoom(() => followDestination(idleRematchDestination, debateRematchDestinationClaimKey(session)));
+  }, [
+    followDestination,
+    handoffSettled,
+    idleRematchDestination,
+    idleSaveFailed,
+    leaveIdleRoom,
+    locallyThanking,
+    rematchQuery.data,
+  ]);
 
   React.useEffect(() => {
     if (!debate || storagePersistenceRequestedRef.current) return;
@@ -2891,9 +3040,6 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 onToggleNoiseFilter={toggleNoiseFilter}
                 rematchSession={rematchQuery.data ?? null}
                 currentUserId={currentUserId}
-                onRequestRematch={requestRematchManually}
-                rematchConsentRequested={rematchConsentRequested}
-                rematchBusy={consentToRematch.isPending}
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
                 onPickOpenRound={pickOpenRound}
@@ -2935,9 +3081,6 @@ function DebateRecordingModal({
   onToggleNoiseFilter,
   rematchSession,
   currentUserId,
-  onRequestRematch,
-  rematchConsentRequested,
-  rematchBusy,
   endTurnPending,
   onEndTurn,
   onPickOpenRound,
@@ -2968,9 +3111,6 @@ function DebateRecordingModal({
   onToggleNoiseFilter: () => void;
   rematchSession: DebateRematchSession | null;
   currentUserId: string | null;
-  onRequestRematch: () => void;
-  rematchConsentRequested: boolean;
-  rematchBusy: boolean;
   endTurnPending: boolean;
   onEndTurn: () => void;
   onPickOpenRound: (
@@ -2987,13 +3127,7 @@ function DebateRecordingModal({
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
-  // The publish control the thank-you card draws is the coordinator's opt-out, not this page's:
-  // the coordinator owns the upload queue and the cancel request, and says here whether there is
-  // still anything to opt out of. Off is the terminal state, so a cancelled recording keeps the
-  // row rather than dropping it — the answer to "Publish debate?" is no, not nothing.
-  const publishOptOutOffer = usePublishOptOutOffer();
-  const setPublishOptOutRequest = useSetPublishOptOutRequest();
-  const publishing = publishOptOutOffer.debateId !== null ? true : publishOptOutOffer.cancelled ? false : null;
+  const requestLobbyRejoinOnLeave = useLobbyRejoinOnLeave();
   const localParticipant =
     (localSlot
       ? debate.participants.find(participant => participant.participant_slot === localSlot)
@@ -3010,15 +3144,15 @@ function DebateRecordingModal({
     localSlot,
     remote: { slot: remoteParticipant?.participant_slot ?? null, name: remoteName },
   });
+  // Open rounds draws the room's moments in the published player's stamps design (GEO-3315); every
+  // fixed format keeps today's.
+  const stamps = isOpenRoundsDebate(debate);
   const localTileFirst = localParticipant?.position !== false;
-  const pickReveal = (name: string, pick: OpenRoundRevealedPick | null, first: boolean) =>
-    pick ? (
-      <OpenRoundPickReveal
-        name={name}
-        pick={pick.pick}
-        placement={reveal.pickPlacement === 'center' ? 'center' : first ? 'raised' : 'lowered'}
-      />
-    ) : null;
+  const pickReveal = (pick: OpenRoundRevealedPick | null, first: boolean) =>
+    pick ? <OpenRoundPickStamp pick={pick.pick} order={first ? 'first' : 'second'} /> : null;
+  // The pick, the reveal and what it means span both tiles, so both dim under them.
+  const tilesDimmed =
+    stamps && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
   const lastWord =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.openRounds?.phase === 'speaking' &&
@@ -3026,7 +3160,11 @@ function DebateRecordingModal({
     countdown.yieldingSlot === null
       ? openRoundLastWord(debate, countdown.turnIndex)
       : null;
-  const lastWordChip = lastWord ? (
+  const lastWordChip = !lastWord ? null : stamps ? (
+    <RoomTag data-open-round-last-word={lastWord} className="text-[2.6cqw]">
+      Last word
+    </RoomTag>
+  ) : (
     <DebateTileChip data-open-round-last-word={lastWord} className={cx('text-text', tileChipSurface)}>
       {/* Your own tile also carries Recording, and on a phone the full line squeezes the position. */}
       <span className="mobile:hidden">
@@ -3034,14 +3172,15 @@ function DebateRecordingModal({
       </span>
       <span className="hidden mobile:inline">{lastWord === 'debate' ? 'Final word' : 'Last word'}</span>
     </DebateTileChip>
-  ) : null;
+  );
   const localUpcomingSeconds = reveal.holdsCountIn ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
+  // Open rounds names the turn after an early end too, so an opening is still "You're up in".
   const localUpcomingLabel =
-    countdown.yieldingSlot && !countdown.preservesExistingCountIn
+    !stamps && countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
       : (upcomingTurnLabel(debate, countdown) ?? "You're up in");
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
-  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
+  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot, stamps);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
   const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
@@ -3051,18 +3190,18 @@ function DebateRecordingModal({
     countdown.activeSlot
   );
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
+  const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
+  // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
+  // turns red with it (GEO-3315).
+  const speakerFinalSeconds = speakingTurn && countdown.remainingSeconds > 0 && countdown.remainingSeconds <= 5;
+  const finalSeconds = stamps && speakerFinalSeconds;
   const countdownRing =
     countdown.remainingSeconds > 0 ? (
       <RecordingCountdownRing
         remainingSeconds={countdown.remainingSeconds}
         progress={countdown.progress}
-        variant={
-          countdown.effectiveStatus === 'in_progress' &&
-          countdown.activeSlot !== null &&
-          countdown.remainingSeconds <= 5
-            ? 'warning'
-            : 'default'
-        }
+        variant={speakerFinalSeconds ? 'warning' : 'default'}
+        buildUp={stamps && speakingTurn ? { remainingMs: countdown.remainingMs } : null}
       />
     ) : null;
   const yieldedCountdownRing =
@@ -3089,24 +3228,38 @@ function DebateRecordingModal({
     : countdown.activeSlot === localSlot
       ? countdownRing
       : sharedPhaseCountdown;
+  // In Open rounds the "Turn ended" stamp says it, as in the mockup, without the spent timer.
   const remoteCountdown =
     countdown.yieldingSlot === remoteParticipant?.participant_slot
-      ? yieldedCountdownRing
+      ? stamps
+        ? null
+        : yieldedCountdownRing
       : countdown.activeSlot === remoteParticipant?.participant_slot
         ? countdownRing
         : sharedPhaseCountdown;
-  const localRematchParticipant = rematchSession?.participants.find(
-    participant => participant.user_id === currentUserId
-  );
   const remoteRematchParticipant = rematchSession?.participants.find(
     participant => participant.user_id !== currentUserId
   );
-  const localConsented = Boolean(localRematchParticipant?.consented_at);
   const remoteConsented = Boolean(remoteRematchParticipant?.consented_at);
   const controlsDisabled = roomState === 'saving' || roomState === 'transitioning';
+  const handingOff =
+    countdown.effectiveStatus === 'thanking' &&
+    countdown.remainingSeconds > 0 &&
+    !reveal.holdsEndCard &&
+    !roomError &&
+    roomState !== 'reconnecting';
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
+  // You ended your turn and theirs follows straight on, which they are counted into on their own
+  // screen. Otherwise the pick, a lead-in or the end comes next.
+  const remoteTurnIsNext =
+    stamps &&
+    localEndingTurn &&
+    openRoundRunsStraightOn(debate, countdown.turnIndex) &&
+    countdown.incomingSlot !== null &&
+    countdown.incomingSlot === remoteParticipant?.participant_slot;
+  const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
   const canEndLocalTurn =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.activeSlot === localSlot &&
@@ -3158,10 +3311,23 @@ function DebateRecordingModal({
         localSlot !== null &&
         thankingSlot === localSlot
       }
-      status={<DebateRecordingStatusPill recording={capturing} />}
-      tileControls={countdown.activeSlot === localSlot ? lastWordChip : null}
-      reveal={pickReveal('You', reveal.localPick, localTileFirst)}
+      status={
+        // Open rounds tags the speaker's corner, as in the mockup, beside the recording indicator.
+        stamps && countdown.activeSlot === localSlot && lastWordChip ? (
+          <span className="flex items-center gap-1.5">
+            {lastWordChip}
+            <DebateRecordingStatusPill recording={capturing} />
+          </span>
+        ) : (
+          <DebateRecordingStatusPill recording={capturing} />
+        )
+      }
+      tileControls={!stamps && countdown.activeSlot === localSlot ? lastWordChip : null}
+      reveal={pickReveal(reveal.localPick, localTileFirst)}
       chipsHidden={reveal.chipsHidden}
+      stamps={stamps}
+      dimmed={tilesDimmed}
+      finalSeconds={finalSeconds && countdown.activeSlot === localSlot}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
     </DebateVideoTile>
@@ -3185,15 +3351,25 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
+      // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
+      // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
+      showWrapItUp={
+        stamps &&
+        !showLocalDebateEndsSoon &&
+        wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true)
+      }
       endingTurn={remoteEndingTurn}
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
       countdown={remoteCountdown}
-      tileControls={
-        remoteParticipant && countdown.activeSlot === remoteParticipant.participant_slot ? lastWordChip : null
-      }
-      reveal={pickReveal(remoteName, reveal.remotePick, !localTileFirst)}
+      tileControls={!stamps && remoteSpeaking ? lastWordChip : null}
+      status={stamps && remoteSpeaking ? lastWordChip : undefined}
+      reveal={pickReveal(reveal.remotePick, !localTileFirst)}
       chipsHidden={reveal.chipsHidden}
+      stamps={stamps}
+      dimmed={tilesDimmed}
+      finalSeconds={finalSeconds && countdown.activeSlot === remoteParticipant?.participant_slot}
+      nextTurnName={remoteTurnIsNext ? remoteName : null}
     >
       <div
         ref={setRemoteMediaElement}
@@ -3237,7 +3413,16 @@ function DebateRecordingModal({
       {/* `main` is wide enough for the claim, which is set and sized exactly as the intro screen
           sets it so the headline does not change under you at the swap. Everything below it stays
           in the single 430px column the room has always used. */}
-      <main className="mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]">
+      {/* GEO-3301. Between the last turn and the claim picker the room has nothing left to show, so
+          it shows nothing: the picker's white surface, then the picker. `invisible` rather than
+          unmounting, so the media elements and refs the recording is still being saved through
+          stay put. A failed save or a dropped connection keeps the room up to say so. */}
+      <main
+        className={cx(
+          'mx-auto flex min-h-dvh w-full max-w-[940px] flex-col items-center justify-center px-2 py-8 mobile:px-5 md:max-w-[430px]',
+          handingOff && 'invisible'
+        )}
+      >
         <h1 className="mb-5 w-full max-w-[900px] text-center text-mainPage text-text md:max-w-[390px] md:text-[1.5rem] md:leading-[1.8125rem] md:font-semibold md:tracking-[-0.75px]">
           {debate.claim.claim}
         </h1>
@@ -3264,60 +3449,41 @@ function DebateRecordingModal({
           </RecordingCircleButton>
         </div>
 
-        <div className="relative grid w-full max-w-[430px] gap-2">
+        {/* A size container, so the Open rounds panel and banners over the tiles size with them. */}
+        <div className="@container relative grid w-full max-w-[430px] gap-2">
           {orderedVideoTiles}
 
-          {openRoundDeciding && debate.open_rounds && localSlot !== null && (
-            <OpenRoundPickCard
-              // A fresh card per round, so nothing picked or failed in one round carries into the next.
-              key={openRoundDeciding.roundIndex}
-              roundIndex={openRoundDeciding.roundIndex}
-              savedPick={
-                debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
-              }
-              rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
-              remainingSeconds={countdown.remainingSeconds}
-              progress={countdown.progress}
-              onPick={(pick, context) =>
-                onPickOpenRound(openRoundDeciding.roundIndex, pick, {
-                  ...context,
-                  decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
-                })
-              }
-              localReconnecting={roomState === 'reconnecting'}
-              reconnectingOpponentName={remoteDisconnected ? remoteName : null}
-            />
-          )}
+          {/* The pick panel fades and the round's banner rolls out, as the next moment comes in. */}
+          <RoomExit className="z-40">
+            {openRoundDeciding && debate.open_rounds && localSlot !== null && (
+              <OpenRoundPickCard
+                // A fresh card per round, so nothing picked or failed in one round carries into the next.
+                key={openRoundDeciding.roundIndex}
+                roundIndex={openRoundDeciding.roundIndex}
+                savedPick={
+                  debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
+                }
+                rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
+                remainingSeconds={countdown.remainingSeconds}
+                onPick={(pick, context) =>
+                  onPickOpenRound(openRoundDeciding.roundIndex, pick, {
+                    ...context,
+                    decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
+                  })
+                }
+                localReconnecting={roomState === 'reconnecting'}
+                reconnectingOpponentName={remoteDisconnected ? remoteName : null}
+              />
+            )}
+          </RoomExit>
 
-          {reveal.result && <OpenRoundResultOverlay result={reveal.result} />}
+          <RoomExit exit="roll" className="z-[45]">
+            {reveal.result && <OpenRoundResultOverlay result={reveal.result} />}
+          </RoomExit>
           {debate.open_rounds && (
             <p role="status" aria-live="polite" data-open-round-announcement className="sr-only">
               {reveal.announcement}
             </p>
-          )}
-
-          {countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > 0 && !reveal.holdsEndCard && (
-            <DebateAgainCard
-              opponentName={
-                remoteRematchParticipant?.display_name ||
-                remoteRematchParticipant?.profile_space_id ||
-                remoteParticipant?.display_name ||
-                remoteParticipant?.profile_space_id ||
-                'Other debater'
-              }
-              localConsented={localConsented || rematchConsentRequested}
-              remoteConsented={remoteConsented}
-              busy={rematchBusy}
-              onConsent={onRequestRematch}
-              countdownLabel={countdown.label}
-              remainingSeconds={countdown.remainingSeconds}
-              publishing={publishing}
-              publishBusy={publishOptOutOffer.busy}
-              onStopPublishing={() => setPublishOptOutRequest(publishOptOutOffer.debateId)}
-              rebuttalRounds={openRebuttalRoundCount(debate)}
-            >
-              <BackToLobbyRow onLeave={onLeave} disabled={leaveDisabled} />
-            </DebateAgainCard>
           )}
         </div>
 
@@ -3343,6 +3509,19 @@ function DebateRecordingModal({
           </div>
         )}
       </main>
+      {handingOff && countdown.elapsedMs >= debateHandoffQuietMs && (
+        <DebateHandoffNotice
+          opponentName={remoteName}
+          waitingForOpponent={rematchSession !== null && !remoteConsented}
+          // The only way out while the room is hidden, so it rejoins the lobby the way the end
+          // card's "Back to <lobby>" row did, and the picker's Leave does.
+          onLeave={() => {
+            requestLobbyRejoinOnLeave();
+            onLeave();
+          }}
+          leaveDisabled={leaveDisabled}
+        />
+      )}
     </div>
   );
 }
@@ -3522,12 +3701,16 @@ function localTurnGoIsVisible(countdown: DebateCountdown, localSlot: Participant
   );
 }
 
-function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null) {
+/**
+ * "Wrap it up" over the speaker's last five seconds. In Open rounds it lands as the timer turns red
+ * and clears after about two seconds (GEO-3315), leaving the timer to count the rest.
+ */
+function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null, stamps = false) {
   return (
     countdown.effectiveStatus === 'in_progress' &&
     slot !== null &&
     countdown.activeSlot === slot &&
-    countdown.remainingSeconds > 0 &&
+    countdown.remainingSeconds > (stamps ? 3 : 0) &&
     countdown.remainingSeconds <= 5
   );
 }
@@ -3537,7 +3720,8 @@ function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | n
  *
  * `null` falls back to the generic "You're up in". The closing round exists to address the
  * audience rather than the opponent (GEO-2852), and the countdown is the only moment the room can
- * say so before someone starts talking — so it says it in full rather than abbreviating.
+ * say so before someone starts talking — so it says it in full rather than abbreviating. Open rounds
+ * says "Your turn in" before every turn after the opening, a word everyone knows (GEO-3315).
  */
 export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
@@ -3547,7 +3731,7 @@ export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
   if (nextTurnIndex >= debate.turn_durations_ms.length) return null;
   switch (debateTurnRoleForDebate(debate, nextTurnIndex)) {
     case 'rebuttal':
-      return 'Rebut in';
+      return isOpenRoundsDebate(debate) ? 'Your turn in' : 'Rebut in';
     case 'closing':
       return 'Closing argument in';
     default:
@@ -3618,134 +3802,46 @@ function DebateRecordingRemovedDialog({
   );
 }
 
-/** The hairline between the card's rows. `divider` is the design's own #F0F0F0. */
-function CardDivider() {
-  return <div aria-hidden className="h-px w-full shrink-0 bg-divider" />;
-}
-
-/** A row of the thank-you card: what is being asked on the left, the control for it on the right. */
-function CardRow({ children }: { children: React.ReactNode }) {
-  return <div className="flex min-h-7 items-center justify-between gap-2.5">{children}</div>;
-}
-
-/**
- * The pill every control on these cards is cut from — 28px tall, fully rounded, metadata type.
- *
- * Shared as a class string rather than a component because the three that use it are a button, a
- * disabled button and a plain span, and only the shape is common to them.
- */
+/** The pill the removal dialog's button is cut from — 28px tall, fully rounded, metadata type. */
 const cardPill = 'inline-flex min-h-7 shrink-0 items-center justify-center gap-1.5 rounded-full px-3 text-metadata';
 
-function DebateAgainCard({
+/**
+ * What the room says between the last turn and the claim picker, once the handoff has run long
+ * (GEO-3301). Usually never seen: both rooms consent and the pair are in the picker well inside
+ * `debateHandoffQuietMs`. When they are not, this says who the room is waiting on and keeps the
+ * way out, since the room itself is hidden.
+ */
+function DebateHandoffNotice({
   opponentName,
-  localConsented,
-  remoteConsented,
-  busy,
-  onConsent,
-  countdownLabel,
-  remainingSeconds,
-  publishing,
-  publishBusy,
-  onStopPublishing,
-  rebuttalRounds,
-  children,
+  waitingForOpponent,
+  onLeave,
+  leaveDisabled,
 }: {
   opponentName: string;
-  localConsented: boolean;
-  remoteConsented: boolean;
-  busy: boolean;
-  onConsent: () => void;
-  countdownLabel: string;
-  remainingSeconds: number;
-  /** Null when there is no recording to opt out of, which is when the row is left off. */
-  publishing: boolean | null;
-  publishBusy: boolean;
-  onStopPublishing: () => void;
-  /** Rebuttal rounds the two unlocked (GEO-3180). Null for a fixed format, which leaves the row off. */
-  rebuttalRounds: number | null;
-  /** Extra rows under the opponent's, e.g. the way back to a lobby. */
-  children?: React.ReactNode;
+  waitingForOpponent: boolean;
+  onLeave: () => void;
+  leaveDisabled: boolean;
 }) {
-  const countdownDescriptionId = React.useId();
-  const consentLabel = localConsented ? 'Waiting...' : busy ? 'Saving...' : "Let's go!";
-
   return (
-    <DebateRoomOverlayCard className="w-[calc(100%-7rem)] gap-2 px-3 py-2">
-      {rebuttalRounds !== null && (
-        <>
-          <CardRow>
-            <Text as="span" variant="smallTitle" color="text" className="min-w-0 truncate">
-              {rebuttalRounds > 0 ? rebuttalRoundsLabel(rebuttalRounds) : 'Opening only'}
-            </Text>
-            {rebuttalRounds > 0 && <DebateRoundPips rounds={rebuttalRounds} className="shrink-0 text-text" />}
-          </CardRow>
-          <CardDivider />
-        </>
-      )}
-      {publishing !== null && (
-        <>
-          <CardRow>
-            <Text as="span" variant="smallTitle" color="text">
-              Publish debate?
-            </Text>
-            <button
+    <div role="status" className="absolute inset-0 grid place-items-center px-5">
+      <div className="w-full max-w-[420px]">
+        <DebateNotice
+          icon={<Time />}
+          action={
+            <SmallButton
               type="button"
-              role="switch"
-              aria-checked={publishing}
-              aria-label="Publish debate"
-              // Off is one-way — it cancels the upload — so the control only acts on the way down.
-              // Left interactive while on so the label and the switch still read as one thing.
-              onClick={publishing ? onStopPublishing : undefined}
-              disabled={publishBusy || !publishing}
-              className="flex min-h-7 shrink-0 cursor-pointer items-center gap-1.5 text-metadata text-grey-04 disabled:cursor-default"
+              className={PILL_BUTTON_SECONDARY_CLASS_NAME}
+              onClick={onLeave}
+              disabled={leaveDisabled}
             >
-              <Toggle checked={publishing} />
-              <span>{publishing ? 'Yes' : 'No'}</span>
-            </button>
-          </CardRow>
-          {/* Inside the conditional: with no publish row above it this would be a hairline
-              hanging off the top of the card. */}
-          <CardDivider />
-        </>
-      )}
-      <CardRow>
-        <Text as="span" variant="smallTitle" color="text">
-          Debate again?
-        </Text>
-        <button
-          type="button"
-          onClick={onConsent}
-          disabled={busy || localConsented}
-          aria-label={consentLabel}
-          aria-describedby={countdownDescriptionId}
-          className={cx(
-            cardPill,
-            'bg-text text-white transition-colors disabled:cursor-default',
-            !busy && !localConsented && 'hover:bg-text/90'
-          )}
+              Leave
+            </SmallButton>
+          }
         >
-          <span>{consentLabel}</span>
-          <span aria-hidden="true" className="text-white/70 tabular-nums">
-            {countdownLabel}
-          </span>
-          <span id={countdownDescriptionId} className="sr-only">
-            {remainingSeconds} seconds remaining
-          </span>
-        </button>
-      </CardRow>
-      <CardDivider />
-      <CardRow>
-        {/* Grey until they are ready, like the pill beside it — the design shows the waiting state. */}
-        <Text as="span" variant="smallTitle" color={remoteConsented ? 'text' : 'grey-04'} className="min-w-0 truncate">
-          {opponentName}
-        </Text>
-        <span className={cx(cardPill, remoteConsented ? 'bg-green text-text' : 'bg-grey-01 text-grey-04')}>
-          {remoteConsented && <Check />}
-          {remoteConsented ? 'Ready' : 'Waiting...'}
-        </span>
-      </CardRow>
-      {children}
-    </DebateRoomOverlayCard>
+          <p className="truncate">{waitingForOpponent ? `Waiting for ${opponentName}...` : 'Opening claims...'}</p>
+        </DebateNotice>
+      </div>
+    </div>
   );
 }
 
@@ -3801,9 +3897,11 @@ export function localTurnStartsInSeconds(
   }
 
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
-  // A required round's lead-in follows this turn and counts its opener in itself, so counting them in
-  // over this turn's end as well, or over its hand-off when it ends early, would count twice.
-  if (countdown.openRounds?.phase === 'speaking' && openRoundLeadInAfterTurn(debate, countdown.turnIndex) > 0) {
+  // While a turn runs, or is handed over early, count into the next only when it follows straight on.
+  // A required round's lead-in counts its opener in itself, and a last word leads to the pick or the
+  // end, even when the next turn is already appended (GEO-3315). The result window after an Extend
+  // still counts the opener in.
+  if (countdown.openRounds?.phase === 'speaking' && !openRoundRunsStraightOn(debate, countdown.turnIndex)) {
     return null;
   }
   if (countdown.yieldingSlot !== null) {
@@ -3819,6 +3917,15 @@ export function localTurnStartsInSeconds(
   return participantSlotForTurn(debate.first_participant_slot, nextTurnIndex) === localSlot
     ? countdown.remainingSeconds
     : null;
+}
+
+/**
+ * Whether the next turn starts as this one ends: not after a pick, a required round's lead-in or the
+ * end of the debate. Always for a fixed format.
+ */
+function openRoundRunsStraightOn(debate: Debate, turnIndex: number | null) {
+  if (turnIndex === null) return false;
+  return openRoundLastWord(debate, turnIndex) === null && openRoundLeadInAfterTurn(debate, turnIndex) === 0;
 }
 
 function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {
@@ -4058,6 +4165,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
     return {
       label: formatCountdownClock(0),
       remainingSeconds: 0,
+      remainingMs: 0,
       progress: 0,
       activeSlot: countdownWindow?.activeSlot ?? null,
       effectiveStatus: countdownWindow?.effectiveStatus ?? debate?.status ?? 'ready',
@@ -4082,6 +4190,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
   return {
     label: formatCountdownClock(seconds),
     remainingSeconds: seconds,
+    remainingMs,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
     activeSlot: countdownWindow.activeSlot,
     effectiveStatus: countdownWindow.effectiveStatus,
@@ -4259,15 +4368,6 @@ export function countdownWindowForDebate(
     yieldedProgress: null,
     preservesExistingCountIn: false,
   };
-}
-
-export function isDebateInThankYouPeriod(
-  debate: Pick<Debate, 'status' | 'turn_ends_at' | 'completed_at'>,
-  now: number
-) {
-  if (debate.status !== 'thanking' && debate.status !== 'complete') return false;
-  const deadline = timestampMs(debate.turn_ends_at ?? debate.completed_at);
-  return deadline !== null && now < deadline;
 }
 
 function timedDebateCountdownWindow(
