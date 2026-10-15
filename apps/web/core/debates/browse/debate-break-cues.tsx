@@ -4,7 +4,17 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { OpenRoundPick, ParticipantSlot } from '~/core/debates/api';
+import type { ParticipantSlot } from '~/core/debates/api';
+import {
+  BANNER_CLASS,
+  ENDED_TILT,
+  LABEL_FONT,
+  STAMP_CLASS,
+  STAMP_FONT,
+  STAMP_INK,
+  STAMP_TILT,
+  STAMP_WORD,
+} from '~/core/debates/debate-stamps';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
   BREAK_QUESTION_MS,
@@ -148,34 +158,8 @@ function heldAt(startMs: number): React.CSSProperties {
   return { animationDelay: `calc(${startMs}ms - var(--break-t, 0) * 1ms)`, animationPlayState: 'paused' };
 }
 
-const STAMP_WORD: Record<OpenRoundPick | 'none', string> = { extend: 'Extend', end: 'End', none: 'No pick' };
-const STAMP_INK: Record<OpenRoundPick | 'none', string> = {
-  extend: 'text-purple',
-  end: 'text-text',
-  none: 'border-dashed text-grey-04',
-};
-/** Each tile's stamp leans its own way, so the two read as two hands. The design mockup's tilts. */
-const STAMP_TILT: Record<ParticipantSlot, string> = { 1: '-3.2deg', 2: '2.4deg' };
-/** "Ended early" leans the other way from a pick. */
-const ENDED_TILT = '2deg';
-
 /** Shown, without a fade, from where a held animation starts: the mockup's dim and note appear at once. */
 const APPEAR = 'motion-safe:animate-[debateStampFade_1ms_linear_both]';
-
-/**
- * The stamps' shared look: Geist Bold on a solid white face, square-cornered, sized snugly around
- * the word. Sizes are in `em`, so a smaller stamp keeps the same proportions.
- */
-const STAMP_CLASS =
-  'rounded-[2px] border-[0.07em] border-current bg-white px-[0.4em] pt-[0.12em] pb-[0.1em] leading-[0.9] font-bold tracking-[0.02em] whitespace-nowrap uppercase shadow-[0_0.12em_0.45em_rgba(0,0,0,0.28)] motion-safe:animate-debate-stamp';
-const STAMP_FONT = { fontFamily: 'var(--font-geist-bold)' } as const;
-
-/** The banners' and the question's type: the recording timer's Geist. */
-export const LABEL_FONT = { fontFamily: 'var(--font-geist-medium)' } as const;
-
-/** A purple band across a box's width, the round and turn announcements. Sized where it is used. */
-export const BANNER_CLASS =
-  'w-full bg-purple px-[0.6em] py-[0.6em] text-center leading-none font-medium tracking-[0.04em] whitespace-nowrap text-white uppercase';
 
 /**
  * The break between two Open rounds in a published debate (GEO-3277): the approved "stamps".

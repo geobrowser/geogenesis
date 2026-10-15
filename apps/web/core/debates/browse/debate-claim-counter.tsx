@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { ActionSurface } from '~/core/action-context-provider';
 import type { DebateClaim } from '~/core/debates/api';
 import type { StackedCard } from '~/core/debates/claim-ticker';
+import { LABEL_FONT } from '~/core/debates/debate-stamps';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
@@ -14,7 +15,6 @@ import { TargetSolid } from '~/design-system/icons/target-solid';
 import { ThumbDown } from '~/design-system/icons/thumb-down';
 import { ThumbUp } from '~/design-system/icons/thumb-up';
 
-import { LABEL_FONT } from './debate-break-cues';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 
 /** How long the "+1 claim" takes to come out of the counter and go. Matches its animations below. */

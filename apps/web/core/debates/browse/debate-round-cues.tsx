@@ -4,9 +4,8 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { BANNER_CLASS, LABEL_FONT } from '~/core/debates/debate-stamps';
 import type { RoundCue } from '~/core/debates/round-cues';
-
-import { BANNER_CLASS, LABEL_FONT } from './debate-break-cues';
 
 /**
  * An outline in every direction rather than the four corners the recording room uses.

@@ -8,6 +8,7 @@ import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
+import { LABEL_FONT } from '~/core/debates/debate-stamps';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
 import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
@@ -23,6 +24,7 @@ import {
   silentAt,
 } from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
@@ -36,7 +38,7 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { DebateBreakOverlay, DebateEarlyEndLabels, LABEL_FONT, useBreakCuts } from './debate-break-cues';
+import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
 import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
@@ -1581,17 +1583,6 @@ function DebaterVideo({
 /** The turn timer's size and inset from the tile's corner, in px (`size-8`, `right-3`). */
 const TIMER_PX = 32;
 const TIMER_RIGHT_PX = 12;
-
-/**
- * How large the turn timer is drawn, for an Open rounds debate's last ten seconds of a turn
- * (GEO-3316): a step bigger with each second's pulse from 10 s, reaching 1.3x as 5 s arrives, then
- * held there. 1 the rest of the time.
- */
-export function turnTimerScale(seconds: number) {
-  if (seconds > 10) return 1;
-  if (seconds <= 5) return 1.3;
-  return 1 + (0.3 * Math.min(5, 11 - Math.ceil(seconds))) / 5;
-}
 
 function CountdownBadge({
   seconds,
