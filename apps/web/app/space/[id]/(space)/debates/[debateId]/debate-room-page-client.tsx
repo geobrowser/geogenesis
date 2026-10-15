@@ -3178,12 +3178,17 @@ function DebateRecordingModal({
   const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot, stamps);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
-  const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
-  const remoteInactive = participantIsInactive(
-    countdown.effectiveStatus,
-    remoteParticipant?.participant_slot ?? null,
-    countdown.activeSlot
-  );
+  // Match the audio gate: both microphones are open during the pick, reveal and count-in.
+  const betweenRounds = isBetweenOpenRounds(countdown.openRounds);
+  const localInactive =
+    !betweenRounds && participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
+  const remoteInactive =
+    !betweenRounds &&
+    participantIsInactive(
+      countdown.effectiveStatus,
+      remoteParticipant?.participant_slot ?? null,
+      countdown.activeSlot
+    );
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
   const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
   // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
@@ -3215,7 +3220,7 @@ function DebateRecordingModal({
     countdown.effectiveStatus !== 'thanking' &&
     countdown.activeSlot === null &&
     countdown.yieldingSlot === null &&
-    !isBetweenOpenRounds(countdown.openRounds)
+    !betweenRounds
       ? countdownRing
       : null;
   const localCountdown = localEndingTurn
