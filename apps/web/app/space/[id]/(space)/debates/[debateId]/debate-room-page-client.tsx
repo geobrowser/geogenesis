@@ -2344,7 +2344,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markLocalReady = React.useCallback(async () => {
     setRoomError(null);
     try {
-      await ensureLocalPreview();
+      await ensureLocalPreview({ audio: true, video: true });
       await markReady.mutateAsync();
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
