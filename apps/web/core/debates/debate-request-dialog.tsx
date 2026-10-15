@@ -7,6 +7,7 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 import { Avatar } from '~/design-system/avatar';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
+import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebateParticipantSummary, ParticipantSlot } from './api';
 import { DebateFormatDetails, type DebateFormatOpenRounds } from './format-details';
@@ -97,6 +98,7 @@ export function DebateRequestDialog({
   formatSummaryOnly = false,
 }: DebateRequestDialogProps) {
   const titleId = React.useId();
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const turnParticipants = React.useMemo(
     () => [...participants].sort((a, b) => a.participant_slot - b.participant_slot),
     [participants]
@@ -145,13 +147,14 @@ export function DebateRequestDialog({
   };
 
   return (
-    <div className="max-sm:items-end max-sm:p-0 fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm">
-      <section
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid max-h-[calc(100dvh-2rem)] w-[min(370px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg bg-bg p-5 text-text shadow-card"
-      >
+    <div
+      ref={setPopoverContainer}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      className="max-sm:items-end max-sm:p-0 fixed inset-0 z-1200 flex items-center justify-center bg-text/45 p-5 backdrop-blur-sm"
+    >
+      <section className="max-sm:max-h-[calc(100dvh-1rem)] max-sm:rounded-b-none max-sm:border-b-0 max-sm:px-4 max-sm:py-5 grid max-h-[calc(100dvh-2rem)] w-[min(370px,100%)] grid-rows-[auto_minmax(0,1fr)_auto] gap-4 overflow-hidden rounded-lg bg-bg p-5 text-text shadow-card">
         <header className="min-w-0 text-center">
           {eyebrow ?? (
             <Text as="div" variant="metadata" color="text">
@@ -165,7 +168,11 @@ export function DebateRequestDialog({
 
         <div className="min-h-0 overflow-y-auto pr-1">
           <div className="relative grid grid-cols-[1fr_auto_1fr] items-center rounded-lg bg-white py-5">
-            {overflowMenu ? <div className="absolute top-2 right-2">{overflowMenu}</div> : null}
+            {overflowMenu ? (
+              <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+                <div className="absolute top-2 right-2">{overflowMenu}</div>
+              </ElevatedPopoverPortalContext.Provider>
+            ) : null}
             {renderSide(firstParticipant)}
             <div className="relative grid w-16 place-items-center">
               <span

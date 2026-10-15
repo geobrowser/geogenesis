@@ -282,10 +282,21 @@ vi.mock('~/core/claims/browse/claim-response-summary', async importOriginal => (
   }),
 }));
 
+// The publishing card has its own tests; here it only has to be mounted where the page puts it.
+vi.mock('./rematch-publish-card', () => ({
+  RematchPublishCard: ({ debate }: { debate: { claim: { claim_entity_id: string } } }) => (
+    <div data-testid="rematch-publish-card-stub">{debate.claim.claim_entity_id}</div>
+  ),
+}));
+
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async () => {
   const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
-  return { BackToLobbyRow: () => null, useConsumeDebateReturnDestination: () => consumeDebateReturnDestination };
+  return {
+    // No lobby mic carried into these sessions (GEO-3336 has its own tests).
+    useCarriedLobbyMic: () => null,
+    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
+  };
 });
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -1115,9 +1126,22 @@ describe('DebateRematchPageClient', () => {
   it('ends a browsing rematch only through the explicit leave action', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.leaveMutate).toHaveBeenCalledOnce();
+  });
+
+  it('carries the finished debate’s publishing card under the pair', () => {
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.getByTestId('rematch-publish-card-stub').textContent).toBe(CLAIM_SOURCE);
+  });
+
+  it('draws no publishing card for a profile challenge, which has no debate behind it', () => {
+    mocks.session = session({ source_debate_id: null });
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    expect(screen.queryByTestId('rematch-publish-card-stub')).toBeNull();
   });
 
   it('returns a profile challenge to the page before the debate flow after leaving', async () => {
@@ -1131,7 +1155,7 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.back).toHaveBeenCalledOnce();
     expect(mocks.replace).not.toHaveBeenCalledWith(`/space/${SPACE_1}/debates`);
@@ -1146,7 +1170,7 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.replace).toHaveBeenCalledWith(`/space/${SPACE_1}/debates`);
     expect(mocks.back).not.toHaveBeenCalled();
@@ -1162,7 +1186,7 @@ describe('DebateRematchPageClient', () => {
     );
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.replace).toHaveBeenCalledWith('/space/my-space?tab=activity#latest');
     expect(mocks.back).not.toHaveBeenCalled();
@@ -3845,7 +3869,7 @@ describe('DebateRematchPageClient', () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     expect(screen.queryByTestId('rematch-pair-header')).toBeNull();
-    expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument();
   });
 
   // GEO-2992. The unmute control used to live in a 200px dock fixed to the bottom-right of the
@@ -5949,7 +5973,7 @@ describe('inside a debate room', () => {
 
     render(inRoom(<DebateRematchPageClient sessionId="rematch-1" />));
 
-    await waitFor(() => expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Leave' })).toBeInTheDocument());
     expect(mocks.replace).not.toHaveBeenCalled();
     expect(mocks.back).not.toHaveBeenCalled();
   });

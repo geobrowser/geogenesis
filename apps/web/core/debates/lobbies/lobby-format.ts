@@ -335,7 +335,7 @@ export function lobbyErrorMessage(error: unknown, fallback: string): string {
     case 'lobby_not_found':
       return 'This lobby no longer exists.';
     case 'lobby_stepped_out':
-      return 'You stepped out. Go back to the room to use voice.';
+      return 'You’re in a debate. Voice is back when you return to the room.';
     case 'lobby_not_present':
       return 'You’re not in the lobby right now. Join it to use voice.';
     case 'lobby_voice_full': {

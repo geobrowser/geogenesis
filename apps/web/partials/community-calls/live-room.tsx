@@ -15,7 +15,6 @@ import {
 } from '@livekit/components-react';
 import { useKrispNoiseFilter } from '@livekit/components-react/krisp';
 import '@livekit/components-styles';
-import { Content, Overlay, Portal, Root, Title } from '@radix-ui/react-dialog';
 
 import * as React from 'react';
 
@@ -53,6 +52,7 @@ import { CallEndTimer } from './call-end-timer';
 import { ChatPanel } from './chat-panel';
 import { FocusStage } from './focus-stage';
 import { LeaveCallDialog } from './leave-call-dialog';
+import { MobileSidebarSheet } from './mobile-sidebar-sheet';
 import { ParticipantsPanel } from './participants-panel';
 import { ReactionsButton, ReactionsOverlay, useReactions } from './reactions';
 import { ReconnectionOverlay } from './reconnection-overlay';
@@ -626,31 +626,6 @@ function SidebarContent({
         )}
       </div>
     </>
-  );
-}
-
-/** Slide-up sheet for the Chat/People panels on narrow viewports — the 320px inline sidebar doesn't fit. */
-function MobileSidebarSheet({
-  open,
-  onOpenChange,
-  title,
-  children,
-}: {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  title: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <Root open={open} onOpenChange={onOpenChange}>
-      <Portal>
-        <Overlay className="fixed inset-0 z-100 bg-text/20" />
-        <Content className="fixed inset-x-0 bottom-0 z-101 flex max-h-[80vh] flex-col overflow-hidden rounded-t-lg bg-white focus:outline-hidden">
-          <Title className="sr-only">{title}</Title>
-          {children}
-        </Content>
-      </Portal>
-    </Root>
   );
 }
 
