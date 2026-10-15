@@ -8,12 +8,16 @@ import { EntitySidePanelPopoverPortalContext } from '~/core/state/entity-side-pa
 
 import { slideUpPopoverContainerAtom } from '~/atoms';
 
+/** An enclosing overlay can keep popovers within its focus, accessibility, and stacking boundary. */
+export const ElevatedPopoverPortalContext = React.createContext<HTMLElement | null>(null);
+
 export function useElevatedPopoverPortal() {
+  const localPortal = React.useContext(ElevatedPopoverPortalContext);
   const sidePanelPortal = React.useContext(EntitySidePanelPopoverPortalContext);
   // Like RespondersPopover, read on the render that opens the menu rather than subscribing every
   // closed menu to sheet changes. The sheet's host is already exempt from its RemoveScroll lock.
   const store = useStore();
-  const overlayPortal = sidePanelPortal ?? store.get(slideUpPopoverContainerAtom);
+  const overlayPortal = localPortal ?? sidePanelPortal ?? store.get(slideUpPopoverContainerAtom);
   const [bodyPortal, setBodyPortal] = React.useState<HTMLDivElement | null>(null);
 
   React.useLayoutEffect(() => {

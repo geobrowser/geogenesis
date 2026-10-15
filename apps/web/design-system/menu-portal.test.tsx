@@ -7,7 +7,10 @@ import * as React from 'react';
 import { Provider, createStore } from 'jotai';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
+import { CalendarNarrowSheet } from '~/core/debates/matchmaking/calendar-narrow-panel';
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
+
+import { SubtopicsDialogShell } from '~/partials/space-page/subtopics-dialog-shell';
 
 import { Dropdown } from './dropdown';
 import { Menu } from './menu';
@@ -102,6 +105,40 @@ describe.each([
     );
     await user.click(screen.getByRole('button', { name: 'Topics' }));
     await user.click(screen.getByRole(optionRole, { name: 'Society and culture' }));
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it.each(['subtopics', 'calendar'] as const)('keeps %s modal options accessible and focusable', async modal => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    const menu = <Harness onSelect={onSelect} />;
+    render(
+      <EntitySidePanelPopoverPortalProvider>
+        {modal === 'subtopics' ? (
+          <SubtopicsDialogShell open onOpenChange={() => {}} title="Subtopics" showBack={false}>
+            {menu}
+          </SubtopicsDialogShell>
+        ) : (
+          <CalendarNarrowSheet
+            open
+            onOpenChange={() => {}}
+            picks={{ people: [], claims: [], matchesOnly: false }}
+            onApply={() => {}}
+            shownCount={() => 0}
+            renderBody={() => menu}
+          />
+        )}
+      </EntitySidePanelPopoverPortalProvider>
+    );
+    const dialog = screen.getByRole('dialog', { name: modal === 'subtopics' ? 'Subtopics' : 'Narrow the calendar' });
+    const trigger = within(dialog).getByRole('button', { name: 'Topics' });
+    await user.click(trigger);
+    const option = screen.getByRole(optionRole, { name: 'Society and culture' });
+    expect(dialog).toContainElement(option);
+    expect(option.closest('[aria-hidden="true"]')).toBeNull();
+    option.focus();
+    expect(option).toHaveFocus();
+    await user.click(option);
     expect(onSelect).toHaveBeenCalledOnce();
   });
 
