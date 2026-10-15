@@ -5146,6 +5146,12 @@ describe('where the pair land', () => {
 
   it('lands on the debate’s own claims ahead of their positions when there is no match', async () => {
     nothingToRematch();
+    // Published, so the tab has a card with controls to land on (GEO-3312).
+    mocks.entities.push({
+      ...sharedEntity(),
+      id: 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4',
+      name: 'Coffee dates save everyone’s time',
+    });
     mocks.extractedClaims = {
       turns: [],
       claims: [
@@ -6287,17 +6293,32 @@ describe('From this debate', () => {
   const extracted = (
     text: string,
     turn_index: number,
-    ids: { existing?: string | null; minted?: string | null } = {}
+    ids: { existing?: string | null; minted?: string | null } = {},
+    start_ms: number | null = null
   ) => ({
     text,
     is_factual: false,
     turn_index,
+    start_ms,
     existing_entity_id: ids.existing ?? null,
     entity_id: ids.minted ?? null,
     is_contestable: true,
   });
   /** The shared claim as the graph spells it, matched by geo-chat to a claim from the debate. */
   const matchedEntity = () => ({ ...sharedEntity(), id: hex(CLAIM_SHARED) });
+  /** The source debate as the room ran it: `count` turns of the standard format. */
+  const roomTurns = (count: number) => {
+    mocks.sourceDebate = {
+      claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 },
+      turn_format_id: 'standard',
+      turn_durations_ms: Array.from({ length: count }, () => 60_000),
+    };
+  };
+  /** The transcript's turns, alternating between the two speakers of `turns`. */
+  const transcriptTurns = (count: number) =>
+    Array.from({ length: count }, (_, index) => ({ ...turns[index % 2], turn_index: index }));
+  /** A minted claim from the debate, once the early publish has put it on the graph. */
+  const publishedEntity = (id: string, name: string) => ({ ...sharedEntity(), id, name });
 
   async function openTab() {
     render(<DebateRematchPageClient sessionId="rematch-1" />);
@@ -6306,6 +6327,7 @@ describe('From this debate', () => {
   }
 
   beforeEach(() => {
+    roomTurns(turns.length);
     mocks.entities = [matchedEntity()];
     mocks.claims = [sharedClaim()];
     // The graph's own spelling throughout, as production has it: positions and entities are both
@@ -6355,17 +6377,39 @@ describe('From this debate', () => {
     );
   });
 
-  it('draws a claim the graph does not have yet without controls, and keeps it out of geo-chat’s row lookup', async () => {
+  it('leaves a claim the graph does not have yet out of the list, says it is coming, and keeps it out of geo-chat’s row lookup', async () => {
+    // GEO-3312: drawn without controls it was a card nobody could act on, which then changed shape.
     await openTab();
 
-    const card = screen.getByTestId('from-this-debate-unpublished');
-    expect(within(card).getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
-    // No speaker name on the turn: the participant's own name stands in.
-    expect(within(card).getByText('Said by Salina')).toBeInTheDocument();
-    expect(within(card).getByText(/in a minute or two/)).toBeInTheDocument();
-    expect(within(card).queryByRole('button')).toBeNull();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
+    expect(screen.getByTestId('from-this-debate-publishing')).toHaveTextContent(
+      '1 more claim from this debate is publishing to Geo.'
+    );
+    expect(within(screen.getByRole('button', { name: /^From this debate/ })).getByText('1')).toBeInTheDocument();
     expect(mocks.entityIdLookups.flat()).toContain(MINTED);
     expect(mocks.rematchClaimIds.flat()).not.toContain(MINTED);
+  });
+
+  it('says the claims are publishing while none of them is on the graph yet', async () => {
+    mocks.extractedClaims = { turns, claims: [extracted('Coffee dates save everyone’s time', 1, { minted: MINTED })] };
+    await openTab();
+
+    expect(screen.queryByText('Coffee dates save everyone’s time')).toBeNull();
+    expect(
+      screen.getByText('1 claim from this debate is publishing to Geo. It appears here in a minute or two.')
+    ).toBeInTheDocument();
+  });
+
+  it('draws a claim with its controls and who said it once the graph has it, in the card’s meta row', async () => {
+    mocks.entities = [matchedEntity(), publishedEntity(MINTED, 'Coffee dates save everyone’s time')];
+    await openTab();
+
+    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    // No speaker name on the turn: the participant's own name stands in.
+    expect(screen.getByText('Said by Salina')).toBeInTheDocument();
+    expect(screen.queryByTestId('from-this-debate-publishing')).toBeNull();
+    expect(screen.getAllByRole('button', { name: /^Agree/ })).toHaveLength(2);
   });
 
   it('keeps asking the graph for the debate’s claims, so an unpublished one gains its controls once published', async () => {
@@ -6383,16 +6427,30 @@ describe('From this debate', () => {
       turns,
       claims: [
         extracted('Written before ids were minted', 0),
-        extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }),
+        extracted('A claim both participants chose', 1, { existing: hex(CLAIM_SHARED) }),
       ],
     };
     await openTab();
 
-    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
     expect(screen.queryByText('Written before ids were minted')).toBeNull();
+    expect(screen.queryByTestId('from-this-debate-publishing')).toBeNull();
   });
 
-  it('appends new claims at the bottom without reordering the ones already listed', async () => {
+  it('groups the claims by round, in the order they were said, as new ones arrive', async () => {
+    roomTurns(4);
+    mocks.entities = [
+      matchedEntity(),
+      publishedEntity(MINTED, 'Coffee dates save everyone’s time'),
+      publishedEntity(MINTED_LATER, 'Dinner is a better first date'),
+    ];
+    mocks.extractedClaims = {
+      turns: transcriptTurns(4),
+      claims: [
+        extracted('A claim both participants chose', 0, { existing: hex(CLAIM_SHARED) }, 20_000),
+        extracted('Coffee dates save everyone’s time', 1, { minted: MINTED }, 70_000),
+      ],
+    };
     const view = render(<DebateRematchPageClient sessionId="rematch-1" />);
     fireEvent.click(await screen.findByRole('button', { name: /^From this debate/ }));
     await settleTabSwap();
@@ -6402,25 +6460,53 @@ describe('From this debate', () => {
           /^(A claim both participants chose|Coffee dates save everyone’s time|Dinner is a better first date)$/
         )
         .map(node => node.textContent);
+    const headings = () =>
+      within(screen.getByTestId('from-this-debate-rounds'))
+        .getAllByRole('heading')
+        .map(heading => heading.textContent);
+    const coffeeCard = () => screen.getByText('Coffee dates save everyone’s time').closest('article');
     expect(order()).toEqual(['A claim both participants chose', 'Coffee dates save everyone’s time']);
+    expect(headings()).toEqual(['Round 1 · Opening']);
+    const cardBefore = coffeeCard();
 
-    // The next poll lists the claims the other way round and adds one between them.
+    // The final pass finds one said before everything listed, and moves one to the next round.
     mocks.extractedClaims = {
-      turns,
+      turns: transcriptTurns(4),
       claims: [
-        extracted('Coffee dates save everyone’s time', 0, { minted: MINTED }),
-        extracted('Dinner is a better first date', 0, { minted: MINTED_LATER }),
-        extracted('A claim both participants chose', 1, { existing: hex(CLAIM_SHARED) }),
+        extracted('A claim both participants chose', 0, { existing: hex(CLAIM_SHARED) }, 20_000),
+        extracted('Coffee dates save everyone’s time', 2, { minted: MINTED }, 130_000),
+        extracted('Dinner is a better first date', 0, { minted: MINTED_LATER }, 5_000),
       ],
     };
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
     await settleTabSwap();
 
-    expect(order()).toEqual([
-      'A claim both participants chose',
-      'Coffee dates save everyone’s time',
-      'Dinner is a better first date',
-    ]);
+    await waitFor(() =>
+      expect(order()).toEqual([
+        'Dinner is a better first date',
+        'A claim both participants chose',
+        'Coffee dates save everyone’s time',
+      ])
+    );
+    // Named the way the room named them, from the source debate's turn count.
+    expect(headings()).toEqual(['Round 1 · Opening', 'Round 2 · Rebuttal']);
+    // The same card, moved rather than remounted, so its own state — a failed response's error, a
+    // response in flight — goes with it (Copilot, PR #2861).
+    expect(coffeeCard()).toBe(cardBefore);
+    // Turns 0 and 2 are both the viewer's.
+    expect(screen.getAllByText('Said by You')).toHaveLength(3);
+  });
+
+  it('draws no round headings when the transcript’s turns do not line up with the room’s', async () => {
+    // A silent turn: the transcript ran two turns where the room ran four, so its turn 1 is the
+    // room's turn 3, a rebuttal, and calling it the opening would be wrong (Copilot, PR #2861).
+    roomTurns(4);
+    mocks.entities = [matchedEntity(), publishedEntity(MINTED, 'Coffee dates save everyone’s time')];
+    await openTab();
+
+    expect(screen.getByText('A claim both participants chose')).toBeInTheDocument();
+    expect(screen.getByText('Coffee dates save everyone’s time')).toBeInTheDocument();
+    expect(within(screen.getByTestId('from-this-debate-rounds')).queryAllByRole('heading')).toHaveLength(0);
   });
 
   it('says extraction is still running while the payload is empty, and stops saying so once it is final', async () => {
@@ -6435,6 +6521,38 @@ describe('From this debate', () => {
     view.rerender(<DebateRematchPageClient sessionId="rematch-1" />);
     await settleTabSwap();
     expect(screen.getByText('No claims from this debate are left to debate.')).toBeInTheDocument();
+  });
+
+  it('keeps a refused request on its card, in a round that cannot be collapsed out from under it', async () => {
+    // A collapsed round unmounted its cards while the page still counted the target as on screen,
+    // so a refusal landing after the collapse was shown nowhere (Copilot, PR #2861).
+    mocks.requestError = new Error('respond to this claim before requesting a rematch');
+    mocks.requestVariables = { claim_id: CLAIM_SHARED, source_space_id: SPACE_1 };
+    await openTab();
+
+    const rounds = screen.getByTestId('from-this-debate-rounds');
+    expect(within(rounds).getByRole('heading', { name: 'Round 1 · Opening' })).toBeInTheDocument();
+    expect(within(rounds).queryAllByRole('button', { expanded: true })).toHaveLength(0);
+    const card = screen.getByText('A claim both participants chose').closest('article');
+    expect(within(card!).getByRole('alert')).toHaveTextContent('respond to this claim before requesting a rematch');
+  });
+
+  it('says more are publishing when every published claim is already debated, rather than that none are left', async () => {
+    // Shared is published and debated; the minted one is still on its way to the graph.
+    mocks.claims = [{ ...sharedClaim(), previously_debated: true }];
+    await openTab();
+
+    expect(
+      screen.getByText('1 claim from this debate is publishing to Geo. It appears here in a minute or two.')
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/already debated every claim here/)).toBeNull();
+    // "None yet", not "none": the count holds its skeleton until a claim to debate arrives.
+    expect(
+      within(screen.getByRole('button', { name: /^From this debate/ })).getByLabelText(
+        'Counting claims from this debate'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Already debated with Salina/ })).toBeInTheDocument();
   });
 
   it('folds a claim the pair already debated away, and leaves out one the viewer is not interested in', async () => {
