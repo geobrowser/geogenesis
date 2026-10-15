@@ -2121,11 +2121,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [localMediaStreamRef, localTracksRef, persistStoppedLocalRecording]);
 
   const finishLiveDebate = React.useCallback(
-    async ({ allowDuringThankYou = false }: { allowDuringThankYou?: boolean } = {}) => {
+    async ({
+      allowDuringThankYou = false,
+      explicitLeave = false,
+    }: {
+      allowDuringThankYou?: boolean;
+      /**
+       * Leave itself is finishing the debate. The leave-requested guard below exists to stop the
+       * automatic exits once Leave has been asked for, not Leave: after a Leave that failed before
+       * its opt-out landed and a session that then closed, it is Leave that has to get out.
+       */
+      explicitLeave?: boolean;
+    } = {}) => {
       if (
         !debate ||
         (!allowDuringThankYou && locallyThanking) ||
-        rematchLeaveRequestedRef.current ||
+        (rematchLeaveRequestedRef.current && !explicitLeave) ||
         finalizedDebateRef.current === debate.id
       ) {
         return;
@@ -2444,7 +2455,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         // Retry save clears it: the automatic exit marks the debate finalized before its save, and
         // a save that failed would otherwise leave this press doing nothing.
         finalizedDebateRef.current = null;
-        await finishLiveDebate({ allowDuringThankYou: true });
+        await finishLiveDebate({ allowDuringThankYou: true, explicitLeave: true });
         return;
       } else if (debate.status === 'cancelled') {
         await discardLocalRecorder();
