@@ -50,6 +50,7 @@ import {
   debateRoomTabPriority,
   shouldReleaseDebateRoom,
 } from '~/core/debates/debate-room-ownership';
+import { RoomExit, RoomTag } from '~/core/debates/debate-room-stamps';
 import { DebateRoundIndicator, DebateRoundPips, rebuttalRoundsLabel } from '~/core/debates/debate-round-indicator';
 import { debateRematchPath } from '~/core/debates/debate-routes';
 import {
@@ -88,7 +89,7 @@ import {
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
-import { OpenRoundPickReveal, OpenRoundResultOverlay, useOpenRoundReveal } from '~/core/debates/open-round-reveal';
+import { OpenRoundPickStamp, OpenRoundResultOverlay, useOpenRoundReveal } from '~/core/debates/open-round-reveal';
 import {
   type OpenRoundGap,
   type OpenRoundsRoomPhase,
@@ -96,6 +97,7 @@ import {
   debateTurnRoleForDebate,
   isBetweenOpenRounds,
   isDebatesLastTurn,
+  isOpenRoundsDebate,
   openRebuttalRoundCount,
   openRoundGapAfterTurn,
   openRoundLastWord,
@@ -224,6 +226,8 @@ type RoomLike = {
 export type DebateCountdown = {
   label: string;
   remainingSeconds: number;
+  /** What is left of the window exactly, which the Open rounds timer's red rim drains by. */
+  remainingMs: number;
   progress: number;
   activeSlot: ParticipantSlot | null;
   effectiveStatus: Debate['status'];
@@ -3010,15 +3014,15 @@ function DebateRecordingModal({
     localSlot,
     remote: { slot: remoteParticipant?.participant_slot ?? null, name: remoteName },
   });
+  // Open rounds draws the room's moments in the published player's stamps design (GEO-3315); every
+  // fixed format keeps today's.
+  const stamps = isOpenRoundsDebate(debate);
   const localTileFirst = localParticipant?.position !== false;
-  const pickReveal = (name: string, pick: OpenRoundRevealedPick | null, first: boolean) =>
-    pick ? (
-      <OpenRoundPickReveal
-        name={name}
-        pick={pick.pick}
-        placement={reveal.pickPlacement === 'center' ? 'center' : first ? 'raised' : 'lowered'}
-      />
-    ) : null;
+  const pickReveal = (pick: OpenRoundRevealedPick | null, first: boolean) =>
+    pick ? <OpenRoundPickStamp pick={pick.pick} order={first ? 'first' : 'second'} /> : null;
+  // The pick, the reveal and what it means span both tiles, so both dim under them.
+  const tilesDimmed =
+    stamps && (countdown.openRounds?.phase === 'deciding' || reveal.step === 'flip' || reveal.result !== null);
   const lastWord =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.openRounds?.phase === 'speaking' &&
@@ -3026,7 +3030,11 @@ function DebateRecordingModal({
     countdown.yieldingSlot === null
       ? openRoundLastWord(debate, countdown.turnIndex)
       : null;
-  const lastWordChip = lastWord ? (
+  const lastWordChip = !lastWord ? null : stamps ? (
+    <RoomTag data-open-round-last-word={lastWord} className="text-[2.6cqw]">
+      Last word
+    </RoomTag>
+  ) : (
     <DebateTileChip data-open-round-last-word={lastWord} className={cx('text-text', tileChipSurface)}>
       {/* Your own tile also carries Recording, and on a phone the full line squeezes the position. */}
       <span className="mobile:hidden">
@@ -3034,14 +3042,15 @@ function DebateRecordingModal({
       </span>
       <span className="hidden mobile:inline">{lastWord === 'debate' ? 'Final word' : 'Last word'}</span>
     </DebateTileChip>
-  ) : null;
+  );
   const localUpcomingSeconds = reveal.holdsCountIn ? null : localTurnStartsInSeconds(debate, countdown, localSlot);
+  // Open rounds names the turn after an early end too, so an opening is still "You're up in".
   const localUpcomingLabel =
-    countdown.yieldingSlot && !countdown.preservesExistingCountIn
+    !stamps && countdown.yieldingSlot && !countdown.preservesExistingCountIn
       ? 'Your turn in'
       : (upcomingTurnLabel(debate, countdown) ?? "You're up in");
   const showLocalGo = localTurnGoIsVisible(countdown, localSlot);
-  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot);
+  const showLocalWrapItUp = wrapItUpIsVisible(countdown, localSlot, stamps);
   const showLocalDebateEndsSoon = debateEndsSoonIsVisible(debate, countdown, localSlot);
   const thankingSlot = reveal.holdsEndCard ? null : thankingParticipantSlot(debate, countdown);
   const localInactive = participantIsInactive(countdown.effectiveStatus, localSlot, countdown.activeSlot);
@@ -3051,18 +3060,18 @@ function DebateRecordingModal({
     countdown.activeSlot
   );
   const localEndingTurn = countdown.yieldingSlot !== null && countdown.yieldingSlot === localSlot;
+  const speakingTurn = countdown.effectiveStatus === 'in_progress' && countdown.activeSlot !== null;
+  // The speaker's last five seconds, when the timer warns, and in Open rounds the tile's outline
+  // turns red with it (GEO-3315).
+  const speakerFinalSeconds = speakingTurn && countdown.remainingSeconds > 0 && countdown.remainingSeconds <= 5;
+  const finalSeconds = stamps && speakerFinalSeconds;
   const countdownRing =
     countdown.remainingSeconds > 0 ? (
       <RecordingCountdownRing
         remainingSeconds={countdown.remainingSeconds}
         progress={countdown.progress}
-        variant={
-          countdown.effectiveStatus === 'in_progress' &&
-          countdown.activeSlot !== null &&
-          countdown.remainingSeconds <= 5
-            ? 'warning'
-            : 'default'
-        }
+        variant={speakerFinalSeconds ? 'warning' : 'default'}
+        buildUp={stamps && speakingTurn ? { remainingMs: countdown.remainingMs } : null}
       />
     ) : null;
   const yieldedCountdownRing =
@@ -3089,9 +3098,12 @@ function DebateRecordingModal({
     : countdown.activeSlot === localSlot
       ? countdownRing
       : sharedPhaseCountdown;
+  // In Open rounds the "Turn ended" stamp says it, as in the mockup, without the spent timer.
   const remoteCountdown =
     countdown.yieldingSlot === remoteParticipant?.participant_slot
-      ? yieldedCountdownRing
+      ? stamps
+        ? null
+        : yieldedCountdownRing
       : countdown.activeSlot === remoteParticipant?.participant_slot
         ? countdownRing
         : sharedPhaseCountdown;
@@ -3107,6 +3119,15 @@ function DebateRecordingModal({
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
+  // You ended your turn and theirs follows straight on, which they are counted into on their own
+  // screen. Otherwise the pick, a lead-in or the end comes next.
+  const remoteTurnIsNext =
+    stamps &&
+    localEndingTurn &&
+    openRoundRunsStraightOn(debate, countdown.turnIndex) &&
+    countdown.incomingSlot !== null &&
+    countdown.incomingSlot === remoteParticipant?.participant_slot;
+  const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
   const canEndLocalTurn =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.activeSlot === localSlot &&
@@ -3158,10 +3179,23 @@ function DebateRecordingModal({
         localSlot !== null &&
         thankingSlot === localSlot
       }
-      status={<DebateRecordingStatusPill recording={capturing} />}
-      tileControls={countdown.activeSlot === localSlot ? lastWordChip : null}
-      reveal={pickReveal('You', reveal.localPick, localTileFirst)}
+      status={
+        // Open rounds tags the speaker's corner, as in the mockup, beside the recording indicator.
+        stamps && countdown.activeSlot === localSlot && lastWordChip ? (
+          <span className="flex items-center gap-1.5">
+            {lastWordChip}
+            <DebateRecordingStatusPill recording={capturing} />
+          </span>
+        ) : (
+          <DebateRecordingStatusPill recording={capturing} />
+        )
+      }
+      tileControls={!stamps && countdown.activeSlot === localSlot ? lastWordChip : null}
+      reveal={pickReveal(reveal.localPick, localTileFirst)}
       chipsHidden={reveal.chipsHidden}
+      stamps={stamps}
+      dimmed={tilesDimmed}
+      finalSeconds={finalSeconds && countdown.activeSlot === localSlot}
     >
       <video ref={setLocalVideoElement} className="h-full w-full bg-grey-01 object-cover" playsInline muted autoPlay />
     </DebateVideoTile>
@@ -3185,15 +3219,25 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
+      // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
+      // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
+      showWrapItUp={
+        stamps &&
+        !showLocalDebateEndsSoon &&
+        wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true)
+      }
       endingTurn={remoteEndingTurn}
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
       countdown={remoteCountdown}
-      tileControls={
-        remoteParticipant && countdown.activeSlot === remoteParticipant.participant_slot ? lastWordChip : null
-      }
-      reveal={pickReveal(remoteName, reveal.remotePick, !localTileFirst)}
+      tileControls={!stamps && remoteSpeaking ? lastWordChip : null}
+      status={stamps && remoteSpeaking ? lastWordChip : undefined}
+      reveal={pickReveal(reveal.remotePick, !localTileFirst)}
       chipsHidden={reveal.chipsHidden}
+      stamps={stamps}
+      dimmed={tilesDimmed}
+      finalSeconds={finalSeconds && countdown.activeSlot === remoteParticipant?.participant_slot}
+      nextTurnName={remoteTurnIsNext ? remoteName : null}
     >
       <div
         ref={setRemoteMediaElement}
@@ -3264,32 +3308,37 @@ function DebateRecordingModal({
           </RecordingCircleButton>
         </div>
 
-        <div className="relative grid w-full max-w-[430px] gap-2">
+        {/* A size container, so the Open rounds panel and banners over the tiles size with them. */}
+        <div className="@container relative grid w-full max-w-[430px] gap-2">
           {orderedVideoTiles}
 
-          {openRoundDeciding && debate.open_rounds && localSlot !== null && (
-            <OpenRoundPickCard
-              // A fresh card per round, so nothing picked or failed in one round carries into the next.
-              key={openRoundDeciding.roundIndex}
-              roundIndex={openRoundDeciding.roundIndex}
-              savedPick={
-                debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
-              }
-              rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
-              remainingSeconds={countdown.remainingSeconds}
-              progress={countdown.progress}
-              onPick={(pick, context) =>
-                onPickOpenRound(openRoundDeciding.roundIndex, pick, {
-                  ...context,
-                  decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
-                })
-              }
-              localReconnecting={roomState === 'reconnecting'}
-              reconnectingOpponentName={remoteDisconnected ? remoteName : null}
-            />
-          )}
+          {/* The pick panel fades and the round's banner rolls out, as the next moment comes in. */}
+          <RoomExit className="z-40">
+            {openRoundDeciding && debate.open_rounds && localSlot !== null && (
+              <OpenRoundPickCard
+                // A fresh card per round, so nothing picked or failed in one round carries into the next.
+                key={openRoundDeciding.roundIndex}
+                roundIndex={openRoundDeciding.roundIndex}
+                savedPick={
+                  debate.open_rounds.round_index === openRoundDeciding.roundIndex ? debate.open_rounds.my_pick : null
+                }
+                rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
+                remainingSeconds={countdown.remainingSeconds}
+                onPick={(pick, context) =>
+                  onPickOpenRound(openRoundDeciding.roundIndex, pick, {
+                    ...context,
+                    decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
+                  })
+                }
+                localReconnecting={roomState === 'reconnecting'}
+                reconnectingOpponentName={remoteDisconnected ? remoteName : null}
+              />
+            )}
+          </RoomExit>
 
-          {reveal.result && <OpenRoundResultOverlay result={reveal.result} />}
+          <RoomExit exit="roll" className="z-[45]">
+            {reveal.result && <OpenRoundResultOverlay result={reveal.result} />}
+          </RoomExit>
           {debate.open_rounds && (
             <p role="status" aria-live="polite" data-open-round-announcement className="sr-only">
               {reveal.announcement}
@@ -3522,12 +3571,16 @@ function localTurnGoIsVisible(countdown: DebateCountdown, localSlot: Participant
   );
 }
 
-function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null) {
+/**
+ * "Wrap it up" over the speaker's last five seconds. In Open rounds it lands as the timer turns red
+ * and clears after about two seconds (GEO-3315), leaving the timer to count the rest.
+ */
+function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | null, stamps = false) {
   return (
     countdown.effectiveStatus === 'in_progress' &&
     slot !== null &&
     countdown.activeSlot === slot &&
-    countdown.remainingSeconds > 0 &&
+    countdown.remainingSeconds > (stamps ? 3 : 0) &&
     countdown.remainingSeconds <= 5
   );
 }
@@ -3537,7 +3590,8 @@ function wrapItUpIsVisible(countdown: DebateCountdown, slot: ParticipantSlot | n
  *
  * `null` falls back to the generic "You're up in". The closing round exists to address the
  * audience rather than the opponent (GEO-2852), and the countdown is the only moment the room can
- * say so before someone starts talking — so it says it in full rather than abbreviating.
+ * say so before someone starts talking — so it says it in full rather than abbreviating. Open rounds
+ * says "Your turn in" before every turn after the opening, a word everyone knows (GEO-3315).
  */
 export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
@@ -3547,7 +3601,7 @@ export function upcomingTurnLabel(debate: Debate, countdown: DebateCountdown) {
   if (nextTurnIndex >= debate.turn_durations_ms.length) return null;
   switch (debateTurnRoleForDebate(debate, nextTurnIndex)) {
     case 'rebuttal':
-      return 'Rebut in';
+      return isOpenRoundsDebate(debate) ? 'Your turn in' : 'Rebut in';
     case 'closing':
       return 'Closing argument in';
     default:
@@ -3674,10 +3728,11 @@ function DebateAgainCard({
       {rebuttalRounds !== null && (
         <>
           <CardRow>
-            <Text as="span" variant="smallTitle" color="text" className="min-w-0 truncate">
+            {/* The round count as the stamps design's purple tag (GEO-3315). */}
+            <RoomTag data-debate-again-rounds className="min-w-0 truncate text-[0.75rem]">
               {rebuttalRounds > 0 ? rebuttalRoundsLabel(rebuttalRounds) : 'Opening only'}
-            </Text>
-            {rebuttalRounds > 0 && <DebateRoundPips rounds={rebuttalRounds} className="shrink-0 text-text" />}
+            </RoomTag>
+            {rebuttalRounds > 0 && <DebateRoundPips rounds={rebuttalRounds} className="shrink-0 text-purple" />}
           </CardRow>
           <CardDivider />
         </>
@@ -3801,9 +3856,11 @@ export function localTurnStartsInSeconds(
   }
 
   if (countdown.effectiveStatus !== 'in_progress' || countdown.turnIndex === null) return null;
-  // A required round's lead-in follows this turn and counts its opener in itself, so counting them in
-  // over this turn's end as well, or over its hand-off when it ends early, would count twice.
-  if (countdown.openRounds?.phase === 'speaking' && openRoundLeadInAfterTurn(debate, countdown.turnIndex) > 0) {
+  // While a turn runs, or is handed over early, count into the next only when it follows straight on.
+  // A required round's lead-in counts its opener in itself, and a last word leads to the pick or the
+  // end, even when the next turn is already appended (GEO-3315). The result window after an Extend
+  // still counts the opener in.
+  if (countdown.openRounds?.phase === 'speaking' && !openRoundRunsStraightOn(debate, countdown.turnIndex)) {
     return null;
   }
   if (countdown.yieldingSlot !== null) {
@@ -3819,6 +3876,15 @@ export function localTurnStartsInSeconds(
   return participantSlotForTurn(debate.first_participant_slot, nextTurnIndex) === localSlot
     ? countdown.remainingSeconds
     : null;
+}
+
+/**
+ * Whether the next turn starts as this one ends: not after a pick, a required round's lead-in or the
+ * end of the debate. Always for a fixed format.
+ */
+function openRoundRunsStraightOn(debate: Debate, turnIndex: number | null) {
+  if (turnIndex === null) return false;
+  return openRoundLastWord(debate, turnIndex) === null && openRoundLeadInAfterTurn(debate, turnIndex) === 0;
 }
 
 function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {
@@ -4058,6 +4124,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
     return {
       label: formatCountdownClock(0),
       remainingSeconds: 0,
+      remainingMs: 0,
       progress: 0,
       activeSlot: countdownWindow?.activeSlot ?? null,
       effectiveStatus: countdownWindow?.effectiveStatus ?? debate?.status ?? 'ready',
@@ -4082,6 +4149,7 @@ function useDebateCountdown(debate: Debate | null, serverNow: () => number): Deb
   return {
     label: formatCountdownClock(seconds),
     remainingSeconds: seconds,
+    remainingMs,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
     activeSlot: countdownWindow.activeSlot,
     effectiveStatus: countdownWindow.effectiveStatus,

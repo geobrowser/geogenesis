@@ -46,6 +46,7 @@ function countdownAt(debate: Debate, now: number): DebateCountdown {
   return {
     label: '',
     remainingSeconds: Math.ceil(remainingMs / 1_000),
+    remainingMs,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
     activeSlot: window.activeSlot,
     effectiveStatus: window.effectiveStatus,
@@ -411,10 +412,10 @@ describe('open rounds clock', () => {
       remainingSeconds: 3,
       openRounds: { phase: 'result', roundIndex: 0, outcome: 'extend', nextPhaseStartsAtMs: at('20:02:07.200') },
     });
-    // Round 1 is decided now, so the opener is counted in and the label names it.
+    // Round 1 is decided now, so the opener is counted in, in Open rounds' words (GEO-3315).
     expect(localTurnStartsInSeconds(debate, reveal, 1)).toBe(3);
     expect(localTurnStartsInSeconds(debate, reveal, 2)).toBeNull();
-    expect(upcomingTurnLabel(debate, reveal)).toBe('Rebut in');
+    expect(upcomingTurnLabel(debate, reveal)).toBe('Your turn in');
 
     const roundOne = countdownAt(debate, at('20:02:07.200'));
     expect(roundOne).toMatchObject({
@@ -435,7 +436,7 @@ describe('open rounds clock', () => {
     const aliceEnding = countdownAt(debate, at('20:02:49.000'));
     expect(aliceEnding).toMatchObject({ activeSlot: 1, turnIndex: 2 });
     expect(localTurnStartsInSeconds(debate, aliceEnding, 2)).toBe(4);
-    expect(upcomingTurnLabel(debate, aliceEnding)).toBe('Rebut in');
+    expect(upcomingTurnLabel(debate, aliceEnding)).toBe('Your turn in');
 
     const bobEnding = countdownAt(debate, at('20:03:34.000'));
     expect(bobEnding).toMatchObject({ activeSlot: 2, turnIndex: 3 });
@@ -551,7 +552,7 @@ describe('open rounds: the lead-in to a required round (GEO-3258)', () => {
     const inLeadIn = countdownAt(withLeadIn, at('20:02:04.000'));
     expect(inLeadIn.openRounds).toMatchObject({ phase: 'result', leadIn: true, roundIndex: 0 });
     expect(localTurnStartsInSeconds(withLeadIn, inLeadIn, 1)).toBe(4);
-    expect(upcomingTurnLabel(withLeadIn, inLeadIn)).toBe('Rebut in');
+    expect(upcomingTurnLabel(withLeadIn, inLeadIn)).toBe('Your turn in');
   });
 
   it('counts the opener in once when the opening ends early, during the hand-off as well', () => {
