@@ -1673,6 +1673,10 @@ function CountdownBadge({
         style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
       >
         <span
+          // A fresh rim on turning red: its angle switches from the whole turn's progress to the
+          // last five seconds', and easing between the two would refill it before it drains. Within
+          // either it stays mounted, so it eases from second to second.
+          key={final ? 'final' : 'turn'}
           data-turn-timer-rim
           className={cx(
             'col-start-1 row-start-1 rounded-full',
