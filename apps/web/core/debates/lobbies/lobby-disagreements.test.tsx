@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   requestError: null as Error | null,
   phone: false,
+  backfill: vi.fn(),
   summary: vi.fn((..._args: unknown[]) => ({ indexedViewerDirection: null, isViewerResponseLoading: false })),
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
@@ -24,6 +25,11 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.snapshot,
+}));
+
+vi.mock('../backfill-readiness-for-held-position', async importOriginal => ({
+  ...(await importOriginal<typeof import('../backfill-readiness-for-held-position')>()),
+  useBackfillReadinessForHeldPosition: mocks.backfill,
 }));
 
 vi.mock('~/core/claims/browse/claim-response-summary', () => ({
@@ -78,6 +84,7 @@ afterEach(() => {
   mocks.mutate.mockReset();
   mocks.requestError = null;
   mocks.summary.mockClear();
+  mocks.backfill.mockClear();
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
   mocks.phone = false;
 });
@@ -262,6 +269,25 @@ describe('LobbyDisagreementsTrigger', () => {
     expect(ordinaryReads.every(enabled => enabled === false)).toBe(true);
     expect(withdrawnReads.length).toBeGreaterThan(0);
     expect(withdrawnReads.every(enabled => enabled === true)).toBe(true);
+  });
+
+  it('repairs readiness for a held side geo-chat hasn’t marked ready, with no claim card mounted', () => {
+    const unready = row('a', true, [participant('daniel1')]);
+    unready.viewer_debate_ready = false;
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [unready] };
+    render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claims with Daniel' }));
+
+    expect(mocks.backfill).toHaveBeenCalledWith({
+      readiness: expect.objectContaining({
+        viewer_response: { position: true, position_label: 'Agree' },
+        viewer_debate_ready: false,
+        readiness_disabled_reason: null,
+      }),
+      entityId: 'entity-a',
+      spaceId: 'space-1',
+      indexedPosition: null,
+    });
   });
 
   it('holds the offer while a changed vote publishes, and drops it while a cleared one does', () => {

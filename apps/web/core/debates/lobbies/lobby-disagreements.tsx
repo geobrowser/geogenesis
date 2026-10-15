@@ -7,6 +7,7 @@ import cx from 'classnames';
 import { Text } from '~/design-system/text';
 
 import type { DebateLobbyClaim, DebateLobbyMember } from '../api';
+import { useBackfillReadinessForHeldPosition } from '../backfill-readiness-for-held-position';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubQueryState, HubSkeleton } from '../matchmaking/hub-states';
 import { sameId } from '../rooms/room-presence';
@@ -215,6 +216,14 @@ function DisagreementRow({
     claim.readiness,
     claim.readiness.readiness_disabled_reason === 'claim_response_withdrawn'
   );
+  // A side geo-chat holds but hasn't marked ready can't be requested on, and the claim's card that
+  // would repair it may not be mounted; the repair is idempotent, so both may run it.
+  useBackfillReadinessForHeldPosition({
+    readiness: claim.readiness,
+    entityId: claim.claim.claim_entity_id,
+    spaceId: claim.claim.space_id,
+    indexedPosition,
+  });
   // Latched once offered: a refusal refreshes the list, which can clear `requestable`, and
   // unmounting the control then would drop the refusal before anyone read it.
   const [offered, setOffered] = React.useState(entry.requestable);
