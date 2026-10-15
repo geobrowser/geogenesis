@@ -2165,6 +2165,22 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
 
   /**
+   * This tab still holds what it recorded of this debate and has not saved it: a recorder, its
+   * chunks, a stopped recording or a save already under way. True of any room still in the call, and
+   * of one whose call dropped, which tears the room down without saving. False for a tab that never
+   * held the call (another tab had the room, or it reloaded), where a save could only fail.
+   */
+  const holdsUnsavedRecording = React.useCallback(
+    () =>
+      persistedRecordingDebateIdRef.current !== debate?.id &&
+      (recorderRef.current !== null ||
+        stoppedRecordingRef.current !== null ||
+        recordingChunksRef.current.length > 0 ||
+        recordingPersistencePromiseRef.current !== null),
+    [debate?.id]
+  );
+
+  /**
    * How an idle tab leaves the room, for either of its ways out (back, or on to the picker).
    *
    * Idle covers two different tabs. One never held the call (another tab had the room, or it
@@ -2178,13 +2194,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     async (go: () => void | Promise<void>) => {
       idleExitRef.current = go;
       setIdleSaveFailed(false);
-      const holdsRecording =
-        persistedRecordingDebateIdRef.current !== debate?.id &&
-        (recorderRef.current !== null ||
-          stoppedRecordingRef.current !== null ||
-          recordingChunksRef.current.length > 0 ||
-          recordingPersistencePromiseRef.current !== null);
-      if (holdsRecording) {
+      if (holdsUnsavedRecording()) {
         try {
           await persistStoppedLocalRecording();
         } catch (error) {
@@ -2196,7 +2206,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       idleExitRef.current = null;
       await go();
     },
-    [debate?.id, persistStoppedLocalRecording]
+    [holdsUnsavedRecording, persistStoppedLocalRecording]
   );
 
   const retryLiveDebateFinalization = React.useCallback(() => {
@@ -2392,10 +2402,12 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           rematchSessionStatus === 'browsing' ||
           rematchSessionStatus === 'request_pending';
         if (consentAlreadyPublished) await publishRematchLeave();
-        // A cancelled recording was discarded the moment the cancellation landed, and an idle
-        // room is the disconnected/reloaded path with no live recording to finalize. Insisting on
-        // persistence in either case fails every time and turns this opt-out into a fake exit.
-        if (debate.recording_cancelled_at === null && roomState !== 'idle') {
+        // A cancelled recording was discarded the moment the cancellation landed, and a tab that
+        // never held the call has nothing to finalize. Insisting on persistence in either case
+        // fails every time and turns this opt-out into a fake exit. An idle tab whose call dropped
+        // is different: it can still hold the recording (GEO-3301), and leaving would lose it. A
+        // room still in the call always saves first, as it always has.
+        if (debate.recording_cancelled_at === null && (roomState !== 'idle' || holdsUnsavedRecording())) {
           const persisted = await persistStoppedLocalRecording();
           if (!persisted) {
             throw new Error('Could not save the local recording. Please try leaving again.');
@@ -2430,6 +2442,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate,
     discardLocalRecorder,
     finishLiveDebate,
+    holdsUnsavedRecording,
     localMediaStreamRef,
     localTracksRef,
     localRematchParticipant?.consented_at,
