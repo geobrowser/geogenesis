@@ -416,8 +416,9 @@
   }
 }
 
-/* An Open rounds round banner that is not part of a break (the opening): rolls in over its first
-   300 ms, holds, and rolls on out over its last 300 ms. Run over 1800 ms, the round card's length. */
+/* A round banner that is not part of a break (Open rounds' opening; every round of a fixed format):
+   rolls in over its first 300 ms, holds, and rolls on out over its last 300 ms. Run over 1800 ms,
+   the round card's length. */
 @keyframes debateBannerInOut {
   0% {
     clip-path: inset(0 100% 0 0);
