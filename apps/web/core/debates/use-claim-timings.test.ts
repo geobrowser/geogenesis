@@ -12,12 +12,20 @@ const transcript = vi.hoisted(() => ({
   state: { data: undefined as unknown, isSuccess: false, isError: false },
   media: undefined as unknown,
   mediaEnabled: [] as boolean[],
+  mediaSettled: true,
 }));
 
 vi.mock('./hooks', () => ({
   useDebateMedia: (_id: string, enabled: boolean) => {
     transcript.mediaEnabled.push(enabled);
-    return { data: transcript.media, isPending: false, isLoading: false, isSuccess: true, isError: false, error: null };
+    return {
+      data: transcript.mediaSettled ? transcript.media : undefined,
+      isPending: !transcript.mediaSettled,
+      isLoading: !transcript.mediaSettled,
+      isSuccess: transcript.mediaSettled,
+      isError: false,
+      error: null,
+    };
   },
   useDebateTranscript: (debateId: string, _format: string, enabled: boolean) => {
     transcript.calls.push({ debateId, enabled });
@@ -61,6 +69,7 @@ describe('useClaimTimings', () => {
     transcript.state = { data: undefined, isSuccess: false, isError: false };
     transcript.media = undefined;
     transcript.mediaEnabled = [];
+    transcript.mediaSettled = true;
   });
 
   // Timecodes published to the graph are the edited video's; the player plays the raw recordings,
@@ -140,5 +149,21 @@ describe('useClaimTimings', () => {
 
     renderHook(() => useClaimTimings('debate-1', claims([claim('a', published(0, 1_000)), claim('b', null)])));
     expect(transcript.mediaEnabled.at(-1)).toBe(true);
+  });
+
+  // Copilot, #2843: while the media is still coming, a published time is on the edited clock and
+  // would place the claim early, then move it. It is held back until the media answers.
+  it('holds a published timing back until the media that places it has answered', () => {
+    transcript.media = { turn_segments: RENDERED_TURN_SEGMENTS };
+    transcript.mediaSettled = false;
+    const input = claims([claim('b', published(130_000, 134_000))]);
+    const { result, rerender } = renderHook(() => useClaimTimings('debate-1', input));
+    expect(result.current.timings.has('b')).toBe(false);
+    expect(result.current.isReady).toBe(false);
+
+    transcript.mediaSettled = true;
+    rerender();
+    expect(result.current.timings.get('b')).toMatchObject({ startMs: 136_400, endMs: 140_400 });
+    expect(result.current.isReady).toBe(true);
   });
 });

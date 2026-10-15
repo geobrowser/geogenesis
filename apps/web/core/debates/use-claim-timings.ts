@@ -58,10 +58,16 @@ export function useClaimTimings(
   const needsMedia = enabled && debateId !== null && claims.all.some(claim => claim.publishedTiming !== null);
   const media = useDebateMedia(debateId ?? '', needsMedia);
   const turns = media.data?.turn_segments;
+  const mediaSettled = !needsMedia || media.isSuccess || media.isError;
 
   const timings = React.useMemo(() => {
     if (claims.all.length === 0) return EMPTY_TIMINGS;
     const resolved = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments });
+    // Until the media answers, a published timecode is on the edited clock and may yet move: hold
+    // it back rather than let the live claims place it early and then take it away again.
+    if (!mediaSettled) {
+      return new Map([...resolved].filter(([, timing]) => timing.source !== 'published'));
+    }
     if (!turns?.some(turn => turn.source_start_ms !== undefined)) return resolved;
     return new Map(
       [...resolved].map(([id, timing]) => [
@@ -75,15 +81,13 @@ export function useClaimTimings(
           : timing,
       ])
     );
-  }, [claims.all, claims.blocks, segments, turns]);
+  }, [claims.all, claims.blocks, mediaSettled, segments, turns]);
 
   // A failed transcript fetch is ready, not pending: published timings still resolved, and the rest
   // are not coming. Reporting "still loading" forever would hold a time-ordered surface empty.
   // The same for the media, whose answer can move a published timing: a surface ordered by time
   // waits for it rather than reordering under the reader.
-  const isReady =
-    (!needsTranscript || transcript.isSuccess || transcript.isError) &&
-    (!needsMedia || media.isSuccess || media.isError);
+  const isReady = (!needsTranscript || transcript.isSuccess || transcript.isError) && mediaSettled;
 
   return { timings, isReady };
 }

@@ -64,6 +64,7 @@ const CUT_RECHECK_MS = 50;
  * The wall clock is not the recording's, though: a stall to buffer stops one and not the other. So
  * when the timer fires it asks where the recording really is (`positionMs`), and one that has not
  * reached the cut yet is waited for rather than jumped, which would skip the speaker's last words.
+ * One already past where the cut leads is left alone rather than sent back there.
  */
 export function useBreakCuts(
   cuts: readonly BreakCut[],
@@ -95,6 +96,9 @@ export function useBreakCuts(
           arm(Math.max(CUT_RECHECK_MS, atMs - live));
           return;
         }
+        // A timer that fired late (a throttled background tab) can find the recording already past
+        // where the cut leads; seeking there now would rewind it.
+        if (live !== null && live >= toMs) return;
         seek(toMs / 1_000);
       }, delayMs);
     };

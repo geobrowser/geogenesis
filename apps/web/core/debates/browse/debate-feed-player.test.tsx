@@ -2018,6 +2018,21 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     }
   });
 
+  // Copilot, #2843: a cut's timer that fires late, with the recording already past where the cut
+  // leads, must not seek back there.
+  it('leaves a recording alone that is already past where a late cut would take it', () => {
+    vi.useFakeTimers();
+    try {
+      const seekBoth = vi.fn();
+      renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
+      mocks.livePosition = () => 75_000;
+      vi.advanceTimersByTime(2_000);
+      expect(seekBoth).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not announce a round twice: the round card stands down after a break that announced it', () => {
     // The fixture's turns are 30 s each, so Round 2 (index 1) starts at 60 s.
     const { container } = renderAt(60.5, {

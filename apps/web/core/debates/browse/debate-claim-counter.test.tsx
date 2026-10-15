@@ -239,4 +239,19 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     act(() => vi.advanceTimersByTime(300));
     expect(container.querySelector('[data-claim-list]')).toBeNull();
   });
+
+  // Copilot, #2843: content shown on hover must close with Escape, without moving the pointer.
+  it('closes on Escape, stays closed while the pointer rests, and keeps a keyboard user on the counter', () => {
+    const { container } = renderCounter([said('a', 1_000)], 30_000);
+    hover(counter(container));
+    act(() => vi.advanceTimersByTime(200));
+    const agree = container.querySelector('[aria-label="Agree"]') as HTMLElement;
+    agree.focus();
+    fireEvent.focus(agree);
+
+    fireEvent.keyDown(window, { key: 'Escape' });
+    act(() => vi.advanceTimersByTime(500));
+    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(document.activeElement).toBe(container.querySelector('[data-claim-count]'));
+  });
 });

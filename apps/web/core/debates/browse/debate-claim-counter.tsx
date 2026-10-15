@@ -89,6 +89,24 @@ export function DebateClaimCounter({
   const active = open || keyboardInside;
   React.useEffect(() => onActiveChange?.(active), [active, onActiveChange]);
 
+  // Escape closes the list wherever focus is, as content shown on hover must be dismissible without
+  // moving the pointer or focus (WCAG 1.4.13). It stays closed until both have left, like Hide. A
+  // keyboard user on one of its controls is put back on the counter rather than lost.
+  const rootRef = React.useRef<HTMLDivElement>(null);
+  const countRef = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => {
+    if (!open) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setPinned(false);
+      setDismissed(true);
+      const focused = document.activeElement;
+      if (focused !== countRef.current && rootRef.current?.contains(focused)) countRef.current?.focus();
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [open]);
+
   const toggle = () => {
     if (open) {
       setPinned(false);
@@ -101,6 +119,7 @@ export function DebateClaimCounter({
 
   return (
     <div
+      ref={rootRef}
       data-claim-counter
       className="pointer-events-auto flex flex-col items-end gap-[0.7cqw]"
       // A real mouse only: a touch browser synthesises these from a tap, which would open the list
@@ -164,6 +183,7 @@ export function DebateClaimCounter({
           </span>
         )}
         <button
+          ref={countRef}
           type="button"
           data-claim-count={count}
           aria-expanded={open}
