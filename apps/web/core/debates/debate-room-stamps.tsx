@@ -88,7 +88,79 @@ export function RoomTag({ className, style, ...props }: React.ComponentPropsWith
   );
 }
 
-/** The tile under a moment, dimmed as in the mockup so the stamp or banner reads over any picture. */
-export function RoomDim() {
-  return <div aria-hidden="true" data-room-dim className="pointer-events-none absolute inset-0 z-[15] bg-black/42" />;
+/**
+ * The tile under a moment, dimmed as in the mockup so the stamp or banner reads over any picture.
+ * Always there, and faded in and out, so one moment handing over to the next never flashes.
+ */
+export function RoomDim({ on }: { on: boolean }) {
+  return (
+    <div
+      aria-hidden="true"
+      data-room-dim={on ? 'on' : 'off'}
+      className={cx(
+        'pointer-events-none absolute inset-0 z-[15] bg-black/42 transition-opacity duration-300 motion-reduce:transition-none',
+        on ? 'opacity-100' : 'opacity-0'
+      )}
+    />
+  );
+}
+
+/** How long a moment takes to leave: the banner's roll and the stamps' fade. */
+export const ROOM_EXIT_MS = 300;
+
+const EXIT_CLASS = {
+  // A banner rolls on out the way it rolled in, as in the mockup.
+  roll: 'motion-safe:animate-debate-banner-out',
+  fade: 'motion-safe:animate-[fadeIn_300ms_linear_reverse_both]',
+} as const;
+
+function shown(node: React.ReactNode) {
+  return node !== null && node !== undefined && node !== false;
+}
+
+/**
+ * A moment that leaves rather than vanishing (GEO-3315). While `children` is there it renders as is;
+ * when it goes, the last of it stays for `ROOM_EXIT_MS`, rolling or fading out, so the next moment
+ * comes in over the last one going rather than after a cut. With reduced motion it simply goes.
+ *
+ * The wrapper is always rendered, a box over the whole of its container, so the moment is never
+ * remounted on its way out and its entrance does not replay. It takes no pointer events: a moment
+ * that needs them, like the pick panel, asks for them itself.
+ */
+export function RoomExit({
+  children,
+  exit = 'fade',
+  className,
+}: {
+  children: React.ReactNode;
+  exit?: keyof typeof EXIT_CLASS;
+  className?: string;
+}) {
+  const [previous, setPrevious] = React.useState(children);
+  const [leaving, setLeaving] = React.useState<React.ReactNode>(null);
+  if (children !== previous) {
+    setPrevious(children);
+    setLeaving(shown(children) ? null : shown(previous) ? previous : leaving);
+  }
+
+  React.useEffect(() => {
+    if (!shown(leaving)) return;
+    const timer = window.setTimeout(() => setLeaving(null), ROOM_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [leaving]);
+
+  const content = shown(children) ? children : leaving;
+  if (!shown(content)) return null;
+  return (
+    <div
+      data-room-leaving={shown(children) ? undefined : 'true'}
+      className={cx(
+        'pointer-events-none absolute inset-0',
+        !shown(children) && [EXIT_CLASS[exit], 'motion-reduce:hidden'],
+        className
+      )}
+    >
+      {content}
+    </div>
+  );
 }

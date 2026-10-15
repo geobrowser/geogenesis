@@ -135,11 +135,11 @@ describe('OpenRoundResultOverlay', () => {
     expect(container).toHaveTextContent('That’s a wrapNo picks in time');
   });
 
-  it('says the debate hit the maximum, with the round count as a purple tag', () => {
+  it('says the debate hit the maximum, with every round run, the opening included, as a purple tag', () => {
     const { container } = render(<OpenRoundResultOverlay result={{ kind: 'max', rounds: 10 }} />);
-    expect(container).toHaveTextContent('That’s the max10 rebuttal rounds');
+    expect(container).toHaveTextContent('That’s the max11 rounds');
     expect(container.querySelector('[data-open-round-banner]')).toHaveClass('bg-purple');
-    expect(screen.getByText('10 rebuttal rounds')).toHaveClass('bg-purple');
+    expect(screen.getByText('11 rounds')).toHaveClass('bg-purple');
   });
 
   it('rolls the banner in only for those who allow motion', () => {

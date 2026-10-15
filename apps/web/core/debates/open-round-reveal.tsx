@@ -120,7 +120,7 @@ export type OpenRoundResult =
 /**
  * What a round's resolution means, as a purple banner across the seam between the two tiles
  * (GEO-3315): the next round in two lines, "Round N · Rebuttal" over who opens it; "That's a wrap",
- * with the missing-pick line beneath when that is why; or "That's the max", with the round count. The
+ * with the missing-pick line beneath when that is why; or "That's the max", with the rounds run. The
  * tiles hide their chips while it is up so the two never meet.
  */
 export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) {
@@ -151,7 +151,8 @@ export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) 
       )}
       {result.kind === 'max' && (
         <div className="absolute inset-x-0 top-[calc(50%+7.5cqw)] text-center">
-          <RoomTag className="text-[3cqw]">{rebuttalRoundsLabel(result.rounds)}</RoomTag>
+          {/* Every round run, the opening included, as the mockup counts them. */}
+          <RoomTag className="text-[3cqw]">{openRoundNumber(result.rounds)} rounds</RoomTag>
         </div>
       )}
     </div>

@@ -10,7 +10,7 @@ import { Text } from '~/design-system/text';
 
 import { ENDED_TILT } from './browse/stamp-styles';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
-import { RoomBanner, RoomDim, RoomStamp } from './debate-room-stamps';
+import { RoomBanner, RoomDim, RoomExit, RoomStamp } from './debate-room-stamps';
 
 export const recordingOverlayTextShadow = {
   textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
@@ -197,7 +197,7 @@ export function DebateVideoTile({
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
-      {stamps && (dimmed || endingTurn || upcoming) && <RoomDim />}
+      {stamps && <RoomDim on={dimmed || endingTurn || upcoming} />}
       {endTurnAction && <div className="absolute top-3 left-3 z-40">{endTurnAction}</div>}
       <div
         aria-hidden="true"
@@ -210,7 +210,10 @@ export function DebateVideoTile({
       >
         {showInactiveIndicator && <MutedMicrophoneIndicator />}
       </div>
-      {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+      {/* The count-in's number stamp is the countdown, so the timer steps aside for it. */}
+      {countdown && !(stamps && upcoming) && (
+        <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>
+      )}
 
       {/* One row rather than three corners, so nothing can end up underneath anything else.
           `1fr auto 1fr` rather than a flex row: the controls belong on the tile's centre line, and
@@ -254,66 +257,90 @@ export function DebateVideoTile({
       )}
 
       {stamps ? (
+        // Each moment leaves as the next comes in, rather than cutting (`RoomExit`).
         <>
-          {closingMessage && (
-            <RoomSeamBanner sizeCqw={5.6} data-room-banner="thanks">
-              Nice debate! Say thanks
-            </RoomSeamBanner>
-          )}
+          <RoomExit exit="roll" className="z-30">
+            {closingMessage && (
+              <RoomSeamBanner sizeCqw={5.6} data-room-banner="thanks">
+                Nice debate! Say thanks
+              </RoomSeamBanner>
+            )}
+          </RoomExit>
 
-          {endingTurn && (
-            <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-              <RoomStamp data-room-stamp="ended" ink="border-dashed text-grey-04" sizeCqw={9} tilt={ENDED_TILT}>
-                Turn ended
-              </RoomStamp>
-            </div>
-          )}
-
-          {nextTurnName && (
-            // After the stamp on the tile that ended has landed, as in the mockup.
-            <RoomSeamBanner sizeCqw={6} delayMs={600} data-room-banner="turn">
-              {nextTurnName}’s turn
-            </RoomSeamBanner>
-          )}
-
-          {upcoming && (
-            <div className="pointer-events-none absolute inset-0 z-30">
-              <div className="absolute inset-x-0 top-[28%] -translate-y-1/2">
-                <RoomBanner sizeCqw={6} data-room-banner="count-in">
-                  {upcomingLabel}
-                </RoomBanner>
-              </div>
-              <div className="absolute top-[66%] left-1/2 -translate-x-1/2 -translate-y-1/2">
-                {/* A fresh stamp for every number, so each lands in turn. */}
-                <RoomStamp key={upcomingSeconds} data-room-stamp="count-in" ink="text-purple" sizeCqw={14} tilt="0deg">
-                  {upcomingSeconds}
+          <RoomExit className="z-30">
+            {endingTurn && (
+              <div className="absolute inset-0 grid place-items-center">
+                <RoomStamp data-room-stamp="ended" ink="border-dashed text-grey-04" sizeCqw={9} tilt={ENDED_TILT}>
+                  Turn ended
                 </RoomStamp>
               </div>
-            </div>
-          )}
+            )}
+          </RoomExit>
 
-          {showGo && (
-            <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-              <RoomStamp data-room-stamp="go" ink="text-purple" sizeCqw={15} tilt="-3.2deg">
-                Go!
-              </RoomStamp>
-            </div>
-          )}
+          <RoomExit exit="roll" className="z-30">
+            {nextTurnName && (
+              // After the stamp on the tile that ended has landed, as in the mockup.
+              <RoomSeamBanner sizeCqw={6} delayMs={600} data-room-banner="turn">
+                {nextTurnName}’s turn
+              </RoomSeamBanner>
+            )}
+          </RoomExit>
 
-          {showWrapItUp && (
-            <div className="pointer-events-none absolute inset-0 z-30 grid place-items-center">
-              {/* The warning red the timer turns, `COUNTDOWN_WARNING_COLOR`. */}
-              <RoomStamp data-room-stamp="wrap-it-up" ink="text-[#FF4A26]" sizeCqw={9} tilt="-2deg">
-                Wrap it up
-              </RoomStamp>
-            </div>
-          )}
+          <RoomExit exit="roll" className="z-30">
+            {upcoming && (
+              <>
+                <div className="absolute inset-x-0 top-[28%] -translate-y-1/2">
+                  <RoomBanner sizeCqw={6} data-room-banner="count-in">
+                    {upcomingLabel}
+                  </RoomBanner>
+                </div>
+                <div className="absolute top-[66%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+                  {/* A fresh stamp for every number, so each lands in turn. */}
+                  <RoomStamp
+                    key={upcomingSeconds}
+                    data-room-stamp="count-in"
+                    ink="text-purple"
+                    sizeCqw={14}
+                    tilt="0deg"
+                  >
+                    {upcomingSeconds}
+                  </RoomStamp>
+                </div>
+              </>
+            )}
+          </RoomExit>
 
-          {showDebateEndsSoon && (
-            <RoomSeamBanner sizeCqw={6.6} data-room-banner="ends-soon">
-              Debate ends soon
-            </RoomSeamBanner>
-          )}
+          <RoomExit className="z-30">
+            {showGo && (
+              <div className="absolute inset-0 grid place-items-center">
+                <RoomStamp data-room-stamp="go" ink="text-purple" sizeCqw={15} tilt="-3.2deg">
+                  Go!
+                </RoomStamp>
+              </div>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {showWrapItUp && (
+              <div className="absolute inset-0 grid place-items-center">
+                {/* The warning red the timer turns, `COUNTDOWN_WARNING_COLOR`. */}
+                <RoomStamp data-room-stamp="wrap-it-up" ink="text-[#FF4A26]" sizeCqw={9} tilt="-2deg">
+                  Wrap it up
+                </RoomStamp>
+              </div>
+            )}
+          </RoomExit>
+
+          <RoomExit exit="roll" className="z-30">
+            {showDebateEndsSoon && (
+              <RoomSeamBanner sizeCqw={6.6} data-room-banner="ends-soon">
+                Debate ends soon
+              </RoomSeamBanner>
+            )}
+          </RoomExit>
+
+          {/* The pick reveal's stamp fades as the round's banner rolls in. */}
+          <RoomExit className="z-[35]">{reveal}</RoomExit>
         </>
       ) : (
         <>
@@ -380,7 +407,7 @@ export function DebateVideoTile({
         </>
       )}
 
-      {reveal}
+      {!stamps && reveal}
 
       {overlayText && (
         <div
@@ -408,7 +435,7 @@ export function DebateVideoTile({
 /** A banner across the middle of a tile. */
 function RoomSeamBanner(props: React.ComponentProps<typeof RoomBanner>) {
   return (
-    <div className="pointer-events-none absolute inset-x-0 top-1/2 z-30 -translate-y-1/2">
+    <div className="absolute inset-x-0 top-1/2 -translate-y-1/2">
       <RoomBanner {...props} />
     </div>
   );
