@@ -43,7 +43,7 @@ function session(secret = 'secret-1', token = 'token-1', admission = 1): DebateL
 }
 
 beforeEach(() => {
-  window.sessionStorage.clear();
+  window.localStorage.clear();
   mocks.start.mockReset().mockResolvedValue(session());
   mocks.heartbeat.mockReset().mockResolvedValue({ alive: true, reason: null, lease_expires_at: 'x' });
   mocks.leave.mockClear();

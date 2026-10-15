@@ -1429,9 +1429,11 @@ function DebaterVideo({
             <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={28} />
           </span>
           {participant && validateSpaceId(participant.profile_space_id) ? (
-            <span className="absolute -bottom-2 left-1/2 -translate-x-1/2">
-              <FollowButton target={{ kind: 'person', id: participant.profile_space_id, name }} variant="avatar" />
-            </span>
+            <FollowButton
+              target={{ kind: 'person', id: participant.profile_space_id, name }}
+              variant="avatar"
+              surface="video"
+            />
           ) : null}
         </span>
         <button

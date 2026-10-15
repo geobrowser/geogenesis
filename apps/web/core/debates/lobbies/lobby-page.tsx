@@ -65,6 +65,7 @@ import { usePreOpenHosts } from './lobby-host-lobbies';
 import { LobbyHostLists, LobbyRemovedNotice, useModerationNotice } from './lobby-moderation';
 import { type LobbyGuestNotice, type LobbyHandoffNotice, LobbyNotices, LobbyToast } from './lobby-notices';
 import { LobbyQueuedRequestProvider, useLobbyQueuedRequest } from './lobby-queued-request';
+import { LobbyAnalyticsScope } from './lobby-room-analytics';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { LobbyPeople } from './lobby-roster';
 import { LobbySlot, LobbySlotsProvider, useLobbySlotTargets } from './lobby-slots';
@@ -100,6 +101,7 @@ export const LOBBY_COPY = {
   guestRemoved: LOBBY_STATE_COPY.removed,
   guestRemovedInvite: 'Create an account to come back and take part.',
   guestElsewhere: 'You’re listening in another tab.',
+  guestPaused: 'You’re not listening in this tab.',
   guestListeningOff: 'Listening without an account has been turned off for this lobby. Create an account to join.',
 } as const;
 
@@ -149,6 +151,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
   const exitHref = useLobbyExitHref();
   const exiting = useExitLobbyWhenOut({
+    lobbyId,
     access: lobby?.access ?? null,
     presence: presence.state,
     guestStatus: guestSession.state.status,
@@ -402,17 +405,19 @@ function AdmittedLobby({
     return <MovedToOtherLobby lobby={lobby} otherLobbyId={state.otherLobbyId} onJoin={join} />;
 
   return (
-    <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
-      <LobbyRoom
-        lobby={lobby}
-        state={state}
-        onRetry={() => void join(false)}
-        onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
-        voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
-        guestSession={guestSession}
-        exitHref={exitHref}
-      />
-    </LobbyQueuedRequestProvider>
+    <LobbyAnalyticsScope lobby={lobby}>
+      <LobbyQueuedRequestProvider lobby={lobby} joined={state.status === 'joined'}>
+        <LobbyRoom
+          lobby={lobby}
+          state={state}
+          onRetry={() => void join(false)}
+          onLeave={() => void (state.status === 'stepped_out' ? leaveSteppedOut() : leave())}
+          voice={{ connectionId, setVoiceConnected, awayAt: voiceAwayAt ?? lobby.viewer.voice_away_at }}
+          guestSession={guestSession}
+          exitHref={exitHref}
+        />
+      </LobbyQueuedRequestProvider>
+    </LobbyAnalyticsScope>
   );
 }
 
@@ -544,7 +549,10 @@ function LobbyRoom({
     : guestSession.state.status === 'refused'
       ? { message: guestSession.state.message, retry: guestSession.state.retryable ? 'Try again' : null }
       : guestSession.state.status === 'superseded'
-        ? { message: LOBBY_COPY.guestElsewhere, retry: 'Listen here' }
+        ? {
+            message: guestSession.otherTabListening ? LOBBY_COPY.guestElsewhere : LOBBY_COPY.guestPaused,
+            retry: 'Listen here',
+          }
         : guestEnded && guestEndedAt !== null && guestViewAt >= guestEndedAt
           ? { message: LOBBY_COPY.guestListeningOff, retry: null }
           : null;

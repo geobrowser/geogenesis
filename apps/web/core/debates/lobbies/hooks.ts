@@ -29,16 +29,24 @@ import { viewerReadRetryOptions } from '../matchmaking/hooks';
 import { useConnectionId } from '../rooms/hooks';
 import {
   lobbyCreated,
+  lobbyEnded,
   lobbyJoined,
   lobbyLeft,
   lobbyPageClosed,
   lobbyPageMounted,
   lobbyPageUnmounted,
+  lobbyRsvpChanged,
   lobbySteppedOut,
   markLobbyEntry,
 } from './lobby-analytics';
 import { settleFetchedLobbyClaimLists } from './lobby-claim-lists-state';
-import { isAlreadyInAnotherLobby, isRemovedFromLobby, lobbyErrorMessage, otherLobbyIdFrom } from './lobby-format';
+import {
+  isAlreadyInAnotherLobby,
+  isRemovedFromLobby,
+  lobbyErrorMessage,
+  lobbyRoomHeadcount,
+  otherLobbyIdFrom,
+} from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
 import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
 
@@ -235,6 +243,11 @@ export function useDebateLobbyReminder() {
         list => list && withReminder(list, view)
       );
       store(view);
+      lobbyRsvpChanged(view.lobby_id, {
+        going: view.viewer.reminded,
+        startsAt: view.starts_at,
+        reminderCount: view.reminder_count,
+      });
     },
     // Too late to set: the lobby opened or ended since the list was read.
     onError: error => {
@@ -284,7 +297,10 @@ export function useEndDebateLobby(lobbyId: string) {
 
   return useMutation({
     mutationFn: () => endDebateLobby(lobbyId, getPrivyIdentityToken, accountKey),
-    onSuccess: store,
+    onSuccess: view => {
+      store(view);
+      lobbyEnded(view.lobby_id, { scheduled: view.scheduled, opensAt: view.opens_at });
+    },
   });
 }
 
@@ -387,7 +403,15 @@ export function useLobbyPresence(
         // A lobby that would not admit answers with its view; the page renders its access.
         joinedRef.current = view.viewer.connected;
         // A reconnect in the same visit is not a new session; `lobbyJoined` tells them apart.
-        if (view.viewer.connected) lobbyJoined(lobbyId, { isNewcomer: view.viewer.newcomer ?? null });
+        if (view.viewer.connected) {
+          lobbyJoined(lobbyId, {
+            isNewcomer: view.viewer.newcomer ?? null,
+            role: view.viewer.role,
+            hosting: view.viewer.hosting,
+            moderationAt: view.viewer.last_moderation?.at ?? null,
+            headcount: lobbyRoomHeadcount(view),
+          });
+        }
         setState(view.viewer.connected ? { status: 'joined' } : { status: 'idle' });
       } catch (error) {
         if (generation !== generationRef.current) return;
