@@ -15,13 +15,14 @@ const receivers = (entries: [string, ReceiverSnapshot][]) => new Map(entries);
 describe('voiceSampleMetrics (GEO-3340)', () => {
   it('reports loss each way as a share of what was sent or due', () => {
     const metrics = voiceSampleMetrics(
-      { packets: 1_100, packetsLost: 30, roundTripTime: 0.085, jitter: 0.012 },
+      { packets: 1_100, packetsLost: 110, roundTripTime: 0.085, jitter: 0.012 },
       { packets: 100, packetsLost: 10 },
       receivers([['remote-a', { packets: 900, packetsLost: 100, samples: 48_000, concealedSamples: 4_800 }]]),
       receivers([['remote-a', { packets: 0, packetsLost: 0, samples: 0, concealedSamples: 0 }]])
     );
-    // 20 lost of 1,000 sent + 20 lost.
-    expect(metrics.send_loss_pct).toBe(2);
+    // 100 lost of the 1,000 sent: `packetsSent` already includes what was lost, so this is 10%, not
+    // 100 of 1,100.
+    expect(metrics.send_loss_pct).toBe(10);
     expect(metrics.rtt_ms).toBe(85);
     expect(metrics.send_jitter_ms).toBe(12);
     expect(metrics.sent_packets).toBe(1_000);
@@ -47,16 +48,41 @@ describe('voiceSampleMetrics (GEO-3340)', () => {
     expect(metrics.mic_level_db).toBe(MIC_LEVEL_FLOOR_DB);
   });
 
-  // A mic switch republishes, and the new track's counters start from zero.
-  it('treats a counter that went backwards as a new track', () => {
+  // A mic switch replaces the outbound stream and the mic source, and every counter starts again.
+  it('starts every counter over when the stream changes', () => {
     const metrics = voiceSampleMetrics(
-      { packets: 40, packetsLost: 0 },
-      { packets: 5_000, packetsLost: 9 },
+      { sourceId: 'ssrc-2:source-2', packets: 40, packetsLost: 0, energy: 0.0004, samplesDuration: 0.4 },
+      { sourceId: 'ssrc-1:source-1', packets: 5_000, packetsLost: 9, energy: 2, samplesDuration: 120 },
       new Map(),
       undefined
     );
     expect(metrics.sent_packets).toBe(40);
     expect(metrics.send_loss_pct).toBe(0);
+    // 0.0004 over 0.4 s is a mean power of 0.001: -30 dB, read from the new source alone.
+    expect(metrics.mic_level_db).toBe(-30);
+  });
+
+  // RTCP's cumulative loss shrinks when packets thought lost turn up late.
+  it('reads a shrinking loss count as no new loss, not a restart', () => {
+    const metrics = voiceSampleMetrics(
+      { packets: 2_000, packetsLost: 7 },
+      { packets: 1_000, packetsLost: 9 },
+      new Map(),
+      undefined
+    );
+    expect(metrics.send_loss_pct).toBe(0);
+  });
+
+  // DTX stops sending while someone is quiet, and filling that silence is not choppiness.
+  it('leaves concealment during silence out of what sounded choppy', () => {
+    const metrics = voiceSampleMetrics(
+      {},
+      undefined,
+      receivers([['remote-a', { samples: 48_000, concealedSamples: 30_000, silentConcealedSamples: 28_800 }]]),
+      undefined
+    );
+    // 1,200 audible of 48,000.
+    expect(metrics.recv_concealed_pct).toBe(2.5);
   });
 
   // A lobby: one person leaving must not read as everyone else's counters dropping.
@@ -98,13 +124,21 @@ describe('reading WebRTC stats reports', () => {
   it('picks our outbound audio, the remote view of it, and the mic level', () => {
     expect(
       readSenderReport([
-        { type: 'outbound-rtp', kind: 'audio', packetsSent: 500 },
+        { type: 'outbound-rtp', kind: 'audio', packetsSent: 500, ssrc: 1234, mediaSourceId: 'source-1' },
         { type: 'outbound-rtp', kind: 'video', packetsSent: 9_999 },
         { type: 'remote-inbound-rtp', kind: 'audio', packetsLost: 4, roundTripTime: 0.05, jitter: 0.01 },
         { type: 'media-source', kind: 'audio', totalAudioEnergy: 0.2, totalSamplesDuration: 10 },
         { type: 'candidate-pair', currentRoundTripTime: 1 },
       ])
-    ).toEqual({ packets: 500, packetsLost: 4, roundTripTime: 0.05, jitter: 0.01, energy: 0.2, samplesDuration: 10 });
+    ).toEqual({
+      sourceId: '1234:source-1',
+      packets: 500,
+      packetsLost: 4,
+      roundTripTime: 0.05,
+      jitter: 0.01,
+      energy: 0.2,
+      samplesDuration: 10,
+    });
   });
 
   it('picks inbound audio for a remote track', () => {
@@ -117,11 +151,19 @@ describe('reading WebRTC stats reports', () => {
           packetsLost: 2,
           totalSamplesReceived: 4_800,
           concealedSamples: 48,
+          silentConcealedSamples: 12,
           jitter: 0.02,
         },
         { type: 'inbound-rtp', kind: 'video', packetsReceived: 9_999 },
       ])
-    ).toEqual({ packets: 100, packetsLost: 2, samples: 4_800, concealedSamples: 48, jitter: 0.02 });
+    ).toEqual({
+      packets: 100,
+      packetsLost: 2,
+      samples: 4_800,
+      concealedSamples: 48,
+      silentConcealedSamples: 12,
+      jitter: 0.02,
+    });
   });
 
   it('reads an empty report as nothing measured', () => {
@@ -152,6 +194,18 @@ describe('readTransport (GEO-3343)', () => {
   // Firefox has no transport entry; the nominated pair is the one in use.
   it('falls back to the nominated pair when there is no transport entry', () => {
     expect(readTransport(report({ protocol: 'tcp', candidateType: 'host' }).slice(1))).toBe('tcp');
+  });
+
+  // Firefox can leave an earlier pair nominated after moving to another; `selected` is the one in use.
+  it('prefers the pair Firefox marks selected over one only nominated', () => {
+    expect(
+      readTransport([
+        { id: 'CP0', type: 'candidate-pair', localCandidateId: 'L0', nominated: true },
+        { id: 'CP1', type: 'candidate-pair', localCandidateId: 'L1', nominated: true, selected: true },
+        { id: 'L0', type: 'local-candidate', protocol: 'udp', candidateType: 'host' },
+        { id: 'L1', type: 'local-candidate', protocol: 'tcp', candidateType: 'host' },
+      ])
+    ).toBe('tcp');
   });
 
   it('reads nothing before a pair is chosen', () => {

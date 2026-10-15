@@ -113,9 +113,10 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
       }),
     ]);
 
-    // The next interval reads the growth since the last one: here, a choppy stretch.
+    // The next interval reads the growth since the last one: here, a choppy stretch. 100 of the 1,000
+    // packets sent never arrived.
     call.mic.stats = [
-      { type: 'outbound-rtp', kind: 'audio', packetsSent: 1_400 },
+      { type: 'outbound-rtp', kind: 'audio', packetsSent: 1_500 },
       { type: 'remote-inbound-rtp', kind: 'audio', packetsLost: 100, roundTripTime: 0.3 },
       { type: 'media-source', kind: 'audio', totalAudioEnergy: 0.1, totalSamplesDuration: 40 },
     ];
@@ -202,6 +203,39 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
       expect.objectContaining({ change: 'reconnecting', signal_only: false }),
       expect.objectContaining({ change: 'reconnected', reconnect_ms: 4_000 }),
     ]);
+  });
+
+  it('reports a signal-only reconnect again when it turns into a full one', () => {
+    const call = fakeRoom();
+    renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+
+    act(() => call.emit(RoomEvent.ConnectionStateChanged, ConnectionState.SignalReconnecting));
+    act(() => call.emit(RoomEvent.ConnectionStateChanged, ConnectionState.SignalReconnecting));
+    act(() => call.emit(RoomEvent.ConnectionStateChanged, ConnectionState.Reconnecting));
+    act(() => call.emit(RoomEvent.ConnectionStateChanged, ConnectionState.Reconnecting));
+    act(() => call.emit(RoomEvent.ConnectionStateChanged, ConnectionState.Connected));
+
+    expect(events('debate_voice_changed')).toEqual([
+      expect.objectContaining({ change: 'reconnecting', signal_only: true }),
+      expect.objectContaining({ change: 'reconnecting', signal_only: false }),
+      expect.objectContaining({ change: 'reconnected', signal_only: false }),
+    ]);
+  });
+
+  // A level averaged over a stretch muted and a stretch talking reads like a weak mic.
+  it('leaves the mic level out of a sample whose interval spans a mute change', async () => {
+    const call = fakeRoom();
+    call.mic.stats = [{ type: 'media-source', kind: 'audio', totalAudioEnergy: 0.1, totalSamplesDuration: 10 }];
+    renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'));
+
+    act(() => call.emitLocal(ParticipantEvent.TrackUnmuted, { source: 'microphone' }));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+    call.mic.stats = [{ type: 'media-source', kind: 'audio', totalAudioEnergy: 0.4, totalSamplesDuration: 40 }];
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+
+    const [first, second] = events('debate_voice_sampled');
+    expect(first).toEqual(expect.objectContaining({ mic_level_db: null }));
+    expect(second).toEqual(expect.objectContaining({ mic_level_db: -20 }));
   });
 
   it('summarises the call once when it drops, with time at poor quality and reconnects', () => {

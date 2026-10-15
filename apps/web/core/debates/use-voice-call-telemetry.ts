@@ -12,9 +12,10 @@ import {
   type Room,
   RoomEvent,
   Track,
+  type TrackPublication,
 } from 'livekit-client';
 
-import { capture } from '~/core/analytics';
+import { captureSafely } from '~/core/analytics-capture-safely';
 import { disconnectCause, disconnectReasonName } from '~/core/livekit/disconnect-reason';
 
 import {
@@ -74,6 +75,10 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
     let poorSeconds = 0;
     let lostSeconds = 0;
     let reconnectingSince: number | null = null;
+    /** The open reconnect has gone past signal-only: the audio had a gap. */
+    let reconnectingFully = false;
+    /** Muted or unmuted since the last sample, so that sample's level would mix silence in. */
+    let muteChanged = false;
     let reconnects = 0;
     let samples = 0;
     let worstSendLoss: number | null = null;
@@ -84,12 +89,17 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
     let ended = false;
 
     const micKind = trackSwitches<MicKind>((next, previous) =>
-      capture('debate_voice_changed', { ...base, change: 'mic_device', mic_kind: next, previous_mic_kind: previous })
+      captureSafely('debate_voice_changed', {
+        ...base,
+        change: 'mic_device',
+        mic_kind: next,
+        previous_mic_kind: previous,
+      })
     );
     // What we send and what we hear ride separate connections, and either can fall back on its own.
     const transportSwitches = (direction: 'send' | 'recv') =>
       trackSwitches<VoiceTransport>((next, previous) =>
-        capture('debate_voice_changed', {
+        captureSafely('debate_voice_changed', {
           ...base,
           change: 'transport',
           direction,
@@ -123,15 +133,13 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
       sampling = true;
       try {
         noteMicKind();
-        const senderEntries = statsEntries(
-          await micTrack()
-            ?.getRTCStatsReport()
-            .catch(() => undefined)
-        );
+        const mic = micTrack();
+        const senderEntries = statsEntries(await mic?.getRTCStatsReport().catch(() => undefined));
         const sender = readSenderReport(senderEntries);
-        sendTransport.note(readTransport(senderEntries));
+        const sentOver = readTransport(senderEntries);
 
         const receivers = new Map<string, ReceiverSnapshot>();
+        let heardOver: VoiceTransport | null = null;
         for (const participant of room.remoteParticipants.values()) {
           for (const publication of participant.audioTrackPublications.values()) {
             const remote = publication.track as RemoteAudioTrack | undefined;
@@ -139,19 +147,25 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
             const entries = statsEntries(await remote.getRTCStatsReport().catch(() => undefined));
             receivers.set(publication.trackSid, readReceiverReport(entries));
             // Every remote track arrives over the one subscriber connection.
-            recvTransport.note(readTransport(entries));
+            heardOver ??= readTransport(entries);
           }
         }
+        // The call can end during any of the reads above; nothing reports after its summary.
         if (ended) return;
+        sendTransport.note(sentOver);
+        recvTransport.note(heardOver);
 
         const metrics = voiceSampleMetrics(sender, previousSender, receivers, previousReceivers);
+        // A level averaged across a mute change reads as a weak mic, so it is left out instead.
+        if (muteChanged) metrics.mic_level_db = null;
+        muteChanged = false;
         previousSender = sender;
         previousReceivers = receivers;
         samples += 1;
         worstSendLoss = worstOf(worstSendLoss, metrics.send_loss_pct);
         worstConcealed = worstOf(worstConcealed, metrics.recv_concealed_pct);
 
-        capture('debate_voice_sampled', {
+        captureSafely('debate_voice_sampled', {
           ...base,
           connection_quality: quality,
           mic_enabled: local.isMicrophoneEnabled,
@@ -172,7 +186,7 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
       // A call that never came up has nothing to summarise; its failure is the disconnect event.
       if (connectedAt === null) return;
       settleQuality();
-      capture('debate_voice_ended', {
+      captureSafely('debate_voice_ended', {
         ...base,
         end_reason: endReason,
         seconds_connected: secondsSince(connectedAt),
@@ -193,33 +207,31 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
         if (connectedAt === null) connectedAt = Date.now();
         if (reconnectingSince !== null) {
           reconnects += 1;
-          capture('debate_voice_changed', {
+          captureSafely('debate_voice_changed', {
             ...base,
             change: 'reconnected',
             reconnect_ms: Date.now() - reconnectingSince,
+            signal_only: !reconnectingFully,
           });
           reconnectingSince = null;
+          reconnectingFully = false;
         }
         return;
       }
-      if (
-        (state === ConnectionState.Reconnecting || state === ConnectionState.SignalReconnecting) &&
-        reconnectingSince === null
-      ) {
-        reconnectingSince = Date.now();
-        capture('debate_voice_changed', {
-          ...base,
-          change: 'reconnecting',
-          // Signal-only reconnects keep media flowing; a full one is a gap in the audio.
-          signal_only: state === ConnectionState.SignalReconnecting,
-        });
-      }
+      if (state !== ConnectionState.Reconnecting && state !== ConnectionState.SignalReconnecting) return;
+      // Signal-only reconnects keep media flowing; a full one is a gap in the audio. One that starts
+      // signal-only and then goes further is reported again when it does.
+      const fully = state === ConnectionState.Reconnecting;
+      if (reconnectingSince !== null && (reconnectingFully || !fully)) return;
+      reconnectingSince ??= Date.now();
+      reconnectingFully = fully;
+      captureSafely('debate_voice_changed', { ...base, change: 'reconnecting', signal_only: !fully });
     };
 
     // Named and attributed as community calls do, so one reason reads the same in both.
     const onDisconnected = (reason?: DisconnectReason) => {
       const cause = disconnectCause(reason);
-      capture('debate_voice_changed', {
+      captureSafely('debate_voice_changed', {
         ...base,
         change: 'disconnected',
         reason: disconnectReasonName(reason),
@@ -234,7 +246,7 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
       const previous = quality;
       quality = next;
       if (!NOTABLE_QUALITIES.has(next) && !NOTABLE_QUALITIES.has(previous)) return;
-      capture('debate_voice_changed', {
+      captureSafely('debate_voice_changed', {
         ...base,
         change: 'quality',
         connection_quality: next,
@@ -248,15 +260,23 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
 
     const onPageHide = () => finish('page_closed');
 
+    const onMuteChange = (publication: TrackPublication) => {
+      if (publication.source === Track.Source.Microphone) muteChanged = true;
+    };
+
     room.on(RoomEvent.ConnectionStateChanged, onConnectionState);
     room.on(RoomEvent.Disconnected, onDisconnected);
     room.on(RoomEvent.ActiveDeviceChanged, onActiveDevice);
     room.on(RoomEvent.LocalTrackPublished, noteMicKind);
     local.on(ParticipantEvent.ConnectionQualityChanged, onQuality);
+    local.on(ParticipantEvent.TrackMuted, onMuteChange);
+    local.on(ParticipantEvent.TrackUnmuted, onMuteChange);
     window.addEventListener('pagehide', onPageHide);
 
-    const first = setTimeout(() => void sample(), VOICE_FIRST_SAMPLE_MS);
-    const every = setInterval(() => void sample(), VOICE_SAMPLE_MS);
+    // A failed read is a lost sample, never an unhandled rejection in the middle of a call.
+    const sampleSafely = () => void sample().catch(() => undefined);
+    const first = setTimeout(sampleSafely, VOICE_FIRST_SAMPLE_MS);
+    const every = setInterval(sampleSafely, VOICE_SAMPLE_MS);
 
     return () => {
       clearTimeout(first);
@@ -266,6 +286,8 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
       room.off(RoomEvent.ActiveDeviceChanged, onActiveDevice);
       room.off(RoomEvent.LocalTrackPublished, noteMicKind);
       local.off(ParticipantEvent.ConnectionQualityChanged, onQuality);
+      local.off(ParticipantEvent.TrackMuted, onMuteChange);
+      local.off(ParticipantEvent.TrackUnmuted, onMuteChange);
       window.removeEventListener('pagehide', onPageHide);
       finish('left');
     };

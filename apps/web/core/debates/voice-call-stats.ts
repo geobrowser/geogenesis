@@ -6,7 +6,12 @@
 
 /** Cumulative counters for our own microphone. Absent where the browser did not report them. */
 export type SenderSnapshot = {
-  /** Outbound audio packets. */
+  /**
+   * Which outbound stream and mic source these counters belong to. A mic switch replaces both and
+   * their counters restart, so a change resets every field together.
+   */
+  sourceId?: string;
+  /** Outbound audio packets, everything sent whether it arrived or not. */
   packets?: number;
   /** What the server reports it never got of ours (remote-inbound-rtp). */
   packetsLost?: number;
@@ -26,6 +31,11 @@ export type ReceiverSnapshot = {
   samples?: number;
   /** Samples the browser had to invent because packets came late or never: what choppy sounds like. */
   concealedSamples?: number;
+  /**
+   * The part of those invented during silence. DTX stops sending while someone is quiet, so this is
+   * expected and inaudible, and is left out of `recv_concealed_pct`.
+   */
+  silentConcealedSamples?: number;
   /** Seconds. */
   jitter?: number;
 };
@@ -52,13 +62,14 @@ export type VoiceSampleMetrics = {
 export const MIC_LEVEL_FLOOR_DB = -100;
 
 /**
- * The growth of a cumulative counter. A counter that went backwards belongs to a new track (a mic
- * switch republishes), so the whole of its current value is new.
+ * The growth of a cumulative counter since the previous reading of the same stream. A counter that
+ * went backwards has not restarted (that shows as a new stream): RTCP's lost count can shrink when
+ * late packets turn up, which is no new loss.
  */
 function growth(current?: number, previous?: number) {
   if (current === undefined) return null;
-  if (previous === undefined || current < previous) return current;
-  return current - previous;
+  if (previous === undefined) return current;
+  return Math.max(0, current - previous);
 }
 
 function sum(values: (number | null)[]) {
@@ -83,10 +94,11 @@ export function voiceSampleMetrics(
   receivers: ReceiverSnapshots,
   previousReceivers: ReceiverSnapshots | undefined
 ): VoiceSampleMetrics {
-  const sent = growth(sender.packets, previousSender?.packets);
-  const sentLost = growth(sender.packetsLost, previousSender?.packetsLost);
-  const energy = growth(sender.energy, previousSender?.energy);
-  const micSeconds = growth(sender.samplesDuration, previousSender?.samplesDuration);
+  const before = previousSender?.sourceId === sender.sourceId ? previousSender : undefined;
+  const sent = growth(sender.packets, before?.packets);
+  const sentLost = growth(sender.packetsLost, before?.packetsLost);
+  const energy = growth(sender.energy, before?.energy);
+  const micSeconds = growth(sender.samplesDuration, before?.samplesDuration);
 
   const tracks = [...receivers.entries()];
   const across = (read: (current: ReceiverSnapshot, previous?: ReceiverSnapshot) => number | null) =>
@@ -94,13 +106,17 @@ export function voiceSampleMetrics(
   const received = across((current, previous) => growth(current.packets, previous?.packets));
   const receivedLost = across((current, previous) => growth(current.packetsLost, previous?.packetsLost));
   const samples = across((current, previous) => growth(current.samples, previous?.samples));
-  const concealed = across((current, previous) => growth(current.concealedSamples, previous?.concealedSamples));
+  const concealed = across((current, previous) => {
+    const all = growth(current.concealedSamples, previous?.concealedSamples);
+    const silent = growth(current.silentConcealedSamples, previous?.silentConcealedSamples);
+    return all === null ? null : Math.max(0, all - (silent ?? 0));
+  });
   const jitters = tracks.flatMap(([, current]) => (current.jitter === undefined ? [] : [current.jitter]));
 
   return {
     sent_packets: sent,
-    // Lost against everything we tried to deliver: what arrived plus what did not.
-    send_loss_pct: percent(sentLost, sent === null || sentLost === null ? null : sent + sentLost),
+    // `packetsSent` already counts what never arrived, unlike the receive side's `packetsReceived`.
+    send_loss_pct: percent(sentLost, sent),
     rtt_ms: ms(sender.roundTripTime),
     send_jitter_ms: ms(sender.jitter),
     // `totalAudioEnergy` integrates the squared level over time, so energy over seconds is mean power.
@@ -136,8 +152,12 @@ export function readSenderReport(entries: readonly StatsEntry[]): SenderSnapshot
   const snapshot: SenderSnapshot = {};
   for (const entry of entries) {
     if (!isAudio(entry)) continue;
-    if (entry.type === 'outbound-rtp') snapshot.packets = add(snapshot.packets, entry.packetsSent);
-    else if (entry.type === 'remote-inbound-rtp') {
+    if (entry.type === 'outbound-rtp') {
+      snapshot.packets = add(snapshot.packets, entry.packetsSent);
+      snapshot.sourceId = [snapshot.sourceId, entry.ssrc, entry.mediaSourceId]
+        .filter(part => part !== undefined)
+        .join(':');
+    } else if (entry.type === 'remote-inbound-rtp') {
       snapshot.packetsLost = add(snapshot.packetsLost, entry.packetsLost);
       snapshot.roundTripTime = num(entry.roundTripTime) ?? snapshot.roundTripTime;
       snapshot.jitter = num(entry.jitter) ?? snapshot.jitter;
@@ -158,6 +178,7 @@ export function readReceiverReport(entries: readonly StatsEntry[]): ReceiverSnap
     snapshot.packetsLost = add(snapshot.packetsLost, entry.packetsLost);
     snapshot.samples = add(snapshot.samples, entry.totalSamplesReceived);
     snapshot.concealedSamples = add(snapshot.concealedSamples, entry.concealedSamples);
+    snapshot.silentConcealedSamples = add(snapshot.silentConcealedSamples, entry.silentConcealedSamples);
     snapshot.jitter = num(entry.jitter) ?? snapshot.jitter;
   }
   return snapshot;
@@ -176,10 +197,13 @@ const RELAY_PROTOCOLS = new Set(['udp', 'tcp', 'tls']);
 export function readTransport(entries: readonly StatsEntry[]): VoiceTransport | null {
   const byId = new Map(entries.map(entry => [entry.id, entry]));
   const selectedPairId = entries.find(entry => entry.type === 'transport')?.selectedCandidatePairId;
+  const pairs = entries.filter(entry => entry.type === 'candidate-pair');
   const pair =
     (typeof selectedPairId === 'string' ? byId.get(selectedPairId) : undefined) ??
-    // Firefox reports no transport entry; its selected pair is the one marked as such.
-    entries.find(entry => entry.type === 'candidate-pair' && (entry.selected === true || entry.nominated === true));
+    // Firefox reports no transport entry: it marks the pair in use `selected`, or failing that
+    // only `nominated`, which can also be true of a pair it has moved off.
+    pairs.find(entry => entry.selected === true) ??
+    pairs.find(entry => entry.nominated === true);
   const local = typeof pair?.localCandidateId === 'string' ? byId.get(pair.localCandidateId) : undefined;
   if (!local) return null;
   if (local.candidateType === 'relay') {
