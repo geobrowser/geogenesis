@@ -5,16 +5,6 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { ParticipantSlot } from '~/core/debates/api';
-import {
-  BANNER_CLASS,
-  ENDED_TILT,
-  LABEL_FONT,
-  STAMP_CLASS,
-  STAMP_FONT,
-  STAMP_INK,
-  STAMP_TILT,
-  STAMP_WORD,
-} from '~/core/debates/debate-stamps';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
   BREAK_QUESTION_MS,
@@ -26,6 +16,17 @@ import {
   breakBannerAtMs,
 } from '~/core/debates/playback-breaks';
 import { type TurnCount, roundLabel } from '~/core/debates/round-cues';
+
+import {
+  BANNER_CLASS,
+  ENDED_TILT,
+  LABEL_FONT,
+  STAMP_CLASS,
+  STAMP_FONT,
+  STAMP_INK,
+  STAMP_TILT,
+  STAMP_WORD,
+} from './stamp-styles';
 
 /** How long the banner takes to roll out, ending as the player cuts. Matches `--animate-debate-banner-out`. */
 const BREAK_BANNER_OUT_MS = 300;
@@ -159,7 +160,7 @@ function heldAt(startMs: number): React.CSSProperties {
 }
 
 /** Shown, without a fade, from where a held animation starts: the mockup's dim and note appear at once. */
-const APPEAR = 'motion-safe:animate-[debateStampFade_1ms_linear_both]';
+const APPEAR = 'motion-safe:animate-[fadeIn_1ms_linear_both]';
 
 /**
  * The break between two Open rounds in a published debate (GEO-3277): the approved "stamps".
@@ -214,7 +215,7 @@ export function DebateBreakOverlay({
           <div
             data-debate-question
             // Down from twice its size, a touch past, and settled: the mockup's slam. Hidden until then.
-            className="text-[7cqw] leading-[1.1] font-medium tracking-[-0.01em] text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_24px_rgba(0,0,0,0.45)] motion-safe:animate-[debateSlam_500ms_linear_both,debateStampFade_1ms_linear_both]"
+            className="text-[7cqw] leading-[1.1] font-medium tracking-[-0.01em] text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_24px_rgba(0,0,0,0.45)] motion-safe:animate-debate-slam"
             style={{ ...LABEL_FONT, ...heldAt(BREAK_SETTLE_MS) }}
           >
             Keep debating?
@@ -229,7 +230,7 @@ export function DebateBreakOverlay({
             <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
               <span
                 data-debate-stamp={key}
-                className={cx(STAMP_CLASS, 'text-[12cqw]', STAMP_INK[key])}
+                className={cx(STAMP_CLASS, 'text-[12cqw] motion-safe:animate-debate-stamp', STAMP_INK[key])}
                 style={
                   {
                     ...STAMP_FONT,
@@ -300,7 +301,7 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
       <div className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center bg-black/42')}>
         <span
           data-debate-stamp="ended"
-          className={cx(STAMP_CLASS, 'border-dashed text-[9cqw] text-grey-04')}
+          className={cx(STAMP_CLASS, 'border-dashed text-[9cqw] text-grey-04 motion-safe:animate-debate-stamp')}
           style={{ ...STAMP_FONT, transform: `rotate(${ENDED_TILT})` }}
         >
           Ended early

@@ -7,14 +7,13 @@ import cx from 'classnames';
 import { ActionSurface } from '~/core/action-context-provider';
 import type { DebateClaim } from '~/core/debates/api';
 import type { StackedCard } from '~/core/debates/claim-ticker';
-import { LABEL_FONT } from '~/core/debates/debate-stamps';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
 import { TargetSolid } from '~/design-system/icons/target-solid';
-import { ThumbDown } from '~/design-system/icons/thumb-down';
-import { ThumbUp } from '~/design-system/icons/thumb-up';
 
+import { ClaimIconButton } from './debate-claim-ticker';
+import { LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './stamp-styles';
 import { useDebateClaimResponse } from './use-debate-claim-response';
 
 /** How long the "+1 claim" takes to come out of the counter and go. Matches its animations below. */
@@ -31,9 +30,10 @@ const CLOSE_AFTER_MS = 250;
  *
  * - The counter sits in the tile's bottom-right corner from the start, at 0.
  * - When a claim is said it goes up by one, and a "+1 claim" rises out of it and fades.
- * - Resting the pointer anywhere on the debater's video opens what they have claimed so far, newest
- *   nearest the counter, each with the vote; it closes a moment after the pointer leaves the video.
- *   A tap on the counter does the same on a touch screen, and the keyboard opens it too.
+ * - Resting the pointer on the counter opens what this debater has claimed so far, newest nearest
+ *   the counter, each with the vote. The list is part of the counter's box, so moving up into it
+ *   keeps it open; it closes a moment after the pointer leaves both. A tap on the counter does the
+ *   same on a touch screen, and the keyboard opens it too.
  *
  * The video keeps playing throughout. With nothing said yet, there is no list to open.
  *
@@ -43,7 +43,6 @@ const CLOSE_AFTER_MS = 250;
 export function DebateClaimCounter({
   history,
   playheadMs,
-  tileHovered,
   name,
   rowsByClaimId,
   entitiesByClaimId,
@@ -53,8 +52,6 @@ export function DebateClaimCounter({
   /** What this debater has claimed so far, oldest first. */
   history: StackedCard[];
   playheadMs: number;
-  /** Whether a mouse pointer is over this debater's video, which opens the list after a moment. */
-  tileHovered: boolean;
   /** The debater's first name, for the list's header. */
   name: string;
   rowsByClaimId: Map<string, DebateClaim>;
@@ -63,14 +60,15 @@ export function DebateClaimCounter({
   /** Opens the debate's Claims panel. Without it, the list has no "See all". */
   onSeeAll?: () => void;
 }) {
+  const [pointerOver, setPointerOver] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
   const [pinned, setPinned] = React.useState(false);
-  // Hover intent: open once the pointer has rested on the video a moment, close a moment after it
-  // leaves, so passing across a tile does not flash the list.
+  // Hover intent: open once the pointer has rested on the counter a moment, close a moment after it
+  // leaves the counter and the list, so passing across the corner does not flash the list.
   React.useEffect(() => {
-    const timer = setTimeout(() => setHovered(tileHovered), tileHovered ? OPEN_AFTER_MS : CLOSE_AFTER_MS);
+    const timer = setTimeout(() => setHovered(pointerOver), pointerOver ? OPEN_AFTER_MS : CLOSE_AFTER_MS);
     return () => clearTimeout(timer);
-  }, [tileHovered]);
+  }, [pointerOver]);
 
   const count = history.length;
   const newest = history.at(-1);
@@ -80,7 +78,14 @@ export function DebateClaimCounter({
   const open = (hovered || pinned) && count > 0;
 
   return (
-    <div data-claim-counter className="pointer-events-auto flex flex-col items-end gap-[0.7cqw]">
+    <div
+      data-claim-counter
+      className="pointer-events-auto flex flex-col items-end gap-[0.7cqw]"
+      // A real mouse only: a touch browser synthesises these from a tap, which would open the list
+      // on every tap that pauses the video. The counter's own press is the way in on touch.
+      onPointerEnter={event => event.pointerType === 'mouse' && setPointerOver(true)}
+      onPointerLeave={event => event.pointerType === 'mouse' && setPointerOver(false)}
+    >
       {open && (
         <ClaimList
           history={history}
@@ -142,10 +147,7 @@ export function DebateClaimCounter({
  */
 function ClaimCount({ count }: { count: number }) {
   return (
-    <span
-      className="inline-block rounded-[2px] bg-purple px-[1.8cqw] py-[1cqw] text-[2.6cqw] leading-none font-medium tracking-[0.04em] whitespace-nowrap text-white tabular-nums"
-      style={LABEL_FONT}
-    >
+    <span className={cx(TAG_CLASS, 'inline-block text-[2.6cqw] tabular-nums')} style={LABEL_FONT}>
       <span className="mr-[0.4em] inline-block align-[-0.17em]">
         <TargetSolid />
       </span>
@@ -157,10 +159,7 @@ function ClaimCount({ count }: { count: number }) {
 /** The +1's face: the breaks' stamp at 3.6cqw, leaning a little. */
 function ClaimStamp({ children }: { children: React.ReactNode }) {
   return (
-    <span
-      className="inline-block rotate-[-1.6deg] rounded-[2px] border-[0.07em] border-current bg-white px-[0.4em] pt-[0.12em] pb-[0.1em] text-[3.6cqw] leading-[0.9] font-bold tracking-[0.02em] whitespace-nowrap text-purple uppercase shadow-[0_0.12em_0.45em_rgba(0,0,0,0.28)]"
-      style={{ fontFamily: 'var(--font-geist-bold)' }}
-    >
+    <span className={cx(STAMP_CLASS, 'inline-block rotate-[-1.6deg] text-[3.6cqw] text-purple')} style={STAMP_FONT}>
       {children}
     </span>
   );
@@ -271,7 +270,7 @@ function ClaimListCardBody({
   spaceId: string;
 }) {
   const claim = card.window.claim;
-  const { summary, control } = useDebateClaimResponse({ claimId: claim.id, spaceId, row, entity });
+  const { responseKind, summary, control } = useDebateClaimResponse({ claimId: claim.id, spaceId, row, entity });
   const position = control.viewerPosition;
   // The session's answers feed the end-of-debate scorecard, as the live card's always have.
   React.useEffect(() => {
@@ -279,29 +278,19 @@ function ClaimListCardBody({
   }, [claim.id, onAnswered, position]);
 
   const vote = (side: boolean) => {
-    const selected = position === side;
     const label = side ? CLAIM_RESPONSE_COPY.positiveAction : CLAIM_RESPONSE_COPY.negativeAction;
     return (
-      <button
-        type="button"
-        aria-label={label}
-        aria-pressed={selected}
-        title={control.actionTitle(side) || label}
+      <ClaimIconButton
+        responseKind={responseKind}
+        position={side}
+        label={label}
+        selected={position === side}
         disabled={!control.canRespond}
-        onClick={event => {
-          event.stopPropagation();
-          control.respond(side);
-        }}
-        // 6cqw, overlapping the column's gaps, and never under a 24px target.
-        className={cx(
-          '-my-[1cqw] grid size-[6cqw] min-h-6 min-w-6 place-items-center rounded-full transition-colors disabled:cursor-default [&>svg]:size-[3.6cqw]',
-          selected
-            ? cx('bg-white/15', side ? 'text-green' : 'text-red-01')
-            : 'text-white/70 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent'
-        )}
-      >
-        {side ? <ThumbUp filled /> : <ThumbDown filled />}
-      </button>
+        title={control.actionTitle(side) || label}
+        onClick={() => control.respond(side)}
+        tone="glass"
+        layout="column"
+      />
     );
   };
 
@@ -314,8 +303,9 @@ function ClaimListCardBody({
       style={
         freshness > 0
           ? {
-              backgroundColor: `rgba(104, 51, 255, ${0.18 + 0.25 * freshness})`,
-              boxShadow: `inset 0 0 0 0.3cqw rgba(160, 130, 255, ${freshness})`,
+              backgroundColor: `color-mix(in srgb, var(--color-purple) ${(18 + 25 * freshness).toFixed(1)}%, transparent)`,
+              // The purple lifted 40% toward white, as the mockup's lighter edge.
+              boxShadow: `inset 0 0 0 0.3cqw color-mix(in srgb, color-mix(in srgb, var(--color-purple) 60%, white) ${(100 * freshness).toFixed(1)}%, transparent)`,
             }
           : { backgroundColor: 'rgba(21, 21, 21, 0.55)' }
       }

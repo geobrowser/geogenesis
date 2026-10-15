@@ -100,8 +100,9 @@
   /* Open rounds' stamps (GEO-3277, GEO-3315), in published playback's breaks and the recording
      room's moments: each pick stamped onto its debater, then the banner saying what the picks
      mean. Each rests on its last frame, so with reduced motion the element is simply in place. */
-  --animate-debate-stamp: debateStampScale 216ms cubic-bezier(0.33, 1, 0.68, 1) both, debateStampFade 90ms linear both;
-  --animate-debate-slam: debateSlam 500ms linear both;
+  --animate-debate-stamp: debateStampScale 216ms cubic-bezier(0.33, 1, 0.68, 1) both, fadeIn 90ms linear both;
+  /* Hidden until it starts, then down from 2x at full opacity. */
+  --animate-debate-slam: debateSlam 500ms linear both, fadeIn 1ms linear both;
   --animate-debate-banner: debateBanner 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
   --animate-debate-banner-out: debateBannerOut 300ms cubic-bezier(0.33, 1, 0.68, 1) both;
 
@@ -372,23 +373,14 @@
 }
 
 /* The design mockup's stamp, exactly: two motions on their own curves. It comes down from 1.3x to
-   its size over 216 ms on an ease-out cubic, and is fully opaque by 90 ms. No bounce or shake; its
-   tilt is the element's own `transform`, which `scale` composes with. */
+   its size over 216 ms on an ease-out cubic, and is fully opaque by 90 ms (`fadeIn`). No bounce or
+   shake; its tilt is the element's own `transform`, which `scale` composes with. */
 @keyframes debateStampScale {
   from {
     scale: 1.3;
   }
   to {
     scale: 1;
-  }
-}
-
-@keyframes debateStampFade {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
   }
 }
 
@@ -513,10 +505,10 @@
 /* The red glow each of the last five seconds lands with, fading over the second. */
 @keyframes turnTimerGlow {
   from {
-    filter: drop-shadow(0 0 0.6rem rgb(255 82 58 / 0.75));
+    filter: drop-shadow(0 0 0.6rem color-mix(in srgb, var(--color-red-01) 75%, transparent));
   }
   to {
-    filter: drop-shadow(0 0 0 rgb(255 82 58 / 0));
+    filter: drop-shadow(0 0 0 transparent);
   }
 }
 

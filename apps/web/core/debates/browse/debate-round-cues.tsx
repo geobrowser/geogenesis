@@ -4,8 +4,9 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { BANNER_CLASS, LABEL_FONT } from '~/core/debates/debate-stamps';
 import type { RoundCue } from '~/core/debates/round-cues';
+
+import { BANNER_CLASS, LABEL_FONT, TAG_CLASS } from './stamp-styles';
 
 /**
  * An outline in every direction rather than the four corners the recording room uses.
@@ -175,10 +176,7 @@ export function DebateRoundBadge({
       <span
         aria-hidden
         data-round-tag={stamped || undefined}
-        className={cx(
-          'truncate',
-          stamped && 'rounded-[2px] bg-purple px-[1.8cqw] py-[1cqw] text-[2.8cqw] tracking-[0.04em] uppercase'
-        )}
+        className={cx('truncate', stamped && cx(TAG_CLASS, 'text-[2.8cqw] uppercase'))}
         style={stamped ? LABEL_FONT : undefined}
       >
         {cue.label}

@@ -52,8 +52,11 @@ export function useClaimTimings(
     () => (transcript.data?.segments ? transcriptOnRecordings(transcript.data.segments) : []),
     [transcript.data?.segments]
   );
-  // The same response the player reads, so on a playing card this is a cache read.
-  const media = useDebateMedia(debateId ?? '', enabled && debateId !== null && claims.all.length > 0);
+  // Only a published timecode needs the media: it comes on the edited video's clock and is placed by
+  // the turn it falls in. Nearly always none today, so the claims panel and activity rows ask for
+  // nothing more than they did. On a playing card it is the player's own response, a cache read.
+  const needsMedia = enabled && debateId !== null && claims.all.some(claim => claim.publishedTiming !== null);
+  const media = useDebateMedia(debateId ?? '', needsMedia);
   const turns = media.data?.turn_segments;
 
   const timings = React.useMemo(() => {
@@ -76,7 +79,11 @@ export function useClaimTimings(
 
   // A failed transcript fetch is ready, not pending: published timings still resolved, and the rest
   // are not coming. Reporting "still loading" forever would hold a time-ordered surface empty.
-  const isReady = !needsTranscript || transcript.isSuccess || transcript.isError;
+  // The same for the media, whose answer can move a published timing: a surface ordered by time
+  // waits for it rather than reordering under the reader.
+  const isReady =
+    (!needsTranscript || transcript.isSuccess || transcript.isError) &&
+    (!needsMedia || media.isSuccess || media.isError);
 
   return { timings, isReady };
 }

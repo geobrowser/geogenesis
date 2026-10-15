@@ -3,9 +3,9 @@
 import * as React from 'react';
 
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
+import { LABEL_FONT, STAMP_INK, STAMP_TILT, STAMP_WORD } from './browse/stamp-styles';
 import { RoomBanner, RoomStamp, RoomTag } from './debate-room-stamps';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
-import { LABEL_FONT, STAMP_INK, STAMP_TILT, STAMP_WORD } from './debate-stamps';
 import { type OpenRoundsRoomPhase, openRoundCountInMs, openRoundNumber, openRoundRevealedPicks } from './open-rounds';
 import { BREAK_STAMP_GAP_MS } from './playback-breaks';
 

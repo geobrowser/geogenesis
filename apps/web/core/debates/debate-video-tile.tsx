@@ -8,9 +8,9 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Text } from '~/design-system/text';
 
+import { ENDED_TILT } from './browse/stamp-styles';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
 import { RoomBanner, RoomDim, RoomStamp } from './debate-room-stamps';
-import { ENDED_TILT } from './debate-stamps';
 
 export const recordingOverlayTextShadow = {
   textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',

@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { BANNER_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './debate-stamps';
+import { BANNER_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT, TAG_CLASS } from './browse/stamp-styles';
 
 /**
  * The recording room's moments in an Open rounds debate, in the stamps design the published player
@@ -34,7 +34,7 @@ export function RoomStamp({
   return (
     <span
       {...props}
-      className={cx(STAMP_CLASS, ink, className)}
+      className={cx(STAMP_CLASS, 'motion-safe:animate-debate-stamp', ink, className)}
       style={{
         ...STAMP_FONT,
         fontSize: `${sizeCqw}cqw`,
@@ -79,7 +79,13 @@ export function RoomBanner({
 
 /** A small purple label, "Last word" or a round count. */
 export function RoomTag({ className, style, ...props }: React.ComponentPropsWithoutRef<'span'>) {
-  return <span {...props} className={cx(TAG_CLASS, className)} style={{ ...LABEL_FONT, ...style }} />;
+  return (
+    <span
+      {...props}
+      className={cx(TAG_CLASS, 'inline-flex items-center uppercase', className)}
+      style={{ ...LABEL_FONT, ...style }}
+    />
+  );
 }
 
 /** The tile under a moment, dimmed as in the mockup so the stamp or banner reads over any picture. */

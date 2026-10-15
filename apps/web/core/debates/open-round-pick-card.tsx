@@ -7,7 +7,7 @@ import cx from 'classnames';
 import { Check } from '~/design-system/icons/check';
 
 import type { OpenRoundPick } from './api';
-import { LABEL_FONT } from './debate-stamps';
+import { LABEL_FONT } from './browse/stamp-styles';
 
 export type OpenRoundPickContext = {
   previousPick: OpenRoundPick | null;
@@ -88,7 +88,7 @@ export function OpenRoundPickCard({
     <section
       aria-labelledby={headingId}
       data-open-round-pick-card={roundIndex}
-      className="absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 gap-[2.4cqw] rounded-[6px] bg-[#141418] p-[3.4cqw] text-white shadow-[0_2cqw_6cqw_rgba(0,0,0,0.45)] motion-safe:animate-[debateStampFade_150ms_linear_both]"
+      className="absolute top-1/2 left-1/2 z-40 grid w-[78%] -translate-x-1/2 -translate-y-1/2 gap-[2.4cqw] rounded-[6px] bg-[#141418] p-[3.4cqw] text-white shadow-[0_2cqw_6cqw_rgba(0,0,0,0.45)] motion-safe:animate-[fadeIn_150ms_linear_both]"
       style={LABEL_FONT}
     >
       <div className="flex items-center justify-between gap-[2cqw]">
