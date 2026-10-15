@@ -25,6 +25,7 @@ import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useScrollLock } from '../use-scroll-lock';
 import {
+  type LobbyPresenceRoster,
   type LobbyPresenceState,
   MAX_TIMEOUT_MS,
   useDebateLobby,
@@ -97,7 +98,6 @@ export const LOBBY_COPY = {
   oneLobby: (name: string) => `You can be in one lobby at a time. Joining ${name} will leave it.`,
   scheduled: 'Debate lobby · scheduled',
   guestBeforeOpen: 'No account? You can still join and listen when it opens.',
-  steppedOut: 'You stepped out to debate. You’re still on the roster.',
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
   guestRemoved: LOBBY_STATE_COPY.removed,
   guestRemovedInvite: 'Create an account to come back and take part.',
@@ -131,12 +131,20 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const lobby: LobbyPageView | null = guest ? guestLobby : memberLobby;
   const memberViewer = lobby && isMemberView(lobby) ? lobby.viewer : null;
   const admitted = lobby?.access.status === 'admitted';
+  const currentUserId = useCurrentGeoChatUserId();
+  // The member roster, for a page stepped out by a debate in another tab to read how it went.
+  const members = guest ? undefined : memberData?.members;
+  const roster = React.useMemo<LobbyPresenceRoster | undefined>(
+    () => (members && currentUserId ? { members, viewerId: currentUserId } : undefined),
+    [members, currentUserId]
+  );
   const presence = useLobbyPresence(
     lobbyId,
     admitted && !guest,
     memberViewer?.stepped_out ?? false,
     memberViewer?.connected ?? false,
-    memberViewer?.removed ?? false
+    memberViewer?.removed ?? false,
+    roster
   );
   const guestSession = useLobbyGuestSession(lobbyId, {
     listen: signedOut && admitted,
@@ -813,20 +821,8 @@ function LobbyPhoneTabs({
   );
 }
 
-/** Stepped out, a failed join, or joining: above the people, where the room would be. */
+/** A failed join, or joining: above the people, where the room would be. */
 function LobbyRoomStatus({ state, onRetry }: { state: LobbyPresenceState; onRetry: () => void }) {
-  if (state.status === 'stepped_out') {
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <Text as="p" variant="footnote" color="text">
-          {LOBBY_COPY.steppedOut}
-        </Text>
-        <HubPillButton variant="primary" analyticsLabel="Lobby back to the room" onClick={onRetry}>
-          Back to the room
-        </HubPillButton>
-      </div>
-    );
-  }
   if (state.status === 'failed') {
     return (
       <div className="flex items-center gap-2">

@@ -4,6 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
+import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
 
 import { Avatar } from '~/design-system/avatar';
@@ -508,32 +509,22 @@ function TalkingBars() {
  */
 function UnmuteNotice({ opponentName, onUnmute, onDismiss }: PairHeaderNotice & { opponentName: string }) {
   return (
-    <div
+    <DebateNotice
       data-testid="rematch-unmute-notice"
-      className="flex items-center gap-2.5 rounded-lg bg-grey-01 py-1.5 pr-1.5 pl-3 text-metadata text-text"
+      icon={<MicrophoneIcon muted />}
+      onDismiss={onDismiss}
+      action={
+        <button
+          type="button"
+          onClick={onUnmute}
+          className="h-7 shrink-0 rounded-full border border-grey-02 bg-white px-2.5 text-metadataMedium text-text transition-colors hover:border-grey-03"
+        >
+          Unmute
+        </button>
+      }
     >
-      <span className="flex shrink-0 text-grey-04 [&>svg]:size-4">
-        <MicrophoneIcon muted />
-      </span>
-      <p className="min-w-0 flex-1">
-        You’re in a live room with {firstName(opponentName)}. Unmute to talk while you pick a claim.
-      </p>
-      <button
-        type="button"
-        onClick={onUnmute}
-        className="h-7 shrink-0 rounded-full border border-grey-02 bg-white px-2.5 text-metadataMedium text-text transition-colors hover:border-grey-03"
-      >
-        Unmute
-      </button>
-      <button
-        type="button"
-        onClick={onDismiss}
-        aria-label="Dismiss"
-        className="grid size-7 shrink-0 place-items-center rounded-full text-grey-04 transition-colors hover:text-text"
-      >
-        <CloseSmall />
-      </button>
-    </div>
+      <p>You’re in a live room with {firstName(opponentName)}. Unmute to talk while you pick a claim.</p>
+    </DebateNotice>
   );
 }
 

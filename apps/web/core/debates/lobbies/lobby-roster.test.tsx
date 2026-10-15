@@ -23,6 +23,10 @@ vi.mock('./lobby-member-actions', async importOriginal => ({
   ...(await importOriginal<typeof import('./lobby-member-actions')>()),
   LobbyMemberActions: () => <div data-testid="host-controls">Host controls</div>,
 }));
+vi.mock('./lobby-room-claims-hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('./lobby-room-claims-hooks')>()),
+  useDebateLobbyClaims: () => ({ data: undefined, isLoading: true, error: null, refetch: vi.fn() }),
+}));
 vi.mock('./lobby-voice', async () => {
   const ReactModule = await import('react');
   const Context = ReactModule.createContext({
@@ -149,6 +153,23 @@ describe('LobbyPeople on desktop', () => {
     expect(elena).not.toHaveTextContent('Disagrees');
     expect(jordan).toHaveTextContent('Just chatting');
     expect(within(jordan).getByRole('img', { name: 'Muted' })).toBeInTheDocument();
+    expect(within(daniel).getByRole('button', { name: 'Disagrees on 4 claims with Daniel' })).toBeInTheDocument();
+  });
+
+  it('keeps a tile’s status line one height whether its speaker is talking or not', () => {
+    const view = lobby(roster);
+    const { rerender } = renderPeople(view);
+    const statusLine = () => screen.getAllByTestId('lobby-tile-status')[0]!;
+    expect(statusLine()).toHaveTextContent('Looking to debate');
+    expect(statusLine()).toHaveClass('h-[18px]');
+
+    rerender(
+      <LobbyVoiceStatesProvider value={{ speaking: new Set(['adam']), micOn: new Set(['adam']), connected: true }}>
+        <LobbyPeople lobby={view} viewerId="Adam" ownAvailable={undefined} disagreements={null} />
+      </LobbyVoiceStatesProvider>
+    );
+    expect(within(statusLine()).getByRole('img', { name: 'Speaking' })).toBeInTheDocument();
+    expect(statusLine()).toHaveClass('h-[18px]');
   });
 
   it('counts guests among the listeners and notes who a host moved there', () => {
@@ -237,6 +258,30 @@ describe('LobbyPeople on desktop', () => {
 });
 
 describe('LobbyPeople on a phone', () => {
+  it('keeps an open disagreements sheet open when that speaker starts talking', () => {
+    mocks.phone = true;
+    const view = lobby(roster);
+    const { rerender } = renderPeople(view);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 4 claims with Daniel' }));
+    expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
+
+    rerender(
+      <LobbyVoiceStatesProvider value={{ speaking: new Set(['daniel']), micOn: new Set(['daniel']), connected: true }}>
+        <LobbyPeople
+          lobby={view}
+          viewerId="Adam"
+          ownAvailable={undefined}
+          disagreements={[{ user_id: 'daniel', claims: 4 }]}
+        />
+      </LobbyVoiceStatesProvider>
+    );
+    // The open sheet hides the page behind it from the accessibility tree.
+    const daniel = screen.getByRole('group', { name: 'Daniel', hidden: true });
+    expect(daniel).toHaveTextContent('Speaking');
+    expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
+  });
+
   it('shortens statuses to one line and opens the person menu as a sheet', () => {
     mocks.phone = true;
     renderPeople(lobby(roster, { debate_pairs: pairs }), ['adam']);
@@ -252,7 +297,7 @@ describe('LobbyPeople on a phone', () => {
     expect(daniel).not.toHaveTextContent('Looking');
     expect(elena).toHaveTextContent('Looking');
 
-    fireEvent.click(daniel);
+    fireEvent.click(within(daniel).getByRole('button', { name: 'Daniel' }));
     const sheet = screen.getByTestId('bottom-sheet');
     expect(sheet).toHaveAttribute('role', 'dialog');
     expect(within(sheet).getByRole('button', { name: 'Request a debate with Daniel' })).toBeInTheDocument();
