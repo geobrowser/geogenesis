@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   error: null as Error | null,
   refetch: vi.fn(),
   mutate: vi.fn(),
+  requestError: null as Error | null,
   phone: false,
 }));
 
@@ -38,7 +39,7 @@ vi.mock('../hooks', () => ({ useDebateActivity: () => ({ data: { available_to_de
 
 vi.mock('../matchmaking/hooks', () => ({
   useDebateRequests: () => ({ data: { outbound: null, incoming: [] } }),
-  useCreateDebateRequest: () => ({ mutate: mocks.mutate, isPending: false, error: null }),
+  useCreateDebateRequest: () => ({ mutate: mocks.mutate, isPending: false, error: mocks.requestError }),
 }));
 
 // The menu's placement hook observes the trigger, and JSDOM has no ResizeObserver.
@@ -50,6 +51,8 @@ class ResizeObserverStub {
 window.ResizeObserver ??= ResizeObserverStub as unknown as typeof ResizeObserver;
 
 const { LobbyDisagreementsTrigger, lobbyDisagreements } = await import('./lobby-disagreements');
+const { GeoChatRequestError } = await import('../api');
+const { RECIPIENT_UNAVAILABLE_MESSAGE } = await import('./lobby-room-claims-hooks');
 
 afterEach(() => {
   cleanup();
@@ -58,6 +61,7 @@ afterEach(() => {
   mocks.error = null;
   mocks.refetch.mockReset();
   mocks.mutate.mockReset();
+  mocks.requestError = null;
   mocks.phone = false;
 });
 
@@ -146,6 +150,22 @@ describe('LobbyDisagreementsTrigger', () => {
       },
       { onError: expect.any(Function) }
     );
+  });
+
+  it('keeps a refusal readable after the refresh it triggers marks the person unrequestable', () => {
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, [participant('daniel1')])] };
+    const { rerender } = render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claims with Daniel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
+
+    // geo-chat refuses, and the refetch it triggers comes back with Daniel no longer requestable.
+    mocks.requestError = new GeoChatRequestError('unavailable', 'recipient_not_available', 409);
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, [participant('daniel1', false)])] };
+    rerender(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
+
+    const disagreement = screen.getByTestId('lobby-disagreement');
+    expect(within(disagreement).getByRole('alert')).toHaveTextContent(RECIPIENT_UNAVAILABLE_MESSAGE);
+    expect(within(disagreement).getByRole('button', { name: 'Request debate' })).toBeDisabled();
   });
 
   it('offers a retry when the claims fail to load, rather than calling them unlisted', () => {

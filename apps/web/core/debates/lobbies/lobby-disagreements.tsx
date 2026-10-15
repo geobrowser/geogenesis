@@ -13,7 +13,7 @@ import { sameId } from '../rooms/room-presence';
 import { personName } from './lobby-format';
 import { LobbyPopup } from './lobby-popup';
 import { LobbyClaimRequest, lobbyRoomClaimFrom } from './lobby-room-claims';
-import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
+import { RECIPIENT_UNAVAILABLE_MESSAGE, useDebateLobbyClaims } from './lobby-room-claims-hooks';
 import { roomSideOpposing } from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
 
@@ -68,12 +68,15 @@ export function LobbyDisagreementsTrigger({
   member,
   count,
   variant,
+  hidden = false,
 }: {
   lobby: LobbyPageView;
   member: DebateLobbyMember;
   count: number;
   /** `pill` on desktop, `line` for a phone tile's one status line. */
   variant: 'pill' | 'line';
+  /** Hides the trigger but keeps the popup mounted, so an open sheet survives the line changing. */
+  hidden?: boolean;
 }) {
   const [open, setOpen] = React.useState(false);
   const name = personName(member);
@@ -95,6 +98,7 @@ export function LobbyDisagreementsTrigger({
           // Above the tile's stretched person button, which covers the rest of the tile.
           className={cx(
             'relative z-10 max-w-full font-medium whitespace-nowrap text-[#C42D17]',
+            hidden && 'hidden!',
             variant === 'pill'
               ? 'inline-flex h-5 items-center rounded-full bg-red-02 px-2 text-[11px] leading-[13px] transition-colors hover:bg-red-02/70 data-[state=open]:ring-1 data-[state=open]:ring-[#C42D17]'
               : 'truncate text-[11px] leading-[13px] underline-offset-2 hover:underline'
@@ -176,6 +180,10 @@ function DisagreementRow({
 }) {
   const name = personName(member);
   const claim = React.useMemo(() => lobbyRoomClaimFrom(entry.row), [entry.row]);
+  // Latched once offered: a refusal refreshes the list, which can clear `requestable`, and
+  // unmounting the control then would drop the refusal before anyone read it.
+  const [offered, setOffered] = React.useState(entry.requestable);
+  if (entry.requestable && !offered) setOffered(true);
 
   return (
     <div className="flex flex-col gap-2 py-2.5" data-testid="lobby-disagreement">
@@ -186,10 +194,11 @@ function DisagreementRow({
         <Text as="p" variant="footnote" color="grey-04">
           You: {entry.viewerLabel} · {name}: {entry.theirLabel}
         </Text>
-        {entry.requestable ? (
+        {offered ? (
           <LobbyClaimRequest
             lobbyId={lobbyId}
             recipientUserId={member.user_id}
+            unavailableReason={entry.requestable ? null : RECIPIENT_UNAVAILABLE_MESSAGE}
             offer={{
               entry: claim,
               viewerPosition: entry.viewerPosition,

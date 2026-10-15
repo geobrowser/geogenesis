@@ -23,6 +23,10 @@ vi.mock('./lobby-member-actions', async importOriginal => ({
   ...(await importOriginal<typeof import('./lobby-member-actions')>()),
   LobbyMemberActions: () => <div data-testid="host-controls">Host controls</div>,
 }));
+vi.mock('./lobby-room-claims-hooks', async importOriginal => ({
+  ...(await importOriginal<typeof import('./lobby-room-claims-hooks')>()),
+  useDebateLobbyClaims: () => ({ data: undefined, isLoading: true, error: null, refetch: vi.fn() }),
+}));
 vi.mock('./lobby-voice', async () => {
   const ReactModule = await import('react');
   const Context = ReactModule.createContext({
@@ -254,6 +258,30 @@ describe('LobbyPeople on desktop', () => {
 });
 
 describe('LobbyPeople on a phone', () => {
+  it('keeps an open disagreements sheet open when that speaker starts talking', () => {
+    mocks.phone = true;
+    const view = lobby(roster);
+    const { rerender } = renderPeople(view);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 4 claims with Daniel' }));
+    expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
+
+    rerender(
+      <LobbyVoiceStatesProvider value={{ speaking: new Set(['daniel']), micOn: new Set(['daniel']), connected: true }}>
+        <LobbyPeople
+          lobby={view}
+          viewerId="Adam"
+          ownAvailable={undefined}
+          disagreements={[{ user_id: 'daniel', claims: 4 }]}
+        />
+      </LobbyVoiceStatesProvider>
+    );
+    // The open sheet hides the page behind it from the accessibility tree.
+    const daniel = screen.getByRole('group', { name: 'Daniel', hidden: true });
+    expect(daniel).toHaveTextContent('Speaking');
+    expect(screen.getByTestId('lobby-disagreements')).toBeInTheDocument();
+  });
+
   it('shortens statuses to one line and opens the person menu as a sheet', () => {
     mocks.phone = true;
     renderPeople(lobby(roster, { debate_pairs: pairs }), ['adam']);

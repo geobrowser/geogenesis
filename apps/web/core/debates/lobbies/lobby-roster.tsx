@@ -230,11 +230,19 @@ function TileStatus({
         data-testid="lobby-tile-status"
         className="flex h-[13px] max-w-full min-w-0 items-center justify-center text-[11px] leading-[13px]"
       >
+        {/* Mounted while they speak too: the trigger owns the sheet, which must not close mid-read. */}
+        {disagreements !== null ? (
+          <LobbyDisagreementsTrigger
+            lobby={lobby}
+            member={member}
+            count={disagreements}
+            variant="line"
+            hidden={speaking}
+          />
+        ) : null}
         {speaking ? (
           <span className="truncate text-[#127A5B]">Speaking</span>
-        ) : disagreements !== null ? (
-          <LobbyDisagreementsTrigger lobby={lobby} member={member} count={disagreements} variant="line" />
-        ) : line ? (
+        ) : disagreements === null && line ? (
           <span className="truncate text-grey-04">{line}</span>
         ) : null}
       </span>

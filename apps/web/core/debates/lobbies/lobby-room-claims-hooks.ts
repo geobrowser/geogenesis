@@ -43,12 +43,14 @@ export function useRefreshLobbyClaimsOnRefusal(lobbyId: string) {
   };
 }
 
+export const RECIPIENT_UNAVAILABLE_MESSAGE = 'They can’t take a request on this claim right now.';
+
 /** A refused lobby-scoped request, in the reader's terms; null to fall back to the claim's own. */
 export function lobbyClaimRequestErrorMessage(error: unknown) {
   if (!(error instanceof GeoChatRequestError)) return null;
   switch (error.code) {
     case 'recipient_not_available':
-      return 'They can’t take a request on this claim right now.';
+      return RECIPIENT_UNAVAILABLE_MESSAGE;
     case 'no_candidates_in_lobby':
       return 'Nobody here on the other side can take a request right now.';
     case 'lobby_not_present':

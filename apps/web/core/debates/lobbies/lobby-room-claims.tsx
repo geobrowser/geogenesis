@@ -118,10 +118,13 @@ export function LobbyClaimRequest({
   lobbyId,
   offer,
   recipientUserId,
+  unavailableReason,
 }: {
   lobbyId: string;
   offer: LobbyRoomOffer;
   recipientUserId?: string;
+  /** Holds the offer disabled rather than unmounting it, so a refusal it just showed stays readable. */
+  unavailableReason?: string | null;
 }) {
   const { claim, readiness } = offer.entry;
   const { data: activity } = useDebateActivity(true);
@@ -150,7 +153,8 @@ export function LobbyClaimRequest({
     readiness.viewer_response?.position === offer.viewerPosition && !repairing
       ? readinessDisabledMessage(reason)
       : null;
-  const blockedReason = claimRequestBlockedReason(activity, requests) ?? readinessBlock ?? undefined;
+  const blockedReason =
+    claimRequestBlockedReason(activity, requests) ?? readinessBlock ?? unavailableReason ?? undefined;
 
   return (
     <RequestDebateControl
