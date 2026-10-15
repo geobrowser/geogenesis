@@ -48,6 +48,7 @@ export function DebateClaimCounter({
   entitiesByClaimId,
   onAnswered,
   onSeeAll,
+  onActiveChange,
 }: {
   /** What this debater has claimed so far, oldest first. */
   history: StackedCard[];
@@ -59,32 +60,78 @@ export function DebateClaimCounter({
   onAnswered: (claimId: string, position: boolean | null) => void;
   /** Opens the debate's Claims panel. Without it, the list has no "See all". */
   onSeeAll?: () => void;
+  /** Whether the list is open or a keyboard is inside it, so the player keeps the corner visible. */
+  onActiveChange?: (active: boolean) => void;
 }) {
   const [pointerOver, setPointerOver] = React.useState(false);
   const [hovered, setHovered] = React.useState(false);
   const [pinned, setPinned] = React.useState(false);
+  const [keyboardInside, setKeyboardInside] = React.useState(false);
+  // Closed by its own button while the pointer or keyboard is still there: stays closed until both
+  // have left, so "Hide" is not undone by the hover that is still resting on it.
+  const [dismissed, setDismissed] = React.useState(false);
   // Hover intent: open once the pointer has rested on the counter a moment, close a moment after it
   // leaves the counter and the list, so passing across the corner does not flash the list.
   React.useEffect(() => {
     const timer = setTimeout(() => setHovered(pointerOver), pointerOver ? OPEN_AFTER_MS : CLOSE_AFTER_MS);
     return () => clearTimeout(timer);
   }, [pointerOver]);
+  // Focus that follows a press is the pointer's, not the keyboard's: a click on a vote button must
+  // not hold the list open after the pointer leaves, where a keyboard user's focus must.
+  const pressing = React.useRef(false);
 
   const count = history.length;
   const newest = history.at(-1);
   const newestAgeMs = newest ? playheadMs - newest.window.startMs : Number.POSITIVE_INFINITY;
   const popping = newest !== undefined && newestAgeMs >= 0 && newestAgeMs < PLUS_ONE_MS;
   const fresh = newest !== undefined && newestAgeMs >= 0 && newestAgeMs < FRESH_MS;
-  const open = (hovered || pinned) && count > 0;
+  const open = !dismissed && (hovered || pinned || keyboardInside) && count > 0;
+  const active = open || keyboardInside;
+  React.useEffect(() => onActiveChange?.(active), [active, onActiveChange]);
+
+  const toggle = () => {
+    if (open) {
+      setPinned(false);
+      setDismissed(true);
+    } else {
+      setDismissed(false);
+      setPinned(true);
+    }
+  };
 
   return (
     <div
       data-claim-counter
       className="pointer-events-auto flex flex-col items-end gap-[0.7cqw]"
       // A real mouse only: a touch browser synthesises these from a tap, which would open the list
-      // on every tap that pauses the video. The counter's own press is the way in on touch.
+      // on every tap that pauses the video. The counter's own press is the way in on touch. Leaving
+      // also lets go of a pin and a dismissal, so the corner never stays stuck open or shut behind
+      // a mouse that has moved on.
       onPointerEnter={event => event.pointerType === 'mouse' && setPointerOver(true)}
-      onPointerLeave={event => event.pointerType === 'mouse' && setPointerOver(false)}
+      onPointerLeave={event => {
+        if (event.pointerType !== 'mouse') return;
+        setPointerOver(false);
+        setPinned(false);
+        if (!keyboardInside) setDismissed(false);
+      }}
+      onPointerDown={() => {
+        pressing.current = true;
+      }}
+      onPointerUp={() => {
+        pressing.current = false;
+      }}
+      // Keyboard focus anywhere inside (the counter, a vote, See all) holds the list open, so the
+      // control a keyboard user is on is never unmounted under them. It lets go when focus leaves.
+      onFocus={() => {
+        if (!pressing.current) setKeyboardInside(true);
+      }}
+      onBlur={event => {
+        if (event.currentTarget.contains(event.relatedTarget as Node | null)) return;
+        // A keyboard user tabbing away takes their pin with them; a touch pin stays until tapped.
+        if (keyboardInside) setPinned(false);
+        setKeyboardInside(false);
+        if (!pointerOver) setDismissed(false);
+      }}
     >
       {open && (
         <ClaimList
@@ -121,7 +168,7 @@ export function DebateClaimCounter({
           data-claim-count={count}
           aria-expanded={open}
           aria-label={`${count} ${count === 1 ? 'claim' : 'claims'} so far. ${open ? 'Hide' : 'Show'} them`}
-          onClick={() => setPinned(current => !current)}
+          onClick={toggle}
           className="relative z-[1] cursor-pointer"
         >
           {/* The bump as the +1 leaves: a half sine up to 1.22x and back, from the right edge. */}

@@ -50,16 +50,35 @@ const MAX_AHEAD_MS = 500;
 
 /** How long ahead of a cut its timer is set: the playhead arrives about four times a second. */
 const CUT_LOOKAHEAD_MS = 1_000;
+/** How far short of a cut the recording may be when its timer fires and still be cut: a frame or so. */
+const CUT_TOLERANCE_MS = 50;
+/** How often a cut the recording has not reached yet looks again. */
+const CUT_RECHECK_MS = 50;
 
 /**
  * Makes the player's cuts (`breakCuts`): at each one, jumps both recordings to where it leads. Timed
  * off the wall clock from the latest playhead sample, which lands it within a frame of the cut where
  * waiting for the next sample could miss it by a quarter of a second. Only while playing on its own:
  * a viewer who pauses or drags the scrubber into a break keeps it.
+ *
+ * The wall clock is not the recording's, though: a stall to buffer stops one and not the other. So
+ * when the timer fires it asks where the recording really is (`positionMs`), and one that has not
+ * reached the cut yet is waited for rather than jumped, which would skip the speaker's last words.
  */
 export function useBreakCuts(
   cuts: readonly BreakCut[],
-  { playheadMs, running, seek }: { playheadMs: number; running: boolean; seek: (seconds: number) => void }
+  {
+    playheadMs,
+    running,
+    seek,
+    positionMs,
+  }: {
+    playheadMs: number;
+    running: boolean;
+    seek: (seconds: number) => void;
+    /** Where the recording is right now, in ms; null when it cannot be read. */
+    positionMs?: () => number | null;
+  }
 ) {
   const next = running
     ? (cuts.find(cut => playheadMs < cut.toMs && cut.atMs - playheadMs < CUT_LOOKAHEAD_MS) ?? null)
@@ -68,9 +87,20 @@ export function useBreakCuts(
   const toMs = next?.toMs ?? null;
   React.useEffect(() => {
     if (atMs === null || toMs === null) return;
-    const timer = window.setTimeout(() => seek(toMs / 1_000), Math.max(0, atMs - playheadMs));
+    let timer = 0;
+    const arm = (delayMs: number) => {
+      timer = window.setTimeout(() => {
+        const live = positionMs?.() ?? null;
+        if (live !== null && live < atMs - CUT_TOLERANCE_MS) {
+          arm(Math.max(CUT_RECHECK_MS, atMs - live));
+          return;
+        }
+        seek(toMs / 1_000);
+      }, delayMs);
+    };
+    arm(Math.max(0, atMs - playheadMs));
     return () => window.clearTimeout(timer);
-  }, [atMs, playheadMs, seek, toMs]);
+  }, [atMs, playheadMs, positionMs, seek, toMs]);
 }
 
 /** A gap between the drawn clock and the playhead wider than this is a jump (a scrub), not drift. */
