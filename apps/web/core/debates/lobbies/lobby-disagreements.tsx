@@ -55,7 +55,15 @@ export function lobbyDisagreements(
     if (!person) {
       const kept = previous.find(entry => entry.row.claim.id === row.claim.id);
       const cutOff = theirs.participants.length < theirs.total_in_room;
-      return kept && cutOff && kept.viewerPosition === viewer.position ? [{ ...kept, row, requestable: false }] : [];
+      // Listed on the viewer's side, they moved; a cut-off list only leaves it unknown.
+      const joinedViewer = row.positions.some(
+        side =>
+          side.position === viewer.position &&
+          side.participants.some(participant => sameId(participant.user_id, userId))
+      );
+      return kept && cutOff && !joinedViewer && kept.viewerPosition === viewer.position
+        ? [{ ...kept, row, requestable: false }]
+        : [];
     }
     return [
       {
@@ -199,11 +207,13 @@ function DisagreementRow({
 }) {
   const name = personName(member);
   const claim = React.useMemo(() => lobbyRoomClaimFrom(entry.row), [entry.row]);
-  // The side being published wins over geo-chat's cached one, as on the room's claim cards.
+  // The side being published wins over geo-chat's cached one, as on the room's claim cards. The
+  // chain is read only for a withdrawn row, the one case this offer uses it for; a missing intent
+  // falls back to refreshing readiness, and the claim's card shares the cache when it has read it.
   const { viewerPosition, indexedPosition, indexingDelayed } = useLobbyViewerPosition(
     claim.claim,
     claim.readiness,
-    true
+    claim.readiness.readiness_disabled_reason === 'claim_response_withdrawn'
   );
   // Latched once offered: a refusal refreshes the list, which can clear `requestable`, and
   // unmounting the control then would drop the refusal before anyone read it.

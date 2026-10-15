@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   mutate: vi.fn(),
   requestError: null as Error | null,
   phone: false,
+  summary: vi.fn((..._args: unknown[]) => ({ indexedViewerDirection: null, isViewerResponseLoading: false })),
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
     pending: { expectedResponse: 'positive' | 'negative' | null } | null;
@@ -26,7 +27,7 @@ vi.mock('~/core/hooks/use-entity-vote', () => ({
 }));
 
 vi.mock('~/core/claims/browse/claim-response-summary', () => ({
-  useClaimResponseSummary: () => ({ indexedViewerDirection: null, isViewerResponseLoading: false }),
+  useClaimResponseSummary: mocks.summary,
 }));
 
 vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => mocks.phone }));
@@ -76,6 +77,7 @@ afterEach(() => {
   mocks.refetch.mockReset();
   mocks.mutate.mockReset();
   mocks.requestError = null;
+  mocks.summary.mockClear();
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
   mocks.phone = false;
 });
@@ -210,6 +212,56 @@ describe('LobbyDisagreementsTrigger', () => {
     expect(rows).toHaveLength(1);
     expect(rows[0]).toHaveTextContent('Claim a');
     expect(within(rows[0]!).getByRole('alert')).toHaveTextContent(RECIPIENT_UNAVAILABLE_MESSAGE);
+  });
+
+  it('drops a cut-off row once the refresh lists the person on the viewer’s side', () => {
+    const others = Array.from({ length: 8 }, (_, index) => participant(`other${index}`));
+    mocks.data = {
+      lobby_id: '0192abc',
+      source: 'room',
+      claims: [
+        row('a', true, [participant('daniel1'), ...others.slice(0, 7)], 9),
+        row('b', true, [participant('daniel1')]),
+      ],
+    };
+    const { rerender } = render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={2} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 2 claims with Daniel' }));
+    expect(screen.getAllByTestId('lobby-disagreement')).toHaveLength(2);
+
+    // Daniel switches to Agree on a: off the full Disagree list, and listed beside the viewer.
+    const moved = row('a', true, others, 9);
+    moved.positions = moved.positions.map(side =>
+      side.position ? { ...side, total_in_room: 1, participants: [participant('daniel1')] } : side
+    );
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [moved, row('b', true, [participant('daniel1')])] };
+    rerender(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={2} variant="pill" />);
+
+    const rows = screen.getAllByTestId('lobby-disagreement');
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toHaveTextContent('Claim b');
+  });
+
+  it('reads the chain only for a withdrawn row, the one place the offer uses it', () => {
+    // Graph-shaped ids, so only the gate under test can hold a read back.
+    const onGraph = (claim: DebateLobbyClaim, entityId: string) => ({
+      ...claim,
+      claim: { ...claim.claim, claim_entity_id: entityId, space_id: 'a3f1c2d4e5b6a7c8d9e0f1a2b3c4d5e6' },
+    });
+    const ordinary = onGraph(row('a', true, [participant('daniel1')]), 'b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6');
+    const withdrawn = onGraph(row('b', true, [participant('daniel1')]), 'c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6');
+    withdrawn.readiness_disabled_reason = 'claim_response_withdrawn';
+    mocks.data = { lobby_id: '0192abc', source: 'room', claims: [ordinary, withdrawn] };
+    render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={2} variant="pill" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 2 claims with Daniel' }));
+
+    const enabledFor = (entityId: string) =>
+      mocks.summary.mock.calls.filter(call => call[0] === entityId).map(call => call[3]);
+    const ordinaryReads = enabledFor('b1c2d3e4f5a6b7c8d9e0f1a2b3c4d5e6');
+    const withdrawnReads = enabledFor('c1d2e3f4a5b6c7d8e9f0a1b2c3d4e5f6');
+    expect(ordinaryReads.length).toBeGreaterThan(0);
+    expect(ordinaryReads.every(enabled => enabled === false)).toBe(true);
+    expect(withdrawnReads.length).toBeGreaterThan(0);
+    expect(withdrawnReads.every(enabled => enabled === true)).toBe(true);
   });
 
   it('holds the offer while a changed vote publishes, and drops it while a cleared one does', () => {
