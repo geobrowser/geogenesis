@@ -5544,16 +5544,24 @@ describe('DebateRoomPageClient', () => {
       expectNoMutedIndicator('remote');
 
       // Through the reveal and count-in too.
-      rerenderAt(view, '20:02:05.000', openRoundsRevealRebut());
+      rerenderAt(view, '20:02:05.000', revealRebutWithCountIn());
       await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
       expectNoMutedIndicator('local');
       expectNoMutedIndicator('remote');
 
-      rerenderAt(view, '20:02:06.500', openRoundsRevealRebut());
+      rerenderAt(view, '20:02:09.000', revealRebutWithCountIn());
+      await waitFor(() => expect(within(debateVideoTile('local')).getByText('Your turn in')).toBeInTheDocument());
+      expect(audioTrack.mediaStreamTrack.enabled).toBe(true);
       expectNoMutedIndicator('local');
       expectNoMutedIndicator('remote');
 
-      // Round 2: Alice opens it, then Bob takes the second turn and her mic closes.
+      // Round 2: Alice opens it, so Bob's muted indicator returns.
+      rerenderAt(view, '20:02:12.400', revealRebutWithCountIn());
+      await waitFor(() => expectActiveDebateVideoTile('local'));
+      expectNoMutedIndicator('local');
+      expectMutedIndicator('remote');
+
+      // Then Bob takes the second turn and Alice's mic closes.
       rerenderAt(view, '20:03:20.000', openRoundsRoundOneSpeaking());
       await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
       expectMutedIndicator('local');
@@ -5723,18 +5731,6 @@ describe('DebateRoomPageClient', () => {
       expect(result()?.textContent).toBe('Round 2 · RebuttalYou open');
       expect(screen.queryByText('Your turn in')).not.toBeInTheDocument();
     });
-
-    // geo-chat's `extend_count_in_ms` (geo-chat #227): the new round starts 5 s after the window
-    // closes. `next_phase_starts_at` stays the end of the window, resolved + 3 s.
-    const revealRebutWithCountIn = (): Debate => {
-      const debate = openRoundsRevealRebut();
-      return {
-        ...debate,
-        turn_started_at: '2026-10-06T20:02:12.200Z',
-        turn_ends_at: '2026-10-06T20:02:57.200Z',
-        open_rounds: { ...debate.open_rounds!, extend_count_in_ms: 5_000 },
-      };
-    };
 
     it('counts the opener in for 5 s after the announcement', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:06.000'));
@@ -6324,6 +6320,18 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.back).not.toHaveBeenCalled();
   });
 });
+
+// geo-chat's `extend_count_in_ms` (geo-chat #227): the new round starts 5 s after the window
+// closes. `next_phase_starts_at` stays the end of the window, resolved + 3 s.
+function revealRebutWithCountIn(): Debate {
+  const debate = openRoundsRevealRebut();
+  return {
+    ...debate,
+    turn_started_at: '2026-10-06T20:02:12.200Z',
+    turn_ends_at: '2026-10-06T20:02:57.200Z',
+    open_rounds: { ...debate.open_rounds!, extend_count_in_ms: 5_000 },
+  };
+}
 
 /** Moves the room's clock to `time` (an Open rounds fixture time, or epoch ms) and serves `debate`. */
 function rerenderAt(view: ReturnType<typeof render>, time: string | number, debate: Debate) {
