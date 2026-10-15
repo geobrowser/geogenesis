@@ -20,6 +20,7 @@ import { ExpandSmall } from '~/design-system/icons/expand-small';
 import { MobileSheetSurface } from '~/design-system/mobile-sheet-surface';
 import { Badge, tabGroupTabLinkStyles } from '~/design-system/tab-group';
 import { Text } from '~/design-system/text';
+import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
@@ -83,6 +84,7 @@ function visibleTab(activeTab: DebatesHubTab, authenticated: boolean): DebatesHu
 
 export function DebatesHubPanel() {
   const isMobile = useIsMobileLayout();
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const { isOpen, activeTab, close, setTab } = useDebatesHub();
   const { setOverlayElement, sheetStyle, sheet } = useMobileSheetDrag({
     enabled: isMobile && isOpen,
@@ -208,7 +210,10 @@ export function DebatesHubPanel() {
             sheetStyle={sheetStyle}
             sheet={sheet}
           >
-            {body}
+            <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+              {body}
+            </ElevatedPopoverPortalContext.Provider>
+            <div ref={setPopoverContainer} />
           </MobileSheetSurface>
         </motion.div>
       </MotionConfig>,

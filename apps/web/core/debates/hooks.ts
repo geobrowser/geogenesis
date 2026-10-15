@@ -135,10 +135,11 @@ export const debateQueryKeys = {
   claims: (spaceId: string, claimIds: string[] | null, accountKey: string | null) =>
     ['debates', 'claims', spaceId, claimIds ?? 'all', accountKey] as const,
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
-  debate: (debateId: string) => ['debates', 'detail', debateId] as const,
-  media: (debateId: string) => ['debates', 'media', debateId] as const,
+  /** Per-debate keys are dashless: callers hold either spelling, and both must share one entry. */
+  debate: (debateId: string) => ['debates', 'detail', dashlessId(debateId)] as const,
+  media: (debateId: string) => ['debates', 'media', dashlessId(debateId)] as const,
   /** GEO-2870. geo-chat's extracted claims for one debate, with whether its media job has finished. */
-  extractedClaims: (debateId: string) => ['debates', 'extracted-claims', debateId] as const,
+  extractedClaims: (debateId: string) => ['debates', 'extracted-claims', dashlessId(debateId)] as const,
   /** Viewer-specific: whether a recording can be read at all is decided per identity. */
   recordingUrl: (
     debateId: string,
@@ -146,7 +147,8 @@ export const debateQueryKeys = {
     accountKey: string | null,
     variant: RecordingPlaybackVariant | 'original' = 'original'
   ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
-  transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
+  transcript: (debateId: string, format: TranscriptFormat) =>
+    ['debates', 'transcript', dashlessId(debateId), format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
   /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */
@@ -195,11 +197,11 @@ export const debateQueryKeys = {
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
-  // Deliberately NOT nested under `rematch(...)`: the gateway invalidates that prefix on every
-  // `debate.rematch_changed`, and refetching here would hand `<LiveKitRoom>` a new token and tear
-  // down the live voice connection.
-  rematchLiveKit: (accountKey: string | null, sessionId: string) =>
-    ['debates', 'account', accountKey, 'rematch-livekit', sessionId] as const,
+  // Deliberately outside the `debates` root, as the lobby's voice token is. The gateway refetches
+  // that whole root on every (re)connect, and a fresh token reaching `<LiveKitRoom>` while it is
+  // Reconnecting makes livekit-client abandon the resume and rejoin from scratch (GEO-3343) — and a
+  // network blip is exactly when the socket and the call drop together.
+  rematchLiveKit: (accountKey: string | null, sessionId: string) => ['rematch-livekit', accountKey, sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
