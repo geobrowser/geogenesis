@@ -428,6 +428,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   /** An idle tab's save failed on its way out of the room, and the exit it was taking. */
   const [idleSaveFailed, setIdleSaveFailed] = React.useState(false);
   const idleExitRef = React.useRef<(() => void | Promise<void>) | null>(null);
+  /** Bumped by each idle exit, so only the newest may navigate or record a failed save. */
+  const idleExitAttemptRef = React.useRef(0);
+  /** `leave`, for Retry save, which is declared before it. */
+  const leaveRef = React.useRef<(() => Promise<void>) | null>(null);
   const autoRematchConsentAttemptRef = React.useRef<{ debateId: string; remainingSeconds: number } | null>(null);
   const rematchConsentInFlightRef = React.useRef<Promise<boolean> | null>(null);
   const rematchConsentPublishedRef = React.useRef(false);
@@ -2192,17 +2196,23 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    */
   const leaveIdleRoom = React.useCallback(
     async (go: () => void | Promise<void>) => {
+      const attempt = ++idleExitAttemptRef.current;
+      // A newer exit started while this one's save ran: the session moved on (it ended while the
+      // tab was on its way to the picker, say), and only the newest exit speaks for it.
+      const superseded = () => attempt !== idleExitAttemptRef.current;
       idleExitRef.current = go;
       setIdleSaveFailed(false);
       if (holdsUnsavedRecording()) {
         try {
           await persistStoppedLocalRecording();
         } catch (error) {
+          if (superseded()) return;
           setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
           setIdleSaveFailed(true);
           return;
         }
       }
+      if (superseded()) return;
       idleExitRef.current = null;
       // Leave pressed while that save ran is the newer choice, and makes its own way out.
       if (rematchLeaveRequestedRef.current) return;
@@ -2212,6 +2222,13 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   );
 
   const retryLiveDebateFinalization = React.useCallback(() => {
+    // Leave was asked for and its save failed: retrying finishes Leave, which saves, publishes its
+    // opt-out and goes. Every automatic exit stands down once Leave is asked for, so retrying one
+    // of them would save and then do nothing.
+    if (rematchLeaveRequestedRef.current && leaveRef.current) {
+      void leaveRef.current();
+      return;
+    }
     // An idle tab's save failed on its way out: retry that save, then take the same exit.
     if (idleSaveFailed && idleExitRef.current) {
       setRoomError(null);
@@ -2461,6 +2478,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     returnFromDebate,
     roomState,
   ]);
+
+  React.useLayoutEffect(() => {
+    leaveRef.current = leave;
+  }, [leave]);
 
   const handleConnectionFailure = React.useCallback(() => {
     if (connectionFailureHandledRef.current) return;
