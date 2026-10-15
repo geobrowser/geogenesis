@@ -110,8 +110,19 @@ export function lobbyRoomClaimFrom(row: DebateLobbyClaim): LobbyRoomClaim {
   };
 }
 
-/** Request debate, offered only to people in this lobby on the other side. */
-export function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: LobbyRoomOffer }) {
+/**
+ * Request debate, offered only to people in this lobby on the other side, or only to
+ * `recipientUserId` when given.
+ */
+export function LobbyClaimRequest({
+  lobbyId,
+  offer,
+  recipientUserId,
+}: {
+  lobbyId: string;
+  offer: LobbyRoomOffer;
+  recipientUserId?: string;
+}) {
   const { claim, readiness } = offer.entry;
   const { data: activity } = useDebateActivity(true);
   const { data: requests } = useDebateRequests(true);
@@ -145,7 +156,12 @@ export function LobbyClaimRequest({ lobbyId, offer }: { lobbyId: string; offer: 
     <RequestDebateControl
       onRequest={() =>
         createRequest.mutate(
-          { space_id: claim.space_id, claim_entity_id: claim.claim_entity_id, lobby_id: dashlessId(lobbyId) },
+          {
+            space_id: claim.space_id,
+            claim_entity_id: claim.claim_entity_id,
+            lobby_id: dashlessId(lobbyId),
+            ...(recipientUserId ? { recipient_user_id: dashlessId(recipientUserId) } : {}),
+          },
           {
             onError: error => {
               recoverFromMissingIntent(error);

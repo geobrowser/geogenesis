@@ -149,6 +149,23 @@ describe('LobbyPeople on desktop', () => {
     expect(elena).not.toHaveTextContent('Disagrees');
     expect(jordan).toHaveTextContent('Just chatting');
     expect(within(jordan).getByRole('img', { name: 'Muted' })).toBeInTheDocument();
+    expect(within(daniel).getByRole('button', { name: 'Disagrees on 4 claims with Daniel' })).toBeInTheDocument();
+  });
+
+  it('keeps a tile’s status line one height whether its speaker is talking or not', () => {
+    const view = lobby(roster);
+    const { rerender } = renderPeople(view);
+    const statusLine = () => screen.getAllByTestId('lobby-tile-status')[0]!;
+    expect(statusLine()).toHaveTextContent('Looking to debate');
+    expect(statusLine()).toHaveClass('h-[18px]');
+
+    rerender(
+      <LobbyVoiceStatesProvider value={{ speaking: new Set(['adam']), micOn: new Set(['adam']), connected: true }}>
+        <LobbyPeople lobby={view} viewerId="Adam" ownAvailable={undefined} disagreements={null} />
+      </LobbyVoiceStatesProvider>
+    );
+    expect(within(statusLine()).getByRole('img', { name: 'Speaking' })).toBeInTheDocument();
+    expect(statusLine()).toHaveClass('h-[18px]');
   });
 
   it('counts guests among the listeners and notes who a host moved there', () => {
@@ -252,7 +269,7 @@ describe('LobbyPeople on a phone', () => {
     expect(daniel).not.toHaveTextContent('Looking');
     expect(elena).toHaveTextContent('Looking');
 
-    fireEvent.click(daniel);
+    fireEvent.click(within(daniel).getByRole('button', { name: 'Daniel' }));
     const sheet = screen.getByTestId('bottom-sheet');
     expect(sheet).toHaveAttribute('role', 'dialog');
     expect(within(sheet).getByRole('button', { name: 'Request a debate with Daniel' })).toBeInTheDocument();

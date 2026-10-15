@@ -905,6 +905,11 @@ export type CreateDebateRequestBody = {
   format_id?: string;
   /** Dashless. Offers the request only to people requestable in that lobby (GEO-3130). */
   lobby_id?: string;
+  /**
+   * Dashless. With `lobby_id`, offers the request to this one person and never re-targets it
+   * (GEO-3333). geo-chat without it ignores the field and offers it to the other side as before.
+   */
+  recipient_user_id?: string;
 };
 
 export type DismissDebateRequestBody = {

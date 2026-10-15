@@ -31,7 +31,7 @@ export function useDebateLobbyClaims(lobbyId: string, enabled = true) {
 }
 
 /** Refusals that mean the list's request offer is out of date. */
-const STALE_OFFER_CODES = new Set(['no_candidates_in_lobby', 'lobby_not_present']);
+const STALE_OFFER_CODES = new Set(['no_candidates_in_lobby', 'lobby_not_present', 'recipient_not_available']);
 
 /** A request `onError` that refetches the list when the refusal says its offer was stale. */
 export function useRefreshLobbyClaimsOnRefusal(lobbyId: string) {
@@ -47,6 +47,8 @@ export function useRefreshLobbyClaimsOnRefusal(lobbyId: string) {
 export function lobbyClaimRequestErrorMessage(error: unknown) {
   if (!(error instanceof GeoChatRequestError)) return null;
   switch (error.code) {
+    case 'recipient_not_available':
+      return 'They can’t take a request on this claim right now.';
     case 'no_candidates_in_lobby':
       return 'Nobody here on the other side can take a request right now.';
     case 'lobby_not_present':
