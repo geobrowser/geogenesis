@@ -480,7 +480,7 @@ export function usePersonPositionIndex({
   /** Exclude the viewer's held positions before building facets or paginating cards. */
   excludeAnsweredBy?: string | null;
 }) {
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useQuery({
     queryKey: personPositionIndexQueryKey(spaceId, excludeAnsweredBy),
     enabled: enabled && spaceId !== '',
     // Refresh an exclusion whenever it is revisited: the viewer can answer claims
@@ -541,5 +541,5 @@ export function usePersonPositionIndex({
     };
   }, [data]);
 
-  return { index, isLoading, isError, refetch };
+  return { index, isLoading, isFetching, isError, refetch };
 }

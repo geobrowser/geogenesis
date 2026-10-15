@@ -50,6 +50,9 @@ vi.mock('./record-filter-row', () => ({
   }) => (
     <div>
       <button onClick={() => sort.onChange('top')}>Top</button>
+      <output aria-label="Selected topics">
+        {dimensions.find(dimension => dimension.key === 'topics')?.values.join(',')}
+      </output>
       {dimensions.flatMap(dimension =>
         dimension.options.map(option => (
           <button
@@ -268,6 +271,62 @@ describe('profile Hide my positions', () => {
     fireEvent.click(toggle());
     await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(23)));
   });
+
+  it.each(['failure', 'topic returns', 'topic still excluded'] as const)(
+    'waits for a cached exclusion refresh before reconciling topics: %s',
+    async outcome => {
+      const profileEntries = entries.map((entry, i) =>
+        i < 20
+          ? {
+              ...entry,
+              topicIds: ['excluded'],
+              topicsBySpace: new Map(entry.spaceIds.map(space => [space, new Set(['excluded'])])),
+            }
+          : entry
+      );
+      mocks.graphql.mockImplementation(({ variables }) =>
+        Effect.succeed(page(variables.filter ? profileEntries.slice(20) : profileEntries))
+      );
+      setup(true);
+      await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(20)));
+      fireEvent.click(toggle());
+      fireEvent.click(await screen.findByRole('button', { name: 'topics: excluded (20)' }));
+      await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(0, 20)));
+
+      let resolveRefresh!: (value: ReturnType<typeof page>) => void;
+      let rejectRefresh!: (reason: Error) => void;
+      const refresh = new Promise<ReturnType<typeof page>>((resolve, reject) => {
+        resolveRefresh = resolve;
+        rejectRefresh = reject;
+      });
+      mocks.graphql.mockReturnValue(Effect.tryPromise(() => refresh));
+      const previousRequests = mocks.graphql.mock.calls.length;
+      fireEvent.click(toggle());
+      await waitFor(() => expect(mocks.graphql.mock.calls.length).toBeGreaterThan(previousRequests));
+      // Cached facets omit this topic, but the new request has not answered yet.
+      expect(screen.getByLabelText('Selected topics')).toHaveTextContent('excluded');
+
+      await act(async () => {
+        if (outcome === 'failure') rejectRefresh(new Error('refresh unavailable'));
+        else resolveRefresh(page(outcome === 'topic returns' ? profileEntries : profileEntries.slice(20)));
+      });
+
+      if (outcome === 'failure') {
+        await screen.findByText('Could not load positions');
+        fireEvent.click(toggle());
+        expect(await screen.findByRole('button', { name: 'topics: excluded (20)' })).toHaveAttribute(
+          'aria-pressed',
+          'true'
+        );
+      } else if (outcome === 'topic returns') {
+        await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(0, 20)));
+        expect(screen.getByLabelText('Selected topics')).toHaveTextContent('excluded');
+      } else {
+        await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(20)));
+        expect(screen.getByLabelText('Selected topics')).toBeEmptyDOMElement();
+      }
+    }
+  );
 
   it('does not reuse another viewer’s filtered index after switching accounts', async () => {
     mocks.graphql.mockImplementation(({ variables }) =>

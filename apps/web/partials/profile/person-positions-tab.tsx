@@ -58,6 +58,7 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
   const {
     index,
     isLoading: isLoadingIndex,
+    isFetching: isFetchingIndex,
     isError: isIndexError,
     refetch: refetchIndex,
   } = usePersonPositionIndex({
@@ -159,14 +160,15 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
   const replaceTopics = topics.replace;
 
   React.useEffect(() => {
-    // A failed lookup cannot establish that a selected topic is unreachable.
-    if (isLoadingIndex || isIndexError) return;
+    // Cached facets cannot establish reachability while a refresh is in flight,
+    // and a failed lookup cannot establish it at all.
+    if (isLoadingIndex || isFetchingIndex || isIndexError) return;
     // `replaceTopics` rather than `topics`: the selection object is rebuilt each
     // render, so depending on it would re-run this on every one. The callback is
     // stable, and `replace` keeps the previous array when nothing changed, so
     // this settles rather than chasing its own output.
     replaceTopics(current => keepSelectableTopics(current, reachableTopics, true));
-  }, [isLoadingIndex, isIndexError, reachableTopics, replaceTopics]);
+  }, [isLoadingIndex, isFetchingIndex, isIndexError, reachableTopics, replaceTopics]);
 
   return (
     <div className="flex flex-col gap-4">
