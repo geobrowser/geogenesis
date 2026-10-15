@@ -24,9 +24,9 @@ export function useSpaceType(spaceId: string, { enabled = true }: { enabled?: bo
     queryKey: ['space-type', id],
     queryFn: () => loadSpaceType(id),
     initialData: () => queryClient.getQueryData<Space | null>(['space', spaceId])?.type,
-    // Never refetched and never dropped: `staleTime` alone still lets an unmounted card's entry be
-    // garbage-collected, and the next card from that space would ask again.
-    staleTime: Infinity,
+    // A found type is never refetched or dropped (`gcTime` too, or the next card would ask again).
+    // A miss goes stale at once, so a space still reaching the indexer resolves on the next mount.
+    staleTime: ({ state }) => (state.data === null ? 0 : Infinity),
     gcTime: Infinity,
     enabled: enabled && id.length > 0,
   });

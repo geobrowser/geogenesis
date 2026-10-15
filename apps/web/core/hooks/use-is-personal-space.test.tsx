@@ -39,4 +39,20 @@ describe('useIsPersonalSpace', () => {
     expect(second.result.current).toBe(true);
     expect(fetchSpaceTypes).toHaveBeenCalledTimes(1);
   });
+
+  it('asks again on the next mount for a space the lookup did not find', async () => {
+    const MISSING = '00000000000000000000000000000000';
+    fetchSpaceTypes.mockImplementationOnce(async () => new Map());
+    const client = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const first = renderHook(() => useIsPersonalSpace(MISSING), { wrapper });
+    await waitFor(() => expect(first.result.current).toBe(false));
+    first.unmount();
+
+    renderHook(() => useIsPersonalSpace(MISSING), { wrapper });
+    await waitFor(() => expect(fetchSpaceTypes).toHaveBeenCalledTimes(2));
+  });
 });
