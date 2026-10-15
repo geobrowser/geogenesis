@@ -44,10 +44,18 @@ const POSITION_INDEX_SOURCE = /* GraphQL */ `
     $kinds: [Int!]
     $types: [Int!]
     $topicsPropertyId: UUID!
+    $filter: EntityFilter
     $first: Int
     $after: Cursor
   ) {
-    entitiesConnection(votedBy: $userId, votedByKinds: $kinds, votedByTypes: $types, first: $first, after: $after) {
+    entitiesConnection(
+      votedBy: $userId
+      votedByKinds: $kinds
+      votedByTypes: $types
+      filter: $filter
+      first: $first
+      after: $after
+    ) {
       pageInfo {
         hasNextPage
         endCursor
@@ -454,13 +462,26 @@ export function reachableTopicFacets(topics: readonly PositionFacet[], selected:
   );
 }
 
-export function personPositionIndexQueryKey(spaceId: string) {
-  return ['person-position-index', ID.uuidToHex(spaceId)] as const;
+export function personPositionIndexQueryKey(spaceId: string, excludeAnsweredBy?: string | null) {
+  return [
+    'person-position-index',
+    ID.uuidToHex(spaceId),
+    excludeAnsweredBy ? ID.uuidToHex(excludeAnsweredBy) : null,
+  ] as const;
 }
 
-export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: string; enabled?: boolean }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: personPositionIndexQueryKey(spaceId),
+export function usePersonPositionIndex({
+  spaceId,
+  enabled = true,
+  excludeAnsweredBy,
+}: {
+  spaceId: string;
+  enabled?: boolean;
+  /** Exclude the viewer's held positions before building facets or paginating cards. */
+  excludeAnsweredBy?: string | null;
+}) {
+  const { data, isLoading, isError, refetch } = useQuery({
+    queryKey: personPositionIndexQueryKey(spaceId, excludeAnsweredBy),
     enabled: enabled && spaceId !== '',
     // Held longer than the list. The record's shape changes when this person
     // votes, which is not something the reader of somebody else's profile does.
@@ -481,6 +502,17 @@ export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: s
               kinds: [...POSITION_VOTE_KINDS],
               types: [...POSITION_VOTE_TYPES],
               topicsPropertyId: TOPICS_PROPERTY_ID,
+              filter: excludeAnsweredBy
+                ? {
+                    not: {
+                      votedBy: {
+                        userId: ID.uuidToHex(excludeAnsweredBy),
+                        kinds: [...POSITION_VOTE_KINDS],
+                        types: [...POSITION_VOTE_TYPES],
+                      },
+                    },
+                  }
+                : null,
               first: INDEX_PAGE_SIZE,
               after,
             },
@@ -519,5 +551,5 @@ export function usePersonPositionIndex({ spaceId, enabled = true }: { spaceId: s
     };
   }, [data]);
 
-  return { index, isLoading, isError };
+  return { index, isLoading, isError, refetch };
 }
