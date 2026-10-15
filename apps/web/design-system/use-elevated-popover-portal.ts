@@ -2,14 +2,22 @@
 
 import * as React from 'react';
 
+import { useStore } from 'jotai';
+
 import { EntitySidePanelPopoverPortalContext } from '~/core/state/entity-side-panel-popover-portal';
+
+import { slideUpPopoverContainerAtom } from '~/atoms';
 
 export function useElevatedPopoverPortal() {
   const sidePanelPortal = React.useContext(EntitySidePanelPopoverPortalContext);
+  // Like RespondersPopover, read on the render that opens the menu rather than subscribing every
+  // closed menu to sheet changes. The sheet's host is already exempt from its RemoveScroll lock.
+  const store = useStore();
+  const overlayPortal = sidePanelPortal ?? store.get(slideUpPopoverContainerAtom);
   const [bodyPortal, setBodyPortal] = React.useState<HTMLDivElement | null>(null);
 
   React.useLayoutEffect(() => {
-    if (sidePanelPortal) {
+    if (overlayPortal) {
       return;
     }
 
@@ -22,7 +30,7 @@ export function useElevatedPopoverPortal() {
       document.body.removeChild(el);
       setBodyPortal(null);
     };
-  }, [sidePanelPortal]);
+  }, [overlayPortal]);
 
-  return sidePanelPortal ?? bodyPortal;
+  return overlayPortal ?? bodyPortal;
 }

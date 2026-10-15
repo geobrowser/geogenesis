@@ -4,12 +4,15 @@ import userEvent from '@testing-library/user-event';
 
 import * as React from 'react';
 
+import { Provider, createStore } from 'jotai';
 import { afterEach, beforeAll, describe, expect, it } from 'vitest';
 
-import { EntitySidePanelPopoverPortalContext } from '~/core/state/entity-side-panel-popover-portal';
+import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 
 import { Dropdown } from './dropdown';
 import { Menu } from './menu';
+import { SlideUp } from './slide-up';
+import { slideUpPopoverContainerAtom } from '~/atoms';
 
 beforeAll(() => {
   window.ResizeObserver = class {
@@ -40,9 +43,9 @@ function DropdownHarness() {
 }
 
 describe.each([
-  ['Menu', MenuHarness],
-  ['Dropdown', DropdownHarness],
-] as const)('%s overlay placement', (_name, Harness) => {
+  ['Menu', MenuHarness, 'button'],
+  ['Dropdown', DropdownHarness, 'menuitem'],
+] as const)('%s overlay placement', (_name, Harness, optionRole) => {
   it('escapes a sticky, clipped controls row and restores focus on Escape', async () => {
     const user = userEvent.setup();
     const view = render(
@@ -66,24 +69,36 @@ describe.each([
     expect(document.querySelector('.elevated-popover')).toBeNull();
   });
 
-  it('uses the enclosing overlay host when opened inside a panel', async () => {
+  it('keeps panel options accessible in the real overlay host', async () => {
     const user = userEvent.setup();
-    function Panel() {
-      const [host, setHost] = React.useState<HTMLDivElement | null>(null);
-      return (
-        <EntitySidePanelPopoverPortalContext.Provider value={host}>
-          <div data-testid="controls">
-            <Harness />
-          </div>
-          <div ref={setHost} data-testid="overlay-host" />
-        </EntitySidePanelPopoverPortalContext.Provider>
-      );
-    }
-    render(<Panel />);
+    render(
+      <EntitySidePanelPopoverPortalProvider>
+        <div data-testid="controls">
+          <Harness />
+        </div>
+      </EntitySidePanelPopoverPortalProvider>
+    );
     await user.click(screen.getByRole('button', { name: 'Topics' }));
 
-    expect(within(screen.getByTestId('overlay-host')).getByText('Society and culture')).toBeVisible();
+    const option = screen.getByRole(optionRole, { name: 'Society and culture' });
+    expect(option.closest('.side-panel-elevated-popover')).toBeInTheDocument();
     expect(within(screen.getByTestId('controls')).queryByText('Society and culture')).toBeNull();
     expect(document.querySelector('.elevated-popover')).toBeNull();
+  });
+
+  it('uses the slide-up host that is exempt from the sheet scroll lock', async () => {
+    const user = userEvent.setup();
+    const store = createStore();
+    render(
+      <Provider store={store}>
+        <SlideUp isOpen setIsOpen={() => {}}>
+          <Harness />
+        </SlideUp>
+      </Provider>
+    );
+    await user.click(screen.getByRole('button', { name: 'Topics' }));
+
+    const option = screen.getByRole(optionRole, { name: 'Society and culture' });
+    expect(store.get(slideUpPopoverContainerAtom)).toContainElement(option);
   });
 });
