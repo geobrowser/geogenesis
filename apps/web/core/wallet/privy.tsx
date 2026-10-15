@@ -31,6 +31,10 @@ export const privyConfig: PrivyClientConfig = {
   },
   appearance: {
     showWalletLoginFirst: false,
+    // Privy fetches the WalletConnect registry (~170 KB) when the provider mounts if this list names
+    // a registry wallet (metamask, rainbow, wallet_connect, …), and its default list does. Nothing
+    // here opens a wallet picker; Privy's own connect view still loads the registry when it opens.
+    walletList: ['detected_ethereum_wallets'],
     logo: '/static/favicon-320x180.png',
   },
 };

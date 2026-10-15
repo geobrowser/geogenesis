@@ -22,3 +22,36 @@ describe('Privy login methods', () => {
     expect(methods.filter(method => !SAME_DOCUMENT_LOGIN_METHODS.includes(method))).toEqual([]);
   });
 });
+
+describe('Privy wallet list', () => {
+  // Privy (3.32) fetches explorer-api.walletconnect.com/v3/wallets on every page load when any of these is listed.
+  const REGISTRY_WALLETS = [
+    'wallet_connect',
+    'backpack',
+    'binance',
+    'binanceus',
+    'bitget_wallet',
+    'bybit_wallet',
+    'cryptocom',
+    'haha_wallet',
+    'jupiter',
+    'metamask',
+    'okx_wallet',
+    'phantom',
+    'rabby_wallet',
+    'rainbow',
+    'ronin_wallet',
+    'safe',
+    'solflare',
+    'uniswap',
+    'zerion',
+    'kraken_wallet',
+  ];
+
+  it('names no WalletConnect registry wallet, so the registry is not fetched on mount', () => {
+    const list = privyConfig.appearance?.walletList;
+
+    expect(list).toBeDefined();
+    expect(list!.filter(entry => REGISTRY_WALLETS.includes(entry))).toEqual([]);
+  });
+});
