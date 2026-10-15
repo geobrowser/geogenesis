@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { WATCH_LIVE_ENABLED, WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
+import { WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
@@ -22,6 +22,7 @@ import { trustedIndexedPosition, useBackfillReadinessForHeldPosition } from '../
 import { HubCardList } from '../matchmaking/hub-motion';
 import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import { MatchmakingClaimCard, isResolvableClaim } from '../matchmaking/matchmaking-claim-card';
+import { WATCH_LIVE_ENABLED } from '../watch-live';
 import { hostsLabel, personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 

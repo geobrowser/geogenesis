@@ -26,6 +26,7 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 // refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
 // are lifted above every module-level declaration, so a mock that reads it can't use a plain const.
 const mocks = vi.hoisted(() => ({
+  watchLive: true,
   submitResponse: vi.fn(),
   submitResponseAsync: vi.fn(),
   isConnected: true,
@@ -70,6 +71,14 @@ const mocks = vi.hoisted(() => ({
   nearViewport: true,
   rootSelectors: [] as (string | undefined)[],
   useEntityResponse: vi.fn(),
+}));
+
+// Live watching is off in the product (GEO-3334). On here so the pill's own behaviour stays covered
+// for when it ships; the off state has its own test.
+vi.mock('../watch-live', () => ({
+  get WATCH_LIVE_ENABLED() {
+    return mocks.watchLive;
+  },
 }));
 
 vi.mock('../hooks', () => ({
@@ -274,6 +283,7 @@ function renderCard(card: ReactElement, { smartAccount }: { smartAccount?: objec
 }
 
 beforeEach(() => {
+  mocks.watchLive = true;
   // The disabled-state tooltip uses Radix positioning, which observes its content in the browser.
   vi.stubGlobal(
     'ResizeObserver',
@@ -1363,9 +1373,26 @@ describe('MatchmakingClaimCard', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
   });
 
-  // Live watching does not exist yet (GEO-3334): the room of a running debate has no recording to
-  // show, so the pill sent readers to a debate other than the one it named.
+  it('opens the room when a debate is running', () => {
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness()}
+        activeDebate={{ id: 'debate-7', claim: { ...claim, space_id: mocks.spaceId } } as never}
+      />
+    );
+
+    // A verb, not a status. "Debating now" told the reader something was happening and gave them
+    // nowhere to go, which is the whole reason the slot holds actions.
+    expect(screen.getByRole('link', { name: /Watch live/ })).toHaveAttribute(
+      'href',
+      `/space/${mocks.spaceId}/debates/debate-7`
+    );
+  });
+
   it('offers no Watch live while live watching is off', () => {
+    mocks.watchLive = false;
     renderCard(
       <MatchmakingClaimCard
         claim={claim}
@@ -1376,6 +1403,28 @@ describe('MatchmakingClaimCard', () => {
     );
 
     expect(screen.queryByRole('link', { name: /Watch live/ })).toBeNull();
+  });
+
+  // A debate room lives under the space its *claim* came from, which is not always the space the
+  // surface rendering the row is scoped to — the debate claims panel already fetches its rows per
+  // claim space, so a debate quoting a claim from elsewhere lands here with the two disagreeing.
+  // Building the href from the host's `spaceId` sent the reader to a room under the wrong space.
+  it('opens the room under the debate claim’s own space, not the host surface’s', () => {
+    const OTHER_SPACE = 'e7d6d84d3a3d4b0e9f9d6d0f6f5e4c3b';
+
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness()}
+        activeDebate={{ id: 'debate-7', claim: { ...claim, space_id: OTHER_SPACE } } as never}
+      />
+    );
+
+    expect(screen.getByRole('link', { name: /Watch live/ })).toHaveAttribute(
+      'href',
+      `/space/${OTHER_SPACE}/debates/debate-7`
+    );
   });
 
   // `EntityVoteButtons` — the control every claim surface used to render — refused outright while
