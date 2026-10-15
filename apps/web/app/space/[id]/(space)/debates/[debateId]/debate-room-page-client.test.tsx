@@ -5532,18 +5532,32 @@ describe('DebateRoomPageClient', () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
       const view = await renderLiveDebate(openRoundsListening());
       await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+      const remoteVideo = document.createElement('video');
+      const trackSubscribed = mocks.roomOn.mock.calls.find(([event]) => event === 'trackSubscribed')?.[1];
+      act(() => trackSubscribed?.({ attach: () => remoteVideo }));
+      expectMutedIndicator('local');
 
       rerenderAt(view, '20:02:03.000', openRoundsDeciding());
       await waitFor(() => expect(document.querySelector('[data-open-round-pick-card]')).not.toBeNull());
       await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+      expectNoMutedIndicator('local');
+      expectNoMutedIndicator('remote');
 
       // Through the reveal and count-in too.
       rerenderAt(view, '20:02:05.000', openRoundsRevealRebut());
       await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(true));
+      expectNoMutedIndicator('local');
+      expectNoMutedIndicator('remote');
+
+      rerenderAt(view, '20:02:06.500', openRoundsRevealRebut());
+      expectNoMutedIndicator('local');
+      expectNoMutedIndicator('remote');
 
       // Round 2: Alice opens it, then Bob takes the second turn and her mic closes.
       rerenderAt(view, '20:03:20.000', openRoundsRoundOneSpeaking());
       await waitFor(() => expect(audioTrack.mediaStreamTrack.enabled).toBe(false));
+      expectMutedIndicator('local');
+      expectNoMutedIndicator('remote');
     });
   });
 
