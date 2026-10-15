@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   endDebateLobbyStepOut: vi.fn(),
   listDebateLobbies: vi.fn(),
   listDebateLobbyCalendar: vi.fn(),
+  setDebateLobbyReminder: vi.fn(),
+  endDebateLobby: vi.fn(),
 }));
 
 const capture = vi.hoisted(() => vi.fn());
@@ -32,13 +34,20 @@ vi.mock('../hooks', async importOriginal => ({
 }));
 
 const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useDebateLobbyCalendar, useLobbyPresence } =
-  await import('./hooks');
+const {
+  LOBBY_HEARTBEAT_MS,
+  useDebateLobbies,
+  useDebateLobby,
+  useDebateLobbyCalendar,
+  useDebateLobbyReminder,
+  useEndDebateLobby,
+  useLobbyPresence,
+} = await import('./hooks');
 const { debateQueryKeys } = await import('../hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
 const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
-const { lobbyDebateSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
+const { lobbyDebateSeen, lobbyRoomVoteSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
 
 const lobbyEvents = (name: string) =>
   capture.mock.calls.filter(([event]) => event === name).map(([, props]) => props as Record<string, unknown>);
@@ -202,6 +211,22 @@ describe('useLobbyPresence', () => {
     const { result } = await goneAfterBeat('ended');
     await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'ended' }));
     expect(joins()).toHaveLength(1);
+  });
+
+  it('ends the room vote a hosting tab was following when the heartbeat says another host ended the lobby', async () => {
+    lobbyRoomVoteSeen('lobby1', {
+      vote_id: 'vote-at-end',
+      claim: { id: 'dc', space_id: 's', claim_entity_id: 'c', claim: 'Claim', description: null },
+      started_by: null,
+      started_at: '2026-10-05T10:00:00Z',
+      tally: { agree: 2, disagree: 1, eligible: 4 },
+    });
+    const { result } = await goneAfterBeat('ended');
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'ended' }));
+
+    expect(lobbyEvents('lobby_room_vote_ended')).toEqual([
+      expect.objectContaining({ room_vote_id: 'vote-at-end', end_reason: 'lobby_ended', agree: 2 }),
+    ]);
   });
 
   it('rejoins on reason lapsed', async () => {
@@ -786,7 +811,14 @@ describe('lobby analytics through useLobbyPresence', () => {
     });
 
     expect(lobbyEvents('lobby_joined')).toEqual([
-      { lobby_id: 'lobby1', lobby_session_id: expect.any(String), is_newcomer: true, entry: 'side_panel' },
+      {
+        lobby_id: 'lobby1',
+        lobby_session_id: expect.any(String),
+        is_newcomer: true,
+        role: 'speaker',
+        hosting: false,
+        entry: 'side_panel',
+      },
     ]);
     expect(lobbyEvents('lobby_left')).toEqual([]);
   });
@@ -854,5 +886,71 @@ describe('lobby analytics through useLobbyPresence', () => {
 
     expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['link', 'back_after_debate']);
     expect(lobbyEvents('lobby_left').map(props => props.exit)).toEqual(['unknown']);
+  });
+});
+
+describe('lobby analytics from the lobby hooks (GEO-3311)', () => {
+  it('puts the role the join answered with on lobby_joined', async () => {
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    expect(lobbyEvents('lobby_joined')).toEqual([expect.objectContaining({ role: 'speaker', hosting: false })]);
+  });
+
+  it('starts the session from the room the join answered with', async () => {
+    const member = (id: string) => ({
+      user_id: id,
+      profile_space_id: `space-${id}`,
+      display_name: null,
+      avatar_cid: null,
+      role: 'listener' as const,
+      creator: false,
+      acting_host: false,
+      on_roster_since: '2026-10-05T10:00:00Z',
+      stepped_out: false,
+      in_debate: false,
+    });
+    api.setDebateLobbyPresence.mockImplementationOnce(async () => ({
+      ...view(true),
+      members: [member('u1'), member('u2')],
+      guest_count: 1,
+    }));
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    await act(() => result.current.leave());
+
+    expect(lobbyEvents('lobby_left')).toEqual([expect.objectContaining({ peak_headcount: 3 })]);
+  });
+
+  it('records Going on the server’s confirmation, not on a refusal', async () => {
+    api.setDebateLobbyReminder.mockResolvedValueOnce({
+      ...view(false),
+      scheduled: true,
+      reminder_count: 4,
+      viewer: { ...view(false).viewer, reminded: true },
+    });
+    api.setDebateLobbyReminder.mockRejectedValueOnce(
+      new GeoChatRequestError('already open', 'lobby_already_open', 409, null, null)
+    );
+    const { result } = renderHook(() => useDebateLobbyReminder(), { wrapper });
+
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }));
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }).catch(() => undefined));
+
+    expect(lobbyEvents('lobby_rsvp_changed')).toEqual([
+      expect.objectContaining({ lobby_id: 'lobby1', going: true, going_count: 4 }),
+    ]);
+  });
+
+  it('sends lobby_ended once the host’s End is confirmed', async () => {
+    api.endDebateLobby.mockResolvedValueOnce({ ...view(false), scheduled: true });
+    const { result } = renderHook(() => useEndDebateLobby('lobby1'), { wrapper });
+
+    await act(() => result.current.mutateAsync());
+
+    expect(lobbyEvents('lobby_ended')).toEqual([
+      expect.objectContaining({ lobby_id: 'lobby1', scheduled: true, open_ms: expect.any(Number) }),
+    ]);
   });
 });

@@ -1,5 +1,7 @@
 'use client';
 
+import { currentNavigationType } from '~/core/utils/navigation-type';
+
 import { debateRoomPath, isDebateRoomPath } from './rooms/room-routes';
 
 const debateReturnDestinationKey = 'geo.debates.return-destination';
@@ -103,8 +105,8 @@ export function lastPageOutsideDebates(): string | null {
 }
 
 function documentRestored() {
-  const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
-  return entry?.type === 'reload' || entry?.type === 'back_forward';
+  const type = currentNavigationType();
+  return type === 'reload' || type === 'back_forward';
 }
 
 /** Session storage can be unavailable in privacy modes; these treat that as empty. */

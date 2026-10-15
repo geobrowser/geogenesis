@@ -116,6 +116,11 @@ export function lobbyHeadcount(lobby: Pick<DebateLobbyView, 'members'>) {
   return lobby.members.length;
 }
 
+/** Everyone in the room: who the header counts as here, plus guests listening without an account. */
+export function lobbyRoomHeadcount(lobby: Pick<DebateLobbyView, 'members' | 'guest_count'>) {
+  return lobbyHeadcount(lobby) + (lobby.guest_count ?? 0);
+}
+
 export function hereLabel(headcount: number) {
   return `${headcount} here`;
 }
