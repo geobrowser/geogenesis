@@ -398,10 +398,14 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   const join = useRematchLiveKitJoin(session.id, voiceActive && ownership === 'owned');
 
   const [micFailure, setMicFailure] = React.useState<MediaDeviceFailure | null>(null);
+  const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
 
   const cameraAllowed = join.data ? tokenAllowsCamera(join.data.token) : false;
   const [cameraIntent, setCameraIntent] = React.useState(() => cameraEnabledByDefault(session));
-  const handleCameraIntentChange = React.useCallback((enabled: boolean) => setCameraIntent(enabled), []);
+  const handleCameraIntentChange = React.useCallback((enabled: boolean) => {
+    if (enabled) setCameraFailure(null);
+    setCameraIntent(enabled);
+  }, []);
   const handleCameraFailure = React.useCallback(() => setCameraIntent(false), []);
 
   // `<LiveKitRoom audio>` is not a one-time "publish on join" flag. Recovery remounts the room
@@ -495,6 +499,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure, kind?: MediaDeviceKind) => {
     if (kind === 'videoinput') {
       setCameraIntent(false);
+      setCameraFailure(failure ?? null);
       return;
     }
     setMicFailure(failure ?? null);
@@ -633,6 +638,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
         opponentUserId={opponent.user_id}
         micFailure={micFailure}
         cameraAllowed={cameraAllowed}
+        cameraFailure={cameraFailure}
         cameraIntent={cameraIntent}
         onCameraIntentChange={handleCameraIntentChange}
         onCameraFailure={handleCameraFailure}
@@ -712,6 +718,7 @@ function VoiceHeaderBody({
   opponentUserId,
   micFailure,
   cameraAllowed,
+  cameraFailure,
   cameraIntent,
   onCameraIntentChange,
   onCameraFailure,
@@ -730,6 +737,7 @@ function VoiceHeaderBody({
   opponentUserId: string;
   micFailure: MediaDeviceFailure | null;
   cameraAllowed: boolean;
+  cameraFailure: MediaDeviceFailure | null;
   cameraIntent: boolean;
   onCameraIntentChange: (enabled: boolean) => void;
   onCameraFailure: () => void;
@@ -918,7 +926,12 @@ function VoiceHeaderBody({
     return null;
   })();
 
-  const cameraMessage = cameraIntent && !cameraAllowed ? 'Video isn’t available in this call.' : null;
+  const cameraMessage =
+    cameraIntent && !cameraAllowed
+      ? 'Video isn’t available in this call.'
+      : cameraFailure
+        ? cameraFailureMessage(cameraFailure)
+        : null;
 
   const opponentCamera = opponentParticipant?.getTrackPublication(Track.Source.Camera);
   const localVideo = cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} /> : null;
@@ -1071,6 +1084,19 @@ function OpponentPresence({
  * boolean.
  */
 const TALKING_WHILE_MUTED: boolean = false;
+
+export function cameraFailureMessage(failure: MediaDeviceFailure): string {
+  switch (failure) {
+    case MediaDeviceFailure.PermissionDenied:
+      return 'Camera blocked. Allow it in your browser, then try again.';
+    case MediaDeviceFailure.NotFound:
+      return 'No camera found. Connect one, then try again.';
+    case MediaDeviceFailure.DeviceInUse:
+      return 'Your camera is in use by another app.';
+    default:
+      return 'Camera unavailable.';
+  }
+}
 
 export function micFailureMessage(failure: MediaDeviceFailure): string {
   switch (failure) {

@@ -639,6 +639,39 @@ describe('RematchVoiceHeader', () => {
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
   });
 
+  it('names the camera’s own problem', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (
+      failure?: string,
+      kind?: MediaDeviceKind
+    ) => void;
+
+    act(() => onMediaDeviceFailure('NotFound', 'videoinput'));
+
+    expect(await screen.findByText('No camera found. Connect one, then try again.')).toBeInTheDocument();
+    expect(screen.queryByText(/No microphone found/)).toBeNull();
+  });
+
+  it('drops the camera’s message when it is tried again', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (
+      failure?: string,
+      kind?: MediaDeviceKind
+    ) => void;
+    act(() => onMediaDeviceFailure('NotFound', 'videoinput'));
+    await screen.findByText('No camera found. Connect one, then try again.');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+
+    await waitFor(() => expect(screen.queryByText(/No camera found/)).toBeNull());
+  });
+
   it('leaves the microphone alone when the camera is the device that failed', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
     rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
