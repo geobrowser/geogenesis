@@ -232,7 +232,14 @@ export type RoomSoundEngine = {
  */
 async function loopback(stream: MediaStream): Promise<{ stream: MediaStream; close: () => void }> {
   const sender = new RTCPeerConnection();
-  const receiver = new RTCPeerConnection();
+  let receiver: RTCPeerConnection;
+  try {
+    receiver = new RTCPeerConnection();
+  } catch (error) {
+    // Out of peer connections, say: the first must not outlive the failed setup.
+    sender.close();
+    throw error;
+  }
   let timeout: ReturnType<typeof setTimeout> | undefined;
   const close = () => {
     clearTimeout(timeout);
@@ -318,8 +325,13 @@ export async function createRoomSoundEngine(): Promise<RoomSoundEngine | null> {
     return {
       play: sound => {
         try {
-          if (ownContext.state === 'suspended') void ownContext.resume().catch(() => undefined);
           if (audio.paused) void audio.play().catch(() => undefined);
+          // A suspended context's clock stands still, so every sound scheduled meanwhile would land
+          // at once when it resumes. Skip this one, and ask it to resume for the next.
+          if (ownContext.state !== 'running') {
+            void ownContext.resume().catch(() => undefined);
+            return;
+          }
           ROOM_SOUNDS[sound](voice);
         } catch {
           // A sound is never worth an error in the room.

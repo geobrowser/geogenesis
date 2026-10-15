@@ -24,23 +24,32 @@ function installStorage() {
 
 afterEach(() => {
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 
-/** Just enough of an AudioContext for the engine to build its bus. */
+/** Just enough of an AudioContext for the engine to build its bus and play a sound. */
 class FakeAudioContext {
+  static last: FakeAudioContext | null = null;
+  state: AudioContextState = 'running';
   sampleRate = 8;
   currentTime = 0;
-  resume = () => Promise.resolve();
+  resume = vi.fn(() => Promise.resolve());
+  createOscillator = vi.fn(() => ({ ...this.node(), start() {}, stop() {} }));
+  createBufferSource = vi.fn(() => ({ ...this.node(), start() {}, stop() {} }));
+  constructor() {
+    FakeAudioContext.last = this;
+  }
   close = () => Promise.resolve();
   private node = () => {
     const node: Record<string, unknown> = {
       type: '',
-      frequency: { value: 0 },
+      frequency: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
       threshold: { value: 0 },
       ratio: { value: 0 },
       attack: { value: 0 },
       release: { value: 0 },
-      gain: { value: 0 },
+      gain: { value: 0, setValueAtTime() {}, exponentialRampToValueAtTime() {} },
+      Q: { value: 0 },
       connect: (next: unknown) => next,
     };
     return node;
@@ -50,6 +59,24 @@ class FakeAudioContext {
   createGain = this.node;
   createMediaStreamDestination = () => ({ ...this.node(), stream: { getAudioTracks: () => [] } });
   createBuffer = () => ({ getChannelData: () => new Float32Array(8) });
+}
+
+/** A connection pair that completes: the receiving end gets the track once it has the offer. */
+class LoopbackPeerConnection {
+  static made = 0;
+  private isReceiver = LoopbackPeerConnection.made++ % 2 === 1;
+  ontrack: ((event: { streams: unknown[]; track: unknown }) => void) | null = null;
+  onicecandidate: unknown = null;
+  addTrack() {}
+  close() {}
+  addIceCandidate = () => Promise.resolve();
+  createOffer = () => Promise.resolve({ type: 'offer', sdp: '' });
+  createAnswer = () => Promise.resolve({ type: 'answer', sdp: '' });
+  setLocalDescription = () => Promise.resolve();
+  setRemoteDescription = () => {
+    if (this.isReceiver) this.ontrack?.({ streams: [{}], track: {} });
+    return Promise.resolve();
+  };
 }
 
 describe('countInSound', () => {
@@ -120,6 +147,47 @@ describe('createRoomSoundEngine', () => {
       process.off('unhandledRejection', unhandled);
       vi.useRealTimers();
     }
+  });
+
+  it('closes the first peer connection when the second cannot be made', async () => {
+    const closed = vi.fn();
+    let made = 0;
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal(
+      'RTCPeerConnection',
+      class {
+        constructor() {
+          if (++made > 1) throw new Error('Too many peer connections');
+        }
+        close = closed;
+      }
+    );
+
+    await expect(createRoomSoundEngine()).resolves.toBeNull();
+    expect(closed).toHaveBeenCalledTimes(1);
+  });
+
+  it('skips sounds while the audio context is suspended, rather than piling them up for its resume', async () => {
+    vi.stubGlobal('AudioContext', FakeAudioContext);
+    vi.stubGlobal('RTCPeerConnection', LoopbackPeerConnection);
+    vi.spyOn(HTMLMediaElement.prototype, 'play').mockResolvedValue(undefined);
+    vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => undefined);
+
+    const engine = await createRoomSoundEngine();
+    const context = FakeAudioContext.last!;
+    expect(engine).not.toBeNull();
+
+    context.state = 'suspended';
+    context.resume.mockReturnValue(new Promise(() => undefined));
+    engine!.play('go');
+    engine!.play('tick');
+    expect(context.createOscillator).not.toHaveBeenCalled();
+    expect(context.resume).toHaveBeenCalled();
+
+    context.state = 'running';
+    engine!.play('go');
+    expect(context.createOscillator).toHaveBeenCalled();
+    engine!.dispose();
   });
 
   it('stays silent where there is no Web Audio', async () => {
