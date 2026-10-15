@@ -1,9 +1,10 @@
 import { DisconnectReason } from 'livekit-client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { disconnectCause, disconnectReasonName } from '~/core/livekit/disconnect-reason';
 import { reportEvent } from '~/core/telemetry/logger';
 
-import { disconnectCause, disconnectReasonName, reportCallDisconnect } from './disconnect-telemetry';
+import { reportCallDisconnect } from './disconnect-telemetry';
 
 vi.mock('~/core/telemetry/logger', () => ({ reportEvent: vi.fn() }));
 

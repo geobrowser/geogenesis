@@ -6,6 +6,7 @@ import {
   micKindOf,
   readReceiverReport,
   readSenderReport,
+  readTransport,
   voiceSampleMetrics,
 } from './voice-call-stats';
 
@@ -123,9 +124,39 @@ describe('reading WebRTC stats reports', () => {
     ).toEqual({ packets: 100, packetsLost: 2, samples: 4_800, concealedSamples: 48, jitter: 0.02 });
   });
 
-  it('reads an absent report as nothing measured', () => {
-    expect(readSenderReport(undefined)).toEqual({});
-    expect(readReceiverReport(undefined)).toEqual({});
+  it('reads an empty report as nothing measured', () => {
+    expect(readSenderReport([])).toEqual({});
+    expect(readReceiverReport([])).toEqual({});
+  });
+});
+
+describe('readTransport (GEO-3343)', () => {
+  const report = (local: Record<string, unknown>) => [
+    { id: 'T1', type: 'transport', selectedCandidatePairId: 'CP1' },
+    { id: 'CP0', type: 'candidate-pair', localCandidateId: 'L0', nominated: false },
+    { id: 'CP1', type: 'candidate-pair', localCandidateId: 'L1', nominated: true },
+    { id: 'L0', type: 'local-candidate', protocol: 'udp', candidateType: 'host' },
+    { id: 'L1', type: 'local-candidate', ...local },
+  ];
+
+  it('reads the selected pair rather than any other', () => {
+    expect(readTransport(report({ protocol: 'tcp', candidateType: 'host' }))).toBe('tcp');
+    expect(readTransport(report({ protocol: 'udp', candidateType: 'srflx' }))).toBe('udp');
+  });
+
+  it('names a relay by the protocol it reaches the relay over', () => {
+    expect(readTransport(report({ protocol: 'udp', candidateType: 'relay', relayProtocol: 'tls' }))).toBe('relay_tls');
+    expect(readTransport(report({ protocol: 'udp', candidateType: 'relay' }))).toBe('relay');
+  });
+
+  // Firefox has no transport entry; the nominated pair is the one in use.
+  it('falls back to the nominated pair when there is no transport entry', () => {
+    expect(readTransport(report({ protocol: 'tcp', candidateType: 'host' }).slice(1))).toBe('tcp');
+  });
+
+  it('reads nothing before a pair is chosen', () => {
+    expect(readTransport([{ id: 'T1', type: 'transport' }])).toBeNull();
+    expect(readTransport([])).toBeNull();
   });
 });
 

@@ -117,7 +117,12 @@ export function voiceSampleMetrics(
   };
 }
 
-type StatsEntry = { type?: string; kind?: string; [field: string]: unknown };
+type StatsEntry = { id?: string; type?: string; kind?: string; [field: string]: unknown };
+
+/** A report's entries, read once: transport lookups follow ids between them. */
+export function statsEntries(report: { values(): Iterable<StatsEntry> } | undefined): StatsEntry[] {
+  return report ? [...report.values()] : [];
+}
 
 const num = (value: unknown) => (typeof value === 'number' && Number.isFinite(value) ? value : undefined);
 const add = (total: number | undefined, value: unknown) => {
@@ -127,9 +132,9 @@ const add = (total: number | undefined, value: unknown) => {
 const isAudio = (entry: StatsEntry) => entry.kind === undefined || entry.kind === 'audio';
 
 /** Our microphone's sender report: outbound packets, the server's view of them, and the source level. */
-export function readSenderReport(entries: Iterable<StatsEntry> | undefined): SenderSnapshot {
+export function readSenderReport(entries: readonly StatsEntry[]): SenderSnapshot {
   const snapshot: SenderSnapshot = {};
-  for (const entry of entries ?? []) {
+  for (const entry of entries) {
     if (!isAudio(entry)) continue;
     if (entry.type === 'outbound-rtp') snapshot.packets = add(snapshot.packets, entry.packetsSent);
     else if (entry.type === 'remote-inbound-rtp') {
@@ -145,9 +150,9 @@ export function readSenderReport(entries: Iterable<StatsEntry> | undefined): Sen
 }
 
 /** One remote audio track's receiver report. */
-export function readReceiverReport(entries: Iterable<StatsEntry> | undefined): ReceiverSnapshot {
+export function readReceiverReport(entries: readonly StatsEntry[]): ReceiverSnapshot {
   const snapshot: ReceiverSnapshot = {};
-  for (const entry of entries ?? []) {
+  for (const entry of entries) {
     if (entry.type !== 'inbound-rtp' || !isAudio(entry)) continue;
     snapshot.packets = add(snapshot.packets, entry.packetsReceived);
     snapshot.packetsLost = add(snapshot.packetsLost, entry.packetsLost);
@@ -156,6 +161,34 @@ export function readReceiverReport(entries: Iterable<StatsEntry> | undefined): R
     snapshot.jitter = num(entry.jitter) ?? snapshot.jitter;
   }
   return snapshot;
+}
+
+/**
+ * How a connection reaches the server. `udp` is the normal path. `tcp` delivers lost packets late,
+ * as a burst, which is what choppy audio sounds like (GEO-3343). `relay_*` goes through a TURN
+ * server, over the protocol it names; plain `relay` is a browser that does not say which.
+ */
+export type VoiceTransport = 'udp' | 'tcp' | 'relay_udp' | 'relay_tcp' | 'relay_tls' | 'relay';
+
+const RELAY_PROTOCOLS = new Set(['udp', 'tcp', 'tls']);
+
+/** The transport of the candidate pair a report's connection is using, or null before one is chosen. */
+export function readTransport(entries: readonly StatsEntry[]): VoiceTransport | null {
+  const byId = new Map(entries.map(entry => [entry.id, entry]));
+  const selectedPairId = entries.find(entry => entry.type === 'transport')?.selectedCandidatePairId;
+  const pair =
+    (typeof selectedPairId === 'string' ? byId.get(selectedPairId) : undefined) ??
+    // Firefox reports no transport entry; its selected pair is the one marked as such.
+    entries.find(entry => entry.type === 'candidate-pair' && (entry.selected === true || entry.nominated === true));
+  const local = typeof pair?.localCandidateId === 'string' ? byId.get(pair.localCandidateId) : undefined;
+  if (!local) return null;
+  if (local.candidateType === 'relay') {
+    const protocol = local.relayProtocol;
+    return typeof protocol === 'string' && RELAY_PROTOCOLS.has(protocol)
+      ? (`relay_${protocol}` as VoiceTransport)
+      : 'relay';
+  }
+  return local.protocol === 'tcp' || local.protocol === 'udp' ? local.protocol : null;
 }
 
 export type MicKind = 'built_in' | 'bluetooth' | 'external' | 'virtual' | 'unknown';

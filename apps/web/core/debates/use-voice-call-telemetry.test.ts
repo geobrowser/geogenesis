@@ -135,6 +135,39 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     );
   });
 
+  // GEO-3343: the listener's connection fell back to TCP while the speaker's was on UDP.
+  it('reports the transport each way, and a fallback mid-call', async () => {
+    const path = (prefix: string, protocol: string) => [
+      { id: `${prefix}T`, type: 'transport', selectedCandidatePairId: `${prefix}P` },
+      { id: `${prefix}P`, type: 'candidate-pair', localCandidateId: `${prefix}L` },
+      { id: `${prefix}L`, type: 'local-candidate', protocol, candidateType: 'host' },
+    ];
+    const call = fakeRoom();
+    call.mic.stats = path('s', 'udp');
+    call.remote.stats = path('r', 'udp');
+    renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+    expect(events('debate_voice_sampled')[0]).toEqual(
+      expect.objectContaining({ send_transport: 'udp', recv_transport: 'udp' })
+    );
+
+    call.remote.stats = path('r', 'tcp');
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    expect(events('debate_voice_sampled')[1]).toEqual(
+      expect.objectContaining({ send_transport: 'udp', recv_transport: 'tcp' })
+    );
+    expect(events('debate_voice_changed')).toEqual([
+      expect.objectContaining({ change: 'transport', direction: 'recv', transport: 'tcp', previous_transport: 'udp' }),
+    ]);
+  });
+
+  it('summarises a call the viewer disconnected as left', () => {
+    const call = fakeRoom();
+    renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+    act(() => call.emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED));
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'left' })]);
+  });
+
   it('does not sample a room that is not connected', async () => {
     const call = fakeRoom();
     call.raw.state = ConnectionState.Reconnecting;
@@ -185,7 +218,8 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     unmount();
 
     expect(events('debate_voice_changed').at(-1)).toEqual(
-      expect.objectContaining({ change: 'disconnected', reason: 'SIGNAL_CLOSE' })
+      // Named and attributed by the helpers community calls use, so the two read alike.
+      expect.objectContaining({ change: 'disconnected', reason: 'SIGNAL_CLOSE', cause: 'unknown' })
     );
     expect(events('debate_voice_ended')).toEqual([
       expect.objectContaining({
