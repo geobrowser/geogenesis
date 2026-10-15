@@ -527,7 +527,8 @@ function LobbyRoom({
   const phone = useIsPhoneLayout();
   // The viewer's own toggle, as the availability pill and People tab read it, ahead of the roster's.
   // A member read: off for a guest, including one signed in while the member view loads.
-  const activity = useDebateActivity(authenticated && !guest).data;
+  const activityQuery = useDebateActivity(authenticated && !guest);
+  const activity = activityQuery.data;
   const ownAvailable = activity?.available_to_debate;
   const ownRematch = activity?.rematch ?? null;
   const handoff = useHandoffNotice(lobby);
@@ -630,7 +631,13 @@ function LobbyRoom({
         className={cx('flex flex-col', columns ? 'h-[calc(100dvh-2.75rem)]' : 'min-h-[calc(100dvh-2.75rem)]')}
         data-testid="debate-lobby"
       >
-        {ownRematch && !guest ? <EndPickerLeftBehind joined={state.status === 'joined'} session={ownRematch} /> : null}
+        {ownRematch && !guest ? (
+          <EndPickerLeftBehind
+            joined={state.status === 'joined'}
+            session={ownRematch}
+            checkedAt={activityQuery.dataUpdatedAt}
+          />
+        ) : null}
         <LobbyHeader lobby={lobby} phone={phone} availability={phone ? null : availability} />
         {tabbed ? <LobbyPhoneTabs ids={tabIds} tab={tab} onTab={setTab} claimsMark={claimsMark} /> : null}
 

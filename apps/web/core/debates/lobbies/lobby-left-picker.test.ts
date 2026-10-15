@@ -11,12 +11,13 @@ const session = rematchSessionFixture;
 
 const leave = vi.fn();
 
-type Props = { joined: boolean; value: DebateRematchSession | null };
+type Props = { joined: boolean; value: DebateRematchSession | null; checkedAt?: number };
 
 const mount = (initialProps: Props) =>
-  renderHook(({ joined, value }: Props) => useEndPickerLeftBehind({ joined, session: value, leave }), {
-    initialProps,
-  });
+  renderHook(
+    ({ joined, value, checkedAt = 1 }: Props) => useEndPickerLeftBehind({ joined, session: value, checkedAt, leave }),
+    { initialProps }
+  );
 
 /** Lets the Web Locks query and the effect's promise settle. */
 const settle = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -73,6 +74,24 @@ describe('ending a picker left behind when back in the lobby room', () => {
       await settle();
       expect(leave).not.toHaveBeenCalled();
       closePickerTab();
+    });
+
+    // Copilot on #2876: the lobby joined while the picker tab was open, then that tab closed, which
+    // sends nothing. Only the next activity read can notice; the lock was checked once and never again.
+    it('leaves on the next activity read once that tab closes', async () => {
+      const closePickerTab = holdOpenDebateTab(debateRematchClaimKey('session-1'), 'picker-tab');
+      const { rerender } = mount({ joined: true, value: session(), checkedAt: 1 });
+      await settle();
+      expect(leave).not.toHaveBeenCalled();
+
+      closePickerTab();
+      await settle();
+      rerender({ joined: true, value: session(), checkedAt: 2 });
+      await waitFor(() => expect(leave).toHaveBeenCalledTimes(1));
+
+      rerender({ joined: true, value: session(), checkedAt: 3 });
+      await settle();
+      expect(leave).toHaveBeenCalledTimes(1);
     });
 
     it('leaves once no tab holds it', async () => {

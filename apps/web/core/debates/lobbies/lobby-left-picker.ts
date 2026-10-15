@@ -17,22 +17,26 @@ import { isPickerSessionOpen } from '../use-leave-rematch-on-exit';
  *
  * Joined to the room means they chose the room, so an open picker that no tab of theirs holds is one
  * they walked out of. It ends exactly the sessions the picker's own exit would, and a picker still
- * open in another tab is left alone: the viewer may be choosing there right now.
+ * open in another tab is left alone: the viewer may be choosing there right now. That tab can close
+ * later without a word, so the check runs again on every activity read until it leaves.
  */
 export function useEndPickerLeftBehind({
   joined,
   session,
+  checkedAt,
   leave,
 }: {
   /** In the room now: joined, not stepped out. */
   joined: boolean;
   /** The viewer's own debate-again session, from their debate activity. */
   session: DebateRematchSession | null;
+  /** When that activity was last read: each read looks for the picker tab again. */
+  checkedAt: number;
   leave: () => void;
 }) {
   const leaveRef = React.useRef(leave);
   leaveRef.current = leave;
-  // Once per session: a refused leave must not loop on every activity poll.
+  // One leave per session: a refused leave must not repeat on every activity poll.
   const triedRef = React.useRef<string | null>(null);
 
   const sessionId = session?.id ?? null;
@@ -49,12 +53,20 @@ export function useEndPickerLeftBehind({
     return () => {
       cancelled = true;
     };
-  }, [joined, open, sessionId]);
+  }, [joined, open, sessionId, checkedAt]);
 }
 
 /** {@link useEndPickerLeftBehind} on the lobby room, mounted only while the viewer has a session. */
-export function EndPickerLeftBehind({ joined, session }: { joined: boolean; session: DebateRematchSession }) {
+export function EndPickerLeftBehind({
+  joined,
+  session,
+  checkedAt,
+}: {
+  joined: boolean;
+  session: DebateRematchSession;
+  checkedAt: number;
+}) {
   const leaveRematch = useLeaveDebateRematch(session.id);
-  useEndPickerLeftBehind({ joined, session, leave: () => leaveRematch.mutate() });
+  useEndPickerLeftBehind({ joined, session, checkedAt, leave: () => leaveRematch.mutate() });
   return null;
 }
