@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { StackedCard, TickerWindow } from '~/core/debates/claim-ticker';
+import type { ClaimHistoryEntry, TickerWindow } from '~/core/debates/claim-ticker';
 
 import { DebateClaimCounter } from './debate-claim-counter';
 
@@ -27,16 +27,15 @@ vi.mock('./use-debate-claim-response', () => ({
 }));
 
 /** A claim said at `saidMs` (its card's window opens when it has been said). */
-const said = (id: string, saidMs: number, text = `Claim ${id}`): StackedCard => ({
+const said = (id: string, saidMs: number, text = `Claim ${id}`): ClaimHistoryEntry => ({
   window: {
     claim: { id, text, spaceId: 'space-1' },
     startMs: saidMs,
     endMs: saidMs + 8_000,
   } as unknown as TickerWindow,
-  opacity: 1,
 });
 
-const renderCounter = (history: StackedCard[], playheadMs: number, onSeeAll?: () => void) =>
+const renderCounter = (history: ClaimHistoryEntry[], playheadMs: number, onSeeAll?: () => void) =>
   render(
     <DebateClaimCounter
       history={history}

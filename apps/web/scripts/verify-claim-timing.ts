@@ -6,7 +6,7 @@
  *
  * Usage: bun scripts/verify-claim-timing.ts [debateEntityId] [spaceId]
  */
-import { claimMarkers, tickerStack, tickerWindows } from '../core/debates/claim-ticker';
+import { backlogWindows, claimHistory, claimMarkers } from '../core/debates/claim-ticker';
 import {
   claimsInSpokenOrder,
   formatTimecode,
@@ -47,7 +47,7 @@ for (const claim of ordered)
   bySource.set(claim.timing?.source ?? 'none', (bySource.get(claim.timing?.source ?? 'none') ?? 0) + 1);
 console.log(`\nby source: ${[...bySource].map(([key, count]) => `${key}=${count}`).join('  ')}`);
 const assertable = ordered.filter(claim => isAssertableMoment(claim.timing)).length;
-console.log(`firm enough to state — timecode, live card: ${assertable} of ${ordered.length}`);
+console.log(`firm enough to state — timecode, scrubber marker: ${assertable} of ${ordered.length}`);
 // Counted directly, not as `segments - assertable`: `assertable` spans every source, and a
 // published timing scores 1, so on a fully published debate that subtraction printed 0 − 13.
 const belowBar = ordered.filter(
@@ -55,8 +55,8 @@ const belowBar = ordered.filter(
 ).length;
 console.log(`used for ordering only (matched, below the bar): ${belowBar}`);
 
-const windows = tickerWindows(ordered);
-console.log(`\nticker-eligible claims: ${windows.length} of ${ordered.length}`);
+const windows = backlogWindows(ordered);
+console.log(`\ncounter-eligible claims: ${windows.length} of ${ordered.length}`);
 
 /**
  * The debate's own length, taken from the transcript.
@@ -75,14 +75,13 @@ console.log(`timeline: ${(timelineMs / 1000).toFixed(0)}s`);
 const markers = claimMarkers(ordered, timelineMs);
 console.log(`scrubber markers: ${markers.length}`);
 
-console.log('\nWhat the viewer sees, sampled every 10s:');
+console.log('\nWhat the two claim counters hold between them, sampled every 10s:');
 for (let ms = 0; ms <= timelineMs; ms += 10_000) {
-  const stack = tickerStack(windows, ms);
-  for (const card of stack) {
-    console.log(
-      `  ${formatTimecode(ms).padStart(5)}  [${card.opacity.toFixed(2)}]  ${card.window.claim.text.slice(0, 56)}`
-    );
-  }
+  const history = claimHistory(windows, ms);
+  const newest = history[history.length - 1];
+  console.log(
+    `  ${formatTimecode(ms).padStart(5)}  ${String(history.length).padStart(2)}  ${newest?.window.claim.text.slice(0, 56) ?? ''}`
+  );
 }
 
 const missing = ordered.filter(claim => claim.timing === null);

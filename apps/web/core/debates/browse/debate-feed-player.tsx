@@ -9,7 +9,6 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
-import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
 import {
@@ -29,6 +28,7 @@ import {
   turnTimerPulseClass,
   turnTimerRimMask,
   turnTimerScale,
+  useRestartedEach,
 } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -46,9 +46,9 @@ import { Text } from '~/design-system/text';
 
 import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
 import { DebateClaimCounter } from './debate-claim-counter';
-import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
+import { ClaimScrubberMarkers, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
-import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
+import { DebateRoundBadge, DebateRoundBanner } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { LABEL_FONT, STAMP_FONT, TAG_CLASS } from './stamp-styles';
 import { useDebateEndCard } from './use-debate-end-card';
@@ -360,11 +360,8 @@ export function DebateFeedPlayer({
     onPlaybackState?.({ ready, playing, autoplayBlocked, error: hasError, pairHeld });
   }, [onPlaybackState, ready, playing, autoplayBlocked, hasError, pairHeld]);
 
-  // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
-  // it belongs to is spoken, rather than appearing a beat late on the first one.
-  // The agreed stamps design (GEO-3277, GEO-3314, GEO-3316, GEO-3317) is Open rounds only for now.
-  const stamped = isOpenRoundsDebate(debate);
-
+  // The live claim layer. Loaded alongside the recordings so the counter has its claims the moment
+  // each is spoken, rather than ticking a beat late on the first one.
   const ticker = useDebateClaimTicker(debate, {
     playheadMs: playheadSeconds * 1000,
     timelineMs: timelineSeconds * 1000,
@@ -414,9 +411,10 @@ export function DebateFeedPlayer({
     seek: seekBothRaw,
     positionMs: livePositionMs,
   });
+  // Open rounds only in effect: the last speaker before a pick, and only Open rounds has picks.
   const lastWordSlot = React.useMemo(
-    () => (stamped && !reducedOverlays ? lastWordSlotAt(playbackBreaks, turnSegments, playheadMs) : null),
-    [playbackBreaks, playheadMs, reducedOverlays, stamped, turnSegments]
+    () => (reducedOverlays ? null : lastWordSlotAt(playbackBreaks, turnSegments, playheadMs)),
+    [playbackBreaks, playheadMs, reducedOverlays, turnSegments]
   );
   const earlyEndCue = React.useMemo(
     () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, playheadMs)),
@@ -489,22 +487,8 @@ export function DebateFeedPlayer({
   const [timelineFocused, setTimelineFocused] = React.useState(false);
   const scrubberShown = showControls || timelineFocused;
 
-  // Which debater's corner is showing their backlog rather than their live cards.
-  //
-  // Pointer state is tracked per tile rather than on the stack itself, because the backlog has to
-  // open from anywhere over that debater's half. A claim card is on screen for a few seconds at a
-  // time, so a hover target made of the cards is a target that is usually not there — and "hover to
-  // see what they said" has to work in the silences, which is most of a debate.
-  //
-  // Per tile rather than per player so the two corners stay independent: pointing at one debater
-  // opens their claims and leaves the other's alone, which is the whole reason for splitting them.
-  const [pointerOverSlot, setPointerOverSlot] = React.useState<number | null>(null);
-  const [focusedSlot, setFocusedSlot] = React.useState<number | null>(null);
-  // Held open by the chip rather than by the pointer — the only way in on a touch screen, where
-  // there is no hover to end and so no hover to hold it.
-  const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
-  // An Open rounds counter whose list is open, or that a keyboard is inside, per slot: its corner
-  // stays visible under a round banner rather than fading out from under the viewer.
+  // A counter whose list is open, or that a keyboard is inside, per slot: its corner stays visible
+  // under a round banner rather than fading out from under the viewer.
   const [activeCounters, setActiveCounters] = React.useState<ReadonlySet<number>>(() => new Set());
   const onCounterActive = React.useCallback(
     (slot: number, active: boolean) =>
@@ -519,158 +503,24 @@ export function DebateFeedPlayer({
   );
   const onCounterActive1 = React.useCallback((active: boolean) => onCounterActive(1, active), [onCounterActive]);
   const onCounterActive2 = React.useCallback((active: boolean) => onCounterActive(2, active), [onCounterActive]);
-  /**
-   * The slot whose backlog the pointer has opened, held until the pointer leaves that tile.
-   *
-   * A latch rather than a live test of where the pointer is. Reaching the backlog means crossing
-   * into it, and a rule that closed the moment the pointer came back down would put the cards
-   * permanently out of reach — no scrolling it, no expanding a claim, no answering one. So the
-   * pointer opens it by going above the live card, and then the tile holds it open.
-   */
-  const [backlogHoverSlot, setBacklogHoverSlot] = React.useState<number | null>(null);
-
-  /** The same condition the stack is given, so the corner's box can cap itself only when open. */
-  const claimsOpenFor = (slot: number) => {
-    // An Open rounds counter opens its own list; the corner keeps its live width.
-    if (stamped) return false;
-    // A backlog opened on purpose stays open, and a claim arriving lands at the bottom of it —
-    // that is the whole point of having opened it. Same for a keyboard that has tabbed into it.
-    if (pinnedSlot === slot || focusedSlot === slot) return true;
-    return pointerOverSlot === slot && backlogHoverSlot === slot;
-  };
 
   /**
-   * The top edge of the live card, in viewport coordinates, per slot.
-   *
-   * Remembered rather than measured live, because opening the backlog makes the corner taller and
-   * moves its top edge up past the pointer. Test against that and the pointer would be above the
-   * corner, then inside it, then above it again — the list would flicker open and shut under a
-   * stationary mouse. The line stays where the *card* drew it.
+   * This debater's claim counter, from the start of the debate at 0 (GEO-3317, every format since
+   * GEO-3353). Nothing on a compact gallery tile, which is too small for it, or once the debate has
+   * ended and the end card has the claims.
    */
-  const liveCornerTop = React.useRef(new Map<number, number>());
-
-  /**
-   * The pointer moving over, or leaving, one debater's tile.
-   *
-   * Filtered to a real mouse. Touch browsers synthesise `pointerenter` from a tap, so without this
-   * every tap on the video — including the tap that pauses it — would throw the claim corner open,
-   * and nothing would close it again since there is no corresponding leave. On touch the chip is
-   * the way in, deliberately and only.
-   *
-   * Leaving also clears the pin, so a mouse user who clicked the chip and then moved away does not
-   * leave the corner stuck open behind them.
-   */
-  const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
-    // An Open rounds counter answers to the pointer on itself, not the tile.
-    if (stamped || event.pointerType !== 'mouse') return;
-    const clearSlot = (current: number | null) => (current === slot ? null : current);
-
-    if (!hovered) {
-      setPointerOverSlot(clearSlot);
-      setBacklogHoverSlot(clearSlot);
-      setPinnedSlot(clearSlot);
-      liveCornerTop.current.delete(slot);
-      return;
-    }
-
-    setPointerOverSlot(slot);
-
-    const live = (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0;
-    // Measured only while the card itself is what the corner is drawing. Once the backlog is open
-    // the remembered edge is the one that counts, and reading the box again would move the line.
-    // Skipped entirely with nothing live, which is most of a debate and the whole cost here.
-    if (live && !claimsOpenFor(slot)) {
-      const corner = event.currentTarget.querySelector('[data-claim-corner]');
-      if (corner) liveCornerTop.current.set(slot, corner.getBoundingClientRect().top);
-    }
-
-    setBacklogHoverSlot(current => {
-      if (current === slot) return current;
-      // Nothing being presented: the backlog answers to the tile as a whole.
-      if (!live) return slot;
-      // A claim is up, so only the video above it asks for the backlog. The card's own band belongs
-      // to the card, and a pointer resting there cannot swap the claim out mid-sentence.
-      const edge = liveCornerTop.current.get(slot);
-      return edge !== undefined && event.clientY < edge ? slot : current;
-    });
-  };
-
-  /**
-   * Whether slot's corner has a stack at all. `claimsFor` draws nothing when this is false.
-   *
-   * Lifted out of it so the effect below can watch the same condition: both latches that open the
-   * backlog are held up here, and a stack that has gone cannot release either one.
-   */
-  const stackShownFor = (slot: number) => {
-    if (reducedOverlays) return false;
-    if (playbackEnded) return false;
-    // An Open rounds counter shows from the start, at 0.
-    if (stamped) return true;
-    return (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0 || (ticker.historyBySlot.get(slot)?.length ?? 0) > 0;
-  };
-
-  const slot1StackShown = stackShownFor(1);
-  const slot2StackShown = stackShownFor(2);
-
-  /**
-   * Let go of a corner whose stack has been taken away.
-   *
-   * `focusedSlot` is cleared only by the stack's own `onBlur`, and a focused element removed from
-   * the document fires no `blur` — the ticker's suite asserts that absence directly. So a viewer
-   * who tabs into the backlog and then reaches the end of the debate, or scrolls the tile out of
-   * the preload window, left the slot latched: on replay the corner opened straight into backlog
-   * mode with nothing in it, and nothing short of tabbing back in and out closed it again.
-   *
-   * `pinnedSlot` has the same hole on a touch screen, where the only other release is a
-   * `pointerleave` that early-returns on anything but a mouse — so both are cleared here.
-   */
-  React.useEffect(() => {
-    const releaseIfGone = (shown: boolean, slot: number) => {
-      if (shown) return;
-      const clear = (current: number | null) => (current === slot ? null : current);
-      setFocusedSlot(clear);
-      setPinnedSlot(clear);
-    };
-
-    releaseIfGone(slot1StackShown, 1);
-    releaseIfGone(slot2StackShown, 2);
-  }, [slot1StackShown, slot2StackShown]);
-
-  const claimsFor = (slot: number) => {
-    const cards = ticker.cardsBySlot.get(slot) ?? [];
-    const history = ticker.historyBySlot.get(slot) ?? [];
-    if (!stackShownFor(slot)) return null;
-
-    if (stamped) {
-      return (
-        <DebateClaimCounter
-          history={history}
-          playheadMs={playheadMs}
-          name={breakNames[slot as 1 | 2]}
-          rowsByClaimId={ticker.rowsByClaimId}
-          entitiesByClaimId={ticker.entitiesByClaimId}
-          onAnswered={ticker.onAnswered}
-          onSeeAll={onOpenClaims}
-          onActiveChange={slot === 1 ? onCounterActive1 : onCounterActive2}
-        />
-      );
-    }
-
-    const pinned = pinnedSlot === slot;
-    const clearSlot = (current: number | null) => (current === slot ? null : current);
-
+  const claimsFor = (slot: 1 | 2) => {
+    if (reducedOverlays || playbackEnded) return null;
     return (
-      <DebateClaimTickerStack
-        cards={cards}
-        history={history}
-        open={claimsOpenFor(slot)}
-        pinned={pinned}
-        onTogglePinned={() => setPinnedSlot(current => (current === slot ? null : slot))}
-        onFocusChange={focused => setFocusedSlot(current => (focused ? slot : clearSlot(current)))}
-        participantByClaimId={ticker.participantByClaimId}
+      <DebateClaimCounter
+        history={ticker.historyBySlot.get(slot) ?? []}
+        playheadMs={playheadMs}
+        name={breakNames[slot]}
         rowsByClaimId={ticker.rowsByClaimId}
         entitiesByClaimId={ticker.entitiesByClaimId}
         onAnswered={ticker.onAnswered}
+        onSeeAll={onOpenClaims}
+        onActiveChange={slot === 1 ? onCounterActive1 : onCounterActive2}
       />
     );
   };
@@ -751,11 +601,9 @@ export function DebateFeedPlayer({
           // Only this tile's: the card and the break's banner are centred on the seam, so they cross
           // the *top* tile's name band and come nowhere near the bottom tile's, half a player away.
           cardYield={Math.max(roundCard?.opacity ?? 0, bannerYield)}
-          // The claim corner yields to the break's banner only, which is Open rounds only. The round
-          // card plays in every format and leaves the corner as it always has.
-          claimsYield={Math.max(bannerYield, stamped ? (roundCard?.opacity ?? 0) : 0)}
+          // The claim corner steps out with the name, unless its list is open (`claimsActive`).
+          claimsYield={Math.max(bannerYield, roundCard?.opacity ?? 0)}
           claimsActive={activeCounters.has(1)}
-          stamped={stamped}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
@@ -765,8 +613,6 @@ export function DebateFeedPlayer({
           onToggle={toggleFromVideo}
           claims={claimsFor(1)}
           lastWord={lastWordSlot === 1}
-          claimsOpen={claimsOpenFor(1)}
-          onClaimsHoverChange={onTileHover(1)}
           topLeft={
             ready && !playbackEnded ? (
               <div className="flex items-center gap-2">
@@ -827,9 +673,6 @@ export function DebateFeedPlayer({
           onToggle={toggleFromVideo}
           claims={claimsFor(2)}
           lastWord={lastWordSlot === 2}
-          claimsOpen={claimsOpenFor(2)}
-          stamped={stamped}
-          onClaimsHoverChange={onTileHover(2)}
           // This is the half the scrubber sits in, so its claim corner is the one that has to lift
           // clear of the bar.
           clearScrubber={scrubberShown ? 'always' : 'on-hover'}
@@ -916,7 +759,7 @@ export function DebateFeedPlayer({
             </span>
           )}
 
-        {stamped ? <DebateRoundBanner cue={roundCard} /> : <DebateRoundCard cue={roundCard} />}
+        <DebateRoundBanner cue={roundCard} />
         {!endCardShown && (
           <>
             <DebateBreakOverlay
@@ -1022,14 +865,11 @@ function DebaterVideo({
   onExhausted,
   onToggle,
   claims,
-  claimsOpen = false,
-  onClaimsHoverChange,
   clearScrubber = 'never',
   topLeft,
   scrubber,
   scrimClassName = 'h-14',
   inert = false,
-  stamped = false,
   lastWord = false,
 }: {
   participant: DebateParticipant | null;
@@ -1054,8 +894,6 @@ function DebaterVideo({
    * scrubber, the name's profile link — should take keyboard focus or be read out underneath it.
    */
   inert?: boolean;
-  /** Open rounds: the agreed stamps design for the timer's last ten seconds and the round tag. */
-  stamped?: boolean;
   /** Open rounds: this debater speaks last before a pick, tagged beside their name as in the mockup. */
   lastWord?: boolean;
   /**
@@ -1066,10 +904,9 @@ function DebaterVideo({
    * where it is applied below.
    */
   cardYield?: number;
-  /** How far the claim corner has stepped out from under a round banner, 0–1. A fixed format's
-   * backlog, held open, stays; an Open rounds counter steps out with its list. */
+  /** How far the claim corner has stepped out from under a round banner, 0–1. */
   claimsYield?: number;
-  /** An Open rounds counter whose list is open or holds keyboard focus: kept visible under a banner. */
+  /** A counter whose list is open or holds keyboard focus: kept visible under a banner. */
   claimsActive?: boolean;
   mutedByUser: boolean;
   isResuming: boolean;
@@ -1082,13 +919,8 @@ function DebaterVideo({
   /** Every rebuild of this recording failed — re-sign it, in case the URL is what is broken. */
   onExhausted?: () => void;
   onToggle: () => void;
-  /** This debater's claim corner, if they have anything to show right now. */
+  /** This debater's claim counter. */
   claims?: React.ReactNode;
-  /** Whether the corner is showing the scrollable backlog rather than the live card. */
-  claimsOpen?: boolean;
-  /** The pointer entering or leaving this tile, which opens their backlog. */
-  onClaimsHoverChange?: (event: React.PointerEvent, hovered: boolean) => void;
-  /** Whether the claim corner has to sit above the scrubber, which only one tile hosts. */
   /** Whether what sits in the bottom band — the claim corner and the debater's name — lifts clear
    * of the scrubber, and whether it does so always or only while the player is hovered. */
   clearScrubber?: 'never' | 'on-hover' | 'always';
@@ -1312,9 +1144,6 @@ function DebaterVideo({
 
   return (
     <div
-      onPointerEnter={event => onClaimsHoverChange?.(event, true)}
-      onPointerMove={event => onClaimsHoverChange?.(event, true)}
-      onPointerLeave={event => onClaimsHoverChange?.(event, false)}
       // Which half of the debate this is, readable from outside React like the player's own state
       // above it. The turn overlays move between the tiles as the turn does, and "on the right
       // tile" is otherwise only checkable by counting DOM order.
@@ -1397,109 +1226,33 @@ function DebaterVideo({
 
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
-      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} buildUp={stamped} />}
+      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
       {countdown && (
         <DebateRoundBadge
           cue={roundBadge ?? null}
-          stamped={stamped}
           // Kept clear of the timer as it grows over a turn's last ten seconds.
-          rightPx={stamped ? TIMER_RIGHT_PX + TIMER_PX * turnTimerScale(countdown.seconds) + 8 : undefined}
+          rightPx={TIMER_RIGHT_PX + TIMER_PX * turnTimerScale(countdown.seconds) + 8}
         />
       )}
 
-      {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
-          one for the player: a viewer is looking at whoever is talking, and a shared corner asks
-          the eye to leave the speaker in order to read what the speaker is saying.
+      {/* This debater's claim counter, in the bottom-right of their own tile. One corner each rather
+          than one for the player: a viewer is looking at whoever is talking, and a shared corner
+          asks the eye to leave the speaker to see what the speaker has claimed.
 
-          The height cap is on this box rather than on the list inside it. A percentage max-height
-          resolves against the parent's height, and the list's parent is content-sized — so capping
-          the list made it 63% of a box it had itself defined, and the whole stack ended up pinned to
-          the top of the tile instead of the bottom. Here the percentage is of the tile, which the
-          aspect ratio makes definite, and `bottom-3` keeps it anchored where it belongs.
-
-          60% is roughly the 168px of a 291px tile the frame gives the stack. Left to fill the tile
-          the open list climbed to the debater's chin — more of their face than it needs, and
-          further than the edge fade can dissolve.
-
-          360px and two lines — a departure from the frame's 209px and three lines, and a
-          deliberate one.
-
-          Measured over all 854 published claims in Calibre at 16/17: at the frame's 209px the
-          median claim runs to *four* lines and only 30% are shown whole. Width and lines both buy
-          legibility, but width is what keeps the card short, and a short card is what keeps it
-          below the speaker's chin — the face is in the middle of the tile, so height costs more
-          than width does. Two lines at 360px show 62% of claims whole against three lines at 260px
-          showing 66%: the same reading in a card 17px shorter.
-
-          75% is where the explore card's 484px tile lands on the 360 cap; the cap is what holds a
-          far wider fullscreen player to the same card rather than a 450px one. Half the tile was
-          tried and reverted — 242px reads better as a corner label but shows only about 13% of
-          claims whole, which is a look bought with most of the legibility.
-
-          Back on the name's own line, and drawn over it — `z-[11]` against the name's `z-10`,
-          under the subtitle's `z-20`. The corner had been lifted clear of the name, which cost 26px
-          of the tile's height for a gap nobody asked for. Sharing the line is what lets the card
-          have the full width: the name is still there and still a link the moment no card covers
-          it, and behind a card it goes under 30% dark and a 44px blur rather than being switched
-          off, which is the one thing that reads worse than either.
-
-          A phone splits the difference by state rather than picking one width. A live card takes
-          the whole tile — 93% of ~361px is 337, a 313px line, where two lines hold about 45% of
-          claims whole — because one claim over a video is there to be read at a glance and there
-          is nothing else in the band to share with. The backlog drops back to 62%, because a list
-          you have opened to scroll through should leave the debate visible behind it, and that is
-          also where the dissolve earns its place again.
-
-          `items-end` because that cap is a cap, not a width. A flex column stretches its children
-          by default, which drew the little claims chip as a 209px bar with two words adrift in it.
-          The cards ask for the full width themselves; everything else here should be its own size,
-          against the edge the corner is anchored to.
-
-          No height cap here any more. It used to carry one, which was wrong twice over: measured
-          against the tile, so the same class meant a different number of cards on a phone than on
-          a desktop; and shared with the chip, so on a phone the chip's 43px came out of the list's
-          budget and left one card, most of it under the dissolve. The list caps itself in px now —
-          see `max-h-[9.75rem]` on the scroll box, which is sized against the cards rather than
-          against the picture.
-
-          `justify-end` is still load-bearing: it overflows *downward* once its content is taller
-          than its box, which is how a second card used to push the newest one 78px below the
-          corner and into the tile's own `overflow-hidden`. Nothing here may set a height the
-          content can exceed. */}
+          On the name's own line, and drawn over it: `z-[11]` against the name's `z-10`, under the
+          subtitle's `z-20`. `items-end` and `justify-end` keep the counter, and the list that opens
+          above it, against the corner it is anchored to; nothing here may set a height the list can
+          exceed, or it would overflow downward into the tile's `overflow-hidden`. */}
       {claims && (
         <div
           data-claim-corner
-          data-yield={(!claimsOpen && !claimsActive && claimsYield > 0.5) || undefined}
-          style={{ opacity: claimsOpen || claimsActive ? 1 : 1 - claimsYield }}
+          data-yield={(!claimsActive && claimsYield > 0.5) || undefined}
+          style={{ opacity: claimsActive ? 1 : 1 - claimsYield }}
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom,opacity] duration-150',
+            'pointer-events-none absolute right-3 bottom-3 z-[11] flex w-[calc(100%-1.75rem)] max-w-[45rem] flex-col items-end justify-end transition-[padding-bottom,opacity] duration-150',
             // Stepped out from under a banner, so out of the pointer's way too, as the name row is.
             // Tabbing into it brings it back: focus inside makes the counter active.
             '[&[data-yield]_*]:pointer-events-none!',
-            // Two widths, by state rather than by screen. A live claim takes the whole tile,
-            // because it is one line of somebody's argument and there is nothing to read it
-            // against. `100% - 1.75rem` rather than a percentage: the corner hangs off `right-3`,
-            // so subtracting that 12px and the name's own `left-4` 16px lands the card's left edge
-            // exactly on the avatar below it, which is the line the eye already has.
-            //
-            // The backlog is a list you have opened to scroll, and it should leave the debate
-            // visible behind it — so it gives most of the picture back, and at that width the
-            // dissolve at its top edge reads as the edge of a list rather than as damage.
-            //
-            // `@min-md:` on the phone width, because `md:` here is a *custom* max-width variant and
-            // Tailwind emits custom variants after its own container queries — so a bare `md:w-[62%]`
-            // would beat the `@max-md:` sheet width below on every phone. Scoping it to a wide player
-            // keeps it exactly where it applied before: a phone-width viewport with a player of
-            // 448px or more (a tablet in portrait), and nowhere else.
-            claimsOpen ? 'w-[45%] @min-md:md:w-[62%]' : 'w-[calc(100%-1.75rem)] max-w-[45rem]',
-            // A small player (`@max-md`: a phone, or the compact gallery) opens the list as a sheet
-            // instead (GEO-3114): the live card's full width, so a claim prints whole in a few
-            // lines rather than eight at 45%, and pinned below the tile's top controls (`top-14`
-            // clears the mute control, which runs 12px to 54px on a phone) so the list can be as
-            // tall as the tile allows. It covers the face only while the viewer has it open: the
-            // chip under it ("Hide"), or a pointer leaving the tile, puts it away. The live card
-            // needs nothing here, as it docks itself to one line (see `ClaimCardSmallPanel`).
-            claimsOpen && '@max-md:top-14 @max-md:w-[calc(100%-1.75rem)]',
             // `pb-5` clears `FeedScrubber`'s own `h-5` band — keep the two in step. Every spelling
             // is written out because Tailwind generates classes by scanning this source text, so a
             // composed `group-hover:${…}` would produce a rule that does not exist.
@@ -1632,27 +1385,20 @@ function DebaterVideo({
 const TIMER_PX = 32;
 const TIMER_RIGHT_PX = 12;
 
-function CountdownBadge({
-  seconds,
-  progress,
-  buildUp = false,
-}: {
-  seconds: number;
-  progress: number;
-  buildUp?: boolean;
-}) {
+function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
   // The ring shows time remaining, so it shrinks as the turn elapses rather than filling up.
   const remaining = 1 - Math.max(0, Math.min(1, progress));
   const whole = Math.ceil(seconds);
-  // Open rounds, as the design mockup has it: from 10 s the timer swells each second and grows a
-  // step with each swell; from 5 s it turns red at its full size and holds there, its rim draining
-  // over the last five seconds and each second landing with a red glow.
-  const stage = turnTimerBuildUp(buildUp ? seconds : Infinity);
+  // As the stamps design has it (GEO-3316, every format since GEO-3353): from 10 s the timer swells
+  // each second and grows a step with each swell; from 5 s it turns red at its full size and holds
+  // there, its rim draining over the last five seconds and each second landing with a red glow.
+  const stage = turnTimerBuildUp(seconds);
   const { counting, final } = stage;
   const degrees = final ? (Math.max(0, seconds) / 5) * 360 : remaining * 360;
   // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
   // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
   const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
+  const faceRef = useRestartedEach<HTMLDivElement>(counting ? whole : null);
   return (
     <div
       data-turn-timer={stage.phase}
@@ -1660,8 +1406,9 @@ function CountdownBadge({
       style={{ scale: stage.scale }}
     >
       <div
-        // Re-mounted each second, which restarts its swell and glow.
-        key={counting ? whole : 'steady'}
+        // Its swell and glow restart each second (`useRestartedEach`) without remounting it, so the
+        // rim inside keeps draining across the second rather than stepping.
+        ref={faceRef}
         className={cx(
           'grid size-8 origin-top-right place-items-center rounded-full',
           turnTimerPulseClass(stage),
@@ -1670,10 +1417,14 @@ function CountdownBadge({
         style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
       >
         <span
+          // A fresh rim on turning red: its angle switches from the whole turn's progress to the
+          // last five seconds', and easing between the two would refill it before it drains. Within
+          // either it stays mounted, so it eases from second to second.
+          key={final ? 'final' : 'turn'}
+          data-turn-timer-rim
           className={cx(
             'col-start-1 row-start-1 rounded-full',
-            // Smooth only for the Open rounds build-up; a fixed format's ring jumps as it always has.
-            buildUp && 'transition-[--turn-timer-rim] duration-300 ease-linear',
+            'transition-[--turn-timer-rim] duration-300 ease-linear',
             final ? 'size-8' : 'size-7'
           )}
           style={

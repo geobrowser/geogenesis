@@ -5,6 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { ParticipantSlot } from '~/core/debates/api';
+import { ROOM_ENTER_CLASS, RoomExit } from '~/core/debates/debate-room-stamps';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
   BREAK_QUESTION_MS,
@@ -320,32 +321,42 @@ export function DebateBreakOverlay({
 /**
  * Around an early end in an Open rounds debate: an "Ended early" stamp on the debater who ended
  * their turn, and a purple banner with whose turn it is on the other tile, in the breaks' design.
- * The playback counterpart of the room's "Ending turn…" and count-in.
+ * The playback counterpart of the room's "Turn ended" and count-in.
+ *
+ * The dim fades in under the stamp, and when the cue ends the stamp and dim fade and the banner rolls
+ * on out, as the room's do, rather than all three cutting in one frame (GEO-3347).
  */
 export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; names: BreakNames }) {
-  if (!cue) return null;
-
   return (
-    <div aria-hidden data-debate-early-end className="pointer-events-none absolute inset-0 z-[22]">
-      {/* The debater who ended is dimmed under their stamp, as in the mockup. */}
-      <div className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center bg-black/42')}>
-        <span
-          data-debate-stamp="ended"
-          className={cx(STAMP_CLASS, 'border-dashed text-[9cqw] text-grey-04 motion-safe:animate-debate-stamp')}
-          style={{ ...STAMP_FONT, transform: `rotate(${ENDED_TILT})` }}
-        >
-          Ended early
-        </span>
-      </div>
-      <div className={cx(TILE_CLASS[cue.nextSlot], 'grid place-items-center')}>
-        <div
-          data-debate-banner="turn"
-          className={cx(BANNER_CLASS, 'truncate text-[6cqw] motion-safe:animate-debate-banner')}
-          style={LABEL_FONT}
-        >
-          {names[cue.nextSlot]}’s turn
-        </div>
-      </div>
+    <div aria-hidden className="pointer-events-none absolute inset-0 z-[22]">
+      <RoomExit>
+        {cue && (
+          // The debater who ended is dimmed under their stamp, as in the mockup.
+          <div data-debate-early-end className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center')}>
+            <div className={cx('absolute inset-0 bg-black/42', ROOM_ENTER_CLASS)} />
+            <span
+              data-debate-stamp="ended"
+              className={cx(STAMP_CLASS, STAMP_INK.none, 'relative text-[9cqw] motion-safe:animate-debate-stamp')}
+              style={{ ...STAMP_FONT, transform: `rotate(${ENDED_TILT})` }}
+            >
+              Ended early
+            </span>
+          </div>
+        )}
+      </RoomExit>
+      <RoomExit exit="roll">
+        {cue && (
+          <div className={cx(TILE_CLASS[cue.nextSlot], 'grid place-items-center')}>
+            <div
+              data-debate-banner="turn"
+              className={cx(BANNER_CLASS, 'truncate text-[6cqw] motion-safe:animate-debate-banner')}
+              style={LABEL_FONT}
+            >
+              {names[cue.nextSlot]}’s turn
+            </div>
+          </div>
+        )}
+      </RoomExit>
     </div>
   );
 }

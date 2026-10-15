@@ -31,16 +31,13 @@ vi.mock('~/core/hooks/use-space', () => ({ useSpace: () => ({ space: null }) }))
 vi.mock('~/core/telemetry/logger', () => ({ reportEvent: vi.fn() }));
 vi.mock('./debate-claim-ticker', () => ({
   useDebateClaimTicker: () => ({
-    cardsBySlot: new Map(),
     historyBySlot: new Map(),
     markers: [],
     answers: new Map(),
     onAnswered: vi.fn(),
     rowsByClaimId: new Map(),
     entitiesByClaimId: new Map(),
-    participantByClaimId: new Map(),
   }),
-  DebateClaimTickerStack: () => null,
   ClaimScrubberMarkers: () => null,
 }));
 vi.mock('~/core/debates/hooks', () => ({

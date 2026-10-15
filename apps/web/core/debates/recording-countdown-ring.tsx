@@ -17,9 +17,10 @@ export const COUNTDOWN_WARNING_COLOR = '#FF4A26';
 type RecordingCountdownVariant = 'default' | 'warning' | 'muted';
 
 /**
- * How large the turn timer is drawn in an Open rounds debate's last ten seconds of a turn (GEO-3316):
- * a step bigger with each second's pulse from 10 s, reaching 1.3x as 5 s arrives, then held there.
- * 1 the rest of the time. The room's timer and the published player's share it.
+ * How large the turn timer is drawn in a turn's last ten seconds (GEO-3316): a step bigger with
+ * each second's pulse from 10 s, reaching 1.3x as 5 s arrives, then held there. 1 the rest of the
+ * time. The room's timer and the published player's share it: the player in every format since
+ * GEO-3353, the room for Open rounds only.
  */
 export function turnTimerScale(seconds: number) {
   if (seconds > 10) return 1;
@@ -28,8 +29,8 @@ export function turnTimerScale(seconds: number) {
 }
 
 /**
- * Where an Open rounds turn timer is in its last ten seconds, shared by the room's timer and the
- * published player's: `building` from 10 s, growing a step with each pulse; `final` from 5 s, red at
+ * Where a turn timer is in its last ten seconds, shared by the room's timer (Open rounds) and the
+ * published player's (every format): `building` from 10 s, growing a step with each pulse; `final` from 5 s, red at
  * its full size. `swell` is the once-a-second pulse's peak, relative to `scale`: the mockup's swell is
  * absolute, 0.08 of the timer's size while it grows and 0.05 once red.
  */
@@ -62,10 +63,12 @@ export function turnTimerRimMask(width: string) {
 }
 
 /**
- * Restarts an element's own CSS animations each time `tick` changes, without remounting it, so
- * whatever it holds (the timer's rim, mid-drain) carries on. `null` leaves them alone.
+ * A ref whose element's own CSS animations restart each time `tick` changes, without remounting it,
+ * so whatever it holds (the timer's rim, mid-drain) carries on. `null` leaves them alone. The room's
+ * timer and the published player's both pulse with it.
  */
-function useRestartedEach(ref: React.RefObject<HTMLElement | null>, tick: number | null) {
+export function useRestartedEach<T extends HTMLElement>(tick: number | null) {
+  const ref = React.useRef<T>(null);
   React.useLayoutEffect(() => {
     const element = ref.current;
     if (tick === null || !element) return;
@@ -74,7 +77,8 @@ function useRestartedEach(ref: React.RefObject<HTMLElement | null>, tick: number
     element.style.animation = 'none';
     void element.offsetWidth;
     element.style.animation = '';
-  }, [ref, tick]);
+  }, [tick]);
+  return ref;
 }
 
 /** The room's red rim, at the disc's very edge. */
@@ -99,7 +103,6 @@ export function RecordingCountdownRing({
   buildUp?: { remainingMs: number } | null;
 }) {
   const gradientId = React.useId();
-  const faceRef = React.useRef<HTMLDivElement>(null);
   const elapsedRatio = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
   const muted = variant === 'muted';
   const stage = turnTimerBuildUp(buildUp ? remainingSeconds : Infinity);
@@ -107,7 +110,7 @@ export function RecordingCountdownRing({
   const ringColor = muted ? 'rgba(190,190,190,0.92)' : variant === 'warning' ? COUNTDOWN_WARNING_COLOR : '#FFFFFF';
   const numberColor = muted ? 'var(--color-grey-02)' : '#FFFFFF';
   const dashOffset = COUNTDOWN_CIRCUMFERENCE * elapsedRatio;
-  useRestartedEach(faceRef, counting ? remainingSeconds : null);
+  const faceRef = useRestartedEach<HTMLDivElement>(counting ? remainingSeconds : null);
   const rimDegrees = final && buildUp ? (Math.max(0, Math.min(5_000, buildUp.remainingMs)) / 5_000) * 360 : 0;
 
   return (

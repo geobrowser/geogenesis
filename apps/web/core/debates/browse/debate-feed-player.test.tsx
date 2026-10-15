@@ -6,6 +6,7 @@ import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/d
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
+import { recordAnimationRestarts } from '~/core/debates/turn-timer-fixtures';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -20,8 +21,6 @@ const mocks = vi.hoisted(() => ({
   controller: null as unknown,
   ticker: null as unknown,
   bylines: new Map<string, string>(),
-  /** The `open` prop each render handed the stack, so a test can read the latest. */
-  stackOpens: [] as boolean[],
   /** Each call's `enabled`, so a test can see when the end card's numbers are asked for. */
   endCardEnabled: [] as boolean[],
   /** Each call's `shown`, so a test can see when the card's numbers are refreshed. */
@@ -72,14 +71,12 @@ vi.mock('~/core/debates/participant-bylines', () => ({
 
 /** The ticker's shape with nothing in it, which is what most of these tests want. */
 const emptyTicker = () => ({
-  cardsBySlot: new Map(),
   historyBySlot: new Map(),
   markers: [],
   answers: new Map(),
   onAnswered: vi.fn(),
   rowsByClaimId: new Map(),
   entitiesByClaimId: new Map(),
-  participantByClaimId: new Map(),
 });
 
 vi.mock('~/core/debates/use-debate-playback', () => ({
@@ -102,22 +99,11 @@ vi.mock('~/core/hooks/use-space', () => ({
 // query client. These tests are about the audio gate; the ticker has its own suite.
 vi.mock('./debate-claim-ticker', () => ({
   useDebateClaimTicker: () => mocks.ticker,
-  // Stands in for the stack so the *player's* half is what is under test: whether it opens the
-  // corner, and whether it lets go when the stack is gone. Clicking it reports focus arriving,
-  // which is all the player ever learns from the real one.
-  DebateClaimTickerStack: ({ open, onFocusChange }: { open?: boolean; onFocusChange?: (f: boolean) => void }) => {
-    mocks.stackOpens.push(open === true);
-    return (
-      <button type="button" data-testid="claim-stack" onClick={() => onFocusChange?.(true)}>
-        stack
-      </button>
-    );
-  },
   ClaimScrubberMarkers: () => null,
 }));
 
-// The Open rounds counter has its own suite; here it stands in so the player's wiring is what is
-// under test: which corner each format draws, and what it is handed.
+// The claim counter has its own suite; here it stands in so the player's wiring is what is
+// under test: that each corner draws one, and what it is handed.
 vi.mock('./debate-claim-counter', () => ({
   DebateClaimCounter: ({
     history,
@@ -268,7 +254,6 @@ beforeEach(() => {
   mocks.ticker = emptyTicker();
   mocks.bylines = new Map();
   mocks.livePosition = null;
-  mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
 });
@@ -399,16 +384,19 @@ describe('player layout', () => {
 });
 
 describe('overlay variants', () => {
-  it('removes inline claim cards while leaving claim details to the card action', () => {
+  it('removes the claim counters while leaving claim details to the card action', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     mocks.ticker = {
       ...emptyTicker(),
-      cardsBySlot: new Map([[1, [{}]]]),
+      historyBySlot: new Map([[1, [{}]]]),
     };
 
-    const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    const full = render(<DebateFeedPlayer debate={debate} active />);
+    expect(full.queryAllByTestId('claim-counter')).toHaveLength(2);
+    full.unmount();
 
-    expect(queryByTestId('claim-stack')).toBeNull();
+    const { queryByTestId } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
+    expect(queryByTestId('claim-counter')).toBeNull();
   });
 
   it('hides participant bylines in a compact debate card', () => {
@@ -735,94 +723,6 @@ describe('ended playback', () => {
 
     fireEvent.click(replayButton);
     expect(controller.playFromStart).toHaveBeenCalledTimes(1);
-  });
-});
-
-/**
- * The backlog opens on keyboard focus and stays open until focus leaves — a latch, because the
- * corner has to survive a keyboard moving between the cards inside it.
- *
- * Nothing releases that latch if the stack is taken away while the keyboard is in it. A removed
- * element fires no `blur`, so the stack's own handler — the only thing that ever reports focus
- * gone — never runs; see the ticker's suite, which asserts exactly that absence. The stack goes
- * when the debate ends, when the tile scrolls out of the preload window, and when a debate has
- * nothing to show yet, so this is ordinary rather than exotic.
- *
- * `pinnedSlot` is the same shape on a touch screen, where the only other release is a
- * `pointerleave` that early-returns on anything but a mouse.
- */
-describe('a backlog latch outliving its stack', () => {
-  const withCardsForSlot1 = () => ({
-    ...emptyTicker(),
-    // The stack is mocked, so only the length is read.
-    cardsBySlot: new Map([[1, [{}]]]),
-  });
-
-  const renderAt = (playbackEnded: boolean) => {
-    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playbackEnded });
-    return <DebateFeedPlayer debate={debate} active />;
-  };
-
-  const lastOpen = () => mocks.stackOpens[mocks.stackOpens.length - 1];
-
-  /** Scoped to this render's own container: the suite has no cleanup between tests. */
-  const stackIn = (container: HTMLElement) => container.querySelector('[data-testid="claim-stack"]');
-
-  it('closes the corner again once the stack it was holding has gone', () => {
-    mocks.ticker = withCardsForSlot1();
-    const { container, rerender } = render(renderAt(false));
-
-    // A keyboard tabs in and the corner opens into the backlog.
-    fireEvent.click(stackIn(container) as HTMLElement);
-    expect(lastOpen()).toBe(true);
-
-    // The debate ends. The stack unmounts without ever reporting that focus left it.
-    rerender(renderAt(true));
-    expect(stackIn(container)).toBeNull();
-
-    // Replay. The corner has no keyboard and no pointer in it, so it starts closed.
-    rerender(renderAt(false));
-    expect(lastOpen()).toBe(false);
-  });
-
-  /**
-   * GEO-3114. On a small player the opened list is a sheet: as wide as the live card and pinned
-   * below the tile's top controls, so a claim prints whole. Behind `@max-md:` only, so the wide
-   * panel's 45%/62% column is untouched — and only while open, so the live card keeps the corner.
-   */
-  it('turns the opened corner into a sheet on a small panel, and only the opened one', () => {
-    mocks.ticker = withCardsForSlot1();
-    const { container } = render(renderAt(false));
-    const corner = () => container.querySelector('[data-claim-corner]') as HTMLElement;
-
-    const classes = () => [...corner().classList];
-
-    expect(classes()).not.toContain('@max-md:top-14');
-    expect(classes()).toContain('w-[calc(100%-1.75rem)]');
-
-    fireEvent.click(stackIn(container) as HTMLElement);
-
-    expect(classes()).toEqual(
-      expect.arrayContaining(['w-[45%]', '@min-md:md:w-[62%]', '@max-md:top-14', '@max-md:w-[calc(100%-1.75rem)]'])
-    );
-  });
-
-  // The same latch, released by the same cleanup: a tile scrolled out of the preload window empties
-  // the ticker, which takes the stack with it.
-  it('closes the corner when the ticker empties rather than the debate ending', () => {
-    mocks.ticker = withCardsForSlot1();
-    const { container, rerender } = render(renderAt(false));
-
-    fireEvent.click(stackIn(container) as HTMLElement);
-    expect(lastOpen()).toBe(true);
-
-    mocks.ticker = emptyTicker();
-    rerender(renderAt(false));
-    expect(stackIn(container)).toBeNull();
-
-    mocks.ticker = withCardsForSlot1();
-    rerender(renderAt(false));
-    expect(lastOpen()).toBe(false);
   });
 });
 
@@ -1252,11 +1152,11 @@ describe('the round it is playing', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    const cards = [...container.querySelectorAll('[data-round-card]')];
+    const cards = [...container.querySelectorAll('[data-round-banner]')];
 
     // One card for the player, not one per tile: the round is about both of them.
     expect(cards).toHaveLength(1);
-    expect(cards[0].getAttribute('data-round-card')).toBe('Round 1 · Opening');
+    expect(cards[0].getAttribute('data-round-banner')).toBe('Round 1 · Opening');
   });
 
   it('takes the top tile\u2019s name with it and gives it straight back', () => {
@@ -1325,7 +1225,7 @@ describe('the round it is playing', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-round-card]')).not.toBeNull();
+    expect(container.querySelector('[data-round-banner]')).not.toBeNull();
     expect(container.textContent).not.toContain(subtitle);
   });
 
@@ -1334,7 +1234,7 @@ describe('the round it is playing', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-banner]')).toBeNull();
     // Only the speaking tile has a timer, so only it carries the label.
     const badges = [...container.querySelectorAll('[data-round-badge]')];
     expect(badges).toHaveLength(1);
@@ -1348,7 +1248,7 @@ describe('the round it is playing', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-banner]')).toBeNull();
     expect(container.querySelector('[data-round-badge]')?.getAttribute('data-round-badge')).toBe('Round 1 · Opening');
   });
 
@@ -1386,7 +1286,9 @@ describe('the round it is playing', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-round-card]')?.getAttribute('data-round-card')).toBe('Round 2 · Rebuttal');
+    expect(container.querySelector('[data-round-banner]')?.getAttribute('data-round-banner')).toBe(
+      'Round 2 · Rebuttal'
+    );
   });
 
   it('stands down while the viewer has the debate paused', () => {
@@ -1395,7 +1297,7 @@ describe('the round it is playing', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-banner]')).toBeNull();
     expect(container.querySelector('[data-round-badge]')).toBeNull();
   });
 
@@ -1404,7 +1306,7 @@ describe('the round it is playing', () => {
     mocks.ticker = emptyTicker();
 
     const { container } = render(<DebateFeedPlayer debate={debate} active reducedOverlays />);
-    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-banner]')).toBeNull();
     expect(container.querySelector('[data-round-badge]')).toBeNull();
   });
 });
@@ -2065,7 +1967,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     const { container } = renderAt(60.5, {
       playbackBreaks: breaks({ breaks: [{ ...extendBreak, decidingStartMs: 50_000, startMs: 52_000, endMs: 60_000 }] }),
     });
-    expect(container.querySelector('[data-round-card]')).toBeNull();
+    expect(container.querySelector('[data-round-banner]')).toBeNull();
   });
 
   it('stamps a missing pick as no pick after the final End, then wraps with the reason', () => {
@@ -2106,6 +2008,42 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(container.querySelector('[data-debate-banner="turn"]')?.textContent).toMatch(/’s turn$/);
   });
 
+  // GEO-3347: the stamp, its dim and the banner used to cut out in one frame.
+  it('lets "Ended early" and the turn banner leave rather than cutting them', () => {
+    vi.useFakeTimers();
+    try {
+      const turnSegments: DebateMediaTurnSegment[] = [
+        { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000 },
+        { turn_index: 1, participant_slot: 2, output_start_ms: 33_000, output_end_ms: 63_000, duration_ms: 30_000 },
+      ];
+      const playbackBreaks = breaks({
+        earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000, endedSlot: 1, nextSlot: 2 }],
+      });
+      const { container, rerender } = renderAt(33.2, { turnSegments, playbackBreaks });
+      const stamp = () => container.querySelector('[data-debate-stamp="ended"]');
+      const banner = () => container.querySelector('[data-debate-banner="turn"]');
+      expect(stamp()?.closest('[data-room-leaving]')).toBeNull();
+
+      // Past the cue's hold: both are still drawn, on their way out.
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 2,
+        playheadSeconds: 34,
+        turnSegments,
+        playbackBreaks,
+      });
+      rerender(<DebateFeedPlayer debate={startedDebate} active />);
+      expect(stamp()?.closest('[data-room-leaving]')).not.toBeNull();
+      expect(banner()?.closest('[data-room-leaving]')?.className).toContain('animate-debate-banner-out');
+
+      act(() => vi.advanceTimersByTime(300));
+      expect(stamp()).toBeNull();
+      expect(banner()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Both mics are open between rounds now: nothing said while nobody holds a turn may be heard or
   // captioned, including an older render's lead-in kept at the front of the next turn.
   it('keeps a break silent and uncaptioned, then plays the round', () => {
@@ -2130,32 +2068,36 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
   });
 });
 
-describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, GEO-3316, GEO-3317)', () => {
+describe('the stamps in-app player, in every format: round labels, timer and claims (GEO-3314, GEO-3316, GEO-3317, GEO-3353)', () => {
   const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
   const at = (playheadSeconds: number) => controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds });
 
-  it('opens with the purple "Round 1 · Opening" banner instead of the round card', () => {
-    mocks.controller = at(0.5);
-    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
-    expect(container.querySelector('[data-round-banner]')?.getAttribute('data-round-banner')).toBe('Round 1 · Opening');
-    expect(container.querySelector('[data-round-card]')).toBeNull();
+  it('opens with the purple "Round 1 · Opening" banner in both formats', () => {
+    for (const d of [openRounds, debate]) {
+      mocks.controller = at(0.5);
+      const { container } = render(<DebateFeedPlayer debate={d} active />);
+      expect(container.querySelector('[data-round-banner]')?.getAttribute('data-round-banner')).toBe(
+        'Round 1 · Opening'
+      );
+    }
   });
 
-  it('keeps the round card in a fixed-format debate', () => {
-    mocks.controller = at(0.5);
+  // A fixed format has no breaks, so nothing else announces its later rounds: the banner does, over
+  // the round's first speaker. Open rounds' later rounds are its breaks' to announce.
+  it('announces each later round of a fixed format with the same banner (GEO-3353)', () => {
+    mocks.controller = at(60.5);
     const { container } = render(<DebateFeedPlayer debate={debate} active />);
-    expect(container.querySelector('[data-round-card]')).not.toBeNull();
-    expect(container.querySelector('[data-round-banner]')).toBeNull();
+    expect(container.querySelector('[data-round-banner]')?.getAttribute('data-round-banner')).toBe(
+      'Round 2 · Rebuttal'
+    );
   });
 
-  it('labels the round beside the timer as a purple tag', () => {
-    mocks.controller = at(12);
-    const open = render(<DebateFeedPlayer debate={openRounds} active />).container;
-    expect(open.querySelector('[data-round-badge] [data-round-tag]')?.className).toContain('bg-purple');
-
-    mocks.controller = at(12);
-    const fixed = render(<DebateFeedPlayer debate={debate} active />).container;
-    expect(fixed.querySelector('[data-round-badge] [data-round-tag]')).toBeNull();
+  it('labels the round beside the timer as a purple tag in both formats', () => {
+    for (const d of [openRounds, debate]) {
+      mocks.controller = at(12);
+      const { container } = render(<DebateFeedPlayer debate={d} active />);
+      expect(container.querySelector('[data-round-badge] [data-round-tag]')?.className).toContain('bg-purple');
+    }
   });
 
   it('builds the timer up over a turn’s last ten seconds and turns it red for the last five', () => {
@@ -2163,24 +2105,76 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
       mocks.controller = { ...at(12), turnState: { slot: 1, seconds: secondsLeft, progress: 0.5 } };
       return render(<DebateFeedPlayer debate={d} active />).container.querySelector('[data-turn-timer]');
     };
-    expect(timer(18, openRounds)?.getAttribute('data-turn-timer')).toBe('steady');
-    expect(timer(8, openRounds)?.getAttribute('data-turn-timer')).toBe('building');
-    expect(timer(4, openRounds)?.getAttribute('data-turn-timer')).toBe('final');
-    // A fixed format keeps today's timer.
-    expect(timer(4, debate)?.getAttribute('data-turn-timer')).toBe('steady');
-    // Down to its ring, which jumps between samples as it always has rather than easing.
-    expect(timer(4, debate)?.innerHTML).not.toContain('turn-timer-rim]');
+    for (const d of [openRounds, debate]) {
+      expect(timer(18, d)?.getAttribute('data-turn-timer')).toBe('steady');
+      expect(timer(8, d)?.getAttribute('data-turn-timer')).toBe('building');
+      expect(timer(4, d)?.getAttribute('data-turn-timer')).toBe('final');
+      // Its rim eases between the playhead's samples rather than jumping.
+      expect(timer(4, d)?.innerHTML).toContain('transition-[--turn-timer-rim]');
+    }
   });
 
-  it('draws a claim counter in each corner from the start, and the live cards only in a fixed format', () => {
-    mocks.controller = at(12);
-    const open = render(<DebateFeedPlayer debate={openRounds} active />).container;
-    expect(open.querySelectorAll('[data-testid="claim-counter"]')).toHaveLength(2);
-    expect(open.querySelector('[data-testid="claim-stack"]')).toBeNull();
+  it('keeps the red rim draining across a second, restarting only the pulse', () => {
+    const { restarts, restore } = recordAnimationRestarts();
+    const at = (secondsLeft: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
+        turnState: { slot: 1, seconds: secondsLeft, progress: 0.9 },
+      };
+      return <DebateFeedPlayer debate={openRounds} active />;
+    };
+    const rim = (container: HTMLElement) => container.querySelector('[data-turn-timer-rim]');
+    try {
+      const view = render(at(3.9));
+      const before = rim(view.container);
+      expect(before).not.toBeNull();
+      restarts.length = 0;
 
-    mocks.controller = at(12);
-    const fixed = render(<DebateFeedPlayer debate={debate} active />).container;
-    expect(fixed.querySelector('[data-testid="claim-counter"]')).toBeNull();
+      view.rerender(at(3.4));
+      // Within a second: no pulse.
+      expect(restarts).toEqual([]);
+
+      view.rerender(at(2.9));
+      // A new second pulses, and the rim is the same element, so its drain carries on.
+      expect(restarts).toEqual(['none']);
+      expect(rim(view.container)).toBe(before);
+    } finally {
+      restore();
+    }
+  });
+
+  it('starts the red rim full as the timer turns red, rather than easing up from the turn’s progress', () => {
+    const at = (secondsLeft: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
+        turnState: { slot: 1, seconds: secondsLeft, progress: 0.75 },
+      };
+      return <DebateFeedPlayer debate={openRounds} active />;
+    };
+    const rim = (container: HTMLElement) => container.querySelector<HTMLElement>('[data-turn-timer-rim]');
+
+    const view = render(at(5.4));
+    const turnRim = rim(view.container);
+    // Three quarters of the turn gone: the rim is a quarter of the way round.
+    expect(turnRim?.style.getPropertyValue('--turn-timer-rim')).toBe('90deg');
+
+    view.rerender(at(4.9));
+    const redRim = rim(view.container);
+    // A new element, so it shows its full five-second angle at once instead of transitioning to it.
+    expect(redRim).not.toBe(turnRim);
+    expect(redRim?.style.getPropertyValue('--turn-timer-rim')).toBe(`${(4.9 / 5) * 360}deg`);
+
+    view.rerender(at(3.9));
+    // Within the red phase it keeps draining on the same element.
+    expect(rim(view.container)).toBe(redRim);
+  });
+
+  it('draws a claim counter in each corner from the start, in both formats', () => {
+    for (const d of [openRounds, debate]) {
+      mocks.controller = at(12);
+      const { container } = render(<DebateFeedPlayer debate={d} active />);
+      expect(container.querySelectorAll('[data-testid="claim-counter"]')).toHaveLength(2);
+    }
   });
 });
 
