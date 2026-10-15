@@ -5,7 +5,7 @@ import userEvent from '@testing-library/user-event';
 import * as React from 'react';
 
 import { Provider, createStore } from 'jotai';
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 
 import { EntitySidePanelPopoverPortalProvider } from '~/core/state/entity-side-panel-popover-portal';
 
@@ -24,20 +24,22 @@ beforeAll(() => {
 
 afterEach(cleanup);
 
-function MenuHarness() {
+function MenuHarness({ onSelect = () => {} }: { onSelect?: () => void }) {
   const [open, setOpen] = React.useState(false);
   return (
     <Menu open={open} onOpenChange={setOpen} trigger={<span>Topics</span>}>
-      <button type="button">Society and culture</button>
+      <button type="button" onClick={onSelect}>
+        Society and culture
+      </button>
     </Menu>
   );
 }
 
-function DropdownHarness() {
+function DropdownHarness({ onSelect = () => {} }: { onSelect?: () => void }) {
   return (
     <Dropdown
       trigger="Topics"
-      options={[{ label: 'Society and culture', value: 'society', disabled: false, onClick: () => {} }]}
+      options={[{ label: 'Society and culture', value: 'society', disabled: false, onClick: onSelect }]}
     />
   );
 }
@@ -84,6 +86,23 @@ describe.each([
     expect(option.closest('.side-panel-elevated-popover')).toBeInTheDocument();
     expect(within(screen.getByTestId('controls')).queryByText('Society and culture')).toBeNull();
     expect(document.querySelector('.elevated-popover')).toBeNull();
+  });
+
+  it('accepts pointer clicks in a ranking sheet without entity-panel CSS', async () => {
+    const user = userEvent.setup();
+    const onSelect = vi.fn();
+    render(
+      <>
+        {/* The two Tailwind utilities relevant to hit testing; no entity-panel override. */}
+        <style>{'.pointer-events-none { pointer-events: none; } .pointer-events-auto { pointer-events: auto; }'}</style>
+        <EntitySidePanelPopoverPortalProvider>
+          <Harness onSelect={onSelect} />
+        </EntitySidePanelPopoverPortalProvider>
+      </>
+    );
+    await user.click(screen.getByRole('button', { name: 'Topics' }));
+    await user.click(screen.getByRole(optionRole, { name: 'Society and culture' }));
+    expect(onSelect).toHaveBeenCalledOnce();
   });
 
   it('uses the slide-up host that is exempt from the sheet scroll lock', async () => {

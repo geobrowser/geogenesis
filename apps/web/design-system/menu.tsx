@@ -50,7 +50,7 @@ interface Props {
 
 /** Outer shell: opaque + clips corners so overscroll never reveals “holes” behind the panel. */
 const shellStyles = cva(
-  'isolate z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
+  'pointer-events-auto isolate z-100 w-full max-w-[360px] min-w-0 overflow-hidden rounded-lg border border-grey-02 bg-white shadow-lg outline-none focus:outline-none focus-visible:outline-none',
   {
     variants: {
       align: {
