@@ -4,7 +4,7 @@ import { act, cleanup, render, renderHook, screen } from '@testing-library/react
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  OpenRoundPickReveal,
+  OpenRoundPickStamp,
   OpenRoundResultOverlay,
   openRoundRevealStep,
   openRoundWrapNote,
@@ -89,58 +89,68 @@ describe('useOpenRoundRevealStep', () => {
   });
 });
 
-describe('OpenRoundPickReveal', () => {
-  it('flips from the name to the pick', () => {
-    const { container } = render(<OpenRoundPickReveal name="Bob" pick="extend" />);
+describe('OpenRoundPickStamp (GEO-3315)', () => {
+  it('stamps the pick onto the tile in its ink', () => {
+    const { container } = render(<OpenRoundPickStamp pick="extend" order="first" />);
     expect(container.firstChild).toHaveAttribute('data-open-round-reveal', 'extend');
-    expect(container).toHaveTextContent('Bob');
-    expect(screen.getByText('Extend')).toHaveClass('uppercase');
+    expect(screen.getByText('Extend')).toHaveClass('text-purple', 'uppercase');
+    expect(screen.getByText('Extend')).toHaveStyle({ transform: 'rotate(-3.2deg)' });
   });
 
-  it('shows a missing pick as no pick under the name, neither Extend nor End', () => {
-    const { container } = render(<OpenRoundPickReveal name="Bob" pick={null} />);
+  it('stamps a missing pick as a grey dashed no pick, neither Extend nor End', () => {
+    const { container } = render(<OpenRoundPickStamp pick={null} order="first" />);
     expect(container.firstChild).toHaveAttribute('data-open-round-reveal', 'none');
-    expect(screen.getByText('No pick')).toHaveClass('uppercase');
-    expect(screen.getAllByText('Bob')).toHaveLength(2);
+    expect(screen.getByText('No pick')).toHaveClass('border-dashed', 'text-grey-04');
     expect(screen.queryByText('End')).not.toBeInTheDocument();
     expect(screen.queryByText('Extend')).not.toBeInTheDocument();
   });
 
-  it('rests on the pick side, and only animates for those who allow motion', () => {
-    const { container } = render(<OpenRoundPickReveal name="Bob" pick="end" />);
-    const card = container.querySelector('.transform-3d');
-    expect(card).toHaveClass('rotate-y-180', 'motion-safe:animate-open-round-flip');
-    expect(card?.className).not.toMatch(/(^| )animate-/);
+  it('lands the second stamp a beat later, leaning the other way, and only animates for those who allow motion', () => {
+    render(<OpenRoundPickStamp pick="end" order="second" />);
+    const stamp = screen.getByText('End');
+    expect(stamp).toHaveClass('text-text', 'motion-safe:animate-debate-stamp');
+    expect(stamp.className).not.toMatch(/(^| )animate-/);
+    expect(stamp).toHaveStyle({ transform: 'rotate(2.4deg)', animationDelay: '280ms' });
   });
 });
 
 describe('OpenRoundResultOverlay', () => {
-  it('announces a new round and who opens it, with no count', () => {
-    const { container } = render(<OpenRoundResultOverlay result={{ kind: 'round', round: 2, opener: 'Alice' }} />);
-    expect(container).toHaveTextContent('Round2Alice opens');
+  it('announces a new round as a two-line banner, with who opens it and no count', () => {
+    const { container } = render(
+      <OpenRoundResultOverlay result={{ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: 'Alice' }} />
+    );
+    expect(container.querySelector('[data-open-round-banner]')).toHaveClass('bg-purple');
+    expect(container).toHaveTextContent('Round 2 · RebuttalAlice opens');
     expect(container.textContent).not.toMatch(/ in \d/);
   });
 
   it('says "You open" to the opener', () => {
-    render(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: null }} />);
+    render(<OpenRoundResultOverlay result={{ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null }} />);
     expect(screen.getByText('You open')).toBeInTheDocument();
   });
 
-  it('ends with a reason only when there is one', () => {
+  it('ends with a purple banner, and a reason only when there is one', () => {
     const { container, rerender } = render(<OpenRoundResultOverlay result={{ kind: 'wrap', note: null }} />);
-    expect(container.textContent).toBe("That's a wrap");
+    expect(container.textContent).toBe('That’s a wrap');
+    expect(container.querySelector('[data-open-round-banner]')).toHaveClass('bg-purple');
     rerender(<OpenRoundResultOverlay result={{ kind: 'wrap', note: 'No picks in time' }} />);
-    expect(container).toHaveTextContent("That's a wrapNo picks in time");
+    expect(container).toHaveTextContent('That’s a wrapNo picks in time');
   });
 
-  it('says the debate hit the maximum', () => {
+  it('says the debate hit the maximum, with every round run, the opening included, as a purple tag', () => {
     const { container } = render(<OpenRoundResultOverlay result={{ kind: 'max', rounds: 10 }} />);
-    expect(container).toHaveTextContent("That's the max10 rebuttal rounds");
+    expect(container).toHaveTextContent('That’s the max11 rounds');
+    expect(container.querySelector('[data-open-round-banner]')).toHaveClass('bg-purple');
+    expect(screen.getByText('11 rounds')).toHaveClass('bg-purple');
   });
 
-  it('drops the burst for reduced motion', () => {
-    const { container } = render(<OpenRoundResultOverlay result={{ kind: 'round', round: 1, opener: null }} />);
-    expect(container.querySelector('.motion-reduce\\:hidden')).toBeInTheDocument();
+  it('rolls the banner in only for those who allow motion', () => {
+    const { container } = render(
+      <OpenRoundResultOverlay result={{ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null }} />
+    );
+    const banner = container.querySelector('[data-open-round-banner]');
+    expect(banner).toHaveClass('motion-safe:animate-debate-banner');
+    expect(banner?.className).not.toMatch(/(^| )animate-/);
   });
 });
 
@@ -206,7 +216,7 @@ describe('useOpenRoundReveal', () => {
 
   it('announces the new round to its opener as "You", and moves the counter to it', () => {
     const current = reveal({ elapsedMs: 2_000 });
-    expect(current.result).toEqual({ kind: 'round', round: 2, opener: null });
+    expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null });
     expect(current.localPick).toBeNull();
     expect(current.chipsHidden).toBe(true);
     expect(current.announcedRoundPhase).toMatchObject({ phase: 'speaking', roundIndex: 1 });
@@ -215,14 +225,14 @@ describe('useOpenRoundReveal', () => {
   it('names the opener to the other debater, and keeps it up through the count-in', () => {
     const current = reveal({ elapsedMs: 4_000, localSlot: 2, remote: { slot: 1, name: 'Alice' } });
     expect(current.step).toBe('countIn');
-    expect(current.result).toEqual({ kind: 'round', round: 2, opener: 'Alice' });
+    expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: 'Alice' });
   });
 
   it("keeps the opener's announcement up while a stale payload has not brought the new round yet", () => {
     // Resolved Extend, but this payload predates the next round's turns: the room holds on the result.
     const stale = { ...revealRebut(), turn_durations_ms: [60_000, 60_000] };
     const current = reveal({ debate: stale, elapsedMs: 4_000, remainingSeconds: 0 });
-    expect(current.result).toEqual({ kind: 'round', round: 2, opener: null });
+    expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null });
     expect(current.chipsHidden).toBe(true);
     expect(current.holdsCountIn).toBe(true);
   });
@@ -245,7 +255,7 @@ describe('useOpenRoundReveal', () => {
     };
     expect(reveal({ debate, elapsedMs: 500 }).remotePick).toEqual({ participant_slot: 2, pick: null });
     const announced = reveal({ debate, elapsedMs: 2_000 });
-    expect(announced.result).toEqual({ kind: 'round', round: 2, opener: null });
+    expect(announced.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null });
     expect(announced.announcement).toBe('You: Extend. Bob: no pick. Round 2. You open.');
   });
 
@@ -263,7 +273,6 @@ describe('useOpenRoundReveal', () => {
     });
     expect(current.result).toEqual({ kind: 'wrap', note: "Bob didn't pick in time" });
     expect(current.remotePick).toEqual({ participant_slot: 2, pick: null });
-    expect(current.pickPlacement).toBe('apart');
   });
 
   it('holds the wrap into the start of thanking, then lets the end card through', () => {
@@ -312,7 +321,7 @@ describe('useOpenRoundReveal', () => {
     it('announces Round 2 at once, with no picks to turn', () => {
       const current = reveal({ debate, phase: leadIn, elapsedMs: 0 });
       expect(current.step).toBe('result');
-      expect(current.result).toEqual({ kind: 'round', round: 2, opener: null });
+      expect(current.result).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: null });
       expect(current.localPick).toBeNull();
       expect(current.remotePick).toBeNull();
       expect(current.announcement).toBe('Round 2. You open.');
@@ -323,7 +332,7 @@ describe('useOpenRoundReveal', () => {
       expect(reveal({ debate, phase: leadIn, elapsedMs: 3_000 })).toMatchObject({ step: 'countIn', result: null });
       expect(
         reveal({ debate, phase: leadIn, elapsedMs: 3_000, localSlot: 2, remote: { slot: 1, name: 'Alice' } }).result
-      ).toEqual({ kind: 'round', round: 2, opener: 'Alice' });
+      ).toEqual({ kind: 'round', round: 2, label: 'Round 2 · Rebuttal', opener: 'Alice' });
     });
   });
 });

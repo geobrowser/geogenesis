@@ -23,6 +23,13 @@ import {
   silentAt,
 } from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import {
+  TURN_TIMER_SCALE_CLASS,
+  turnTimerBuildUp,
+  turnTimerPulseClass,
+  turnTimerRimMask,
+  turnTimerScale,
+} from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
@@ -1605,17 +1612,6 @@ function DebaterVideo({
 const TIMER_PX = 32;
 const TIMER_RIGHT_PX = 12;
 
-/**
- * How large the turn timer is drawn, for an Open rounds debate's last ten seconds of a turn
- * (GEO-3316): a step bigger with each second's pulse from 10 s, reaching 1.3x as 5 s arrives, then
- * held there. 1 the rest of the time.
- */
-export function turnTimerScale(seconds: number) {
-  if (seconds > 10) return 1;
-  if (seconds <= 5) return 1.3;
-  return 1 + (0.3 * Math.min(5, 11 - Math.ceil(seconds))) / 5;
-}
-
 function CountdownBadge({
   seconds,
   progress,
@@ -1631,32 +1627,27 @@ function CountdownBadge({
   // Open rounds, as the design mockup has it: from 10 s the timer swells each second and grows a
   // step with each swell; from 5 s it turns red at its full size and holds there, its rim draining
   // over the last five seconds and each second landing with a red glow.
-  const counting = buildUp && seconds <= 10 && seconds > 0;
-  const final = counting && seconds <= 5;
-  const scale = buildUp ? turnTimerScale(seconds) : 1;
+  const stage = turnTimerBuildUp(buildUp ? seconds : Infinity);
+  const { counting, final } = stage;
   const degrees = final ? (Math.max(0, seconds) / 5) * 360 : remaining * 360;
-  // The swell's height in the mockup is absolute: 0.08 of the timer's size while it grows, 0.05 once red.
-  const swell = 1 + (final ? 0.05 : 0.08) / scale;
   // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
   // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
-  const ringWidth = final ? '0.55cqw' : '2px';
-  const ringMask = `radial-gradient(farthest-side, transparent calc(100% - ${ringWidth}), #000 calc(100% - ${ringWidth}))`;
+  const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
   return (
     <div
-      data-turn-timer={final ? 'final' : counting ? 'building' : 'steady'}
-      className="absolute top-3 right-3 z-10 size-8 origin-top-right transition-[scale] duration-[350ms] ease-[cubic-bezier(0.33,1,0.68,1)]"
-      style={{ scale }}
+      data-turn-timer={stage.phase}
+      className={cx('absolute top-3 right-3 z-10 size-8', TURN_TIMER_SCALE_CLASS)}
+      style={{ scale: stage.scale }}
     >
       <div
         // Re-mounted each second, which restarts its swell and glow.
         key={counting ? whole : 'steady'}
         className={cx(
           'grid size-8 origin-top-right place-items-center rounded-full',
-          counting && !final && 'motion-safe:animate-[turnTimerPulse_350ms_linear]',
-          final && 'motion-safe:animate-[turnTimerPulse_350ms_linear,turnTimerGlow_1000ms_linear]',
+          turnTimerPulseClass(stage),
           final ? 'bg-red-01' : 'bg-linear-to-b from-black/50 to-black/25'
         )}
-        style={{ '--turn-timer-swell': swell } as React.CSSProperties}
+        style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
       >
         <span
           className={cx(

@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import type { OpenRoundPick, ParticipantSlot } from '~/core/debates/api';
+import type { ParticipantSlot } from '~/core/debates/api';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
   BREAK_QUESTION_MS,
@@ -17,7 +17,18 @@ import {
 } from '~/core/debates/playback-breaks';
 import { type TurnCount, roundLabel } from '~/core/debates/round-cues';
 
-import { BANNER_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT } from './stamp-styles';
+import {
+  BANNER_CLASS,
+  BANNER_SUB_CLASS,
+  ENDED_TILT,
+  LABEL_FONT,
+  NOTE_CLASS,
+  STAMP_CLASS,
+  STAMP_FONT,
+  STAMP_INK,
+  STAMP_TILT,
+  STAMP_WORD,
+} from './stamp-styles';
 
 /** How long the banner takes to roll out, ending as the player cuts. Matches `--animate-debate-banner-out`. */
 const BREAK_BANNER_OUT_MS = 300;
@@ -184,17 +195,6 @@ function heldAt(startMs: number): React.CSSProperties {
   return { animationDelay: `calc(${startMs}ms - var(--break-t, 0) * 1ms)`, animationPlayState: 'paused' };
 }
 
-const STAMP_WORD: Record<OpenRoundPick | 'none', string> = { extend: 'Extend', end: 'End', none: 'No pick' };
-const STAMP_INK: Record<OpenRoundPick | 'none', string> = {
-  extend: 'text-purple',
-  end: 'text-text',
-  none: 'border-dashed text-grey-04',
-};
-/** Each tile's stamp leans its own way, so the two read as two hands. The design mockup's tilts. */
-const STAMP_TILT: Record<ParticipantSlot, string> = { 1: '-3.2deg', 2: '2.4deg' };
-/** "Ended early" leans the other way from a pick. */
-const ENDED_TILT = '2deg';
-
 /** Shown, without a fade, from where a held animation starts: the mockup's dim and note appear at once. */
 const APPEAR = 'motion-safe:animate-[fadeIn_1ms_linear_both]';
 
@@ -299,10 +299,7 @@ export function DebateBreakOverlay({
           >
             <span className="block truncate">{title}</span>
             {opener && (
-              <span
-                data-debate-banner-sub
-                className="mt-[0.35em] block truncate text-[0.6em] tracking-[0.02em] normal-case opacity-85"
-              >
+              <span data-debate-banner-sub className={BANNER_SUB_CLASS}>
                 {opener}
               </span>
             )}
@@ -311,10 +308,7 @@ export function DebateBreakOverlay({
       )}
       {note && cue.elapsedMs >= bannerAtMs - MOUNT_AHEAD_MS && (
         <div className={cx('absolute inset-x-0 top-[calc(50%+7.5cqw)] text-center', APPEAR)} style={heldAt(bannerAtMs)}>
-          <span
-            className="inline-block rounded-[3px] bg-black/72 px-[2.2cqw] py-[1.3cqw] text-[2.8cqw] leading-[1.2] font-medium tracking-[0.01em] text-white"
-            style={LABEL_FONT}
-          >
+          <span className={NOTE_CLASS} style={LABEL_FONT}>
             {note}
           </span>
         </div>

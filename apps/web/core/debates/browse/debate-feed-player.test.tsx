@@ -5,9 +5,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/debates/api';
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
+import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
-import { DebateFeedPlayer, turnTimerScale } from './debate-feed-player';
+import { DebateFeedPlayer } from './debate-feed-player';
 
 const SPACE_1 = '11111111111111111111111111111111';
 const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
