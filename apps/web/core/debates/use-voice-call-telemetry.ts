@@ -131,12 +131,19 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
     const sample = async () => {
       if (sampling || ended || room.state !== ConnectionState.Connected) return;
       sampling = true;
+      // Whether this sample's mic interval, which ends at the sender read, spans a mute change. Put
+      // back if the sample is dropped, since the next one then measures from the same baseline.
+      let spansMuteChange = false;
+      let committed = false;
       try {
         noteMicKind();
-        const mic = micTrack();
-        const senderEntries = statsEntries(await mic?.getRTCStatsReport().catch(() => undefined));
+        // A refused read throws out of the sample, which is dropped: an empty snapshot taken as the
+        // baseline would make the next sample report the whole call as one interval.
+        const senderEntries = statsEntries(await micTrack()?.getRTCStatsReport());
         const sender = readSenderReport(senderEntries);
         const sentOver = readTransport(senderEntries);
+        spansMuteChange = muteChanged;
+        muteChanged = false;
 
         const receivers = new Map<string, ReceiverSnapshot>();
         let heardOver: VoiceTransport | null = null;
@@ -144,8 +151,10 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
           for (const publication of participant.audioTrackPublications.values()) {
             const remote = publication.track as RemoteAudioTrack | undefined;
             if (!remote || !publication.trackSid) continue;
-            const entries = statsEntries(await remote.getRTCStatsReport().catch(() => undefined));
-            receivers.set(publication.trackSid, readReceiverReport(entries));
+            const entries = statsEntries(await remote.getRTCStatsReport());
+            const received = readReceiverReport(entries);
+            // By stream as well as track: a resubscribed track is a new stream whose counters restart.
+            receivers.set(`${publication.trackSid}:${received.streamId ?? ''}`, received);
             // Every remote track arrives over the one subscriber connection.
             heardOver ??= readTransport(entries);
           }
@@ -157,8 +166,8 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
 
         const metrics = voiceSampleMetrics(sender, previousSender, receivers, previousReceivers);
         // A level averaged across a mute change reads as a weak mic, so it is left out instead.
-        if (muteChanged) metrics.mic_level_db = null;
-        muteChanged = false;
+        if (spansMuteChange) metrics.mic_level_db = null;
+        committed = true;
         previousSender = sender;
         previousReceivers = receivers;
         samples += 1;
@@ -176,6 +185,7 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
           ...metrics,
         });
       } finally {
+        if (!committed) muteChanged ||= spansMuteChange;
         sampling = false;
       }
     };
@@ -202,9 +212,22 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
       });
     };
 
+    // Timed from the connection, not from mount: a slow join would otherwise miss the early sample,
+    // and a short call would report none.
+    let first: ReturnType<typeof setTimeout> | undefined;
+    let every: ReturnType<typeof setInterval> | undefined;
+    const startSampling = () => {
+      if (first !== undefined) return;
+      // A failed read is a lost sample, never an unhandled rejection in the middle of a call.
+      const sampleSafely = () => void sample().catch(() => undefined);
+      first = setTimeout(sampleSafely, VOICE_FIRST_SAMPLE_MS);
+      every = setInterval(sampleSafely, VOICE_SAMPLE_MS);
+    };
+
     const onConnectionState = (state: ConnectionState) => {
       if (state === ConnectionState.Connected) {
         if (connectedAt === null) connectedAt = Date.now();
+        startSampling();
         if (reconnectingSince !== null) {
           reconnects += 1;
           captureSafely('debate_voice_changed', {
@@ -273,10 +296,7 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
     local.on(ParticipantEvent.TrackUnmuted, onMuteChange);
     window.addEventListener('pagehide', onPageHide);
 
-    // A failed read is a lost sample, never an unhandled rejection in the middle of a call.
-    const sampleSafely = () => void sample().catch(() => undefined);
-    const first = setTimeout(sampleSafely, VOICE_FIRST_SAMPLE_MS);
-    const every = setInterval(sampleSafely, VOICE_SAMPLE_MS);
+    if (connectedAt !== null) startSampling();
 
     return () => {
       clearTimeout(first);

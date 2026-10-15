@@ -7,8 +7,13 @@
 /** Cumulative counters for our own microphone. Absent where the browser did not report them. */
 export type SenderSnapshot = {
   /**
-   * Which outbound stream and mic source these counters belong to. A mic switch replaces both and
-   * their counters restart, so a change resets every field together.
+   * The RTP stream (SSRC) the packet counters belong to. A new stream starts them again.
+   */
+  streamId?: string;
+  /**
+   * The mic source the level counters belong to. LiveKit switches mics with `replaceTrack`, which
+   * keeps the stream and its packet counts but brings a new source whose level counters start again,
+   * so the two reset independently.
    */
   sourceId?: string;
   /** Outbound audio packets, everything sent whether it arrived or not. */
@@ -26,6 +31,8 @@ export type SenderSnapshot = {
 
 /** Cumulative counters for one remote audio track. */
 export type ReceiverSnapshot = {
+  /** The RTP stream (SSRC) the counters belong to. */
+  streamId?: string;
   packets?: number;
   packetsLost?: number;
   samples?: number;
@@ -68,8 +75,8 @@ export const MIC_LEVEL_FLOOR_DB = -100;
  */
 function growth(current?: number, previous?: number) {
   if (current === undefined) return null;
-  if (previous === undefined) return current;
-  return Math.max(0, current - previous);
+  // A cumulative loss count is negative when duplicates outnumber losses, first reading or not.
+  return Math.max(0, previous === undefined ? current : current - previous);
 }
 
 function sum(values: (number | null)[]) {
@@ -94,11 +101,12 @@ export function voiceSampleMetrics(
   receivers: ReceiverSnapshots,
   previousReceivers: ReceiverSnapshots | undefined
 ): VoiceSampleMetrics {
-  const before = previousSender?.sourceId === sender.sourceId ? previousSender : undefined;
-  const sent = growth(sender.packets, before?.packets);
-  const sentLost = growth(sender.packetsLost, before?.packetsLost);
-  const energy = growth(sender.energy, before?.energy);
-  const micSeconds = growth(sender.samplesDuration, before?.samplesDuration);
+  const sameStream = previousSender?.streamId === sender.streamId ? previousSender : undefined;
+  const sameSource = previousSender?.sourceId === sender.sourceId ? previousSender : undefined;
+  const sent = growth(sender.packets, sameStream?.packets);
+  const sentLost = growth(sender.packetsLost, sameStream?.packetsLost);
+  const energy = growth(sender.energy, sameSource?.energy);
+  const micSeconds = growth(sender.samplesDuration, sameSource?.samplesDuration);
 
   const tracks = [...receivers.entries()];
   const across = (read: (current: ReceiverSnapshot, previous?: ReceiverSnapshot) => number | null) =>
@@ -154,9 +162,8 @@ export function readSenderReport(entries: readonly StatsEntry[]): SenderSnapshot
     if (!isAudio(entry)) continue;
     if (entry.type === 'outbound-rtp') {
       snapshot.packets = add(snapshot.packets, entry.packetsSent);
-      snapshot.sourceId = [snapshot.sourceId, entry.ssrc, entry.mediaSourceId]
-        .filter(part => part !== undefined)
-        .join(':');
+      if (entry.ssrc !== undefined) snapshot.streamId = String(entry.ssrc);
+      if (typeof entry.mediaSourceId === 'string') snapshot.sourceId = entry.mediaSourceId;
     } else if (entry.type === 'remote-inbound-rtp') {
       snapshot.packetsLost = add(snapshot.packetsLost, entry.packetsLost);
       snapshot.roundTripTime = num(entry.roundTripTime) ?? snapshot.roundTripTime;
@@ -174,6 +181,7 @@ export function readReceiverReport(entries: readonly StatsEntry[]): ReceiverSnap
   const snapshot: ReceiverSnapshot = {};
   for (const entry of entries) {
     if (entry.type !== 'inbound-rtp' || !isAudio(entry)) continue;
+    if (entry.ssrc !== undefined) snapshot.streamId = String(entry.ssrc);
     snapshot.packets = add(snapshot.packets, entry.packetsReceived);
     snapshot.packetsLost = add(snapshot.packetsLost, entry.packetsLost);
     snapshot.samples = add(snapshot.samples, entry.totalSamplesReceived);

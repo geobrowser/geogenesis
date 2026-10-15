@@ -48,18 +48,43 @@ describe('voiceSampleMetrics (GEO-3340)', () => {
     expect(metrics.mic_level_db).toBe(MIC_LEVEL_FLOOR_DB);
   });
 
-  // A mic switch replaces the outbound stream and the mic source, and every counter starts again.
-  it('starts every counter over when the stream changes', () => {
+  // Copilot on #2884: LiveKit switches mics with `replaceTrack`, which keeps the RTP stream and its
+  // packet counters while the new mic is a new media source whose level counters start again.
+  it('keeps the packet baseline across a mic switch on the same stream', () => {
     const metrics = voiceSampleMetrics(
-      { sourceId: 'ssrc-2:source-2', packets: 40, packetsLost: 0, energy: 0.0004, samplesDuration: 0.4 },
-      { sourceId: 'ssrc-1:source-1', packets: 5_000, packetsLost: 9, energy: 2, samplesDuration: 120 },
+      { streamId: '1', sourceId: 'source-2', packets: 11_000, packetsLost: 100, energy: 0.0004, samplesDuration: 0.4 },
+      { streamId: '1', sourceId: 'source-1', packets: 10_000, packetsLost: 0, energy: 2, samplesDuration: 120 },
+      new Map(),
+      undefined
+    );
+    expect(metrics.sent_packets).toBe(1_000);
+    expect(metrics.send_loss_pct).toBe(10);
+    // 0.0004 over 0.4 s is a mean power of 0.001: -30 dB, read from the new source alone.
+    expect(metrics.mic_level_db).toBe(-30);
+  });
+
+  it('starts the packet counters over on a new stream', () => {
+    const metrics = voiceSampleMetrics(
+      { streamId: '2', sourceId: 'source-2', packets: 40, packetsLost: 0 },
+      { streamId: '1', sourceId: 'source-1', packets: 5_000, packetsLost: 9 },
       new Map(),
       undefined
     );
     expect(metrics.sent_packets).toBe(40);
     expect(metrics.send_loss_pct).toBe(0);
-    // 0.0004 over 0.4 s is a mean power of 0.001: -30 dB, read from the new source alone.
-    expect(metrics.mic_level_db).toBe(-30);
+  });
+
+  // Copilot on #2884: a cumulative loss count is negative when duplicates outnumber losses, and a
+  // first reading has no earlier one to clamp against.
+  it('reads a negative first loss count as no loss, not negative loss', () => {
+    const metrics = voiceSampleMetrics(
+      { packets: 100, packetsLost: -2 },
+      undefined,
+      receivers([['remote-a', { packets: 100, packetsLost: -2 }]]),
+      undefined
+    );
+    expect(metrics.send_loss_pct).toBe(0);
+    expect(metrics.recv_loss_pct).toBe(0);
   });
 
   // RTCP's cumulative loss shrinks when packets thought lost turn up late.
@@ -131,7 +156,8 @@ describe('reading WebRTC stats reports', () => {
         { type: 'candidate-pair', currentRoundTripTime: 1 },
       ])
     ).toEqual({
-      sourceId: '1234:source-1',
+      streamId: '1234',
+      sourceId: 'source-1',
       packets: 500,
       packetsLost: 4,
       roundTripTime: 0.05,

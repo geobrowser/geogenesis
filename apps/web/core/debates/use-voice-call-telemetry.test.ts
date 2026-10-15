@@ -25,8 +25,14 @@ function fakeRoom() {
   const mic = {
     label: 'MacBook Pro Microphone',
     stats: [] as Record<string, unknown>[],
+    /** The browser refuses the next stats read. */
+    rejects: false,
   };
-  const remote = { stats: [] as Record<string, unknown>[] };
+  const remote = {
+    stats: [] as Record<string, unknown>[],
+    /** Holds the next stats read open until the test lets it go. */
+    hold: null as Promise<void> | null,
+  };
   const room = {
     state: ConnectionState.Connected as ConnectionState,
     on: on(roomListeners),
@@ -39,7 +45,10 @@ function fakeRoom() {
       getTrackPublication: () => ({
         track: {
           mediaStreamTrack: { label: mic.label },
-          getRTCStatsReport: async () => new Map(mic.stats.map((entry, index) => [`s${index}`, entry])),
+          getRTCStatsReport: async () => {
+            if (mic.rejects) throw new Error('stats unavailable');
+            return new Map(mic.stats.map((entry, index) => [`s${index}`, entry]));
+          },
         },
       }),
     },
@@ -53,7 +62,10 @@ function fakeRoom() {
               {
                 trackSid: 'TR_them',
                 track: {
-                  getRTCStatsReport: async () => new Map(remote.stats.map((entry, index) => [`r${index}`, entry])),
+                  getRTCStatsReport: async () => {
+                    if (remote.hold) await remote.hold;
+                    return new Map(remote.stats.map((entry, index) => [`r${index}`, entry]));
+                  },
                 },
               },
             ],
@@ -167,6 +179,87 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
     act(() => call.emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED));
     expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'left' })]);
+  });
+
+  // Copilot on #2884: an empty snapshot from a refused read became the baseline, so the next sample
+  // reported the whole call's counters as one interval.
+  it('skips a sample whose stats read is refused, keeping the last good baseline', async () => {
+    const call = fakeRoom();
+    const sent = (packets: number, lost: number) => [
+      { type: 'outbound-rtp', kind: 'audio', packetsSent: packets, ssrc: 1 },
+      { type: 'remote-inbound-rtp', kind: 'audio', packetsLost: lost },
+    ];
+    call.mic.stats = sent(10_000, 0);
+    renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+
+    call.mic.rejects = true;
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    expect(events('debate_voice_sampled')).toHaveLength(1);
+
+    call.mic.rejects = false;
+    call.mic.stats = sent(11_000, 100);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    expect(events('debate_voice_sampled')[1]).toEqual(
+      expect.objectContaining({ sent_packets: 1_000, send_loss_pct: 10 })
+    );
+  });
+
+  // Copilot on #2884: the sample's mic interval ends when the sender is read. A mute after that,
+  // while someone else's stats are still being read, belongs to the next interval.
+  it('keeps a mute made during a later read for the next sample', async () => {
+    const call = fakeRoom();
+    const level = (energy: number, seconds: number) => [
+      { type: 'media-source', kind: 'audio', totalAudioEnergy: energy, totalSamplesDuration: seconds },
+    ];
+    call.mic.stats = level(0.1, 10);
+    renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+
+    let letGo: () => void = () => undefined;
+    call.remote.hold = new Promise(resolve => (letGo = resolve));
+    call.mic.stats = level(0.4, 40);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    act(() => call.emitLocal(ParticipantEvent.TrackMuted, { source: 'microphone' }));
+    call.remote.hold = null;
+    await act(async () => letGo());
+
+    call.mic.stats = level(0.4, 70);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    const [, second, third] = events('debate_voice_sampled');
+    expect(second).toEqual(expect.objectContaining({ mic_level_db: -20 }));
+    expect(third).toEqual(expect.objectContaining({ mic_level_db: null }));
+  });
+
+  // Copilot on #2884: sampling was timed from mount, so a slow join missed the early sample and a
+  // short call reported none.
+  it('times sampling from the connection, not from mount', async () => {
+    const call = fakeRoom();
+    call.raw.state = ConnectionState.Connecting;
+    renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+
+    await act(async () => void (await vi.advanceTimersByTimeAsync(12_000)));
+    call.raw.state = ConnectionState.Connected;
+    act(() => call.emit(RoomEvent.ConnectionStateChanged, ConnectionState.Connected));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+
+    expect(events('debate_voice_sampled')).toEqual([expect.objectContaining({ seconds_connected: 10 })]);
+  });
+
+  // The receive side of the same rule: a resubscribed track is a new stream whose counters restart,
+  // and must not read as no audio at all for the interval.
+  it('measures a resubscribed remote track from its new stream', async () => {
+    const call = fakeRoom();
+    const heard = (ssrc: number, packets: number, lost: number) => [
+      { type: 'inbound-rtp', kind: 'audio', ssrc, packetsReceived: packets, packetsLost: lost },
+    ];
+    call.remote.stats = heard(1, 50_000, 0);
+    renderHook(() => useVoiceCallTelemetry(call.room, 'lobby', 'lobby-1'));
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_FIRST_SAMPLE_MS)));
+
+    call.remote.stats = heard(2, 900, 100);
+    await act(async () => void (await vi.advanceTimersByTimeAsync(VOICE_SAMPLE_MS)));
+    expect(events('debate_voice_sampled')[1]).toEqual(expect.objectContaining({ recv_loss_pct: 10 }));
   });
 
   it('does not sample a room that is not connected', async () => {
