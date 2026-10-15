@@ -541,7 +541,7 @@ export function DebateClaimTickerStack({
   history?: StackedCard[];
   /** Show the backlog rather than the live cards. */
   open?: boolean;
-  /** Open because the chip was pressed rather than because the pointer is over the tile. */
+  /** Held open by the chip or by focus rather than by the pointer over the tile, so the chip can close it. */
   pinned?: boolean;
   /** Pressing the chip. Without it the corner has no chip and is hover-only. */
   onTogglePinned?: () => void;
@@ -553,6 +553,8 @@ export function DebateClaimTickerStack({
   onAnswered: (claimId: string, position: boolean | null) => void;
 }) {
   const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  React.useEffect(trackInputModality, []);
 
   const shown = open ? (history ?? cards) : cards;
   const backlog = history ?? cards;
@@ -707,6 +709,13 @@ export function DebateClaimTickerStack({
         // decide when it is reachable. A click still focuses the control it landed on — it just no
         // longer reads as having tabbed in.
         if (event.target instanceof Element && !event.target.matches(':focus-visible')) return;
+        // And a keyboard really was the last thing used. `:focus-visible` alone is not that answer
+        // on a phone: WebKit matches it for any focus a click did not cause — focus put back by a
+        // closing dialog, or restored to the page when the viewer returns to the tab — and a tap on
+        // iOS never counts as a click for it, because a tapped button is not focused at all. So the
+        // backlog opened by itself mid-debate with nothing touched, unpinned, and the chip still
+        // offering "5 claims" rather than a way to close it.
+        if (lastInput !== 'keyboard') return;
         onFocusChange?.(true);
       }}
       // Only when focus leaves the stack entirely — moving between two cards, or out to the chip,
@@ -775,6 +784,35 @@ export function DebateClaimTickerStack({
         <ClaimBacklogChip count={backlog.length} expanded={open && pinned} onClick={onTogglePinned} />
       )}
     </div>
+  );
+}
+
+/**
+ * Whether the viewer last pressed a key or a pointer, for the stack's focus handler.
+ *
+ * Module-level and installed once, on the capture phase so nothing on the page can stop it first.
+ * Starts as neither: until a key is pressed, no focus anywhere came from a keyboard.
+ */
+let lastInput: 'keyboard' | 'pointer' | null = null;
+let inputModalityTracked = false;
+
+function trackInputModality() {
+  if (inputModalityTracked) return;
+  inputModalityTracked = true;
+  document.addEventListener(
+    'keydown',
+    event => {
+      // A shortcut is not navigation, and Cmd-Tab back to the browser restores focus as well.
+      if (!event.metaKey && !event.ctrlKey && !event.altKey) lastInput = 'keyboard';
+    },
+    true
+  );
+  document.addEventListener(
+    'pointerdown',
+    () => {
+      lastInput = 'pointer';
+    },
+    true
   );
 }
 
