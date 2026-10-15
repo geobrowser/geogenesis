@@ -207,10 +207,12 @@ describe('LobbyRoomClaimsList', () => {
     });
   });
 
-  it('points at a live debate when there is no offer, and never draws one beside the offer', () => {
+  // Live watching does not exist yet (GEO-3334): the pill opened the space's feed, which plays an
+  // older recording. The offer still wins the slot when one is there.
+  it('draws no Watch live while live watching is off, and keeps the offer', () => {
     const live = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)]), activeDebate: true };
     const { unmount } = render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} />);
-    expect(screen.getByRole('link', { name: 'Watch live' }).getAttribute('href')).toBe('/space/space-1/debates');
+    expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
     unmount();
 
     const offered = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 1)]), activeDebate: true };
@@ -229,10 +231,10 @@ describe('LobbyRoomClaimsList', () => {
       expect(screen.getByRole('button', { name: 'Claim options' })).toBeTruthy();
     });
 
-    it('sits beside Watch live', () => {
+    it('stays on a claim with a running debate, without Watch live', () => {
       const live = { ...entry(true, [side(true, [], 0), side(false, [], 0)]), activeDebate: true };
       render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} renderMenu={renderMenu} />);
-      expect(screen.getByRole('link', { name: 'Watch live' })).toBeTruthy();
+      expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
       expect(screen.getByRole('button', { name: 'Claim options' })).toBeTruthy();
     });
 

@@ -2,7 +2,7 @@
 
 import * as React from 'react';
 
-import { WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
+import { WATCH_LIVE_ENABLED, WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
@@ -154,9 +154,10 @@ export function LobbyRoomClaimCard({
         })
       : null;
   const menu = renderMenu?.(entry);
-  const watch = entry.activeDebate ? (
-    <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
-  ) : null;
+  const watch =
+    WATCH_LIVE_ENABLED && entry.activeDebate ? (
+      <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
+    ) : null;
   // On Explore the offer rides on the room line.
   const action = explore ? watch : (offer ?? watch);
 

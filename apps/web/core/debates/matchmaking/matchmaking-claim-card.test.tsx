@@ -1363,7 +1363,9 @@ describe('MatchmakingClaimCard', () => {
     expect(await screen.findByRole('tooltip')).toHaveTextContent('Withdraw your open request to send another.');
   });
 
-  it('opens the room when a debate is running', () => {
+  // Live watching does not exist yet (GEO-3334): the room of a running debate has no recording to
+  // show, so the pill sent readers to a debate other than the one it named.
+  it('offers no Watch live while live watching is off', () => {
     renderCard(
       <MatchmakingClaimCard
         claim={claim}
@@ -1373,34 +1375,7 @@ describe('MatchmakingClaimCard', () => {
       />
     );
 
-    // A verb, not a status. "Debating now" told the reader something was happening and gave them
-    // nowhere to go, which is the whole reason the slot holds actions.
-    expect(screen.getByRole('link', { name: /Watch live/ })).toHaveAttribute(
-      'href',
-      `/space/${mocks.spaceId}/debates/debate-7`
-    );
-  });
-
-  // A debate room lives under the space its *claim* came from, which is not always the space the
-  // surface rendering the row is scoped to — the debate claims panel already fetches its rows per
-  // claim space, so a debate quoting a claim from elsewhere lands here with the two disagreeing.
-  // Building the href from the host's `spaceId` sent the reader to a room under the wrong space.
-  it('opens the room under the debate claim’s own space, not the host surface’s', () => {
-    const OTHER_SPACE = 'e7d6d84d3a3d4b0e9f9d6d0f6f5e4c3b';
-
-    renderCard(
-      <MatchmakingClaimCard
-        claim={claim}
-        positions={positions}
-        readiness={readiness()}
-        activeDebate={{ id: 'debate-7', claim: { ...claim, space_id: OTHER_SPACE } } as never}
-      />
-    );
-
-    expect(screen.getByRole('link', { name: /Watch live/ })).toHaveAttribute(
-      'href',
-      `/space/${OTHER_SPACE}/debates/debate-7`
-    );
+    expect(screen.queryByRole('link', { name: /Watch live/ })).toBeNull();
   });
 
   // `EntityVoteButtons` — the control every claim surface used to render — refused outright while

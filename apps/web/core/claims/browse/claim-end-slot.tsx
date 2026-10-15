@@ -29,7 +29,7 @@ import { useClaimMatchup } from './use-claim-matchup';
  * Priority, most actionable first:
  *
  *   1. Request debate — someone is standing ready on the side opposite the viewer's.
- *   2. Watch live     — a debate is running on this claim.
+ *   2. Watch live     — a debate is running on this claim. Off for now; see `WATCH_LIVE_ENABLED`.
  *   3. Nothing        — the row simply ends, which is the common case and must cost no layout.
  *
  * A fourth state, "Watch the debate" for a recorded one, was specified and built and then had no
@@ -40,6 +40,16 @@ import { useClaimMatchup } from './use-claim-matchup';
  * Request outranks live because it is the only one that needs the viewer: a live debate is still
  * there a second later, whereas a match evaporates when either party is taken.
  */
+/**
+ * Whether claim surfaces offer "Watch live" on a running debate.
+ *
+ * Off until live watching exists (GEO-3334, GEO-3138). Until then there is nowhere live to send
+ * the reader: the flag-only shape opened the space's feed, which plays an older recording, and a
+ * running debate's room has no recording yet. A pill that promises the debate happening now and
+ * then shows a different one is worse than no pill, so the slot falls through to its spacer.
+ */
+export const WATCH_LIVE_ENABLED = false;
+
 export function ClaimEndSlot(props: React.ComponentProps<typeof MatchmakingClaimEndSlot>) {
   // Every claim opened beside the picker belongs to that pair, including related claims.
   // An unavailable rematch must never fall back to requesting a different matchmaking opponent.
@@ -162,7 +172,7 @@ function MatchmakingClaimEndSlot({
     );
   }
 
-  if (activeDebate) {
+  if (WATCH_LIVE_ENABLED && activeDebate) {
     return <WatchLiveLink activeDebate={activeDebate} spaceId={spaceId} variant={variant} className={className} />;
   }
 
