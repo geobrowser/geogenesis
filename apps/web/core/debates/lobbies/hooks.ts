@@ -7,6 +7,7 @@ import * as React from 'react';
 import {
   type CreateDebateLobbyRequest,
   type DebateLobbyHeartbeat,
+  type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
   createDebateLobby,
@@ -200,6 +201,19 @@ export function useCreateDebateLobby() {
   });
 }
 
+/** `list` with the viewer's reminder on `view`'s row, or the same list when it is not listed. */
+function withReminder<T extends { lobbies: DebateLobbySummary[] }>(list: T, view: DebateLobbyView): T {
+  if (!list.lobbies.some(row => dashlessId(row.lobby_id) === dashlessId(view.lobby_id))) return list;
+  return {
+    ...list,
+    lobbies: list.lobbies.map(row =>
+      dashlessId(row.lobby_id) === dashlessId(view.lobby_id)
+        ? { ...row, viewer_reminded: view.viewer.reminded, reminder_count: view.reminder_count }
+        : row
+    ),
+  };
+}
+
 /** Every reminder write shares it, so one in flight shows on every control for that lobby. */
 const LOBBY_REMINDER_MUTATION_KEY = ['debates', 'lobby-reminder'] as const;
 
@@ -212,7 +226,16 @@ export function useDebateLobbyReminder() {
     mutationKey: LOBBY_REMINDER_MUTATION_KEY,
     mutationFn: ({ lobbyId, reminded }: { lobbyId: string; reminded: boolean }) =>
       setDebateLobbyReminder(lobbyId, reminded, getPrivyIdentityToken, accountKey),
-    onSuccess: store,
+    onSuccess: view => {
+      // Remind me draws from the list's row, so the answer is written there now (the calendar's
+      // week sits under the same key). Waiting on the refetch `store` starts would show RSVP again
+      // until it lands, and for good if it fails (GEO-3289).
+      queryClient.setQueriesData<{ lobbies: DebateLobbySummary[] }>(
+        { queryKey: debateQueryKeys.lobbies(accountKey) },
+        list => list && withReminder(list, view)
+      );
+      store(view);
+    },
     // Too late to set: the lobby opened or ended since the list was read.
     onError: error => {
       if (error instanceof GeoChatRequestError && error.status === 409) {

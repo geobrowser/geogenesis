@@ -779,6 +779,36 @@ it('shows a reminder saving in one control as saving in every control for that l
   await waitFor(() => expect(result.current.panel).toBe(false));
 });
 
+// Copilot on #2863: the button reads the list's row, so a saved reminder is written there at once
+// rather than waiting on the refetch, which may be slow or fail.
+it('writes a saved reminder into the cached list and calendar rows without waiting for a refetch', async () => {
+  const row = { lobby_id: 'lobby1', open: false, viewer_reminded: false, reminder_count: 0 };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(debateQueryKeys.lobbies('acct'), { lobbies: [row, { ...row, lobby_id: 'other' }] });
+  client.setQueryData(debateQueryKeys.lobbyCalendar('acct', 1, 2), { lobbies: [{ ...row, state: 'upcoming' }] });
+  api.listDebateLobbies.mockRejectedValue(new GeoChatRequestError('down', 'unavailable', 503));
+  api.listDebateLobbyCalendar.mockReturnValue(new Promise(() => undefined));
+  const saved = { ...view(false), reminder_count: 4, viewer: { ...view(false).viewer, reminded: true } };
+  api.setDebateLobbyReminder.mockResolvedValueOnce(saved);
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  try {
+    const { result } = renderHook(() => useDebateLobbyReminder(), { wrapper });
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }));
+
+    const list = client.getQueryData<{ lobbies: (typeof row)[] }>(debateQueryKeys.lobbies('acct'));
+    expect(list?.lobbies[0]).toMatchObject({ viewer_reminded: true, reminder_count: 4 });
+    expect(list?.lobbies[1]).toMatchObject({ viewer_reminded: false, reminder_count: 0 });
+    const week = client.getQueryData<{ lobbies: (typeof row)[] }>(debateQueryKeys.lobbyCalendar('acct', 1, 2));
+    expect(week?.lobbies[0]).toMatchObject({ viewer_reminded: true, reminder_count: 4, state: 'upcoming' });
+  } finally {
+    api.listDebateLobbies.mockReset();
+    api.listDebateLobbyCalendar.mockReset();
+  }
+});
+
 // GEO-3289. Signed out there is no gateway scope to patch the list, so it is polled.
 it('lists lobbies to a signed-out visitor and polls, and only then', async () => {
   api.listDebateLobbies.mockResolvedValue({ lobbies: [] });
