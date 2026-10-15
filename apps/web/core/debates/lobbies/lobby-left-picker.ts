@@ -1,9 +1,15 @@
 import * as React from 'react';
 
 import type { DebateRematchSession } from '../api';
-import { debateRematchClaimKey, hasOtherOpenDebateTab } from '../debate-tab-claims';
+import { DEBATE_TAB_CLAIM_TTL_MS, debateRematchClaimKey, findOtherOpenDebateTab } from '../debate-tab-claims';
 import { useLeaveDebateRematch } from '../hooks';
 import { isPickerSessionOpen } from '../use-leave-rematch-on-exit';
+
+/**
+ * How long no tab may hold the picker before the lobby takes it as left: as long as a debate tab may
+ * go quiet and still count as open, which comfortably covers a reload.
+ */
+const PICKER_GONE_AFTER_MS = DEBATE_TAB_CLAIM_TTL_MS;
 
 /**
  * Ends the viewer's debate-again session once they are back in the lobby room with no picker open
@@ -19,6 +25,12 @@ import { isPickerSessionOpen } from '../use-leave-rematch-on-exit';
  * they walked out of. It ends exactly the sessions the picker's own exit would, and a picker still
  * open in another tab is left alone: the viewer may be choosing there right now. That tab can close
  * later without a word, so the check runs again on every activity read until it leaves.
+ *
+ * A picker tab that is reloading holds no lock until its new page mounts, which here waits for
+ * hydration, so one read without a lock proves nothing. It leaves only once reads at least
+ * {@link PICKER_GONE_AFTER_MS} apart have found no picker tab, with none found in between. A check
+ * that cannot answer (no Web Locks, or the query fails) counts as a picker open: unlike the
+ * picker's own exit, joining the room does not show the picker was left.
  */
 export function useEndPickerLeftBehind({
   joined,
@@ -38,15 +50,32 @@ export function useEndPickerLeftBehind({
   leaveRef.current = leave;
   // One leave per session: a refused leave must not repeat on every activity poll.
   const triedRef = React.useRef<string | null>(null);
+  // When reads began finding no picker tab for this session, while the viewer stayed in the room.
+  const goneSinceRef = React.useRef<{ sessionId: string; at: number } | null>(null);
 
   const sessionId = session?.id ?? null;
   const open = session !== null && isPickerSessionOpen(session);
 
   React.useEffect(() => {
-    if (!joined || !open || sessionId === null || triedRef.current === sessionId) return;
+    if (!joined || !open || sessionId === null) {
+      goneSinceRef.current = null;
+      return;
+    }
+    if (triedRef.current === sessionId) return;
     let cancelled = false;
-    void hasOtherOpenDebateTab(debateRematchClaimKey(sessionId)).then(pickerOpen => {
-      if (cancelled || pickerOpen) return;
+    void findOtherOpenDebateTab(debateRematchClaimKey(sessionId)).then(pickerOpen => {
+      if (cancelled) return;
+      if (pickerOpen !== false) {
+        goneSinceRef.current = null;
+        return;
+      }
+      const now = Date.now();
+      const goneSince = goneSinceRef.current;
+      if (goneSince?.sessionId !== sessionId) {
+        goneSinceRef.current = { sessionId, at: now };
+        return;
+      }
+      if (now - goneSince.at < PICKER_GONE_AFTER_MS) return;
       triedRef.current = sessionId;
       leaveRef.current();
     });
