@@ -9,6 +9,12 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
+import {
+  clearCarriedLobbyMic,
+  registerLobbyMic,
+  registerLobbyStepOut,
+  routeIntoDebate,
+} from '~/core/debates/lobbies/step-out';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
@@ -481,6 +487,41 @@ describe('RematchVoiceHeader', () => {
     expect(mocks.livekitRoomProps[0]?.audio).toBe(true);
     expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
+  });
+
+  /** Routes out of a lobby whose mic is `on`, as the lobby's request flow does. */
+  function leaveLobbyWithMic(on: boolean) {
+    const clearMic = registerLobbyMic(() => on);
+    const clearStepOut = registerLobbyStepOut(async () => undefined);
+    routeIntoDebate(() => undefined);
+    clearMic();
+    clearStepOut();
+  }
+
+  it('keeps the microphone live for a viewer who was unmuted in the lobby', async () => {
+    leaveLobbyWithMic(true);
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps[0]?.audio).toBe(true);
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+
+    // Spent on arrival: the next picker starts from its own default again.
+    cleanup();
+    render(<RematchVoiceHeader session={{ ...makeSession('browsing'), id: 'session-2' }} currentUserId="me" />);
+    await flushOwnership();
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(false);
+  });
+
+  it('keeps the microphone off for a viewer who was muted in the lobby, even with an opponent in the room', async () => {
+    leaveLobbyWithMic(false);
+    render(
+      <RematchVoiceHeader session={{ ...makeSession('browsing'), source_debate_id: 'debate-1' }} currentUserId="me" />
+    );
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
+    clearCarriedLobbyMic();
   });
 
   it('resets the microphone default when the route moves between rematch sessions', async () => {

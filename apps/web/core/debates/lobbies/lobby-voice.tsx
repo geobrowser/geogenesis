@@ -39,6 +39,7 @@ import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
+import { registerLobbyMic } from './step-out';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
@@ -188,6 +189,13 @@ export function LobbyVoice({
   React.useEffect(() => {
     if (listenOnly) setMicChoice(false);
   }, [listenOnly]);
+
+  // What a route into a debate carries to the picker or ready room. Only a mic of the viewer's own
+  // here counts: a listener, or voice held by another tab, leaves the next screen at its default.
+  const carriedMic = ownership === 'owned' && data?.can_publish ? micIntent && !micFailure : null;
+  const carriedMicRef = React.useRef(carriedMic);
+  carriedMicRef.current = carriedMic;
+  React.useEffect(() => registerLobbyMic(() => carriedMicRef.current), []);
 
   const handleConnected = React.useCallback(() => {
     connectedRef.current = true;

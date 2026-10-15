@@ -2,12 +2,24 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { debateEntryClick, registerLobbyStepOut, routeIntoDebate } from './step-out';
+import {
+  clearCarriedLobbyMic,
+  debateEntryClick,
+  readCarriedLobbyMic,
+  registerLobbyMic,
+  registerLobbyStepOut,
+  routeIntoDebate,
+} from './step-out';
 
 let clear: (() => void) | null = null;
+let clearMic: (() => void) | null = null;
 afterEach(() => {
   clear?.();
   clear = null;
+  clearMic?.();
+  clearMic = null;
+  clearCarriedLobbyMic();
+  vi.useRealTimers();
 });
 
 function click(overrides: Partial<{ button: number; metaKey: boolean; defaultPrevented: boolean }> = {}) {
@@ -38,6 +50,57 @@ describe('routeIntoDebate', () => {
     routeIntoDebate(() => order.push('go'));
     expect(order).toEqual(['step-out']);
     await vi.waitFor(() => expect(order).toEqual(['step-out', 'go']));
+  });
+});
+
+describe('carrying the lobby mic into a debate', () => {
+  it('carries an unmuted mic, read before the step-out takes it down', () => {
+    let on: boolean | null = true;
+    clearMic = registerLobbyMic(() => on);
+    clear = registerLobbyStepOut(async () => {
+      on = false;
+    });
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBe(true);
+  });
+
+  it('carries a muted mic', () => {
+    clearMic = registerLobbyMic(() => false);
+    clear = registerLobbyStepOut(async () => undefined);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBe(false);
+  });
+
+  it('carries nothing for a listener, or once spent', () => {
+    clearMic = registerLobbyMic(() => true);
+    clear = registerLobbyStepOut(async () => undefined);
+    routeIntoDebate(() => undefined);
+    clearCarriedLobbyMic();
+    expect(readCarriedLobbyMic()).toBeNull();
+
+    clearMic();
+    clearMic = registerLobbyMic(() => null);
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBeNull();
+  });
+
+  it('does not reach a debate entered from outside a lobby', () => {
+    clearMic = registerLobbyMic(() => true);
+    clear = registerLobbyStepOut(async () => undefined);
+    routeIntoDebate(() => undefined);
+    clear();
+    clear = null;
+    routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBeNull();
+  });
+
+  it('expires after a minute', () => {
+    vi.useFakeTimers();
+    clearMic = registerLobbyMic(() => true);
+    clear = registerLobbyStepOut(async () => undefined);
+    routeIntoDebate(() => undefined);
+    vi.advanceTimersByTime(61_000);
+    expect(readCarriedLobbyMic()).toBeNull();
   });
 });
 
