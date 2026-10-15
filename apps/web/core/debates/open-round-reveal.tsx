@@ -4,19 +4,26 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { Text } from '~/design-system/text';
-
 import type { Debate, OpenRoundPick, OpenRoundRevealedPick, ParticipantSlot } from './api';
+import { LABEL_FONT, NOTE_CLASS, STAMP_INK, STAMP_TILT, STAMP_WORD } from './browse/stamp-styles';
+import { RoomMiddleBanner, RoomTag, RoomTileStamp } from './debate-room-stamps';
 import { rebuttalRoundsLabel } from './debate-round-indicator';
-import { recordingLabelTextShadow, recordingOverlayTextShadow } from './debate-video-tile';
-import { type OpenRoundsRoomPhase, openRoundCountInMs, openRoundNumber, openRoundRevealedPicks } from './open-rounds';
+import {
+  type OpenRoundsRoomPhase,
+  debateTurnRoleForDebate,
+  openRoundCountInMs,
+  openRoundNumber,
+  openRoundRevealedPicks,
+} from './open-rounds';
+import { BREAK_STAMP_GAP_MS } from './playback-breaks';
+import { roundLabel } from './round-cues';
 
 /**
  * The Open rounds reveal (GEO-3179): the result window after a round resolves (`result_window_ms`,
  * 3 s today), on both screens at once because both time it from the server's
  * `decision_resolved_at`.
  *
- * - `flip`: each tile's card turns from the debater's name to their pick.
+ * - `flip`: each debater's pick is stamped onto their tile.
  * - `result`: what the picks mean, for the rest of the window. Two Extends: "Round N" and who opens
  *   it. Anything else: "That's a wrap", with the picks left up so the split explains itself.
  * - `countIn`: Extend only, after the window. The opener gets the room's usual 5 s count-in, which
@@ -29,7 +36,7 @@ import { type OpenRoundsRoomPhase, openRoundCountInMs, openRoundNumber, openRoun
  */
 export type OpenRoundRevealStep = 'flip' | 'result' | 'countIn';
 
-/** The share of the window the picks have to turn and be read before the result takes over. */
+/** The share of the window the picks have to land and be read before the result takes over. */
 const OPEN_ROUND_FLIP_SHARE = 0.45;
 
 /**
@@ -84,113 +91,67 @@ export function useOpenRoundRevealStep(
   return openRoundRevealStep(effectiveMs, outcome, windowMs, hasPicks);
 }
 
-/** What each pick reads as, and its card's colour once it flips. A missing pick is neither choice. */
-const PICK_FACES: Record<OpenRoundPick | 'none', { word: string; surface: string }> = {
-  extend: { word: 'Extend', surface: 'bg-purple' },
-  end: { word: 'End', surface: 'bg-text' },
-  none: { word: 'No pick', surface: 'bg-grey-04' },
-};
-
 /**
- * One debater's pick, as a card over their tile that flips once, on mount, from their name to the
- * pick. A missing pick flips to "No pick" on grey rather than to either choice: it goes with the
- * other debater's pick, and ends the debate only when neither picked.
+ * One debater's pick, stamped onto their tile as the reveal starts (GEO-3315), in the published
+ * player's stamps: Extend in purple, End in black, a missing pick as a grey dashed "No pick". A
+ * missing pick is neither choice: it goes with the other debater's pick, and ends the debate only
+ * when neither picked.
  *
- * `placement` moves the card off the tile's centre while result text is up between the two tiles:
- * the upper tile's card rises, the lower one's drops.
+ * The lower tile's stamp lands a beat after the upper one's and leans the other way, so the two read
+ * as two hands. Both stay up beside "That's a wrap", so a split explains itself.
  */
-export function OpenRoundPickReveal({
-  name,
-  pick,
-  placement = 'center',
-}: {
-  name: string;
-  pick: OpenRoundPick | null;
-  placement?: 'center' | 'raised' | 'lowered';
-}) {
-  const face = PICK_FACES[pick ?? 'none'];
+export function OpenRoundPickStamp({ pick, order }: { pick: OpenRoundPick | null; order: 'first' | 'second' }) {
+  const key = pick ?? 'none';
   return (
-    <div
-      aria-hidden="true"
-      data-open-round-reveal={pick ?? 'none'}
-      className={cx(
-        'pointer-events-none absolute left-1/2 z-[35] h-[3.75rem] w-32 -translate-x-1/2 -translate-y-1/2 transition-[top] duration-300 perspective-[600px] motion-reduce:transition-none',
-        placement === 'raised' ? 'top-[36%]' : placement === 'lowered' ? 'top-[66%]' : 'top-1/2'
-      )}
-    >
-      <div className="relative h-full w-full rotate-y-180 transform-3d motion-safe:animate-open-round-flip">
-        <div className="absolute inset-0 grid place-items-center rounded-lg bg-white bg-[repeating-linear-gradient(45deg,var(--color-grey-01)_0_6px,var(--color-white)_6px_12px)] px-2 shadow-card backface-hidden">
-          <Text variant="metadataMedium" color="grey-04" className="max-w-full truncate">
-            {name}
-          </Text>
-        </div>
-        <div
-          className={cx(
-            'absolute inset-0 flex rotate-y-180 flex-col items-center justify-center rounded-lg px-2 text-white shadow-[0_10px_30px_rgba(0,0,0,0.35)] backface-hidden',
-            face.surface
-          )}
-        >
-          <span className="max-w-full truncate text-[0.6875rem] leading-[0.8125rem] font-medium tracking-[0.06em] uppercase opacity-80">
-            {name}
-          </span>
-          <span className="text-[1.375rem] leading-6 font-bold tracking-[0.04em] uppercase">{face.word}</span>
-        </div>
-      </div>
+    <div aria-hidden="true" data-open-round-reveal={key} className="pointer-events-none absolute inset-0 z-[35]">
+      <RoomTileStamp
+        ink={STAMP_INK[key]}
+        sizeCqw={12}
+        tilt={STAMP_TILT[order === 'first' ? 1 : 2]}
+        delayMs={order === 'first' ? 0 : BREAK_STAMP_GAP_MS}
+      >
+        {STAMP_WORD[key]}
+      </RoomTileStamp>
     </div>
   );
 }
 
 export type OpenRoundResult =
   /** `opener` is the opener's name, or `null` when it is you. */
-  | { kind: 'round'; round: number; opener: string | null }
+  /** `label` is the round in the player's words, "Round 2 · Rebuttal". */
+  | { kind: 'round'; round: number; label: string; opener: string | null }
   | { kind: 'wrap'; note: string | null }
   | { kind: 'max'; rounds: number };
 
 /**
- * What a round's resolution means, over the middle of the two tiles: a new round and who opens it,
- * the end of the debate, or the cap. It sits on the gap between the tiles, which is where the
- * room's other cards go, and the tiles hide their chips while it is up so the two never meet.
+ * What a round's resolution means, as a purple banner across the seam between the two tiles
+ * (GEO-3315): the next round in two lines, "Round N · Rebuttal" over who opens it; "That's a wrap",
+ * with the missing-pick line beneath when that is why; or "That's the max", with the rounds run. The
+ * tiles hide their chips while it is up so the two never meet.
  */
 export function OpenRoundResultOverlay({ result }: { result: OpenRoundResult }) {
-  const pill =
-    result.kind === 'round'
-      ? openRoundOpenerLine(result.opener)
-      : result.kind === 'wrap'
-        ? result.note
-        : rebuttalRoundsLabel(result.rounds);
-
   return (
     <div data-open-round-result={result.kind} className="pointer-events-none absolute inset-0 z-[45]">
-      {result.kind === 'round' && (
-        <div aria-hidden="true" className="absolute inset-0 overflow-hidden rounded-lg motion-reduce:hidden">
-          <div className="absolute top-1/2 left-1/2 -mt-[260px] -ml-[260px] h-[520px] w-[520px] bg-[repeating-conic-gradient(from_0deg,rgb(104_51_255/0.5)_0_7deg,transparent_7deg_18deg)] [mask-image:radial-gradient(circle,#000_0_18%,transparent_55%)] motion-safe:animate-open-round-burst" />
+      <RoomMiddleBanner
+        sizeCqw={5}
+        data-open-round-banner
+        sub={result.kind === 'round' ? openRoundOpenerLine(result.opener) : undefined}
+      >
+        {result.kind === 'round' ? result.label : result.kind === 'wrap' ? 'That’s a wrap' : 'That’s the max'}
+      </RoomMiddleBanner>
+      {result.kind === 'wrap' && result.note && (
+        <div className="absolute inset-x-0 top-[calc(50%+7.5cqw)] px-4 text-center">
+          <span className={cx(NOTE_CLASS, 'max-w-full text-balance')} style={LABEL_FONT}>
+            {result.note}
+          </span>
         </div>
       )}
-      <div className="absolute inset-0 flex flex-col items-center justify-center px-4 text-center">
-        <div
-          className="text-recordingLabel text-text motion-safe:animate-open-round-slam"
-          style={recordingLabelTextShadow}
-        >
-          {result.kind === 'round' ? 'Round' : result.kind === 'wrap' ? "That's a wrap" : "That's the max"}
+      {result.kind === 'max' && (
+        <div className="absolute inset-x-0 top-[calc(50%+7.5cqw)] text-center">
+          {/* Every round run, the opening included, as the mockup counts them. */}
+          <RoomTag className="text-[3cqw]">{openRoundNumber(result.rounds)} rounds</RoomTag>
         </div>
-        {result.kind === 'round' && (
-          <div
-            className="mt-1 text-[7.5rem] leading-[0.85] font-bold text-white motion-safe:animate-open-round-slam"
-            style={recordingOverlayTextShadow}
-          >
-            {result.round}
-          </div>
-        )}
-        {pill && (
-          <Text
-            color="white"
-            variant="metadata"
-            className="mt-3 max-w-full rounded-xl border border-white/40 bg-black/70 px-3 py-1.5 text-balance shadow-light"
-          >
-            {pill}
-          </Text>
-        )}
-      </div>
+      )}
     </div>
   );
 }
@@ -202,17 +163,19 @@ function openRoundOpenerLine(opener: string | null) {
 
 /**
  * Why a debate ended, when nobody picked End: the missing picks. An End ends the debate whatever the
- * other pick was, so when there is one the cards already say why, and there is no line.
+ * other pick was, so when there is one the stamps already say why, and there is no line.
  */
 export function openRoundWrapNote(
   localPick: OpenRoundPick | null | undefined,
-  remote: { name: string; pick: OpenRoundPick | null | undefined }
+  remote: { name: string; pick: OpenRoundPick | null | undefined },
+  /** The first side's name where there is no "you", as in published playback (GEO-3277). */
+  localName = 'You'
 ) {
   if (localPick === 'end' || remote.pick === 'end') return null;
   const localMissed = localPick === null;
   const remoteMissed = remote.pick === null;
   if (localMissed && remoteMissed) return 'No picks in time';
-  if (localMissed) return "You didn't pick in time";
+  if (localMissed) return `${localName} didn't pick in time`;
   if (remoteMissed) return `${remote.name} didn't pick in time`;
   return null;
 }
@@ -233,11 +196,9 @@ export type OpenRoundReveal = {
   step: OpenRoundRevealStep | null;
   /** What the resolution means, for the overlay between the tiles; `null` when nothing is up. */
   result: OpenRoundResult | null;
-  /** Each debater's pick card, while the cards are up. */
+  /** Each debater's pick stamp, while the stamps are up. */
   localPick: OpenRoundRevealedPick | null;
   remotePick: OpenRoundRevealedPick | null;
-  /** Where the cards sit: centred while they turn, then clear of the result text. */
-  pickPlacement: 'center' | 'apart';
   /** The tiles fade their chips while result text sits between them. */
   chipsHidden: boolean;
   /** The end card and the thank-you overlay wait while the debate's last result is still up. */
@@ -310,11 +271,16 @@ export function useOpenRoundReveal({
     result =
       outcome === 'extend'
         ? // The first slot opens every round, and is one of the two debaters.
-          { kind: 'round', round: openRoundNumber(roundIndex + 1), opener: localOpens ? null : remote.name }
+          {
+            kind: 'round',
+            round: openRoundNumber(roundIndex + 1),
+            label: roundLabel((roundIndex + 1) * 2, turnIndex => debateTurnRoleForDebate(debate, turnIndex)),
+            opener: localOpens ? null : remote.name,
+          }
         : { kind: 'wrap', note: openRoundWrapNote(localPick?.pick, { name: remote.name, pick: remotePick?.pick }) };
   }
 
-  // The picks turn, then stay up beside "That's a wrap" so a split explains itself. A new round
+  // The picks land, then stay up beside "That's a wrap" so a split explains itself. A new round
   // takes the tiles back for its own text.
   const picksShown = step === 'flip' || (step === 'result' && outcome === 'end');
   const newRound = resultPhase?.outcome === 'extend' && (step === 'result' || step === 'countIn');
@@ -324,7 +290,6 @@ export function useOpenRoundReveal({
     result,
     localPick: picksShown ? localPick : null,
     remotePick: picksShown ? remotePick : null,
-    pickPlacement: step === 'flip' ? 'center' : 'apart',
     chipsHidden: result !== null,
     holdsEndCard: maxReached || wrapHeld,
     holdsCountIn: resultPhase !== null && !countingIn,
@@ -346,7 +311,7 @@ export function useOpenRoundReveal({
 }
 
 /**
- * The reveal for screen readers, which cannot see the cards turn: both picks, then what they mean.
+ * The reveal for screen readers, which cannot see the stamps land: both picks, then what they mean.
  * A missing pick is said as such, since it can be why the debate ended.
  */
 function openRoundAnnouncementText({
@@ -364,7 +329,7 @@ function openRoundAnnouncementText({
   if (step === null) return '';
   // Mid-sentence, so a missing pick is lower case.
   const said = (entry: OpenRoundRevealedPick | null) =>
-    entry === null ? null : entry.pick === null ? 'no pick' : PICK_FACES[entry.pick].word;
+    entry === null ? null : entry.pick === null ? 'no pick' : STAMP_WORD[entry.pick];
   const picks = [
     said(localPick) && `You: ${said(localPick)}.`,
     said(remote.pick) && `${remote.name}: ${said(remote.pick)}.`,
