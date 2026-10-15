@@ -24,6 +24,7 @@ import { Input } from '~/design-system/input';
 import { OnlineDot } from '~/design-system/online-dot';
 import { Skeleton } from '~/design-system/skeleton';
 import { Text } from '~/design-system/text';
+import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
 import type { DebatePerson } from '../api';
 import { useDebateClaimResponse } from '../browse/use-debate-claim-response';
@@ -812,7 +813,9 @@ export function CalendarNarrowSheet({
           <div className="flex justify-center pt-2 pb-1" aria-hidden>
             <span className="h-1 w-9 rounded-full bg-grey-02" />
           </div>
-          {renderBody(draft, setDraft, portal)}
+          <ElevatedPopoverPortalContext.Provider value={portal}>
+            {renderBody(draft, setDraft, portal)}
+          </ElevatedPopoverPortalContext.Provider>
           <div className="border-t border-grey-02 px-4 pt-3 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <button
               type="button"

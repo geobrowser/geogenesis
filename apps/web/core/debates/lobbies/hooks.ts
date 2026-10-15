@@ -1,12 +1,20 @@
 'use client';
 
-import { type UseQueryResult, useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  type UseQueryResult,
+  replaceEqualDeep,
+  useMutation,
+  useMutationState,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import {
   type CreateDebateLobbyRequest,
   type DebateLobbyHeartbeat,
+  type DebateLobbyMember,
   type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
@@ -27,6 +35,7 @@ import { rememberLobbyReturnDestination } from '../debate-return-navigation';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
 import { useConnectionId } from '../rooms/hooks';
+import { sameId } from '../rooms/room-presence';
 import {
   lobbyCreated,
   lobbyEnded,
@@ -48,7 +57,7 @@ import {
   otherLobbyIdFrom,
 } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
-import { carryLobbyMic, clearLobbyRejoin, consumeLobbyRejoin, forgetLobbyMic, registerLobbyStepOut } from './step-out';
+import { carryLobbyMic, forgetLobbyMic, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
@@ -135,6 +144,18 @@ const OPENS_REFETCH_MIN_MS = 5_000;
 export const MAX_TIMEOUT_MS = 2_147_483_647;
 
 /**
+ * Structural sharing that still hands out a new `members` on every full read, a refetch or a stored
+ * view, even one equal to the last: a stepped-out page waits for a roster read since its step-out,
+ * and tells one by that. Patches (claim lists, guest counts) spread the cached view and keep it.
+ */
+function shareLobbyViewWithFreshRoster(previous: unknown, next: unknown): unknown {
+  const shared = replaceEqualDeep(previous, next) as DebateLobbyView | undefined;
+  const members = (next as DebateLobbyView | undefined)?.members;
+  if (!shared || !members || shared.members === members) return shared;
+  return { ...shared, members };
+}
+
+/**
  * One lobby. Kept current by `debate.lobby_changed` and the heartbeat's own view. That event only
  * reaches people in the lobby, so a lobby not yet open is refetched at `opens_at`.
  */
@@ -157,6 +178,7 @@ export function useDebateLobby(lobbyId: string, enabled = true) {
       );
     },
     enabled: enabled && Boolean(lobbyId) && ready && authenticated,
+    structuralSharing: shareLobbyViewWithFreshRoster,
   });
 
   const access = query.data?.access;
@@ -312,12 +334,19 @@ export type LobbyPresenceState =
   | { status: 'confirm_leave_other'; otherLobbyId: string | null; rejoin?: true }
   /** Joined another lobby from another tab, which dropped this one; no automatic rejoin. */
   | { status: 'moved'; otherLobbyId: string | null }
-  /** Left to debate, still on the roster; "Back to the room" joins again. */
+  /**
+   * Out to debate, still on the roster. Stepped out by a debate in another tab, it joins again once a
+   * newer roster shows that debate over. It ends as `left` once one shows the viewer gone, or as
+   * `dropped` when a host removes them meanwhile.
+   */
   | { status: 'stepped_out' }
   /** Taken out by the server; the refetched access says the rest. */
   | { status: 'dropped'; reason: 'ended' | 'banned' | 'removed' }
   | { status: 'left' }
   | { status: 'failed'; message: string };
+
+/** A lobby view's roster, with the viewer's id to find their own row in it. */
+export type LobbyPresenceRoster = { members: readonly DebateLobbyMember[]; viewerId: string };
 
 /**
  * Presence in one lobby: joins once admitted, heartbeats while joined, and leaves on unmount,
@@ -328,7 +357,9 @@ export function useLobbyPresence(
   admitted: boolean,
   steppedOut = false,
   connected = false,
-  removed = false
+  removed = false,
+  /** The view's roster and whose row is the viewer's; undefined while either is unknown. */
+  roster?: LobbyPresenceRoster
 ) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -472,7 +503,18 @@ export function useLobbyPresence(
     [setState]
   );
 
+  // The latest roster, and the one shown when a debate in another tab stepped this page out. Only a
+  // roster read since can say how that debate went: patches to the view (claim lists, guest counts)
+  // keep the same `members`. Null when nothing is to be recovered, as when this tab left to debate.
+  const rosterRef = React.useRef(roster);
+  React.useEffect(() => {
+    rosterRef.current = roster;
+  }, [roster]);
+  const stepOutRosterRef = React.useRef<{ members: readonly DebateLobbyMember[] | undefined } | null>(null);
+
   const stepOut = React.useCallback(async () => {
+    // This tab is going to the debate itself: its own step-out is never one to come back from here.
+    stepOutRosterRef.current = null;
     // The server can step the viewer out first (the debate's start reaches the heartbeat before
     // the routing), and the lobby must still be where the debate returns to.
     const steppedOutAlready = statusRef.current === 'stepped_out';
@@ -480,8 +522,6 @@ export function useLobbyPresence(
     lobbySteppedOut(lobbyId);
     rememberLobbyReturnDestination(lobbyId);
     carryLobbyMic();
-    // Only a press on the coming debate's end card may skip the stepped-out prompt.
-    clearLobbyRejoin();
     if (!sentRef.current) return;
     stopWithout({ status: 'stepped_out' });
     try {
@@ -510,19 +550,37 @@ export function useLobbyPresence(
     return registerLobbyStepOut(stepOut);
   }, [stepOut]);
 
-  // Auto-join once admitted, unless the viewer left, is being asked about another lobby, or
-  // stepped out, where going back is their call unless the debate's end card already made it.
+  // Auto-join once admitted, unless the viewer left or is being asked about another lobby. Arriving
+  // stepped out is coming back from the debate, by any route: straight into the room.
   const status = state.status;
   React.useEffect(() => {
     if (!admitted || status !== 'idle') return;
-    // Consumed on every arrival so a flag left by a failed leave cannot outlive it.
-    const rejoin = consumeLobbyRejoin(lobbyId);
-    if (rejoin) markLobbyEntry(lobbyId, 'back_after_debate');
-    // A host removed them, possibly mid-debate: coming back is their call, even after Back to the room.
-    if (removed) setState({ status: 'dropped', reason: 'removed' });
-    else if (steppedOut && !rejoin) setState({ status: 'stepped_out' });
-    else void join(false);
+    // A host removed them, possibly mid-debate: coming back is their call, even back from the debate.
+    if (removed) {
+      setState({ status: 'dropped', reason: 'removed' });
+      return;
+    }
+    if (steppedOut) markLobbyEntry(lobbyId, 'back_after_debate');
+    void join(false);
   }, [admitted, join, lobbyId, removed, setState, status, steppedOut]);
+
+  // Stepped out while this page stayed open, by a debate in another tab: back in once a roster read
+  // since shows the debate over, which can be before this tab ever saw it running. A roster without
+  // the viewer means they left from another tab, and this one leaves with them.
+  React.useEffect(() => {
+    const shownAtStepOut = stepOutRosterRef.current;
+    if (status !== 'stepped_out' || !shownAtStepOut || !admitted) return;
+    // A host removed them meanwhile: the removed screen, as for a page still in the room.
+    if (removed) {
+      stopWithout({ status: 'dropped', reason: 'removed' });
+      return;
+    }
+    if (!roster) return;
+    if (roster.members === shownAtStepOut.members) return;
+    const own = roster.members.find(member => sameId(member.user_id, roster.viewerId));
+    if (!own) stopWithout({ status: 'left' });
+    else if (!own.in_debate) void join(false);
+  }, [admitted, join, removed, roster, status, stopWithout]);
 
   // Unbanned after a ban this tab heard: the view is admitted again with `removed`, so the
   // viewer gets the removed screen and its Rejoin rather than a stale ban.
@@ -545,6 +603,7 @@ export function useLobbyPresence(
           return;
         case 'stepped_out':
           lobbySteppedOut(lobbyId);
+          stepOutRosterRef.current = { members: rosterRef.current?.members };
           stopWithout({ status: 'stepped_out' });
           void queryClient.invalidateQueries({ queryKey: debateQueryKeys.lobby(accountKey, lobbyId) });
           return;
