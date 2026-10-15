@@ -9,6 +9,7 @@ import { Megaphone } from '~/design-system/icons/megaphone';
 import { useDebateActivity, useGeoChatAuth } from '../hooks';
 import { useLobbyLineup } from '../lobbies/live-lobbies';
 import { LiveLobbiesPreview } from '../lobbies/live-lobbies-preview';
+import { useLobbyReminderReplay } from '../lobbies/lobby-reminder-press';
 import { useDebateRequests } from './hooks';
 import { useDebatesHub } from './use-debates-hub';
 import { useUnexpiredRequests } from './use-request-countdown';
@@ -44,6 +45,9 @@ export function DebatesHubButton() {
   // the panel closed: it holds the matchmaking scope that carries `debate.lobbies_changed`.
   const { live } = useLobbyLineup();
   const liveLabel = liveLobbiesLabel(live);
+  // GEO-3289. A reminder a visitor asked for before signing up is set from here once their account
+  // can, so it does not wait on the panel being open or the lobby's card still showing.
+  useLobbyReminderReplay();
 
   return (
     <LiveLobbiesPreview lobbies={live} disabled={isOpen}>

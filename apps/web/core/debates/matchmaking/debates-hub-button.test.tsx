@@ -15,6 +15,9 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const lineup = vi.hoisted(() => ({ live: [] as { lobby_id: string; headcount: number }[] }));
+const replay = vi.hoisted(() => vi.fn());
+// GEO-3289. A reminder queued before sign-up replays from here.
+vi.mock('../lobbies/lobby-reminder-press', () => ({ useLobbyReminderReplay: replay }));
 // GEO-3268's lineup reads the lobby list and holds the matchmaking scope.
 vi.mock('../lobbies/live-lobbies', () => ({ useLobbyLineup: () => ({ live: lineup.live, soon: null, later: [] }) }));
 vi.mock('../lobbies/live-lobbies-preview', () => ({
@@ -59,6 +62,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('DebatesHubButton', () => {
+  it('holds the queued lobby reminder’s replay, on every page it is on', () => {
+    mocks.authenticated = false;
+    renderButton();
+    expect(replay).toHaveBeenCalled();
+  });
+
   it('shows for a signed-in user', () => {
     renderButton();
     expect(screen.getByRole('button', { name: 'Debate' })).toBeInTheDocument();

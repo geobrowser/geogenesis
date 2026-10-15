@@ -33,15 +33,17 @@ vi.mock('../hooks', async importOriginal => ({
   useGeoChatAuth: () => ({ ready: true, ...auth, getPrivyIdentityToken: vi.fn() }),
 }));
 
-const { GeoChatRequestError } = await import('../api');
+const { GeoChatRequestError, GeoChatSessionError } = await import('../api');
 const {
   LOBBY_HEARTBEAT_MS,
+  SIGNED_OUT_LOBBIES_POLL_MS,
   useDebateLobbies,
   useDebateLobby,
   useDebateLobbyCalendar,
   useDebateLobbyReminder,
   useEndDebateLobby,
   useLobbyPresence,
+  useLobbyReminderSaving,
 } = await import('./hooks');
 const { debateQueryKeys } = await import('../hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
@@ -714,10 +716,13 @@ it('moves a ban this tab heard to the removed screen once unbanned, and Rejoin c
   expect(result.current.state.status).toBe('joined');
 });
 
-// Copilot on #2836 asked for the list to be hidden once signed out. It already is: the key carries
-// the account, which Privy clears with the session, so a signed-out read is a different, empty entry.
-it('shows no lobbies once the viewer signs out', async () => {
-  api.listDebateLobbies.mockResolvedValue({ lobbies: [{ lobby_id: 'members-only' }] });
+// Copilot on #2836 asked for the list to be hidden once signed out. The key carries the account,
+// which Privy clears with the session, so a signed-out read is a different entry: since GEO-3289
+// the anonymous list, never the account's.
+it('drops the account’s lobbies once the viewer signs out, for the anonymous list', async () => {
+  api.listDebateLobbies.mockImplementation(async (_token: unknown, accountKey: string | null) => ({
+    lobbies: [{ lobby_id: accountKey ? 'members-view' : 'anonymous-view' }],
+  }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -725,13 +730,129 @@ it('shows no lobbies once the viewer signs out', async () => {
 
   try {
     const { result, rerender } = renderHook(() => useDebateLobbies(), { wrapper });
-    await waitFor(() => expect(result.current.data?.lobbies).toHaveLength(1));
+    await waitFor(() => expect(result.current.data?.lobbies[0]?.lobby_id).toBe('members-view'));
 
     Object.assign(auth, { authenticated: false, accountKey: null });
     rerender();
     expect(result.current.data).toBeUndefined();
+    await waitFor(() => expect(result.current.data?.lobbies[0]?.lobby_id).toBe('anonymous-view'));
   } finally {
     Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
+  }
+});
+
+// Copilot on #2863: a brand-new account is refused for a minute or two. The list waits that out
+// like the account's other reads, so the navbar and a queued reminder do not sit on a failed read.
+it('waits out a new account’s warm-up signed in, and reads once signed out', async () => {
+  const warmingUp = new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401));
+  api.listDebateLobbies.mockRejectedValueOnce(warmingUp).mockResolvedValueOnce({ lobbies: [] });
+  const client = new QueryClient();
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  try {
+    const signedIn = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true), { timeout: 3_000 });
+    expect(api.listDebateLobbies).toHaveBeenCalledTimes(2);
+    signedIn.unmount();
+
+    api.listDebateLobbies.mockReset().mockRejectedValue(new GeoChatRequestError('down', 'unavailable', 503));
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    const signedOut = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedOut.result.current.isError).toBe(true));
+    expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
+  }
+});
+
+// Copilot on #2863: a reminder saving through one control (the navbar's replay) shows as saving on
+// every control for that lobby, so none can take it back while the write is still landing.
+it('shows a reminder saving in one control as saving in every control for that lobby', async () => {
+  let settle: (view: unknown) => void = () => undefined;
+  api.setDebateLobbyReminder.mockImplementationOnce(() => new Promise(done => (settle = done)));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  const { result } = renderHook(
+    () => ({
+      replay: useDebateLobbyReminder(),
+      panel: useLobbyReminderSaving('abc-123'),
+      other: useLobbyReminderSaving('zzz'),
+    }),
+    { wrapper }
+  );
+  expect(result.current.panel).toBe(false);
+
+  act(() => result.current.replay.mutate({ lobbyId: 'abc123', reminded: true }));
+  await waitFor(() => expect(result.current.panel).toBe(true));
+  expect(result.current.other).toBe(false);
+
+  await act(async () => settle(view(false)));
+  await waitFor(() => expect(result.current.panel).toBe(false));
+});
+
+// Copilot on #2863: the button reads the list's row, so a saved reminder is written there at once
+// rather than waiting on the refetch, which may be slow or fail.
+it('writes a saved reminder into the cached list and calendar rows without waiting for a refetch', async () => {
+  const row = { lobby_id: 'lobby1', open: false, viewer_reminded: false, reminder_count: 0 };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(debateQueryKeys.lobbies('acct'), { lobbies: [row, { ...row, lobby_id: 'other' }] });
+  client.setQueryData(debateQueryKeys.lobbyCalendar('acct', 1, 2), { lobbies: [{ ...row, state: 'upcoming' }] });
+  api.listDebateLobbies.mockRejectedValue(new GeoChatRequestError('down', 'unavailable', 503));
+  api.listDebateLobbyCalendar.mockReturnValue(new Promise(() => undefined));
+  const saved = { ...view(false), reminder_count: 4, viewer: { ...view(false).viewer, reminded: true } };
+  api.setDebateLobbyReminder.mockResolvedValueOnce(saved);
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  try {
+    const { result } = renderHook(() => useDebateLobbyReminder(), { wrapper });
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }));
+
+    const list = client.getQueryData<{ lobbies: (typeof row)[] }>(debateQueryKeys.lobbies('acct'));
+    expect(list?.lobbies[0]).toMatchObject({ viewer_reminded: true, reminder_count: 4 });
+    expect(list?.lobbies[1]).toMatchObject({ viewer_reminded: false, reminder_count: 0 });
+    const week = client.getQueryData<{ lobbies: (typeof row)[] }>(debateQueryKeys.lobbyCalendar('acct', 1, 2));
+    expect(week?.lobbies[0]).toMatchObject({ viewer_reminded: true, reminder_count: 4, state: 'upcoming' });
+  } finally {
+    api.listDebateLobbies.mockReset();
+    api.listDebateLobbyCalendar.mockReset();
+  }
+});
+
+// GEO-3289. Signed out there is no gateway scope to patch the list, so it is polled.
+it('lists lobbies to a signed-out visitor and polls, and only then', async () => {
+  api.listDebateLobbies.mockResolvedValue({ lobbies: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const interval = (accountKey: string | null) =>
+    client.getQueryCache().find({ queryKey: debateQueryKeys.lobbies(accountKey) })?.observers[0]?.options
+      .refetchInterval;
+
+  try {
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    const signedOut = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedOut.result.current.isSuccess).toBe(true));
+    expect(api.listDebateLobbies).toHaveBeenCalledWith(expect.anything(), null, expect.anything());
+    expect(interval(null)).toBe(SIGNED_OUT_LOBBIES_POLL_MS);
+    signedOut.unmount();
+
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    const signedIn = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true));
+    expect(interval('acct')).toBeFalsy();
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
   }
 });
 

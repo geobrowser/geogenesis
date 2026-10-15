@@ -22,6 +22,7 @@ const {
   lobbySteppedOut,
   lobbyViewerRole,
   markLobbyEntry,
+  peekLobbyEntry,
   resetLobbyAnalytics,
   useLobbyDebateAnalytics,
 } = await import('./lobby-analytics');
@@ -75,6 +76,19 @@ describe('lobby sessions', () => {
     lobbyJoined(LOBBY, { isNewcomer: false });
 
     expect(events('lobby_joined').map(props => props.entry)).toEqual(['link', 'link']);
+  });
+
+  // GEO-3289. The signed-out account prompt reads it; the join after sign-up still gets it.
+  it('peeks at the entry without using it up, with the same fallbacks', () => {
+    markLobbyEntry(LOBBY, 'nav');
+    expect(peekLobbyEntry(DASHLESS)).toBe('nav');
+    expect(peekLobbyEntry('other')).toBe('link');
+    lobbyJoined(LOBBY, { isNewcomer: false });
+    expect(events('lobby_joined').map(props => props.entry)).toEqual(['nav']);
+
+    markLobbyEntry(LOBBY, 'side_panel');
+    vi.advanceTimersByTime(61_000);
+    expect(peekLobbyEntry(LOBBY)).toBe('link');
   });
 
   it('keeps the session through a StrictMode remount, and ends it on a real unmount', () => {

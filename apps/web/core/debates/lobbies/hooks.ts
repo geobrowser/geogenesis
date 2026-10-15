@@ -1,12 +1,13 @@
 'use client';
 
-import { type UseQueryResult, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type UseQueryResult, useMutation, useMutationState, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import * as React from 'react';
 
 import {
   type CreateDebateLobbyRequest,
   type DebateLobbyHeartbeat,
+  type DebateLobbySummary,
   type DebateLobbyView,
   GeoChatRequestError,
   createDebateLobby,
@@ -73,13 +74,16 @@ async function retryOnceIfRateLimited<T>(task: () => Promise<T>): Promise<T> {
   }
 }
 
+/** How often a signed-out visitor's lobby list is read: they hold no gateway scope to patch it. */
+export const SIGNED_OUT_LOBBIES_POLL_MS = 30_000;
+
 /**
  * The lobby list, patched or refetched by `debate.lobbies_changed`. Reloaded on every mount in case
  * patches stopped while nothing held the matchmaking scope. With `staleTime`, reloaded on mount only
  * once that old.
  *
- * Signed in only. geo-chat lists lobbies to accounts alone, and a signed-out visitor cannot join one
- * yet, so every lobby surface stays hidden for them until both change (GEO-3268).
+ * Signed out too (GEO-3289): geo-chat answers with the list a new account sees (GEO-3291). With no
+ * gateway scope to carry `debate.lobbies_changed`, that list is polled instead.
  */
 export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: number } = {}) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
@@ -88,15 +92,19 @@ export function useDebateLobbies(enabled = true, { staleTime }: { staleTime?: nu
     ...debateQueryNetworkOptions,
     queryKey: debateQueryKeys.lobbies(accountKey),
     queryFn: ({ signal }) => listDebateLobbies(getPrivyIdentityToken, accountKey, signal),
-    enabled: enabled && ready && authenticated,
+    // Signed in it carries the viewer's own reminders and roster, so it waits out a new account
+    // geo-chat does not know yet like the account's other reads. Anonymous, one read.
+    ...(accountKey ? viewerReadRetryOptions(accountKey) : {}),
+    enabled: enabled && ready,
     ...(staleTime === undefined ? { refetchOnMount: 'always' as const } : { staleTime }),
+    ...(authenticated ? {} : { refetchInterval: SIGNED_OUT_LOBBIES_POLL_MS }),
   });
 }
 
 /**
  * Every lobby starting in `[from, to)` (GEO-3271), for the calendar's week: no per-host or total cap,
- * and ended lobbies included. Signed in only, as the list is. Refetched with it; card patches are
- * laid over it by the gateway.
+ * and ended lobbies included. Signed in only. Refetched with the lobby list; card patches are laid
+ * over it by the gateway.
  */
 export function useDebateLobbyCalendar(from: Date, to: Date, enabled = true) {
   const { accountKey, authenticated, ready, getPrivyIdentityToken } = useGeoChatAuth();
@@ -201,15 +209,39 @@ export function useCreateDebateLobby() {
   });
 }
 
+/** `list` with the viewer's reminder on `view`'s row, or the same list when it is not listed. */
+function withReminder<T extends { lobbies: DebateLobbySummary[] }>(list: T, view: DebateLobbyView): T {
+  if (!list.lobbies.some(row => dashlessId(row.lobby_id) === dashlessId(view.lobby_id))) return list;
+  return {
+    ...list,
+    lobbies: list.lobbies.map(row =>
+      dashlessId(row.lobby_id) === dashlessId(view.lobby_id)
+        ? { ...row, viewer_reminded: view.viewer.reminded, reminder_count: view.reminder_count }
+        : row
+    ),
+  };
+}
+
+/** Every reminder write shares it, so one in flight shows on every control for that lobby. */
+const LOBBY_REMINDER_MUTATION_KEY = ['debates', 'lobby-reminder'] as const;
+
 export function useDebateLobbyReminder() {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
   const store = useStoreLobbyView();
 
   return useMutation({
+    mutationKey: LOBBY_REMINDER_MUTATION_KEY,
     mutationFn: ({ lobbyId, reminded }: { lobbyId: string; reminded: boolean }) =>
       setDebateLobbyReminder(lobbyId, reminded, getPrivyIdentityToken, accountKey),
     onSuccess: view => {
+      // Remind me draws from the list's row, so the answer is written there now (the calendar's
+      // week sits under the same key). Waiting on the refetch `store` starts would show RSVP again
+      // until it lands, and for good if it fails (GEO-3289).
+      queryClient.setQueriesData<{ lobbies: DebateLobbySummary[] }>(
+        { queryKey: debateQueryKeys.lobbies(accountKey) },
+        list => list && withReminder(list, view)
+      );
       store(view);
       lobbyRsvpChanged(view.lobby_id, {
         going: view.viewer.reminded,
@@ -224,6 +256,19 @@ export function useDebateLobbyReminder() {
       }
     },
   });
+}
+
+/**
+ * Whether any control is writing this lobby's reminder (GEO-3289), the navbar's queued replay
+ * included. Each control has its own mutation, so this is what stops one taking a reminder back
+ * while another's write is still landing.
+ */
+export function useLobbyReminderSaving(lobbyId: string) {
+  const saving = useMutationState({
+    filters: { mutationKey: LOBBY_REMINDER_MUTATION_KEY, status: 'pending' },
+    select: mutation => (mutation.state.variables as { lobbyId: string } | undefined)?.lobbyId,
+  });
+  return lobbyId !== '' && saving.some(id => id !== undefined && dashlessId(id) === dashlessId(lobbyId));
 }
 
 /**
