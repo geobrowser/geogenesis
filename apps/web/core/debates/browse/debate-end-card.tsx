@@ -190,7 +190,7 @@ function VoteRow({
   );
 }
 
-/** The live cards report each answer to the ticker's tally; the end card keeps no tally of its own. */
+/** The claim counter's cards report each answer to the ticker's tally; the end card keeps no tally of its own. */
 const IGNORE_ANSWER = () => {};
 
 /**
@@ -306,7 +306,6 @@ function ClaimsCarousel({ carousel, onOpenClaims }: { carousel: EndCardClaims; o
                 row={null}
                 entity={entitiesByClaimId.get(claim.id) ?? null}
                 onAnswered={IGNORE_ANSWER}
-                tone="light"
               />
             </ActionContextProvider>
           </div>

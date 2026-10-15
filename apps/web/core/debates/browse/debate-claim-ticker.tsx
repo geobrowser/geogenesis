@@ -7,8 +7,8 @@ import cx from 'classnames';
 import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
+  type ClaimHistoryEntry,
   type ClaimMarker,
-  type StackedCard,
   type TickerWindow,
   backlogWindows,
   claimHistory,
@@ -36,7 +36,7 @@ type DebateTicker = {
    * Bounded by the playhead, so it is a record of what has been said rather than a table of
    * contents for what is coming.
    */
-  historyBySlot: Map<number, StackedCard[]>;
+  historyBySlot: Map<number, ClaimHistoryEntry[]>;
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
   /** Which way the viewer answered each claim this session. */
@@ -97,7 +97,7 @@ export function useDebateClaimTicker(
    * A claim needs two things before it can be drawn: a speaker the participant list recognises, so
    * the card can attribute it, and a space to answer in — without either, `DebateClaimTickerCard`
    * renders nothing. Applied here rather than at each consumer because the consumers were drifting:
-   * cards dropped these claims, while the scrubber drew a clickable hash for them and the chip
+   * cards dropped these claims, while the scrubber drew a clickable hash for them and the counter
    * counted them, so both promised a card that could never appear. A hash nothing is behind is the
    * same broken promise {@link claimMarkers} already turns low-confidence matches away to avoid.
    *
@@ -108,11 +108,11 @@ export function useDebateClaimTicker(
    * but the feed card and the explore card fetch the same query ungated, so a disabled ticker reads
    * a full claim list out of a warm cache. `groupBySlot` already refused to build cards from it;
    * the markers did not, so an inactive feed card could draw a clickable hash that seeks to a claim
-   * whose card and backlog are both deliberately empty. One gate now, not two half-gates.
+   * whose counter and list are both deliberately empty. One gate now, not two half-gates.
    *
    * **The third rule is about what a viewer can tell apart.** Two claim entities can carry the same
    * text *and* the same published moment, and then everything downstream doubles: two identical
-   * cards in the backlog, a chip counting them twice, and two markers at one spot where the later
+   * cards in the list, a counter counting them twice, and two markers at one spot where the later
    * one covers the earlier so the first is unreachable by pointer. Measured: 11 such claims, all in
    * one debate, whose claims appear to have been published twice; and zero cases of the same text
    * at *different* moments, which is why the key is text **and** moment rather than text alone — a
@@ -185,7 +185,7 @@ export function useDebateClaimTicker(
   const backlogBySlot = React.useMemo(() => groupBySlot(backlog), [groupBySlot, backlog]);
 
   const historyBySlot = React.useMemo(() => {
-    const history = new Map<number, StackedCard[]>();
+    const history = new Map<number, ClaimHistoryEntry[]>();
     for (const [slot, slotWindows] of backlogBySlot) history.set(slot, claimHistory(slotWindows, playheadMs));
     return history;
   }, [backlogBySlot, playheadMs]);
@@ -200,24 +200,20 @@ export function useDebateClaimTicker(
   };
 }
 
-/** `glass` over the video; `light` on a white surface, as the end card's carousel is. */
-export type ClaimCardTone = 'glass' | 'light';
-
 /**
- * The claim card that rises over the video as it is said.
+ * One claim as a card on a white surface: who said it, how the crowd has answered, the two ways to
+ * answer, and the claim. The debate end card's carousel draws these (GEO-3353 retired the dark
+ * card that rose over the video; claims there are the counter's now, `DebateClaimCounter`).
  *
- * A translucent dark card in the player's bottom-right corner, stacked upward: the newest arrives
- * at the bottom and earlier ones ride up and dissolve, which is the shape of a chat rather than a
- * dialog. It never pauses the video or opens anything — the only thing that interrupts playback is
- * the sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a
- * thumb while signed out.
+ * It never pauses the video or opens anything — the only thing that interrupts playback is the
+ * sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a thumb
+ * while signed out.
  */
 export function DebateClaimTickerCard(props: Parameters<typeof DebateClaimTickerCardBody>[0]) {
   if (!props.window.claim.spaceId) return null;
   return (
     <ActionSurface
       asChild
-      trackImpression={props.opacity === undefined || props.opacity > 0}
       value={{ component: 'debate_claim_ticker', target_id: props.window.claim.id, target_type: 'claim' }}
     >
       <DebateClaimTickerCardBody {...props} />
@@ -227,22 +223,13 @@ export function DebateClaimTickerCard(props: Parameters<typeof DebateClaimTicker
 
 function DebateClaimTickerCardBody({
   window,
-  opacity = 1,
   speaker = null,
   row,
   entity,
   onAnswered,
-  tone = 'glass',
 }: {
   window: TickerWindow;
-  /**
-   * `glass` over the video, as it rises while the claim is said. `light` on a white surface — the
-   * debate end card's carousel — where the dark glass would be white text on near-white.
-   */
-  tone?: ClaimCardTone;
-  /** Driven by the playhead, so a scrub lands on the right strength rather than mid-animation. */
-  opacity?: number;
-  /** Who said it. The card names them, so it no longer has to sit over their tile to attribute. */
+  /** Who said it. The card names them. */
   speaker?: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
@@ -257,31 +244,8 @@ function DebateClaimTickerCardBody({
       // The video behind is one big play/pause button; without this every tap on a thumb would
       // also toggle playback.
       onClick={event => event.stopPropagation()}
-      // Left off entirely at full strength, so the open list's edge fade — which writes this
-      // property straight to the node on scroll — is not overwritten on the next render.
-      style={opacity === 1 ? undefined : { opacity }}
-      /**
-       * `rgba(21,21,21,0.3)`, 8px radius, 12px padding, 6px between the header and the claim, over a
-       * 44px backdrop blur.
-       *
-       * Every value but the blur is read straight off the frame. The blur is fitted, because the
-       * Dev Mode export does not carry it — there is no `filter` or `backdrop` anywhere in that
-       * file, and taking the omission at face value is how this card ended up flat.
-       *
-       * What gives it away is the render itself. Down the card's right edge the video outside runs
-       * 176 → 54 as the tile's scrim ramps to black, while inside the card the same column barely
-       * moves, 118 → 98 — and at the bottom the card is *brighter* than the backdrop it covers,
-       * which no amount of dark translucent fill can do. Only a blur can, by averaging in the
-       * brightness above. Rebuilding the tile from the same still and sweeping the radius puts the
-       * best fit at 44px: mean error 5.7/255 against the frame, where no blur at all scores 20.0.
-       *
-       * `shrink-0` so the open list scrolls a full-height card rather than compressing it to fit.
-       *
-       */
-      className={cx(
-        'pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg p-3',
-        tone === 'glass' ? 'bg-[#151515]/30 backdrop-blur-[44px]' : 'bg-grey-01'
-      )}
+      // 8px radius, 12px padding, 6px between the header and the claim, read off the frame.
+      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-grey-01 p-3"
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -290,42 +254,29 @@ function DebateClaimTickerCardBody({
         row={row}
         entity={entity}
         onAnswered={onAnswered}
-        tone={tone}
       />
       {/* A flex column, so the text — or the expand toggle wrapping it — stays a blockified flex
-          item exactly as it was before this wrapper existed. In a plain block box the toggle is an
-          inline-level `<button>`, which sits on a line box of its own and adds the strut's 7px
-          under every truncated claim in the wide backlog. */}
+          item. In a plain block box the toggle is an inline-level `<button>`, which sits on a line
+          box of its own and adds the strut's 7px under every truncated claim. */}
       <div className="relative flex flex-col">
-        <TickerClaimText text={claim.text} tone={tone} />
+        <TickerClaimText text={claim.text} />
       </div>
     </ActionSurfaceDiv>
   );
 }
 
-/**
- * Two lines of a claim before the card starts covering the face saying it.
- *
- * Three was the frame's, and the arithmetic changed when the card got wider. Measured over all 854
- * published claims: three lines at 260px shows 66% of them whole, two lines at 360px shows 62% —
- * near enough the same reading, in a card 17px shorter. Height is the expensive dimension here,
- * because the speaker's face is in the middle of the tile and the card grows up towards it, while
- * width runs along the bottom where there is far less to cover.
- */
+/** Two lines of a claim, then the expand toggle: the card stays one height across the carousel. */
 const TICKER_CLAMP_LINES = 2;
 
 /**
- * The claim itself, clamped to three lines, and expandable in place when there is more.
- *
- * A claim runs to a sentence or two and three lines of a 209px card is often not all of it. The
- * alternative to expanding here is "go and find it in the panel", which means leaving the debate
- * to read a sentence that is on screen — so the text opens where it is, and closes again the same
- * way.
+ * The claim itself, clamped to {@link TICKER_CLAMP_LINES} lines, and expandable in place when there
+ * is more. The alternative is "go and find it in the panel", which means leaving the end card to
+ * read a sentence that is on screen — so the text opens where it is, and closes again the same way.
  *
  * Only interactive when it is actually truncated. A button that visibly does nothing is worse than
  * no button, and most short claims fit.
  */
-function TickerClaimText({ text, tone }: { text: string; tone: ClaimCardTone }) {
+function TickerClaimText({ text }: { text: string }) {
   // In state rather than a ref: wrapping the text in a button below remounts this node, and the
   // measurement has to follow it. See `useLineClampOverflow`.
   const [textElement, setTextElement] = React.useState<HTMLSpanElement | null>(null);
@@ -347,8 +298,7 @@ function TickerClaimText({ text, tone }: { text: string; tone: ClaimCardTone }) 
       // clamp off, so the card grows to fit the whole claim and nothing ever reports as truncated.
       // The clamp already blockifies the box; only the expanded state needs `block` of its own.
       className={cx(
-        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
-        tone === 'glass' ? 'text-white' : 'text-text',
+        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px] text-text',
         expanded ? 'block' : 'line-clamp-2'
       )}
     >
@@ -375,8 +325,8 @@ function TickerClaimText({ text, tone }: { text: string; tone: ClaimCardTone }) 
  * The card's top line: who said it, how the crowd has answered it, and the two ways to answer.
  *
  * `PositionRow` is not reused here, and the reason is size rather than taste: it is a container
- * query that stacks its two pills vertically below ~230px, which is exactly the width this card
- * wants to be. Reusing it would force the card wide enough to cover the face it sits beside. What
+ * query that stacks its two pills vertically below ~230px, which is about the width this card is
+ * drawn at, so reusing it would stack the header the card means to keep on one line. What
  * matters is shared underneath — `useClaimResponseState` and `useClaimPositionControl` resolve the
  * response and publish it, so the share is the same number the claim page prints.
  *
@@ -392,7 +342,6 @@ function TickerClaimHeader({
   row,
   entity,
   onAnswered,
-  tone,
 }: {
   claimId: string;
   spaceId: string;
@@ -400,7 +349,6 @@ function TickerClaimHeader({
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
-  tone: ClaimCardTone;
 }) {
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId, spaceId, row, entity });
   const openProfile = useOpenDebaterProfile(speaker);
@@ -436,12 +384,7 @@ function TickerClaimHeader({
           is the avatar's 16px and the words centre against it. Untrimmed, each 17px line box sets
           the row instead and the card comes out a pixel taller than the frame draws. Per node and
           not via a child selector, because the name now sits inside a button. */}
-      <span
-        className={cx(
-          'flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem]',
-          tone === 'glass' ? 'text-white' : 'text-grey-04'
-        )}
-      >
+      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-grey-04">
         {speaker && (
           // The same link as the name in the corner of the tile, and the same person — a reader
           // looking at who said this should be able to go and look at them from here.
@@ -451,12 +394,7 @@ function TickerClaimHeader({
             title={`Open ${speakerLabel(speaker)}`}
             className="flex min-w-0 items-center gap-1.5 text-left hover:underline"
           >
-            <span
-              className={cx(
-                'block size-4 shrink-0 overflow-hidden rounded-full',
-                tone === 'glass' ? 'bg-white' : 'bg-grey-02'
-              )}
-            >
+            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
               <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
             </span>
             <span className="truncate [text-box:trim-both_cap_alphabetic]">{speakerLabel(speaker)}</span>
@@ -489,7 +427,7 @@ function TickerClaimHeader({
           disabled={!control.canRespond}
           title={control.actionTitle(true) || copy.positiveAction}
           onClick={() => control.respond(true)}
-          tone={tone}
+          tone="light"
         />
         <ClaimIconButton
           responseKind={responseKind}
@@ -499,7 +437,7 @@ function TickerClaimHeader({
           disabled={!control.canRespond}
           title={control.actionTitle(false) || copy.negativeAction}
           onClick={() => control.respond(false)}
-          tone={tone}
+          tone="light"
         />
       </span>
     </div>
@@ -521,6 +459,9 @@ function TickerClaimHeader({
  * `column` is the claim counter's list's vote column (GEO-3317): a round 24px target sized to the
  * player, with a solid glyph that reads at that size, coloured once the reader takes a side.
  */
+/** `glass` over the video, as the claim counter's list is; `light` on a white surface, as the end card's carousel is. */
+type ClaimCardTone = 'glass' | 'light';
+
 export function ClaimIconButton({
   responseKind,
   position,

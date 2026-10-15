@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
 import type { DebateClaim } from '~/core/debates/api';
-import type { StackedCard } from '~/core/debates/claim-ticker';
+import type { ClaimHistoryEntry } from '~/core/debates/claim-ticker';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
@@ -51,7 +51,7 @@ export function DebateClaimCounter({
   onActiveChange,
 }: {
   /** What this debater has claimed so far, oldest first. */
-  history: StackedCard[];
+  history: ClaimHistoryEntry[];
   playheadMs: number;
   /** The debater's first name, for the list's header. */
   name: string;
@@ -255,7 +255,7 @@ function ClaimList({
   onAnswered,
   onSeeAll,
 }: {
-  history: StackedCard[];
+  history: ClaimHistoryEntry[];
   name: string;
   freshClaimId: string | null;
   freshness: number;
@@ -349,7 +349,7 @@ function paintTopFade(list: HTMLElement, fades: boolean) {
 }
 
 function ClaimListCard(props: {
-  card: StackedCard;
+  card: ClaimHistoryEntry;
   freshness: number;
   row: DebateClaim | null;
   entity: Entity | null;
@@ -377,7 +377,7 @@ function ClaimListCardBody({
   onAnswered,
   spaceId,
 }: {
-  card: StackedCard;
+  card: ClaimHistoryEntry;
   freshness: number;
   row: DebateClaim | null;
   entity: Entity | null;
@@ -387,7 +387,7 @@ function ClaimListCardBody({
   const claim = card.window.claim;
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId: claim.id, spaceId, row, entity });
   const position = control.viewerPosition;
-  // The session's answers feed the end-of-debate scorecard, as the live card's always have.
+  // The session's answers feed the end-of-debate scorecard.
   React.useEffect(() => {
     onAnswered(claim.id, position);
   }, [claim.id, onAnswered, position]);
@@ -410,7 +410,7 @@ function ClaimListCardBody({
   };
 
   return (
-    // The surface's measurement root, as the live card's is: with `asChild`, `ActionSurface` only
+    // The surface's measurement root, as the end card's claim card's is: with `asChild`, `ActionSurface` only
     // measures (and so reports an impression) through an `ActionSurfaceDiv` beneath it.
     <ActionSurfaceDiv
       data-claim-list-card={claim.id}

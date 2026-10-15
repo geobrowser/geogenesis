@@ -21,10 +21,9 @@ import type { TurnSpan } from './playback-utils';
  * would be the same announcement made twice — and the badge beside the timer is already holding
  * that fact for both of them.
  *
- * Pure, and a function of the playhead rather than of when a component mounted — the same rule
- * `cardOpacity` follows in `claim-ticker.ts`, for the same reason: the playhead can jump. A
- * viewer who scrubs into the middle of a round card should find it at full strength, and a
- * rewatch has to produce the identical sequence.
+ * Pure, and a function of the playhead rather than of when a component mounted, because the
+ * playhead can jump. A viewer who scrubs into the middle of a round card should find it at full
+ * strength, and a rewatch has to produce the identical sequence.
  */
 
 /** How long the card holds. Long enough to read a short phrase twice, and no longer. */

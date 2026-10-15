@@ -201,14 +201,6 @@ describe('DebateClaimTickerCard', () => {
     expect(screen.getByText('Peter Feldip')).toBeInTheDocument();
   });
 
-  it('fades with its window rather than holding at full strength', () => {
-    const { container } = renderCard({ opacity: 0.4 });
-
-    expect(container.firstElementChild).toHaveStyle({ opacity: '0.4' });
-  });
-
-  // The card above the newest one dissolves into the video; the newest sits at full strength. In
-  // Figma that is one gradient over the whole stack, reproduced per-card — see `OLDER_CARD_FADE`.
   it('shows the crowd split before the viewer has answered, per the design', () => {
     mocks.percent = 65;
 
