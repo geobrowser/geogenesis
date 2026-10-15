@@ -39,7 +39,6 @@ const mocks = vi.hoisted(() => ({
    */
   isPhone: true,
   sourceDebate: { claim: { claim_entity_id: CLAIM_SOURCE, space_id: SPACE_1 } } as unknown,
-  requestLobbyRejoinOnLeave: vi.fn(),
   sourceDebateLoading: false,
   /** GEO-2870. geo-chat's extracted-claims payload for the source debate, and whether it is final. */
   extractedClaims: { turns: [], claims: [] } as { turns: unknown[]; claims: unknown[] },
@@ -297,7 +296,6 @@ vi.mock('~/core/debates/lobbies/lobby-return', async () => {
     // No lobby mic carried into these sessions (GEO-3336 has its own tests).
     useCarriedLobbyMic: () => null,
     useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
-    useLobbyRejoinOnLeave: () => mocks.requestLobbyRejoinOnLeave,
   };
 });
 
@@ -1131,16 +1129,6 @@ describe('DebateRematchPageClient', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
 
     expect(mocks.leaveMutate).toHaveBeenCalledOnce();
-  });
-
-  // GEO-3301. The end card's "Back to <lobby>" row is gone, so Leave is what rejoins the lobby.
-  it('asks the lobby the flow started in to rejoin on arrival when the viewer leaves', () => {
-    mocks.requestLobbyRejoinOnLeave.mockClear();
-    render(<DebateRematchPageClient sessionId="rematch-1" />);
-
-    fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
-
-    expect(mocks.requestLobbyRejoinOnLeave).toHaveBeenCalledOnce();
   });
 
   it('carries the finished debate’s publishing card under the pair', () => {

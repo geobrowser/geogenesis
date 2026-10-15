@@ -44,7 +44,6 @@ const mocks = vi.hoisted(() => ({
   endTurnMutateAsync: vi.fn(),
   savePickMutateAsync: vi.fn(),
   leaveRematchMutateAsync: vi.fn(),
-  requestLobbyRejoinOnLeave: vi.fn(),
   enqueueRecording: vi.fn(),
   startLiveStream: vi.fn(),
   liveStreamAppend: vi.fn(),
@@ -139,7 +138,6 @@ vi.mock('~/core/debates/lobbies/lobby-return', async importOriginal => {
   return {
     useCarriedLobbyMic,
     useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
-    useLobbyRejoinOnLeave: () => mocks.requestLobbyRejoinOnLeave,
   };
 });
 
@@ -4377,11 +4375,8 @@ describe('DebateRoomPageClient', () => {
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
     expect(await screen.findByText('Waiting for Bri...')).toBeInTheDocument();
-    mocks.requestLobbyRejoinOnLeave.mockClear();
     fireEvent.click(screen.getByRole('button', { name: 'Leave' }));
     await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
-    // Copilot on #2853: the end card's lobby row rejoined, so this way out has to as well.
-    expect(mocks.requestLobbyRejoinOnLeave).toHaveBeenCalledOnce();
   });
 
   it('automatically consents shortly before the thank-you countdown ends', async () => {

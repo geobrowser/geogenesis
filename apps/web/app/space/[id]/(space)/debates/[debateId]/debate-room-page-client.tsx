@@ -79,11 +79,7 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import {
-  useCarriedLobbyMic,
-  useConsumeDebateReturnDestination,
-  useLobbyRejoinOnLeave,
-} from '~/core/debates/lobbies/lobby-return';
+import { useCarriedLobbyMic, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -3127,7 +3123,6 @@ function DebateRecordingModal({
   leaveDisabled: boolean;
 }) {
   const debateDebuggingEnabled = useFeatureFlag('debateDebugging');
-  const requestLobbyRejoinOnLeave = useLobbyRejoinOnLeave();
   const localParticipant =
     (localSlot
       ? debate.participants.find(participant => participant.participant_slot === localSlot)
@@ -3518,12 +3513,8 @@ function DebateRecordingModal({
         <DebateHandoffNotice
           opponentName={remoteName}
           waitingForOpponent={rematchSession !== null && !remoteConsented}
-          // The only way out while the room is hidden, so it rejoins the lobby the way the end
-          // card's "Back to <lobby>" row did, and the picker's Leave does.
-          onLeave={() => {
-            requestLobbyRejoinOnLeave();
-            onLeave();
-          }}
+          // The only way out while the room is hidden; a lobby it returns to joins on arrival.
+          onLeave={onLeave}
           leaveDisabled={leaveDisabled}
         />
       )}
