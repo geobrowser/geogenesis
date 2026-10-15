@@ -138,6 +138,14 @@ vi.mock('~/core/debates/hooks', () => ({
   // Reached through `useClaimTimings`, which the panel calls to put a timecode on each row.
   // `mocks.transcript` lets a test supply segments; by default there are none, which is the shape
   // of every debate recorded before claim timecodes existed.
+  useDebateMedia: () => ({
+    data: undefined,
+    isPending: false,
+    isLoading: false,
+    isSuccess: true,
+    isError: false,
+    error: null,
+  }),
   useDebateTranscript: () => mocks.transcript,
 }));
 
