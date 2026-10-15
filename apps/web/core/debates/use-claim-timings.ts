@@ -3,7 +3,8 @@
 import * as React from 'react';
 
 import { type ClaimTiming, resolveClaimTimings } from './claim-timing';
-import { useDebateTranscript } from './hooks';
+import { useDebateMedia, useDebateTranscript } from './hooks';
+import { recordingTimeOf, transcriptOnRecordings } from './recording-clock';
 import type { DebateTranscriptClaims } from './transcript-claims';
 
 export type ClaimTimingsResult = {
@@ -22,7 +23,10 @@ export type ClaimTimingsResult = {
 const EMPTY_TIMINGS = new Map<string, ClaimTiming>();
 
 /**
- * When each of a debate's claims was said, on the debate timeline.
+ * When each of a debate's claims was said, on the web player's clock: the raw recordings, from the
+ * debate's start. Transcript lines carry their time on that clock (GEO-3293). Timecodes published
+ * to the graph are the rendered video's, which an Open rounds render edits, so each is placed by
+ * the turn it falls in. Both keep every claim in order, so a time-ordered surface need not wait.
  *
  * Published timecodes come back with the claims themselves and need nothing else. Everything else
  * is recovered by matching the claims against the Whisper transcript, which the player already
@@ -44,16 +48,46 @@ export function useClaimTimings(
   const needsTranscript = enabled && debateId !== null && claims.all.length > 0 && !allPublished;
 
   const transcript = useDebateTranscript(debateId ?? '', 'json', needsTranscript);
-  const segments = transcript.data?.segments;
+  const segments = React.useMemo(
+    () => (transcript.data?.segments ? transcriptOnRecordings(transcript.data.segments) : []),
+    [transcript.data?.segments]
+  );
+  // Only a published timecode needs the media: it comes on the edited video's clock and is placed by
+  // the turn it falls in. Nearly always none today, so the claims panel and activity rows ask for
+  // nothing more than they did. On a playing card it is the player's own response, a cache read.
+  const needsMedia = enabled && debateId !== null && claims.all.some(claim => claim.publishedTiming !== null);
+  const media = useDebateMedia(debateId ?? '', needsMedia);
+  const turns = media.data?.turn_segments;
+  const mediaSettled = !needsMedia || media.isSuccess || media.isError;
 
   const timings = React.useMemo(() => {
     if (claims.all.length === 0) return EMPTY_TIMINGS;
-    return resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments: segments ?? [] });
-  }, [claims.all, claims.blocks, segments]);
+    const resolved = resolveClaimTimings({ claims: claims.all, blocks: claims.blocks, segments });
+    // Until the media answers, a published timecode is on the edited clock and may yet move: hold
+    // it back rather than let the live claims place it early and then take it away again.
+    if (!mediaSettled) {
+      return new Map([...resolved].filter(([, timing]) => timing.source !== 'published'));
+    }
+    if (!turns?.some(turn => turn.source_start_ms !== undefined)) return resolved;
+    return new Map(
+      [...resolved].map(([id, timing]) => [
+        id,
+        timing.source === 'published'
+          ? {
+              ...timing,
+              startMs: recordingTimeOf(timing.startMs, turns, 'start'),
+              endMs: recordingTimeOf(timing.endMs, turns, 'end'),
+            }
+          : timing,
+      ])
+    );
+  }, [claims.all, claims.blocks, mediaSettled, segments, turns]);
 
   // A failed transcript fetch is ready, not pending: published timings still resolved, and the rest
   // are not coming. Reporting "still loading" forever would hold a time-ordered surface empty.
-  const isReady = !needsTranscript || transcript.isSuccess || transcript.isError;
+  // The same for the media, whose answer can move a published timing: a surface ordered by time
+  // waits for it rather than reordering under the reader.
+  const isReady = (!needsTranscript || transcript.isSuccess || transcript.isError) && mediaSettled;
 
   return { timings, isReady };
 }

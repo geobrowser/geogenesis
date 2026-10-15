@@ -19,7 +19,6 @@ function renderCard(props: Partial<ComponentProps<typeof OpenRoundPickCard>> = {
     savedPick: null,
     rebuttalTurnMs: 45_000,
     remainingSeconds: 8,
-    progress: 0.2,
     onPick,
     localReconnecting: false,
     reconnectingOpponentName: null,
@@ -43,15 +42,13 @@ function deferred() {
 }
 
 describe('OpenRoundPickCard (GEO-3178)', () => {
-  it('asks to keep debating with Extend, End and the seconds left', () => {
-    renderCard({ roundIndex: 1, remainingSeconds: 8 });
+  it('asks to keep debating with Extend, End and the seconds left, and no instruction line (GEO-3315)', () => {
+    const view = renderCard({ roundIndex: 1, remainingSeconds: 8 });
 
     expect(screen.getByRole('region', { name: 'Keep debating?' })).toBeInTheDocument();
-    expect(
-      screen.getByText('Pick in secret. An Extend unlocks Round 3 unless either of you picks End.')
-    ).toBeInTheDocument();
+    expect(view.container.querySelectorAll('p:not(:empty)')).toHaveLength(0);
     expect(extend()).toHaveAccessibleName(/\+45s each/);
-    expect(end()).toHaveAccessibleName(/Ends here/);
+    expect(end()).toHaveAccessibleName(/Finish here/);
     expect(extend()).toHaveAttribute('aria-pressed', 'false');
     expect(end()).toHaveAttribute('aria-pressed', 'false');
     expect(screen.getByText('8 seconds to pick')).toBeInTheDocument();
@@ -63,8 +60,11 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
     fireEvent.click(extend());
     expect(view.onPick).toHaveBeenLastCalledWith('extend', expect.objectContaining({ previousPick: null }));
     expect(extend()).toHaveAttribute('aria-pressed', 'true');
-    expect(screen.getByRole('heading', { name: 'Locked in' })).toBeInTheDocument();
-    expect(screen.getByText('You can change it until the reveal.')).toBeInTheDocument();
+    // The pick shows a check and an outline, the other dims, and the question stays.
+    expect(extend()).toHaveClass('outline-white');
+    expect(extend().querySelector('svg')).toBeInTheDocument();
+    expect(end()).toHaveClass('opacity-35');
+    expect(screen.getByRole('heading', { name: 'Keep debating?' })).toBeInTheDocument();
 
     await act(async () => undefined);
     view.rerender(<OpenRoundPickCard {...view.props} savedPick="extend" />);
@@ -145,7 +145,7 @@ describe('OpenRoundPickCard (GEO-3178)', () => {
   });
 
   it('stops taking picks once the window has run out', () => {
-    renderCard({ remainingSeconds: 0, progress: 1 });
+    renderCard({ remainingSeconds: 0 });
 
     expect(extend()).toBeDisabled();
     expect(end()).toBeDisabled();
