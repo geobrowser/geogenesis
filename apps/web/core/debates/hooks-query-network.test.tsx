@@ -235,7 +235,7 @@ describe('debate query network ownership', () => {
     renderHook(() => useRematchLiveKitJoin('rematch-1', true));
 
     expect(mocks.useQuery.mock.calls.at(-1)?.[0]).toMatchObject({
-      queryKey: ['debates', 'account', 'user-a', 'rematch-livekit', 'rematch-1'],
+      queryKey: ['rematch-livekit', 'user-a', 'rematch-1'],
       staleTime: Infinity,
       gcTime: 0,
       refetchOnReconnect: false,

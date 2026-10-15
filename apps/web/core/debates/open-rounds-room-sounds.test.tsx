@@ -15,8 +15,6 @@ const quiet: OpenRoundsRoomMoments = {
   decidingSecondsLeft: null,
   flipping: null,
   result: null,
-  sayThanks: false,
-  remoteReady: false,
 };
 
 function setup() {
@@ -82,12 +80,10 @@ describe('useOpenRoundsRoomSounds', () => {
     expect(played).toEqual(['roundUp', 'wrap', 'max']);
   });
 
-  it('covers the turn ended, last call, thanks and the other debater being ready', () => {
+  it('covers the turn ended and the last call', () => {
     const { played, step } = setup();
     step({ endedTurn: 3 });
     step({ endsSoonTurn: 4 });
-    step({ sayThanks: true });
-    step({ sayThanks: true, remoteReady: true });
-    expect(played).toEqual(['handoff', 'endsoon', 'thanks', 'ready']);
+    expect(played).toEqual(['handoff', 'endsoon']);
   });
 });

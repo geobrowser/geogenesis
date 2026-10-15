@@ -13,6 +13,7 @@ import { type DebateLobbyClaims, type DebateLobbyMember, dashlessId } from '../a
 import { MicrophoneIcon } from '../debate-room-controls';
 import { sameId } from '../rooms/room-presence';
 import { LobbyDebatePairs } from './lobby-debate-pairs';
+import { LobbyDisagreementsTrigger } from './lobby-disagreements';
 import {
   type LobbyMemberStatus,
   SHORT_STATUS_LABEL,
@@ -33,7 +34,6 @@ export const LOBBY_ROSTER_COPY = {
   empty: 'Nobody’s here right now.',
   movedToListeners: 'moved to listeners',
   handRaised: 'hand raised',
-  disagreesOn: (count: number) => `Disagrees on ${count}`,
 } as const;
 
 /** Hosts, the acting host and speakers; they are the ones voice lets publish. */
@@ -142,64 +142,80 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
   const showMic = voice.connected && !member.stepped_out;
   const micOn = voice.micOn.has(voiceId);
   const name = personName(member);
+  const label = isSelf ? `${name} (you)` : name;
 
+  // The person button stretches over the whole tile, so a press anywhere opens the person menu; the
+  // disagreements trigger sits above it, beside the button rather than inside it.
   return (
-    <LobbyPersonMenu
-      lobby={lobby}
-      member={member}
-      isSelf={isSelf}
-      viewerId={viewerId}
-      micOn={showMic ? micOn : undefined}
-      disagreements={disagreements}
+    <div
+      role="group"
+      aria-label={label}
+      data-testid="lobby-speaker-tile"
+      data-speaking={speaking || undefined}
+      className={cx(
+        'relative flex w-full min-w-0 flex-col items-center gap-2 rounded-xl border bg-white px-3 py-4 text-center transition-colors hover:border-grey-03 has-[[data-person-trigger][data-state=open]]:border-text md:gap-1 md:px-1.5 md:py-2.5',
+        speaking ? 'border-green' : 'border-grey-02'
+      )}
     >
-      <button
-        type="button"
-        aria-label={isSelf ? `${name} (you)` : name}
-        {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
-        data-testid="lobby-speaker-tile"
-        data-speaking={speaking || undefined}
-        className={cx(
-          'flex w-full min-w-0 flex-col items-center gap-2 rounded-xl border bg-white px-3 py-4 text-center transition-colors hover:border-grey-03 data-[state=open]:border-text md:gap-1 md:px-1.5 md:py-2.5',
-          speaking ? 'border-green' : 'border-grey-02'
-        )}
+      <LobbyPersonMenu
+        lobby={lobby}
+        member={member}
+        isSelf={isSelf}
+        viewerId={viewerId}
+        micOn={showMic ? micOn : undefined}
+        disagreements={disagreements}
       >
-        <span
-          className={cx(
-            'size-14 shrink-0 overflow-hidden rounded-full md:size-11 [&>svg]:size-full',
-            speaking && 'ring-2 ring-successTertiary'
-          )}
+        <button
+          type="button"
+          aria-label={label}
+          {...personMenuAnalyticsAttributes(lobby, member, isSelf)}
+          data-person-trigger
+          className="flex w-full min-w-0 flex-col items-center gap-2 after:absolute after:inset-0 after:rounded-xl md:gap-1"
         >
-          <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
-        </span>
-        <span className="flex max-w-full min-w-0 items-center gap-1.5 text-[17px] leading-[22px] font-semibold md:gap-1 md:text-[15px] md:leading-[18px] md:font-medium">
-          <span className="truncate">{name}</span>
-          <PersonTags member={member} />
-        </span>
-        <TileStatus
-          member={member}
-          status={status}
-          speaking={speaking}
-          muted={showMic && !micOn}
-          disagreements={disagreements}
-        />
-        {isSelf && !phone ? (
-          <Text as="span" variant="footnote" color="grey-04">
-            You
-          </Text>
-        ) : null}
-      </button>
-    </LobbyPersonMenu>
+          <span
+            className={cx(
+              'size-14 shrink-0 overflow-hidden rounded-full md:size-11 [&>svg]:size-full',
+              speaking && 'ring-2 ring-successTertiary'
+            )}
+          >
+            <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
+          </span>
+          <span className="flex max-w-full min-w-0 items-center gap-1.5 text-[17px] leading-[22px] font-semibold md:gap-1 md:text-[15px] md:leading-[18px] md:font-medium">
+            <span className="truncate">{name}</span>
+            <PersonTags member={member} />
+          </span>
+        </button>
+      </LobbyPersonMenu>
+      <TileStatus
+        lobby={lobby}
+        member={member}
+        status={status}
+        speaking={speaking}
+        muted={showMic && !micOn}
+        disagreements={disagreements}
+      />
+      {isSelf && !phone ? (
+        <Text as="span" variant="footnote" color="grey-04">
+          You
+        </Text>
+      ) : null}
+    </div>
   );
 }
 
-/** Desktop: speaking bars, or the full status with a mic-off mark. Phone: one short line. */
+/**
+ * Desktop: speaking bars, or the full status with a mic-off mark. Phone: one short line. Either way
+ * the line keeps one height, so a tile does not jump when its speaker starts or stops talking.
+ */
 function TileStatus({
+  lobby,
   member,
   status,
   speaking,
   muted,
   disagreements,
 }: {
+  lobby: LobbyPageView;
   member: DebateLobbyMember;
   status: LobbyMemberStatus | null;
   speaking: boolean;
@@ -208,29 +224,32 @@ function TileStatus({
 }) {
   const phone = useIsPhoneLayout();
   if (phone) {
-    const line = speaking
-      ? 'Speaking'
-      : disagreements !== null
-        ? LOBBY_ROSTER_COPY.disagreesOn(disagreements)
-        : member.stepped_out
-          ? 'Stepped out'
-          : status
-            ? SHORT_STATUS_LABEL[status]
-            : null;
-    if (!line) return null;
+    const line = member.stepped_out ? 'Stepped out' : status ? SHORT_STATUS_LABEL[status] : null;
     return (
       <span
-        className={cx(
-          'max-w-full truncate text-[11px] leading-[13px]',
-          speaking ? 'text-[#127A5B]' : disagreements !== null ? 'text-[#C42D17]' : 'text-grey-04'
-        )}
+        data-testid="lobby-tile-status"
+        className="flex h-[13px] max-w-full min-w-0 items-center justify-center text-[11px] leading-[13px]"
       >
-        {line}
+        {/* Mounted while they speak too: the trigger owns the sheet, which must not close mid-read. */}
+        {disagreements !== null ? (
+          <LobbyDisagreementsTrigger
+            lobby={lobby}
+            member={member}
+            count={disagreements}
+            variant="line"
+            hidden={speaking}
+          />
+        ) : null}
+        {speaking ? (
+          <span className="truncate text-[#127A5B]">Speaking</span>
+        ) : disagreements === null && line ? (
+          <span className="truncate text-grey-04">{line}</span>
+        ) : null}
       </span>
     );
   }
 
-  // Plain text: the tile is a button, so the subject's claim link lives on the pair card instead.
+  // Plain text: the subject's claim link lives on the pair card instead.
   const full = member.stepped_out
     ? 'Stepped out'
     : member.in_debate
@@ -240,22 +259,22 @@ function TileStatus({
         : null;
   return (
     <>
-      {speaking ? (
-        <SpeakingBars />
-      ) : full ? (
-        <span className="flex max-w-full min-w-0 items-center gap-1 text-[14px] leading-[18px] text-grey-04">
-          {muted ? (
-            <span role="img" aria-label="Muted" className="shrink-0 [&>svg]:size-3">
-              <MicrophoneIcon muted />
-            </span>
-          ) : null}
-          <span className="truncate">{full}</span>
-        </span>
-      ) : null}
+      <span data-testid="lobby-tile-status" className="flex h-[18px] max-w-full min-w-0 items-center justify-center">
+        {speaking ? (
+          <SpeakingBars />
+        ) : full ? (
+          <span className="flex max-w-full min-w-0 items-center gap-1 text-[14px] leading-[18px] text-grey-04">
+            {muted ? (
+              <span role="img" aria-label="Muted" className="shrink-0 [&>svg]:size-3">
+                <MicrophoneIcon muted />
+              </span>
+            ) : null}
+            <span className="truncate">{full}</span>
+          </span>
+        ) : null}
+      </span>
       {disagreements !== null ? (
-        <span className="inline-flex h-5 items-center rounded-full bg-red-02 px-2 text-[11px] leading-[13px] font-medium whitespace-nowrap text-[#C42D17]">
-          {LOBBY_ROSTER_COPY.disagreesOn(disagreements)}
-        </span>
+        <LobbyDisagreementsTrigger lobby={lobby} member={member} count={disagreements} variant="pill" />
       ) : null}
     </>
   );

@@ -59,6 +59,14 @@ export type DebateExtractedClaimsClaim = {
   start_ms?: number | null;
   end_ms?: number | null;
   /**
+   * GEO-3325: the room turn the claim was said in — the room's own count, the one
+   * `turn_durations_ms` indexes — which geo-chat places at read time from `start_ms` and the
+   * speaker's turns on the rendered timeline. Unlike `turn_index`, which counts changes of speaker,
+   * it is not shifted by a turn nobody spoke in. Absent when geo-chat could not place the claim (no
+   * timing, or no room turn of that speaker holds it) and on reads from before it shipped.
+   */
+  room_turn_index?: number | null;
+  /**
    * How much the claim carries the debate, 0–1: extraction-api's `claims.score_highlights`
    * answer, carried by geo-chat when `EXTRACTION_HIGHLIGHT_SCORING` is on. Null when the claim
    * was not scored, and absent on payloads from before scoring shipped.

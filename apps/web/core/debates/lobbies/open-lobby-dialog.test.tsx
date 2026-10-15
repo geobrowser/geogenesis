@@ -81,6 +81,17 @@ describe('lobbyRequestFor', () => {
 });
 
 describe('OpenLobbyDialog', () => {
+  it('keeps the claim-list picker above the lobby dialog and outside its scrolling form', () => {
+    render(<OpenLobbyDialog onClose={vi.fn()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Add a list' }));
+    const option = screen.getByRole('button', { name: 'Pick list a' });
+    const dialog = screen.getByRole('dialog', { name: 'Open a debate lobby' });
+    expect(dialog).toContainElement(option);
+    expect(option.closest('form')).toBeNull();
+    fireEvent.click(option);
+    expect(screen.getByRole('button', { name: 'Remove List a' })).toBeInTheDocument();
+  });
+
   it('titles and describes the dialog, and offers Open now and Schedule a start time', () => {
     render(<OpenLobbyDialog onClose={vi.fn()} />);
     expect(screen.getByRole('dialog', { name: 'Open a debate lobby' })).toBeTruthy();

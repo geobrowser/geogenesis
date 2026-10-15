@@ -25,7 +25,7 @@ import { audioContextClass } from './debate-request-alert';
  * (two stamps into a banner) never clip, and every sound sits at a similar level under the voices.
  */
 
-const NOTE = { G4: 392, C5: 523.25, E5: 659.25, G5: 783.99, A5: 880, C6: 1046.5 } as const;
+const NOTE = { G4: 392, C5: 523.25, E5: 659.25, G5: 783.99, C6: 1046.5 } as const;
 
 type Voice = {
   context: AudioContext;
@@ -187,14 +187,6 @@ const ROOM_SOUNDS = {
   endsoon: voice => {
     bell(voice, NOTE.G4, 0.9, { gain: 0.11 });
     bell(voice, NOTE.G4, 0.9, { gain: 0.09, at: 0.45 });
-  },
-  thanks: voice =>
-    [NOTE.C5, NOTE.E5, NOTE.G5].forEach((frequency, k) =>
-      tone(voice, frequency, 1.3, { gain: 0.05, at: k * 0.05, attack: 0.06 })
-    ),
-  ready: voice => {
-    tone(voice, NOTE.E5, 0.1, { gain: 0.07 });
-    tone(voice, NOTE.A5, 0.25, { gain: 0.07, at: 0.1 });
   },
 } satisfies Record<string, (voice: Voice) => void>;
 

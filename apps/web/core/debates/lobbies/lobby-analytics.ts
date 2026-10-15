@@ -27,7 +27,7 @@ export type LobbyEntry =
   | 'requests'
   /** Go to lobby, right after creating it. */
   | 'created'
-  /** Back to the room, on a debate's end card or on the lobby's stepped-out prompt. */
+  /** Back from a debate stepped out to, by any route: arriving, or a tab left open rejoining. */
   | 'back_after_debate'
   /** Rejoin after leaving, being removed, or being moved out by another tab. */
   | 'rejoin'

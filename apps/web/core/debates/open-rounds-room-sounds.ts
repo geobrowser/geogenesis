@@ -30,10 +30,6 @@ export type OpenRoundsRoomMoments = {
   flipping: { round: number; first: OpenRoundPick | null; second: OpenRoundPick | null } | null;
   /** The banner over both tiles: a new round, "That's a wrap" or "That's the max". */
   result: { kind: 'round'; round: number } | { kind: 'wrap' } | { kind: 'max' } | null;
-  /** The local debater has been asked to say thanks. */
-  sayThanks: boolean;
-  /** The other debater pressed Let's go. */
-  remoteReady: boolean;
 };
 
 /** The last three seconds of the pick window tick. */
@@ -74,6 +70,4 @@ export function useOpenRoundsRoomSounds(moments: OpenRoundsRoomMoments, play: (s
   useCue(result ? (result.kind === 'round' ? `round:${result.round}` : result.kind) : null, () => {
     if (result) play(result.kind === 'round' ? 'roundUp' : result.kind);
   });
-  useCue(moments.sayThanks ? 'thanks' : null, () => play('thanks'));
-  useCue(moments.remoteReady ? 'ready' : null, () => play('ready'));
 }

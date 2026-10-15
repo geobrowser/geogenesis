@@ -9,8 +9,8 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { getSpaceMemberRequest } from '~/partials/space-page/get-space-member-request';
 
 import { SpaceMembersChip } from './space-members-chip';
-import { SpaceMembersDialogServerContainer } from './space-members-dialog-server-container';
 import { SpaceMembersJoinButton } from './space-members-join-button';
+import { SpaceMembersManageDialogContent } from './space-members-manage-dialog-content';
 import { SpaceMembersMenu } from './space-members-menu';
 import { SpaceMembersPopover } from './space-members-popover';
 import { SpaceMembersContent } from './space-members-popover-content';
@@ -64,8 +64,9 @@ export async function SpaceMembers({ spaceId }: Props) {
         <SpaceMembersPopover trigger={chip} content={popoverContent} />
         <div className="h-4 w-px bg-divider" />
         <SpaceMembersMenu
-          manageMembersComponent={
-            <SpaceMembersDialogServerContainer
+          label="Manage members"
+          content={
+            <SpaceMembersManageDialogContent
               spaceId={spaceId}
               isEditor={isEditor}
               initialParticipantsPage={membersPage}

@@ -29,21 +29,6 @@ function RoundPipRow({ children, className }: { children: React.ReactNode; class
   );
 }
 
-/**
- * The rounds a finished debate unlocked (GEO-3180), one pip each, in the current text colour, so
- * the end card sets it. Smaller than the room's counter,
- * which is the row's headline; here they sit beside a label.
- */
-export function DebateRoundPips({ rounds, className }: { rounds: number; className?: string }) {
-  return (
-    <RoundPipRow className={className}>
-      {Array.from({ length: rounds }, (_, index) => (
-        <RoundPip key={index} round={index + 1} className="h-[5px] w-2 bg-current" />
-      ))}
-    </RoundPipRow>
-  );
-}
-
 /** "Round 1 is next.", "Rounds 1 to 2 are next." */
 function requiredRoundsToComeLabel(first: number, last: number) {
   return first === last ? `Round ${first} is next.` : `Rounds ${first} to ${last} are next.`;
