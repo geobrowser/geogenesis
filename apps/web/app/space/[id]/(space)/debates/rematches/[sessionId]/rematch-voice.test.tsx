@@ -639,6 +639,34 @@ describe('RematchVoiceHeader', () => {
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
   });
 
+  it('leaves the microphone alone when the camera is the device that failed', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (
+      failure?: string,
+      kind?: MediaDeviceKind
+    ) => void;
+
+    act(() => onMediaDeviceFailure('PermissionDenied', 'videoinput'));
+
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeEnabled();
+    expect(screen.queryByText(/Microphone blocked/)).toBeNull();
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+  });
+
+  it('still reports an unlabelled failure as the microphone’s', async () => {
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+    const onMediaDeviceFailure = mocks.livekitRoomProps[0]?.onMediaDeviceFailure as (failure?: string) => void;
+
+    act(() => onMediaDeviceFailure('PermissionDenied'));
+
+    expect(screen.getByRole('button', { name: /^(Mute|Unmute) microphone$/ })).toBeDisabled();
+    expect(screen.getByText(/Microphone blocked/)).toBeInTheDocument();
+  });
+
   it('stays connected listen-only when the microphone fails', async () => {
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();

@@ -491,7 +491,12 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
     if (connectedRef.current) return;
     setConnectFailed(true);
   }, []);
-  const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure) => {
+
+  const handleMediaDeviceFailure = React.useCallback((failure?: MediaDeviceFailure, kind?: MediaDeviceKind) => {
+    if (kind === 'videoinput') {
+      setCameraIntent(false);
+      return;
+    }
     setMicFailure(failure ?? null);
   }, []);
 
