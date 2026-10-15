@@ -1,4 +1,4 @@
-import { act, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { ConnectionQuality, ConnectionState, DisconnectReason, ParticipantEvent, RoomEvent } from 'livekit-client';
 import type { Room } from 'livekit-client';
@@ -88,6 +88,9 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     capture.mockReset();
   });
   afterEach(() => {
+    // Unmounted between tests: a hook left mounted keeps its window listeners and answers the next
+    // test's events.
+    cleanup();
     vi.useRealTimers();
   });
 
@@ -393,6 +396,24 @@ describe('useVoiceCallTelemetry (GEO-3340)', () => {
     );
     expect(JSON.stringify(capture.mock.calls)).not.toContain('AirPods');
     expect(JSON.stringify(capture.mock.calls)).not.toContain('MacBook');
+  });
+
+  // Copilot on #2884 (round 2): the summary is the last word on a call. Leaving the page summarises
+  // it before LiveKit tears the room down, and nothing the room says after that may report.
+  it('reports nothing after the summary, whatever the room says next', () => {
+    const call = fakeRoom();
+    renderHook(() => useVoiceCallTelemetry(call.room, 'picker', 'session-1'));
+
+    act(() => void window.dispatchEvent(new Event('pagehide')));
+    act(() => call.emitLocal(ParticipantEvent.ConnectionQualityChanged, ConnectionQuality.Lost));
+    act(() => call.emit(RoomEvent.ConnectionStateChanged, ConnectionState.Reconnecting));
+    act(() => call.emit(RoomEvent.Disconnected, DisconnectReason.CLIENT_INITIATED));
+    call.mic.label = 'AirPods Pro';
+    act(() => call.emit(RoomEvent.ActiveDeviceChanged, 'audioinput', 'device-2'));
+
+    const names = capture.mock.calls.map(([event]) => event);
+    expect(names.at(-1)).toBe('debate_voice_ended');
+    expect(events('debate_voice_ended')).toEqual([expect.objectContaining({ end_reason: 'page_closed' })]);
   });
 
   it('stops listening when it unmounts', () => {

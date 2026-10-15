@@ -88,24 +88,18 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
     let sampling = false;
     let ended = false;
 
+    /** Every change reports through here, so nothing follows the call's summary. */
+    const reportChange = (change: Record<string, unknown>) => {
+      if (!ended) captureSafely('debate_voice_changed', { ...base, ...change });
+    };
+
     const micKind = trackSwitches<MicKind>((next, previous) =>
-      captureSafely('debate_voice_changed', {
-        ...base,
-        change: 'mic_device',
-        mic_kind: next,
-        previous_mic_kind: previous,
-      })
+      reportChange({ change: 'mic_device', mic_kind: next, previous_mic_kind: previous })
     );
     // What we send and what we hear ride separate connections, and either can fall back on its own.
     const transportSwitches = (direction: 'send' | 'recv') =>
       trackSwitches<VoiceTransport>((next, previous) =>
-        captureSafely('debate_voice_changed', {
-          ...base,
-          change: 'transport',
-          direction,
-          transport: next,
-          previous_transport: previous,
-        })
+        reportChange({ change: 'transport', direction, transport: next, previous_transport: previous })
       );
     const sendTransport = transportSwitches('send');
     const recvTransport = transportSwitches('recv');
@@ -230,8 +224,7 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
         startSampling();
         if (reconnectingSince !== null) {
           reconnects += 1;
-          captureSafely('debate_voice_changed', {
-            ...base,
+          reportChange({
             change: 'reconnected',
             reconnect_ms: Date.now() - reconnectingSince,
             signal_only: !reconnectingFully,
@@ -248,18 +241,13 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
       if (reconnectingSince !== null && (reconnectingFully || !fully)) return;
       reconnectingSince ??= Date.now();
       reconnectingFully = fully;
-      captureSafely('debate_voice_changed', { ...base, change: 'reconnecting', signal_only: !fully });
+      reportChange({ change: 'reconnecting', signal_only: !fully });
     };
 
     // Named and attributed as community calls do, so one reason reads the same in both.
     const onDisconnected = (reason?: DisconnectReason) => {
       const cause = disconnectCause(reason);
-      captureSafely('debate_voice_changed', {
-        ...base,
-        change: 'disconnected',
-        reason: disconnectReasonName(reason),
-        cause,
-      });
+      reportChange({ change: 'disconnected', reason: disconnectReasonName(reason), cause });
       finish(cause === 'intentional' ? 'left' : 'disconnected');
     };
 
@@ -269,12 +257,7 @@ export function useVoiceCallTelemetry(room: Room, surface: VoiceCallSurface, cal
       const previous = quality;
       quality = next;
       if (!NOTABLE_QUALITIES.has(next) && !NOTABLE_QUALITIES.has(previous)) return;
-      captureSafely('debate_voice_changed', {
-        ...base,
-        change: 'quality',
-        connection_quality: next,
-        previous_quality: previous,
-      });
+      reportChange({ change: 'quality', connection_quality: next, previous_quality: previous });
     };
 
     const onActiveDevice = (kind: MediaDeviceKind) => {
