@@ -268,32 +268,20 @@ export function DataBlockSortMenu({
               <>
                 {BUILT_IN_SORT_OPTIONS.map(option => {
                   const isActive = sortState?.kind === 'builtin' && sortState.sort === option.sort;
-                  // A single offered direction applies on click; otherwise open the direction step.
-                  const directDirection = option.directions.length === 1 ? option.directions[0] : undefined;
 
                   return (
                     <MenuItem
                       key={option.sort}
                       className={listRowClassName}
-                      onClick={() =>
-                        directDirection !== undefined
-                          ? applySortAndClose({ kind: 'builtin', sort: option.sort, direction: directDirection })
-                          : setDirectionPickTarget({ kind: 'builtin', sort: option.sort })
-                      }
+                      onClick={() => setDirectionPickTarget({ kind: 'builtin', sort: option.sort })}
                     >
                       <div className="flex w-full items-center justify-between gap-2">
                         <span className={cx('min-w-0 truncate text-left', isActive && 'font-medium')}>
                           {option.label}
                         </span>
-                        {directDirection !== undefined ? (
-                          <span className="shrink-0 text-grey-04 tabular-nums" aria-hidden>
-                            {directDirection === 'asc' ? '↑' : '↓'}
-                          </span>
-                        ) : (
-                          <span className="inline-flex shrink-0 text-grey-04 [&_svg]:h-3.5 [&_svg]:w-3.5">
-                            <ChevronRight color="grey-04" />
-                          </span>
-                        )}
+                        <span className="inline-flex shrink-0 text-grey-04 [&_svg]:h-3.5 [&_svg]:w-3.5">
+                          <ChevronRight color="grey-04" />
+                        </span>
                       </div>
                     </MenuItem>
                   );

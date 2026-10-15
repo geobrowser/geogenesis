@@ -31,13 +31,12 @@ export type ColumnSortState = PropertySortState | BuiltInSortState | null;
 export type BuiltInSortOption = {
   sort: BuiltInSort;
   label: string;
-  /** Directions the menu offers. A single entry applies on click with no direction step. */
-  directions: readonly SortDirection[];
 };
 
+/** Both directions apply to every entry: the menu offers the same Ascending / Descending step as a property. */
 export const BUILT_IN_SORT_OPTIONS: readonly BuiltInSortOption[] = [
-  { sort: 'best', label: 'Best', directions: ['desc'] },
-  { sort: 'created_at', label: 'Created', directions: ['asc', 'desc'] },
+  { sort: 'best', label: 'Best' },
+  { sort: 'created_at', label: 'Created' },
 ];
 
 export function builtInSortLabel(sort: BuiltInSort): string {
