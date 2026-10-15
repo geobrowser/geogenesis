@@ -4445,6 +4445,47 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.enqueueRecording.mock.invocationCallOrder[0]).toBeLessThan(left.mock.invocationCallOrder[0]!);
   });
 
+  // Copilot on #2853: a failed save on an idle tab's way out stranded it, with Retry save locked
+  // behind "transitioning" on a live session and the room not drawn at all on an ended one.
+  it.each([
+    ['going back on an ended session', 'ended' as const],
+    ['following a live session to the picker', 'browsing' as const],
+  ])('offers a working Retry save when that save fails, then finishes %s', async (_label, status) => {
+    setHistoryLength(2);
+    mocks.enqueueRecording.mockRejectedValueOnce(new Error('Storage unavailable'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:15.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    act(() => emitRoomEvent('disconnected', 99));
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:25.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession(status, { localConsented: true, remoteConsented: status === 'browsing' });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const retry = await screen.findByRole('button', { name: 'Retry save' });
+    expect(retry).toBeEnabled();
+    expect(screen.getAllByText('Storage unavailable')).not.toHaveLength(0);
+    // Held, not looping: one attempt until the viewer asks again.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 600));
+    });
+    expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
+
+    fireEvent.click(retry);
+
+    const left = status === 'ended' ? mocks.back : mocks.replace;
+    await waitFor(() => expect(left).toHaveBeenCalled());
+    expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2);
+  });
+
   // Copilot on #2853: a tab that never held the call (reloaded, or another tab had the room) has no
   // recording to save, so finalizing there failed for good and stranded it on a save error.
   it('sends an idle tab back when the session ended, without trying to save a recording', async () => {
@@ -5571,6 +5612,33 @@ describe('DebateRoomPageClient', () => {
         ...openRoundsCapRoundLastTurn(),
         rematch_session_id: 'rematch-1',
       });
+      await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
+    });
+
+    // Copilot on #2853: an idle tab (reloaded, or another tab had the call) draws the same reveal
+    // from a completed debate, and its way to the picker has to wait it out too.
+    it('waits out "That\'s the max" on an idle tab before following a live session', async () => {
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      const thankingStartedAt = new Date(OPEN_ROUNDS_CAP_ROUND_ENDS_AT).toISOString();
+      const completed = {
+        ...openRoundsCapRoundLastTurn(),
+        status: 'complete' as const,
+        turn_started_at: thankingStartedAt,
+        turn_ends_at: new Date(OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 20_000).toISOString(),
+        completed_at: new Date(OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 500).toISOString(),
+        rematch_session_id: 'rematch-1',
+      };
+      vi.spyOn(Date, 'now').mockReturnValue(OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 1_000);
+      mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+      mocks.debate = completed;
+      const view = render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+      await act(async () => {
+        await new Promise(resolve => setTimeout(resolve, 1_000));
+      });
+      expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+
+      rerenderAt(view, OPEN_ROUNDS_CAP_ROUND_ENDS_AT + 3_500, completed);
       await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
     });
 
