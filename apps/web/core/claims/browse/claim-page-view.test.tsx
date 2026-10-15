@@ -118,6 +118,15 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
 vi.mock('~/partials/entity-page/editable-entity-header', () => ({
   EditableHeading: () => <div data-testid="editable-heading" />,
 }));
+vi.mock('~/partials/entity-page/entity-page-actions', () => ({
+  EntityPageActions: ({ isVoteable, showCreate = true }: { isVoteable?: boolean; showCreate?: boolean }) => (
+    <div
+      data-testid="entity-page-actions"
+      data-voteable={String(Boolean(isVoteable))}
+      data-show-create={String(showCreate)}
+    />
+  ),
+}));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
 // that the description is handed to it at all, and with the shared line budget — the measuring
@@ -230,7 +239,7 @@ vi.mock('~/core/debates/matchmaking/matchmaking-claim-card', () => ({
 vi.mock('./claim-position-comment', () => ({
   ClaimPositionCommentControl: (props: Record<string, unknown>) => {
     mocks.positionControl = props;
-    return <div data-testid="position" />;
+    return <div data-testid="position">{props.positionRowEndSlot as React.ReactNode}</div>;
   },
 }));
 vi.mock('./claim-comment-position', () => ({
@@ -563,6 +572,17 @@ describe('ClaimPageView record', () => {
 
     expect(screen.getByTestId('editable-heading')).toBeInTheDocument();
     expect(screen.getByTestId('editable-description')).toBeInTheDocument();
+  });
+
+  it('puts history and the menu beside the pills in edit mode only, without create or votes', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    expect(screen.queryByTestId('entity-page-actions')).not.toBeInTheDocument();
+
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-1" isEditing />);
+    const actions = screen.getByTestId('entity-page-actions');
+    expect(screen.getByTestId('position')).toContainElement(actions);
+    expect(actions).toHaveAttribute('data-voteable', 'false');
+    expect(actions).toHaveAttribute('data-show-create', 'false');
   });
 
   it('makes Activity select claim record tabs inside a side panel', () => {
