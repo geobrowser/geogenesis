@@ -5,11 +5,15 @@ import type { ReactNode } from 'react';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { spaceByIdQueryKey } from '~/core/io/query-keys';
+
 import { useSpaceDebateSupport } from './space-debate-support';
 
 const DAO = '224406e0de3c48d78ef12774111b8b2f';
 const PERSONAL = '73a82967cb12f604f9589ac4bc8024cb';
 const UNKNOWN = '00000000000000000000000000000000';
+/** `DAO` in the dashed spelling some callers key `['space', id]` with. */
+const DAO_DASHED = '224406e0-de3c-48d7-8ef1-2774111b8b2f';
 
 const fetchSpaceTypes = vi.hoisted(() =>
   vi.fn(async (ids: string[]) => {
@@ -53,6 +57,26 @@ describe('useSpaceDebateSupport', () => {
     client.setQueryData(['space', DAO], { id: DAO, type: 'DAO' });
 
     const { result } = renderHook(() => useSpaceDebateSupport(DAO), { wrapper });
+
+    expect(result.current).toBe('indexed');
+    expect(fetchSpaceTypes).not.toHaveBeenCalled();
+  });
+
+  it('answers from a full space cached under the other spelling of its id', () => {
+    const { client, wrapper } = setup();
+    client.setQueryData(['space', DAO_DASHED], { id: DAO, type: 'DAO' });
+
+    const { result } = renderHook(() => useSpaceDebateSupport(DAO), { wrapper });
+
+    expect(result.current).toBe('indexed');
+    expect(fetchSpaceTypes).not.toHaveBeenCalled();
+  });
+
+  it('answers from a space `useSpacesByIds` already cached, whichever spelling asks', () => {
+    const { client, wrapper } = setup();
+    client.setQueryData(spaceByIdQueryKey(DAO), { id: DAO, type: 'DAO' });
+
+    const { result } = renderHook(() => useSpaceDebateSupport(DAO_DASHED), { wrapper });
 
     expect(result.current).toBe('indexed');
     expect(fetchSpaceTypes).not.toHaveBeenCalled();
