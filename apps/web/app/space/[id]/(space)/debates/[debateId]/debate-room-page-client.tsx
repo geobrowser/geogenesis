@@ -2290,16 +2290,17 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const requestRematch = React.useCallback(async () => {
     if (rematchConsentRequested) return;
-    setRoomError(null);
     setRematchConsentRequested(true);
     const request = (async () => {
       try {
         await consentToRematch.mutateAsync();
         rematchConsentPublishedRef.current = true;
         return true;
-      } catch (error) {
+      } catch {
+        // Automatic since GEO-3301, so there is nobody to show an error to: the effect below tries
+        // again on the next displayed second. The likeliest refusal is this room's clock reaching
+        // the end of the last turn a moment before the server's.
         setRematchConsentRequested(false);
-        setRoomError(error instanceof Error ? error.message : 'Could not request another debate.');
         return false;
       }
     })();
@@ -2313,13 +2314,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     participant => participant.user_id === currentUserId
   );
   React.useEffect(() => {
-    if (!debate || !['thanking', 'complete'].includes(debate.status) || countdown.effectiveStatus !== 'thanking') {
-      return;
-    }
+    if (!debate || debate.status === 'cancelled' || countdown.effectiveStatus !== 'thanking') return;
     // GEO-3301. Straight away rather than in the last seconds: there is no thank-you screen to sit
     // through, and the server moves the pair on to the picker as soon as both rooms have said so.
     if (countdown.remainingSeconds <= 0) return;
-    if (rematchQuery.data?.status !== 'deciding') return;
+    // On the room's own clock, not on the debate payload saying `thanking`: nothing refreshes that
+    // payload as the last turn ends, and waiting for it (and for the session it names) held the
+    // pair on a blank screen. Consenting needs only the debate: the server moves it into thanking
+    // and returns the session, which also tells this room where the picker is.
+    if (rematchSessionStatus !== null && rematchSessionStatus !== 'deciding') return;
     if (rematchLeaveRequestedRef.current) return;
     if (localRematchParticipant?.consented_at || rematchConsentRequested || consentToRematch.isPending) return;
     const attempted = autoRematchConsentAttemptRef.current;
@@ -2335,7 +2338,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     debate,
     localRematchParticipant?.consented_at,
     rematchConsentRequested,
-    rematchQuery.data?.status,
+    rematchSessionStatus,
     requestRematch,
   ]);
 

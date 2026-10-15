@@ -4230,6 +4230,33 @@ describe('DebateRoomPageClient', () => {
     expect(screen.queryByText(/Opening only|Debate again|Publish debate/)).toBeNull();
   });
 
+  // GEO-3301. Nothing refreshes the debate as its last turn ends, so a room that waited for the
+  // payload to say `thanking`, and for the session it names, sat on a blank screen (Preston saw
+  // "Opening claims..." on the preview). Consent needs only the debate.
+  it('consents on its own clock, before the debate payload or the session catch up', async () => {
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:20.500Z'));
+    mocks.rematch = null;
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'in_progress',
+      first_participant_slot: 1,
+      current_turn_index: 1,
+      current_speaker_slot: 2,
+      turn_durations_ms: [10_000, 10_000],
+      started_at: '2026-07-02T00:00:00.000Z',
+      turn_started_at: '2026-07-02T00:00:10.000Z',
+      turn_ends_at: '2026-07-02T00:00:20.000Z',
+      completed_at: null,
+      rematch_session_id: null,
+    };
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
+    expect(mocks.refetchDebate).not.toHaveBeenCalled();
+  });
+
   it('advances from the final turn to thanking without waiting for a debate refresh', async () => {
     vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.500Z'));
     const audioTrack = { mediaStreamTrack: { kind: 'audio', enabled: false }, stop: vi.fn(), detach: vi.fn() };
@@ -4876,65 +4903,43 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledTimes(2));
   });
 
-  // Leaving before the session has loaded: the room has not consented yet, and must not once it has.
-  it('does not automatically consent after the user starts leaving', async () => {
-    const persistence = deferred<void>();
-    mocks.enqueueRecording.mockReturnValue(persistence.promise);
-    installRecordingMocks();
-    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
-    const view = await renderLiveDebate();
-    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
-    mocks.debate = {
+  // The room consents the moment the last turn ends (GEO-3301), so the one window left between
+  // Leave and consent is a refused attempt waiting for its retry on the next second. Leave closes it.
+  function thankingWithRefusedConsent() {
+    mocks.consentMutateAsync.mockRejectedValueOnce(
+      new GeoChatRequestError('the rematch decision phase has not started', 'rematch_not_ready', 400)
+    );
+    return {
       ...completedDebate(),
-      status: 'thanking',
+      status: 'thanking' as const,
       turn_started_at: '2026-07-02T00:00:20.000Z',
       turn_ends_at: '2026-07-02T00:00:40.000Z',
       completed_at: null,
       rematch_session_id: 'rematch-1',
     };
-    mocks.rematch = null;
-    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+  }
 
-    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
-    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
-
-    mocks.rematch = rematchSession('deciding');
-    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
-
-    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
-    persistence.resolve();
-    await waitFor(() => expect(mocks.leaveRematchMutateAsync).toHaveBeenCalledOnce());
-    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
-  });
-
-  it('preserves the rematch opt-out when leaving fails before the session has loaded', async () => {
+  it('preserves the rematch opt-out when leaving fails before a refused consent is retried', async () => {
     mocks.enqueueRecording.mockRejectedValue(new Error('Storage unavailable'));
     mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
     installRecordingMocks();
     vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
     const view = await renderLiveDebate();
     await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
-    mocks.debate = {
-      ...completedDebate(),
-      status: 'thanking',
-      turn_started_at: '2026-07-02T00:00:20.000Z',
-      turn_ends_at: '2026-07-02T00:00:40.000Z',
-      completed_at: null,
-      rematch_session_id: 'rematch-1',
-    };
-    mocks.rematch = null;
+    mocks.debate = thankingWithRefusedConsent();
+    mocks.rematch = rematchSession('deciding');
     view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.consentMutateAsync).toHaveBeenCalledOnce());
 
     fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
     expect(await screen.findAllByText('Storage unavailable')).not.toHaveLength(0);
 
-    mocks.rematch = rematchSession('deciding');
-    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:26.100Z'));
     await act(async () => {
-      await new Promise(resolve => setTimeout(resolve, 550));
+      await new Promise(resolve => setTimeout(resolve, 600));
     });
 
-    expect(mocks.consentMutateAsync).not.toHaveBeenCalled();
+    expect(mocks.consentMutateAsync).toHaveBeenCalledOnce();
   });
 
   it('publishes an existing rematch opt-out before waiting for recording persistence', async () => {
