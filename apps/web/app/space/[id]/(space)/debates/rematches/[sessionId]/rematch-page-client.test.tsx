@@ -294,6 +294,8 @@ vi.mock('./rematch-publish-card', () => ({
 vi.mock('~/core/debates/lobbies/lobby-return', async () => {
   const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
   return {
+    // No lobby mic carried into these sessions (GEO-3336 has its own tests).
+    useCarriedLobbyMic: () => null,
     useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
     useLobbyRejoinOnLeave: () => mocks.requestLobbyRejoinOnLeave,
   };

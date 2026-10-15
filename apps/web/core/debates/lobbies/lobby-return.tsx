@@ -5,7 +5,7 @@ import * as React from 'react';
 import { consumeDebateReturnDestination, peekDebateReturnDestination } from '../debate-return-navigation';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
 import { useMyDebateLobby } from './hooks';
-import { requestLobbyRejoin } from './step-out';
+import { clearCarriedLobbyMic, readCarriedLobbyMic, requestLobbyRejoin } from './step-out';
 
 /**
  * geo-chat's lobby to return to: the one the viewer stepped out of, from any tab, or null. Undefined
@@ -26,6 +26,16 @@ export function useConsumeDebateReturnDestination() {
     () => consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined),
     [known, lobbyId]
   );
+}
+
+/**
+ * The mic the viewer had in the lobby they stepped out of to get here, so the picker or ready room
+ * starts the same way: null when they did not come straight from one. Read once per mount and spent.
+ */
+export function useCarriedLobbyMic(): boolean | null {
+  const [carried] = React.useState(readCarriedLobbyMic);
+  React.useEffect(() => clearCarriedLobbyMic(), []);
+  return carried;
 }
 
 /**

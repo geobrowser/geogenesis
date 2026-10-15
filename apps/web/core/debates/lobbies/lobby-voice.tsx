@@ -39,6 +39,7 @@ import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
+import { reportLobbyMic } from './step-out';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
@@ -188,6 +189,12 @@ export function LobbyVoice({
   React.useEffect(() => {
     if (listenOnly) setMicChoice(false);
   }, [listenOnly]);
+
+  // What stepping out to debate carries to the picker or ready room. Only a mic of the viewer's own
+  // here counts: a listener, or voice held by another tab, leaves the next screen at its default.
+  // Not cleared on unmount: a step-out from the server unmounts this before the route runs.
+  const lobbyMic = ownership === 'owned' && data?.can_publish ? micIntent && !micFailure : null;
+  React.useEffect(() => reportLobbyMic(lobbyMic), [lobbyMic]);
 
   const handleConnected = React.useCallback(() => {
     connectedRef.current = true;
