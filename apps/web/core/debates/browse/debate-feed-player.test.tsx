@@ -6,6 +6,7 @@ import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/d
 import { PAIR_HOLD_TIMEOUT_MS, SUSPEND_GRACE_MS } from '~/core/debates/pair-readiness';
 import { turnSpansForDurations } from '~/core/debates/playback-utils';
 import { turnTimerScale } from '~/core/debates/recording-countdown-ring';
+import { recordAnimationRestarts } from '~/core/debates/turn-timer-fixtures';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
 import { DebateFeedPlayer } from './debate-feed-player';
@@ -2173,17 +2174,7 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
   });
 
   it('keeps the red rim draining across a second, restarting only the pulse', () => {
-    // The pulse restart takes the face's animations off, lays it out, and puts them back: record
-    // what the animation was each time the face is laid out.
-    const restarts: string[] = [];
-    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
-    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
-      configurable: true,
-      get(this: HTMLElement) {
-        restarts.push(this.style.animation);
-        return 0;
-      },
-    });
+    const { restarts, restore } = recordAnimationRestarts();
     const at = (secondsLeft: number) => {
       mocks.controller = {
         ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
@@ -2191,7 +2182,7 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
       };
       return <DebateFeedPlayer debate={openRounds} active />;
     };
-    const rim = (container: HTMLElement) => container.querySelector('[data-turn-timer] > div > span');
+    const rim = (container: HTMLElement) => container.querySelector('[data-turn-timer-rim]');
     try {
       const view = render(at(3.9));
       const before = rim(view.container);
@@ -2207,7 +2198,7 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
       expect(restarts).toEqual(['none']);
       expect(rim(view.container)).toBe(before);
     } finally {
-      if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
+      restore();
     }
   });
 

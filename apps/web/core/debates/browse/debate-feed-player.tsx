@@ -1654,8 +1654,7 @@ function CountdownBadge({
   // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
   // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
   const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
-  const faceRef = React.useRef<HTMLDivElement>(null);
-  useRestartedEach(faceRef, counting ? whole : null);
+  const faceRef = useRestartedEach<HTMLDivElement>(counting ? whole : null);
   return (
     <div
       data-turn-timer={stage.phase}
@@ -1674,6 +1673,7 @@ function CountdownBadge({
         style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
       >
         <span
+          data-turn-timer-rim
           className={cx(
             'col-start-1 row-start-1 rounded-full',
             // Smooth only for the Open rounds build-up; a fixed format's ring jumps as it always has.
