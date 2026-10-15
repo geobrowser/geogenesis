@@ -4412,6 +4412,39 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1'));
   });
 
+  // Copilot on #2853: a dropped call tears the room down without saving, so a tab that held it can
+  // be idle and still hold what it recorded. Either way out of the room saves that first.
+  it.each([
+    ['goes back when the session ended', 'ended' as const],
+    ['follows a live session to the picker', 'browsing' as const],
+  ])('saves what a dropped call left it holding before it %s', async (_label, status) => {
+    setHistoryLength(2);
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:15.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+
+    // The call drops mid-debate, before the room ever reaches the save.
+    act(() => emitRoomEvent('disconnected', 99));
+    expect(mocks.enqueueRecording).not.toHaveBeenCalled();
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:25.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession(status, { localConsented: true, remoteConsented: status === 'browsing' });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    const left = status === 'ended' ? mocks.back : mocks.replace;
+    await waitFor(() => expect(left).toHaveBeenCalled());
+    expect(mocks.enqueueRecording).toHaveBeenCalledOnce();
+    expect(mocks.enqueueRecording.mock.invocationCallOrder[0]).toBeLessThan(left.mock.invocationCallOrder[0]!);
+  });
+
   // Copilot on #2853: a tab that never held the call (reloaded, or another tab had the room) has no
   // recording to save, so finalizing there failed for good and stranded it on a save error.
   it('sends an idle tab back when the session ended, without trying to save a recording', async () => {

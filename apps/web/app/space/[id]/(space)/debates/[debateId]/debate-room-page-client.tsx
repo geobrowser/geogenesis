@@ -2234,20 +2234,50 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     requestRematch,
   ]);
 
+  /**
+   * How an idle tab leaves the room, for either of its ways out (back, or on to the picker).
+   *
+   * Idle covers two different tabs. One never held the call (another tab had the room, or it
+   * reloaded) and has nothing to save; finalizing there fails for good, so it just goes. The other
+   * held it until the call dropped, which tears the room down without saving: it can still hold
+   * what it recorded, in memory only, and leaving would unmount it away. That one saves first, and
+   * stays to say so if the save fails.
+   */
+  const leaveIdleRoom = React.useCallback(
+    async (go: () => void | Promise<void>) => {
+      const holdsRecording =
+        persistedRecordingDebateIdRef.current !== debate?.id &&
+        (recorderRef.current !== null ||
+          stoppedRecordingRef.current !== null ||
+          recordingChunksRef.current.length > 0 ||
+          recordingPersistencePromiseRef.current !== null);
+      if (holdsRecording) {
+        try {
+          await persistStoppedLocalRecording();
+        } catch (error) {
+          setRoomError(error instanceof Error ? error.message : 'Could not save the local recording.');
+          return;
+        }
+      }
+      await go();
+    },
+    [debate?.id, persistStoppedLocalRecording]
+  );
+
   // Leave as soon as the session has an answer rather than on the clock; see `handoffSettled`.
   // `finishLiveDebate` saves the recording, then follows the session to the picker or goes back.
   //
-  // Only for a room holding the call. An idle tab (another tab had the room, or it reloaded) has no
-  // recording to save, and finalizing one there fails for good. It follows a live session through
-  // `idleRematchDestination` below; a closed one leaves it nowhere to go but back.
+  // Only for a room holding the call: an idle tab follows a live session through
+  // `idleRematchDestination` below, and a closed one leaves it nowhere to go but back. Either way it
+  // leaves through `leaveIdleRoom`, which saves anything it still holds first.
   React.useEffect(() => {
     if (!handoffSettled) return;
     if (roomState === 'idle') {
-      if (rematchSessionClosed && !rematchLeaveRequestedRef.current) returnFromDebate();
+      if (rematchSessionClosed && !rematchLeaveRequestedRef.current) void leaveIdleRoom(returnFromDebate);
       return;
     }
     void finishLiveDebate({ allowDuringThankYou: true });
-  }, [finishLiveDebate, handoffSettled, rematchSessionClosed, returnFromDebate, roomState]);
+  }, [finishLiveDebate, handoffSettled, leaveIdleRoom, rematchSessionClosed, returnFromDebate, roomState]);
 
   /**
    * GEO-2819. A tab that joined the room for the intro is already there when the second "I'm
@@ -2488,9 +2518,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     const session = rematchQuery.data;
     if (!session) return;
     // This tab is idle in the room — another tab held it, or it dropped — so it follows only if no
-    // tab nearer the viewer has already gone on (GEO-3149).
-    void followDestination(idleRematchDestination, debateRematchDestinationClaimKey(session));
-  }, [rematchReady, followDestination, idleRematchDestination, locallyThanking, rematchQuery.data]);
+    // tab nearer the viewer has already gone on (GEO-3149), and saves what a dropped call left it
+    // holding before it does.
+    void leaveIdleRoom(() => followDestination(idleRematchDestination, debateRematchDestinationClaimKey(session)));
+  }, [rematchReady, followDestination, idleRematchDestination, leaveIdleRoom, locallyThanking, rematchQuery.data]);
 
   React.useEffect(() => {
     if (!debate || storagePersistenceRequestedRef.current) return;
