@@ -518,7 +518,7 @@ export class DebateGatewayClient {
         }
         break;
       case 'debate.state_changed':
-        if (identifiers.debate_id) this.queueQuery(['debates', 'detail', identifiers.debate_id]);
+        if (identifiers.debate_id) this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
         this.queueAccountActivity();
         break;
@@ -530,9 +530,9 @@ export class DebateGatewayClient {
         break;
       case 'debate.media_changed':
         if (identifiers.debate_id) {
-          this.queueQuery(['debates', 'media', identifiers.debate_id]);
-          this.queueQuery(['debates', 'detail', identifiers.debate_id]);
-          this.queueQuery(['debates', 'transcript', identifiers.debate_id]);
+          this.queueQuery(['debates', 'media', dashlessId(identifiers.debate_id)]);
+          this.queueQuery(['debates', 'detail', dashlessId(identifiers.debate_id)]);
+          this.queueQuery(['debates', 'transcript', dashlessId(identifiers.debate_id)]);
         }
         if (identifiers.space_id) this.queueQuery(['debates', 'space', identifiers.space_id]);
         break;
@@ -734,9 +734,9 @@ export class DebateGatewayClient {
       this.queueAccountQuery('lobby-claims');
       return;
     }
-    this.queueQuery(['debates', 'detail', scope.debate_id]);
-    this.queueQuery(['debates', 'media', scope.debate_id]);
-    this.queueQuery(['debates', 'transcript', scope.debate_id]);
+    this.queueQuery(['debates', 'detail', dashlessId(scope.debate_id)]);
+    this.queueQuery(['debates', 'media', dashlessId(scope.debate_id)]);
+    this.queueQuery(['debates', 'transcript', dashlessId(scope.debate_id)]);
   }
 
   private queueBroadReconcile() {
