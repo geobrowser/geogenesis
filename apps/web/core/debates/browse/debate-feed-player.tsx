@@ -29,6 +29,7 @@ import {
   turnTimerPulseClass,
   turnTimerRimMask,
   turnTimerScale,
+  useRestartedEach,
 } from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
@@ -1653,6 +1654,8 @@ function CountdownBadge({
   // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
   // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
   const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
+  const faceRef = React.useRef<HTMLDivElement>(null);
+  useRestartedEach(faceRef, counting ? whole : null);
   return (
     <div
       data-turn-timer={stage.phase}
@@ -1660,8 +1663,9 @@ function CountdownBadge({
       style={{ scale: stage.scale }}
     >
       <div
-        // Re-mounted each second, which restarts its swell and glow.
-        key={counting ? whole : 'steady'}
+        // Its swell and glow restart each second (`useRestartedEach`) without remounting it, so the
+        // rim inside keeps draining across the second rather than stepping.
+        ref={faceRef}
         className={cx(
           'grid size-8 origin-top-right place-items-center rounded-full',
           turnTimerPulseClass(stage),

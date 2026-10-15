@@ -2172,6 +2172,45 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
     expect(timer(4, debate)?.innerHTML).not.toContain('turn-timer-rim]');
   });
 
+  it('keeps the red rim draining across a second, restarting only the pulse', () => {
+    // The pulse restart takes the face's animations off, lays it out, and puts them back: record
+    // what the animation was each time the face is laid out.
+    const restarts: string[] = [];
+    const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+    Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+      configurable: true,
+      get(this: HTMLElement) {
+        restarts.push(this.style.animation);
+        return 0;
+      },
+    });
+    const at = (secondsLeft: number) => {
+      mocks.controller = {
+        ...controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 }),
+        turnState: { slot: 1, seconds: secondsLeft, progress: 0.9 },
+      };
+      return <DebateFeedPlayer debate={openRounds} active />;
+    };
+    const rim = (container: HTMLElement) => container.querySelector('[data-turn-timer] > div > span');
+    try {
+      const view = render(at(3.9));
+      const before = rim(view.container);
+      expect(before).not.toBeNull();
+      restarts.length = 0;
+
+      view.rerender(at(3.4));
+      // Within a second: no pulse.
+      expect(restarts).toEqual([]);
+
+      view.rerender(at(2.9));
+      // A new second pulses, and the rim is the same element, so its drain carries on.
+      expect(restarts).toEqual(['none']);
+      expect(rim(view.container)).toBe(before);
+    } finally {
+      if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
+    }
+  });
+
   it('draws a claim counter in each corner from the start, and the live cards only in a fixed format', () => {
     mocks.controller = at(12);
     const open = render(<DebateFeedPlayer debate={openRounds} active />).container;

@@ -63,9 +63,10 @@ export function turnTimerRimMask(width: string) {
 
 /**
  * Restarts an element's own CSS animations each time `tick` changes, without remounting it, so
- * whatever it holds (the timer's rim, mid-drain) carries on. `null` leaves them alone.
+ * whatever it holds (the timer's rim, mid-drain) carries on. `null` leaves them alone. The room's
+ * timer and the published player's both pulse with it.
  */
-function useRestartedEach(ref: React.RefObject<HTMLElement | null>, tick: number | null) {
+export function useRestartedEach(ref: React.RefObject<HTMLElement | null>, tick: number | null) {
   React.useLayoutEffect(() => {
     const element = ref.current;
     if (tick === null || !element) return;
