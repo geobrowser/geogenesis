@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('~/core/action-context-provider', () => ({
   ActionSurface: ({ children }: { children: React.ReactNode }) => children,
+  ActionSurfaceDiv: (props: React.ComponentProps<'div'>) => <div {...props} />,
 }));
 
 vi.mock('./use-debate-claim-response', () => ({

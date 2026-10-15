@@ -181,6 +181,7 @@ export function DebateFeedPlayer({
     resumeBoth,
     suspend,
     seekBoth: seekBothRaw,
+    livePositionMs,
     beginScrub,
     endScrub,
   } = controller;
@@ -399,16 +400,11 @@ export function DebateFeedPlayer({
   // The break's banner lies across the seam, over the top tile's name and claim corner: they step
   // out while it is up and come back with the next speaker, as they do for the round card.
   const bannerYield = breakBannerShown(breakCue) ? 1 : 0;
-  // Slot 1's element is the pair's clock, so where it is is where the recording is.
-  const recordingPositionMs = React.useCallback(() => {
-    const element = slot1VideoRef.current;
-    return element ? element.currentTime * 1_000 : null;
-  }, [slot1VideoRef]);
   useBreakCuts(cuts, {
     playheadMs,
     running: playing && !isScrubbing,
     seek: seekBothRaw,
-    positionMs: recordingPositionMs,
+    positionMs: livePositionMs,
   });
   const lastWordSlot = React.useMemo(
     () => (stamped && !reducedOverlays ? lastWordSlotAt(playbackBreaks, turnSegments, playheadMs) : null),

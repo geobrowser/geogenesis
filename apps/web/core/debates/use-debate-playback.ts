@@ -1520,6 +1520,16 @@ export function useDebatePlayback(
     if (wasPlayingBeforeScrubRef.current && !playbackEnded) void resumeBoth();
   }, [playbackEnded, resumeBoth]);
 
+  /**
+   * Where the recordings really are right now, on the debate's clock, in ms: slot 1's element, the
+   * pair's clock, with its offset added, as `pairPlayhead` reads it. Unlike the playhead it stops
+   * when a stall does, so a decision that must not run ahead of the media (a break's cut) can wait.
+   */
+  const livePositionMs = React.useCallback(() => {
+    const primary = slot1VideoRef.current;
+    return primary ? pairPlayhead(primary, slot2VideoRef.current, offsets).seconds * 1_000 : null;
+  }, [offsets]);
+
   return {
     /** Held URLs lapsed while released and are being re-signed; render no <video> meanwhile. */
     urlsLapsed,
@@ -1541,6 +1551,7 @@ export function useDebatePlayback(
     mutedByUser,
     setMutedByUser,
     playheadSeconds,
+    livePositionMs,
     timelineSeconds,
     turnState,
     turnSpans,

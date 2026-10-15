@@ -14,6 +14,8 @@ const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
 const SPACE_2 = '22222222222222222222222222222222';
 
 const mocks = vi.hoisted(() => ({
+  // Where the stand-in recording is, for the cut's stall check; null reads as unknown.
+  livePosition: null as (() => number | null) | null,
   controller: null as unknown,
   ticker: null as unknown,
   bylines: new Map<string, string>(),
@@ -216,6 +218,7 @@ function controllerFixture(overrides: {
     resumeBoth: vi.fn(),
     suspend: vi.fn(),
     seekBoth: overrides.seekBoth ?? vi.fn(),
+    livePositionMs: () => mocks.livePosition?.() ?? null,
     beginScrub: vi.fn(),
     endScrub: vi.fn(),
   };
@@ -252,6 +255,7 @@ beforeEach(() => {
   mocks.controller = null;
   mocks.ticker = emptyTicker();
   mocks.bylines = new Map();
+  mocks.livePosition = null;
   mocks.stackOpens = [];
   vi.spyOn(HTMLMediaElement.prototype, 'pause').mockImplementation(() => {});
   vi.spyOn(HTMLMediaElement.prototype, 'load').mockImplementation(() => {});
@@ -1965,15 +1969,11 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(second.style.animationDelay).toContain('1380ms');
   });
 
-  /** Gives slot 1's element, the pair's clock, a position: running on with the fake clock from `fromS`, or held. */
+  /** Gives the recording a position on the debate's clock: running on with the fake clock from `fromS`, or held. */
   const recordingAt = (fromS: number, { stalled = false } = {}) => {
-    const element = (mocks.controller as DebatePlaybackController | null)?.slot1VideoRef.current as HTMLVideoElement;
     const start = Date.now();
     let held = stalled;
-    Object.defineProperty(element, 'currentTime', {
-      configurable: true,
-      get: () => (held ? fromS : fromS + (Date.now() - start) / 1_000),
-    });
+    mocks.livePosition = () => (held ? fromS : fromS + (Date.now() - start) / 1_000) * 1_000;
     return { resume: () => (held = false) };
   };
 

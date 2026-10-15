@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import cx from 'classnames';
 
-import { ActionSurface } from '~/core/action-context-provider';
+import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
 import type { DebateClaim } from '~/core/debates/api';
 import type { StackedCard } from '~/core/debates/claim-ticker';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
@@ -342,7 +342,9 @@ function ClaimListCardBody({
   };
 
   return (
-    <div
+    // The surface's measurement root, as the live card's is: with `asChild`, `ActionSurface` only
+    // measures (and so reports an impression) through an `ActionSurfaceDiv` beneath it.
+    <ActionSurfaceDiv
       data-claim-list-card={claim.id}
       data-fresh={freshness > 0 || undefined}
       className="grid grid-cols-[1fr_auto] items-center gap-x-[2.4cqw] rounded-[4px] py-[1.4cqw] pr-[1.2cqw] pl-[2.6cqw] text-white backdrop-blur-[22px] transition-[background-color,box-shadow] duration-300"
@@ -372,6 +374,6 @@ function ClaimListCardBody({
         )}
         {vote(false)}
       </span>
-    </div>
+    </ActionSurfaceDiv>
   );
 }

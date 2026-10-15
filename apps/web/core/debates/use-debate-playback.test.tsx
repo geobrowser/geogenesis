@@ -2107,6 +2107,15 @@ describe('useDebatePlayback — a fresh pair is positioned before it is started 
     return { result, slot1, slot2 };
   }
 
+  // Copilot, #2843: a break's cut is checked against where the recording really is, on the debate's
+  // clock. Reading the element's own clock instead put a recording that began 4.969 s early 4.969 s
+  // ahead of the debate, so a stall just short of a cut still let it fire over the last words.
+  it('reports where the recordings really are on the debate’s clock, offset and all', async () => {
+    const { result, slot1 } = await mounted();
+    slot1.video.currentTime = 275.169;
+    expect(result.current.livePositionMs()).toBeCloseTo(270_200, 3);
+  });
+
   it('moves both elements to the start of the debate once both know their shape', async () => {
     const { result, slot1, slot2 } = await mounted();
 
