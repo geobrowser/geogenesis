@@ -8,15 +8,26 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityResponseIndexingState } from '~/core/hooks/use-entity-vote';
 
 import { type DebateLobbyHighlights, type DebateLobbyRoomVote, GeoChatRequestError } from '../api';
-import { useLobbyHighlights, useRoomVoteHint, useSetLobbyHighlight } from './lobby-highlights-hooks';
+import {
+  useEndLobbyRoomVote,
+  useLobbyHighlights,
+  useRoomVoteHint,
+  useSetLobbyHighlight,
+  useStartLobbyRoomVote,
+} from './lobby-highlights-hooks';
 
 const mocks = vi.hoisted(() => ({
   snapshot: { status: 'idle', pending: null, runId: null } as EntityResponseIndexingState,
   hint: vi.fn(async (..._args: unknown[]) => undefined),
   getHighlights: vi.fn(),
   setHighlight: vi.fn(),
+  startVote: vi.fn(),
+  endVote: vi.fn(),
   accountKey: 'user-a',
 }));
+
+const analytics = vi.hoisted(() => ({ lobbyRoomVoteStarted: vi.fn(), lobbyRoomVoteSeen: vi.fn() }));
+vi.mock('./lobby-analytics', () => analytics);
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.snapshot,
@@ -27,6 +38,8 @@ vi.mock('../api', async importOriginal => ({
   setDebateLobbyRoomVoteHint: mocks.hint,
   getDebateLobbyHighlights: mocks.getHighlights,
   setDebateLobbyHighlight: mocks.setHighlight,
+  startDebateLobbyRoomVote: mocks.startVote,
+  endDebateLobbyRoomVote: mocks.endVote,
 }));
 
 vi.mock('../hooks', () => ({
@@ -236,5 +249,88 @@ describe('host actions', () => {
 
     await waitFor(() => expect(result.current.read.data?.highlights.map(row => row.claim.id)).toEqual(['c']));
     expect(result.current.read.data?.viewer).toEqual({ room_vote_position: null, vote_id: null });
+  });
+});
+
+describe('room vote analytics (GEO-3311)', () => {
+  const state = (roomVote: DebateLobbyRoomVote | null, asOf = '2026-10-07T12:00:00Z'): DebateLobbyHighlights => ({
+    lobby_id: 'L',
+    as_of: asOf,
+    highlights: [],
+    room_vote: roomVote,
+  });
+  let client: QueryClient;
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  /** A gateway event that landed before the mutation's response. */
+  const overtakenBy = (newer: DebateLobbyHighlights) =>
+    client.setQueryData(['debates', 'account', 'user-a', 'lobby-highlights', 'L'], {
+      ...newer,
+      viewer: { room_vote_position: null, vote_id: newer.room_vote?.vote_id ?? null },
+    });
+  const otherVote: DebateLobbyRoomVote = { ...vote, vote_id: 'VOTE-2', tally: { agree: 3, disagree: 1, eligible: 5 } };
+
+  beforeEach(() => {
+    client = new QueryClient();
+    analytics.lobbyRoomVoteStarted.mockClear();
+    analytics.lobbyRoomVoteSeen.mockClear();
+  });
+
+  it('reports a started vote, and whether it replaced another, once the server confirms it', async () => {
+    mocks.startVote.mockResolvedValueOnce(state(vote));
+    mocks.startVote.mockRejectedValueOnce(
+      new GeoChatRequestError('running', 'lobby_room_vote_running', 409, null, null)
+    );
+    const { result } = renderHook(() => useStartLobbyRoomVote('L'), { wrapper });
+
+    await act(() => result.current.mutateAsync({ claimId: 'c', replace: true }));
+    await act(() => result.current.mutateAsync({ claimId: 'c' }).catch(() => undefined));
+
+    expect(analytics.lobbyRoomVoteStarted.mock.calls).toEqual([['L', vote, { replaced: true }]]);
+  });
+
+  it('follows the room vote from the stored state, ending a replaced vote before the start is sent', async () => {
+    mocks.startVote.mockResolvedValueOnce(state(vote));
+    const order: string[] = [];
+    analytics.lobbyRoomVoteSeen.mockImplementationOnce(() => order.push('seen'));
+    analytics.lobbyRoomVoteStarted.mockImplementationOnce(() => order.push('started'));
+    const { result } = renderHook(() => useStartLobbyRoomVote('L'), { wrapper });
+
+    await act(() => result.current.mutateAsync({ claimId: 'c' }));
+
+    expect(analytics.lobbyRoomVoteSeen).toHaveBeenCalledWith('L', vote);
+    expect(order).toEqual(['seen', 'started']);
+  });
+
+  it('still reports a start a newer event overtook, without tracking the response over that event', async () => {
+    // Another host replaced this vote before the response arrived.
+    overtakenBy(state(otherVote, '2026-10-07T12:00:05Z'));
+    mocks.startVote.mockResolvedValueOnce(state(vote, '2026-10-07T12:00:01Z'));
+    const { result } = renderHook(() => useStartLobbyRoomVote('L'), { wrapper });
+
+    await act(() => result.current.mutateAsync({ claimId: 'c' }));
+
+    expect(analytics.lobbyRoomVoteSeen.mock.calls).toEqual([['L', otherVote]]);
+    expect(analytics.lobbyRoomVoteStarted.mock.calls).toEqual([['L', vote, { replaced: false }]]);
+  });
+
+  it('reports the end from the stored state', async () => {
+    mocks.endVote.mockResolvedValueOnce(state(null));
+    const { result } = renderHook(() => useEndLobbyRoomVote('L'), { wrapper });
+
+    await act(() => result.current.mutateAsync('VOTE-1'));
+
+    expect(analytics.lobbyRoomVoteSeen).toHaveBeenCalledWith('L', null);
+  });
+
+  it('does not end a newer vote with an End response that a newer event overtook', async () => {
+    overtakenBy(state(otherVote, '2026-10-07T12:00:05Z'));
+    mocks.endVote.mockResolvedValueOnce(state(null, '2026-10-07T12:00:01Z'));
+    const { result } = renderHook(() => useEndLobbyRoomVote('L'), { wrapper });
+
+    await act(() => result.current.mutateAsync('VOTE-1'));
+
+    expect(analytics.lobbyRoomVoteSeen.mock.calls).toEqual([['L', otherVote]]);
   });
 });

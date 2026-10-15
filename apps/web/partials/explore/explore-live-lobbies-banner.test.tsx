@@ -6,7 +6,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbySummary } from '~/core/debates/api';
 
-const mocks = vi.hoisted(() => ({ live: [] as DebateLobbySummary[], markLobbyEntry: vi.fn() }));
+const mocks = vi.hoisted(() => ({ live: [] as DebateLobbySummary[], markLobbyEntry: vi.fn(), authenticated: true }));
+
+vi.mock('~/core/debates/hooks', () => ({ useGeoChatAuth: () => ({ authenticated: mocks.authenticated }) }));
 
 vi.mock('~/core/debates/lobbies/live-lobbies', () => ({
   useLobbyLineup: () => ({ live: mocks.live, soon: null, later: [] }),
@@ -52,6 +54,7 @@ function renderBanner(store = createStore()) {
 
 beforeEach(() => {
   mocks.live = [];
+  mocks.authenticated = true;
 });
 
 afterEach(() => {
@@ -104,5 +107,14 @@ describe('ExploreLiveLobbiesBanner', () => {
     renderBanner(store);
     expect(screen.getByRole('heading', { name: 'AI Policy Night is live' })).toBeInTheDocument();
     expect(screen.queryByText('NYC Debates is live')).not.toBeInTheDocument();
+  });
+
+  // GEO-3289. Signed-out visitors find lobbies in the navbar and the debates panel only.
+  // Its own lobby: dismissals persist across tests, and `nyc` was dismissed above.
+  it('shows nothing to a signed-out visitor', () => {
+    mocks.authenticated = false;
+    mocks.live = [lobby({ lobby_id: 'signed-out-only' })];
+    renderBanner();
+    expect(screen.queryByTestId('explore-live-lobbies-banner')).not.toBeInTheDocument();
   });
 });

@@ -990,8 +990,11 @@ function TickerClaimHeader({
  * Thumbs, on every claim. A factual one used to draw chevrons here, because verifying a fact and
  * agreeing with a position were different acts; claims ask one question now, so there is one
  * glyph.
+ *
+ * `column` is the Open rounds claim list's vote column (GEO-3317): a round 24px target sized to the
+ * player, with a solid glyph that reads at that size, coloured once the reader takes a side.
  */
-function ClaimIconButton({
+export function ClaimIconButton({
   responseKind,
   position,
   label,
@@ -1000,6 +1003,7 @@ function ClaimIconButton({
   title,
   onClick,
   tone,
+  layout = 'inline',
 }: {
   responseKind: ResponseKind;
   position: boolean;
@@ -1009,8 +1013,10 @@ function ClaimIconButton({
   title: string;
   onClick?: () => void;
   tone: ClaimCardTone;
+  layout?: 'inline' | 'column';
 }) {
   const glass = tone === 'glass';
+  const column = layout === 'column';
   return (
     <button
       type="button"
@@ -1033,7 +1039,11 @@ function ClaimIconButton({
         // 28px on a touch screen, by the same trick: a 20px target is comfortable under a cursor
         // and small under a thumb. The negative margin absorbs all of the growth, so the row stays
         // 16px and the card stays 97px on both.
-        '-my-0.5 grid size-5 place-items-center rounded-sm transition-colors disabled:cursor-default md:-my-1.5 md:size-7',
+        'grid place-items-center transition-colors disabled:cursor-default',
+        column
+          ? // 6cqw, overlapping the column's gaps, and never under 24px.
+            '-my-[1cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3.6cqw]'
+          : '-my-0.5 size-5 rounded-sm md:-my-1.5 md:size-7',
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
         selected
@@ -1043,7 +1053,7 @@ function ClaimIconButton({
             : 'text-grey-04 hover:bg-divider hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
       )}
     >
-      <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected} />
+      <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected || column} />
     </button>
   );
 }

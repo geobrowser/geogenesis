@@ -19,6 +19,7 @@ import {
   isAccountWarmingUp,
   joinDebateQueue,
   listDebateClaims,
+  listDebateLobbies,
   listDebateLobbyCalendar,
   listDebatePeople,
   listMatchmakingClaims,
@@ -540,6 +541,40 @@ describe('matchmaking read authentication', () => {
     await expect(listMatchmakingClaims({ filter: 'all' }, getPrivyIdentityToken, 'user-a')).rejects.toThrow(
       'Identity token unavailable'
     );
+    expect(fetch).not.toHaveBeenCalled();
+  });
+});
+
+// GEO-3289 (geo-chat GEO-3291): the lobby list opens to signed-out visitors the same way.
+describe('lobby list authentication', () => {
+  beforeEach(() => {
+    resetGeoChatSession();
+    window.localStorage.removeItem('geo:chat-session');
+  });
+
+  it('lists lobbies anonymously when nobody is signed in', async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(JSON.stringify({ lobbies: [] }), { status: 200, headers: { 'Content-Type': 'application/json' } })
+      );
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn();
+
+    await expect(listDebateLobbies(getPrivyIdentityToken, null)).resolves.toEqual({ lobbies: [] });
+    expect(fetch).toHaveBeenCalledWith(
+      expect.stringContaining('/debate-lobbies'),
+      expect.objectContaining({ headers: {} })
+    );
+    expect(getPrivyIdentityToken).not.toHaveBeenCalled();
+  });
+
+  it('does not downgrade a signed-in lobby list to anonymous when the token exchange fails', async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal('fetch', fetch);
+    const getPrivyIdentityToken = vi.fn().mockRejectedValue(new Error('Identity token unavailable'));
+
+    await expect(listDebateLobbies(getPrivyIdentityToken, 'user-a')).rejects.toThrow('Identity token unavailable');
     expect(fetch).not.toHaveBeenCalled();
   });
 });

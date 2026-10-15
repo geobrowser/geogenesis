@@ -8,7 +8,10 @@ import { responsePositionLabel } from '~/core/responses/entity-response';
 
 import { Text } from '~/design-system/text';
 
+import { ENDED_TILT, STAMP_INK } from './browse/stamp-styles';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
+import { RoomBanner, RoomDim, RoomExit, RoomMiddleBanner, RoomStamp, RoomTileStamp } from './debate-room-stamps';
+import { COUNTDOWN_WARNING_COLOR } from './recording-countdown-ring';
 
 export const recordingOverlayTextShadow = {
   textShadow: '-2px -2px 0 #000, 2px -2px 0 #000, -2px 2px 0 #000, 2px 2px 0 #000, 0 3px 8px #000',
@@ -121,6 +124,10 @@ export function DebateVideoTile({
   status,
   reveal,
   chipsHidden = false,
+  stamps = false,
+  dimmed = false,
+  finalSeconds = false,
+  nextTurnName = null,
   children,
 }: {
   participantPosition: boolean | null;
@@ -159,23 +166,39 @@ export function DebateVideoTile({
    * the upper tile's chips are (GEO-3179).
    */
   chipsHidden?: boolean;
+  /**
+   * Open rounds (GEO-3315): draws the tile's moments in the stamps design the published player
+   * uses, rather than today's outlined phrases, which every fixed format keeps.
+   */
+  stamps?: boolean;
+  /** Stamps only: dims the picture under a moment that spans both tiles, like the pick and the reveal. */
+  dimmed?: boolean;
+  /** Stamps only: the speaker's last five seconds, when their outline turns warning red with the timer. */
+  finalSeconds?: boolean;
+  /** Stamps only: after you end your turn, whose turn it is now, on their tile. */
+  nextTurnName?: string | null;
   children: React.ReactNode;
 }) {
   const positionLabel = participantPosition === null ? null : responsePositionLabel(participantPosition);
   const showInactiveIndicator =
     showMutedIndicator || (inactive && !revealInactive && !countdown && !overlayText && !endingTurn);
+  const upcoming = upcomingSeconds !== null && upcomingSeconds !== undefined;
 
   return (
     <section
       aria-label={tileLabel}
       data-debate-video-position={participantPosition === null ? undefined : participantPosition ? 'yes' : 'no'}
       data-active-speaker={active ? 'true' : 'false'}
+      data-final-seconds={stamps && finalSeconds ? 'true' : undefined}
       className={cx(
         'relative aspect-[5/3] min-h-0 overflow-hidden rounded-lg bg-black shadow-card',
-        active && 'outline-[3px] outline-offset-0 outline-purple'
+        stamps && '@container',
+        active && 'outline-[3px] outline-offset-0',
+        active && (stamps && finalSeconds ? 'outline-red-01' : 'outline-purple')
       )}
     >
       <div className="absolute inset-0 z-0">{children}</div>
+      {stamps && <RoomDim on={dimmed || endingTurn || upcoming} />}
       {endTurnAction && <div className="absolute top-3 left-3 z-40">{endTurnAction}</div>}
       <div
         aria-hidden="true"
@@ -188,7 +211,10 @@ export function DebateVideoTile({
       >
         {showInactiveIndicator && <MutedMicrophoneIndicator />}
       </div>
-      {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+      {/* The count-in's number stamp is the countdown, so the timer steps aside for it. */}
+      {countdown && !(stamps && upcoming) && (
+        <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>
+      )}
 
       {/* One row rather than three corners, so nothing can end up underneath anything else.
           `1fr auto 1fr` rather than a flex row: the controls belong on the tile's centre line, and
@@ -231,65 +257,156 @@ export function DebateVideoTile({
         </div>
       )}
 
-      {closingMessage && (
-        <div
-          className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-center text-recordingLabel text-text"
-          style={recordingLabelTextShadow}
-        >
-          Nice debate!
-          <br />
-          Say thanks
-        </div>
+      {stamps ? (
+        // Each moment leaves as the next comes in, rather than cutting (`RoomExit`).
+        <>
+          <RoomExit exit="roll" className="z-30">
+            {closingMessage && (
+              <RoomMiddleBanner sizeCqw={5.6} data-room-banner="thanks">
+                Nice debate! Say thanks
+              </RoomMiddleBanner>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {endingTurn && (
+              <RoomTileStamp data-room-stamp="ended" ink={STAMP_INK.none} sizeCqw={9} tilt={ENDED_TILT}>
+                Turn ended
+              </RoomTileStamp>
+            )}
+          </RoomExit>
+
+          <RoomExit exit="roll" className="z-30">
+            {nextTurnName && (
+              // After the stamp on the tile that ended has landed, as in the mockup.
+              <RoomMiddleBanner sizeCqw={6} delayMs={600} data-room-banner="turn">
+                {nextTurnName}’s turn
+              </RoomMiddleBanner>
+            )}
+          </RoomExit>
+
+          <RoomExit exit="roll" className="z-30">
+            {upcoming && (
+              <>
+                <div className="absolute inset-x-0 top-[28%] -translate-y-1/2">
+                  <RoomBanner sizeCqw={6} data-room-banner="count-in">
+                    {upcomingLabel}
+                  </RoomBanner>
+                </div>
+                <div className="absolute top-[66%] left-1/2 -translate-x-1/2 -translate-y-1/2">
+                  {/* A fresh stamp for every number, so each lands in turn. */}
+                  <RoomStamp
+                    key={upcomingSeconds}
+                    data-room-stamp="count-in"
+                    ink="text-purple"
+                    sizeCqw={14}
+                    tilt="0deg"
+                  >
+                    {upcomingSeconds}
+                  </RoomStamp>
+                </div>
+              </>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {showGo && (
+              <RoomTileStamp data-room-stamp="go" ink="text-purple" sizeCqw={15} tilt="-3.2deg">
+                Go!
+              </RoomTileStamp>
+            )}
+          </RoomExit>
+
+          <RoomExit className="z-30">
+            {showWrapItUp && (
+              <RoomTileStamp
+                data-room-stamp="wrap-it-up"
+                sizeCqw={9}
+                tilt="-2deg"
+                style={{ color: COUNTDOWN_WARNING_COLOR }}
+              >
+                Wrap it up
+              </RoomTileStamp>
+            )}
+          </RoomExit>
+
+          <RoomExit exit="roll" className="z-30">
+            {showDebateEndsSoon && (
+              <RoomMiddleBanner sizeCqw={6.6} data-room-banner="ends-soon">
+                Debate ends soon
+              </RoomMiddleBanner>
+            )}
+          </RoomExit>
+
+          {/* The pick reveal's stamp fades as the round's banner rolls in. */}
+          <RoomExit className="z-[35]">{reveal}</RoomExit>
+        </>
+      ) : (
+        <>
+          {closingMessage && (
+            <div
+              className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center text-center text-recordingLabel text-text"
+              style={recordingLabelTextShadow}
+            >
+              Nice debate!
+              <br />
+              Say thanks
+            </div>
+          )}
+
+          {endingTurn && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+              style={recordingLabelTextShadow}
+            >
+              Ending turn…
+            </div>
+          )}
+
+          {upcomingSeconds !== null && upcomingSeconds !== undefined && (
+            <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center text-center">
+              <div className="text-recordingLabel text-text" style={recordingLabelTextShadow}>
+                {upcomingLabel}
+              </div>
+              <div
+                className="mt-1 text-[7.5rem] leading-[0.85] font-bold text-white"
+                style={recordingOverlayTextShadow}
+              >
+                {upcomingSeconds}
+              </div>
+            </div>
+          )}
+
+          {showGo && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 grid place-items-center text-center text-[7.5rem] leading-none font-bold text-white"
+              style={recordingOverlayTextShadow}
+            >
+              GO!
+            </div>
+          )}
+
+          {showWrapItUp && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+              style={recordingLabelTextShadow}
+            >
+              Wrap it up!
+            </div>
+          )}
+
+          {showDebateEndsSoon && (
+            <div
+              className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
+              style={recordingLabelTextShadow}
+            >
+              Debate ends soon
+            </div>
+          )}
+        </>
       )}
 
-      {endingTurn && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
-          style={recordingLabelTextShadow}
-        >
-          Ending turn…
-        </div>
-      )}
-
-      {upcomingSeconds !== null && upcomingSeconds !== undefined && (
-        <div className="pointer-events-none absolute inset-0 z-30 flex flex-col items-center justify-center text-center">
-          <div className="text-recordingLabel text-text" style={recordingLabelTextShadow}>
-            {upcomingLabel}
-          </div>
-          <div className="mt-1 text-[7.5rem] leading-[0.85] font-bold text-white" style={recordingOverlayTextShadow}>
-            {upcomingSeconds}
-          </div>
-        </div>
-      )}
-
-      {showGo && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center text-center text-[7.5rem] leading-none font-bold text-white"
-          style={recordingOverlayTextShadow}
-        >
-          GO!
-        </div>
-      )}
-
-      {showWrapItUp && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
-          style={recordingLabelTextShadow}
-        >
-          Wrap it up!
-        </div>
-      )}
-
-      {showDebateEndsSoon && (
-        <div
-          className="pointer-events-none absolute inset-0 z-30 grid place-items-center px-4 text-center text-recordingLabel text-text"
-          style={recordingLabelTextShadow}
-        >
-          Debate ends soon
-        </div>
-      )}
-
-      {reveal}
+      {!stamps && reveal}
 
       {overlayText && (
         <div
