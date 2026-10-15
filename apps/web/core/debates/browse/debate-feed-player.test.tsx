@@ -105,8 +105,8 @@ vi.mock('./debate-claim-ticker', () => ({
 // The Open rounds counter has its own suite; here it stands in so the player's wiring is what is
 // under test: which corner each format draws, and what it is handed.
 vi.mock('./debate-claim-counter', () => ({
-  DebateClaimCounter: ({ history, name, tileHovered }: { history: unknown[]; name: string; tileHovered: boolean }) => (
-    <div data-testid="claim-counter" data-count={history.length} data-name={name} data-hovered={tileHovered} />
+  DebateClaimCounter: ({ history, name }: { history: unknown[]; name: string }) => (
+    <div data-testid="claim-counter" data-count={history.length} data-name={name} />
   ),
 }));
 
@@ -2078,6 +2078,8 @@ describe('Open rounds in-app player: round labels, timer and claims (GEO-3314, G
     expect(timer(4, openRounds)?.getAttribute('data-turn-timer')).toBe('final');
     // A fixed format keeps today's timer.
     expect(timer(4, debate)?.getAttribute('data-turn-timer')).toBe('steady');
+    // Down to its ring, which jumps between samples as it always has rather than easing.
+    expect(timer(4, debate)?.innerHTML).not.toContain('turn-timer-rim]');
   });
 
   it('draws a claim counter in each corner from the start, and the live cards only in a fixed format', () => {
@@ -2103,24 +2105,8 @@ describe('turnTimerScale', () => {
   });
 });
 
-describe('Open rounds in-app player: hover and the last word (GEO-3317, GEO-3277)', () => {
+describe('Open rounds in-app player: the last word (GEO-3277)', () => {
   const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
-
-  it('opens a debater’s claims when the pointer is anywhere on their video', () => {
-    mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 12 });
-    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
-    const tile = container.querySelector('[data-debate-slot="1"]') as HTMLElement;
-    const counter = () => container.querySelector('[data-debate-slot="1"] [data-testid="claim-counter"]');
-
-    fireEvent.pointerEnter(tile, { pointerType: 'mouse' });
-    expect(counter()?.getAttribute('data-hovered')).toBe('true');
-    // The other debater's stays shut.
-    expect(
-      container.querySelector('[data-debate-slot="2"] [data-testid="claim-counter"]')?.getAttribute('data-hovered')
-    ).toBe('false');
-    fireEvent.pointerLeave(tile, { pointerType: 'mouse' });
-    expect(counter()?.getAttribute('data-hovered')).toBe('false');
-  });
 
   it('tags the last speaker before a pick "Last word", and no one else', () => {
     // Round 2's closing turn (index 3) ends at 120 s and an Extend pick follows it.

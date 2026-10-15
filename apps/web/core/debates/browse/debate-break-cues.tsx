@@ -17,6 +17,8 @@ import {
 } from '~/core/debates/playback-breaks';
 import { type TurnCount, roundLabel } from '~/core/debates/round-cues';
 
+import { BANNER_CLASS, LABEL_FONT, STAMP_CLASS, STAMP_FONT } from './stamp-styles';
+
 /** How long the banner takes to roll out, ending as the player cuts. Matches `--animate-debate-banner-out`. */
 const BREAK_BANNER_OUT_MS = 300;
 
@@ -160,22 +162,7 @@ const STAMP_TILT: Record<ParticipantSlot, string> = { 1: '-3.2deg', 2: '2.4deg' 
 const ENDED_TILT = '2deg';
 
 /** Shown, without a fade, from where a held animation starts: the mockup's dim and note appear at once. */
-const APPEAR = 'motion-safe:animate-[debateStampFade_1ms_linear_both]';
-
-/**
- * The stamps' shared look: Geist Bold on a solid white face, square-cornered, sized snugly around
- * the word. Sizes are in `em`, so a smaller stamp keeps the same proportions.
- */
-const STAMP_CLASS =
-  'rounded-[2px] border-[0.07em] border-current bg-white px-[0.4em] pt-[0.12em] pb-[0.1em] leading-[0.9] font-bold tracking-[0.02em] whitespace-nowrap uppercase shadow-[0_0.12em_0.45em_rgba(0,0,0,0.28)] motion-safe:animate-debate-stamp';
-const STAMP_FONT = { fontFamily: 'var(--font-geist-bold)' } as const;
-
-/** The banners' and the question's type: the recording timer's Geist. */
-export const LABEL_FONT = { fontFamily: 'var(--font-geist-medium)' } as const;
-
-/** A purple band across a box's width, the round and turn announcements. Sized where it is used. */
-export const BANNER_CLASS =
-  'w-full bg-purple px-[0.6em] py-[0.6em] text-center leading-none font-medium tracking-[0.04em] whitespace-nowrap text-white uppercase';
+const APPEAR = 'motion-safe:animate-[fadeIn_1ms_linear_both]';
 
 /**
  * The break between two Open rounds in a published debate (GEO-3277): the approved "stamps".
@@ -230,7 +217,7 @@ export function DebateBreakOverlay({
           <div
             data-debate-question
             // Down from twice its size, a touch past, and settled: the mockup's slam. Hidden until then.
-            className="text-[7cqw] leading-[1.1] font-medium tracking-[-0.01em] text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_24px_rgba(0,0,0,0.45)] motion-safe:animate-[debateSlam_500ms_linear_both,debateStampFade_1ms_linear_both]"
+            className="text-[7cqw] leading-[1.1] font-medium tracking-[-0.01em] text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.55),0_0_24px_rgba(0,0,0,0.45)] motion-safe:animate-debate-slam"
             style={{ ...LABEL_FONT, ...heldAt(BREAK_SETTLE_MS) }}
           >
             Keep debating?
@@ -245,7 +232,7 @@ export function DebateBreakOverlay({
             <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
               <span
                 data-debate-stamp={key}
-                className={cx(STAMP_CLASS, 'text-[12cqw]', STAMP_INK[key])}
+                className={cx(STAMP_CLASS, 'text-[12cqw] motion-safe:animate-debate-stamp', STAMP_INK[key])}
                 style={
                   {
                     ...STAMP_FONT,
@@ -316,7 +303,7 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
       <div className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center bg-black/42')}>
         <span
           data-debate-stamp="ended"
-          className={cx(STAMP_CLASS, 'border-dashed text-[9cqw] text-grey-04')}
+          className={cx(STAMP_CLASS, 'border-dashed text-[9cqw] text-grey-04 motion-safe:animate-debate-stamp')}
           style={{ ...STAMP_FONT, transform: `rotate(${ENDED_TILT})` }}
         >
           Ended early

@@ -1,3 +1,5 @@
+import { firstName } from '~/partials/profile/claim-response-tag';
+
 import type {
   Debate,
   DebateMediaResponse,
@@ -39,7 +41,7 @@ export const BREAK_QUESTION_MS = 800;
 export const BREAK_STAMP_GAP_MS = 280;
 
 /** When the banner wipes in after a pick: both stamps landed and settled. */
-export const BREAK_BANNER_AT_MS = BREAK_SETTLE_MS + BREAK_QUESTION_MS + 750;
+const BREAK_BANNER_AT_MS = BREAK_SETTLE_MS + BREAK_QUESTION_MS + 750;
 
 /**
  * How much of each break the player plays before cutting to what follows it: about two seconds,
@@ -54,7 +56,7 @@ export const BREAK_PLAYED_MS: Record<'lead_in' | 'extend' | 'final_end', number>
 
 /** A debater as the break graphics name them: their first name, which keeps the banner's opener line short. */
 export function breakFirstName(participant: Pick<DebateParticipant, 'display_name'> | null | undefined) {
-  return participant?.display_name?.trim().split(/\s+/)[0] || 'Debater';
+  return firstName(participant?.display_name) ?? 'Debater';
 }
 
 export type PlayerBreak = {
@@ -70,7 +72,7 @@ export type PlayerBreak = {
 };
 
 /** The quiet of an early end inside a round: from the last word of the turn that ended to the next speaker's first. */
-export type PlayerEarlyEnd = { turnIndex: number; nextTurnIndex: number; startMs: number; endMs: number };
+type PlayerEarlyEnd = { turnIndex: number; nextTurnIndex: number; startMs: number; endMs: number };
 
 export type PlaybackBreaks = {
   breaks: PlayerBreak[];
@@ -125,7 +127,8 @@ export function playbackBreaksFrom(
     });
   }
 
-  if (isOpenRoundsDebate(debate) && (debate.open_rounds.required_round_lead_in_ms ?? 0) > 0) {
+  // `debate` is Open rounds by now: the early return above saw to that.
+  if ((debate.open_rounds.required_round_lead_in_ms ?? 0) > 0) {
     const required = openRoundsRequiredRebuttalRounds(debate.open_rounds);
     for (const segment of segments) {
       const round = Math.floor(segment.turn_index / 2);
@@ -267,12 +270,6 @@ export function earlyEndCueAt(
 }
 
 /**
- * Whether the playhead is somewhere nobody holds a turn: a break, from its pick window on, or an
- * early end's quiet. Nothing there is meant to be heard or captioned. Mostly that is already so,
- * because these lie between turn segments; an older render's lead-in is the exception, kept at the
- * front of the next turn.
- */
-/**
  * The debater with the last word: the speaker of a round's closing turn when a pick follows it, for
  * as long as that turn runs. In the design mockup the player tags them "Last word" (GEO-3277).
  * `segments` on the player's clock.
@@ -289,6 +286,12 @@ export function lastWordSlotAt(
   return picked ? turn.participant_slot : null;
 }
 
+/**
+ * Whether the playhead is somewhere nobody holds a turn: a break, from its pick window on, or an
+ * early end's quiet. Nothing there is meant to be heard or captioned. Mostly that is already so,
+ * because these lie between turn segments; an older render's lead-in is the exception, kept at the
+ * front of the next turn.
+ */
 export function silentAt(breaks: PlaybackBreaks, playheadMs: number) {
   return (
     breaks.breaks.some(entry => playheadMs >= entry.decidingStartMs && playheadMs < entry.endMs) ||

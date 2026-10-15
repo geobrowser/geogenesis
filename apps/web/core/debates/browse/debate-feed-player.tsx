@@ -36,12 +36,13 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
-import { DebateBreakOverlay, DebateEarlyEndLabels, LABEL_FONT, useBreakCuts } from './debate-break-cues';
+import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
 import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { LABEL_FONT, STAMP_FONT, TAG_CLASS } from './stamp-styles';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -530,12 +531,8 @@ export function DebateFeedPlayer({
    * leave the corner stuck open behind them.
    */
   const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
-    if (event.pointerType !== 'mouse') return;
-    // An Open rounds counter opens its list while the pointer is anywhere on its debater's video.
-    if (stamped) {
-      setPointerOverSlot(current => (hovered ? slot : current === slot ? null : current));
-      return;
-    }
+    // An Open rounds counter answers to the pointer on itself, not the tile.
+    if (stamped || event.pointerType !== 'mouse') return;
     const clearSlot = (current: number | null) => (current === slot ? null : current);
 
     if (!hovered) {
@@ -619,7 +616,6 @@ export function DebateFeedPlayer({
         <DebateClaimCounter
           history={history}
           playheadMs={playheadMs}
-          tileHovered={pointerOverSlot === slot}
           name={breakNames[slot as 1 | 2]}
           rowsByClaimId={ticker.rowsByClaimId}
           entitiesByClaimId={ticker.entitiesByClaimId}
@@ -1037,8 +1033,8 @@ function DebaterVideo({
    * where it is applied below.
    */
   cardYield?: number;
-  /** How far the claim corner has stepped out from under the break's banner, 0–1. It stays while
-   * the viewer has its backlog open. */
+  /** How far the claim corner has stepped out from under a round banner, 0–1. A fixed format's
+   * backlog, held open, stays; an Open rounds counter steps out with its list. */
   claimsYield?: number;
   mutedByUser: boolean;
   isResuming: boolean;
@@ -1555,11 +1551,7 @@ function DebaterVideo({
                 <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
               )}
               {lastWord && (
-                <span
-                  data-last-word
-                  className="shrink-0 rounded-[2px] bg-purple px-[1.8cqw] py-[1cqw] text-[2.6cqw] leading-none font-medium tracking-[0.04em] text-white uppercase"
-                  style={LABEL_FONT}
-                >
+                <span data-last-word className={cx(TAG_CLASS, 'shrink-0 text-[2.6cqw] uppercase')} style={LABEL_FONT}>
                   Last word
                 </span>
               )}
@@ -1637,7 +1629,9 @@ function CountdownBadge({
       >
         <span
           className={cx(
-            'col-start-1 row-start-1 rounded-full transition-[--turn-timer-rim] duration-300 ease-linear',
+            'col-start-1 row-start-1 rounded-full',
+            // Smooth only for the Open rounds build-up; a fixed format's ring jumps as it always has.
+            buildUp && 'transition-[--turn-timer-rim] duration-300 ease-linear',
             final ? 'size-8' : 'size-7'
           )}
           style={
@@ -1651,7 +1645,7 @@ function CountdownBadge({
         />
         <span
           className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums"
-          style={final ? { fontFamily: 'var(--font-geist-bold)', fontWeight: 700 } : undefined}
+          style={final ? { ...STAMP_FONT, fontWeight: 700 } : undefined}
         >
           {whole}
         </span>

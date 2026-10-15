@@ -3,6 +3,7 @@ import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { ClaimTiming } from './claim-timing';
+import { RENDERED_TURN_SEGMENTS } from './open-rounds-media-fixtures';
 import type { DebateTranscriptClaims, TranscriptClaim } from './transcript-claims';
 import { useClaimTimings } from './use-claim-timings';
 
@@ -10,10 +11,14 @@ const transcript = vi.hoisted(() => ({
   calls: [] as { debateId: string; enabled: boolean }[],
   state: { data: undefined as unknown, isSuccess: false, isError: false },
   media: undefined as unknown,
+  mediaEnabled: [] as boolean[],
 }));
 
 vi.mock('./hooks', () => ({
-  useDebateMedia: () => ({ data: transcript.media, isPending: false, isLoading: false, error: null }),
+  useDebateMedia: (_id: string, enabled: boolean) => {
+    transcript.mediaEnabled.push(enabled);
+    return { data: transcript.media, isPending: false, isLoading: false, isSuccess: true, isError: false, error: null };
+  },
   useDebateTranscript: (debateId: string, _format: string, enabled: boolean) => {
     transcript.calls.push({ debateId, enabled });
     return transcript.state;
@@ -55,33 +60,14 @@ describe('useClaimTimings', () => {
     transcript.calls = [];
     transcript.state = { data: undefined, isSuccess: false, isError: false };
     transcript.media = undefined;
+    transcript.mediaEnabled = [];
   });
 
   // Timecodes published to the graph are the edited video's; the player plays the raw recordings,
   // so each is placed by the turn it falls in, from the turn's two served positions (GEO-3293).
   it('places each claim on the recordings the player plays, not the edited video', () => {
-    transcript.media = {
-      turn_segments: [
-        {
-          turn_index: 1,
-          participant_slot: 2,
-          output_start_ms: 60_000,
-          output_end_ms: 120_000,
-          duration_ms: 60_000,
-          source_start_ms: 60_000,
-          source_end_ms: 120_000,
-        },
-        {
-          turn_index: 2,
-          participant_slot: 1,
-          output_start_ms: 121_600,
-          output_end_ms: 166_600,
-          duration_ms: 45_000,
-          source_start_ms: 128_000,
-          source_end_ms: 173_000,
-        },
-      ],
-    };
+    // The Preston vs Adam render: turn 2 is at 121.6 s in the video and 128 s in the recordings.
+    transcript.media = { turn_segments: RENDERED_TURN_SEGMENTS };
     const { result } = renderHook(() =>
       useClaimTimings(
         'debate-1',
@@ -144,5 +130,15 @@ describe('useClaimTimings', () => {
     const { result } = renderHook(() => useClaimTimings('debate-1', claims([claim('a', published(0, 1_000))])));
 
     expect(result.current.isReady).toBe(true);
+  });
+
+  // The claims panel and activity rows read this for every debate. Only a published timecode needs
+  // the media, so a debate without one asks for nothing new.
+  it('asks for the media only when a claim carries a published timecode', () => {
+    renderHook(() => useClaimTimings('debate-1', claims([claim('a', null), claim('b', null)])));
+    expect(transcript.mediaEnabled.at(-1)).toBe(false);
+
+    renderHook(() => useClaimTimings('debate-1', claims([claim('a', published(0, 1_000)), claim('b', null)])));
+    expect(transcript.mediaEnabled.at(-1)).toBe(true);
   });
 });
