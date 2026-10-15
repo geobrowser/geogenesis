@@ -518,7 +518,7 @@ function TickerClaimHeader({
  * agreeing with a position were different acts; claims ask one question now, so there is one
  * glyph.
  *
- * `column` is the Open rounds claim list's vote column (GEO-3317): a round 24px target sized to the
+ * `column` is the claim counter's list's vote column (GEO-3317): a round 24px target sized to the
  * player, with a solid glyph that reads at that size, coloured once the reader takes a side.
  */
 export function ClaimIconButton({

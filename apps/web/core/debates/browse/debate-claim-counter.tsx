@@ -25,8 +25,8 @@ const OPEN_AFTER_MS = 150;
 const CLOSE_AFTER_MS = 250;
 
 /**
- * One debater's claims in an Open rounds debate (GEO-3317): a count rather than each claim's text
- * over the video.
+ * One debater's claims in the published player (GEO-3317, every format since GEO-3353): a count
+ * rather than each claim's text over the video.
  *
  * - The counter sits in the tile's bottom-right corner from the start, at 0.
  * - When a claim is said it goes up by one, and a "+1 claim" rises out of it and fades.
