@@ -3158,6 +3158,7 @@ function DebateRecordingModal({
       upcomingSeconds={localUpcomingSeconds}
       upcomingLabel={localUpcomingLabel}
       endingTurn={localEndingTurn}
+      turnEndedStamp={openRoundYieldHandsOver(debate, countdown.turnIndex)}
       endTurnAction={
         canEndLocalTurn || (endTurnPending && localEndingTurn) ? (
           <button
@@ -3890,6 +3891,16 @@ export function localTurnStartsInSeconds(
 function openRoundRunsStraightOn(debate: Debate, turnIndex: number | null) {
   if (turnIndex === null) return false;
   return openRoundLastWord(debate, turnIndex) === null && openRoundLeadInAfterTurn(debate, turnIndex) === 0;
+}
+
+/**
+ * Whether ending an Open rounds turn early hands over to the other speaker, the only yield geo-chat
+ * gives a handoff window. A round's second turn hands over to the pick, a required round's lead-in
+ * or the end, and its yield closes the moment the server accepts it, so a "Turn ended" stamp there
+ * would last a request's round trip and flicker (GEO-3347).
+ */
+function openRoundYieldHandsOver(debate: Debate, turnIndex: number | null) {
+  return turnIndex !== null && turnIndex % 2 === 0 && turnIndex + 1 < debate.turn_durations_ms.length;
 }
 
 function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {

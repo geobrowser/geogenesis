@@ -112,6 +112,7 @@ export function DebateVideoTile({
   showWrapItUp = false,
   showDebateEndsSoon = false,
   endingTurn = false,
+  turnEndedStamp = true,
   endTurnAction,
   inactive = false,
   revealInactive = false,
@@ -141,6 +142,11 @@ export function DebateVideoTile({
   showWrapItUp?: boolean;
   showDebateEndsSoon?: boolean;
   endingTurn?: boolean;
+  /**
+   * Stamps only: whether an ended turn is stamped "Turn ended". Only a turn that hands over to the
+   * other speaker is; any other yield closes as soon as it is accepted, so its tile just dims.
+   */
+  turnEndedStamp?: boolean;
   endTurnAction?: React.ReactNode;
   inactive?: boolean;
   revealInactive?: boolean;
@@ -199,21 +205,50 @@ export function DebateVideoTile({
     >
       <div className="absolute inset-0 z-0">{children}</div>
       {stamps && <RoomDim on={dimmed || endingTurn || upcoming} />}
-      {endTurnAction && <div className="absolute top-3 left-3 z-40">{endTurnAction}</div>}
-      <div
-        aria-hidden="true"
-        data-inactive-speaker={inactiveIndicatorId}
-        data-visible={showInactiveIndicator ? 'true' : 'false'}
-        className={cx(
-          'pointer-events-none absolute top-3 right-3 z-20',
-          showInactiveIndicator ? 'opacity-100' : 'opacity-0'
-        )}
-      >
-        {showInactiveIndicator && <MutedMicrophoneIndicator />}
-      </div>
-      {/* The count-in's number stamp is the countdown, so the timer steps aside for it. */}
-      {countdown && !(stamps && upcoming) && (
-        <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>
+      {stamps ? (
+        // Ending a turn hands the corner from the timer to the muted microphone and takes End turn
+        // away, so each fades rather than cutting (GEO-3347).
+        <>
+          <div className="absolute top-3 left-3 z-40">
+            <RoomExit layout="inline">
+              {endTurnAction && <div className="pointer-events-auto">{endTurnAction}</div>}
+            </RoomExit>
+          </div>
+          <div
+            aria-hidden="true"
+            data-inactive-speaker={inactiveIndicatorId}
+            data-visible={showInactiveIndicator ? 'true' : 'false'}
+            className="pointer-events-none absolute top-3 right-3 z-20"
+          >
+            <RoomExit layout="inline">
+              {showInactiveIndicator && (
+                <div className="motion-safe:animate-[fadeIn_300ms_linear_both]">
+                  <MutedMicrophoneIndicator />
+                </div>
+              )}
+            </RoomExit>
+          </div>
+          {/* The count-in's number stamp is the countdown, so the timer steps aside for it. */}
+          <div className="pointer-events-none absolute top-3 right-3 z-20">
+            <RoomExit layout="inline">{!upcoming && countdown}</RoomExit>
+          </div>
+        </>
+      ) : (
+        <>
+          {endTurnAction && <div className="absolute top-3 left-3 z-40">{endTurnAction}</div>}
+          <div
+            aria-hidden="true"
+            data-inactive-speaker={inactiveIndicatorId}
+            data-visible={showInactiveIndicator ? 'true' : 'false'}
+            className={cx(
+              'pointer-events-none absolute top-3 right-3 z-20',
+              showInactiveIndicator ? 'opacity-100' : 'opacity-0'
+            )}
+          >
+            {showInactiveIndicator && <MutedMicrophoneIndicator />}
+          </div>
+          {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
+        </>
       )}
 
       {/* One row rather than three corners, so nothing can end up underneath anything else.
@@ -269,7 +304,7 @@ export function DebateVideoTile({
           </RoomExit>
 
           <RoomExit className="z-30">
-            {endingTurn && (
+            {endingTurn && turnEndedStamp && (
               <RoomTileStamp data-room-stamp="ended" ink={STAMP_INK.none} sizeCqw={9} tilt={ENDED_TILT}>
                 Turn ended
               </RoomTileStamp>
