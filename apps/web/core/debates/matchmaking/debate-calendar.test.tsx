@@ -1295,7 +1295,8 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Claims' }));
 
     fireEvent.click(within(panel()).getByRole('button', { name: 'Any topic' }));
-    fireEvent.click((await within(panel()).findByText('Health')).closest('button')!);
+    // Options portal outside the panel so they can overlap its sticky controls.
+    fireEvent.click(await within(screen.getByRole('dialog')).findByRole('button', { name: /^Health/ }));
 
     const claims = within(panel()).getByRole('list', { name: 'Claims' });
     expect(within(claims).getByText('Homework does more harm than good')).toBeInTheDocument();
@@ -1305,7 +1306,7 @@ describe('DebateCalendar, People and Claims panel (GEO-3220)', () => {
 
     fireEvent.click(within(panel()).getByRole('tab', { name: /People/ }));
     fireEvent.click(within(panel()).getByRole('button', { name: 'Any topic' }));
-    fireEvent.click((await within(panel()).findByText('Education')).closest('button')!);
+    fireEvent.click(await within(screen.getByRole('dialog')).findByRole('button', { name: /^Education/ }));
 
     const people = within(panel()).getByRole('list', { name: 'People' });
     expect(within(people).getByRole('checkbox', { name: 'Elena' })).toBeInTheDocument();
