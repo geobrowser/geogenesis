@@ -48,7 +48,7 @@ import {
   otherLobbyIdFrom,
 } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
-import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
+import { carryLobbyMic, clearLobbyRejoin, consumeLobbyRejoin, forgetLobbyMic, registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
@@ -479,6 +479,7 @@ export function useLobbyPresence(
     if (!sentRef.current && !steppedOutAlready) return;
     lobbySteppedOut(lobbyId);
     rememberLobbyReturnDestination(lobbyId);
+    carryLobbyMic();
     // Only a press on the coming debate's end card may skip the stepped-out prompt.
     clearLobbyRejoin();
     if (!sentRef.current) return;
@@ -627,6 +628,7 @@ export function useLobbyPresence(
     return () => {
       window.removeEventListener('pagehide', close);
       lobbyPageUnmounted(lobbyId);
+      forgetLobbyMic();
     };
   }, [lobbyId]);
 

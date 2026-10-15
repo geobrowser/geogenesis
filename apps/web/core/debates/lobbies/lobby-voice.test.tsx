@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateLobbyVoiceToken } from '../api';
 import type { MemberLobbyPageView } from './lobby-view';
+import { carryLobbyMic, clearCarriedLobbyMic, forgetLobbyMic, readCarriedLobbyMic } from './step-out';
 
 const mocks = vi.hoisted(() => ({
   getDebateLobbyVoiceToken: vi.fn(),
@@ -201,6 +202,33 @@ describe('LobbyVoice', () => {
     expect(await screen.findByText('You’re listening')).toBeTruthy();
     expect(screen.queryByRole('button', { name: /mute/i })).toBeNull();
     expect(mocks.roomProps).toMatchObject({ audio: false });
+  });
+
+  // GEO-3336. A step-out from the server unmounts the voice before the route into the debate runs.
+  it('leaves its mic for the step-out to carry after it unmounts', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ start_muted: true }));
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    cleanup();
+    carryLobbyMic();
+    expect(readCarriedLobbyMic()).toBe(false);
+
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token());
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    cleanup();
+    carryLobbyMic();
+    expect(readCarriedLobbyMic()).toBe(true);
+    clearCarriedLobbyMic();
+    forgetLobbyMic();
+  });
+
+  it('gives a listener no mic to carry', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ can_publish: false }));
+    renderVoice(lobby('listener'));
+    expect(await screen.findByText('You’re listening')).toBeTruthy();
+    carryLobbyMic();
+    expect(readCarriedLobbyMic()).toBeNull();
   });
 
   // GEO-3134: LiveKit revokes publishing before the refetch brings the listener role.
