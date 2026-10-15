@@ -99,6 +99,12 @@ type EntityVoteButtonsProps = {
    * announcement is the better failure than none.
    */
   compact?: boolean;
+  /**
+   * Whether the control is close enough to the viewport to load its counts. A list that pre-mounts
+   * rows far below the fold passes its own proximity here; until it is true and nothing is cached,
+   * the control draws its loading skeleton rather than a zero.
+   */
+  nearViewport?: boolean;
 };
 
 /**
@@ -128,6 +134,7 @@ function EntityResponseButtons({
   claimResponderAvatarsPosition = 'leading',
   presentation = 'inline',
   compact = false,
+  nearViewport = true,
 }: EntityVoteButtonsProps) {
   const getContext = useActionContext('entity_vote_buttons', 'entity', entityId);
   const responseBatch = useClaimResponseBatchState();
@@ -201,7 +208,7 @@ function EntityResponseButtons({
     queryKey: entityResponseCountsQueryKey(entityId, spaceId, ENTITY_RESPONSE_OBJECT_TYPE, queryResponseKind),
     queryFn: () =>
       Effect.runPromise(getEntityResponseCounts(entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)),
-    enabled: !responseBatch.managed && !isResponseKindLoading && responseKind !== null,
+    enabled: nearViewport && !responseBatch.managed && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -219,7 +226,8 @@ function EntityResponseButtons({
         getUserEntityResponse(personalSpaceId, entityId, spaceId, queryResponseKind, ENTITY_RESPONSE_OBJECT_TYPE)
       );
     },
-    enabled: !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
+    enabled:
+      nearViewport && !responseBatch.managed && !!personalSpaceId && !isResponseKindLoading && responseKind !== null,
     staleTime: 30_000,
   });
 
@@ -451,7 +459,8 @@ function EntityResponseButtons({
     );
   };
 
-  if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading) {
+  const countsDeferred = !nearViewport && !responseBatch.managed && responseCounts === undefined;
+  if ((responseBatch.managed && !responseBatch.ready) || isResponseKindLoading || countsDeferred) {
     return <Skeleton className="h-5 w-16 shrink-0 rounded" />;
   }
 
