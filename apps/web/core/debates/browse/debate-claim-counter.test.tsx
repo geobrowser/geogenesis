@@ -292,4 +292,36 @@ describe('DebateClaimCounter (GEO-3317)', () => {
       width.mockRestore();
     }
   });
+
+  // Copilot, #2843: a press dragged off the counter and released outside left it thinking a press
+  // was still happening, so later keyboard focus no longer held the list open.
+  it('still holds open for the keyboard after a press released outside', () => {
+    const { container } = renderCounter([said('a', 1_000)], 30_000);
+    hover(counter(container));
+    act(() => vi.advanceTimersByTime(200));
+    fireEvent.pointerDown(counter(container));
+    leave(counter(container));
+
+    hover(counter(container));
+    act(() => vi.advanceTimersByTime(200));
+    fireEvent.focus(container.querySelector('[aria-label="Agree"]') as HTMLElement);
+    leave(counter(container));
+    act(() => vi.advanceTimersByTime(500));
+    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+  });
+
+  // Copilot, #2843: leaving after Hide let go of the dismissal while the hover was still running out
+  // its close delay, so the closed list came back for that moment.
+  it('stays closed as the pointer leaves after Hide', () => {
+    const { container } = renderCounter([said('a', 1_000)], 30_000);
+    hover(counter(container));
+    act(() => vi.advanceTimersByTime(200));
+    fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
+    expect(container.querySelector('[data-claim-list]')).toBeNull();
+
+    leave(counter(container));
+    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    act(() => vi.advanceTimersByTime(100));
+    expect(container.querySelector('[data-claim-list]')).toBeNull();
+  });
 });

@@ -107,6 +107,14 @@ export function DebateClaimCounter({
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [open]);
 
+  // A closed list lets go of its dismissal once the pointer and focus have both left, and drops the
+  // hover that was still running out its close delay with it: otherwise the list it closed would
+  // come back for that last moment.
+  const releaseDismissal = () => {
+    if (dismissed) setHovered(false);
+    setDismissed(false);
+  };
+
   const toggle = () => {
     if (open) {
       setPinned(false);
@@ -128,15 +136,20 @@ export function DebateClaimCounter({
       // a mouse that has moved on.
       onPointerEnter={event => event.pointerType === 'mouse' && setPointerOver(true)}
       onPointerLeave={event => {
+        // A press dragged off and released outside never reaches `onPointerUp` here.
+        pressing.current = false;
         if (event.pointerType !== 'mouse') return;
         setPointerOver(false);
         setPinned(false);
-        if (!keyboardInside) setDismissed(false);
+        if (!keyboardInside) releaseDismissal();
       }}
       onPointerDown={() => {
         pressing.current = true;
       }}
       onPointerUp={() => {
+        pressing.current = false;
+      }}
+      onPointerCancel={() => {
         pressing.current = false;
       }}
       // Keyboard focus anywhere inside (the counter, a vote, See all) holds the list open, so the
@@ -149,7 +162,7 @@ export function DebateClaimCounter({
         // A keyboard user tabbing away takes their pin with them; a touch pin stays until tapped.
         if (keyboardInside) setPinned(false);
         setKeyboardInside(false);
-        if (!pointerOver) setDismissed(false);
+        if (!pointerOver) releaseDismissal();
       }}
     >
       {open && (
