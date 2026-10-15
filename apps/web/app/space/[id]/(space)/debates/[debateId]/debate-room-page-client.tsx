@@ -2204,6 +2204,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         }
       }
       idleExitRef.current = null;
+      // Leave pressed while that save ran is the newer choice, and makes its own way out.
+      if (rematchLeaveRequestedRef.current) return;
       await go();
     },
     [holdsUnsavedRecording, persistStoppedLocalRecording]
@@ -2417,7 +2419,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         disconnectRoom(roomRef, localTracksRef, localVideoRef, remoteMediaRef);
         localMediaStreamRef.current = null;
         setRoomState('idle');
-      } else if (debate.status === 'complete') {
+      } else if (debate.status === 'complete' || debate.status === 'thanking') {
+        // The debate is over, with no live session to opt out of: save and go, as the automatic
+        // exit does. Before GEO-3301 a thanking debate fell through to the mid-debate branch below,
+        // which discards the recording and aborts the debate; with the room now leaving on an ended
+        // session, a failed save there put Leave one press from losing the recording. Cleared as
+        // Retry save clears it: the automatic exit marks the debate finalized before its save, and
+        // a save that failed would otherwise leave this press doing nothing.
+        finalizedDebateRef.current = null;
         await finishLiveDebate({ allowDuringThankYou: true });
         return;
       } else if (debate.status === 'cancelled') {

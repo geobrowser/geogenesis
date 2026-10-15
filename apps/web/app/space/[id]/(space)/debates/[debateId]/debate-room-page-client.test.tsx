@@ -4521,6 +4521,73 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.enqueueRecording.mock.invocationCallOrder[1]).toBeLessThan(mocks.back.mock.invocationCallOrder[0]!);
   });
 
+  // Copilot on #2853: Leave on a debate still thanking, with the session ended, fell through to the
+  // mid-debate branch, which discards the recording and aborts the debate.
+  it('saves rather than aborts when Leave follows a failed save on an ended session, still thanking', async () => {
+    setHistoryLength(2);
+    mocks.enqueueRecording.mockRejectedValueOnce(new Error('Storage unavailable'));
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    mocks.debate = {
+      ...completedDebate(),
+      status: 'thanking',
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: null,
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('ended', { localConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await screen.findByRole('button', { name: 'Retry save' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Leave debate' }));
+
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(mocks.enqueueRecording).toHaveBeenCalledTimes(2);
+    expect(mocks.abortMutateAsync).not.toHaveBeenCalled();
+  });
+
+  // Copilot on #2853: an idle tab's way to the picker ran on after its save even when Leave had
+  // been pressed while the save was pending, so the picker overrode the viewer's choice.
+  it('lets Leave pressed during an idle tab’s pending save win over the move to the picker', async () => {
+    setHistoryLength(2);
+    const persistence = deferred<void>();
+    mocks.enqueueRecording.mockReturnValue(persistence.promise);
+    installRecordingMocks();
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:15.000Z'));
+    const view = await renderLiveDebate();
+    await waitFor(() => expect(mocks.mediaRecorderStart).toHaveBeenCalled());
+    act(() => emitRoomEvent('disconnected', 99));
+
+    vi.mocked(Date.now).mockReturnValue(Date.parse('2026-07-02T00:00:25.000Z'));
+    mocks.debate = {
+      ...completedDebate(),
+      turn_started_at: '2026-07-02T00:00:20.000Z',
+      turn_ends_at: '2026-07-02T00:00:40.000Z',
+      completed_at: '2026-07-02T00:00:25.000Z',
+      rematch_session_id: 'rematch-1',
+    };
+    mocks.rematch = rematchSession('browsing', { localConsented: true, remoteConsented: true });
+    view.rerender(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+    await waitFor(() => expect(mocks.enqueueRecording).toHaveBeenCalledOnce());
+
+    // The dropped call keeps the room up to say so, with its own Leave.
+    fireEvent.click(await screen.findByRole('button', { name: 'Leave debate' }));
+    await act(async () => {
+      persistence.resolve();
+      await persistence.promise;
+    });
+
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    // The move to the picker claims the next step asynchronously; give it time to land if it ran.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 600));
+    });
+    expect(mocks.replace).not.toHaveBeenCalledWith('/space/space-1/debates/rematches/rematch-1');
+  });
+
   // Copilot on #2853: a tab that never held the call (reloaded, or another tab had the room) has no
   // recording to save, so finalizing there failed for good and stranded it on a save error.
   it('sends an idle tab back when the session ended, without trying to save a recording', async () => {
