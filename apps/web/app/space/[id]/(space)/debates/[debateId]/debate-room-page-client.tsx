@@ -277,6 +277,15 @@ const debateThankingDurationMs = 20_000;
 // clients can record their automatic consent before the server closes the session at that same
 // boundary; the room itself stays visible until the countdown reaches zero.
 const rematchAutoConsentLeadSeconds = 5;
+
+/**
+ * Whether a Let's go consent seen now was someone pressing it. In the last
+ * `rematchAutoConsentLeadSeconds` the page consents on the viewer's behalf, and `consented_at`
+ * does not say which kind a consent was, so only one seen before then is known to be a press.
+ */
+function debateAgainConsentIsPressed(countdown: Pick<DebateCountdown, 'effectiveStatus' | 'remainingSeconds'>) {
+  return countdown.effectiveStatus === 'thanking' && countdown.remainingSeconds > rematchAutoConsentLeadSeconds;
+}
 const debatePreflightDurationMs = 5_000;
 const connectionFailureRedirectDelayMs = 750;
 const maximumBrowserTimeoutMs = 2_147_483_647;
@@ -775,13 +784,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * necessarily two people who reached for the button.
    *
    * Inside the lead window the room still sits out the rest of the countdown. Either consent there
-   * may be the automatic one, `consented_at` does not say which, and leaving on it would both cut
-   * the last seconds off every debate and walk out on a debater who never asked to go anywhere.
+   * may be the automatic one (see {@link debateAgainConsentIsPressed}), and leaving on it would both
+   * cut the last seconds off every debate and walk out on a debater who never asked to go anywhere.
    */
-  const bothPressedDebateAgain =
-    countdown.effectiveStatus === 'thanking' &&
-    countdown.remainingSeconds > rematchAutoConsentLeadSeconds &&
-    liveRematchDestination !== null;
+  const bothPressedDebateAgain = debateAgainConsentIsPressed(countdown) && liveRematchDestination !== null;
 
   // A completed debate with a live rematch session is a dead end while the room is idle:
   // DebateCoordinator defers to this page so the recording finalizes first, but finalization only
@@ -3175,7 +3181,8 @@ function DebateRecordingModal({
           ? { kind: 'round', round: reveal.result.round }
           : { kind: reveal.result.kind },
       sayThanks: thankingSlot !== null && thankingSlot === localSlot,
-      remoteReady: countdown.effectiveStatus === 'thanking' && remoteConsented,
+      // The automatic consent near the end is nobody pressing anything, so it stays quiet.
+      remoteReady: debateAgainConsentIsPressed(countdown) && remoteConsented,
     },
     playSound
   );

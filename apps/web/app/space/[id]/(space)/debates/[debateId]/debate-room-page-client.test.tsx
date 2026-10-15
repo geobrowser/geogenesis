@@ -31,6 +31,7 @@ import { DebateRoomPageClient, isDebateInThankYouPeriod, upcomingTurnLabel } fro
 
 const mocks = vi.hoisted(() => ({
   currentUserId: 'user-a',
+  playSound: vi.fn(),
   prefetchAllowlist: vi.fn(),
   warmRelatedClaims: vi.fn(),
   back: vi.fn(),
@@ -357,6 +358,12 @@ vi.mock('~/core/debates/use-prefetch-claim-space-allowlist', () => ({
 // The same arrangement, for the same reason: the room warms this one too and reads nothing back, so
 // the only question here is whether it asks — with the claim being argued, and only once the debate
 // is actually under way. Its real implementation wants a sync engine this suite does not stand up.
+// The real engine needs Web Audio and WebRTC, which jsdom lacks; the room's cues are what is tested.
+vi.mock('~/core/debates/room-sound-effects', async importOriginal => ({
+  ...(await importOriginal<typeof import('~/core/debates/room-sound-effects')>()),
+  useRoomSoundEffects: () => mocks.playSound,
+}));
+
 vi.mock('~/core/debates/use-related-debate-claims', () => ({
   useRelatedDebateClaims: (options: unknown) => {
     mocks.warmRelatedClaims(options);
@@ -366,6 +373,7 @@ vi.mock('~/core/debates/use-related-debate-claims', () => ({
 
 beforeEach(() => {
   mocks.currentUserId = 'user-a';
+  mocks.playSound.mockReset();
   mocks.publishOptOutOffer = { debateId: null, busy: false, cancelled: false };
   mocks.setPublishOptOutRequest.mockReset();
   mocks.prefetchAllowlist.mockReset();
@@ -5280,7 +5288,7 @@ describe('DebateRoomPageClient', () => {
   });
 
   // GEO-3319. The room's moments have sound effects in Open rounds, which a debater can turn off.
-  describe('open rounds sound effects toggle', () => {
+  describe('open rounds sound effects', () => {
     const soundToggle = () => screen.queryByRole('button', { name: /Turn sound effects (on|off)/ });
 
     it('sits beside Leave, on by default, and remembers being turned off', async () => {
@@ -5303,6 +5311,25 @@ describe('DebateRoomPageClient', () => {
       fireEvent.click(toggle);
       expect(screen.getByRole('button', { name: 'Turn sound effects on' })).toBeInTheDocument();
       expect(values.get('geogenesis.debates.room-sound-effects.v1')).toBe('off');
+    });
+
+    // Thanking runs to the fixture's turn_ends_at, 20:03:08; the room consents for each debater
+    // in its last five seconds.
+    it("plays the ready cue when the other debater presses Let's go", async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:12.000'));
+      mocks.rematch = rematchSession('deciding', { remoteConsented: true });
+      await renderLiveDebate(openRoundsThankingAfterEnd());
+
+      await waitFor(() => expect(mocks.playSound).toHaveBeenCalledWith('ready'));
+    });
+
+    it("stays quiet for the other debater's automatic consent in the last seconds", async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:03:05.000'));
+      mocks.rematch = rematchSession('deciding', { remoteConsented: true });
+      await renderLiveDebate(openRoundsThankingAfterEnd());
+
+      await waitFor(() => expect(screen.getByRole('button', { name: /Let's go!|Waiting/ })).toHaveTextContent('0:03'));
+      expect(mocks.playSound).not.toHaveBeenCalledWith('ready');
     });
 
     it('is not offered in a fixed format, which stays silent', async () => {

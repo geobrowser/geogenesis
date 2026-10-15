@@ -233,7 +233,9 @@ export type RoomSoundEngine = {
 async function loopback(stream: MediaStream): Promise<{ stream: MediaStream; close: () => void }> {
   const sender = new RTCPeerConnection();
   const receiver = new RTCPeerConnection();
+  let timeout: ReturnType<typeof setTimeout> | undefined;
   const close = () => {
+    clearTimeout(timeout);
     sender.close();
     receiver.close();
   };
@@ -244,11 +246,13 @@ async function loopback(stream: MediaStream): Promise<{ stream: MediaStream; clo
     receiver.onicecandidate = event => {
       if (event.candidate) void sender.addIceCandidate(event.candidate).catch(() => undefined);
     };
-    let timeout: ReturnType<typeof setTimeout> | undefined;
     const received = new Promise<MediaStream>((resolve, reject) => {
       receiver.ontrack = event => resolve(event.streams[0] ?? new MediaStream([event.track]));
       timeout = setTimeout(() => reject(new Error('Sound effect loopback timed out.')), 5_000);
-    }).finally(() => clearTimeout(timeout));
+    });
+    // Handled here as well as awaited below: a negotiation step that throws first leaves this
+    // promise unawaited, and its timeout must not surface as an unhandled rejection.
+    received.catch(() => undefined);
     for (const track of stream.getAudioTracks()) sender.addTrack(track, stream);
     const offer = await sender.createOffer();
     await sender.setLocalDescription(offer);
@@ -256,7 +260,9 @@ async function loopback(stream: MediaStream): Promise<{ stream: MediaStream; clo
     const answer = await receiver.createAnswer();
     await receiver.setLocalDescription(answer);
     await sender.setRemoteDescription(answer);
-    return { stream: await received, close };
+    const looped = await received;
+    clearTimeout(timeout);
+    return { stream: looped, close };
   } catch (error) {
     close();
     throw error;
