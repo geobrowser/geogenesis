@@ -203,3 +203,34 @@ describe('against the rendered segments', () => {
     expect(turnSpansFromSegments([late, early]).map(span => span.slot)).toEqual([1, 2]);
   });
 });
+
+// GEO-3277. Open rounds has no closing round: every round after the opening is a rebuttal, however
+// many there were, so the cues take each turn's role from the debate instead of counting turns.
+describe('round cues for Open rounds', () => {
+  const openRoundsRoles = (turnIndex: number) => (turnIndex < 2 ? 'opening' : 'rebuttal') as 'opening' | 'rebuttal';
+
+  it('calls every round after the opening a rebuttal, never a closing', () => {
+    expect(roundLabel(0, openRoundsRoles)).toBe('Round 1 · Opening');
+    expect(roundLabel(4, openRoundsRoles)).toBe('Round 3 · Rebuttal');
+    expect(roundLabel(4, 6)).toBe('Round 3 · Closing');
+    const spans = [0, 1, 2, 3, 4, 5].map(index => ({
+      index,
+      slot: (index % 2 === 0 ? 1 : 2) as 1 | 2,
+      startSeconds: index * 45,
+      endSeconds: (index + 1) * 45,
+    }));
+    expect(roundCardAt(spans, openRoundsRoles, 180.5)?.label).toBe('Round 3 · Rebuttal');
+    expect(roundBadgeAt(spans, openRoundsRoles, 200)?.label).toBe('Round 3 · Rebuttal');
+  });
+
+  it('skips the card for a round something else already announced', () => {
+    const spans = [0, 1, 2, 3].map(index => ({
+      index,
+      slot: (index % 2 === 0 ? 1 : 2) as 1 | 2,
+      startSeconds: index * 45,
+      endSeconds: (index + 1) * 45,
+    }));
+    expect(roundCardAt(spans, 4, 90.5, round => round === 1)).toBeNull();
+    expect(roundCardAt(spans, 4, 0.5, round => round === 1)?.label).toBe('Round 1 · Opening');
+  });
+});

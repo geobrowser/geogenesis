@@ -174,15 +174,15 @@ describe('DebateGatewayClient', () => {
     expect(invalidateQueries.mock.calls).toEqual(
       expect.arrayContaining([
         [
-          { queryKey: ['debates', 'media', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'media', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
-          { queryKey: ['debates', 'detail', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'detail', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
-          { queryKey: ['debates', 'transcript', 'debate-1'], refetchType: 'active' },
+          { queryKey: ['debates', 'transcript', 'debate1'], refetchType: 'active' },
           { throwOnError: true, cancelRefetch: false },
         ],
         [
@@ -207,7 +207,7 @@ describe('DebateGatewayClient', () => {
       'state',
       { event_type: 'debate.state_changed', payload: { debate_id: 'debate-1', space_id: 'space-1' } },
       [
-        ['debates', 'detail', 'debate-1'],
+        ['debates', 'detail', 'debate1'],
         ['debates', 'space', 'space-1'],
         ['debates', 'account', 'user-a', 'activity'],
         ['debates', 'account', 'user-a', 'profile'],

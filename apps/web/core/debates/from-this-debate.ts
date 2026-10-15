@@ -23,6 +23,11 @@ export type FromThisDebateClaim = {
   id: string;
   text: string;
   turnIndex: number;
+  /**
+   * The room turn it was said in (GEO-3325), which rounds are drawn from; null where geo-chat could
+   * not place it, or on a read from before it did.
+   */
+  roomTurnIndex: number | null;
   /** Where in the debate it was said, in ms from the start; null on payloads without timings. */
   startMs: number | null;
   /** Who said it, from the turn the claim was extracted from. */
@@ -43,6 +48,10 @@ function trimmedId(value: unknown): string | null {
 
 function startMsOf(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function roomTurnIndexOf(value: unknown): number | null {
+  return typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 }
 
 /**
@@ -101,6 +110,7 @@ export function fromThisDebateCandidates(
         id,
         text,
         turnIndex: claim.turn_index,
+        roomTurnIndex: roomTurnIndexOf(claim.room_turn_index),
         startMs: said.startMs,
         speakerName: turn?.speaker_name?.trim() || null,
         speakerSpaceId: turn?.attributed_space_id || null,
@@ -184,12 +194,13 @@ export type FromThisDebateRound<T> = { key: number; label: string | null; items:
  * Sorted here rather than trusted from the list, which is append-only (D4) and so puts a claim the
  * final pass found late after everything already listed, whatever turn it came from.
  *
- * A claim's `turnIndex` counts runs of one speaker's transcribed speech, not the room's turns:
- * geo-chat numbers a new turn each time the speaker changes, skipping silence. A turn nobody spoke
- * in merges the turns either side of it, and every round after it would be labelled one early. So
- * rounds are drawn only when the transcript has exactly as many turns as the room ran
- * (`roomTurnCount`); otherwise the list comes back as one unlabelled stretch, still in order. Equal
- * counts can still hide a silent turn offset by crosstalk, which only geo-chat could tell apart.
+ * Rounds come from each claim's `roomTurnIndex`, the room turn geo-chat placed it in (GEO-3325),
+ * whenever every claim listed has one. Otherwise they fall back to `turnIndex`, which counts runs of
+ * one speaker's transcribed speech, not the room's turns: geo-chat numbers a new turn each time the
+ * speaker changes, skipping silence. A turn nobody spoke in merges the turns either side of it, and
+ * every round after it would be labelled one early. So on that fallback rounds are drawn only when
+ * the transcript has exactly as many turns as the room ran (`roomTurnCount`); otherwise the list
+ * comes back as one unlabelled stretch, still in order.
  *
  * Rounds are named the way the room named them ("Round 2 · Rebuttal"). An Open rounds debate runs
  * as many rounds as the pair unlock, so the format's names do not apply there and its rounds are
@@ -204,16 +215,24 @@ export function groupFromThisDebateByRound<T>(
     numberedOnly,
   }: { roomTurnCount: number; extractedTurnCount: number; numberedOnly: boolean }
 ): FromThisDebateRound<T>[] {
-  const sorted = items
-    .map((item, order) => ({ item, claim: claimOf(item), order }))
-    .sort((a, b) => compareWhenSaid(a.claim, b.claim) || a.order - b.order);
-  if (sorted.length === 0) return [];
-  if (roomTurnCount <= 0 || extractedTurnCount !== roomTurnCount) {
+  const claims = items.map((item, order) => ({ item, claim: claimOf(item), order }));
+  if (claims.length === 0) return [];
+  const placed = claims.every(({ claim }) => claim.roomTurnIndex !== null);
+  const sorted = claims
+    .map(entry => ({
+      ...entry,
+      said: {
+        turnIndex: placed ? (entry.claim.roomTurnIndex ?? 0) : entry.claim.turnIndex,
+        startMs: entry.claim.startMs,
+      },
+    }))
+    .sort((a, b) => compareWhenSaid(a.said, b.said) || a.order - b.order);
+  if (roomTurnCount <= 0 || (!placed && extractedTurnCount !== roomTurnCount)) {
     return [{ key: -1, label: null, items: sorted.map(({ item }) => item) }];
   }
   const rounds: FromThisDebateRound<T>[] = [];
-  for (const { item, claim } of sorted) {
-    const key = openRoundIndexForTurn(claim.turnIndex);
+  for (const { item, said } of sorted) {
+    const key = openRoundIndexForTurn(said.turnIndex);
     let round = rounds[rounds.length - 1];
     if (!round || round.key !== key) {
       const firstTurn = key * 2;

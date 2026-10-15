@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   backfill: vi.fn(),
   openClaim: vi.fn(),
   rootSelectors: [] as (string | undefined)[],
+  watchLive: true,
   indexed: null as 'positive' | 'negative' | null,
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
@@ -36,6 +37,14 @@ vi.mock('~/core/hooks/use-near-viewport', async importOriginal => {
     },
   };
 });
+
+// Live watching is off in the product (GEO-3334). On here so the pill's own behaviour stays covered
+// for when it ships; the off state has its own test.
+vi.mock('../watch-live', () => ({
+  get WATCH_LIVE_ENABLED() {
+    return mocks.watchLive;
+  },
+}));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.snapshot,
@@ -84,6 +93,7 @@ afterEach(() => {
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
   mocks.indexed = null;
   mocks.rootSelectors = [];
+  mocks.watchLive = true;
 });
 
 function person(name: string): DebateParticipantSummary {
@@ -237,6 +247,15 @@ describe('LobbyRoomClaimsList', () => {
     render(<LobbyRoomClaimsList claims={[offered]} renderOffer={renderOffer} />);
     expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
+  });
+
+  it('draws no Watch live while live watching is off, leaving the spacer', () => {
+    mocks.watchLive = false;
+    const live = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)]), activeDebate: true };
+    render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} />);
+
+    expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
+    expect(screen.getByTestId('card-end').querySelector('span[aria-hidden]')).toBeTruthy();
   });
 
   describe('a host menu', () => {

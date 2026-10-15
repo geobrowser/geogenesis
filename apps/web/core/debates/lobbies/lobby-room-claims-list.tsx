@@ -23,6 +23,7 @@ import { trustedIndexedPosition, useBackfillReadinessForHeldPosition } from '../
 import { HubCardList } from '../matchmaking/hub-motion';
 import { useHubScrollSelector } from '../matchmaking/hub-scroll';
 import { MatchmakingClaimCard, isResolvableClaim } from '../matchmaking/matchmaking-claim-card';
+import { WATCH_LIVE_ENABLED } from '../watch-live';
 import { hostsLabel, personName } from './lobby-format';
 import { useIsLobbyGuest } from './lobby-guest-hooks';
 
@@ -156,9 +157,10 @@ export function LobbyRoomClaimCard({
       : null;
   const openClaim = useOpenClaimInSidePanel();
   const menu = renderMenu?.(entry);
-  const watch = entry.activeDebate ? (
-    <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
-  ) : null;
+  const watch =
+    WATCH_LIVE_ENABLED && entry.activeDebate ? (
+      <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
+    ) : null;
   // On Explore the offer rides on the room line.
   const action = explore ? watch : (offer ?? watch);
 
