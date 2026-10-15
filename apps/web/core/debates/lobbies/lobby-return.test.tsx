@@ -25,7 +25,6 @@ vi.mock('./hooks', () => ({
 }));
 
 const { BackToLobbyRow, useConsumeDebateReturnDestination } = await import('./lobby-return');
-const { consumeLobbyRejoin } = await import('./step-out');
 
 const member = (id: string, stepped_out = false): DebateLobbyMember => ({
   user_id: id,
@@ -52,7 +51,6 @@ const notInALobby: DebateMyLobby = { current_lobby_id: null, stepped_out: false 
 
 beforeEach(() => {
   clearDebateReturnDestination();
-  consumeLobbyRejoin('');
   mocks.lobby = admitted();
   mocks.useDebateLobby.mockClear();
   mocks.mine = { data: undefined, isError: false };
@@ -137,21 +135,6 @@ describe('useConsumeDebateReturnDestination', () => {
     expect(consume()).toBe('/debate/lobby1');
   });
 
-  // GEO-3337: every exit back to the lobby drops the viewer into the room, not onto a prompt.
-  it('has the lobby it returns to join again on arrival', () => {
-    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
-    consume();
-    expect(consumeLobbyRejoin('lobby1')).toBe(true);
-  });
-
-  it('asks no lobby to rejoin when the flow returns elsewhere', () => {
-    rememberDebateReturnDestination('/space/my-space');
-    mocks.mine = { data: notInALobby, isError: false };
-    consume();
-    expect(consumeLobbyRejoin('my-space')).toBe(false);
-    expect(window.sessionStorage.getItem('geo.debates.lobby-rejoin')).toBeNull();
-  });
-
   it('drops this tab’s lobby once geo-chat says the viewer is in none', () => {
     rememberLobbyReturnDestination('lobby1');
     mocks.mine = { data: notInALobby, isError: false };
@@ -168,7 +151,6 @@ describe('useConsumeDebateReturnDestination', () => {
     rememberLobbyReturnDestination('lobby1');
     mocks.mine = { data: undefined, isError: true };
     expect(consume()).toBe('/debate/lobby1');
-    expect(consumeLobbyRejoin('lobby1')).toBe(true);
     expect(consume()).toBeNull();
   });
 });

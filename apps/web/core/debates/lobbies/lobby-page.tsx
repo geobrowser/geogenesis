@@ -21,6 +21,7 @@ import { hubAnalyticsAttributes } from '../matchmaking/hub-analytics';
 import { HubHeaderControls } from '../matchmaking/hub-header-controls';
 import { HubPillButton, hubPillClassName } from '../matchmaking/hub-pill-button';
 import { HUB_SCROLL_SELECTOR, HubScrollSelectorProvider } from '../matchmaking/hub-scroll';
+import { sameId } from '../rooms/room-presence';
 import { debateRoomPath } from '../rooms/room-routes';
 import { useCurrentGeoChatUserId } from '../use-current-geo-chat-user-id';
 import { useScrollLock } from '../use-scroll-lock';
@@ -96,7 +97,6 @@ export const LOBBY_COPY = {
   oneLobby: (name: string) => `You can be in one lobby at a time. Joining ${name} will leave it.`,
   scheduled: 'Debate lobby · scheduled',
   guestBeforeOpen: 'No account? You can still join and listen when it opens.',
-  steppedOut: 'You stepped out to debate. You’re still on the roster.',
   movedToOther: (name: string | null) => `You joined ${name ?? 'another lobby'} in another tab.`,
   guestRemoved: LOBBY_STATE_COPY.removed,
   guestRemovedInvite: 'Create an account to come back and take part.',
@@ -130,12 +130,19 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   const lobby: LobbyPageView | null = guest ? guestLobby : memberLobby;
   const memberViewer = lobby && isMemberView(lobby) ? lobby.viewer : null;
   const admitted = lobby?.access.status === 'admitted';
+  const currentUserId = useCurrentGeoChatUserId();
+  // Their own roster row; geo-chat keeps `stepped_out` for a while after the debate ends.
+  const debating =
+    memberViewer !== null &&
+    currentUserId !== null &&
+    (lobby?.members.some(member => member.in_debate && sameId(member.user_id, currentUserId)) ?? false);
   const presence = useLobbyPresence(
     lobbyId,
     admitted && !guest,
     memberViewer?.stepped_out ?? false,
     memberViewer?.connected ?? false,
-    memberViewer?.removed ?? false
+    memberViewer?.removed ?? false,
+    debating
   );
   const guestSession = useLobbyGuestSession(lobbyId, {
     listen: signedOut && admitted,
@@ -809,20 +816,8 @@ function LobbyPhoneTabs({
   );
 }
 
-/** Stepped out, a failed join, or joining: above the people, where the room would be. */
+/** A failed join, or joining: above the people, where the room would be. */
 function LobbyRoomStatus({ state, onRetry }: { state: LobbyPresenceState; onRetry: () => void }) {
-  if (state.status === 'stepped_out') {
-    return (
-      <div className="flex flex-wrap items-center gap-2">
-        <Text as="p" variant="footnote" color="text">
-          {LOBBY_COPY.steppedOut}
-        </Text>
-        <HubPillButton variant="primary" analyticsLabel="Lobby back to the room" onClick={onRetry}>
-          Back to the room
-        </HubPillButton>
-      </div>
-    );
-  }
   if (state.status === 'failed') {
     return (
       <div className="flex items-center gap-2">

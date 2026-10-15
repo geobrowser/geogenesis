@@ -48,7 +48,7 @@ import {
   otherLobbyIdFrom,
 } from './lobby-format';
 import { readGuestSecret } from './lobby-guest-secret';
-import { clearLobbyRejoin, consumeLobbyRejoin, registerLobbyStepOut } from './step-out';
+import { registerLobbyStepOut } from './step-out';
 
 /** The lease is 120s server-side; a throttled background tab beating once a minute stays in. */
 export const LOBBY_HEARTBEAT_MS = 15_000;
@@ -312,7 +312,7 @@ export type LobbyPresenceState =
   | { status: 'confirm_leave_other'; otherLobbyId: string | null; rejoin?: true }
   /** Joined another lobby from another tab, which dropped this one; no automatic rejoin. */
   | { status: 'moved'; otherLobbyId: string | null }
-  /** Left to debate, still on the roster; "Back to the room" joins again. */
+  /** Out debating from another tab, still on the roster; joins again once the debate is over. */
   | { status: 'stepped_out' }
   /** Taken out by the server; the refetched access says the rest. */
   | { status: 'dropped'; reason: 'ended' | 'banned' | 'removed' }
@@ -328,7 +328,9 @@ export function useLobbyPresence(
   admitted: boolean,
   steppedOut = false,
   connected = false,
-  removed = false
+  removed = false,
+  /** The viewer's own roster row says they are in a debate. */
+  debating = false
 ) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -479,8 +481,6 @@ export function useLobbyPresence(
     if (!sentRef.current && !steppedOutAlready) return;
     lobbySteppedOut(lobbyId);
     rememberLobbyReturnDestination(lobbyId);
-    // Only the coming debate's exit back to this lobby may skip the stepped-out prompt.
-    clearLobbyRejoin();
     if (!sentRef.current) return;
     stopWithout({ status: 'stepped_out' });
     try {
@@ -509,19 +509,31 @@ export function useLobbyPresence(
     return registerLobbyStepOut(stepOut);
   }, [stepOut]);
 
-  // Auto-join once admitted, unless the viewer left, is being asked about another lobby, or
-  // stepped out, where going back is their call unless they arrive from the debate's exit.
+  // Auto-join once admitted, unless the viewer left or is being asked about another lobby. Arriving
+  // stepped out is coming back from the debate, by any route: straight into the room.
   const status = state.status;
   React.useEffect(() => {
     if (!admitted || status !== 'idle') return;
-    // Consumed on every arrival so a flag left by a failed leave cannot outlive it.
-    const rejoin = consumeLobbyRejoin(lobbyId);
-    if (rejoin) markLobbyEntry(lobbyId, 'back_after_debate');
-    // A host removed them, possibly mid-debate: coming back is their call, even after Back to the room.
-    if (removed) setState({ status: 'dropped', reason: 'removed' });
-    else if (steppedOut && !rejoin) setState({ status: 'stepped_out' });
-    else void join(false);
+    // A host removed them, possibly mid-debate: coming back is their call, even back from the debate.
+    if (removed) {
+      setState({ status: 'dropped', reason: 'removed' });
+      return;
+    }
+    if (steppedOut) markLobbyEntry(lobbyId, 'back_after_debate');
+    void join(false);
   }, [admitted, join, lobbyId, removed, setState, status, steppedOut]);
+
+  // Stepped out while this page stayed open, by a debate in another tab: back in once it is over.
+  // Only after the view has shown the debate, since the step-out can land before the view does.
+  const debateSeenRef = React.useRef(false);
+  React.useEffect(() => {
+    if (status !== 'stepped_out') {
+      debateSeenRef.current = false;
+      return;
+    }
+    if (debating) debateSeenRef.current = true;
+    else if (debateSeenRef.current && admitted && !removed) void join(false);
+  }, [admitted, debating, join, removed, status]);
 
   // Unbanned after a ban this tab heard: the view is admitted again with `removed`, so the
   // viewer gets the removed screen and its Rejoin rather than a stale ban.

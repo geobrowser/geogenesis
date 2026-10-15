@@ -9,7 +9,6 @@ import { debateRoomIdFromPath } from '../rooms/room-routes';
 import { useDebateLobby, useMyDebateLobby } from './hooks';
 import { hereNowLabel, lobbyHeadcount } from './lobby-format';
 import { LobbyAvatarStack } from './lobby-people';
-import { requestLobbyRejoin } from './step-out';
 
 /**
  * geo-chat's lobby to return to: the one the viewer stepped out of, from any tab, or null. Undefined
@@ -34,21 +33,15 @@ export function useRecordedLobby(): string | null {
   return mine.data?.stepped_out ? mine.data.current_lobby_id : null;
 }
 
-/**
- * The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. A
- * flow heading back to its lobby has the lobby join again on arrival, with no stepped-out prompt.
- */
+/** The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. */
 export function useConsumeDebateReturnDestination() {
   const lobby = useServerLobbyReturn();
   const lobbyId = lobby?.lobbyId;
   const known = lobby !== undefined;
-  return React.useCallback(() => {
-    const destination = consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined);
-    // Only a lobby is a room path here: other debate surfaces are never stored as destinations.
-    const returningTo = destination ? debateRoomIdFromPath(destination) : null;
-    if (returningTo) requestLobbyRejoin(returningTo);
-    return destination;
-  }, [known, lobbyId]);
+  return React.useCallback(
+    () => consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined),
+    [known, lobbyId]
+  );
 }
 
 /** Faces on the way-back row; the count beside them carries the rest. */
@@ -57,8 +50,8 @@ const BACK_AVATARS = 3;
 type BackToLobbyProps = { onLeave: () => void; disabled?: boolean };
 
 /**
- * A row for the debate's end card: leaves the debate the usual way, which returns to the lobby and
- * joins it again on arrival. Hidden unless the debate started in a lobby that is still open.
+ * A row for the debate's end card: leaves the debate the usual way, which returns to the lobby (and
+ * so into the room). Hidden unless the debate started in a lobby that is still open.
  */
 export function BackToLobbyRow(props: BackToLobbyProps) {
   const lobbyId = useRecordedLobby();
