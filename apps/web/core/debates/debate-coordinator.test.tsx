@@ -1,17 +1,20 @@
 import '@testing-library/jest-dom/vitest';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateActivity, DebateRequestsResponse, DebateSharePrompt, UpcomingDebateRoom } from './api';
 import { DebateCoordinator } from './debate-coordinator';
 import { clearEnteringDebate, markEnteringDebate, markEnteringPendingDebate } from './debate-entry-intent';
+import { markRematchEnded, resetEndedRematches } from './ended-rematches';
 
 const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   /** The room view the page at `/debate/{id}` loaded, read by the coordinator from the cache. */
   roomAtPath: null as { kind: 'debate' | 'lobby' } | null,
   activity: null as DebateActivity | null,
+  /** When the activity read landed: compared against when the picker saw a session end. */
+  activityUpdatedAt: 0,
   requests: { outbound: null, incoming: [] } as DebateRequestsResponse,
   acceptRequestMutate: vi.fn(),
   dismissRequestMutate: vi.fn(),
@@ -73,7 +76,7 @@ vi.mock('./api', async importOriginal => {
 
 vi.mock('./hooks', () => ({
   useGeoChatAuth: () => ({ ready: true, authenticated: mocks.authenticated, getPrivyIdentityToken: vi.fn() }),
-  useDebateActivity: () => ({ data: mocks.activity, refetch: mocks.refetch }),
+  useDebateActivity: () => ({ data: mocks.activity, refetch: mocks.refetch, dataUpdatedAt: mocks.activityUpdatedAt }),
   useDebateSharePrompts: () => ({ data: { prompts: mocks.prompts }, isFetching: mocks.promptsFetching }),
   useDebateMediaArtifactUrl: () => ({ mutate: mocks.mediaMutate, error: null }),
   useHandleDebateSharePrompt: () => ({ mutate: mocks.handleMutate, isPending: false }),
@@ -173,6 +176,8 @@ beforeEach(() => {
   mocks.downloadClick.mockClear();
   mocks.capture.mockReset();
   mocks.activity = null;
+  mocks.activityUpdatedAt = 0;
+  resetEndedRematches();
   mocks.requests = { outbound: null, incoming: [] };
   mocks.acceptRequestMutate.mockReset();
   mocks.dismissRequestMutate.mockReset();
@@ -904,6 +909,57 @@ describe('DebateCoordinator', () => {
       rematch: { ...activity.rematch!, source_debate_id: null, status: 'browsing' },
       challenge: null,
     };
+
+    render(<DebateCoordinator />);
+
+    await waitFor(() => expect(mocks.push).toHaveBeenCalled());
+  });
+
+  // GEO-3342. The other person left: the picker saw the session end and sent the viewer out, while
+  // activity still read it as browsing. Routing on that sent them straight back into a dead picker.
+  it('does not route back into a picker whose end was seen after the activity was read', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/explore';
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+    mocks.activityUpdatedAt = 1_000;
+    markRematchEnded('rematch-1', 2_000);
+
+    render(<DebateCoordinator />);
+
+    // Settles pending effects and microtasks before asserting nothing happened.
+    await act(async () => undefined);
+    expect(mocks.push).not.toHaveBeenCalled();
+  });
+
+  // Activity read after the end still routes: geo-chat only reports a session browsing if it is.
+  it('routes into the same session again once activity is newer than the end', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/explore';
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+    mocks.activityUpdatedAt = 1_000;
+    markRematchEnded('rematch-1', 2_000);
+
+    const { rerender } = render(<DebateCoordinator />);
+    expect(mocks.push).not.toHaveBeenCalled();
+
+    mocks.activityUpdatedAt = 3_000;
+    rerender(<DebateCoordinator />);
+
+    await waitFor(() =>
+      expect(mocks.push).toHaveBeenCalledWith('/space/019fedae-72b6-7ab2-927a-df044d57c566/debates/rematches/rematch-1')
+    );
+  });
+
+  // A different session ending says nothing about this one.
+  it('still routes into a session other than the one that ended', async () => {
+    mocks.currentUserId = 'user-requester';
+    mocks.pathname = '/explore';
+    const activity = activityWithRematch('browsing');
+    mocks.activity = { ...activity, rematch: { ...activity.rematch!, source_debate_id: null }, challenge: null };
+    mocks.activityUpdatedAt = 1_000;
+    markRematchEnded('rematch-earlier', 2_000);
 
     render(<DebateCoordinator />);
 

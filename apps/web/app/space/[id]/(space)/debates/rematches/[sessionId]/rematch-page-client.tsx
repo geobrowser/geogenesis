@@ -30,6 +30,7 @@ import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-t
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
+import { markRematchEnded } from '~/core/debates/ended-rematches';
 import { requestOpenRounds } from '~/core/debates/format-details';
 import { defaultDebateFormatId, isOpenRoundsFormatId } from '~/core/debates/formats';
 import {
@@ -2463,6 +2464,13 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     session !== null &&
     ((session.status === 'converted' && Boolean(session.converted_debate_id)) ||
       ((session.status === 'ended' || session.status === 'expired') && !inDebateRoom));
+
+  // GEO-3342. Declared ahead of the redirect below so it runs first: the coordinator must not route
+  // straight back in on activity that still reads the session as browsing.
+  const endedSessionId = sessionEnded ? session.id : null;
+  React.useEffect(() => {
+    if (endedSessionId) markRematchEnded(endedSessionId);
+  }, [endedSessionId]);
 
   React.useEffect(() => {
     if (!session) return;

@@ -11,6 +11,7 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
+import { rematchEndedSince, resetEndedRematches } from '~/core/debates/ended-rematches';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
@@ -1135,6 +1136,22 @@ describe('DebateRematchPageClient', () => {
 
     expect(mocks.back).toHaveBeenCalledOnce();
     expect(mocks.replace).not.toHaveBeenCalledWith(`/space/${SPACE_1}/debates`);
+  });
+
+  // GEO-3342. The other person left: the session arrives ended with no click from this viewer. The
+  // end is recorded before the page sends them out, so the coordinator cannot route them back in on
+  // activity read before it.
+  it('records the end when the other person leaves, and goes out once', async () => {
+    vi.spyOn(window.history, 'length', 'get').mockReturnValue(2);
+    resetEndedRematches();
+    const before = Date.now();
+    mocks.session = session({ source_debate_id: null, status: 'ended' });
+
+    render(<DebateRematchPageClient sessionId="rematch-1" />);
+
+    await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
+    expect(rematchEndedSince('rematch-1', before)).toBe(true);
+    expect(rematchEndedSince('rematch-other', before)).toBe(false);
   });
 
   it('preserves the debates-page exit for rematches started from a prior debate', async () => {
