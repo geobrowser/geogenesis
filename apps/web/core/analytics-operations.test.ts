@@ -330,3 +330,42 @@ describe('legacy event context isolation', () => {
     );
   });
 });
+
+describe('lobby attribution on vote detail events (GEO-3311)', () => {
+  const context = {
+    component: 'entity_vote_buttons' as const,
+    target_id: 'claim',
+    target_type: 'claim',
+    page_path: '/debate/lobby',
+    page_type: 'debate',
+    page_view_id: 'view',
+    lobby_id: 'lobby',
+  };
+
+  it('puts the lobby and its room vote on vote_cast as well as on action_completed', () => {
+    const operation = observeOperation('vote', 'claim', 'claim', undefined, { ...context, room_vote_id: 'vote-1' });
+    operation.outcome('vote_cast', 'submitted', {});
+    operation.outcome('vote_cast', 'indexed', {});
+
+    const votes = capture.mock.calls.filter(([event]) => event === 'vote_cast').map(([, props]) => props);
+    expect(votes).toHaveLength(2);
+    for (const props of votes) expect(props).toMatchObject({ lobby_id: 'lobby', room_vote_id: 'vote-1' });
+    // Only the lobby fields: the detail events keep their own surface attribution.
+    expect(votes[0]).not.toHaveProperty('component');
+    expect(capture).toHaveBeenCalledWith(
+      'action_completed',
+      expect.objectContaining({ lobby_id: 'lobby', room_vote_id: 'vote-1' })
+    );
+  });
+
+  it('adds nothing to a vote outside a lobby, and no room vote to one that is not answering it', () => {
+    const { lobby_id: _lobby, ...outside } = context;
+    observeOperation('vote', 'claim', 'claim', undefined, outside).outcome('vote_cast', 'submitted', {});
+    observeOperation('vote', 'claim', 'claim', undefined, context).outcome('vote_cast', 'submitted', {});
+
+    const votes = capture.mock.calls.filter(([event]) => event === 'vote_cast').map(([, props]) => props);
+    expect(votes[0]).not.toHaveProperty('lobby_id');
+    expect(votes[1]).toMatchObject({ lobby_id: 'lobby' });
+    expect(votes[1]).not.toHaveProperty('room_vote_id');
+  });
+});

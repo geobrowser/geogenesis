@@ -207,6 +207,8 @@ export type OwnDebate = {
   state: 'booked' | 'requested' | 'asked';
   /** The other side, whose name labels the block. */
   opponentUserId: string | null;
+  /** The Geo team set this debate up (GEO-3229): neither debater asked the other. */
+  arrangedByAdmin: boolean;
 };
 
 /**
@@ -237,6 +239,7 @@ export function ownDebates(
       end,
       state: request.status === 'accepted' ? 'booked' : request.viewer_must_answer ? 'asked' : 'requested',
       opponentUserId: opponentOf(request, viewerUserId),
+      arrangedByAdmin: request.created_by_admin,
     });
   }
   return debates.sort((left, right) => left.start - right.start);

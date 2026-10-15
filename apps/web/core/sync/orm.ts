@@ -401,40 +401,30 @@ export class E {
     includeEmptyNames?: boolean;
     signal?: AbortController['signal'];
   }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
-    if (where?.id?.in) {
-      const entityIds = where.id.in.filter(id => id !== '');
+    // A relation target can be '' (#1410). The server rejects an empty id in a
+    // list, so it is dropped before any path below sees the list.
+    const requestedIds = where?.id?.in;
+    if (requestedIds?.some(id => id === '')) {
+      where = { ...where, id: { ...where.id, in: requestedIds.filter(id => id !== '') } };
+    }
+    const hasIdList = where?.id?.in !== undefined;
 
-      if (sort) {
-        const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames });
-        const page = await Effect.runPromise(
-          getEntitiesOrderedByPropertyConnection(
-            {
-              propertyId: sort.propertyId,
-              sortDirection: sort.direction === 'asc' ? SortOrder.Asc : SortOrder.Desc,
-              dataType: sort.dataType,
-              includeWithoutValue: sort.includeWithoutValue,
-              spaceId,
-              limit: first,
-              after,
-              offset,
-              filter,
-            },
-            signal
-          )
-        );
+    // An unsorted id list is a batch read in the caller's order. A sorted one
+    // (property `sort` or built-in `orderBy`) is a regular ordered page below,
+    // with the ids riding along as an `id.in` filter: one place for cursor
+    // paging and the remote-id dedupe.
+    if (where?.id?.in && !sort && !orderBy) {
+      const entityIds = where.id.in;
 
-        const remoteEntities = page.entities;
-        const remoteById = new Map(remoteEntities.map(e => [e.id as string, e]));
-        const merged = remoteEntities
-          .map(e => this.merge({ id: e.id, store, spaceId, mergeWith: remoteById.get(e.id) }))
-          .filter((e): e is Entity => e !== null);
-        return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
-      }
+      // Sorted and deduped for the network read only: the request's key is its id list, so two
+      // callers asking for the same set in a different order (or with repeats) would otherwise each
+      // send the whole batch. Results are matched back by id below, so the order asked for is kept.
+      const requestIds = [...new Set(entityIds)].sort();
 
       const remoteEntities = (
         await Promise.all(
-          Array.from({ length: Math.ceil(entityIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
-            const batchIds = entityIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
+          Array.from({ length: Math.ceil(requestIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
+            const batchIds = requestIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
             return syncFetchQuery(cache, {
               queryKey: ['network', 'entities', batchIds, spaceId],
               queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),
@@ -460,7 +450,9 @@ export class E {
       return { merged: nonNullEntities, remote: remoteEntities, endCursor: null, hasNextPage: false };
     }
 
-    const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames });
+    // An explicit id list already is the population: keep unnamed members, as
+    // the batch read above does, instead of the open-query name exclusion.
+    const filter = convertWhereConditionToEntityFilter(where, { includeEmptyNames: includeEmptyNames || hasIdList });
     const typeIds = extractTypeIdsFromWhere(where);
 
     const page = sort

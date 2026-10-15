@@ -432,8 +432,10 @@ export function useQueryEntities({
       // Position) and surface newly-created entities immediately. The
       // single-key gate is load-bearing — with extra clauses (e.g. a name
       // filter) `store.getEntity` would return every id regardless, so we
-      // must fall through to the server-filtered `data.ids`.
-      if (where?.id?.in && !sort && Object.keys(where).length === 1) {
+      // must fall through to the server-filtered `data.ids`. A server `sort`
+      // or `orderBy` falls through for the same reason: the page order is the
+      // server's, not the caller's.
+      if (where?.id?.in && !sort && !orderBy && Object.keys(where).length === 1) {
         const ids = where.id.in;
         const entities = ids.map(id => store.getEntity(id)).filter(isMaterializedEntity);
         return first !== undefined ? entities.slice(0, first) : entities;

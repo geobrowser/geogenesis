@@ -9,14 +9,33 @@ import type { Debate, DebateParticipant } from '~/core/debates/api';
 import type { ClaimMarker } from '~/core/debates/claim-ticker';
 import type { DebatePagePlayerState } from '~/core/debates/debate-page-outcome';
 import { DebatePositionChip } from '~/core/debates/debate-video-tile';
+import { isOpenRoundsDebate } from '~/core/debates/open-rounds';
 import { usePairReadiness } from '~/core/debates/pair-readiness';
 import { useParticipantBylines } from '~/core/debates/participant-bylines';
+import {
+  breakAnnouncesRound,
+  breakBannerShown,
+  breakCueAt,
+  breakCuts,
+  breakFirstName,
+  earlyEndCueAt,
+  lastWordSlotAt,
+  silentAt,
+} from '~/core/debates/playback-breaks';
 import { type TurnState, clampSeconds, speakerLabel } from '~/core/debates/playback-utils';
+import {
+  TURN_TIMER_SCALE_CLASS,
+  turnTimerBuildUp,
+  turnTimerPulseClass,
+  turnTimerRimMask,
+  turnTimerScale,
+} from '~/core/debates/recording-countdown-ring';
 import type { RoundCue } from '~/core/debates/round-cues';
 import { roundBadgeAt, roundCardAt } from '~/core/debates/round-cues';
 import { useDebatePlayback } from '~/core/debates/use-debate-playback';
 import { usePlaybackAnalytics } from '~/core/debates/use-playback-analytics';
 import { markDebateWatched } from '~/core/debates/watched-debates';
+import { FollowButton } from '~/core/follows/follow-button';
 import { validateSpaceId } from '~/core/io/rest/validation';
 import { responsePositionLabel } from '~/core/responses/entity-response';
 import { reattachVideoSource, releaseVideo } from '~/core/utils/video/release-video';
@@ -25,10 +44,13 @@ import { Avatar } from '~/design-system/avatar';
 import { RetrySmall } from '~/design-system/icons/retry-small';
 import { Text } from '~/design-system/text';
 
+import { DebateBreakOverlay, DebateEarlyEndLabels, useBreakCuts } from './debate-break-cues';
+import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
-import { DebateRoundBadge, DebateRoundCard } from './debate-round-cues';
+import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
+import { LABEL_FONT, STAMP_FONT, TAG_CLASS } from './stamp-styles';
 import { useDebateEndCard } from './use-debate-end-card';
 import { useOpenDebaterProfile } from './use-open-debater-profile';
 
@@ -155,7 +177,9 @@ export function DebateFeedPlayer({
     timelineSeconds,
     turnState,
     turnSpans,
-    turnCount,
+    turnSegments,
+    roundTurns,
+    playbackBreaks,
     subtitle,
     onPlaybackTick,
     resyncSlot,
@@ -165,6 +189,7 @@ export function DebateFeedPlayer({
     resumeBoth,
     suspend,
     seekBoth: seekBothRaw,
+    livePositionMs,
     beginScrub,
     endScrub,
   } = controller;
@@ -337,6 +362,9 @@ export function DebateFeedPlayer({
 
   // The live claim layer. Loaded alongside the recordings so a card is ready the moment the claim
   // it belongs to is spoken, rather than appearing a beat late on the first one.
+  // The agreed stamps design (GEO-3277, GEO-3314, GEO-3316, GEO-3317) is Open rounds only for now.
+  const stamped = isOpenRoundsDebate(debate);
+
   const ticker = useDebateClaimTicker(debate, {
     playheadMs: playheadSeconds * 1000,
     timelineMs: timelineSeconds * 1000,
@@ -352,13 +380,55 @@ export function DebateFeedPlayer({
    * small for a phrase across it.
    */
   const roundCard = React.useMemo(
-    () => (playing && !reducedOverlays ? roundCardAt(turnSpans, turnCount, playheadSeconds) : null),
-    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
+    () =>
+      playing && !reducedOverlays
+        ? // A condensed break's own graphic already announced the round it leads into (GEO-3277).
+          roundCardAt(turnSpans, roundTurns, playheadSeconds, round =>
+            breakAnnouncesRound(playbackBreaks.breaks, round)
+          )
+        : null,
+    [playbackBreaks.breaks, playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
   );
   const roundBadge = React.useMemo(
-    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, turnCount, playheadSeconds) : null),
-    [playheadSeconds, playing, reducedOverlays, turnCount, turnSpans]
+    () => (playing && !reducedOverlays ? roundBadgeAt(turnSpans, roundTurns, playheadSeconds) : null),
+    [playheadSeconds, playing, reducedOverlays, roundTurns, turnSpans]
   );
+
+  /**
+   * The breaks between Open rounds and the early ends (GEO-3277), drawn from the playhead like the
+   * round card. Not gated on `playing`, unlike the card: the footage under a break means nothing
+   * without its graphic, so a viewer who pauses or scrubs there sees the graphic held where it is.
+   */
+  const playheadMs = playheadSeconds * 1_000;
+  const breakCue = React.useMemo(
+    () => (reducedOverlays ? null : breakCueAt(playbackBreaks.breaks, playbackBreaks.picks, playheadMs)),
+    [playbackBreaks.breaks, playbackBreaks.picks, playheadMs, reducedOverlays]
+  );
+  const cuts = React.useMemo(() => breakCuts(playbackBreaks), [playbackBreaks]);
+  // The break's banner lies across the seam, over the top tile's name and claim corner: they step
+  // out while it is up and come back with the next speaker, as they do for the round card.
+  const bannerYield = breakBannerShown(breakCue) ? 1 : 0;
+  useBreakCuts(cuts, {
+    playheadMs,
+    running: playing && !isScrubbing,
+    seek: seekBothRaw,
+    positionMs: livePositionMs,
+  });
+  const lastWordSlot = React.useMemo(
+    () => (stamped && !reducedOverlays ? lastWordSlotAt(playbackBreaks, turnSegments, playheadMs) : null),
+    [playbackBreaks, playheadMs, reducedOverlays, stamped, turnSegments]
+  );
+  const earlyEndCue = React.useMemo(
+    () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, playheadMs)),
+    [playbackBreaks.earlyEnds, playheadMs, reducedOverlays]
+  );
+  /**
+   * Nobody holds a turn: a break, from its pick window on, or an early end's quiet. Both mics are
+   * open between rounds (#2838), so this can hold talk that was never meant to be published: nobody
+   * is audible through it, and it is not captioned.
+   */
+  const betweenTurns = React.useMemo(() => silentAt(playbackBreaks, playheadMs), [playbackBreaks, playheadMs]);
+  const breakNames = { 1: breakFirstName(slot1Participant), 2: breakFirstName(slot2Participant) };
 
   const showReplay = ready && playbackEnded;
   // The end card is where an ended debate lands, except on a compact gallery tile — which has no
@@ -433,6 +503,22 @@ export function DebateFeedPlayer({
   // Held open by the chip rather than by the pointer — the only way in on a touch screen, where
   // there is no hover to end and so no hover to hold it.
   const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
+  // An Open rounds counter whose list is open, or that a keyboard is inside, per slot: its corner
+  // stays visible under a round banner rather than fading out from under the viewer.
+  const [activeCounters, setActiveCounters] = React.useState<ReadonlySet<number>>(() => new Set());
+  const onCounterActive = React.useCallback(
+    (slot: number, active: boolean) =>
+      setActiveCounters(current => {
+        if (current.has(slot) === active) return current;
+        const next = new Set(current);
+        if (active) next.add(slot);
+        else next.delete(slot);
+        return next;
+      }),
+    []
+  );
+  const onCounterActive1 = React.useCallback((active: boolean) => onCounterActive(1, active), [onCounterActive]);
+  const onCounterActive2 = React.useCallback((active: boolean) => onCounterActive(2, active), [onCounterActive]);
   /**
    * The slot whose backlog the pointer has opened, held until the pointer leaves that tile.
    *
@@ -445,6 +531,8 @@ export function DebateFeedPlayer({
 
   /** The same condition the stack is given, so the corner's box can cap itself only when open. */
   const claimsOpenFor = (slot: number) => {
+    // An Open rounds counter opens its own list; the corner keeps its live width.
+    if (stamped) return false;
     // A backlog opened on purpose stays open, and a claim arriving lands at the bottom of it —
     // that is the whole point of having opened it. Same for a keyboard that has tabbed into it.
     if (pinnedSlot === slot || focusedSlot === slot) return true;
@@ -473,7 +561,8 @@ export function DebateFeedPlayer({
    * leave the corner stuck open behind them.
    */
   const onTileHover = (slot: number) => (event: React.PointerEvent, hovered: boolean) => {
-    if (event.pointerType !== 'mouse') return;
+    // An Open rounds counter answers to the pointer on itself, not the tile.
+    if (stamped || event.pointerType !== 'mouse') return;
     const clearSlot = (current: number | null) => (current === slot ? null : current);
 
     if (!hovered) {
@@ -515,6 +604,8 @@ export function DebateFeedPlayer({
   const stackShownFor = (slot: number) => {
     if (reducedOverlays) return false;
     if (playbackEnded) return false;
+    // An Open rounds counter shows from the start, at 0.
+    if (stamped) return true;
     return (ticker.cardsBySlot.get(slot)?.length ?? 0) > 0 || (ticker.historyBySlot.get(slot)?.length ?? 0) > 0;
   };
 
@@ -549,6 +640,21 @@ export function DebateFeedPlayer({
     const cards = ticker.cardsBySlot.get(slot) ?? [];
     const history = ticker.historyBySlot.get(slot) ?? [];
     if (!stackShownFor(slot)) return null;
+
+    if (stamped) {
+      return (
+        <DebateClaimCounter
+          history={history}
+          playheadMs={playheadMs}
+          name={breakNames[slot as 1 | 2]}
+          rowsByClaimId={ticker.rowsByClaimId}
+          entitiesByClaimId={ticker.entitiesByClaimId}
+          onAnswered={ticker.onAnswered}
+          onSeeAll={onOpenClaims}
+          onActiveChange={slot === 1 ? onCounterActive1 : onCounterActive2}
+        />
+      );
+    }
 
     const pinned = pinnedSlot === slot;
     const clearSlot = (current: number | null) => (current === slot ? null : current);
@@ -639,12 +745,17 @@ export function DebateFeedPlayer({
           videoRef={slot1VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
-          audible={playing && turnState?.slot === 1}
+          audible={playing && turnState?.slot === 1 && !betweenTurns}
           countdown={playing && turnState?.slot === 1 ? turnState : null}
           roundBadge={turnState?.slot === 1 ? roundBadge : null}
-          // Only this tile's: the card is centred on the seam, so it crosses the *top* tile's name
-          // band and comes nowhere near the bottom tile's, half a player away.
-          cardYield={roundCard?.opacity ?? 0}
+          // Only this tile's: the card and the break's banner are centred on the seam, so they cross
+          // the *top* tile's name band and come nowhere near the bottom tile's, half a player away.
+          cardYield={Math.max(roundCard?.opacity ?? 0, bannerYield)}
+          // The claim corner yields to the break's banner only, which is Open rounds only. The round
+          // card plays in every format and leaves the corner as it always has.
+          claimsYield={Math.max(bannerYield, stamped ? (roundCard?.opacity ?? 0) : 0)}
+          claimsActive={activeCounters.has(1)}
+          stamped={stamped}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
           onPlaybackTick={onPlaybackTick}
@@ -653,6 +764,7 @@ export function DebateFeedPlayer({
           onExhausted={() => void refreshSlotUrl(1)}
           onToggle={toggleFromVideo}
           claims={claimsFor(1)}
+          lastWord={lastWordSlot === 1}
           claimsOpen={claimsOpenFor(1)}
           onClaimsHoverChange={onTileHover(1)}
           topLeft={
@@ -703,7 +815,7 @@ export function DebateFeedPlayer({
           videoRef={slot2VideoRef}
           buffer={active || buffer}
           concealed={!pair.mayShow}
-          audible={playing && turnState?.slot === 2}
+          audible={playing && turnState?.slot === 2 && !betweenTurns}
           countdown={playing && turnState?.slot === 2 ? turnState : null}
           roundBadge={turnState?.slot === 2 ? roundBadge : null}
           mutedByUser={mutedByUser}
@@ -714,7 +826,9 @@ export function DebateFeedPlayer({
           onExhausted={() => void refreshSlotUrl(2)}
           onToggle={toggleFromVideo}
           claims={claimsFor(2)}
+          lastWord={lastWordSlot === 2}
           claimsOpen={claimsOpenFor(2)}
+          stamped={stamped}
           onClaimsHoverChange={onTileHover(2)}
           // This is the half the scrubber sits in, so its claim corner is the one that has to lift
           // clear of the bar.
@@ -791,13 +905,30 @@ export function DebateFeedPlayer({
           It costs at most 1.8s of caption at the top of a round, and usually none: the cost is
           real only where the render retained speech from before the incoming debater's clock
           started (GEO-2754), which is the one case where they are already talking as it lands. */}
-        {subtitle && !roundCard && !endCardShown && (!reducedOverlays || (active && playing && mutedByUser)) && (
-          <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
-            {subtitle}
-          </span>
-        )}
+        {subtitle &&
+          !roundCard &&
+          !breakCue &&
+          !betweenTurns &&
+          !endCardShown &&
+          (!reducedOverlays || (active && playing && mutedByUser)) && (
+            <span className="pointer-events-none absolute top-1/2 left-1/2 z-20 w-max max-w-[70%] -translate-x-1/2 -translate-y-1/2 rounded-sm bg-black/78 px-1.5 py-1.5 text-center text-[1rem] leading-tight text-white [text-box:trim-both_cap_alphabetic] md:max-w-[90%]">
+              {subtitle}
+            </span>
+          )}
 
-        <DebateRoundCard cue={roundCard} />
+        {stamped ? <DebateRoundBanner cue={roundCard} /> : <DebateRoundCard cue={roundCard} />}
+        {!endCardShown && (
+          <>
+            <DebateBreakOverlay
+              cue={breakCue}
+              names={breakNames}
+              firstSlot={debate.first_participant_slot}
+              roundTurns={roundTurns}
+              playing={playing}
+            />
+            <DebateEarlyEndLabels cue={earlyEndCue} names={breakNames} />
+          </>
+        )}
 
         {/* The replay and resume states are mutually exclusive, so they share one centered control.
           Replay is shown at every width; the ordinary paused control stays mobile-only because
@@ -881,6 +1012,8 @@ function DebaterVideo({
   countdown,
   roundBadge,
   cardYield = 0,
+  claimsYield = 0,
+  claimsActive = false,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -896,6 +1029,8 @@ function DebaterVideo({
   scrubber,
   scrimClassName = 'h-14',
   inert = false,
+  stamped = false,
+  lastWord = false,
 }: {
   participant: DebateParticipant | null;
   byline: string | null;
@@ -919,13 +1054,23 @@ function DebaterVideo({
    * scrubber, the name's profile link — should take keyboard focus or be read out underneath it.
    */
   inert?: boolean;
+  /** Open rounds: the agreed stamps design for the timer's last ten seconds and the round tag. */
+  stamped?: boolean;
+  /** Open rounds: this debater speaks last before a pick, tagged beside their name as in the mockup. */
+  lastWord?: boolean;
   /**
-   * How much of this tile's bottom band the round card has taken, 0–1.
+   * How much of this tile's bottom band the round card or the break's banner has taken, 0–1.
    *
    * The card's own opacity, handed straight back, so the name crossfades against it rather than
-   * running a timer of its own. See where it is applied below.
+   * running a timer of its own; the banner's is all or nothing, and the transition fades it. See
+   * where it is applied below.
    */
   cardYield?: number;
+  /** How far the claim corner has stepped out from under a round banner, 0–1. A fixed format's
+   * backlog, held open, stays; an Open rounds counter steps out with its list. */
+  claimsYield?: number;
+  /** An Open rounds counter whose list is open or holds keyboard focus: kept visible under a banner. */
+  claimsActive?: boolean;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -1252,8 +1397,15 @@ function DebaterVideo({
 
       {topLeft && <div className="absolute top-3 left-3 z-10 flex items-center gap-2">{topLeft}</div>}
 
-      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} />}
-      {countdown && <DebateRoundBadge cue={roundBadge ?? null} />}
+      {countdown && <CountdownBadge seconds={countdown.seconds} progress={countdown.progress} buildUp={stamped} />}
+      {countdown && (
+        <DebateRoundBadge
+          cue={roundBadge ?? null}
+          stamped={stamped}
+          // Kept clear of the timer as it grows over a turn's last ten seconds.
+          rightPx={stamped ? TIMER_RIGHT_PX + TIMER_PX * turnTimerScale(countdown.seconds) + 8 : undefined}
+        />
+      )}
 
       {/* This debater's claims, in the bottom-right of their own tile. One corner each rather than
           one for the player: a viewer is looking at whoever is talking, and a shared corner asks
@@ -1317,8 +1469,13 @@ function DebaterVideo({
       {claims && (
         <div
           data-claim-corner
+          data-yield={(!claimsOpen && !claimsActive && claimsYield > 0.5) || undefined}
+          style={{ opacity: claimsOpen || claimsActive ? 1 : 1 - claimsYield }}
           className={cx(
-            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom] duration-150',
+            'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom,opacity] duration-150',
+            // Stepped out from under a banner, so out of the pointer's way too, as the name row is.
+            // Tabbing into it brings it back: focus inside makes the counter active.
+            '[&[data-yield]_*]:pointer-events-none!',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,
             // because it is one line of somebody's argument and there is nothing to read it
             // against. `100% - 1.75rem` rather than a percentage: the corner hangs off `right-3`,
@@ -1403,8 +1560,8 @@ function DebaterVideo({
         }}
         style={{ opacity: nameFocused ? 1 : 1 - cardYield }}
         className={cx(
-          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-start gap-2 transition-[padding-bottom,opacity] duration-150',
-          cardYield > 0.5 && '[&_button]:pointer-events-none',
+          'pointer-events-none absolute bottom-3 left-4 z-10 flex w-[calc(100%-2rem)] items-center gap-2 transition-[padding-bottom,opacity] duration-150',
+          cardYield > 0.5 && '[&_[data-debater-avatar]]:pointer-events-none [&_button]:pointer-events-none',
           // Lifts with the claim stack, and for the same reason: the name shares the bottom band
           // with the scrubber, so the scrubber appearing would otherwise draw a track through it.
           // Padding rather than `bottom`, because the box is pinned by its bottom edge — the
@@ -1413,14 +1570,33 @@ function DebaterVideo({
           clearScrubber === 'on-hover' && 'group-hover:pb-5'
         )}
       >
+        {/* The face, with Follow as a "+" pinned to its bottom edge (GEO-3305), the way short-video
+            apps do it: a pill beside the name and the position chip was one chip too many for the
+            band. The badge can't sit inside a button, so the face is its own pointer target for the
+            profile, out of the tab order because the name button is the same link for the keyboard.
+            A face already followed has no badge; see `FollowButton`'s `avatar` variant. */}
+        <span className="pointer-events-auto relative shrink-0">
+          <span
+            aria-hidden
+            data-debater-avatar
+            onClick={openProfile}
+            className="block size-7 cursor-pointer overflow-hidden rounded-full bg-white"
+          >
+            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={28} />
+          </span>
+          {participant && validateSpaceId(participant.profile_space_id) ? (
+            <FollowButton
+              target={{ kind: 'person', id: participant.profile_space_id, name }}
+              variant="avatar"
+              surface="video"
+            />
+          ) : null}
+        </span>
         <button
           type="button"
           onClick={onIdentityClick}
-          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center gap-2 text-left"
+          className="pointer-events-auto flex max-w-[55%] min-w-0 items-center text-left"
         >
-          <span className="block size-5 shrink-0 overflow-hidden rounded-full bg-white">
-            <Avatar avatarUrl={participant?.avatar_cid} value={participant?.profile_space_id} size={20} />
-          </span>
           <span className="flex min-w-0 flex-col">
             <span className="flex min-w-0 items-center gap-2">
               <span className="truncate text-[1rem] leading-5 tracking-[-0.35px] text-white">{name}</span>
@@ -1431,6 +1607,11 @@ function DebaterVideo({
                   the only thing left to guard. */}
               {participant && (
                 <DebatePositionChip data-debate-position-chip label={responsePositionLabel(participant.position)} />
+              )}
+              {lastWord && (
+                <span data-last-word className={cx(TAG_CLASS, 'shrink-0 text-[2.6cqw] uppercase')} style={LABEL_FONT}>
+                  Last word
+                </span>
               )}
             </span>
             {byline && (
@@ -1447,26 +1628,70 @@ function DebaterVideo({
   );
 }
 
-function CountdownBadge({ seconds, progress }: { seconds: number; progress: number }) {
+/** The turn timer's size and inset from the tile's corner, in px (`size-8`, `right-3`). */
+const TIMER_PX = 32;
+const TIMER_RIGHT_PX = 12;
+
+function CountdownBadge({
+  seconds,
+  progress,
+  buildUp = false,
+}: {
+  seconds: number;
+  progress: number;
+  buildUp?: boolean;
+}) {
   // The ring shows time remaining, so it shrinks as the turn elapses rather than filling up.
   const remaining = 1 - Math.max(0, Math.min(1, progress));
-  const degrees = remaining * 360;
+  const whole = Math.ceil(seconds);
+  // Open rounds, as the design mockup has it: from 10 s the timer swells each second and grows a
+  // step with each swell; from 5 s it turns red at its full size and holds there, its rim draining
+  // over the last five seconds and each second landing with a red glow.
+  const stage = turnTimerBuildUp(buildUp ? seconds : Infinity);
+  const { counting, final } = stage;
+  const degrees = final ? (Math.max(0, seconds) / 5) * 360 : remaining * 360;
+  // Hollowed into a ring so the badge's own backing shows through the middle. Today's ring sits 2px
+  // inside the badge; the red one runs at its very edge, 0.55cqw thick, around a solid red disc.
+  const ringMask = turnTimerRimMask(final ? '0.55cqw' : '2px');
   return (
-    <div className="absolute top-3 right-3 z-10 grid size-8 place-items-center rounded-full bg-linear-to-b from-black/50 to-black/25">
-      <span
-        className="col-start-1 row-start-1 size-7 rounded-full"
-        style={{
-          backgroundImage: `conic-gradient(#ffffff ${degrees}deg, rgba(255,255,255,0.3) 0deg)`,
-          // Hollowed into a 2px ring so the badge's own translucent backing shows through the
-          // middle. The frame draws a stroked circle; a filled disc would print the number on a
-          // grey plate the design does not have.
-          maskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
-          WebkitMaskImage: 'radial-gradient(farthest-side, transparent calc(100% - 2px), #000 calc(100% - 2px))',
-        }}
-      />
-      <span className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums">
-        {Math.ceil(seconds)}
-      </span>
+    <div
+      data-turn-timer={stage.phase}
+      className={cx('absolute top-3 right-3 z-10 size-8', TURN_TIMER_SCALE_CLASS)}
+      style={{ scale: stage.scale }}
+    >
+      <div
+        // Re-mounted each second, which restarts its swell and glow.
+        key={counting ? whole : 'steady'}
+        className={cx(
+          'grid size-8 origin-top-right place-items-center rounded-full',
+          turnTimerPulseClass(stage),
+          final ? 'bg-red-01' : 'bg-linear-to-b from-black/50 to-black/25'
+        )}
+        style={{ '--turn-timer-swell': stage.swell } as React.CSSProperties}
+      >
+        <span
+          className={cx(
+            'col-start-1 row-start-1 rounded-full',
+            // Smooth only for the Open rounds build-up; a fixed format's ring jumps as it always has.
+            buildUp && 'transition-[--turn-timer-rim] duration-300 ease-linear',
+            final ? 'size-8' : 'size-7'
+          )}
+          style={
+            {
+              '--turn-timer-rim': `${degrees}deg`,
+              backgroundImage: `conic-gradient(#ffffff var(--turn-timer-rim), rgba(255,255,255,${final ? 0.28 : 0.3}) 0deg)`,
+              maskImage: ringMask,
+              WebkitMaskImage: ringMask,
+            } as React.CSSProperties
+          }
+        />
+        <span
+          className="col-start-1 row-start-1 grid place-items-center text-[1.0625rem] leading-none font-medium text-white tabular-nums"
+          style={final ? { ...STAMP_FONT, fontWeight: 700 } : undefined}
+        >
+          {whole}
+        </span>
+      </div>
     </div>
   );
 }

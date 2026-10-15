@@ -14,7 +14,10 @@ import { keepSelectableSpaces } from '~/core/debates/claim-space-allowlist';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from '~/core/debates/matchmaking/hub-filter-menu';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from '~/core/debates/matchmaking/topic-facets';
 import type { ExplorePageSort } from '~/core/explore/explore-feed-params';
-import type { ExploreFeedItem, ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import type { ExploreFeedResult, ExploreTime } from '~/core/explore/fetch-explore-feed';
+import { composeSeenPages } from '~/core/explore/seen-demotion/hide-seen';
+import { readSeenDemotionPageConfig } from '~/core/explore/seen-demotion/seen-demotion-config';
+import { seenStore } from '~/core/explore/seen-demotion/seen-store';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { exploreMoreFiltersOpenAtom } from '~/core/state/explore-more-filters';
 import { normId } from '~/core/utils/norm-id';
@@ -497,10 +500,24 @@ export function EntityFeed({
     return () => io.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
+  // GEO-3234. Load what this browser has already shown, once, while the first page is in flight.
+  const isBest = sort === 'best';
+  React.useEffect(() => {
+    if (isBest) seenStore().prime();
+  }, [isBest]);
+  const [mountedAtSec] = React.useState(() => Math.floor(Date.now() / 1000));
+
   const items = React.useMemo(() => {
-    const pages = data?.pages ?? [];
-    const flat: ExploreFeedItem[] = [];
-    for (const p of pages) flat.push(...p.items);
+    // GEO-3234. Best's pages composed together for this visitor: seen cards hidden, gaps filled from
+    // each page's reserve, nothing shown twice. Pages without the config pass through.
+    const flat = composeSeenPages(
+      (data?.pages ?? []).map(p => ({
+        items: p.items,
+        reserve: p.reserve,
+        config: readSeenDemotionPageConfig(p.seenDemotion),
+      })),
+      { snapshot: seenStore().snapshot(), nowSec: mountedAtSec }
+    );
     if (!isForYou) return flat;
     // For you pages two streams that overlap, so an item served from one can come back later from
     // the other. The first appearance stays.
@@ -511,7 +528,7 @@ export function EntityFeed({
       seen.add(id);
       return true;
     });
-  }, [data?.pages, isForYou]);
+  }, [data?.pages, isForYou, mountedAtSec]);
 
   const timeLabel = TIME_OPTIONS.find(o => o.value === time)?.label ?? time;
   const sortLabel = SORT_LABELS[sort];

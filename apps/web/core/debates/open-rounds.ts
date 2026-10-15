@@ -1,4 +1,4 @@
-import type { Debate, DebateOpenRounds, OpenRoundPick } from './api';
+import type { Debate, DebateOpenRounds, OpenRoundPick, OpenRoundRevealedPick } from './api';
 import { type DebateTurnRole, debateTurnRole } from './formats';
 
 /**
@@ -46,6 +46,11 @@ export type OpenRoundsRoomPhase =
       resolvedAtMs: number;
       /** The next round's first turn, or thanking, starts here. */
       nextPhaseStartsAtMs: number;
+      /**
+       * A required round's lead-in rather than a resolved pick: the round ended at `resolvedAtMs`,
+       * nobody picked, and the next round is announced and counted in as after an Extend.
+       */
+      leadIn?: true;
     }
   | { phase: 'finished'; roundIndex: number; isFinalRound: boolean };
 
@@ -64,6 +69,19 @@ export function isOpenRoundsDebate<T extends Pick<Debate, 'open_rounds'>>(
   return debate.open_rounds !== undefined && debate.open_rounds !== null;
 }
 
+/**
+ * Whether the room is between two Open rounds: picking, or showing the result, count-in or a
+ * required round's lead-in. Nobody holds a turn then.
+ */
+export function isBetweenOpenRounds(phase: OpenRoundsRoomPhase | null | undefined) {
+  return phase?.phase === 'deciding' || phase?.phase === 'result';
+}
+
+/** The number a round is shown with: the opening is Round 1, so the first rebuttal round is Round 2. */
+export function openRoundNumber(roundIndex: number) {
+  return roundIndex + 1;
+}
+
 /** Round `r` holds turns `2r` and `2r + 1`. */
 export function openRoundIndexForTurn(turnIndex: number) {
   return Math.floor(Math.max(0, turnIndex) / 2);
@@ -73,15 +91,88 @@ export function isFinalOpenRound(openRounds: Pick<DebateOpenRounds, 'max_rebutta
   return roundIndex >= openRounds.max_rebuttal_rounds;
 }
 
+/** The rebuttal rounds that run before the first pick. `0` from a geo-chat that does not send it. */
+export function openRoundsRequiredRebuttalRounds(openRounds: Pick<DebateOpenRounds, 'required_rebuttal_rounds'>) {
+  return Math.max(0, openRounds.required_rebuttal_rounds ?? 0);
+}
+
+/**
+ * Whether a round ends on a pick. Every round before the last required one runs straight into the
+ * next, like a fixed format's rounds, so the first pick follows the last required round (or the
+ * opening, when none is required). The cap round goes straight to thanking.
+ */
+export function openRoundEndsOnPick(
+  openRounds: Pick<DebateOpenRounds, 'max_rebuttal_rounds' | 'required_rebuttal_rounds'>,
+  roundIndex: number
+) {
+  return roundIndex >= openRoundsRequiredRebuttalRounds(openRounds) && !isFinalOpenRound(openRounds, roundIndex);
+}
+
+/**
+ * The pause after `turnIndex` before the next required round starts, or `0` when that round (or
+ * thanking, or a decision) follows straight on. Only the last turn of a round before the last
+ * required one has one, and only on a debate that snapshotted a lead-in.
+ */
+export function openRoundLeadInAfterTurn(debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>, turnIndex: number) {
+  if (!isOpenRoundsDebate(debate) || turnIndex % 2 !== 1) return 0;
+  if (turnIndex + 1 >= debate.turn_durations_ms.length) return 0;
+  const openRounds = debate.open_rounds;
+  const roundIndex = openRoundIndexForTurn(turnIndex);
+  if (openRoundEndsOnPick(openRounds, roundIndex) || isFinalOpenRound(openRounds, roundIndex)) return 0;
+  return Math.max(0, openRounds.required_round_lead_in_ms ?? 0);
+}
+
 /**
  * Whether thanking follows this turn directly. For a fixed format that is its last turn. For Open
  * rounds it is only the second turn of the cap round: every other round's last turn is followed by
- * a decision, so "Debate ends soon" never belongs on it.
+ * a decision or the next round, so "Debate ends soon" never belongs on it.
  */
 export function isDebatesLastTurn(debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>, turnIndex: number) {
   if (turnIndex !== debate.turn_durations_ms.length - 1) return false;
   if (!isOpenRoundsDebate(debate)) return true;
   return turnIndex % 2 === 1 && isFinalOpenRound(debate.open_rounds, openRoundIndexForTurn(turnIndex));
+}
+
+/**
+ * How many rebuttal rounds an Open rounds debate unlocked (GEO-3180): `0` for one that ended after
+ * the opening, `null` for a fixed format, which has no rounds to count. Read off the last appended
+ * turn rather than `rounds[]`: only an Extend appends a round, so the appended turns are exactly
+ * the rounds both debaters agreed to — including the cap round, which never resolves into
+ * `rounds[]`. Round 0 is the opening, so the last turn's round is the rebuttal count.
+ */
+export function openRebuttalRoundCount(debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>): number | null {
+  if (!isOpenRoundsDebate(debate)) return null;
+  return openRoundIndexForTurn(debate.turn_durations_ms.length - 1);
+}
+
+/**
+ * Both picks of a resolved round, for the reveal (GEO-3179). `rounds[]` lists every resolved round;
+ * in the result window the block itself also carries the round that just resolved, which is the one
+ * a payload written in the same transaction as the resolution has. `null` until the round resolves.
+ */
+export function openRoundRevealedPicks(
+  openRounds: Pick<DebateOpenRounds, 'rounds' | 'round_index' | 'revealed_picks'>,
+  roundIndex: number
+): OpenRoundRevealedPick[] | null {
+  const history = openRounds.rounds?.find(round => round.round_index === roundIndex);
+  if (history?.picks?.length) return history.picks;
+  if (openRounds.round_index === roundIndex && openRounds.revealed_picks?.length) return openRounds.revealed_picks;
+  return null;
+}
+
+/**
+ * Whether the second turn of a round is running that ends on a pick, so whoever speaks it has the
+ * last word before both decide (GEO-3179). The cap round's second turn is the last word of the whole
+ * debate. A round that runs straight into the next (`openRoundEndsOnPick`) has neither.
+ */
+export function openRoundLastWord(
+  debate: Pick<Debate, 'turn_durations_ms' | 'open_rounds'>,
+  turnIndex: number | null
+): 'round' | 'debate' | null {
+  if (!isOpenRoundsDebate(debate) || turnIndex === null || turnIndex % 2 !== 1) return null;
+  const roundIndex = openRoundIndexForTurn(turnIndex);
+  if (isFinalOpenRound(debate.open_rounds, roundIndex)) return 'debate';
+  return openRoundEndsOnPick(debate.open_rounds, roundIndex) ? 'round' : null;
 }
 
 /**
@@ -101,10 +192,14 @@ export function debateTurnRoleForDebate(
 /**
  * What follows `turnIndex`, which ended at `turnEndsAtMs`, at `nowMs`.
  *
- * Fixed formats, the first turn of a round and the cap round's last turn answer `continue` at
- * `turnEndsAtMs`, which is exactly what the room did before Open rounds existed. Otherwise the turn
- * ended a round, and the round is deciding until it resolves, then in its result window until
- * `decision_resolved_at + result_window_ms`, then either the next round (`continue`) or thanking.
+ * Fixed formats, the first turn of a round, the last turn of a round that runs straight on
+ * (`openRoundEndsOnPick`) and the cap round's last turn answer `continue` at `turnEndsAtMs`, which is
+ * exactly what the room did before Open rounds existed; a round that runs straight on into a
+ * required round with a lead-in holds on that lead-in first, as a `result` with `leadIn` set.
+ * Otherwise the turn ended a round, and the round is deciding until it resolves, then in its result
+ * window until `decision_resolved_at + result_window_ms`, then thanking after an End. After an Extend
+ * the opener's count-in (`extend_count_in_ms`) follows the window, and then the next round
+ * (`continue`).
  *
  * An unresolved round stays `deciding` however late it gets: the room never falls through to
  * thanking because the last appended turn ended. Only the server's outcome ends a debate.
@@ -120,7 +215,17 @@ export function openRoundGapAfterTurn(
 
   const openRounds = debate.open_rounds;
   const roundIndex = openRoundIndexForTurn(turnIndex);
-  if (isFinalOpenRound(openRounds, roundIndex)) return proceed;
+  if (!openRoundEndsOnPick(openRounds, roundIndex)) {
+    // A required round has no pick, but may still be announced and counted in like an Extend.
+    const leadInMs = openRoundLeadInAfterTurn(debate, turnIndex);
+    if (leadInMs === 0) return proceed;
+    const nextPhaseStartsAtMs = turnEndsAtMs + leadInMs;
+    if (nowMs >= nextPhaseStartsAtMs) return { kind: 'continue', nextTurnStartsAtMs: nextPhaseStartsAtMs };
+    return {
+      kind: 'hold',
+      phase: { ...resultHold(roundIndex, 'extend', turnEndsAtMs, nextPhaseStartsAtMs), leadIn: true },
+    };
+  }
 
   const decisionDeadlineAtMs = turnEndsAtMs + openRounds.decision_window_ms;
   const deciding: OpenRoundGap = {
@@ -131,7 +236,10 @@ export function openRoundGapAfterTurn(
   const resolution = openRoundResolution(debate, roundIndex, turnEndsAtMs);
   if (!resolution || nowMs < resolution.resolvedAtMs) return deciding;
 
-  const nextPhaseStartsAtMs = resolution.resolvedAtMs + openRounds.result_window_ms;
+  const nextPhaseStartsAtMs =
+    resolution.resolvedAtMs +
+    openRounds.result_window_ms +
+    (resolution.outcome === 'extend' ? openRoundCountInMs(openRounds) : 0);
   const nextRoundAppended = turnIndex + 1 < debate.turn_durations_ms.length;
   // An Extend appends the next round in the same transaction that writes it, so an Extend without the
   // next round's turns is a payload that has not caught up; hold on the result rather than invent
@@ -139,19 +247,27 @@ export function openRoundGapAfterTurn(
   if (nowMs < nextPhaseStartsAtMs || (resolution.outcome === 'extend' && !nextRoundAppended)) {
     return {
       kind: 'hold',
-      phase: {
-        phase: 'result',
-        roundIndex,
-        isFinalRound: false,
-        outcome: resolution.outcome,
-        resolvedAtMs: resolution.resolvedAtMs,
-        nextPhaseStartsAtMs,
-      },
+      phase: resultHold(roundIndex, resolution.outcome, resolution.resolvedAtMs, nextPhaseStartsAtMs),
     };
   }
 
   if (resolution.outcome === 'end') return { kind: 'thanking', startsAtMs: nextPhaseStartsAtMs };
   return { kind: 'continue', nextTurnStartsAtMs: nextPhaseStartsAtMs };
+}
+
+/** The room's `result` phase: a round that resolved, or a lead-in into a required round. */
+function resultHold(
+  roundIndex: number,
+  outcome: OpenRoundPick,
+  resolvedAtMs: number,
+  nextPhaseStartsAtMs: number
+): Extract<OpenRoundsRoomPhase, { phase: 'result' }> {
+  return { phase: 'result', roundIndex, isFinalRound: false, outcome, resolvedAtMs, nextPhaseStartsAtMs };
+}
+
+/** The opener's count-in after an Extend or a lead-in. `0` from a geo-chat that does not send it. */
+export function openRoundCountInMs(openRounds: Pick<DebateOpenRounds, 'extend_count_in_ms'>) {
+  return Math.max(0, openRounds.extend_count_in_ms ?? 0);
 }
 
 /**
@@ -179,7 +295,10 @@ function openRoundResolution(
   const nextTurnIndex = roundIndex * 2 + 2;
   if (nextTurnIndex < debate.turn_durations_ms.length) {
     const nextStartedAtMs = debate.current_turn_index === nextTurnIndex ? timestampMs(debate.turn_started_at) : null;
-    const resolvedAtMs = nextStartedAtMs !== null ? nextStartedAtMs - openRounds.result_window_ms : roundEndedAtMs;
+    const resolvedAtMs =
+      nextStartedAtMs !== null
+        ? nextStartedAtMs - openRounds.result_window_ms - openRoundCountInMs(openRounds)
+        : roundEndedAtMs;
     return { resolvedAtMs: Math.max(roundEndedAtMs, resolvedAtMs), outcome: 'extend' };
   }
 

@@ -19,7 +19,7 @@ import { Ellipsis } from '~/design-system/icons/ellipsis';
 import { Menu } from '~/design-system/menu';
 import { Text } from '~/design-system/text';
 
-import { PILL_ACTION_CLASS } from './pill-action';
+import { CIRCLE_ACTION_CLASS, PILL_ACTION_CLASS } from './pill-action';
 
 /**
  * Whether the viewer may remove this debate, by geo-chat's rule: a participant, or an editor of the
@@ -57,11 +57,7 @@ export function DebateOverflowMenu({ debate, variant }: { debate: Debate; varian
       aria-label="More debate options"
       data-geo-analytics-label="Debate options"
       data-geo-analytics-intent="debate_action"
-      className={
-        variant === 'circle'
-          ? 'grid size-9 place-items-center rounded-full border border-grey-02 bg-white text-grey-04 shadow-light transition-colors hover:text-text'
-          : cx(PILL_ACTION_CLASS, 'w-7 justify-center px-0')
-      }
+      className={variant === 'circle' ? CIRCLE_ACTION_CLASS : cx(PILL_ACTION_CLASS, 'w-7 justify-center px-0')}
     >
       <Ellipsis />
     </button>

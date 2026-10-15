@@ -17,6 +17,33 @@ import { useNextDebate } from './use-next-debate';
 const NO_ENTITIES: ReadonlyMap<string, Entity> = new Map();
 const NO_CLAIMS: TimedClaim[] = [];
 
+/** How long before the debate's expected end the next-debate lookup starts. */
+export const NEXT_DEBATE_LEAD_MS = 45_000;
+/** Wait used when the debate carries no turn lengths to estimate its end from. */
+const NEXT_DEBATE_FALLBACK_WAIT_MS = 60_000;
+
+/**
+ * Whether the end card's "next debate" suggestion should be worked out yet.
+ *
+ * That lookup lists the space's debates (up to 500 rows, ~400 KB for the busiest space), so it is
+ * held back from the moment a debate becomes active — on the feed, page load — until shortly before
+ * the debate ends. The clock starts when `live` does and counts the turn allowance, which is an
+ * upper bound on the recording's length. A viewer who pauses just fires it early; one who seeks
+ * straight to the end gets it when the card shows, which is `shown` here.
+ */
+function useNextDebateDue(debate: Debate, live: boolean, shown: boolean): boolean {
+  const [due, setDue] = React.useState<string | null>(null);
+  const debateId = debate.id;
+  const totalMs = (debate.turn_durations_ms ?? []).reduce((sum, ms) => sum + ms, 0);
+  React.useEffect(() => {
+    if (!live) return;
+    const wait = totalMs > 0 ? Math.max(0, totalMs - NEXT_DEBATE_LEAD_MS) : NEXT_DEBATE_FALLBACK_WAIT_MS;
+    const timer = setTimeout(() => setDue(debateId), wait);
+    return () => clearTimeout(timer);
+  }, [live, debateId, totalMs]);
+  return live && (shown || due === debateId);
+}
+
 /** The claims the debate extracted, as the end card's carousel draws them. */
 export type EndCardClaims = {
   /** In the order they were said. Empty until the transcript and its timings have both answered. */
@@ -120,9 +147,11 @@ export function useDebateEndCard(debate: Debate, enabled: boolean, shown = false
     // fails, or never starts because the transcript failed, the entity is handed over anyway and
     // the claim asks for itself: its own row needs nothing from the transcript.
     entity: batchPending ? null : (entities[0] ?? null),
+    // The debate is over and this is its only claim: ask to save after the first vote.
+    savePromptSurface: 'single',
   });
 
-  const nextDebate = useNextDebate(debate, live);
+  const nextDebate = useNextDebate(debate, useNextDebateDue(debate, live, shown));
 
   const carousel = React.useMemo<EndCardClaims>(
     () => ({

@@ -18,7 +18,8 @@ type Claim = {
   /** null models a claim the graph reports no space for. */
   spaceId?: string | null;
   /**
-   * Values on the block → claim relation entity, where timecodes and the highlight score live.
+   * Values on the block → claim relation entity, where timecodes, the highlight score and the axis
+   * scores live.
    * Integers arrive from the API as strings, so these fixtures are written as strings too; floats
    * arrive as numbers.
    */
@@ -574,6 +575,87 @@ describe('published timecodes', () => {
     expect(two(null, 0.6).highlightScore).toBe(0.6);
     expect(two(0.6, null).highlightScore).toBe(0.6);
     expect(two(null, null).highlightScore).toBeNull();
+  });
+
+  const RELEVANCE = '3bce8adfccf14579b7dc2e736a30f1a1';
+  const QUALITY = '8f766c854dce400d97101b5aa3850382';
+  const CONTROVERSY = '5d32dba2b7a64da3a754e10f0bdc021b';
+
+  it('reads the three axis scores off the relation entity beside the highlight score', () => {
+    const values = [
+      { propertyId: '580ba596988144a79716cd38a891319b', float: 0.62 },
+      { propertyId: RELEVANCE, float: 0.8 },
+      { propertyId: QUALITY, float: 0.9 },
+      { propertyId: CONTROVERSY, float: 0.7 },
+    ];
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+    expect(all[0]).toMatchObject({
+      highlightScore: 0.62,
+      relevanceScore: 0.8,
+      qualityScore: 0.9,
+      controversyScore: 0.7,
+    });
+  });
+
+  it('reports null for an axis the relation entity does not carry, or carries out of range', () => {
+    const values = [
+      { propertyId: RELEVANCE, float: 1.5 },
+      { propertyId: QUALITY, float: 0.9 },
+    ];
+    const { all } = group(response([{ id: 'block-1', claims: [{ id: 'c1', offsets: values }] }]));
+    expect(all[0]).toMatchObject({
+      highlightScore: null,
+      relevanceScore: null,
+      qualityScore: 0.9,
+      controversyScore: null,
+    });
+  });
+
+  it('gives a restated claim the highest of each axis across its statements, each axis on its own', () => {
+    const row = group(
+      response([
+        {
+          id: 'block-1',
+          position: 'a1',
+          author: PRESTON,
+          claims: [
+            {
+              id: 'claim-1',
+              offsets: [
+                { propertyId: RELEVANCE, float: 0.3 },
+                { propertyId: QUALITY, float: 0.9 },
+              ],
+            },
+          ],
+        },
+        {
+          id: 'block-2',
+          position: 'a2',
+          author: ARTURAS,
+          claims: [{ id: 'claim-1', offsets: [{ propertyId: RELEVANCE, float: 0.8 }] }],
+        },
+      ])
+    ).all[0];
+    expect(row).toMatchObject({ restated: true, relevanceScore: 0.8, qualityScore: 0.9, controversyScore: null });
+
+    // Whichever statement comes first in (random) publish order, the highest stands.
+    const reversed = group(
+      response([
+        {
+          id: 'block-1',
+          position: 'a1',
+          author: PRESTON,
+          claims: [{ id: 'claim-1', offsets: [{ propertyId: RELEVANCE, float: 0.8 }] }],
+        },
+        {
+          id: 'block-2',
+          position: 'a2',
+          author: ARTURAS,
+          claims: [{ id: 'claim-1', offsets: [{ propertyId: RELEVANCE, float: 0.3 }] }],
+        },
+      ])
+    ).all[0];
+    expect(reversed).toMatchObject({ restated: true, relevanceScore: 0.8 });
   });
 
   it('carries the block each claim was said in, so its turn can be located on the recording', () => {

@@ -4,7 +4,7 @@ import {
   type ClaimStance,
   type DebateClaimInput,
   type DebatePublishTurn,
-  publishableHighlightScore,
+  publishableScore,
   publishableTiming,
 } from '../debate-publish-draft';
 import { looksLikeEntityId } from './claim-reuse';
@@ -59,11 +59,29 @@ export type DebateExtractedClaimsClaim = {
   start_ms?: number | null;
   end_ms?: number | null;
   /**
+   * GEO-3325: the room turn the claim was said in — the room's own count, the one
+   * `turn_durations_ms` indexes — which geo-chat places at read time from `start_ms` and the
+   * speaker's turns on the rendered timeline. Unlike `turn_index`, which counts changes of speaker,
+   * it is not shifted by a turn nobody spoke in. Absent when geo-chat could not place the claim (no
+   * timing, or no room turn of that speaker holds it) and on reads from before it shipped.
+   */
+  room_turn_index?: number | null;
+  /**
    * How much the claim carries the debate, 0–1: extraction-api's `claims.score_highlights`
    * answer, carried by geo-chat when `EXTRACTION_HIGHLIGHT_SCORING` is on. Null when the claim
    * was not scored, and absent on payloads from before scoring shipped.
    */
   highlight_score?: number | null;
+  /**
+   * The three axis scores the same `claims.score_highlights` run returns, each 0–1 (a position on
+   * a four-level scale): how directly the claim bears on the debated claim, whether it stands as a
+   * faithful, single, self-contained statement, and how likely an audience is to split on it. Null
+   * when the claim was not scored or the task did not report that axis; absent on payloads from
+   * before the axes shipped.
+   */
+  relevance_score?: number | null;
+  quality_score?: number | null;
+  controversy_score?: number | null;
   /**
    * GEO-3142: the claim's stance toward the debated claim — `supports`, `opposes` or `addresses`
    * — judged by the extractor on what the claim says, not on the speaker's side. Null when the
@@ -123,7 +141,10 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
     topics: decodeTopics(claim.topics, droppedTopics),
     isContestable: claim.is_contestable === true,
     timing: decodeTiming(claim.start_ms, claim.end_ms),
-    highlightScore: decodeHighlightScore(claim.highlight_score, droppedScores),
+    highlightScore: decodeScore('highlight_score', claim.highlight_score, droppedScores),
+    relevanceScore: decodeScore('relevance_score', claim.relevance_score, droppedScores),
+    qualityScore: decodeScore('quality_score', claim.quality_score, droppedScores),
+    controversyScore: decodeScore('controversy_score', claim.controversy_score, droppedScores),
     stance: decodeStance(claim.stance),
   }));
   if (droppedTopics.length > 0) {
@@ -145,7 +166,7 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
   if (droppedScores.length > 0) {
     // A score that is present but not a number in [0, 1] is drift — a retyped field upstream
     // would otherwise publish every debate unscored with nothing in the logs to say why.
-    console.warn('[debate-acceptor] dropping extracted-claim highlight scores that are not in [0, 1]', {
+    console.warn('[debate-acceptor] dropping extracted-claim highlight scores or axis scores that are not in [0, 1]', {
       count: droppedScores.length,
       sample: droppedScores.slice(0, 5),
     });
@@ -153,10 +174,17 @@ export function decodeExtractedClaims(response: DebateExtractedClaimsResponse): 
   if (claims.length > 0) {
     // Scores are written once: a debate published unscored stays unscored (no backfill), so the
     // count has to be visible here. `model` null with claims present means scoring did not run
-    // or failed upstream; a model with zero scored means the field was dropped on the way.
+    // or failed upstream; a model with zero scored means the field was dropped on the way. The
+    // The axes come from the same run, so an axis count below `scored` means that axis went
+    // missing upstream: an older task that does not answer it, or a value geo-chat refused.
     console.log('[debate-acceptor] highlight scores decoded', {
       claims: claims.length,
       scored: claims.filter(claim => claim.highlightScore !== null).length,
+      axes: {
+        relevance: claims.filter(claim => claim.relevanceScore !== null).length,
+        quality: claims.filter(claim => claim.qualityScore !== null).length,
+        controversy: claims.filter(claim => claim.controversyScore !== null).length,
+      },
       model: typeof response.highlight_model === 'string' ? response.highlight_model : null,
     });
   }
@@ -223,15 +251,17 @@ function decodeTiming(startMs: unknown, endMs: unknown): { startMs: number; endM
 }
 
 /**
- * `highlight_score` → a score, only when it is a finite number in [0, 1]. Anything else is null,
- * so nothing is published: the player ranks claims by this, and a malformed value would rank.
- * Null and absent are the ordinary "not scored"; a present value that fails is recorded in
- * `dropped` so the decoder can say so.
+ * `highlight_score` or an axis score → a score, only when it is a finite number in [0, 1].
+ * Anything else is null, so nothing is published: the player ranks claims by these, and a
+ * malformed value would rank. Null and absent are the ordinary "not scored"; a present value that
+ * fails is recorded in `dropped` so the decoder can say so.
  */
-function decodeHighlightScore(score: unknown, dropped: unknown[]): number | null {
+function decodeScore(field: string, score: unknown, dropped: unknown[]): number | null {
   if (score === null || score === undefined) return null;
-  const accepted = typeof score === 'number' ? publishableHighlightScore(score) : null;
-  if (accepted === null) dropped.push(score);
+  const accepted = typeof score === 'number' ? publishableScore(score) : null;
+  // Labelled, because the highlight score drifting breaks the ranking and an axis drifting does
+  // not yet break anything visible; the log has to say which.
+  if (accepted === null) dropped.push({ field, value: score });
   return accepted;
 }
 

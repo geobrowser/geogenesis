@@ -6,6 +6,7 @@ import {
   adminDebatesByCell,
   blockLabel,
   countByState,
+  dayShift,
   matchSentence,
   matchState,
   showsOffHours,
@@ -217,6 +218,16 @@ describe('countByState and adminDebatesByCell', () => {
 });
 
 describe('zoneCity', () => {
+  it('says how many calendar days apart two zones are, past one as well', () => {
+    // 10:30 GMT on 6 October: 12:30 AM on the 7th in Kiritimati, 11:30 PM on the 5th in Pago Pago.
+    const at = Date.parse('2026-10-06T10:30:00Z');
+    expect(dayShift(at, 'Pacific/Pago_Pago', 'Pacific/Kiritimati')).toBe(' (2 days before)');
+    expect(dayShift(at, 'Pacific/Kiritimati', 'Pacific/Pago_Pago')).toBe(' (2 days after)');
+    expect(dayShift(at, 'Europe/Madrid', 'Pacific/Kiritimati')).toBe(' (day before)');
+    expect(dayShift(at, 'Pacific/Kiritimati', 'UTC')).toBe(' (next day)');
+    expect(dayShift(at, 'Europe/Madrid', 'UTC')).toBe('');
+  });
+
   it('says a zone the way people do', () => {
     expect(zoneCity('America/New_York')).toBe('New York');
     expect(zoneCity('Europe/Madrid')).toBe('Madrid');

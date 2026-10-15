@@ -48,8 +48,9 @@ const NO_RANKING: ReadonlyMap<string, number> = new Map();
  * faces through `useProfilesBySpaceIds`. The same queries on the same keys, so a viewer who has been
  * on either page gets a cache read.
  *
- * `live` is the end card's own latch: on once the debate has been active, so the suggestion is worked
- * out while the debate plays rather than after it ends. The watched list is subscribed to, so a
+ * `live` is the end card's own latch for this lookup: on shortly before the debate is expected to end
+ * (see `useNextDebateDue`), so the suggestion is worked out while the debate plays rather than after
+ * it ends, without listing the space's debates at page load. The watched list is subscribed to, so a
  * debate finished anywhere drops out of the suggestion at once. Recording a finished debate is the
  * player's — see `DebateFeedPlayer` — because a compact tile finishes debates without ever showing
  * this card.

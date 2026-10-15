@@ -1,5 +1,6 @@
 import { capture } from '~/core/analytics';
 import { db } from '~/core/database/indexeddb';
+import { addTelemetryBreadcrumb, reportEvent } from '~/core/telemetry/logger';
 
 import { GeoChatRequestError, type LocalRecordingPartUrl, type ObjectStoreUpload } from './api';
 import { RecordingUploadError, recordingStorageHttpError } from './recording-upload-errors';
@@ -381,13 +382,35 @@ export type RecordingPartTransport = {
   abortMultipart: (filename: string, uploadId: string) => Promise<void>;
 };
 
+/** Why the live upload is standing down for the call. Reported, so a stream that never ran says why. */
+export type RecordingPauseReason = 'connection_poor' | 'room_not_connected' | 'offline';
+
+/**
+ * A recording that is not streaming during the debate, and why. Reported once per recording, as
+ * soon as it is known: the whole recording is then one upload after the debate, over the same
+ * connection, which is the case most likely to lose it.
+ */
+export type RecordingStreamStall = {
+  reason: 'start_failed' | 'paused' | 'routes_missing';
+  pause_reason: RecordingPauseReason | null;
+  start_attempts: number;
+  bytes_recorded: number;
+  paused_ms: number;
+};
+
 export type RecordingPartStreamerOptions = RecordingPartTransport & {
   /**
    * Called before every part. The upload shares the participant's upstream with the live call,
    * so it yields whenever the call is struggling — the bytes are safe in IndexedDB and go out
    * after the debate instead, which is exactly what happened before streaming existed.
+   *
+   * Returns why it should pause, or `false`/`null` when it should not. A plain `true` is read as
+   * `connection_poor`. It never stops the upload being opened, only parts being sent, and a pause
+   * that lasts {@link MAX_CONTINUOUS_PAUSE_MS} lets one part through.
    */
-  shouldPause: () => boolean;
+  shouldPause: () => boolean | RecordingPauseReason | null;
+  /** The recording has not started streaming {@link STREAM_STALL_AFTER_MS} after its first bytes. */
+  onStall?: (stall: RecordingStreamStall) => void;
   /** Persists progress so a reload knows which parts already landed. */
   onMultipartChange?: (multipart: StreamedRecordingMultipart) => void;
   setTimer?: (callback: () => void, delayMs: number) => unknown;
@@ -408,6 +431,20 @@ const PAUSE_RECHECK_MS = 3_000;
 const MIN_RETRY_MS = 2_000;
 const MAX_RETRY_MS = 30_000;
 const MAX_START_ATTEMPTS = 3;
+/**
+ * The longest the live upload stands down in one stretch before it sends a part anyway, one per
+ * stretch. A pause that never lifts used to mean no part at all: the whole recording went up in
+ * one PUT after the debate, over the connection that had been too poor to stream it (GEO-3171).
+ * One 5 MiB part a minute is under 0.7 Mbps, well below what the recording itself is made at.
+ */
+export const MAX_CONTINUOUS_PAUSE_MS = 60_000;
+/** How long after its first bytes a recording that has not started streaming is reported. */
+export const STREAM_STALL_AFTER_MS = 30_000;
+
+function pauseReason(value: boolean | RecordingPauseReason | null): RecordingPauseReason | null {
+  if (!value) return null;
+  return value === true ? 'connection_poor' : value;
+}
 
 /**
  * Uploads a growing recording to R2 one fixed-size part at a time, while it is recorded.
@@ -432,7 +469,19 @@ export class RecordingPartStreamer {
   private disabled = false;
   private stopped = false;
   private pausedMs = 0;
+  private readonly pausedMsByReason: Record<RecordingPauseReason, number> = {
+    connection_poor: 0,
+    room_not_connected: 0,
+    offline: 0,
+  };
+  /** Paused since the last part went out (or since the start): what {@link MAX_CONTINUOUS_PAUSE_MS} bounds. */
+  private continuousPausedMs = 0;
+  private lastPauseReason: RecordingPauseReason | null = null;
+  private partsSentThroughPause = 0;
   private partFailures = 0;
+  private startFailures = 0;
+  private stallTimer: unknown = null;
+  private stallReported = false;
 
   constructor(options: RecordingPartStreamerOptions) {
     this.options = {
@@ -458,12 +507,34 @@ export class RecordingPartStreamer {
   append(chunk: Blob): void {
     if (this.stopped || chunk.size === 0) return;
     this.ledger.append(chunk);
-    this.schedule(0);
+    this.wake();
   }
 
   /** New bytes are in the shared ledger: send any part they complete. */
   wake(): void {
     this.schedule(0);
+    this.armStallCheck();
+  }
+
+  private armStallCheck() {
+    if (this.stallTimer !== null || this.stallReported || this.multipart || this.stopped) return;
+    this.stallTimer = this.options.setTimer(() => {
+      this.stallTimer = null;
+      this.reportStall();
+    }, STREAM_STALL_AFTER_MS);
+  }
+
+  /** Once per recording: it is not streaming, and why. */
+  private reportStall() {
+    if (this.stallReported || this.multipart || this.stopped) return;
+    this.stallReported = true;
+    this.options.onStall?.({
+      reason: this.disabled ? 'routes_missing' : this.startFailures > 0 ? 'start_failed' : 'paused',
+      pause_reason: this.lastPauseReason,
+      start_attempts: this.startAttempts,
+      bytes_recorded: this.byteSize,
+      paused_ms: this.pausedMs,
+    });
   }
 
   /**
@@ -482,6 +553,8 @@ export class RecordingPartStreamer {
    * part already on the wire so its number is recorded, but never for more parts.
    */
   async finish(): Promise<StreamedRecordingMultipart | null> {
+    // A recording that never streamed is reported now if its stall check had not come round yet.
+    if (this.byteSize > 0) this.reportStall();
     this.stopped = true;
     this.clearScheduled();
     if (this.inFlight) {
@@ -517,6 +590,12 @@ export class RecordingPartStreamer {
       parts_uploaded_live: this.uploaded.size,
       total_parts: partSize ? totalPartCount(this.byteSize, partSize) : null,
       paused_ms: this.pausedMs,
+      paused_connection_poor_ms: this.pausedMsByReason.connection_poor,
+      paused_room_not_connected_ms: this.pausedMsByReason.room_not_connected,
+      paused_offline_ms: this.pausedMsByReason.offline,
+      parts_sent_through_pause: this.partsSentThroughPause,
+      start_attempts: this.startAttempts,
+      start_failures: this.startFailures,
       part_failures: this.partFailures,
       peak_retained_bytes: this.ledger.peakRetainedBytes,
       spilled_chunks: this.ledger.spilledChunks,
@@ -541,6 +620,10 @@ export class RecordingPartStreamer {
       this.options.clearTimer(this.timer);
       this.timer = null;
     }
+    if (this.stallTimer !== null) {
+      this.options.clearTimer(this.stallTimer);
+      this.stallTimer = null;
+    }
   }
 
   private nextPartNumber(): number | null {
@@ -554,31 +637,57 @@ export class RecordingPartStreamer {
 
   private async pump(): Promise<void> {
     if (this.stopped || this.disabled || this.inFlight) return;
-    if (this.options.shouldPause()) {
-      this.pausedMs += PAUSE_RECHECK_MS;
-      this.schedule(PAUSE_RECHECK_MS);
-      return;
+    // Opening the upload is one small request, so it is never held back for the call: a pause that
+    // held from the first second used to leave a debate with no live upload at all (GEO-3171).
+    // Parts are what compete with the call, and they stand down — but not for ever.
+    let throughPause = false;
+    if (this.multipart && this.nextPartNumber() !== null) {
+      const reason = pauseReason(this.options.shouldPause());
+      if (reason) {
+        this.lastPauseReason = reason;
+        if (this.continuousPausedMs < MAX_CONTINUOUS_PAUSE_MS) {
+          this.pausedMs += PAUSE_RECHECK_MS;
+          this.pausedMsByReason[reason] += PAUSE_RECHECK_MS;
+          this.continuousPausedMs += PAUSE_RECHECK_MS;
+          this.schedule(PAUSE_RECHECK_MS);
+          return;
+        }
+        throughPause = true;
+      }
+    } else if (!this.multipart) {
+      // Still recorded, so a recording that cannot open its upload says what the call was doing.
+      const reason = pauseReason(this.options.shouldPause());
+      if (reason) this.lastPauseReason = reason;
     }
-    const step = this.multipart ? this.sendNextPart() : this.start();
+    const sendingPart = this.multipart !== null;
+    const step = sendingPart ? this.sendNextPart() : this.start();
     this.inFlight = step;
     try {
       await step;
       this.failures = 0;
+      if (sendingPart) {
+        this.continuousPausedMs = 0;
+        if (throughPause) this.partsSentThroughPause += 1;
+      }
     } catch (error) {
       this.failures += 1;
       if (this.multipart) this.partFailures += 1;
+      else this.startFailures += 1;
       if (!this.multipart && isMissingRouteError(error)) {
         // A geo-chat without the multipart routes. The recording still uploads after the debate,
         // as one PUT, exactly as it did before.
         this.disabled = true;
         return;
       }
-      if (!this.multipart && this.startAttempts >= MAX_START_ATTEMPTS) {
-        this.disabled = true;
-        return;
-      }
       this.inFlight = null;
-      this.schedule(Math.min(MAX_RETRY_MS, MIN_RETRY_MS * 2 ** (this.failures - 1)));
+      // Opening the upload is retried for as long as the recording runs, at most every
+      // {@link MAX_RETRY_MS} once it has failed {@link MAX_START_ATTEMPTS} times: giving up left the
+      // whole recording to one upload after the debate.
+      const delay =
+        !this.multipart && this.startAttempts >= MAX_START_ATTEMPTS
+          ? MAX_RETRY_MS
+          : Math.min(MAX_RETRY_MS, MIN_RETRY_MS * 2 ** (this.failures - 1));
+      this.schedule(delay);
       return;
     } finally {
       if (this.inFlight === step) this.inFlight = null;
@@ -742,6 +851,33 @@ export type LiveRecordingStream = {
  * Failures here are logged and swallowed, never thrown into the recorder: a quota error or a
  * dead connection costs the protection this adds, not the recording.
  */
+/**
+ * A recording that is not streaming during the debate. Everything it holds goes up after the
+ * debate instead, in one upload, which is how one participant's recording was lost (GEO-3171): no
+ * event said streaming had not started until the debate was over, and none said why.
+ */
+export function reportRecordingStreamStall(debateId: string, stall: RecordingStreamStall) {
+  console.warn('[DebateRecording] the recording is not streaming during the debate:', stall);
+  try {
+    const { reason: stallReason, ...details } = stall;
+    capture('debate_recording_upload_fallback', {
+      debate_id: debateId,
+      reason: 'stream_not_started',
+      stall_reason: stallReason,
+      ...details,
+    });
+    addTelemetryBreadcrumb('debate.recording', 'stream_not_started', { debate_id: debateId, ...stall }, 'warning');
+    reportEvent({
+      name: 'debate_recording_stream_not_started',
+      level: 'warning',
+      tags: { reason: stall.reason, pause_reason: stall.pause_reason ?? 'none' },
+      extra: { debate_id: debateId, ...stall },
+    });
+  } catch {
+    // Reporting must never touch the recording.
+  }
+}
+
 export function startLiveRecordingStream({
   id,
   metadata,
@@ -752,7 +888,7 @@ export function startLiveRecordingStream({
   id: string;
   metadata: RecordingStreamMetadata;
   transport: RecordingPartTransport;
-  shouldPause: () => boolean;
+  shouldPause: () => boolean | RecordingPauseReason | null;
   /** For tests. */
   retainedBytesLimit?: number;
 }): LiveRecordingStream {
@@ -768,6 +904,7 @@ export function startLiveRecordingStream({
     shouldPause,
     ledger,
     readDurable,
+    onStall: stall => reportRecordingStreamStall(metadata.debateId, stall),
     onMultipartChange: multipart => {
       writes = writes.then(() =>
         setRecordingStreamMultipart(id, multipart).catch(error =>

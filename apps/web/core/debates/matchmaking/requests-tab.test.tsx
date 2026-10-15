@@ -19,7 +19,15 @@ const mocks = vi.hoisted(() => ({
   rejectChallenge: vi.fn(),
   currentUserId: 'user-me' as string | null,
   peerAvailability: false,
-  scheduled: { answerable: [], upcoming: [], people: [], requestsError: null, roomsError: null } as ScheduledContent,
+  scheduled: {
+    answerable: [],
+    upcoming: [],
+    lobbies: [],
+    people: [],
+    requestsError: null,
+    roomsError: null,
+    lobbiesError: null,
+  } as ScheduledContent,
 }));
 
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
@@ -29,6 +37,12 @@ vi.mock('~/core/state/feature-flags', async importOriginal => ({
 
 // The section's own rendering needs a QueryClientProvider, which this suite deliberately does without
 // (see below). Stubbed, because what is under test here is whether the section appears at all.
+// Reads the scheduled-debates query, like the section above, and is covered by its own suite.
+vi.mock('./availability-request-notice', () => ({
+  useAvailabilityRequests: () => [],
+  AvailabilityRequestNotice: () => null,
+}));
+
 vi.mock('./scheduled-debates-section', async importOriginal => ({
   ...(await importOriginal<typeof import('./scheduled-debates-section')>()),
   useScheduledContent: () => mocks.scheduled,
@@ -428,9 +442,11 @@ describe('RequestsTab', () => {
 const EMPTY_SCHEDULED: ScheduledContent = {
   answerable: [],
   upcoming: [],
+  lobbies: [],
   people: [],
   requestsError: null,
   roomsError: null,
+  lobbiesError: null,
 };
 
 describe('dense (workspace rail) visibility', () => {
@@ -491,6 +507,25 @@ describe('dense (workspace rail) visibility', () => {
   it('appears for an upcoming room', () => {
     mocks.peerAvailability = true;
     mocks.scheduled = { ...EMPTY_SCHEDULED, upcoming: [{ id: 'room-1' }] as unknown as ScheduledContent['upcoming'] };
+    const { container } = render(<RequestsTab dense />);
+
+    expect(container.innerHTML).not.toBe('');
+  });
+
+  it('appears when the lobby list could not be read', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduled = { ...EMPTY_SCHEDULED, lobbiesError: new Error('nope') };
+    const { container } = render(<RequestsTab dense />);
+
+    expect(container.innerHTML).not.toBe('');
+  });
+
+  it('appears for a lobby the viewer is going to', () => {
+    mocks.peerAvailability = true;
+    mocks.scheduled = {
+      ...EMPTY_SCHEDULED,
+      lobbies: [{ lobbyId: 'lobby-1' }] as unknown as ScheduledContent['lobbies'],
+    };
     const { container } = render(<RequestsTab dense />);
 
     expect(container.innerHTML).not.toBe('');

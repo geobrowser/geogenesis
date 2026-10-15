@@ -7,25 +7,15 @@ import * as React from 'react';
 import cx from 'classnames';
 import { useAtom } from 'jotai';
 
-import { resolveClaimResponseKind } from '~/core/claims/browse/use-claim-response-state';
 import { DEBATE_TAG_ID } from '~/core/debates/ontology';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { usePrivySignIn } from '~/core/hooks/use-privy-sign-in';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
-import { ID } from '~/core/id';
-import { responsePositionLabel } from '~/core/responses/entity-response';
-import { validateEntityId } from '~/core/utils/utils';
 
 import { Input } from '~/design-system/input';
 
-import type {
-  DebateClaim,
-  DebateClaimPositionSummary,
-  MatchmakingClaim,
-  MatchmakingClaimsFilter,
-  MatchmakingClaimsQuery,
-} from '../api';
+import type { MatchmakingClaim, MatchmakingClaimsFilter, MatchmakingClaimsQuery } from '../api';
 import { eligibleClaimSpaceIds, isClaimSpaceAllowed } from '../claim-space-allowlist';
 import { useDebateActivity, useDebateClaimsBySpaces, useGeoChatAuth } from '../hooks';
 import {
@@ -48,10 +38,18 @@ import type { DebateAnalyticsSurface } from './hub-analytics';
 import { HubFacetRail } from './hub-facet-rail';
 import { type HubFilterOption, HubMultiFilterMenu, pickerLabel } from './hub-filter-menu';
 import { HubCardList } from './hub-motion';
-import { HubQueryState, HubSkeleton } from './hub-states';
+import { useHubScrollSelector } from './hub-scroll';
+import { HubQueryState, HubSkeleton, exploreClaimsAction } from './hub-states';
 import { HideMyPositionsSwitch } from './matches-only-switch';
 import { MatchmakingClaimCard } from './matchmaking-claim-card';
 import { OutboundRequestCard } from './outbound-request-card';
+import {
+  claimRowGroups,
+  placedAnswersReady,
+  placedClaimKey,
+  rowsByPlacedClaim,
+  taggedClaimEntry,
+} from './tagged-claim-entry';
 import { keepSelectableTopics, orderFacetOptions, toggleId } from './topic-facets';
 import { useDebouncedSearch } from './use-debounced-search';
 import { useDebouncedSelection } from './use-debounced-selection';
@@ -59,6 +57,7 @@ import { useScopedMatchmakingClaims } from './use-scoped-claims';
 import { useSpaceFilterMenu } from './use-space-filter-selection';
 import { useStableListOrder } from './use-stable-list-order';
 import {
+  type DebatesHubTab,
   debatesHubExploreSearchAtom,
   debatesHubExploreSpaceIdsAtom,
   debatesHubExploreSpaceSeedSpentAtom,
@@ -72,6 +71,10 @@ import {
   debatesHubPositionsSpaceIdsAtom,
   debatesHubPositionsSpaceSeedSpentAtom,
   debatesHubPositionsTopicIdsAtom,
+  lobbyExploreSearchAtom,
+  lobbyExploreSpaceIdsAtom,
+  lobbyExploreSpaceSeedSpentAtom,
+  lobbyExploreTopicIdsAtom,
 } from '~/atoms';
 
 /**
@@ -138,6 +141,9 @@ const DEBATE_CLAIMS_QUERY_PREFIX = ['debates', 'claims'] as const;
  */
 export type ClaimsTabVariant = 'explore' | 'lobby' | 'positions';
 
+/** Every list the tab draws: the hub's, plus the debate lobby's Explore tab (`lobbyExplore`). */
+export type ClaimsListVariant = ClaimsTabVariant | 'lobbyExplore';
+
 /** Every value the `list` param may name, for validating one that arrived from outside. */
 export const CLAIMS_TAB_VARIANTS: readonly ClaimsTabVariant[] = ['explore', 'lobby', 'positions'];
 
@@ -180,7 +186,8 @@ export type ClaimsLayout = 'panel' | 'workspace';
  *
  * The expand link carries the selection in the URL regardless, and the workspace seeds from it on
  * mount, because a link is the one way onto this surface with no session behind it — a shared or
- * reopened `/matchmaking?…` meets those atoms at their defaults. Seeding only; nothing goes back.
+ * reopened `/matchmaking?…` meets those atoms at their defaults. The workspace writes changes back
+ * to the URL (GEO-3298) so the address bar stays a link to what is on screen; the panel does not.
  */
 export const VARIANT_ATOMS = {
   explore: {
@@ -203,17 +210,47 @@ export const VARIANT_ATOMS = {
     search: debatesHubLobbySearchAtom,
     seedSpent: debatesHubLobbySpaceSeedSpentAtom,
   },
-} as const;
+  lobbyExplore: {
+    spaceIds: lobbyExploreSpaceIdsAtom,
+    topicIds: lobbyExploreTopicIdsAtom,
+    search: lobbyExploreSearchAtom,
+    seedSpent: lobbyExploreSpaceSeedSpentAtom,
+  },
+} as const satisfies Record<ClaimsListVariant, unknown>;
+
+/**
+ * Where each list reports, and whether it hides the viewer's answered claims. `lobbyExplore` reads the
+ * Debate tag like `explore`, but its cards offer requests only on a side taken, so it keeps them.
+ */
+const LIST_SURFACE: Record<ClaimsListVariant, { analyticsSurface: DebateAnalyticsSurface; hidesAnswered: boolean }> = {
+  explore: { analyticsSurface: 'hub', hidesAnswered: true },
+  lobby: { analyticsSurface: 'hub', hidesAnswered: true },
+  positions: { analyticsSurface: 'hub', hidesAnswered: true },
+  lobbyExplore: { analyticsSurface: 'lobby', hidesAnswered: false },
+};
+
+/** What the tab would hand its own card, for a host drawing the card itself. */
+export type ClaimCardDefaults = { answersReady: boolean; allowsSignedOutVotes: boolean };
 
 export function ClaimsTab({
   variant = 'explore',
+  renderClaim,
+  onVisibleClaims,
+  stickyTopClassName,
   trailing,
   warm = false,
   onSettledEmpty,
+  onTabChange,
   layout = 'panel',
   scopePicker,
 }: {
-  variant?: ClaimsTabVariant;
+  variant?: ClaimsListVariant;
+  /** Draws each claim in place of the default card, for a host with its own offer (the lobby). */
+  renderClaim?: (entry: MatchmakingClaim, card: ClaimCardDefaults) => React.ReactElement;
+  /** The claims on screen, after each change. */
+  onVisibleClaims?: (entries: MatchmakingClaim[]) => void;
+  /** Where the pinned controls stop, for a host scrolling the page under a fixed bar. */
+  stickyTopClassName?: string;
   /** Rendered at the end of the filter row. Lobby passes its "Matches only" switch. */
   trailing?: React.ReactNode;
   /**
@@ -224,6 +261,11 @@ export function ClaimsTab({
    * not fired for a filtered empty list, which is a question the viewer asked and got an answer to.
    */
   onSettledEmpty?: () => void;
+  /**
+   * Only reached from an empty, unfiltered list's action, as on Matches and People. Lobby passes it:
+   * with nobody ready to debate, the corpus is the one list that always has something on it.
+   */
+  onTabChange?: (tab: DebatesHubTab) => void;
   /**
    * Run the queries, draw nothing (GEO-2863).
    *
@@ -247,6 +289,7 @@ export function ClaimsTab({
 } = {}) {
   const isLobby = variant === 'lobby';
   const atoms = VARIANT_ATOMS[variant];
+  const { analyticsSurface, hidesAnswered } = LIST_SURFACE[variant];
   const workspace = layout === 'workspace';
   const queryClient = useQueryClient();
   const { authenticated, accountKey } = useGeoChatAuth();
@@ -429,7 +472,7 @@ export function ClaimsTab({
   // stored preference rather than on anything about the answers, so the query does not change when
   // they land.
   const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
-  const excludesAnswered = graphSourced && !isLobby && authenticated && hideMyPositions;
+  const excludesAnswered = graphSourced && !isLobby && hidesAnswered && authenticated && hideMyPositions;
   const excludeAnsweredBy = excludesAnswered ? personalSpaceId : null;
   // Until the account's space is known there is no telling which claims to leave out, and asking
   // without it would draw the answered ones and then take them back.
@@ -491,19 +534,13 @@ export function ClaimsTab({
   // not yet resolved. `fetchDebateClaims` sends `auth: 'optional'` when it has no account, so a
   // request in that window succeeds and comes back with every viewer field null; the rows still
   // carry the public ones, so the card drew its avatars while reporting no response from the viewer.
-  const taggedGroups = React.useMemo(() => {
-    if (!authenticated || !accountKey) return [];
-    const bySpace = new Map<string, string[]>();
-    for (const { claim, spaceId } of taggedPage) {
-      if (!validateEntityId(claim.entity.id)) continue;
-      const existing = bySpace.get(spaceId);
-      if (existing) existing.push(claim.entity.id);
-      else bySpace.set(spaceId, [claim.entity.id]);
-    }
-    return [...bySpace.entries()]
-      .sort(([a], [b]) => a.localeCompare(b))
-      .map(([spaceId, claimIds]) => ({ spaceId, claimIds }));
-  }, [accountKey, authenticated, taggedPage]);
+  const taggedGroups = React.useMemo(
+    () =>
+      authenticated && accountKey
+        ? claimRowGroups(taggedPage.map(({ claim, spaceId }) => ({ spaceId, claimId: claim.entity.id })))
+        : [],
+    [accountKey, authenticated, taggedPage]
+  );
   const taggedRows = useDebateClaimsBySpaces(taggedGroups);
 
   // The page in the shape the rest of the tab already speaks. geo-chat has a row for a claim only
@@ -516,34 +553,15 @@ export function ClaimsTab({
     // of them comes back twice — once per space, each with that space's sides, readiness and live
     // debate. Keyed on the claim alone the map keeps whichever arrived last, and would draw one
     // space's answers onto another space's card and publish into the second.
-    const rowsBySpaceAndClaim = new Map(
-      taggedRows.claims.map(row => [`${ID.uuidToHex(row.space_id)}:${ID.uuidToHex(row.claim_entity_id)}`, row])
+    const rowsBySpaceAndClaim = rowsByPlacedClaim(taggedRows.claims);
+
+    return taggedPage.map(({ claim, spaceId }) =>
+      taggedClaimEntry(
+        claim.entity,
+        spaceId,
+        rowsBySpaceAndClaim.get(placedClaimKey({ spaceId, claimId: claim.entity.id }))
+      )
     );
-
-    return taggedPage.map(({ claim, spaceId }) => {
-      const row = rowsBySpaceAndClaim.get(`${ID.uuidToHex(spaceId)}:${ID.uuidToHex(claim.entity.id)}`);
-      const responseKind = resolveClaimResponseKind();
-
-      return {
-        claim: {
-          id: row?.id ?? claim.entity.id,
-          space_id: spaceId,
-          claim_entity_id: claim.entity.id,
-          claim: claim.entity.name ?? '',
-          description: claim.entity.description,
-        },
-        topics: [],
-        response_kind: responseKind,
-        viewer_response: row?.viewer_response ?? null,
-        viewer_position: row?.viewer_response?.position ?? null,
-        viewer_debate_ready: row?.viewer_debate_ready ?? false,
-        readiness_disabled_reason: row?.readiness_disabled_reason ?? null,
-        positions: taggedPositionSummaries(row),
-        // The index's ranking score, which this list is ordered by on the server and doesn't re-sort.
-        score: 0,
-        active_debate: Boolean(row?.active_debate),
-      };
-    });
   }, [graphSourced, taggedPage, taggedRows.claims]);
 
   // Whether a card may be answered at all.
@@ -577,7 +595,7 @@ export function ClaimsTab({
   const taggedAnswersReadyFor = React.useCallback(
     (entry: MatchmakingClaim) =>
       !graphSourced ||
-      (authenticated ? Boolean(accountKey) && !taggedRows.unresolvedSpaceIds.has(entry.claim.space_id) : true),
+      placedAnswersReady({ authenticated, accountKey }, taggedRows.unresolvedSpaceIds, entry.claim.space_id),
     [accountKey, authenticated, graphSourced, taggedRows.unresolvedSpaceIds]
   );
 
@@ -717,7 +735,7 @@ export function ClaimsTab({
   // Signed out there are no positions to hide — geo-chat answers every `viewer_response` null for
   // a viewer it has no account for — so the collapse is a no-op and the switch is a control that
   // cannot do anything. Both go, rather than leaving one drawn over the other's nothing.
-  const hidesMyPositions = authenticated && hideMyPositions;
+  const hidesMyPositions = hidesAnswered && authenticated && hideMyPositions;
 
   /**
    * And not when the answers cannot be had at all, which is a different thing from not having them
@@ -901,6 +919,10 @@ export function ClaimsTab({
   const collapsedEverything = visibleClaims.length === 0 && (claims.length > 0 || excludedEverything);
   const hasNarrowingFilters = Boolean(debouncedSearch || spaceIds.length || topicIds.length);
 
+  React.useEffect(() => {
+    onVisibleClaims?.(visibleClaims);
+  }, [onVisibleClaims, visibleClaims]);
+
   // Reported once, and only from a settled, unnarrowed, working, *finished* list. Every one of
   // those matters: mid-load every list is empty, an error is not an answer about the corpus, a
   // filtered empty list is the viewer's own question rather than a dead end to be moved out of —
@@ -970,6 +992,7 @@ export function ClaimsTab({
     hasNextPage &&
     ((graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage) || answersInFlight);
 
+  const hubScrollSelector = useHubScrollSelector();
   const sentinelRef = useInfiniteScrollSentinel({
     hasNextPage: mayFetchAhead,
     isFetchingNextPage: graphSourced ? taggedFetchingNextPage : claimsQuery.isFetchingNextPage,
@@ -978,10 +1001,7 @@ export function ClaimsTab({
     // any of it can be shown. Starting the next page a screenful or two early is what keeps that
     // from reading as a list that stops every time you reach the bottom.
     rootMargin: '1200px',
-    // The hub scrolls in its own panel, and `rootMargin` expands the root — so measured against the
-    // viewport the lead above buys nothing: the sentinel is clipped by the panel until it has been
-    // scrolled to, which is the moment the lead was meant to come before.
-    rootSelector: '[data-debates-hub-scroll]',
+    rootSelector: hubScrollSelector,
   });
 
   /**
@@ -1023,7 +1043,7 @@ export function ClaimsTab({
         />
       }
     >
-      <HubStickyControls workspaceStickyOffset={workspace}>
+      <HubStickyControls workspaceStickyOffset={workspace} topClassName={stickyTopClassName}>
         {/* Pinned above the filters, the way the matches list pins it. A request sent from here used
             to vanish the moment it was sent — the card that sent it looks exactly as it did before,
             and the only evidence was on another tab. It rides inside the sticky block rather than
@@ -1040,7 +1060,7 @@ export function ClaimsTab({
         />
 
         <SpaceTopicFilters
-          analyticsSurface="hub"
+          analyticsSurface={analyticsSurface}
           leading={scopePicker}
           menusClassName={workspace ? '@[72rem]/hub:hidden' : undefined}
           spaceIds={spaceIds}
@@ -1061,8 +1081,12 @@ export function ClaimsTab({
           trailing={
             isLobby ? (
               trailing
-            ) : filter === 'mine' || !authenticated ? null : (
-              <HideMyPositionsSwitch analyticsSurface="hub" checked={hideMyPositions} onChange={setHideMyPositions} />
+            ) : filter === 'mine' || !authenticated || !hidesAnswered ? null : (
+              <HideMyPositionsSwitch
+                analyticsSurface={analyticsSurface}
+                checked={hideMyPositions}
+                onChange={setHideMyPositions}
+              />
             )
           }
         />
@@ -1070,7 +1094,7 @@ export function ClaimsTab({
 
       <div className="flex flex-col gap-3 px-4 py-3">
         <HubQueryState
-          analyticsSurface="hub"
+          analyticsSurface={analyticsSurface}
           // Plus the answers, where the list hides some of them. Drawing before they land shows a
           // screenful the tab is about to take back — see `answersSettled`.
           isLoading={
@@ -1161,30 +1185,40 @@ export function ClaimsTab({
                         setTopicIds([]);
                       },
                     }
-                  : undefined
+                  : exploreClaimsAction(onTabChange)
           }
         >
           {/* One list, in the server's order. Splitting out the claims you'd already answered
             re-ranked the tab by something the Position filter in the dropdown already covers, and
             it moved a card between two sections the moment you took a side. */}
           <HubCardList>
-            {visibleClaims.map(entry => (
-              <MatchmakingClaimCard
-                key={claimRowKey(entry)}
-                claim={entry.claim}
-                positions={entry.positions}
-                readiness={entry}
-                activeDebate={entry.active_debate}
-                // The paged list is geo-chat's own, so every row carries its kind already; only the
-                // tagged list has to wait for one — and only for the space this claim is in.
-                answersReady={taggedAnswersReadyFor(entry)}
-                // And where it cannot, the indexed read answers for the side, the same way the main
-                // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
-                // unpressable while those cards went on working.
-                answersMayComeFromIndex
-                onRequireSignIn={onRequireSignIn}
-              />
-            ))}
+            {visibleClaims.map(entry =>
+              renderClaim ? (
+                React.cloneElement(
+                  renderClaim(entry, {
+                    answersReady: taggedAnswersReadyFor(entry),
+                    allowsSignedOutVotes: !authenticated,
+                  }),
+                  { key: claimRowKey(entry) }
+                )
+              ) : (
+                <MatchmakingClaimCard
+                  key={claimRowKey(entry)}
+                  claim={entry.claim}
+                  positions={entry.positions}
+                  readiness={entry}
+                  activeDebate={entry.active_debate}
+                  // The paged list is geo-chat's own, so every row carries its kind already; only the
+                  // tagged list has to wait for one — and only for the space this claim is in.
+                  answersReady={taggedAnswersReadyFor(entry)}
+                  // And where it cannot, the indexed read answers for the side, the same way the main
+                  // feed's cards do. geo-chat refusing this viewer used to leave the whole panel
+                  // unpressable while those cards went on working.
+                  answersMayComeFromIndex
+                  allowsSignedOutVotes={!authenticated}
+                />
+              )
+            )}
           </HubCardList>
         </HubQueryState>
         {/* Pages arrive as the viewer reaches the end of the list rather than on a button. Outside
@@ -1255,48 +1289,22 @@ export function HubListColumns({
 export function HubStickyControls({
   children,
   workspaceStickyOffset = false,
+  topClassName,
 }: {
   children: React.ReactNode;
   workspaceStickyOffset?: boolean;
+  topClassName?: string;
 }) {
   return (
     <div
       className={cx(
         'sticky z-10 flex flex-col gap-3 border-b border-grey-02 bg-white px-4 py-3',
-        workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0'
+        topClassName ?? (workspaceStickyOffset ? 'top-[7.5rem]' : 'top-0')
       )}
     >
       {children}
     </div>
   );
-}
-
-/**
- * The two sides of a tagged claim, from geo-chat's per-space row.
- *
- * That row reports the sides as `online_choices` — who is online and available on each — where the
- * hub's index reports a total alongside them. The card draws the avatars and their overflow count
- * off `total_count`, so the online count stands in for it: it is the only count this endpoint
- * gives, and undercounting a side is better than claiming a total it never told us.
- */
-function taggedPositionSummaries(row: DebateClaim | undefined): DebateClaimPositionSummary[] {
-  return [true, false].map(position => {
-    const choice = row?.online_choices.find(candidate => candidate.position === position);
-
-    return {
-      position,
-      // Our label, never geo-chat's stale Verify/Dispute — see `positionSummariesFromCounts`.
-      position_label: responsePositionLabel(position),
-      total_count: choice?.participant_count ?? 0,
-      available_now_count: choice?.participant_count ?? 0,
-      // These are `online_choices`, so the count already *is* the present population — the same
-      // number, but it has to be set explicitly. `present_count` is what the avatar stack and its
-      // `+N` read (GEO-2691), and leaving it unset would fall back to the length of the capped
-      // preview and silently drop the overflow: 5 people behind 2 faces would render no "+3".
-      present_count: choice?.participant_count ?? 0,
-      participants: choice?.participants ?? [],
-    };
-  });
 }
 
 type SpaceTopicFiltersProps = {

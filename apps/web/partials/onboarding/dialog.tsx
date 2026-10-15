@@ -148,6 +148,12 @@ export const OnboardingDialog = () => {
     if (step === 'existing-entity-match' && entityMatchCandidates.length === 0) {
       setStep('start');
     }
+    // The step persists, so a finished run leaves it at 'done'. Onboarding showing again
+    // means setup has to run again (a registered account whose profile never landed),
+    // and `shouldOpenOnboardingDialog` keeps the dialog shut at 'done' — start over.
+    if (step === 'done') {
+      setStep('start');
+    }
   }, [isOnboardingVisible, step, entityMatchCandidates.length, setStep]);
 
   // Play the completion screen for a beat, then send the user where they were

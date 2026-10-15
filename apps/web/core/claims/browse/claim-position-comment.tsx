@@ -44,6 +44,7 @@ export function ClaimPositionCommentControl({
   pending,
   titleFor,
   noteFor,
+  localSide,
   positionRowClassName,
   positionRowEndSlot,
   onActivityPublish,
@@ -71,6 +72,8 @@ export function ClaimPositionCommentControl({
   pending?: boolean;
   titleFor?: (position: boolean) => string;
   noteFor?: (position: boolean) => React.ReactNode;
+  /** The side held only on this device; see `PositionRow`. */
+  localSide?: boolean | null;
   positionRowClassName?: string;
   /** Compact action rendered after Disagree, such as the Explore comments-panel opener. */
   positionRowEndSlot?: React.ReactNode;
@@ -177,6 +180,7 @@ export function ClaimPositionCommentControl({
           pending={pending}
           titleFor={titleFor}
           noteFor={noteFor}
+          localSide={localSide}
           endSlot={positionRowEndSlot}
         />
       </div>

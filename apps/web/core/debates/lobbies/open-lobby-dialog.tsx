@@ -1,23 +1,38 @@
 'use client';
 
+import * as RadioGroup from '@radix-ui/react-radio-group';
+
 import * as React from 'react';
 
+import cx from 'classnames';
 import Link from 'next/link';
 import { createPortal } from 'react-dom';
 
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
+import { Check } from '~/design-system/icons/check';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
 
 import { debateRoomPath } from '../rooms/room-routes';
 import { useScrollLock } from '../use-scroll-lock';
 import { useCreateDebateLobby } from './hooks';
+import { lobbyShareUrl, markLobbyEntry } from './lobby-analytics';
 import { MAX_SCHEDULE_AHEAD_DAYS, NAME_MAX_CHARS, lobbyErrorMessage, lobbyScheduleLabel } from './lobby-format';
+import { OpenLobbyClaimListsField, type PickedClaimList, claimListsRequestField } from './open-lobby-claim-lists';
 
 /** `<input type="datetime-local">` reads and writes local wall time without a zone. */
 export function toDateTimeLocalValue(at: Date) {
   const pad = (value: number) => String(value).padStart(2, '0');
   return `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}T${pad(at.getHours())}:${pad(at.getMinutes())}`;
+}
+
+/** The viewer's IANA zone, e.g. "Europe/Paris", which the date and time inputs are read in. */
+export function localTimeZone() {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().timeZone || null;
+  } catch {
+    return null;
+  }
 }
 
 /** The request body for the form, or why it cannot be sent yet. */
@@ -46,7 +61,11 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   const create = useCreateDebateLobby();
   const [name, setName] = React.useState('');
   const [when, setWhen] = React.useState<'now' | 'later'>('now');
-  const [startsAt, setStartsAt] = React.useState(() => toDateTimeLocalValue(new Date(Date.now() + 60 * 60_000)));
+  const [initialStart] = React.useState(() => toDateTimeLocalValue(new Date(Date.now() + 60 * 60_000)));
+  const [startDate, setStartDate] = React.useState(initialStart.slice(0, 10));
+  const [startTime, setStartTime] = React.useState(initialStart.slice(11));
+  const [timeZone] = React.useState(localTimeZone);
+  const [claimLists, setClaimLists] = React.useState<PickedClaimList[]>([]);
   const [formError, setFormError] = React.useState<string | null>(null);
   const [copied, setCopied] = React.useState(false);
 
@@ -54,24 +73,26 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
 
   React.useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      // A layer opened over the dialog (the claim list picker) handles its own Escape and marks it
+      // handled, so that press closes the layer, not the dialog under it.
+      if (event.key === 'Escape' && !event.defaultPrevented) onClose();
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [onClose]);
 
   const created = create.data ?? null;
-  const link = created ? `${window.location.origin}${debateRoomPath(created.lobby_id)}` : null;
+  const link = created ? lobbyShareUrl(created.lobby_id) : null;
 
   const submit = (event: React.FormEvent) => {
     event.preventDefault();
-    const request = lobbyRequestFor(name, when, startsAt);
+    const request = lobbyRequestFor(name, when, startDate && startTime ? `${startDate}T${startTime}` : '');
     if ('error' in request) {
       setFormError(request.error);
       return;
     }
     setFormError(null);
-    create.mutate(request.body);
+    create.mutate({ ...request.body, ...claimListsRequestField(claimLists) });
   };
 
   const copy = async () => {
@@ -94,12 +115,19 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
         if (event.target === event.currentTarget) onClose();
       }}
     >
-      <section className="grid w-[min(400px,100%)] gap-4 rounded-lg bg-white p-5 text-text shadow-card">
-        <h2 id={titleId}>
-          <Text as="span" variant="metadataMedium">
-            {created ? 'Your lobby is ready' : 'Open a lobby'}
-          </Text>
-        </h2>
+      <section className="grid max-h-full w-[min(560px,100%)] gap-5 overflow-y-auto rounded-lg bg-white p-5 text-text shadow-card">
+        <div className="grid gap-1.5">
+          <h2 id={titleId}>
+            <Text as="span" variant="smallTitle">
+              {created ? 'Your lobby is ready' : 'Open a debate lobby'}
+            </Text>
+          </h2>
+          {created ? null : (
+            <Text as="p" variant="metadata" color="grey-04">
+              A voice room anyone can join. People pair off into recorded debates and come back.
+            </Text>
+          )}
+        </div>
 
         {created && link ? (
           <>
@@ -123,7 +151,10 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
               </button>
               <Link
                 href={debateRoomPath(created.lobby_id)}
-                onClick={onClose}
+                onClick={() => {
+                  markLobbyEntry(created.lobby_id, 'created');
+                  onClose();
+                }}
                 className={`${DIALOG_ACTION_BUTTON_CLASS_NAME} text-center`}
               >
                 Go to lobby
@@ -139,34 +170,54 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
               <Input value={name} placeholder="Debate hour" onChange={event => setName(event.target.value)} autoFocus />
             </label>
 
-            <fieldset className="grid gap-2">
-              <legend className="sr-only">When</legend>
-              <label className="flex items-center gap-2">
-                <input type="radio" name="when" checked={when === 'now'} onChange={() => setWhen('now')} />
-                <Text as="span" variant="metadata">
+            <RadioGroup.Root
+              aria-label="When"
+              value={when}
+              onValueChange={value => setWhen(value === 'later' ? 'later' : 'now')}
+              className="grid gap-1.5"
+            >
+              <Text as="span" variant="footnoteMedium">
+                When
+              </Text>
+              <div className="space-y-1 rounded-lg border border-grey-02 p-1">
+                <WhenOption value="now" selected={when === 'now'}>
                   Open now
-                </Text>
-              </label>
-              <label className="flex items-center gap-2">
-                <input type="radio" name="when" checked={when === 'later'} onChange={() => setWhen('later')} />
-                <Text as="span" variant="metadata">
+                </WhenOption>
+                <WhenOption value="later" selected={when === 'later'}>
                   Schedule a start time
-                </Text>
-              </label>
-              {when === 'later' ? (
-                <div className="grid gap-1 pl-6">
-                  <Input
-                    type="datetime-local"
-                    value={startsAt}
-                    aria-label="Start time"
-                    onChange={event => setStartsAt(event.target.value)}
-                  />
-                  <Text as="p" variant="footnote" color="grey-04">
-                    Opens 10 minutes early. The link works now.
-                  </Text>
+                </WhenOption>
+              </div>
+            </RadioGroup.Root>
+
+            {when === 'later' ? (
+              <div className="grid gap-1.5">
+                <div className="flex items-end gap-3">
+                  <label className="grid min-w-0 flex-1 gap-1.5">
+                    <Text as="span" variant="footnoteMedium">
+                      Date
+                    </Text>
+                    <Input type="date" value={startDate} onChange={event => setStartDate(event.target.value)} />
+                  </label>
+                  <label className="grid min-w-0 flex-1 gap-1.5">
+                    <Text as="span" variant="footnoteMedium">
+                      Start time
+                      {timeZone ? (
+                        <Text as="span" variant="footnote" color="grey-04">
+                          {' '}
+                          · {timeZone}
+                        </Text>
+                      ) : null}
+                    </Text>
+                    <Input type="time" value={startTime} onChange={event => setStartTime(event.target.value)} />
+                  </label>
                 </div>
-              ) : null}
-            </fieldset>
+                <Text as="p" variant="footnote" color="grey-04">
+                  Opens 10 minutes early. The link works now.
+                </Text>
+              </div>
+            ) : null}
+
+            <OpenLobbyClaimListsField value={claimLists} onChange={setClaimLists} />
 
             {formError || create.error ? (
               <Text as="p" variant="footnote" color="red-01">
@@ -187,5 +238,26 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
       </section>
     </div>,
     document.body
+  );
+}
+
+/** A row of the When choice, drawn like the framed device chooser (device-option-group.tsx). */
+function WhenOption({ value, selected, children }: { value: string; selected: boolean; children: React.ReactNode }) {
+  return (
+    <RadioGroup.Item
+      value={value}
+      className={cx(
+        'flex w-full items-center justify-between gap-3 rounded-md px-4 py-3 text-left text-metadata text-text outline-none',
+        selected ? 'bg-grey-01' : 'hover:bg-grey-01',
+        'focus-visible:ring-1 focus-visible:ring-text'
+      )}
+    >
+      <span className="min-w-0 truncate">{children}</span>
+      {selected && (
+        <span aria-hidden="true" className="shrink-0">
+          <Check />
+        </span>
+      )}
+    </RadioGroup.Item>
   );
 }

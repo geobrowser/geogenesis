@@ -9,6 +9,7 @@ import {
   capRoundLastTurn,
   deciding,
   listening,
+  requiredRoundListening,
   revealEnd,
   revealRebut,
   roundOneSpeaking,
@@ -45,6 +46,7 @@ function countdownAt(debate: Debate, now: number): DebateCountdown {
   return {
     label: '',
     remainingSeconds: Math.ceil(remainingMs / 1_000),
+    remainingMs,
     progress: totalMs === 0 ? 0 : elapsedMs / totalMs,
     activeSlot: window.activeSlot,
     effectiveStatus: window.effectiveStatus,
@@ -410,10 +412,10 @@ describe('open rounds clock', () => {
       remainingSeconds: 3,
       openRounds: { phase: 'result', roundIndex: 0, outcome: 'extend', nextPhaseStartsAtMs: at('20:02:07.200') },
     });
-    // Round 1 is decided now, so the opener is counted in and the label names it.
+    // Round 1 is decided now, so the opener is counted in, in Open rounds' words (GEO-3315).
     expect(localTurnStartsInSeconds(debate, reveal, 1)).toBe(3);
     expect(localTurnStartsInSeconds(debate, reveal, 2)).toBeNull();
-    expect(upcomingTurnLabel(debate, reveal)).toBe('Rebut in');
+    expect(upcomingTurnLabel(debate, reveal)).toBe('Your turn in');
 
     const roundOne = countdownAt(debate, at('20:02:07.200'));
     expect(roundOne).toMatchObject({
@@ -434,7 +436,7 @@ describe('open rounds clock', () => {
     const aliceEnding = countdownAt(debate, at('20:02:49.000'));
     expect(aliceEnding).toMatchObject({ activeSlot: 1, turnIndex: 2 });
     expect(localTurnStartsInSeconds(debate, aliceEnding, 2)).toBe(4);
-    expect(upcomingTurnLabel(debate, aliceEnding)).toBe('Rebut in');
+    expect(upcomingTurnLabel(debate, aliceEnding)).toBe('Your turn in');
 
     const bobEnding = countdownAt(debate, at('20:03:34.000'));
     expect(bobEnding).toMatchObject({ activeSlot: 2, turnIndex: 3 });
@@ -534,5 +536,49 @@ describe('open rounds recording window', () => {
       startAtMs: start,
       endAtMs: CAP_ROUND_ENDS_AT + 5_000,
     });
+  });
+});
+
+describe('open rounds: the lead-in to a required round (GEO-3258)', () => {
+  const withLeadIn = requiredRoundListening({ required_round_lead_in_ms: 8_000, extend_count_in_ms: 5_000 });
+
+  it('counts the opener in once, in the lead-in, rather than over the end of the opening too', () => {
+    // Bob closes the opening; Alice opens round 1.
+    expect(localTurnStartsInSeconds(withLeadIn, countdownAt(withLeadIn, at('20:01:57.000')), 1)).toBeNull();
+    // Without a lead-in the required round follows like a fixed format's next turn, counted in as before.
+    const noLeadIn = requiredRoundListening();
+    expect(localTurnStartsInSeconds(noLeadIn, countdownAt(noLeadIn, at('20:01:57.000')), 1)).toBe(3);
+
+    const inLeadIn = countdownAt(withLeadIn, at('20:02:04.000'));
+    expect(inLeadIn.openRounds).toMatchObject({ phase: 'result', leadIn: true, roundIndex: 0 });
+    expect(localTurnStartsInSeconds(withLeadIn, inLeadIn, 1)).toBe(4);
+    expect(upcomingTurnLabel(withLeadIn, inLeadIn)).toBe('Your turn in');
+  });
+
+  it('counts the opener in once when the opening ends early, during the hand-off as well', () => {
+    // Bob yields the opening's last turn at 20:01:40, with a hand-off to 20:01:45.
+    const yielded: Debate = {
+      ...withLeadIn,
+      turn_yields: [
+        {
+          turn_index: 1,
+          user_id: 'user-b',
+          participant_slot: 2,
+          yielded_at: '2026-10-06T20:01:40.000Z',
+          accepted_at: '2026-10-06T20:01:40.000Z',
+          handoff_deadline_at: '2026-10-06T20:01:45.000Z',
+        },
+      ],
+    };
+    const handoff = countdownAt(yielded, at('20:01:42.000'));
+    expect(handoff).toMatchObject({ yieldingSlot: 2, incomingSlot: 1 });
+    expect(localTurnStartsInSeconds(yielded, handoff, 1)).toBeNull();
+    // The lead-in still counts Alice in, after the hand-off.
+    expect(localTurnStartsInSeconds(yielded, countdownAt(yielded, at('20:01:50.000')), 1)).toBe(3);
+  });
+
+  it('starts round 1 when the lead-in ends', () => {
+    const countdown = countdownAt(withLeadIn, at('20:02:09.000'));
+    expect(countdown).toMatchObject({ turnIndex: 2, activeSlot: 1, remainingSeconds: 44 });
   });
 });

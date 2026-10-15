@@ -50,15 +50,9 @@ export const featureFlagDefinitions = [
     enabledByDefault: false,
   },
   {
-    id: 'lobbyJoining',
-    label: 'Debate lobbies: joining',
-    description: 'See and join live debate lobbies from the debates panel.',
-    enabledByDefault: false,
-  },
-  {
     id: 'lobbyHosting',
     label: 'Debate lobbies: hosting',
-    description: 'Open a lobby or schedule one for later. Needs joining on too.',
+    description: 'Open a lobby or schedule one for later.',
     enabledByDefault: false,
   },
   {
@@ -72,10 +66,13 @@ export const featureFlagDefinitions = [
 export type FeatureFlagId = (typeof featureFlagDefinitions)[number]['id'];
 export type FeatureFlags = Record<FeatureFlagId, boolean>;
 // Claims and debates shipped to everyone, so `questionsTab` (and `debatesTab`, the id it was
-// renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too. All three
-// are still sitting in browsers' stored flag objects; normalizing drops them on the next write
-// rather than reading them back.
-type StoredFeatureFlags = Partial<Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability', boolean>>;
+// renamed from) are no longer flags; nor is `peerAvailability`, since scheduling did too, nor
+// `lobbyJoining`, since finding and joining lobbies did (GEO-3306). All of them are still sitting in
+// browsers' stored flag objects; normalizing drops them on the next write rather than reading them
+// back.
+type StoredFeatureFlags = Partial<
+  Record<FeatureFlagId | 'questionsTab' | 'debatesTab' | 'peerAvailability' | 'lobbyJoining', boolean>
+>;
 
 /**
  * Both of these are derived from the definitions above rather than written out beside them.
