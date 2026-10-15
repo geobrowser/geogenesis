@@ -212,6 +212,33 @@ export type OpenRoundReveal = {
 };
 
 /**
+ * Whether the debate's last result is still up in the first moments of thanking: "That's the max"
+ * after the cap round, for a result window, or "That's a wrap" after an End, for
+ * `OPEN_ROUND_WRAP_HOLD_MS`. Pure, so the room can hold its exit to the claim picker on the same
+ * answer the reveal draws from (GEO-3301); both rooms consent the moment thanking starts, and the
+ * pair would otherwise leave mid-reveal.
+ */
+export function openRoundThankingHold({
+  debate,
+  phase,
+  effectiveStatus,
+  elapsedMs,
+  remainingSeconds,
+}: Pick<OpenRoundRevealInput, 'debate' | 'phase' | 'effectiveStatus' | 'elapsedMs' | 'remainingSeconds'>): {
+  maxReached: boolean;
+  wrapHeld: boolean;
+} {
+  const openRounds = debate.open_rounds ?? null;
+  const thankingStarted =
+    openRounds !== null && effectiveStatus === 'thanking' && phase?.phase === 'finished' && remainingSeconds > 0;
+  if (!thankingStarted) return { maxReached: false, wrapHeld: false };
+  return {
+    maxReached: phase.isFinalRound && elapsedMs < openRounds.result_window_ms,
+    wrapHeld: !phase.isFinalRound && elapsedMs < OPEN_ROUND_WRAP_HOLD_MS,
+  };
+}
+
+/**
  * Everything the room draws for the reveal (GEO-3179), from the room's own clock.
  *
  * Three moments use it. A round's result window after it resolves; then, after an End, the first
@@ -237,10 +264,13 @@ export function useOpenRoundReveal({
     leadIn && openRounds
       ? Math.max(0, resultPhase.nextPhaseStartsAtMs - resultPhase.resolvedAtMs - openRoundCountInMs(openRounds))
       : (openRounds?.result_window_ms ?? 0);
-  const thankingStarted =
-    openRounds !== null && effectiveStatus === 'thanking' && phase?.phase === 'finished' && remainingSeconds > 0;
-  const maxReached = thankingStarted && phase.isFinalRound && elapsedMs < windowMs;
-  const wrapHeld = thankingStarted && !phase.isFinalRound && elapsedMs < OPEN_ROUND_WRAP_HOLD_MS;
+  const { maxReached, wrapHeld } = openRoundThankingHold({
+    debate,
+    phase,
+    effectiveStatus,
+    elapsedMs,
+    remainingSeconds,
+  });
 
   const timedStep = useOpenRoundRevealStep(
     resultPhase ? elapsedMs : null,
@@ -249,7 +279,7 @@ export function useOpenRoundReveal({
     !leadIn
   );
   const step: OpenRoundRevealStep | null = wrapHeld ? 'result' : timedStep;
-  const roundIndex = resultPhase?.roundIndex ?? (wrapHeld ? phase.roundIndex : null);
+  const roundIndex = resultPhase?.roundIndex ?? (wrapHeld && phase?.phase === 'finished' ? phase.roundIndex : null);
   const outcome = resultPhase?.outcome ?? (wrapHeld ? 'end' : null);
 
   const picks = openRounds && roundIndex !== null ? openRoundRevealedPicks(openRounds, roundIndex) : null;

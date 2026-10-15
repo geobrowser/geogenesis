@@ -1587,6 +1587,27 @@ describe('DebateGatewayClient', () => {
     expect(predicate!(cache.find({ queryKey: ['debates', 'claims', 'space-1', 'all'] })!)).toBe(true);
   });
 
+  it('leaves the rematch voice token out of the broad reconcile', async () => {
+    queryClient.setQueryData(['rematch-livekit', 'user-a', 'rematch-1'], { token: 't', url: 'wss://x' });
+    client.start(
+      vi.fn(async () => 'privy-token'),
+      'user-a'
+    );
+    await vi.runAllTicks();
+    sockets[0]!.open();
+    sockets[0]!.receive('READY', readyPayload([]));
+    await flushInvalidations();
+
+    type InvalidationFilters = NonNullable<Parameters<QueryClient['invalidateQueries']>[0]>;
+    const invalidationCalls = invalidateQueries.mock.calls as unknown as Array<[InvalidationFilters]>;
+    const predicate = invalidationCalls.map(call => call[0]).find(filters => 'predicate' in filters)?.predicate;
+    expect(predicate).toBeTypeOf('function');
+    // A fresh token landing while the call is Reconnecting restarts it from scratch, and a reconnect
+    // of this socket is when that is most likely (GEO-3343).
+    const token = queryClient.getQueryCache().find({ queryKey: ['rematch-livekit', 'user-a', 'rematch-1'] });
+    expect(predicate!(token!)).toBe(false);
+  });
+
   it('ignores a refetch cancelled by a later flush instead of recycling the socket', async () => {
     invalidateQueries.mockRejectedValueOnce(new CancelledError());
     client.start(
