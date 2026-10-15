@@ -43,6 +43,7 @@ import {
   isAwaitingResponseSubmission,
   responseKindToVoteKind,
   userEntityResponseQueryKey,
+  voteOutcomeProperties,
   waitForIndexedEntityResponse,
 } from '~/core/responses/entity-response';
 import {
@@ -591,23 +592,15 @@ export function useEntityResponse({ entityId, entityName, spaceId, responseKind 
       };
     },
     onSuccess: (submission, { direction }, context) => {
-      const previousDirection =
-        context?.previousResponse === 'positive' ? 'up' : context?.previousResponse === 'negative' ? 'down' : undefined;
-      const voteDirection = direction === 'positive' ? 'up' : direction === 'negative' ? 'down' : 'none';
-      const voteAction =
-        direction === 'clear' ? 'remove' : previousDirection && previousDirection !== voteDirection ? 'switch' : 'cast';
       const outcomeProperties = {
-        vote_direction: voteDirection,
-        vote_kind: voteDirection,
-        mutation_kind: voteAction,
-        vote_action: voteAction,
-        previous_vote_direction: previousDirection,
-        response_kind: submission.pending.responseKind,
-        response_action: getResponseActionMethod(submission.pending.responseKind, direction),
-        entity_id: submission.pending.entityId,
+        ...voteOutcomeProperties({
+          responseKind: submission.pending.responseKind,
+          direction,
+          previousResponse: context?.previousResponse,
+          entityId: submission.pending.entityId,
+          spaceId: submission.pending.spaceId,
+        }),
         target_name: context?.entityName || undefined,
-        space_id: submission.pending.spaceId,
-        object_type: 0,
         user_operation_hash: submission.transaction,
       };
       context?.operation.outcome('vote_cast', 'submitted', outcomeProperties);

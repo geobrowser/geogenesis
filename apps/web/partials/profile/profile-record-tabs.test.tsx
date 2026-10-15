@@ -36,7 +36,7 @@ vi.mock('./person-debates-tab', () => ({ PersonDebatesTab: () => <div data-testi
 vi.mock('./person-positions-tab', () => ({ PersonPositionsTab: () => <div data-testid="panel">positions</div> }));
 vi.mock('./person-proposals-tab', () => ({ PersonProposalsTab: () => <div data-testid="panel">proposals</div> }));
 vi.mock('./profile-rail', () => ({ ProfileRailSections: () => <div data-testid="panel">about</div> }));
-vi.mock('~/partials/editor/editor', () => ({ Editor: () => null }));
+vi.mock('~/partials/editor/lazy-editor', () => ({ Editor: () => null }));
 vi.mock('~/partials/entity-page/backlinks-client-container', () => ({ BacklinksClientContainer: () => null }));
 
 const renderTabs = () => render(<ProfileRecordTabs entityId="person-1" spaceId="space-1" />);

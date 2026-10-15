@@ -35,6 +35,7 @@ import {
   useLeaveDebateRematch,
   useRejectDebateChallenge,
 } from './hooks';
+import { useLobbyDebateAnalytics } from './lobbies/lobby-analytics';
 import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
@@ -129,6 +130,7 @@ export function DebateCoordinator() {
   const activityQuery = useDebateActivity();
   const currentUserId = useCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
+  useLobbyDebateAnalytics(activity?.debate);
   // Hiding the tab drops presence after a short grace (GEO-3119), but never at the cost of the
   // viewer's own pending things: geo-chat refuses an accept from an offline requester, hides their
   // request from its recipient, and ends a debate-again session whose people went offline. So while
@@ -284,15 +286,11 @@ export function DebateCoordinator() {
   const [snoozedRoomIds, setSnoozedRoomIds] = React.useState<string[]>([]);
   const upcomingRooms = React.useMemo(() => upcomingRoomsQuery.data?.rooms ?? [], [upcomingRoomsQuery.data]);
   const finishedRoomIds = useFinishedRoomIds(upcomingRooms, !atRoom);
-  // A room whose debate already happened is never offered again.
-  // Reminded lobbies ride the same list (GEO-3133), shown only with `lobbyJoining` on.
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
+  // A room whose debate already happened is never offered again. Reminded lobbies ride the same
+  // list (GEO-3133).
   const joinableRooms = React.useMemo(
-    () =>
-      upcomingRooms.filter(
-        room => room.joinable && !finishedRoomIds.has(room.room_id) && (lobbyJoining || room.kind !== 'lobby')
-      ),
-    [finishedRoomIds, lobbyJoining, upcomingRooms]
+    () => upcomingRooms.filter(room => room.joinable && !finishedRoomIds.has(room.room_id)),
+    [finishedRoomIds, upcomingRooms]
   );
   // The sessions rooms have handed out, per the server, so the rematch effect below can tell one
   // from a challenge's on every device. A joinable room with none yet may be about to hand one out.

@@ -25,6 +25,17 @@ const mocks = vi.hoisted(() => ({
 }));
 
 const watchedMocks = vi.hoisted(() => ({ markDebateWatched: vi.fn() }));
+// Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
+vi.mock('~/core/follows/follow-button', () => ({
+  FollowButton: (props: { target: { id: string }; variant?: string; surface?: string }) => (
+    <span data-testid="follow" data-id={props.target.id} data-variant={props.variant} data-surface={props.surface} />
+  ),
+}));
+vi.mock('~/core/follows/person-follow-counts', () => ({
+  usePersonFollowerCount: () => null,
+  usePersonFollowers: () => null,
+}));
+
 vi.mock('~/core/debates/watched-debates', () => ({ markDebateWatched: watchedMocks.markDebateWatched }));
 
 // The card's data is its own hook's business, tested beside it. Here only *when* it is asked for.
@@ -243,6 +254,21 @@ afterEach(() => {
 });
 
 describe('player layout', () => {
+  it("offers Follow as a badge on each debater's face, by their personal space (GEO-3236, GEO-3305)", () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    const follows = Array.from(container.querySelectorAll('[data-testid="follow"]'));
+    expect(follows.map(follow => follow.getAttribute('data-id'))).toEqual([SPACE_1_DASHED, SPACE_2]);
+    expect(follows.every(follow => follow.getAttribute('data-variant') === 'avatar')).toBe(true);
+    // Pinned to the face rather than beside the name, so it is never in the name/position row.
+    for (const follow of follows) {
+      expect(follow.closest('button')).toBeNull();
+      expect(follow.previousElementSibling?.hasAttribute('data-debater-avatar')).toBe(true);
+      expect(follow.getAttribute('data-surface')).toBe('video');
+    }
+  });
+
   it('keeps both stacked videos at the original aspect ratio', () => {
     mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1 });
     const { container } = render(<DebateFeedPlayer debate={debate} active />);

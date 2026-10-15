@@ -48,7 +48,6 @@ const mocks = vi.hoisted(() => ({
   gatewayPaused: false,
   gatewayPauseReason: null as string | null,
   debateDebugging: false,
-  lobbyJoining: false,
   currentUserId: 'user-for' as string | null,
   // What the token exchange answers with when the stored session hasn't been written yet.
   resolvedUserId: null as string | null,
@@ -165,8 +164,7 @@ vi.mock('./debate-return-navigation', () => ({
 
 vi.mock('~/core/state/feature-flags', async importOriginal => ({
   ...(await importOriginal<typeof import('~/core/state/feature-flags')>()),
-  useFeatureFlag: (id: string) =>
-    id === 'debateDebugging' ? mocks.debateDebugging : id === 'lobbyJoining' ? mocks.lobbyJoining : false,
+  useFeatureFlag: (id: string) => (id === 'debateDebugging' ? mocks.debateDebugging : false),
 }));
 
 beforeEach(() => {
@@ -203,7 +201,6 @@ beforeEach(() => {
   mocks.gatewayPaused = false;
   mocks.gatewayPauseReason = null;
   mocks.debateDebugging = false;
-  mocks.lobbyJoining = false;
   mocks.currentUserId = 'user-for';
   mocks.resolvedUserId = null;
   mocks.refetch.mockReset();
@@ -1076,7 +1073,6 @@ describe('DebateCoordinator', () => {
 
   // A reminded lobby stays in the list after it opens, including while the viewer is in it.
   it('does not offer the lobby on screen, only another one', async () => {
-    mocks.lobbyJoining = true;
     mocks.pathname = '/debate/lobby-1';
     mocks.roomAtPath = { kind: 'lobby' };
     mocks.upcomingRooms = [upcomingRoom({ room_id: 'lobby1', kind: 'lobby', name: 'Here' })];

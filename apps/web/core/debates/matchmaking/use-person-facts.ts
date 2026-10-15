@@ -50,9 +50,12 @@ export function usePersonFacts(
     anchorProfileSpaceId?: string | null;
   }
 ) {
-  const { personalSpaceId } = usePersonalSpaceId();
+  const { personalSpaceId, isLoading: personalSpaceLoading } = usePersonalSpaceId();
   const anchor = anchorProfileSpaceId === undefined ? personalSpaceId : anchorProfileSpaceId;
   const viewerProfileSpaceId = authenticated && anchor && isPersonId(anchor) ? anchor : null;
+  // The signed-in viewer's own space is still being looked up: who "the viewer" is is not known yet.
+  // Settled with no usable space is an answer — such a viewer holds no positions (GEO-3220 review).
+  const viewerPending = authenticated && anchorProfileSpaceId === undefined && personalSpaceLoading;
   // One graph read for the viewer and the whole roster. Signed-out visitors have no viewer to
   // compare against, so they do not spend a public query fetching everybody else's positions.
   // The presence service can hand us a malformed profile-space id; keep those out of the graph's
@@ -74,6 +77,7 @@ export function usePersonFacts(
     isLoading: positionsLoading,
     isPlaceholderData: positionsArePlaceholderData,
     error: positionsError,
+    hasFetchedData: positionsHaveFetchedData,
   } = useParticipantPositions(positionParticipants, viewerProfileSpaceId, { onlyViewerClaims: true });
   const matchAnalysis = React.useMemo(
     () => analyzeMatchingClaims(positionsByClaim, viewerProfileSpaceId),
@@ -84,6 +88,40 @@ export function usePersonFacts(
   // same-key background poll is not placeholder data, so settled counts stay visible while polling.
   const matchesKnown =
     viewerProfileSpaceId !== null && !positionsLoading && !positionsArePlaceholderData && positionsError === null;
+  /**
+   * No answer at all yet, as opposed to `matchesKnown`'s "an answer for this exact roster". For a
+   * surface that waits on matches before drawing (the calendar's Matches only), which would
+   * otherwise wait again each time the polled roster changes and the held answer stands in.
+   */
+  const matchesLoading = viewerPending || (viewerProfileSpaceId !== null && positionsLoading);
+  /**
+   * The read failed with nothing to show for it, as opposed to an answer of no matches. A surface
+   * that narrows on matches must not read this as "nobody matches", and should say so; the read's
+   * own poll keeps retrying.
+   */
+  const matchesUnavailable =
+    viewerProfileSpaceId !== null && !positionsLoading && positionsError !== null && !positionsHaveFetchedData;
+  // Whether the viewer holds any position at all: without one, Matches only can never match (GEO-3220).
+  // The scoped read always carries the viewer's own rows. `null` while that is not known.
+  const viewerHasPositions = React.useMemo(() => {
+    if (!viewerProfileSpaceId) return authenticated && !viewerPending ? false : null;
+    // A failed poll with an earlier answer in hand keeps that answer: only a failure with nothing
+    // fetched leaves this unknown.
+    if (positionsLoading || (positionsError !== null && !positionsHaveFetchedData)) return null;
+    const viewerId = normId(viewerProfileSpaceId);
+    for (const rows of positionsByClaim.values()) {
+      if (rows.some(row => normId(row.profileSpaceId) === viewerId)) return true;
+    }
+    return false;
+  }, [
+    authenticated,
+    positionsByClaim,
+    positionsError,
+    positionsHaveFetchedData,
+    positionsLoading,
+    viewerPending,
+    viewerProfileSpaceId,
+  ]);
   const matchingClaimIds = React.useMemo(
     () => [...new Set([...matchAnalysis.byProfile.values()].flatMap(items => items.map(item => item.claimId)))].sort(),
     [matchAnalysis]
@@ -139,6 +177,9 @@ export function usePersonFacts(
   return {
     matchAnalysis,
     matchesKnown,
+    viewerHasPositions,
+    matchesLoading,
+    matchesUnavailable,
     matchingSpaceIds,
     matchingClaimNamesById,
     matchingClaimsLoading,

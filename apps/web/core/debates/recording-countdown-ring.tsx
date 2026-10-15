@@ -7,6 +7,9 @@ const COUNTDOWN_CENTER = COUNTDOWN_SIZE / 2;
 const COUNTDOWN_RADIUS = 21;
 const COUNTDOWN_CIRCUMFERENCE = 2 * Math.PI * COUNTDOWN_RADIUS;
 
+/** The colour every room countdown turns in its last seconds. */
+export const COUNTDOWN_WARNING_COLOR = '#FF4A26';
+
 type RecordingCountdownVariant = 'default' | 'warning' | 'muted';
 
 export function RecordingCountdownRing({
@@ -21,7 +24,7 @@ export function RecordingCountdownRing({
   const gradientId = React.useId();
   const elapsedRatio = Number.isFinite(progress) ? Math.max(0, Math.min(1, progress)) : 0;
   const muted = variant === 'muted';
-  const ringColor = muted ? 'rgba(190,190,190,0.92)' : variant === 'warning' ? '#FF4A26' : '#FFFFFF';
+  const ringColor = muted ? 'rgba(190,190,190,0.92)' : variant === 'warning' ? COUNTDOWN_WARNING_COLOR : '#FFFFFF';
   const numberColor = muted ? 'var(--color-grey-02)' : '#FFFFFF';
   const dashOffset = COUNTDOWN_CIRCUMFERENCE * elapsedRatio;
 

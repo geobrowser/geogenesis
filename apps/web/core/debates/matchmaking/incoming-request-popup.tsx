@@ -55,7 +55,7 @@ export function IncomingRequestPopup({
       participants={participants}
       currentUserId={currentUserId}
       formatId={request.turn_format_id}
-      openRounds={requestOpenRounds(request.max_rebuttal_rounds)}
+      openRounds={requestOpenRounds(request)}
       busy={busy}
       error={error?.message ?? null}
       actionsLayout="split"

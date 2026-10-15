@@ -59,7 +59,14 @@ import {
   weekDays,
   weekStart,
 } from './debate-calendar-model';
-import { CalendarWeekFrame, CalendarWeekSkeleton, NowLine } from './debate-calendar-week';
+import {
+  CALENDAR_BLOCK_CLASS_NAME,
+  CALENDAR_COMPACT_BLOCK_CLASS_NAME,
+  CALENDAR_MORE_BUTTON_CLASS_NAME,
+  CalendarWeekFrame,
+  CalendarWeekSkeleton,
+  NowLine,
+} from './debate-calendar-week';
 import { HubPillButton } from './hub-pill-button';
 import { HubQueryState } from './hub-states';
 import { useGeoChatUserSummaries } from './use-geo-chat-user-summaries';
@@ -266,8 +273,8 @@ function AdminDebateBlock({
           // The full label is in the name and the card; a pointer gets it on hover too.
           title={compact ? `${pair} · ${label}` : undefined}
           className={cx(
-            'flex w-full min-w-0 rounded-md border px-2 text-left text-footnote transition-shadow hover:shadow-inner-text data-[state=open]:shadow-inner-text',
-            compact ? 'items-center gap-1 py-0.5' : 'flex-col gap-px py-1',
+            CALENDAR_BLOCK_CLASS_NAME,
+            compact ? CALENDAR_COMPACT_BLOCK_CLASS_NAME : 'flex-col gap-px py-1',
             STATE_CLASS_NAMES[debate.state],
             debate.state === 'closed' ? 'text-grey-04' : 'text-text'
           )}
@@ -341,7 +348,7 @@ function HourDebates({
         <button
           type="button"
           aria-label={`All ${debates.length} debates at ${heading}`}
-          className="self-start rounded-md px-1 text-footnoteMedium text-grey-04 transition-colors hover:bg-grey-01 hover:text-text"
+          className={CALENDAR_MORE_BUTTON_CLASS_NAME}
         >
           +{hidden} more
         </button>
@@ -590,10 +597,10 @@ export type CalendarView = 'availability' | 'debates';
 
 const VIEW_OPTIONS = [
   { value: 'availability', label: 'Availability' },
-  { value: 'debates', label: 'Debates' },
+  { value: 'debates', label: 'Admin' },
 ] as const;
 
-/** Availability | Debates. Rendered only for an admin; everyone else has one view and no switch. */
+/** Availability | Admin. Rendered only for an admin; everyone else has one view and no switch. */
 export function CalendarViewSwitch({ view, onChange }: { view: CalendarView; onChange: (view: CalendarView) => void }) {
   return <SegmentedControl label="Calendar view" options={VIEW_OPTIONS} value={view} onChange={onChange} />;
 }

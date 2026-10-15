@@ -27,7 +27,7 @@ vi.mock('@privy-io/wagmi', () => ({
   useSetActiveWallet: () => ({ setActiveWallet: mocks.setActiveWallet }),
 }));
 
-import { useEnsureEmbeddedWallet } from './use-ensure-embedded-wallet';
+import { retryEmbeddedWalletSetup, useEnsureEmbeddedWallet } from './use-ensure-embedded-wallet';
 
 const embedded = { address: '0xabc', walletClientType: 'privy' };
 
@@ -312,5 +312,36 @@ describe('useEnsureEmbeddedWallet', () => {
 
       expect(mocks.setActiveWallet).toHaveBeenCalledTimes(3);
     });
+  });
+});
+
+// GEO-3245: the navbar's Reconnect asks for a retry from outside the hook.
+describe('retryEmbeddedWalletSetup', () => {
+  it('activates an already-activated wallet again', async () => {
+    mocks.wallets = [embedded];
+
+    renderHook(() => useEnsureEmbeddedWallet());
+    await waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledTimes(1));
+
+    act(() => retryEmbeddedWalletSetup());
+
+    await waitFor(() => expect(mocks.setActiveWallet).toHaveBeenCalledTimes(2));
+  });
+
+  it('gives a creation that gave up a fresh budget', async () => {
+    vi.useFakeTimers();
+    mocks.createWallet.mockRejectedValue(new Error('network'));
+
+    renderHook(() => useEnsureEmbeddedWallet());
+    for (let i = 0; i < 5; i++) {
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(2_000);
+      });
+    }
+    expect(mocks.createWallet).toHaveBeenCalledTimes(3);
+
+    act(() => retryEmbeddedWalletSetup());
+
+    await vi.waitFor(() => expect(mocks.createWallet).toHaveBeenCalledTimes(4));
   });
 });

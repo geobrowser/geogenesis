@@ -431,10 +431,15 @@ export class E {
         return { merged, remote: remoteEntities, endCursor: page.endCursor, hasNextPage: page.hasNextPage };
       }
 
+      // Sorted and deduped for the network read only: the request's key is its id list, so two
+      // callers asking for the same set in a different order (or with repeats) would otherwise each
+      // send the whole batch. Results are matched back by id below, so the order asked for is kept.
+      const requestIds = [...new Set(entityIds)].sort();
+
       const remoteEntities = (
         await Promise.all(
-          Array.from({ length: Math.ceil(entityIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
-            const batchIds = entityIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
+          Array.from({ length: Math.ceil(requestIds.length / ENTITY_ID_BATCH_SIZE) }, (_, index) => {
+            const batchIds = requestIds.slice(index * ENTITY_ID_BATCH_SIZE, (index + 1) * ENTITY_ID_BATCH_SIZE);
             return syncFetchQuery(cache, {
               queryKey: ['network', 'entities', batchIds, spaceId],
               queryFn: ({ signal }) => Effect.runPromise(getBatchEntities(batchIds, spaceId, signal)),

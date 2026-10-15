@@ -4,12 +4,14 @@ import * as React from 'react';
 
 import cx from 'classnames';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 
 import { toSignIn } from '~/core/auth/sign-in-deep-link';
 import { GeoChatRequestError } from '~/core/debates/api';
 import { useGeoChatAuth } from '~/core/debates/hooks';
-import { DebateLobbyPage, LobbiesUnavailable } from '~/core/debates/lobbies/lobby-page';
+import { LOBBY_LINK_VIA } from '~/core/debates/lobbies/lobby-analytics';
+import { useDebateLobbyGuestView } from '~/core/debates/lobbies/lobby-guest-hooks';
+import { DebateLobbyPage } from '~/core/debates/lobbies/lobby-page';
 import {
   useDebateRoom,
   useDebateRoomPresence,
@@ -25,7 +27,6 @@ import {
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 import { ROOM_NOT_YET_OPEN, ROOM_NO_ACCESS } from '~/core/debates/rooms/room-copy';
 import { debateRoomPath } from '~/core/debates/rooms/room-routes';
-import { useFeatureFlag } from '~/core/state/feature-flags';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Spinner } from '~/design-system/spinner';
@@ -39,11 +40,11 @@ import { DebateRematchPageClient } from '../../space/[id]/(space)/debates/rematc
  */
 export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const roomQuery = useDebateRoom(roomId);
   const room = roomQuery.data ?? null;
   // A lobby answers `not_a_participant` here, so it is never a denial.
   const isLobby = room?.kind === 'lobby';
-  const lobbyJoining = useFeatureFlag('lobbyJoining');
 
   // Refusals arrive in the body, not the status: a stranger gets a 200 saying `not_a_participant`.
   // Only a room that does not exist is an HTTP error.
@@ -68,6 +69,11 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   const { rejoin } = useRoomPresence(roomId, admitted);
   const presence = useDebateRoomPresence(room);
   const { ready, authenticated } = useGeoChatAuth();
+  // Signed out, the room's kind is unknown; the guest view answers for a lobby (GEO-3129), and is
+  // kept through sign-in so the lobby page stays mounted until the member read says the same.
+  const signedOut = ready && !authenticated;
+  const guestView = useDebateLobbyGuestView(roomId, { enabled: signedOut });
+  const knownLobby = isLobby || guestView.data !== undefined;
 
   // A room whose debate is over would otherwise mount the picker, flash its claims and redirect
   // into the finished debate. Decided on the debate's own status: a session converts on acceptance,
@@ -88,19 +94,27 @@ export function DebateRoomPageClient({ roomId }: { roomId: string }) {
   // valid, they are just not in this one.
   if (denial) return null;
 
+  // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest, signed out too.
+  // A lobby link opens for everyone, including a brand-new account (GEO-3270).
+  if (knownLobby) return <DebateLobbyPage key={roomId} lobbyId={roomId} />;
+
   // A room link is pasted into a calendar invite, so the person opening it is often signed out.
   // The room cannot say who they are, and an error card is a dead end.
-  if (ready && !authenticated) {
+  if (signedOut) {
+    if (guestView.isPending && guestView.fetchStatus !== 'idle') {
+      return <RoomNotice busy>Opening…</RoomNotice>;
+    }
+    const lobbyLink = searchParams?.get('via') === LOBBY_LINK_VIA;
     return (
-      <RoomNotice action={{ href: toSignIn({ pathname: debateRoomPath(roomId), via: 'room' }), label: 'Sign in' }}>
-        Sign in to join your debate.
+      <RoomNotice
+        action={{
+          href: toSignIn({ pathname: debateRoomPath(roomId), via: lobbyLink ? LOBBY_LINK_VIA : 'room' }),
+          label: 'Sign in',
+        }}
+      >
+        {lobbyLink ? 'Sign in to join the lobby.' : 'Sign in to join your debate.'}
       </RoomNotice>
     );
-  }
-
-  // GEO-3131. A lobby's room view is only its kind; the lobby page reads the rest.
-  if (isLobby) {
-    return lobbyJoining ? <DebateLobbyPage key={roomId} lobbyId={roomId} /> : <LobbiesUnavailable />;
   }
 
   if (!room) {

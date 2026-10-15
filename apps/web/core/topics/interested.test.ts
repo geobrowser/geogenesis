@@ -1,5 +1,5 @@
 import { decodeFunctionData } from 'viem';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { PERMISSIONLESS_ACTIONS, SpaceRegistryAbi } from '~/core/utils/contracts/space-registry';
 
@@ -8,7 +8,6 @@ import {
   buildInterestedFollowCalls,
   encodeInterestedCall,
   interestedTopicIds,
-  isInterestedFollowEnabled,
 } from './interested';
 
 const REGISTRY = '0xCF13491802747e759e1BB8E364bc43045398d1DD';
@@ -24,23 +23,7 @@ function decode(data: `0x${string}`) {
   return { functionName, from, to, action, topic };
 }
 
-describe('isInterestedFollowEnabled', () => {
-  afterEach(() => vi.unstubAllEnvs());
-
-  it('is off when unset', () => {
-    vi.stubEnv('NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED', '');
-    expect(isInterestedFollowEnabled()).toBe(false);
-  });
-
-  it('is on only for the exact string "true"', () => {
-    vi.stubEnv('NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED', '1');
-    expect(isInterestedFollowEnabled()).toBe(false);
-    vi.stubEnv('NEXT_PUBLIC_INTERESTED_FOLLOW_ENABLED', 'true');
-    expect(isInterestedFollowEnabled()).toBe(true);
-  });
-});
-
-describe('interestedTopicIds (the read rule with the flag on)', () => {
+describe('interestedTopicIds (the read rule)', () => {
   it('reads a topic as followed through a current Interested', () => {
     expect(interestedTopicIds([{ objectId: TOPIC_B }])).toEqual(new Set([TOPIC_B]));
   });

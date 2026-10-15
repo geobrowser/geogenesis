@@ -53,7 +53,7 @@ import {
 } from '~/partials/blocks/table/table-block-dropdowns-config';
 import { TableBlockEditableFilters } from '~/partials/blocks/table/table-block-editable-filters';
 import { TableBlockFilterGroupPill, groupFilters } from '~/partials/blocks/table/table-block-filter-pill';
-import { Editor } from '~/partials/editor/editor';
+import { Editor } from '~/partials/editor/lazy-editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
 import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { EntityPageCover } from '~/partials/entity-page/entity-page-cover';

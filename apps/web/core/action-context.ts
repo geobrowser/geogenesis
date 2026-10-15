@@ -8,6 +8,7 @@ export const ACTION_COMPONENTS = [
   'sign_in_deep_link',
   'invite_link',
   'explore_email_capture',
+  'save_votes_prompt',
   'entity_vote_buttons',
   'claim_position_control',
   'winner_vote_button',
@@ -28,10 +29,14 @@ export const ACTION_COMPONENTS = [
   'debate_claim_ticker',
   'debate_end_card',
   'debate_claims_panel',
+  'topic_follow_button',
+  'person_follow_button',
 ] as const;
 export type ActionComponent = (typeof ACTION_COMPONENTS)[number];
 export type ActionKind =
   | 'vote'
+  | 'local_vote'
+  | 'local_vote_dropped'
   | 'ranking'
   | 'comment'
   | 'edit_comment'
@@ -39,6 +44,10 @@ export type ActionKind =
   | 'edit'
   | 'share'
   | 'join_space'
+  | 'follow_topic'
+  | 'unfollow_topic'
+  | 'follow_person'
+  | 'unfollow_person'
   | 'bounty_interest'
   | 'start_debate'
   | 'join_debate'
@@ -75,11 +84,15 @@ export type ActionContext = {
    * GEO-3140 / GEO-3144. The feed version that put this card on the page (e.g. `best-1`,
    * `for-you-1.0+web.1`), and on an interleaved page which arm picked it and in which experiment,
    * so engagement can be credited per version. `feed_exploration` marks a For you exploration slot.
+   * `feed_slot: 'fresh'` marks a card Best's fresh slot placed (GEO-3221).
    */
   feed_version?: string;
   feed_arm?: 'a' | 'b';
   feed_experiment_id?: string;
   feed_exploration?: boolean;
+  feed_slot?: 'fresh';
+  /** GEO-3234. How many cards this visitor had already seen were hidden from this card's page. */
+  feed_seen_hidden?: number;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -106,6 +119,8 @@ export const ACTION_CONTEXT_FIELDS = [
   'feed_arm',
   'feed_experiment_id',
   'feed_exploration',
+  'feed_slot',
+  'feed_seen_hidden',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',

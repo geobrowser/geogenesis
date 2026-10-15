@@ -1,7 +1,7 @@
 import * as React from 'react';
 
 import { ID } from '~/core/id';
-import { useEditorStoreLite } from '~/core/state/editor/use-editor';
+import { useEditorStoreLite } from '~/core/state/editor/use-editor-blocks';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useValues } from '~/core/sync/use-store';
 import { SORT_PROPERTY } from '~/core/system-ids';

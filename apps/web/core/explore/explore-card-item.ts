@@ -77,6 +77,11 @@ export type ExploreFeedItem = {
    * For you and interleaved pages; absent everywhere else.
    */
   ranking?: FeedItemRanking;
+  /**
+   * GEO-3234. A debate the lead check (GEO-3070) verified playable, so the browser may put it first
+   * in place of a lead this visitor has already seen. Set only while seen demotion is on.
+   */
+  playableLead?: boolean;
 };
 
 /**
