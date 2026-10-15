@@ -1622,6 +1622,39 @@ describe('DebateRoomPageClient', () => {
     expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
   });
 
+  it('keeps the hand-off’s state through a dropped intro connection', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockResolvedValue([
+      createLocalAudioTrack(),
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <InFlightHandover kinds={{ audio: true, video: true }} />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('2'));
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <InFlightHandover kinds={{ audio: true, video: true }} />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument());
+    mocks.createLocalTracks.mockClear();
+
+    act(() => emitRoomEvent('disconnected', 99));
+
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(
+      expect.objectContaining({ audio: expect.anything(), video: expect.anything() })
+    );
+  });
+
   it('opens no devices for a hand-off that chose neither', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 

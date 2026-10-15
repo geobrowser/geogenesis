@@ -435,6 +435,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(inherited.videoEnabled);
   const joinStateChosenHere = React.useRef(false);
+  const settledJoinStateRef = React.useRef<{ audioMuted: boolean; videoEnabled: boolean } | null>(null);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');
@@ -2479,15 +2480,18 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       }
 
       const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
-      const settled = joinStateChosenHere.current
-        ? { audioMuted, videoEnabled }
-        : inheritedJoinState(liveKinds, handedOverAtMount.current);
+      let settled: { audioMuted: boolean; videoEnabled: boolean };
+      if (joinStateChosenHere.current) {
+        settled = { audioMuted, videoEnabled };
+      } else {
+        settled = settledJoinStateRef.current ?? inheritedJoinState(liveKinds, handedOverAtMount.current);
+        settledJoinStateRef.current = settled;
+      }
 
       if (!joinStateChosenHere.current) {
         setAudioMuted(settled.audioMuted);
         setVideoEnabled(settled.videoEnabled);
       }
-
       await ensureLocalPreview(kindsForJoinState(settled, liveKinds)).catch(() => undefined);
     })();
 
