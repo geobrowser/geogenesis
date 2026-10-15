@@ -44,6 +44,8 @@ describe('parsePersistedSort', () => {
     ['json scalar', '"best"'],
     ['json null', 'null'],
     ['missing direction', JSON.stringify({ sort_by: PROPERTY_ID })],
+    ['unknown direction', JSON.stringify({ order_by: 'best', sort_direction: 'asc' })],
+    ['capitalised direction', JSON.stringify({ sort_by: PROPERTY_ID, sort_direction: 'Descending' })],
     ['missing key', JSON.stringify({ sort_direction: 'descending' })],
     ['empty sort_by', JSON.stringify({ sort_by: '', sort_direction: 'descending' })],
     ['unknown order_by', JSON.stringify({ order_by: 'updated_at', sort_direction: 'descending' })],

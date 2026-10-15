@@ -31,10 +31,7 @@ export function useSort(canEdit?: boolean) {
 
   const persistedSortState = React.useMemo(() => {
     if (!sortTriple) return null;
-    if (sortTriple.property.dataType === 'TEXT') {
-      if (sortTriple.value === '') return null;
-      return parsePersistedSort(sortTriple.value);
-    }
+    if (sortTriple.property.dataType === 'TEXT') return parsePersistedSort(sortTriple.value);
     return null;
   }, [sortTriple]);
 

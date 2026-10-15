@@ -27,7 +27,7 @@ export function parsePersistedSort(raw: string | null | undefined): ColumnSortSt
   if (!parsed || typeof parsed !== 'object') return null;
 
   const { sort_by, order_by, sort_direction } = parsed as Record<string, unknown>;
-  if (!sort_direction) return null;
+  if (sort_direction !== 'ascending' && sort_direction !== 'descending') return null;
   const direction: SortDirection = sort_direction === 'ascending' ? 'asc' : 'desc';
 
   if (typeof sort_by === 'string' && sort_by !== '') {
