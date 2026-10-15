@@ -4,7 +4,7 @@ import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { EditProfileStatus } from '~/core/hooks/use-edit-profile';
+import type { EditProfileStatus, ProfileSetup } from '~/core/hooks/use-edit-profile';
 import { TAGLINE_MAX_LENGTH } from '~/core/profile/profile-ontology';
 
 import { EditProfileDialog } from './edit-profile-dialog';
@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   publish: vi.fn(),
   reset: vi.fn(),
   canEdit: true,
+  profileSetup: null as ProfileSetup,
+  address: '0xaccount-a' as string | undefined,
   entityId: 'entity-a',
   isHydrated: true,
   isLoading: false,
@@ -51,6 +53,8 @@ vi.mock('~/core/hooks/use-profile-history', () => ({
 vi.mock('~/core/hooks/use-edit-profile', () => ({
   useEditProfile: () => ({
     canEdit: mocks.canEdit,
+    profileSetup: mocks.profileSetup,
+    address: mocks.address,
     isHydrated: mocks.isHydrated,
     isLoading: mocks.isLoading,
     entityId: mocks.entityId,
@@ -94,6 +98,8 @@ beforeEach(() => {
   mocks.publish.mockReset();
   mocks.reset.mockReset();
   mocks.canEdit = true;
+  mocks.profileSetup = null;
+  mocks.address = '0xaccount-a';
   mocks.entityId = 'entity-a';
   mocks.isHydrated = true;
   mocks.isLoading = false;
@@ -795,5 +801,151 @@ describe('EditProfileDialog', () => {
     frame.dispatchEvent(Object.assign(new Event('drop', { bubbles: true }), { dataTransfer: { files: [gif] } }));
 
     expect(await screen.findByText('Banners have to be a PNG or JPEG.')).toBeInTheDocument();
+  });
+
+  // GEO-3302. A brand-new account's space registers before its profile is
+  // indexed, and for that window the hook has no entity to point at.
+  describe('while a new account’s profile is still being set up', () => {
+    const EMPTY = { name: '', tagline: '', description: '', bannerUrl: undefined, avatarUrl: undefined };
+
+    // The header's X is labelled Close too; this is the footer pill.
+    const footerClose = () => screen.getAllByRole('button', { name: 'Close' }).at(-1)!;
+
+    function settingUp() {
+      mocks.profileSetup = 'waiting';
+      mocks.canEdit = false;
+      mocks.entityId = '';
+      mocks.isHydrated = false;
+      mocks.current = { ...EMPTY };
+    }
+
+    /** The profile lands: an entity to edit, carrying the name chosen at sign-up. */
+    function profileArrives() {
+      mocks.profileSetup = null;
+      mocks.canEdit = true;
+      mocks.entityId = 'entity-a';
+      mocks.isHydrated = true;
+      mocks.current = { ...EMPTY, name: 'New Person' };
+    }
+
+    it('says it is being set up rather than that it cannot be found', () => {
+      settingUp();
+      renderDialog();
+
+      expect(screen.getByText(/Your profile is still being set up/)).toBeInTheDocument();
+      expect(screen.queryByText(/couldn’t find your profile/)).not.toBeInTheDocument();
+      // The name is on its way, not missing.
+      expect(screen.queryByText('Name is required.')).not.toBeInTheDocument();
+    });
+
+    it('holds a Save until the profile is ready, then publishes the draft', async () => {
+      settingUp();
+      const { onOpenChange, rerender } = renderDialog();
+
+      await userEvent.type(taglineField(), 'Building debates');
+      await userEvent.click(saveButton());
+
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: 'Saving when ready' })).toBeDisabled();
+      expect(screen.getByText(/will save as soon as your profile is ready/)).toBeInTheDocument();
+      expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+      profileArrives();
+      rerender(<EditProfileDialog open onOpenChange={onOpenChange} />);
+
+      // The typed tagline survives the entity id arriving, and the untouched name
+      // is the one the profile came with rather than the blank it showed while waiting.
+      expect(mocks.publish).toHaveBeenCalledTimes(1);
+      expect(mocks.publish).toHaveBeenCalledWith(
+        expect.objectContaining({ name: 'New Person', tagline: 'Building debates' }),
+        expect.anything()
+      );
+      expect(onOpenChange).toHaveBeenCalledWith(false);
+    });
+
+    it('still publishes a held Save after the modal is closed', async () => {
+      settingUp();
+      const { onOpenChange, rerender } = renderDialog();
+
+      await userEvent.type(descriptionField(), 'Hello.');
+      await userEvent.click(saveButton());
+      // Closing a held save asks nothing: the draft is already on its way.
+      await userEvent.click(footerClose());
+      expect(screen.queryByRole('dialog', { name: /Exiting without saving/ })).not.toBeInTheDocument();
+      expect(mocks.reset).not.toHaveBeenCalled();
+
+      rerender(<EditProfileDialog open={false} onOpenChange={onOpenChange} />);
+      profileArrives();
+      rerender(<EditProfileDialog open={false} onOpenChange={onOpenChange} />);
+
+      expect(mocks.publish).toHaveBeenCalledWith(expect.objectContaining({ description: 'Hello.' }), expect.anything());
+    });
+
+    it('brings the draft back and says nothing was saved when setup stalls', async () => {
+      settingUp();
+      const { onOpenChange, rerender } = renderDialog();
+
+      await userEvent.type(taglineField(), 'Building debates');
+      await userEvent.click(saveButton());
+      await userEvent.click(footerClose());
+      rerender(<EditProfileDialog open={false} onOpenChange={onOpenChange} />);
+
+      mocks.profileSetup = 'stalled';
+      rerender(<EditProfileDialog open={false} onOpenChange={onOpenChange} />);
+
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenLastCalledWith(true);
+
+      rerender(<EditProfileDialog open onOpenChange={onOpenChange} />);
+      expect(screen.getByText(/taking longer than usual to set up, so nothing was saved/)).toBeInTheDocument();
+      expect(taglineField()).toHaveValue('Building debates');
+      expect(saveButton()).toBeDisabled();
+    });
+
+    it('brings the draft back when the profile arrives but fails to load', async () => {
+      settingUp();
+      const { onOpenChange, rerender } = renderDialog();
+
+      await userEvent.type(taglineField(), 'Building debates');
+      await userEvent.click(saveButton());
+      await userEvent.click(footerClose());
+      rerender(<EditProfileDialog open={false} onOpenChange={onOpenChange} />);
+
+      profileArrives();
+      mocks.isHydrated = false;
+      rerender(<EditProfileDialog open={false} onOpenChange={onOpenChange} />);
+
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    });
+
+    it('still blocks a name the user cleared themselves', async () => {
+      settingUp();
+      mocks.current = { ...EMPTY, name: 'Typed At Sign-up' };
+      renderDialog();
+
+      await userEvent.clear(nameField());
+      await userEvent.type(taglineField(), 'x');
+
+      expect(screen.getByText('Name is required.')).toBeInTheDocument();
+      expect(saveButton()).toBeDisabled();
+    });
+
+    // The address, not the entity id, is what says the account changed: a switch
+    // through the signed-out state also passes through an empty entity id.
+    it('drops a held draft when a different account arrives', async () => {
+      settingUp();
+      const { rerender } = renderDialog();
+
+      await userEvent.type(taglineField(), 'Mine');
+      await userEvent.click(saveButton());
+
+      profileArrives();
+      mocks.address = '0xaccount-b';
+      rerender(<EditProfileDialog open onOpenChange={vi.fn()} />);
+
+      expect(mocks.publish).not.toHaveBeenCalled();
+      expect(taglineField()).toHaveValue('');
+    });
   });
 });
