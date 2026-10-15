@@ -6,22 +6,40 @@ import { REQUEST_ALERT_TITLE, claimRequestAlert, useDebateRequestAlert } from '.
 
 /** Counts tones: each one starts two oscillators. */
 let oscillatorsStarted = 0;
+/** Every context a tone opened, in order, so a test can see which ones were closed. */
+let contexts: FakeAudioContext[] = [];
 class FakeAudioContext {
   currentTime = 0;
   destination = {};
+  closed = false;
+  oscillators: { onended: (() => void) | null }[] = [];
+  constructor() {
+    contexts.push(this);
+  }
   resume() {
     return Promise.resolve();
   }
+  close() {
+    this.closed = true;
+    return Promise.resolve();
+  }
+  /** What the browser does once every scheduled note has stopped. */
+  finish() {
+    for (const oscillator of this.oscillators) oscillator.onended?.();
+  }
   createOscillator() {
-    return {
+    const oscillator = {
       type: 'sine',
       frequency: { value: 0 },
+      onended: null as (() => void) | null,
       connect: (node: unknown) => node,
       start: () => {
         oscillatorsStarted += 1;
       },
       stop: () => undefined,
     };
+    this.oscillators.push(oscillator);
+    return oscillator;
   }
   createGain() {
     const gain = {
@@ -88,6 +106,7 @@ describe('alerting on an incoming debate request', () => {
     vi.useFakeTimers();
     window.localStorage.clear();
     oscillatorsStarted = 0;
+    contexts = [];
     setAway(false);
     document.title = 'Geo';
     vi.stubGlobal('AudioContext', FakeAudioContext);
@@ -111,6 +130,33 @@ describe('alerting on an incoming debate request', () => {
 
     rerender({ pending: ['request-1', 'request-2'] });
     expect(tones()).toBe(2);
+  });
+
+  // GEO-3341: a context left open keeps an audio output running beside the person's next call.
+  it('closes the audio once the tone has played', () => {
+    mount(['request-1']);
+    expect(contexts).toHaveLength(1);
+    expect(contexts[0].closed).toBe(false);
+
+    act(() => contexts[0].finish());
+    expect(contexts[0].closed).toBe(true);
+  });
+
+  // A context the browser would not start never reports its notes ending.
+  it('closes the audio even when the tone never reports ending', () => {
+    mount(['request-1']);
+    act(() => void vi.advanceTimersByTime(2_000));
+    expect(contexts[0].closed).toBe(true);
+  });
+
+  it('still plays later requests after closing an earlier tone', () => {
+    const { rerender } = mount(['request-1']);
+    act(() => contexts[0].finish());
+
+    rerender({ pending: ['request-1', 'request-2'] });
+    expect(tones()).toBe(2);
+    expect(contexts).toHaveLength(2);
+    expect(contexts[1].closed).toBe(false);
   });
 
   it('stays quiet when nothing is waiting', () => {

@@ -71,20 +71,37 @@ function safeStorage(): Storage | null {
   }
 }
 
-let audioContext: AudioContext | null = null;
+/**
+ * Closes a tone's context even when its last note never reports ending: a context the browser
+ * refused to start stays suspended, and no `ended` event ever comes.
+ */
+const TONE_CONTEXT_CLOSE_MS = 2_000;
 
-/** Two short rising notes: distinct from a message ding, and quiet. */
+/**
+ * Two short rising notes: distinct from a message ding, and quiet.
+ *
+ * Each tone gets its own context, closed once the second note ends (GEO-3341). A context left
+ * open keeps an audio output running for the rest of the visit, through the claim picker and the
+ * debate where the person is on a live call, for a sound that lasted a third of a second.
+ */
 export function playRequestTone() {
   try {
     const AudioContextClass =
       window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextClass) return;
-    audioContext ??= new AudioContextClass();
-    const context = audioContext;
+    const context = new AudioContextClass();
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      clearTimeout(fallback);
+      void context.close().catch(() => undefined);
+    };
+    const fallback = setTimeout(close, TONE_CONTEXT_CLOSE_MS);
     void context.resume().catch(() => undefined);
 
     const start = context.currentTime + 0.01;
-    [880, 1318.5].forEach((frequency, index) => {
+    [880, 1318.5].forEach((frequency, index, notes) => {
       const at = start + index * 0.16;
       const oscillator = context.createOscillator();
       const gain = context.createGain();
@@ -94,6 +111,7 @@ export function playRequestTone() {
       gain.gain.exponentialRampToValueAtTime(0.18, at + 0.02);
       gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.14);
       oscillator.connect(gain).connect(context.destination);
+      if (index === notes.length - 1) oscillator.onended = close;
       oscillator.start(at);
       oscillator.stop(at + 0.15);
     });
