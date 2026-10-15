@@ -330,7 +330,9 @@ export function useLobbyPresence(
   connected = false,
   removed = false,
   /** The viewer's own roster row says they are in a debate. */
-  debating = false
+  debating = false,
+  /** When the view `debating` comes from was stored, as react-query's `dataUpdatedAt`. */
+  viewUpdatedAt = 0
 ) {
   const queryClient = useQueryClient();
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
@@ -463,12 +465,15 @@ export function useLobbyPresence(
     }
   }, [enqueue, lobbyId, sendLeave, setState, store]);
 
+  // When this tab was last stepped out; only a view stored after it can say the debate is over.
+  const steppedOutAtRef = React.useRef(0);
   // Out of the lobby without a leave: stops the heartbeat and the unmount's leave.
   const stopWithout = React.useCallback(
     (next: LobbyPresenceState) => {
       generationRef.current += 1;
       sentRef.current = false;
       joinedRef.current = false;
+      if (next.status === 'stepped_out') steppedOutAtRef.current = Date.now();
       setState(next);
     },
     [setState]
@@ -524,16 +529,12 @@ export function useLobbyPresence(
   }, [admitted, join, lobbyId, removed, setState, status, steppedOut]);
 
   // Stepped out while this page stayed open, by a debate in another tab: back in once it is over.
-  // Only after the view has shown the debate, since the step-out can land before the view does.
-  const debateSeenRef = React.useRef(false);
+  // Only a view stored after the step-out counts: one from before it predates the debate, and the
+  // debate can end before this tab ever sees it running.
   React.useEffect(() => {
-    if (status !== 'stepped_out') {
-      debateSeenRef.current = false;
-      return;
-    }
-    if (debating) debateSeenRef.current = true;
-    else if (debateSeenRef.current && admitted && !removed) void join(false);
-  }, [admitted, debating, join, removed, status]);
+    if (status !== 'stepped_out' || !admitted || removed || debating) return;
+    if (viewUpdatedAt > steppedOutAtRef.current) void join(false);
+  }, [admitted, debating, join, removed, status, viewUpdatedAt]);
 
   // Unbanned after a ban this tab heard: the view is admitted again with `removed`, so the
   // viewer gets the removed screen and its Rejoin rather than a stale ban.

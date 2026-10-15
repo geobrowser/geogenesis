@@ -12,6 +12,8 @@ type StoredDebateReturnDestination = {
   capturedAt: number;
   /** A lobby, which shares the room path but is a place to come back to. */
   lobby?: true;
+  /** A lobby's: the page the flow opened from, for when the lobby stops being the way back. */
+  from?: string;
 };
 
 /**
@@ -25,9 +27,14 @@ export function rememberDebateReturnDestination(href = currentBrowserHref()) {
   storeDestination({ href: destination, capturedAt: Date.now() });
 }
 
-/** Remember a lobby, stepped out of to debate, as the place the flow returns to. */
+/**
+ * Remember a lobby, stepped out of to debate, as the place the flow returns to. A page recorded
+ * before it is kept behind it, so leaving the lobby mid-debate still returns there.
+ */
 export function rememberLobbyReturnDestination(lobbyId: string) {
-  storeDestination({ href: debateRoomPath(lobbyId), capturedAt: Date.now(), lobby: true });
+  const previous = readStoredDestination();
+  const from = previous ? (previous.lobby ? previous.from : previous.href) : undefined;
+  storeDestination({ href: debateRoomPath(lobbyId), capturedAt: Date.now(), lobby: true, ...(from ? { from } : {}) });
 }
 
 function storeDestination(stored: StoredDebateReturnDestination) {
@@ -44,7 +51,8 @@ export function consumeDebateReturnDestination(lobby?: { lobbyId: string | null 
   clearDebateReturnDestination();
   if (!lobby) return stored?.href ?? null;
   if (lobby.lobbyId) return debateRoomPath(lobby.lobbyId);
-  return stored && !stored.lobby ? stored.href : null;
+  if (!stored) return null;
+  return stored.lobby ? (stored.from ?? null) : stored.href;
 }
 
 /** The destination the flow will return to, left in place. */
@@ -52,7 +60,7 @@ export function peekDebateReturnDestination(): string | null {
   return readStoredDestination()?.href ?? null;
 }
 
-function readStoredDestination(): { href: string; lobby: boolean } | null {
+function readStoredDestination(): { href: string; lobby: boolean; from?: string } | null {
   const raw = readSession(debateReturnDestinationKey);
   if (!raw) return null;
 
@@ -62,7 +70,11 @@ function readStoredDestination(): { href: string; lobby: boolean } | null {
     if (Date.now() - stored.capturedAt > debateReturnDestinationMaxAgeMs) return null;
     const destination = safeInternalHref(stored.href);
     if (!destination) return null;
-    if (stored.lobby === true) return isDebateRoomPath(destination) ? { href: destination, lobby: true } : null;
+    if (stored.lobby === true) {
+      if (!isDebateRoomPath(destination)) return null;
+      const from = typeof stored.from === 'string' ? safeInternalHref(stored.from) : null;
+      return { href: destination, lobby: true, ...(from && !isDebateFlowHref(from) ? { from } : {}) };
+    }
     return isDebateFlowHref(destination) ? null : { href: destination, lobby: false };
   } catch {
     return null;

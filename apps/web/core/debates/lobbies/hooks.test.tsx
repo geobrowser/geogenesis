@@ -311,32 +311,58 @@ describe('useLobbyPresence', () => {
   });
 
   // A debate started from another tab steps this open page out; it comes back once that is over.
-  it('rejoins a page left open once the debate in another tab is over', async () => {
-    vi.useFakeTimers({ shouldAdvanceTime: true });
-    api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
-      connection_alive: false,
-      voice_away_at: null,
-      reason: 'stepped_out',
-      current_lobby_id: null,
-    });
-    const { result, rerender } = renderHook(
-      ({ debating }) => useLobbyPresence('lobby1', true, debating, false, false, debating),
-      { wrapper, initialProps: { debating: false } }
-    );
-    await waitFor(() => expect(result.current.state.status).toBe('joined'));
-    await act(async () => {
-      await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
-    });
-    // The step-out lands before the view shows the debate: not over, just not seen yet.
-    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
-    rerender({ debating: true });
-    expect(result.current.state.status).toBe('stepped_out');
-    expect(joins()).toHaveLength(1);
+  describe('a page left open while the viewer debates in another tab', () => {
+    async function steppedOutByAnotherTab() {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+        connection_alive: false,
+        voice_away_at: null,
+        reason: 'stepped_out',
+        current_lobby_id: null,
+      });
+      const viewBefore = Date.now();
+      const hook = renderHook(
+        ({ debating, viewUpdatedAt }) => useLobbyPresence('lobby1', true, false, false, false, debating, viewUpdatedAt),
+        { wrapper, initialProps: { debating: false, viewUpdatedAt: viewBefore } }
+      );
+      await waitFor(() => expect(hook.result.current.state.status).toBe('joined'));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+      });
+      await waitFor(() => expect(hook.result.current.state.status).toBe('stepped_out'));
+      // Views stored from here on postdate the step-out.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      return { ...hook, viewBefore };
+    }
 
-    rerender({ debating: false });
-    await waitFor(() => expect(result.current.state.status).toBe('joined'));
-    expect(joins()).toHaveLength(2);
-    expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['link', 'back_after_debate']);
+    it('stays out on a view from before the step-out, which predates the debate', async () => {
+      const { result, rerender, viewBefore } = await steppedOutByAnotherTab();
+      rerender({ debating: false, viewUpdatedAt: viewBefore });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+    });
+
+    it('stays out while a later view shows the debate, and rejoins once one shows it over', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      rerender({ debating: true, viewUpdatedAt: Date.now() });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+
+      rerender({ debating: false, viewUpdatedAt: Date.now() + 1 });
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      expect(joins()).toHaveLength(2);
+      expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['link', 'back_after_debate']);
+    });
+
+    // The debate can end before this tab sees it running: the first view after the step-out says over.
+    it('rejoins when the debate was over before this tab ever saw it', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      rerender({ debating: false, viewUpdatedAt: Date.now() });
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      expect(joins()).toHaveLength(2);
+    });
   });
 
   it('leaves for good on Leave from a page stepped out by another tab', async () => {

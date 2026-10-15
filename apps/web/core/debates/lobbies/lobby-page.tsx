@@ -142,7 +142,8 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
     memberViewer?.stepped_out ?? false,
     memberViewer?.connected ?? false,
     memberViewer?.removed ?? false,
-    debating
+    debating,
+    lobbyQuery.dataUpdatedAt
   );
   const guestSession = useLobbyGuestSession(lobbyId, {
     listen: signedOut && admitted,

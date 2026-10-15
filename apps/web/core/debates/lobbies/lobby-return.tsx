@@ -4,33 +4,55 @@ import * as React from 'react';
 
 import { Text } from '~/design-system/text';
 
-import { consumeDebateReturnDestination, peekDebateReturnDestination } from '../debate-return-navigation';
+import {
+  consumeDebateReturnDestination,
+  peekDebateReturnDestination,
+  rememberLobbyReturnDestination,
+} from '../debate-return-navigation';
+import { sameId } from '../rooms/room-presence';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
 import { useDebateLobby, useMyDebateLobby } from './hooks';
 import { hereNowLabel, lobbyHeadcount } from './lobby-format';
 import { LobbyAvatarStack } from './lobby-people';
 
+/** The lobby this tab's debate flow recorded as its way back, or null. */
+function recordedLobbyId(): string | null {
+  const destination = peekDebateReturnDestination();
+  return destination ? debateRoomIdFromPath(destination) : null;
+}
+
 /**
  * geo-chat's lobby to return to: the one the viewer stepped out of, from any tab, or null. Undefined
  * while it is unknown (loading, or the call failed), so callers fall back to this tab.
+ *
+ * A lobby tab left open rejoins once the debate is over, which ends the step-out while this flow can
+ * still be on its end card. So the lobby is recorded as this tab's way back as soon as geo-chat names
+ * it, and stays the way back while the viewer is still on its roster; leaving it or moving on does not.
  */
 function useServerLobbyReturn(): { lobbyId: string | null } | undefined {
   const mine = useMyDebateLobby();
+  const steppedOutOf = mine.data?.stepped_out ? mine.data.current_lobby_id : null;
+  React.useEffect(() => {
+    if (steppedOutOf) rememberLobbyReturnDestination(steppedOutOf);
+  }, [steppedOutOf]);
+
   if (mine.isError || !mine.data) return undefined;
-  return { lobbyId: mine.data.stepped_out ? mine.data.current_lobby_id : null };
+  const current = mine.data.current_lobby_id;
+  if (!current) return { lobbyId: null };
+  if (mine.data.stepped_out) return { lobbyId: current };
+  const recorded = recordedLobbyId();
+  return { lobbyId: recorded && sameId(recorded, current) ? current : null };
 }
 
 /** The lobby this debate flow returns to; null when it did not start in one or that lobby is gone. */
 export function useRecordedLobby(): string | null {
   const mine = useMyDebateLobby();
+  const server = useServerLobbyReturn();
   // This tab's record, read once per mount; used only when geo-chat cannot answer.
-  const [stored] = React.useState(() => {
-    const destination = peekDebateReturnDestination();
-    return destination ? debateRoomIdFromPath(destination) : null;
-  });
+  const [stored] = React.useState(recordedLobbyId);
 
-  if (mine.isError) return stored;
-  return mine.data?.stepped_out ? mine.data.current_lobby_id : null;
+  if (server) return server.lobbyId;
+  return mine.isError ? stored : null;
 }
 
 /** The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. */
