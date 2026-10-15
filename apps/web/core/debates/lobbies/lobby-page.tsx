@@ -101,6 +101,7 @@ export const LOBBY_COPY = {
   guestRemoved: LOBBY_STATE_COPY.removed,
   guestRemovedInvite: 'Create an account to come back and take part.',
   guestElsewhere: 'You’re listening in another tab.',
+  guestPaused: 'You’re not listening in this tab.',
   guestListeningOff: 'Listening without an account has been turned off for this lobby. Create an account to join.',
 } as const;
 
@@ -548,7 +549,10 @@ function LobbyRoom({
     : guestSession.state.status === 'refused'
       ? { message: guestSession.state.message, retry: guestSession.state.retryable ? 'Try again' : null }
       : guestSession.state.status === 'superseded'
-        ? { message: LOBBY_COPY.guestElsewhere, retry: 'Listen here' }
+        ? {
+            message: guestSession.otherTabListening ? LOBBY_COPY.guestElsewhere : LOBBY_COPY.guestPaused,
+            retry: 'Listen here',
+          }
         : guestEnded && guestEndedAt !== null && guestViewAt >= guestEndedAt
           ? { message: LOBBY_COPY.guestListeningOff, retry: null }
           : null;

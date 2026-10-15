@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { type FromThisDebateClaim, fromThisDebateCandidates, mergeFromThisDebate } from './from-this-debate';
+import {
+  type FromThisDebateClaim,
+  fromThisDebateCandidates,
+  groupFromThisDebateByRound,
+  mergeFromThisDebate,
+} from './from-this-debate';
 
 const MATCHED = '262bea9e9298b3e1caabef450c72cfc8';
 const MINTED_A = 'a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1';
@@ -12,19 +17,25 @@ const turns = [
   { turn_index: 1, participant_slot: 2, attributed_space_id: 'space-susan', speaker_name: 'Susan', text: '…' },
 ];
 
-function claim(text: string, turn_index: number, ids: { existing?: string | null; minted?: string | null } = {}) {
+function claim(
+  text: string,
+  turn_index: number,
+  ids: { existing?: string | null; minted?: string | null } = {},
+  start_ms: number | null = null
+) {
   return {
     text,
     is_factual: false,
     turn_index,
+    start_ms,
     existing_entity_id: ids.existing ?? null,
     entity_id: ids.minted ?? null,
     is_contestable: true,
   };
 }
 
-function item(id: string, text: string, turnIndex = 0): FromThisDebateClaim {
-  return { id, text, turnIndex, speakerName: null, speakerSpaceId: null, matched: false };
+function item(id: string, text: string, turnIndex = 0, startMs: number | null = null): FromThisDebateClaim {
+  return { id, text, turnIndex, startMs, speakerName: null, speakerSpaceId: null, matched: false };
 }
 
 describe('fromThisDebateCandidates', () => {
@@ -79,6 +90,23 @@ describe('fromThisDebateCandidates', () => {
     ]);
   });
 
+  it('orders claims within a turn by when they were said, untimed ones last', () => {
+    const candidates = fromThisDebateCandidates({
+      turns,
+      claims: [
+        claim('Untimed', 0, { minted: MINTED_A }),
+        claim('Later', 0, { minted: MINTED_B }, 30_000),
+        claim('Earlier', 0, { minted: MINTED_C }, 5_000),
+      ],
+    });
+
+    expect(candidates.map(candidate => [candidate.text, candidate.startMs])).toEqual([
+      ['Earlier', 5_000],
+      ['Later', 30_000],
+      ['Untimed', null],
+    ]);
+  });
+
   it('names the speaker of the turn a claim came from', () => {
     const [first, second] = fromThisDebateCandidates({
       turns,
@@ -127,5 +155,74 @@ describe('mergeFromThisDebate (D4)', () => {
       MINTED_B,
       MINTED_C,
     ]);
+  });
+});
+
+describe('groupFromThisDebateByRound', () => {
+  const D = 'd4d4d4d4d4d4d4d4d4d4d4d4d4d4d4d4';
+  const E = 'e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5e5';
+
+  it('groups both debaters’ turns into one round, in the order each claim was said', () => {
+    // Listed append-only, so a claim the final pass found late sits at the end of the list.
+    const listed = [
+      item(MINTED_A, 'Round 1, second', 0, 20_000),
+      item(MINTED_B, 'Round 2, rebuttal', 2, 130_000),
+      item(MINTED_C, 'Round 1, reply', 1, 70_000),
+      item(D, 'Round 1, first', 0, 5_000),
+    ];
+
+    const rounds = groupFromThisDebateByRound(listed, claim => claim, {
+      roomTurnCount: 4,
+      extractedTurnCount: 4,
+      numberedOnly: false,
+    });
+
+    expect(rounds.map(round => [round.label, round.items.map(claim => claim.text)])).toEqual([
+      ['Round 1 · Opening', ['Round 1, first', 'Round 1, second', 'Round 1, reply']],
+      ['Round 2 · Rebuttal', ['Round 2, rebuttal']],
+    ]);
+  });
+
+  it('names a three-round debate’s last round as closing, and numbers Open rounds only', () => {
+    const listed = [item(MINTED_A, 'Opening', 0), item(MINTED_B, 'Middle', 3), item(E, 'Last', 5)];
+
+    expect(
+      groupFromThisDebateByRound(listed, claim => claim, {
+        roomTurnCount: 6,
+        extractedTurnCount: 6,
+        numberedOnly: false,
+      }).map(r => r.label)
+    ).toEqual(['Round 1 · Opening', 'Round 2 · Rebuttal', 'Round 3 · Closing']);
+    expect(
+      groupFromThisDebateByRound(listed, claim => claim, {
+        roomTurnCount: 6,
+        extractedTurnCount: 6,
+        numberedOnly: true,
+      }).map(r => r.label)
+    ).toEqual(['Round 1', 'Round 2', 'Round 3']);
+  });
+
+  it('draws no rounds, only the order said, when the transcript ran a different number of turns than the room', () => {
+    // geo-chat numbers speaker changes over non-silent speech: a turn nobody spoke in merges the
+    // turns either side of it, so transcript turn 1 here is the room's turn 3, a rebuttal.
+    const listed = [item(MINTED_A, 'Rebuttal', 1, 200_000), item(MINTED_B, 'Opening', 0, 5_000)];
+
+    const rounds = groupFromThisDebateByRound(listed, claim => claim, {
+      roomTurnCount: 4,
+      extractedTurnCount: 2,
+      numberedOnly: false,
+    });
+
+    expect(rounds).toEqual([{ key: -1, label: null, items: [listed[1], listed[0]] }]);
+  });
+
+  it('leaves out a round with nothing in it', () => {
+    const rounds = groupFromThisDebateByRound([item(MINTED_A, 'Only', 4)], claim => claim, {
+      roomTurnCount: 6,
+      extractedTurnCount: 6,
+      numberedOnly: false,
+    });
+
+    expect(rounds.map(round => round.label)).toEqual(['Round 3 · Closing']);
   });
 });
