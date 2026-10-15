@@ -9,6 +9,8 @@ import type { DebateLobbySummary } from '../api';
 
 const api = vi.hoisted(() => ({ listDebateLobbies: vi.fn(), setDebateLobbyReminder: vi.fn() }));
 
+// The signed-out Remind me opens Privy, which needs the wallet provider (GEO-3289).
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 vi.mock('../api', async importOriginal => ({ ...(await importOriginal<typeof import('../api')>()), ...api }));
 vi.mock('../hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('../hooks')>()),

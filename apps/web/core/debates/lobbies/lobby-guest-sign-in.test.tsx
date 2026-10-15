@@ -1,4 +1,4 @@
-import { cleanup, renderHook } from '@testing-library/react';
+import { act, cleanup, renderHook } from '@testing-library/react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -21,11 +21,13 @@ vi.mock('~/core/hooks/use-privy-sign-in', () => ({
 }));
 
 const { claimLobbySignInPrompt, useLobbySignInPrompt } = await import('./lobby-guest-sign-in');
+const { markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
 
 beforeEach(() => {
   window.sessionStorage.clear();
   mocks.signIn.mockReset();
   mocks.search = new URLSearchParams();
+  resetLobbyAnalytics();
 });
 
 afterEach(() => cleanup());
@@ -36,7 +38,7 @@ describe('useLobbySignInPrompt', () => {
 
     expect(mocks.signIn).toHaveBeenCalledTimes(1);
     expect(mocks.signIn).toHaveBeenCalledWith(
-      { component: 'lobby_sign_in_prompt', auth_trigger: 'page_load' },
+      { component: 'lobby_sign_in_prompt', auth_trigger: 'page_load', lobby_entry: 'link' },
       { redirectTo: '/debate/lobbya' }
     );
     expect(mocks.options?.analytics?.()).toMatchObject({
@@ -108,5 +110,53 @@ describe('useLobbySignInPrompt', () => {
     } finally {
       if (storage) Object.defineProperty(window, 'sessionStorage', storage);
     }
+  });
+
+  // GEO-3289. Pressed in the navbar or the debates panel: the entry goes with the attempt, and the
+  // press asks again in a tab that was already asked.
+  it('asks again for a press in the navbar or panel, naming where it came from', () => {
+    renderHook(() => useLobbySignInPrompt('lobby-i', true));
+    cleanup();
+    markLobbyEntry('lobby-i', 'side_panel');
+    renderHook(() => useLobbySignInPrompt('lobby-i', true));
+
+    expect(mocks.signIn).toHaveBeenCalledTimes(2);
+    expect(mocks.signIn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ lobby_entry: 'side_panel' }),
+      expect.anything()
+    );
+  });
+
+  it('does not ask again for a press marked for another lobby', () => {
+    renderHook(() => useLobbySignInPrompt('lobby-j', true));
+    cleanup();
+    markLobbyEntry('lobby-k', 'nav');
+    renderHook(() => useLobbySignInPrompt('lobby-j', true));
+
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
+  });
+
+  // Copilot on #2863: the press is answered once. Back to the lobby within the marker's minute is
+  // not another press, and must not reopen a prompt the visitor dismissed.
+  it('answers a press once, so coming back with Back does not ask again', () => {
+    markLobbyEntry('lobby-l', 'nav');
+    renderHook(() => useLobbySignInPrompt('lobby-l', true));
+    cleanup();
+    renderHook(() => useLobbySignInPrompt('lobby-l', true));
+
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
+  });
+
+  // And pressing Join for the lobby already on screen asks, though its page stays mounted.
+  it('asks for a press on the lobby whose page is open', () => {
+    renderHook(() => useLobbySignInPrompt('lobby-m', true));
+    expect(mocks.signIn).toHaveBeenCalledTimes(1);
+
+    act(() => markLobbyEntry('lobby-m', 'side_panel'));
+    expect(mocks.signIn).toHaveBeenCalledTimes(2);
+    expect(mocks.signIn).toHaveBeenLastCalledWith(
+      expect.objectContaining({ lobby_entry: 'side_panel' }),
+      expect.anything()
+    );
   });
 });

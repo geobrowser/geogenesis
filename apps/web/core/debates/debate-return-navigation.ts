@@ -1,5 +1,8 @@
 'use client';
 
+import { currentNavigationType } from '~/core/utils/navigation-type';
+import { readSession, removeSession, writeSession } from '~/core/utils/session-storage';
+
 import { debateRoomPath, isDebateRoomPath } from './rooms/room-routes';
 
 const debateReturnDestinationKey = 'geo.debates.return-destination';
@@ -103,33 +106,8 @@ export function lastPageOutsideDebates(): string | null {
 }
 
 function documentRestored() {
-  const [entry] = performance.getEntriesByType('navigation') as PerformanceNavigationTiming[];
-  return entry?.type === 'reload' || entry?.type === 'back_forward';
-}
-
-/** Session storage can be unavailable in privacy modes; these treat that as empty. */
-function readSession(key: string): string | null {
-  try {
-    return window.sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
-}
-
-function writeSession(key: string, value: string) {
-  try {
-    window.sessionStorage.setItem(key, value);
-  } catch {
-    // Nothing to keep it in.
-  }
-}
-
-function removeSession(key: string) {
-  try {
-    window.sessionStorage.removeItem(key);
-  } catch {
-    // Nothing to clear.
-  }
+  const type = currentNavigationType();
+  return type === 'reload' || type === 'back_forward';
 }
 
 function currentBrowserHref() {
