@@ -9,12 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
-import {
-  clearCarriedLobbyMic,
-  registerLobbyMic,
-  registerLobbyStepOut,
-  routeIntoDebate,
-} from '~/core/debates/lobbies/step-out';
+import { carryLobbyMic, clearCarriedLobbyMic, forgetLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
@@ -489,17 +484,15 @@ describe('RematchVoiceHeader', () => {
     expect(mocks.getUserMedia).not.toHaveBeenCalled();
   });
 
-  /** Routes out of a lobby whose mic is `on`, as the lobby's request flow does. */
-  function leaveLobbyWithMic(on: boolean) {
-    const clearMic = registerLobbyMic(() => on);
-    const clearStepOut = registerLobbyStepOut(async () => undefined);
-    routeIntoDebate(() => undefined);
-    clearMic();
-    clearStepOut();
+  /** What stepping out of a lobby whose mic is `on` leaves behind. */
+  function stepOutOfLobbyWithMic(on: boolean) {
+    reportLobbyMic(on);
+    carryLobbyMic();
+    forgetLobbyMic();
   }
 
   it('keeps the microphone live for a viewer who was unmuted in the lobby', async () => {
-    leaveLobbyWithMic(true);
+    stepOutOfLobbyWithMic(true);
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
@@ -514,7 +507,7 @@ describe('RematchVoiceHeader', () => {
   });
 
   it('keeps the microphone off for a viewer who was muted in the lobby, even with an opponent in the room', async () => {
-    leaveLobbyWithMic(false);
+    stepOutOfLobbyWithMic(false);
     render(
       <RematchVoiceHeader session={{ ...makeSession('browsing'), source_debate_id: 'debate-1' }} currentUserId="me" />
     );

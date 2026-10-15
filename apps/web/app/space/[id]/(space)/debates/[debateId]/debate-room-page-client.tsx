@@ -78,8 +78,11 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import { BackToLobbyRow, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
-import { clearCarriedLobbyMic, readCarriedLobbyMic } from '~/core/debates/lobbies/step-out';
+import {
+  BackToLobbyRow,
+  useCarriedLobbyMic,
+  useConsumeDebateReturnDestination,
+} from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -430,9 +433,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const rematchLeaveRequestedRef = React.useRef(false);
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
-  // Arriving straight from a lobby, the mic is what it was there: muted there, muted here.
-  const [audioMuted, setAudioMuted] = React.useState(() => readCarriedLobbyMic() === false);
-  React.useEffect(() => clearCarriedLobbyMic(), []);
+  const carriedMic = useCarriedLobbyMic();
+  const [audioMuted, setAudioMuted] = React.useState(carriedMic === false);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(true);

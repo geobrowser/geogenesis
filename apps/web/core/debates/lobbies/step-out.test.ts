@@ -3,21 +3,21 @@ import { join, relative } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
+  carryLobbyMic,
   clearCarriedLobbyMic,
   debateEntryClick,
+  forgetLobbyMic,
   readCarriedLobbyMic,
-  registerLobbyMic,
   registerLobbyStepOut,
+  reportLobbyMic,
   routeIntoDebate,
 } from './step-out';
 
 let clear: (() => void) | null = null;
-let clearMic: (() => void) | null = null;
 afterEach(() => {
   clear?.();
   clear = null;
-  clearMic?.();
-  clearMic = null;
+  forgetLobbyMic();
   clearCarriedLobbyMic();
   vi.useRealTimers();
 });
@@ -54,41 +54,52 @@ describe('routeIntoDebate', () => {
 });
 
 describe('carrying the lobby mic into a debate', () => {
-  it('carries an unmuted mic, read before the step-out takes it down', () => {
-    let on: boolean | null = true;
-    clearMic = registerLobbyMic(() => on);
-    clear = registerLobbyStepOut(async () => {
-      on = false;
-    });
+  /** A lobby whose step-out carries its mic, as the presence hook's does. */
+  function inLobbyWithMic(on: boolean | null) {
+    reportLobbyMic(on);
+    clear = registerLobbyStepOut(async () => carryLobbyMic());
+  }
+
+  it('carries an unmuted mic', () => {
+    inLobbyWithMic(true);
     routeIntoDebate(() => undefined);
     expect(readCarriedLobbyMic()).toBe(true);
   });
 
   it('carries a muted mic', () => {
-    clearMic = registerLobbyMic(() => false);
-    clear = registerLobbyStepOut(async () => undefined);
+    inLobbyWithMic(false);
     routeIntoDebate(() => undefined);
     expect(readCarriedLobbyMic()).toBe(false);
   });
 
-  it('carries nothing for a listener, or once spent', () => {
-    clearMic = registerLobbyMic(() => true);
-    clear = registerLobbyStepOut(async () => undefined);
+  // A step-out from the server unmounts the lobby voice before the route runs.
+  it('carries the last mic the voice reported after the voice is gone', () => {
+    inLobbyWithMic(true);
+    // Nothing reports on unmount, so the value stays put until the lobby page goes.
     routeIntoDebate(() => undefined);
-    clearCarriedLobbyMic();
+    expect(readCarriedLobbyMic()).toBe(true);
+  });
+
+  it('carries nothing for a listener, after the lobby page is gone, or once spent', () => {
+    inLobbyWithMic(null);
+    routeIntoDebate(() => undefined);
     expect(readCarriedLobbyMic()).toBeNull();
 
-    clearMic();
-    clearMic = registerLobbyMic(() => null);
+    reportLobbyMic(true);
+    forgetLobbyMic();
     routeIntoDebate(() => undefined);
+    expect(readCarriedLobbyMic()).toBeNull();
+
+    reportLobbyMic(true);
+    routeIntoDebate(() => undefined);
+    clearCarriedLobbyMic();
     expect(readCarriedLobbyMic()).toBeNull();
   });
 
   it('does not reach a debate entered from outside a lobby', () => {
-    clearMic = registerLobbyMic(() => true);
-    clear = registerLobbyStepOut(async () => undefined);
+    inLobbyWithMic(true);
     routeIntoDebate(() => undefined);
-    clear();
+    clear?.();
     clear = null;
     routeIntoDebate(() => undefined);
     expect(readCarriedLobbyMic()).toBeNull();
@@ -96,8 +107,7 @@ describe('carrying the lobby mic into a debate', () => {
 
   it('expires after a minute', () => {
     vi.useFakeTimers();
-    clearMic = registerLobbyMic(() => true);
-    clear = registerLobbyStepOut(async () => undefined);
+    inLobbyWithMic(true);
     routeIntoDebate(() => undefined);
     vi.advanceTimersByTime(61_000);
     expect(readCarriedLobbyMic()).toBeNull();

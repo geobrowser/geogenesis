@@ -12,7 +12,7 @@ import {
   rememberLobbyReturnDestination,
 } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
-import { registerLobbyMic, registerLobbyStepOut, routeIntoDebate } from '~/core/debates/lobbies/step-out';
+import { carryLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
 import {
   CAP_ROUND_ENDS_AT as OPEN_ROUNDS_CAP_ROUND_ENDS_AT,
   at as openRoundsAt,
@@ -132,9 +132,14 @@ vi.mock('~/core/debates/api', async importOriginal => {
 });
 
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
-vi.mock('~/core/debates/lobbies/lobby-return', async () => {
+vi.mock('~/core/debates/lobbies/lobby-return', async importOriginal => {
   const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
-  return { BackToLobbyRow: () => null, useConsumeDebateReturnDestination: () => consumeDebateReturnDestination };
+  const { useCarriedLobbyMic } = await importOriginal<typeof import('~/core/debates/lobbies/lobby-return')>();
+  return {
+    BackToLobbyRow: () => null,
+    useCarriedLobbyMic,
+    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
+  };
 });
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -1642,11 +1647,8 @@ describe('DebateRoomPageClient', () => {
 
   it('starts muted for a viewer who was muted in the lobby they just left', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
-    const clearMic = registerLobbyMic(() => false);
-    const clearStepOut = registerLobbyStepOut(async () => undefined);
-    routeIntoDebate(() => undefined);
-    clearMic();
-    clearStepOut();
+    reportLobbyMic(false);
+    carryLobbyMic();
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 

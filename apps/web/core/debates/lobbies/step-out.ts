@@ -1,5 +1,7 @@
 import type * as React from 'react';
 
+import { readSession, removeSession, writeSession } from '~/core/utils/session-storage';
+
 /** Routing into a debate waits at most this long for the step-out; the server catches up anyway. */
 const STEP_OUT_WAIT_MS = 2_000;
 
@@ -19,13 +21,10 @@ export function registerLobbyStepOut(stepOut: () => Promise<void>) {
  * leave does not take the viewer off its roster. Synchronous outside a lobby.
  */
 export function routeIntoDebate(go: () => void) {
+  // Only the lobby being stepped out of now carries its mic; `stepOut` writes it.
+  clearCarriedLobbyMic();
   const stepOut = stepOutOfCurrentLobby;
-  if (!stepOut) {
-    // Only a route straight out of a lobby carries its mic; an older one must not leak into this.
-    clearCarriedLobbyMic();
-    return go();
-  }
-  carryLobbyMic();
+  if (!stepOut) return go();
   void Promise.race([stepOut(), new Promise<void>(resolve => setTimeout(resolve, STEP_OUT_WAIT_MS))]).then(go);
 }
 
@@ -43,83 +42,66 @@ const rejoinKey = 'geo.debates.lobby-rejoin';
 
 /** Back to the room was pressed: the lobby page joins on arrival instead of asking again. */
 export function requestLobbyRejoin(lobbyId: string) {
-  try {
-    window.sessionStorage.setItem(rejoinKey, lobbyId);
-  } catch {
-    // Without storage the lobby asks once more.
-  }
+  // Without storage the lobby asks once more.
+  writeSession(rejoinKey, lobbyId);
 }
 
 /** Whether a rejoin was requested for this lobby; clears it either way. */
 export function consumeLobbyRejoin(lobbyId: string): boolean {
-  let requested: string | null = null;
-  try {
-    requested = window.sessionStorage.getItem(rejoinKey);
-  } catch {
-    return false;
-  }
+  const requested = readSession(rejoinKey);
   clearLobbyRejoin();
   return requested === lobbyId;
 }
 
 export function clearLobbyRejoin() {
-  try {
-    window.sessionStorage.removeItem(rejoinKey);
-  } catch {
-    // Nothing to clear when storage is unavailable.
-  }
+  removeSession(rejoinKey);
 }
 
-/** The lobby mic as this tab has it: on or off, or null when there is no mic of the viewer's here. */
-let readCurrentLobbyMic: (() => boolean | null) | null = null;
+/**
+ * The viewer's mic in this page's lobby: on, off, or null without a mic of their own there. Outlives
+ * the voice connection, which a step-out from the server can take down before the route runs.
+ */
+let lobbyMic: boolean | null = null;
 
-/** Set by the lobby's voice connection; the returned function clears it. */
-export function registerLobbyMic(read: () => boolean | null) {
-  readCurrentLobbyMic = read;
-  return () => {
-    if (readCurrentLobbyMic === read) readCurrentLobbyMic = null;
-  };
+/** Reported by the lobby's voice connection whenever it changes. */
+export function reportLobbyMic(on: boolean | null) {
+  lobbyMic = on;
+}
+
+/** The lobby page is gone, and the mic it reported with it. */
+export function forgetLobbyMic() {
+  lobbyMic = null;
 }
 
 const carriedMicKey = 'geo.debates.lobby-mic';
 /** Long enough for the step-out, the route and the picker's tab lock; short enough to mean "just now". */
-const CARRIED_MIC_MS = 60_000;
+const CARRIED_MIC_MAX_AGE_MS = 60_000;
 
-/** Called on the way out of a lobby, before the step-out takes the lobby mic down. */
-function carryLobbyMic() {
-  const on = readCurrentLobbyMic?.() ?? null;
-  try {
-    if (on === null) window.sessionStorage.removeItem(carriedMicKey);
-    else window.sessionStorage.setItem(carriedMicKey, JSON.stringify({ on, at: Date.now() }));
-  } catch {
-    // Without storage the next screen starts with its own default.
-  }
+type CarriedMic = { on: boolean; capturedAt: number };
+
+/** The step-out's half: hands the lobby mic to the picker or ready room the viewer is routed into. */
+export function carryLobbyMic() {
+  if (lobbyMic === null) return;
+  // Without storage the next screen starts with its own default.
+  writeSession(carriedMicKey, JSON.stringify({ on: lobbyMic, capturedAt: Date.now() } satisfies CarriedMic));
 }
 
 /**
- * The mic the viewer had in the lobby they just left, for the picker or ready room to start with.
- * Null when they did not come straight from a lobby with a mic of their own. Leaves it in place,
- * so a render that runs twice reads the same answer; `clearCarriedLobbyMic` spends it.
+ * The mic the viewer had in the lobby they just stepped out of, or null. Left in place, so a render
+ * that runs twice reads the same answer; `clearCarriedLobbyMic` spends it.
  */
 export function readCarriedLobbyMic(): boolean | null {
+  const raw = readSession(carriedMicKey);
+  if (!raw) return null;
   try {
-    const raw = window.sessionStorage.getItem(carriedMicKey);
-    if (!raw) return null;
-    const carried: unknown = JSON.parse(raw);
-    if (typeof carried !== 'object' || carried === null) return null;
-    const { on, at } = carried as { on?: unknown; at?: unknown };
-    if (typeof on !== 'boolean' || typeof at !== 'number') return null;
-    if (Date.now() - at > CARRIED_MIC_MS) return null;
-    return on;
+    const carried = JSON.parse(raw) as Partial<CarriedMic>;
+    if (typeof carried.on !== 'boolean' || typeof carried.capturedAt !== 'number') return null;
+    return Date.now() - carried.capturedAt > CARRIED_MIC_MAX_AGE_MS ? null : carried.on;
   } catch {
     return null;
   }
 }
 
 export function clearCarriedLobbyMic() {
-  try {
-    window.sessionStorage.removeItem(carriedMicKey);
-  } catch {
-    // Nothing to clear when storage is unavailable.
-  }
+  removeSession(carriedMicKey);
 }
