@@ -64,7 +64,7 @@ const backButton = () => screen.queryByRole('button', { name: /^Back to Onboardi
 
 describe('BackToLobbyRow', () => {
   // The case sessionStorage cannot cover: this tab never saw the lobby.
-  it('offers the lobby geo-chat says the viewer stepped out of, from another tab, and asks it to rejoin', () => {
+  it('offers the lobby geo-chat says the viewer stepped out of, from another tab', () => {
     mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
     const onLeave = vi.fn();
     render(<BackToLobbyRow onLeave={onLeave} />);
@@ -72,7 +72,6 @@ describe('BackToLobbyRow', () => {
     fireEvent.click(backButton()!);
     expect(onLeave).toHaveBeenCalledTimes(1);
     expect(mocks.useDebateLobby).toHaveBeenCalledWith('lobby1');
-    expect(consumeLobbyRejoin('lobby1')).toBe(true);
   });
 
   it('names the lobby, counts it as the lobby header does, and shows faces of people in the room', () => {
@@ -138,6 +137,21 @@ describe('useConsumeDebateReturnDestination', () => {
     expect(consume()).toBe('/debate/lobby1');
   });
 
+  // GEO-3337: every exit back to the lobby drops the viewer into the room, not onto a prompt.
+  it('has the lobby it returns to join again on arrival', () => {
+    mocks.mine = { data: steppedOutOf('lobby1'), isError: false };
+    consume();
+    expect(consumeLobbyRejoin('lobby1')).toBe(true);
+  });
+
+  it('asks no lobby to rejoin when the flow returns elsewhere', () => {
+    rememberDebateReturnDestination('/space/my-space');
+    mocks.mine = { data: notInALobby, isError: false };
+    consume();
+    expect(consumeLobbyRejoin('my-space')).toBe(false);
+    expect(window.sessionStorage.getItem('geo.debates.lobby-rejoin')).toBeNull();
+  });
+
   it('drops this tab’s lobby once geo-chat says the viewer is in none', () => {
     rememberLobbyReturnDestination('lobby1');
     mocks.mine = { data: notInALobby, isError: false };
@@ -154,6 +168,7 @@ describe('useConsumeDebateReturnDestination', () => {
     rememberLobbyReturnDestination('lobby1');
     mocks.mine = { data: undefined, isError: true };
     expect(consume()).toBe('/debate/lobby1');
+    expect(consumeLobbyRejoin('lobby1')).toBe(true);
     expect(consume()).toBeNull();
   });
 });

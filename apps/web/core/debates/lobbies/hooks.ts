@@ -479,7 +479,7 @@ export function useLobbyPresence(
     if (!sentRef.current && !steppedOutAlready) return;
     lobbySteppedOut(lobbyId);
     rememberLobbyReturnDestination(lobbyId);
-    // Only a press on the coming debate's end card may skip the stepped-out prompt.
+    // Only the coming debate's exit back to this lobby may skip the stepped-out prompt.
     clearLobbyRejoin();
     if (!sentRef.current) return;
     stopWithout({ status: 'stepped_out' });
@@ -510,7 +510,7 @@ export function useLobbyPresence(
   }, [stepOut]);
 
   // Auto-join once admitted, unless the viewer left, is being asked about another lobby, or
-  // stepped out, where going back is their call unless the debate's end card already made it.
+  // stepped out, where going back is their call unless they arrive from the debate's exit.
   const status = state.status;
   React.useEffect(() => {
     if (!admitted || status !== 'idle') return;

@@ -36,7 +36,7 @@ export function debateEntryClick(navigate: () => void) {
 
 const rejoinKey = 'geo.debates.lobby-rejoin';
 
-/** Back to the room was pressed: the lobby page joins on arrival instead of asking again. */
+/** A debate flow is exiting back to its lobby: the lobby page joins on arrival instead of asking. */
 export function requestLobbyRejoin(lobbyId: string) {
   try {
     window.sessionStorage.setItem(rejoinKey, lobbyId);

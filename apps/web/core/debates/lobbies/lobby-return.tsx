@@ -34,15 +34,21 @@ export function useRecordedLobby(): string | null {
   return mine.data?.stepped_out ? mine.data.current_lobby_id : null;
 }
 
-/** The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. */
+/**
+ * The leave paths' `consumeDebateReturnDestination`, preferring geo-chat's lobby over this tab's. A
+ * flow heading back to its lobby has the lobby join again on arrival, with no stepped-out prompt.
+ */
 export function useConsumeDebateReturnDestination() {
   const lobby = useServerLobbyReturn();
   const lobbyId = lobby?.lobbyId;
   const known = lobby !== undefined;
-  return React.useCallback(
-    () => consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined),
-    [known, lobbyId]
-  );
+  return React.useCallback(() => {
+    const destination = consumeDebateReturnDestination(known ? { lobbyId: lobbyId ?? null } : undefined);
+    // Only a lobby is a room path here: other debate surfaces are never stored as destinations.
+    const returningTo = destination ? debateRoomIdFromPath(destination) : null;
+    if (returningTo) requestLobbyRejoin(returningTo);
+    return destination;
+  }, [known, lobbyId]);
 }
 
 /** Faces on the way-back row; the count beside them carries the rest. */
@@ -51,8 +57,8 @@ const BACK_AVATARS = 3;
 type BackToLobbyProps = { onLeave: () => void; disabled?: boolean };
 
 /**
- * A row for the debate's end card: leaves the debate the usual way, which returns to the lobby, and
- * has the lobby join again on arrival. Hidden unless the debate started in a lobby that is still open.
+ * A row for the debate's end card: leaves the debate the usual way, which returns to the lobby and
+ * joins it again on arrival. Hidden unless the debate started in a lobby that is still open.
  */
 export function BackToLobbyRow(props: BackToLobbyProps) {
   const lobbyId = useRecordedLobby();
@@ -82,10 +88,7 @@ function OpenLobbyRow({ lobbyId, onLeave, disabled = false }: BackToLobbyProps &
         <button
           type="button"
           disabled={disabled}
-          onClick={() => {
-            requestLobbyRejoin(lobbyId);
-            onLeave();
-          }}
+          onClick={onLeave}
           className="flex min-w-0 flex-col gap-0.5 text-left outline-none after:absolute after:inset-0 after:rounded-lg disabled:cursor-default"
         >
           <Text as="span" variant="metadataMedium" color="white" className="line-clamp-2 break-words">
