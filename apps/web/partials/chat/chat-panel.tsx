@@ -21,6 +21,7 @@ import {
 import { ChevronDown } from '~/design-system/icons/chevron-down';
 import { Context } from '~/design-system/icons/context';
 import { Menu, MenuItem } from '~/design-system/menu';
+import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
 import { ChatInput } from './chat-input';
 import { ChatMessages } from './chat-messages';
@@ -67,6 +68,7 @@ export function ChatPanel({
   onClearHistory,
 }: Props) {
   const [size, setSize] = useAtom(chatSizeAtom);
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const [menuOpen, setMenuOpen] = React.useState(false);
   const [view, setView] = React.useState<'main' | 'history'>('main');
 
@@ -140,136 +142,140 @@ export function ChatPanel({
   };
 
   return (
-    <motion.div
-      role="region"
-      aria-label="Geo assistant"
-      initial={{ opacity: 0, y: 16, scale: 0.96 }}
-      animate={{ opacity: 1, y: 0, scale: 1 }}
-      exit={{ opacity: 0, y: 16, scale: 0.96 }}
-      transition={{ duration: 0.15 }}
-      style={{ transformOrigin: 'bottom right', width: size.width, height: size.height, containerType: 'size' }}
-      className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${BOTTOM_INSET_MAX_HEIGHT_CLASS} z-1100 flex flex-col overflow-hidden rounded-[20px] border border-grey-02 bg-white shadow-[0px_20px_20px_0px_rgba(0,0,0,0.04)]`}
-    >
-      <ResizeHandle
-        className="absolute inset-y-2 left-0 w-1 cursor-ew-resize"
-        onStart={startResize('x')}
-        onMove={onResizeMove}
-        onEnd={endResize}
-      />
-      <ResizeHandle
-        className="absolute inset-x-2 top-0 h-1 cursor-ns-resize"
-        onStart={startResize('y')}
-        onMove={onResizeMove}
-        onEnd={endResize}
-      />
-      <ResizeHandle
-        className="absolute top-0 left-0 size-3 cursor-nwse-resize"
-        onStart={startResize('xy')}
-        onMove={onResizeMove}
-        onEnd={endResize}
-      />
+    <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+      <motion.div
+        role="region"
+        aria-label="Geo assistant"
+        initial={{ opacity: 0, y: 16, scale: 0.96 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        exit={{ opacity: 0, y: 16, scale: 0.96 }}
+        transition={{ duration: 0.15 }}
+        style={{ transformOrigin: 'bottom right', width: size.width, height: size.height, containerType: 'size' }}
+        className={`fixed right-4 ${BOTTOM_INSET_OFFSET_CLASS} ${BOTTOM_INSET_MAX_HEIGHT_CLASS} z-1100 flex flex-col overflow-hidden rounded-[20px] border border-grey-02 bg-white shadow-[0px_20px_20px_0px_rgba(0,0,0,0.04)]`}
+      >
+        <ResizeHandle
+          className="absolute inset-y-2 left-0 w-1 cursor-ew-resize"
+          onStart={startResize('x')}
+          onMove={onResizeMove}
+          onEnd={endResize}
+        />
+        <ResizeHandle
+          className="absolute inset-x-2 top-0 h-1 cursor-ns-resize"
+          onStart={startResize('y')}
+          onMove={onResizeMove}
+          onEnd={endResize}
+        />
+        <ResizeHandle
+          className="absolute top-0 left-0 size-3 cursor-nwse-resize"
+          onStart={startResize('xy')}
+          onMove={onResizeMove}
+          onEnd={endResize}
+        />
 
-      <div className="flex shrink-0 items-center justify-between p-4">
-        <div className="text-[16px] leading-4 tracking-[-0.35px] text-text">Assistant</div>
-        <div className="flex items-center gap-5 text-text">
-          <Menu
-            open={menuOpen}
-            onOpenChange={setMenuOpen}
-            className={view === 'history' ? 'max-w-[260px]' : 'max-w-[180px]'}
-            asChild
-            trigger={
-              <button
-                type="button"
-                aria-label="Assistant actions"
-                className="flex size-4 items-center justify-center text-text transition-colors hover:text-grey-04"
-              >
-                <Context />
-              </button>
-            }
-          >
-            {view === 'main' ? (
-              <>
-                <MenuItem
-                  onClick={() => {
-                    setMenuOpen(false);
-                    void handleCopyChat();
-                  }}
+        <div className="flex shrink-0 items-center justify-between p-4">
+          <div className="text-[16px] leading-4 tracking-[-0.35px] text-text">Assistant</div>
+          <div className="flex items-center gap-5 text-text">
+            <Menu
+              open={menuOpen}
+              onOpenChange={setMenuOpen}
+              className={view === 'history' ? 'max-w-[260px]' : 'max-w-[180px]'}
+              asChild
+              trigger={
+                <button
+                  type="button"
+                  aria-label="Assistant actions"
+                  className="flex size-4 items-center justify-center text-text transition-colors hover:text-grey-04"
                 >
-                  Copy chat
-                </MenuItem>
-                <MenuItem
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onNewChat();
-                  }}
-                >
-                  New chat
-                </MenuItem>
-                {hasHistory ? <MenuItem onClick={() => setView('history')}>Previous chats</MenuItem> : null}
-                {hasHistory ? <MenuItem onClick={handleClearHistory}>Clear history</MenuItem> : null}
-                <MenuItem
-                  onClick={() => {
-                    setMenuOpen(false);
-                    togglePreset();
-                  }}
-                >
-                  {isAtDefault ? 'Expand' : 'Collapse'}
-                </MenuItem>
-              </>
-            ) : (
-              <>
-                <MenuItem onClick={() => setView('main')}>← Back</MenuItem>
-                {history.map(entry => (
+                  <Context />
+                </button>
+              }
+            >
+              {view === 'main' ? (
+                <>
                   <MenuItem
-                    key={entry.id}
                     onClick={() => {
                       setMenuOpen(false);
-                      onSwitchChat(entry.id);
+                      void handleCopyChat();
                     }}
                   >
-                    <div className="flex min-w-0 flex-col items-start text-left">
-                      <span className="w-full truncate">{entry.title || 'Untitled chat'}</span>
-                      <span className="text-metadata text-grey-04">{formatRelativeTime(entry.updatedAt)}</span>
-                    </div>
+                    Copy chat
                   </MenuItem>
-                ))}
-              </>
-            )}
-          </Menu>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close assistant"
-            className="flex size-4 items-center justify-center text-text transition-colors hover:text-grey-04"
-          >
-            <ChevronDown />
-          </button>
+                  <MenuItem
+                    onClick={() => {
+                      setMenuOpen(false);
+                      onNewChat();
+                    }}
+                  >
+                    New chat
+                  </MenuItem>
+                  {hasHistory ? <MenuItem onClick={() => setView('history')}>Previous chats</MenuItem> : null}
+                  {hasHistory ? <MenuItem onClick={handleClearHistory}>Clear history</MenuItem> : null}
+                  <MenuItem
+                    onClick={() => {
+                      setMenuOpen(false);
+                      togglePreset();
+                    }}
+                  >
+                    {isAtDefault ? 'Expand' : 'Collapse'}
+                  </MenuItem>
+                </>
+              ) : (
+                <>
+                  <MenuItem onClick={() => setView('main')}>← Back</MenuItem>
+                  {history.map(entry => (
+                    <MenuItem
+                      key={entry.id}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onSwitchChat(entry.id);
+                      }}
+                    >
+                      <div className="flex min-w-0 flex-col items-start text-left">
+                        <span className="w-full truncate">{entry.title || 'Untitled chat'}</span>
+                        <span className="text-metadata text-grey-04">{formatRelativeTime(entry.updatedAt)}</span>
+                      </div>
+                    </MenuItem>
+                  ))}
+                </>
+              )}
+            </Menu>
+            <button
+              type="button"
+              onClick={onClose}
+              aria-label="Close assistant"
+              className="flex size-4 items-center justify-center text-text transition-colors hover:text-grey-04"
+            >
+              <ChevronDown />
+            </button>
+          </div>
         </div>
-      </div>
 
-      {hasMessages ? (
-        <ChatMessages
-          messages={messages}
-          status={status}
-          error={error}
-          onSuggestion={text => onSuggestion(text, 'follow_up')}
-          disabled={isBusy || isCompacting}
+        {hasMessages ? (
+          <ChatMessages
+            messages={messages}
+            status={status}
+            error={error}
+            onSuggestion={text => onSuggestion(text, 'follow_up')}
+            disabled={isBusy || isCompacting}
+          />
+        ) : suppressWelcome ? (
+          <div className="flex-1" />
+        ) : (
+          <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy || isCompacting} />
+        )}
+
+        <ChatInput
+          value={input}
+          onChange={onInputChange}
+          onSubmit={onSend}
+          onStop={onStop}
+          isBusy={isBusy || isCompacting}
+          placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
         />
-      ) : suppressWelcome ? (
-        <div className="flex-1" />
-      ) : (
-        <ChatWelcome onSuggestion={text => onSuggestion(text, 'welcome')} disabled={isBusy || isCompacting} />
-      )}
-
-      <ChatInput
-        value={input}
-        onChange={onInputChange}
-        onSubmit={onSend}
-        onStop={onStop}
-        isBusy={isBusy || isCompacting}
-        placeholder={hasMessages ? 'Ask anything...' : 'What are you trying to do?'}
-      />
-    </motion.div>
+      </motion.div>
+      {/* Keep actions above this panel without inheriting its clipping or animation transform. */}
+      <div ref={setPopoverContainer} data-assistant-popover-host className="pointer-events-none fixed inset-0 z-1100" />
+    </ElevatedPopoverPortalContext.Provider>
   );
 }
 

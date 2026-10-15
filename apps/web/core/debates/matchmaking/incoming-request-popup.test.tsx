@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -163,6 +164,21 @@ describe('IncomingRequestPopup', () => {
     fireEvent.click(dismiss);
 
     expect(mocks.dismiss).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps blocking inside the dialog layer and outside its scrolling content', async () => {
+    const user = userEvent.setup();
+    renderPopup();
+    const trigger = screen.getByRole('button', { name: 'More options' });
+    await user.click(trigger);
+    const action = screen.getByRole('button', { name: 'Block Salina Mitchell' });
+    const dialog = screen.getByRole('dialog', { name: request.claim.claim });
+    expect(dialog).toContainElement(action);
+    const host = action.closest('[data-radix-popper-content-wrapper]')!.parentElement!;
+    expect(host.closest('.overflow-y-auto, .overflow-hidden')).toBeNull();
+    await user.click(action);
+    expect(mocks.block).toHaveBeenCalledWith('user-them');
+    expect(trigger).toHaveFocus();
   });
 
   it('offers blocking behind the overflow menu', () => {

@@ -323,6 +323,9 @@ export const debatesHubMatchesOnlyAtom = atomWithStorage('debatesHubMatchesOnly'
  */
 export const debatesHubHideMyPositionsAtom = atomWithStorage('debatesHubHideMyPositions', true);
 
+/** Profiles show the full record by default; remember an explicit choice to browse unanswered claims. */
+export const profileHideMyPositionsAtom = atomWithStorage('profileHideMyPositions', false);
+
 /**
  * "Hide my positions" on the debate-again flow's Explore tab (GEO-2863).
  *
