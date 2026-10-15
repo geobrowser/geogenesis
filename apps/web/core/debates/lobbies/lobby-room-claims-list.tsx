@@ -6,6 +6,7 @@ import { WatchLiveLink } from '~/core/claims/browse/claim-end-slot';
 import { useClaimResponseSummary } from '~/core/claims/browse/claim-response-summary';
 import { useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useNearViewport } from '~/core/hooks/use-near-viewport';
+import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { CLAIM_RESPONSE_KIND } from '~/core/responses/entity-response';
 
 import { Avatar } from '~/design-system/avatar';
@@ -153,6 +154,7 @@ export function LobbyRoomClaimCard({
           indexingDelayed: indexing.status === 'delayed',
         })
       : null;
+  const openClaim = useOpenClaimInSidePanel();
   const menu = renderMenu?.(entry);
   const watch = entry.activeDebate ? (
     <WatchLiveLink activeDebate={entry.activeDebate} spaceId={claim.space_id} />
@@ -164,6 +166,8 @@ export function LobbyRoomClaimCard({
     <MatchmakingClaimCard
       ref={ref}
       claim={claim}
+      // GEO-3332. Its own page would take the viewer out of the lobby, its room and audio.
+      onOpenClaim={() => openClaim(claim)}
       positions={entry.positions}
       readiness={entry.readiness}
       activeDebate={entry.activeDebate}
