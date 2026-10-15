@@ -19,6 +19,7 @@ import {
   capRoundLastTurn as openRoundsCapRoundLastTurn,
   deciding as openRoundsDeciding,
   listening as openRoundsListening,
+  requiredRoundListening as openRoundsRequiredRoundListening,
   revealEnd as openRoundsRevealEnd,
   revealRebut as openRoundsRevealRebut,
   roundOneSpeaking as openRoundsRoundOneSpeaking,
@@ -5581,9 +5582,12 @@ describe('DebateRoomPageClient', () => {
       rerenderAt(view, '20:02:03.000', openRoundsDeciding());
       await waitFor(() => expect(pickCard()).toBeInTheDocument());
       expect(screen.getByText('7 seconds to pick')).toBeInTheDocument();
-      // The card carries the window's countdown, so the tiles do not repeat it.
+      // The card carries the window's countdown, so the tiles do not repeat it. The speaker's timer
+      // fades out as the card comes in (GEO-3347).
       expect(debateVideoTile('local').querySelector('[data-countdown-progress]')).not.toBeInTheDocument();
-      expect(debateVideoTile('remote').querySelector('[data-countdown-progress]')).not.toBeInTheDocument();
+      await waitFor(() =>
+        expect(debateVideoTile('remote').querySelector('[data-countdown-progress]')).not.toBeInTheDocument()
+      );
     });
 
     it('saves a pick for the round that just ended', async () => {
@@ -6041,6 +6045,56 @@ describe('DebateRoomPageClient', () => {
       expect(banner('remote', 'turn')).toHaveClass('bg-purple');
     });
 
+    // GEO-3347. geo-chat closes a round-ending yield the moment it accepts it, so a stamp there lasted
+    // the request's round trip and then faded under the pick: a flicker.
+    it('does not stamp "Turn ended" when ending the round\'s last turn, which goes to the pick', async () => {
+      joinAsBob();
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:03:10.000'));
+      mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
+      await renderLiveDebate({
+        ...openRoundsRoundOneSpeaking(),
+        current_turn_index: 3,
+        current_speaker_slot: 2,
+        turn_started_at: '2026-10-06T20:02:52.200Z',
+        turn_ends_at: '2026-10-06T20:03:37.200Z',
+      });
+
+      fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
+
+      await waitFor(() => expectMutedIndicator('local'));
+      expect(stamp('local', 'ended')).toBeNull();
+      expect(debateVideoTile('local').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
+    });
+
+    it('names no next turn when ending a turn geo-chat closes at once, even one that runs straight on', async () => {
+      // Bob's opening runs straight into a required round, but it is a round's second turn.
+      joinAsBob();
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
+      mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
+      await renderLiveDebate(openRoundsRequiredRoundListening());
+
+      fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
+
+      await waitFor(() => expectMutedIndicator('local'));
+      expect(stamp('local', 'ended')).toBeNull();
+      expect(banner('remote', 'turn')).toBeNull();
+    });
+
+    it('fades the timer out as the muted microphone fades in when you end your turn', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:20.000'));
+      mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
+      await renderLiveDebate(openRoundsRoundOneSpeaking());
+      await waitFor(() => expect(timer('local')).not.toBeNull());
+
+      fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
+
+      await waitFor(() => expectMutedIndicator('local'));
+      expect(timer('local')?.closest('[data-room-leaving]')).not.toBeNull();
+      const indicator = debateVideoTile('local').querySelector('[data-muted-indicator="true"]');
+      expect(indicator?.parentElement).toHaveClass('motion-safe:animate-[fadeIn_300ms_linear_both]');
+      await waitFor(() => expect(timer('local')).toBeNull());
+    });
+
     it('dims both tiles under the pick panel', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:02.000'));
       await renderLiveDebate(openRoundsDeciding());
@@ -6417,10 +6471,12 @@ function expectMutedIndicator(participant: 'local' | 'remote') {
   expect(paths?.[2]).toHaveAttribute('d', 'M28.5 19.5L22.5 29');
 }
 
+/** A copy fading out in Open rounds (GEO-3347) is inert and hidden, so it no longer counts as shown. */
 function expectNoMutedIndicator(participant: 'local' | 'remote') {
-  expect(
-    document.querySelector(`[data-inactive-speaker="${participant}"] [data-muted-indicator="true"]`)
-  ).not.toBeInTheDocument();
+  const shown = [
+    ...document.querySelectorAll(`[data-inactive-speaker="${participant}"] [data-muted-indicator="true"]`),
+  ].filter(indicator => !indicator.closest('[data-room-leaving]'));
+  expect(shown).toEqual([]);
 }
 
 function debateVideoTile(participant: 'local' | 'remote') {
