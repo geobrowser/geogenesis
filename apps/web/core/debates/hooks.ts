@@ -1138,7 +1138,7 @@ export function useLeaveDebateRematch(sessionId: string) {
  * then, so the coordinator sent them straight back into the picker they had just left, which sent
  * them out again (GEO-3342). The same reason `useClearDebateActivityCache` drops a room's rematch.
  *
- * The invalidation also cancels a poll already in flight, whose answer predates the end.
+ * A poll already in flight is cancelled too: its answer predates the end.
  */
 function forgetEndedRematch(queryClient: QueryClient, accountKey: string | null, session: DebateRematchSession) {
   const activityKey = debateQueryKeys.activity(accountKey);
@@ -1150,7 +1150,12 @@ function forgetEndedRematch(queryClient: QueryClient, accountKey: string | null,
       queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
     }
   }
-  void queryClient.invalidateQueries({ queryKey: activityKey });
+  // Cancelled first, then asked again. An invalidation alone cancels a request in flight only when
+  // there is data to protect: with none cached yet it joins that request, whose answer predates the
+  // end and would put the session straight back. The patch above stays synchronous, ahead of this.
+  void queryClient
+    .cancelQueries({ queryKey: activityKey })
+    .then(() => queryClient.invalidateQueries({ queryKey: activityKey }));
 }
 
 /** For the picker, which learns its session ended without a Leave of its own: the other person left. */

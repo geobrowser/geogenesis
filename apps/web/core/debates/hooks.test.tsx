@@ -1,4 +1,4 @@
-import { QueryClient, QueryClientProvider, focusManager, onlineManager } from '@tanstack/react-query';
+import { QueryClient, QueryClientProvider, focusManager, onlineManager, useQuery } from '@tanstack/react-query';
 import { act, fireEvent, render, renderHook, screen, waitFor } from '@testing-library/react';
 
 import type { ReactNode } from 'react';
@@ -1017,7 +1017,7 @@ describe('useForgetEndedRematch', () => {
     challenge: null,
   });
 
-  it('drops the ended session from activity and asks again', () => {
+  it('drops the ended session from activity and asks again', async () => {
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
     const browsing = { ...rematchSession(), status: 'browsing' as const, source_debate_id: null };
@@ -1030,7 +1030,41 @@ describe('useForgetEndedRematch', () => {
     act(() => result.current({ ...browsing, status: 'ended' }));
 
     expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(activityWith(null));
-    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.activity('user-a') });
+    await waitFor(() =>
+      expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.activity('user-a') })
+    );
+  });
+
+  // Copilot on #2883: with nothing cached yet, an invalidation joins the activity request already in
+  // flight instead of cancelling it, and that request predates the end.
+  it('cancels a first activity request in flight, so its pre-end answer cannot restore the session', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const browsing = { ...rematchSession(), status: 'browsing' as const, source_debate_id: null };
+    let answerFirst: (activity: DebateActivity) => void = () => undefined;
+    const activityFetch = vi
+      .fn<() => Promise<DebateActivity>>()
+      .mockImplementationOnce(() => new Promise(resolve => (answerFirst = resolve)))
+      .mockResolvedValue(activityWith(null));
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(
+      () => {
+        useQuery({ queryKey: debateQueryKeys.activity('user-a'), queryFn: activityFetch });
+        return useForgetEndedRematch();
+      },
+      { wrapper }
+    );
+    await waitFor(() => expect(activityFetch).toHaveBeenCalledTimes(1));
+
+    act(() => result.current({ ...browsing, status: 'ended' }));
+    // The request that left before the end answers after it.
+    await act(async () => answerFirst(activityWith(browsing)));
+
+    await waitFor(() => expect(activityFetch).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(activityWith(null))
+    );
   });
 
   it('leaves a different session in activity alone', () => {
