@@ -118,6 +118,11 @@ vi.mock('~/partials/entity-page/entity-page-inline-description', () => ({
 vi.mock('~/partials/entity-page/editable-entity-header', () => ({
   EditableHeading: () => <div data-testid="editable-heading" />,
 }));
+vi.mock('~/partials/entity-page/entity-page-actions', () => ({
+  EntityPageActions: ({ isVoteable }: { isVoteable?: boolean }) => (
+    <div data-testid="entity-page-actions" data-voteable={String(Boolean(isVoteable))} />
+  ),
+}));
 
 // jsdom has no layout, so the real clamp can never measure an overflow. What this file is about is
 // that the description is handed to it at all, and with the shared line budget — the measuring
@@ -563,6 +568,14 @@ describe('ClaimPageView record', () => {
 
     expect(screen.getByTestId('editable-heading')).toBeInTheDocument();
     expect(screen.getByTestId('editable-description')).toBeInTheDocument();
+  });
+
+  it('offers the entity actions in edit mode only, without the generic votes', () => {
+    const view = render(<ClaimPageView entityId="claim-1" spaceId="space-1" />);
+    expect(screen.queryByTestId('entity-page-actions')).not.toBeInTheDocument();
+
+    view.rerender(<ClaimPageView entityId="claim-1" spaceId="space-1" isEditing />);
+    expect(screen.getByTestId('entity-page-actions')).toHaveAttribute('data-voteable', 'false');
   });
 
   it('makes Activity select claim record tabs inside a side panel', () => {

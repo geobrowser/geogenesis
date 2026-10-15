@@ -37,6 +37,7 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { Editor } from '~/partials/editor/lazy-editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
@@ -298,6 +299,16 @@ export function ClaimPageView({
                     />
                   )
                 )}
+
+                {/* History, create and the ⋯ menu (delete, move, copy to a space) live in this row on
+                    every other entity page. A claim's hero has no row for them, so in edit mode they
+                    sit under the description, where the generic page puts them. Not voteable: a
+                    claim is answered with Agree/Disagree, never the generic up/down votes. */}
+                {isEditing ? (
+                  <div className="flex items-center text-text">
+                    <EntityPageActions entityId={entityId} spaceId={spaceId} />
+                  </div>
+                ) : null}
               </div>
 
               <div
