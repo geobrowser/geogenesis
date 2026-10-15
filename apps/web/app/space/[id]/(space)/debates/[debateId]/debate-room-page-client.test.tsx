@@ -12,6 +12,7 @@ import {
   rememberLobbyReturnDestination,
 } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
+import { carryLobbyMic, clearCarriedLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
 import {
   CAP_ROUND_ENDS_AT as OPEN_ROUNDS_CAP_ROUND_ENDS_AT,
   at as openRoundsAt,
@@ -131,9 +132,14 @@ vi.mock('~/core/debates/api', async importOriginal => {
 });
 
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
-vi.mock('~/core/debates/lobbies/lobby-return', async () => {
+vi.mock('~/core/debates/lobbies/lobby-return', async importOriginal => {
   const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
-  return { BackToLobbyRow: () => null, useConsumeDebateReturnDestination: () => consumeDebateReturnDestination };
+  const { useCarriedLobbyMic } = await importOriginal<typeof import('~/core/debates/lobbies/lobby-return')>();
+  return {
+    BackToLobbyRow: () => null,
+    useCarriedLobbyMic,
+    useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
+  };
 });
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -527,6 +533,7 @@ afterEach(async () => {
   delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
   window.localStorage.clear();
   clearDebateReturnDestination();
+  clearCarriedLobbyMic();
   await Promise.resolve();
   await Promise.resolve();
   vi.useRealTimers();
@@ -1637,6 +1644,22 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
     expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
     expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
+  });
+
+  it('starts muted for a viewer who was muted in the lobby they just left', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    reportLobbyMic(false);
+    carryLobbyMic();
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeDisabled();
+    expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument();
+
+    // Spent on arrival: the next room starts unmuted again.
+    cleanup();
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-2" />);
+    expect(await screen.findByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
   });
 
   // The intro's answer to GEO-2819's objection to having these toggles at all: the state is
