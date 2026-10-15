@@ -24,7 +24,8 @@ describe('Privy login methods', () => {
 });
 
 describe('Privy wallet list', () => {
-  // Privy (3.32) fetches explorer-api.walletconnect.com/v3/wallets on every page load when any of these is listed.
+  // Privy fetches explorer-api.walletconnect.com/v3/wallets on every page load when any of these is listed.
+  // Mirrors Privy 3.32.2's registry slugs; re-check on Privy upgrades.
   const REGISTRY_WALLETS = [
     'wallet_connect',
     'backpack',
