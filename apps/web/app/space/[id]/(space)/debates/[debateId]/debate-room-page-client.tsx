@@ -36,6 +36,7 @@ import {
   LeaveIcon,
   MicrophoneIcon,
   RecordingCircleButton,
+  SoundEffectsIcon,
   SpeakerIcon,
 } from '~/core/debates/debate-room-controls';
 import {
@@ -110,6 +111,7 @@ import {
   openRoundsRoomPhase,
 } from '~/core/debates/open-rounds';
 import { captureOpenRoundPickSet, useOpenRoundsOutcomeAnalytics } from '~/core/debates/open-rounds-analytics';
+import { useOpenRoundsRoomSounds } from '~/core/debates/open-rounds-room-sounds';
 import { RecordingCountdownRing } from '~/core/debates/recording-countdown-ring';
 import {
   type LiveRecordingStream,
@@ -127,6 +129,7 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
+import { useRoomSoundEffects, useRoomSoundEffectsEnabled } from '~/core/debates/room-sound-effects';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
@@ -3039,6 +3042,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
                 endTurnPending={pendingTurnYield !== null}
                 onEndTurn={endLocalTurn}
                 onPickOpenRound={pickOpenRound}
+                soundOutputDeviceId={audioOutputSupported ? selectedAudioOutputId : ''}
                 remoteDisconnected={remotePresence === 'left'}
                 onRetryFinalization={retryLiveDebateFinalization}
                 canRetryConnection={canRetryConnection}
@@ -3080,6 +3084,7 @@ function DebateRecordingModal({
   endTurnPending,
   onEndTurn,
   onPickOpenRound,
+  soundOutputDeviceId,
   remoteDisconnected,
   onRetryFinalization,
   canRetryConnection,
@@ -3114,6 +3119,8 @@ function DebateRecordingModal({
     pick: OpenRoundPick,
     context: OpenRoundPickAnalyticsContext
   ) => Promise<unknown>;
+  /** The speaker the debater picked, for the Open rounds sound effects; empty for the system default. */
+  soundOutputDeviceId: string;
   /** The other debater has dropped out of the call, which mid-debate means reconnecting. */
   remoteDisconnected: boolean;
   onRetryFinalization: () => void;
@@ -3262,6 +3269,43 @@ function DebateRecordingModal({
     countdown.incomingSlot !== null &&
     countdown.incomingSlot === remoteParticipant?.participant_slot;
   const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
+  // Open rounds only: a fixed format stays silent (GEO-3319). The choice is the debater's, and
+  // sticks across debates.
+  const [soundEffectsOn, setSoundEffectsOn] = useRoomSoundEffectsEnabled();
+  const playSound = useRoomSoundEffects({ enabled: stamps && soundEffectsOn, outputDeviceId: soundOutputDeviceId });
+  // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
+  // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
+  const showRemoteWrapItUp =
+    stamps &&
+    !showLocalDebateEndsSoon &&
+    wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true);
+  const flippingRound =
+    reveal.step === 'flip' && countdown.openRounds?.phase === 'result' ? countdown.openRounds.roundIndex : null;
+  useOpenRoundsRoomSounds(
+    {
+      countInSeconds: localUpcomingSeconds,
+      goTurn: showLocalGo ? countdown.turnIndex : null,
+      wrapItUpTurn: showLocalWrapItUp || showRemoteWrapItUp ? countdown.turnIndex : null,
+      endsSoonTurn: showLocalDebateEndsSoon ? countdown.turnIndex : null,
+      endedTurn: countdown.yieldingSlot !== null ? countdown.turnIndex : null,
+      decidingRound: openRoundDeciding?.roundIndex ?? null,
+      decidingSecondsLeft: openRoundDeciding ? countdown.remainingSeconds : null,
+      flipping:
+        flippingRound === null
+          ? null
+          : {
+              round: flippingRound,
+              first: (localTileFirst ? reveal.localPick : reveal.remotePick)?.pick ?? null,
+              second: (localTileFirst ? reveal.remotePick : reveal.localPick)?.pick ?? null,
+            },
+      result: !reveal.result
+        ? null
+        : reveal.result.kind === 'round'
+          ? { kind: 'round', round: reveal.result.round }
+          : { kind: reveal.result.kind },
+    },
+    playSound
+  );
   const canEndLocalTurn =
     countdown.effectiveStatus === 'in_progress' &&
     countdown.activeSlot === localSlot &&
@@ -3354,13 +3398,7 @@ function DebateRecordingModal({
             : 'Waiting for video'
       }
       inactive={remoteInactive}
-      // Open rounds shows the speaker's "Wrap it up" on both screens, with their red timer (GEO-3315).
-      // On the debate's last turn the listener's own tile says "Debate ends soon" instead.
-      showWrapItUp={
-        stamps &&
-        !showLocalDebateEndsSoon &&
-        wrapItUpIsVisible(countdown, remoteParticipant?.participant_slot ?? null, true)
-      }
+      showWrapItUp={showRemoteWrapItUp}
       endingTurn={remoteEndingTurn}
       revealInactive={remoteEndingTurn}
       inactiveIndicatorId="remote"
@@ -3441,12 +3479,23 @@ function DebateRecordingModal({
               requiredRounds={openRoundsRequiredRebuttalRounds(debate.open_rounds)}
             />
           )}
+          {stamps && (
+            <RecordingCircleButton
+              ariaLabel={soundEffectsOn ? 'Turn sound effects off' : 'Turn sound effects on'}
+              title={soundEffectsOn ? 'Sound effects on' : 'Sound effects off'}
+              onClick={() => setSoundEffectsOn(!soundEffectsOn)}
+              analyticsLabel="Debate room Sound effects"
+              className="ml-auto shrink-0"
+            >
+              <SoundEffectsIcon off={!soundEffectsOn} />
+            </RecordingCircleButton>
+          )}
           <RecordingCircleButton
             ariaLabel={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
             title={roomState === 'saving' ? 'Saving local recording' : 'Leave debate'}
             onClick={onLeave}
             disabled={leaveDisabled}
-            className="ml-auto shrink-0"
+            className={cx('shrink-0', !stamps && 'ml-auto')}
           >
             <LeaveIcon />
           </RecordingCircleButton>
@@ -3468,12 +3517,14 @@ function DebateRecordingModal({
                 }
                 rebuttalTurnMs={debate.open_rounds.rebuttal_turn_ms}
                 remainingSeconds={countdown.remainingSeconds}
-                onPick={(pick, context) =>
-                  onPickOpenRound(openRoundDeciding.roundIndex, pick, {
+                onPick={(pick, context) => {
+                  // The card only calls this for a real change of pick, so a repeat tap stays quiet.
+                  playSound(pick === 'extend' ? 'pickExtend' : 'pickEnd');
+                  return onPickOpenRound(openRoundDeciding.roundIndex, pick, {
                     ...context,
                     decisionDeadlineAtMs: openRoundDeciding.decisionDeadlineAtMs,
-                  })
-                }
+                  });
+                }}
                 localReconnecting={roomState === 'reconnecting'}
                 reconnectingOpponentName={remoteDisconnected ? remoteName : null}
               />

@@ -10,6 +10,7 @@ export function RecordingCircleButton({
   onClick,
   disabled,
   active = false,
+  analyticsLabel,
   className,
   children,
 }: {
@@ -18,6 +19,7 @@ export function RecordingCircleButton({
   onClick: () => void;
   disabled?: boolean;
   active?: boolean;
+  analyticsLabel?: string;
   className?: string;
   children: React.ReactNode;
 }) {
@@ -28,6 +30,7 @@ export function RecordingCircleButton({
       title={title}
       onClick={onClick}
       disabled={disabled}
+      data-geo-analytics-label={analyticsLabel}
       className={cx(
         'grid size-10 place-items-center rounded-full border border-grey-02 bg-white text-text shadow-light transition disabled:opacity-50',
         active && 'bg-bg',
@@ -163,6 +166,17 @@ export function SpeakerIcon({ disabled }: { disabled: boolean }) {
       <path d="M16 9.5a4 4 0 0 1 0 5" />
       <path d="M19 7a8 8 0 0 1 0 10" />
       {disabled && <path d="M3 3l18 18" />}
+    </svg>
+  );
+}
+
+/** A bell, for the Open rounds sound effects: not the speaker, which means the other debater's voice. */
+export function SoundEffectsIcon({ off }: { off: boolean }) {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true" className="size-4" fill="none" stroke="currentColor" strokeWidth="2">
+      <path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15L6 16Z" />
+      <path d="M10 21h4" />
+      {off && <path d="M3 3l18 18" />}
     </svg>
   );
 }
