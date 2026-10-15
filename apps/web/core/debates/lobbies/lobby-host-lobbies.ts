@@ -1,6 +1,5 @@
 import { type DebateLobbyPerson, type DebateLobbySummary, dashlessId } from '../api';
 import { useDebateLobbies, useRefetchAtOpening } from './hooks';
-import { useIsLobbyGuest } from './lobby-guest-hooks';
 
 /**
  * A lobby's hosts from its lobbies-list row: the roster is empty before it opens. Best effort,
@@ -46,16 +45,15 @@ export function usePreOpenHosts(lobby: { lobby_id: string; hosts?: DebateLobbyPe
 }
 
 /**
- * The lobbies list, signed in only. Inside a lobby only `debate.my_lobby_changed` refreshes it, so
- * a mount refetches once the copy is a minute old, and the list refetches when a listed lobby opens.
+ * The lobbies list, a guest's too since it lists without an account (GEO-3289). Inside a lobby only
+ * `debate.my_lobby_changed` refreshes it, so a mount refetches once the copy is a minute old, and
+ * the list refetches when a listed lobby opens.
  */
 export function useListedLobbies(enabled = true) {
-  const guest = useIsLobbyGuest();
-  const on = enabled && !guest;
-  const query = useDebateLobbies(on, { staleTime: LISTED_LOBBIES_STALE_MS });
+  const query = useDebateLobbies(enabled, { staleTime: LISTED_LOBBIES_STALE_MS });
   const lobbies = query.data?.lobbies ?? NO_LOBBIES;
   // `refetch` ignores `enabled`.
-  useRefetchAtOpening(query, on ? soonestOpening(lobbies) : null);
+  useRefetchAtOpening(query, enabled ? soonestOpening(lobbies) : null);
   return lobbies;
 }
 

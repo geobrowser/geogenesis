@@ -16,7 +16,9 @@ import {
 
 const mocks = vi.hoisted(() => ({
   backfill: vi.fn(),
+  openClaim: vi.fn(),
   rootSelectors: [] as (string | undefined)[],
+  watchLive: true,
   indexed: null as 'positive' | 'negative' | null,
   snapshot: { status: 'idle', pending: null, runId: null } as {
     status: string;
@@ -35,6 +37,14 @@ vi.mock('~/core/hooks/use-near-viewport', async importOriginal => {
     },
   };
 });
+
+// Live watching is off in the product (GEO-3334). On here so the pill's own behaviour stays covered
+// for when it ships; the off state has its own test.
+vi.mock('../watch-live', () => ({
+  get WATCH_LIVE_ENABLED() {
+    return mocks.watchLive;
+  },
+}));
 
 vi.mock('~/core/hooks/use-entity-vote', () => ({
   useEntityResponseIndexingSnapshot: () => mocks.snapshot,
@@ -57,13 +67,17 @@ vi.mock('../matchmaking/matchmaking-claim-card', () => ({
     header,
     endSlot,
     footer,
+    onOpenClaim,
   }: {
     positions: { total_count: number }[];
     header?: React.ReactNode;
     endSlot?: React.ReactNode;
     footer?: React.ReactNode;
+    onOpenClaim?: () => void;
   }) => (
     <article data-testid="card" data-counts={positions.map(side => side.total_count).join(',')}>
+      {/* Not a button: the tests count the card's buttons. */}
+      {onOpenClaim ? <span data-testid="claim-text" onClick={onOpenClaim} /> : null}
       {header}
       <div data-testid="card-end">{endSlot}</div>
       {footer}
@@ -72,12 +86,14 @@ vi.mock('../matchmaking/matchmaking-claim-card', () => ({
 }));
 
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <span data-testid="avatar" /> }));
+vi.mock('~/core/hooks/use-open-claim-in-side-panel', () => ({ useOpenClaimInSidePanel: () => mocks.openClaim }));
 
 afterEach(() => {
   cleanup();
   mocks.snapshot = { status: 'idle', pending: null, runId: null };
   mocks.indexed = null;
   mocks.rootSelectors = [];
+  mocks.watchLive = true;
 });
 
 function person(name: string): DebateParticipantSummary {
@@ -130,6 +146,20 @@ describe('LobbyRoomClaimCard scroll root', () => {
 
     rerender(card(undefined));
     expect(mocks.rootSelectors.at(-1)).toBeUndefined();
+  });
+});
+
+// GEO-3332. Reading a claim must not cost the lobby: it opens beside it, never on its own page.
+describe('LobbyRoomClaimCard claim text', () => {
+  it('opens the claim in the side panel', () => {
+    render(
+      <LobbyRoomClaimCard entry={entry(true, [side(true, [], 0), side(false, [], 0)])} renderOffer={renderOffer} />
+    );
+    screen.getByTestId('claim-text').click();
+    expect(mocks.openClaim).toHaveBeenCalledWith(
+      expect.objectContaining({ claim_entity_id: 'claim-1', space_id: 'space-1' })
+    );
+    cleanup();
   });
 });
 
@@ -217,6 +247,15 @@ describe('LobbyRoomClaimsList', () => {
     render(<LobbyRoomClaimsList claims={[offered]} renderOffer={renderOffer} />);
     expect(screen.getByRole('button', { name: 'Request as agree (1)' })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
+  });
+
+  it('draws no Watch live while live watching is off, leaving the spacer', () => {
+    mocks.watchLive = false;
+    const live = { ...entry(true, [side(true, [], 0), side(false, [person('Ben')], 0)]), activeDebate: true };
+    render(<LobbyRoomClaimsList claims={[live]} renderOffer={renderOffer} />);
+
+    expect(screen.queryByRole('link', { name: 'Watch live' })).toBeNull();
+    expect(screen.getByTestId('card-end').querySelector('span[aria-hidden]')).toBeTruthy();
   });
 
   describe('a host menu', () => {

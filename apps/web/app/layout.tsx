@@ -52,6 +52,15 @@ const geistMedium = localFont({
   preload: false,
 });
 
+// The playback stamps' face (GEO-3277). The same file the OG images already read.
+const geistBold = localFont({
+  src: '../public/fonts/Geist-Bold.ttf',
+  weight: '700',
+  style: 'normal',
+  variable: '--font-geist-bold',
+  preload: false,
+});
+
 export const metadata: Metadata = {
   metadataBase: new URL(process.env.ENV_URL ?? 'https://geobrowser.io'),
   title: 'Geo Genesis',
@@ -102,7 +111,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={cx(calibre.variable, geistMedium.variable)} suppressHydrationWarning>
+    <html lang="en" className={cx(calibre.variable, geistMedium.variable, geistBold.variable)} suppressHydrationWarning>
       <head>
         {/*
           Both scripts are async so neither waits on the head stylesheets: a parser-inserted inline

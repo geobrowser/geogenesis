@@ -32,6 +32,7 @@ import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room
 import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
+import { useCarriedLobbyMic } from '~/core/debates/lobbies/lobby-return';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
@@ -414,11 +415,12 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // would put a muted user back on air the moment they hit Retry. The prop has to track what the
   // user wants. (A plain reconnect is not the risk here: that republishes the existing tracks and
   // preserves their mute state, without re-running the handler.)
-  const [micIntent, setMicIntent] = React.useState(() => microphoneEnabledByDefault(session));
+  const carriedMic = useCarriedLobbyMic();
+  const [micIntent, setMicIntent] = React.useState(() => carriedMic ?? microphoneEnabledByDefault(session));
 
   // Latched by the auto-open below *and* by the user's own toggle, so a mute chosen while waiting
-  // is not undone the moment the opponent walks in.
-  const micSettledRef = React.useRef(false);
+  // is not undone the moment the opponent walks in. A mic carried from the lobby is a choice too.
+  const micSettledRef = React.useRef(carriedMic !== null);
   const handleMicIntentChange = React.useCallback((enabled: boolean) => {
     micSettledRef.current = true;
     setMicIntent(enabled);

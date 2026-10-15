@@ -8,7 +8,9 @@ import { LastPageOutsideDebatesTracker, useExitLobbyWhenOut, useLobbyExitHref } 
 import type { GuestSessionState } from './lobby-guest-session';
 import type { LobbyPageView } from './lobby-view';
 
-const mocks = vi.hoisted(() => ({ replace: vi.fn(), toast: vi.fn() }));
+const mocks = vi.hoisted(() => ({ replace: vi.fn(), toast: vi.fn(), lobbyLeft: vi.fn() }));
+
+vi.mock('./lobby-analytics', () => ({ lobbyLeft: mocks.lobbyLeft }));
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
@@ -30,7 +32,8 @@ const BANNED = { status: 'banned' } as LobbyPageView['access'];
 
 function renderExit(initial: Props) {
   return renderHook(
-    (props: Props) => useExitLobbyWhenOut({ ...props, name: 'Friday debates', exitHref: '/space/s1/e1' }),
+    (props: Props) =>
+      useExitLobbyWhenOut({ ...props, lobbyId: 'lobby-exit', name: 'Friday debates', exitHref: '/space/s1/e1' }),
     { initialProps: initial }
   );
 }
@@ -41,10 +44,41 @@ beforeEach(() => {
   window.sessionStorage.clear();
   mocks.replace.mockReset();
   mocks.toast.mockReset();
+  mocks.lobbyLeft.mockReset();
 });
 
 afterEach(() => {
   cleanup();
+});
+
+describe('useExitLobbyWhenOut analytics (GEO-3311)', () => {
+  it('ends the visit as lobby_ended when a refetched view closes the lobby before the heartbeat, before leaving the page', () => {
+    const order: string[] = [];
+    mocks.lobbyLeft.mockImplementation(() => order.push('lobby_left'));
+    mocks.replace.mockImplementation(() => order.push('route'));
+    const { rerender } = renderExit(joined);
+    // Presence is still joined: no heartbeat has said so yet.
+    rerender({ ...joined, access: ENDED });
+
+    expect(mocks.lobbyLeft.mock.calls).toEqual([['lobby-exit', 'lobby_ended']]);
+    expect(order).toEqual(['lobby_left', 'route']);
+  });
+
+  it.each([
+    ['a ban in the view', { ...joined, access: BANNED }, 'unknown'],
+    ['a ban from the heartbeat', { ...joined, presence: { status: 'dropped', reason: 'banned' } }, 'unknown'],
+    ['a removal', { ...joined, presence: { status: 'dropped', reason: 'removed' } }, 'unknown'],
+    ['Leave', { ...joined, presence: { status: 'left' } }, 'left'],
+  ] as const)('reports %s as the heartbeat path does', (_case, props, exit) => {
+    const { rerender } = renderExit(joined);
+    rerender(props as Props);
+    expect(mocks.lobbyLeft.mock.calls).toEqual([['lobby-exit', exit]]);
+  });
+
+  it('reports nothing for arriving at a lobby that had already ended', () => {
+    renderExit({ ...joined, access: ENDED, presence: { status: 'idle' }, fresh: true });
+    expect(mocks.lobbyLeft).not.toHaveBeenCalled();
+  });
 });
 
 describe('useExitLobbyWhenOut', () => {

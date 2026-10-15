@@ -43,6 +43,8 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
 }));
 
+// The signed-out Remind me opens Privy, which needs the wallet provider (GEO-3289).
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ replace: mocks.replace }),
   usePathname: () => '/debate/lobby-1',
@@ -94,6 +96,7 @@ vi.mock('./hooks', () => ({
   },
   useDebateLobbyReminder: () => ({ mutate: vi.fn(), isPending: false }),
   useLobbyReminderError: () => null,
+  useLobbyReminderSaving: () => false,
   useRefetchAtOpening: vi.fn(),
   useDebateLobbies: (enabled: boolean) => ({ data: enabled ? { lobbies: mocks.lobbies } : undefined }),
   useEndDebateLobby: () => ({ mutate: vi.fn(), isPending: false, isError: false }),
@@ -818,6 +821,21 @@ describe('DebateLobbyPage state screens', () => {
     expect(screen.getByText(/^Adam’s next lobby: Tuesday debate hour, .+\.$/)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Find a debate' })).toBeInTheDocument();
+  });
+
+  // GEO-3289. The list answers without an account, so a guest is pointed on too.
+  it('points a guest at the host’s next lobby when the lobby ended', () => {
+    mocks.guestView = {
+      lobby: { ...lobbyFields, access: { status: 'closed', reason: 'ended' } },
+      claims: null,
+      highlights: null,
+    };
+    mocks.lobbies = [listed({ lobby_id: 'next', name: 'Tuesday debate hour' })];
+    render(<DebateLobbyPage lobbyId="lobby1" />);
+
+    expect(screen.getByRole('heading', { name: 'This lobby has ended' })).toBeInTheDocument();
+    expect(screen.getByText(/^Adam’s next lobby: Tuesday debate hour, .+\.$/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'RSVP' })).toBeInTheDocument();
   });
 
   it('shows an ended lobby with only Find a debate when the host has nothing next', () => {

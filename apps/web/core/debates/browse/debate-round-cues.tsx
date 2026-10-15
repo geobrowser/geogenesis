@@ -6,6 +6,8 @@ import cx from 'classnames';
 
 import type { RoundCue } from '~/core/debates/round-cues';
 
+import { BANNER_CLASS, LABEL_FONT, TAG_CLASS } from './stamp-styles';
+
 /**
  * An outline in every direction rather than the four corners the recording room uses.
  *
@@ -145,21 +147,74 @@ export function DebateRoundCard({ cue }: { cue: RoundCue | null }) {
  * in the tree to be found by someone browsing the player, and a turn change is not an event worth
  * interrupting them over.
  */
-export function DebateRoundBadge({ cue }: { cue: RoundCue | null }) {
+export function DebateRoundBadge({
+  cue,
+  stamped = false,
+  rightPx,
+}: {
+  cue: RoundCue | null;
+  /** Open rounds: a square purple tag in the breaks' type, as the stamps design has it (GEO-3314). */
+  stamped?: boolean;
+  /** Its distance from the tile's right edge, where a growing turn timer needs it to make room. */
+  rightPx?: number;
+}) {
   if (!cue) return null;
 
   return (
     <div
       data-round-badge={cue.label}
-      className="pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem] leading-none font-medium text-white"
-      style={{ opacity: cue.opacity }}
+      className={cx(
+        'pointer-events-none absolute top-3 right-13 z-10 flex h-8 max-w-[calc(100%-6rem)] items-center leading-none font-medium text-white transition-[right] duration-300',
+        !stamped && 'rounded-full bg-linear-to-b from-black/50 to-black/25 px-2.5 text-[0.75rem]'
+      )}
+      style={{ opacity: cue.opacity, ...(rightPx !== undefined && { right: rightPx }) }}
     >
       <span className="sr-only">{cue.role ? `${cue.round}, ${cue.role}` : cue.round}</span>
       {/* Truncating rather than wrapping: the badge is one line beside a 32px circle, and a second
-          line would push it off the top of the tile. */}
-      <span aria-hidden className="truncate">
+          line would push it off the top of the tile. Open rounds' tag is the mockup's: sized to the
+          player, centred against the timer. */}
+      <span
+        aria-hidden
+        data-round-tag={stamped || undefined}
+        className={cx('truncate', stamped && cx(TAG_CLASS, 'text-[2.8cqw] uppercase'))}
+        style={stamped ? LABEL_FONT : undefined}
+      >
         {cue.label}
       </span>
+    </div>
+  );
+}
+
+/**
+ * The round card's Open rounds form (GEO-3314): the breaks' purple banner across the seam, "Round 1 ·
+ * Opening", rolling in, holding and rolling out over the card's own run. In practice it announces
+ * only the opening, since every later round is announced by its break.
+ *
+ * A CSS animation rather than one driven by the playhead's samples, which arrive about four times a
+ * second: started from where the playhead stood when the banner went up, so one that appears part
+ * way in (a scrub, a late first sample) picks up at the right point, then runs on its own.
+ */
+export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
+  if (!cue) return null;
+  return <RoundBannerRun key={cue.label} label={cue.label} startAgeMs={cue.ageMs ?? 0} />;
+}
+
+function RoundBannerRun({ label, startAgeMs }: { label: string; startAgeMs: number }) {
+  // Fixed at mount: re-reading the age from each sample would step the roll back and forth.
+  const [delayMs] = React.useState(() => -startAgeMs);
+  return (
+    <div
+      aria-hidden
+      data-round-banner={label}
+      className="pointer-events-none absolute inset-x-0 top-1/2 z-[21] -translate-y-1/2"
+    >
+      <div
+        // 1800ms is `ROUND_CARD_MS`: Tailwind reads class names from source, so it is written out.
+        className={cx(BANNER_CLASS, 'truncate text-[5cqw] motion-safe:animate-[debateBannerInOut_1800ms_linear_both]')}
+        style={{ ...LABEL_FONT, animationDelay: `${delayMs}ms` }}
+      >
+        {label}
+      </div>
     </div>
   );
 }

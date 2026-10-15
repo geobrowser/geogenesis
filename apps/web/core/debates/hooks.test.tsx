@@ -32,6 +32,7 @@ import {
   useDebateClaims,
   useDebateClaimsBySpaces,
   useDebateExtractedClaims,
+  useDebateMedia,
   useDebateProfile,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
@@ -127,6 +128,43 @@ vi.mock('./api', async importOriginal => {
     saveOpenRoundPick: mocks.saveOpenRoundPick,
     updateDebateAvailability: mocks.updateDebateAvailability,
   };
+});
+
+const DASHED_DEBATE_ID = '01A0448A-61D3-7101-8434-A20FDADF6F97';
+const DASHLESS_DEBATE_ID = '01a0448a61d371018434a20fdadf6f97';
+
+describe('per-debate query keys', () => {
+  it("spell the debate id one way, so both of geo-chat's spellings share an entry", () => {
+    expect(debateQueryKeys.debate(DASHED_DEBATE_ID)).toEqual(debateQueryKeys.debate(DASHLESS_DEBATE_ID));
+    expect(debateQueryKeys.media(DASHED_DEBATE_ID)).toEqual(['debates', 'media', DASHLESS_DEBATE_ID]);
+    expect(debateQueryKeys.extractedClaims(DASHED_DEBATE_ID)).toEqual(
+      debateQueryKeys.extractedClaims(DASHLESS_DEBATE_ID)
+    );
+    expect(debateQueryKeys.transcript(DASHED_DEBATE_ID, 'json')).toEqual(
+      debateQueryKeys.transcript(DASHLESS_DEBATE_ID, 'json')
+    );
+  });
+
+  it("fetches a debate's media once when callers hold different spellings of its id", async () => {
+    mocks.authenticated = false;
+    mocks.identityToken.mockReturnValue(null);
+    mocks.getIdentityToken.mockResolvedValue(null);
+    setCachedIdentityToken(null);
+    mocks.getDebateMedia.mockReset().mockResolvedValue({ job: null, artifacts: [] });
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={client}>{children}</QueryClientProvider>
+    );
+
+    const { result } = renderHook(
+      () => [useDebateMedia(DASHED_DEBATE_ID, true), useDebateMedia(DASHLESS_DEBATE_ID, true)] as const,
+      { wrapper }
+    );
+
+    await waitFor(() => expect(result.current[1].data).toBeDefined());
+    expect(result.current[0].data).toBe(result.current[1].data);
+    expect(mocks.getDebateMedia).toHaveBeenCalledTimes(1);
+  });
 });
 
 /**
