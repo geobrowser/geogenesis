@@ -23,7 +23,13 @@ import { XIcon } from '~/design-system/icons/x';
 import { Spinner } from '~/design-system/spinner';
 
 import { hasSocialVideo } from '../playback-utils';
-import { downloadPreparedVideo, usePreparedSocialVideo } from '../social-video-share';
+import {
+  canNativeShareVideo,
+  downloadPreparedVideo,
+  handoffPreparedSocialVideo,
+  isAbortError,
+  usePreparedSocialVideo,
+} from '../social-video-share';
 
 type Props = {
   open: boolean;
@@ -33,7 +39,7 @@ type Props = {
   openerRef: React.RefObject<HTMLElement | null>;
 };
 
-type ShareMethod = 'reddit' | 'x' | 'linkedin' | 'copy_link' | 'download';
+type ShareMethod = 'reddit' | 'x' | 'linkedin' | 'copy_link' | 'download' | 'share_video';
 
 const SHARE_TAGLINE = 'Watch the debate on Geo!';
 
@@ -57,6 +63,16 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   // Prepare only while the sheet is open: closing aborts the in-flight fetch and revokes the blob.
   const download = useDebateVideoDownload(debate.id, open && socialVideoReady);
   const [, setToast] = useToast();
+
+  const [canShareVideo, setCanShareVideo] = React.useState(false);
+  React.useEffect(() => setCanShareVideo(canNativeShareVideo()), []);
+
+  const [isTouchDevice, setIsTouchDevice] = React.useState(false);
+  React.useEffect(() => setIsTouchDevice(window.matchMedia?.('(pointer: coarse)').matches ?? false), []);
+
+  const [videoShareRefused, setVideoShareRefused] = React.useState(false);
+
+  const sharingRef = React.useRef(false);
 
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`;
 
@@ -96,12 +112,72 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     );
   };
 
-  const onX = () => {
+  const canShareVideoToX =
+    canShareVideo &&
+    isTouchDevice &&
+    !videoShareRefused &&
+    download.status === 'ready' &&
+    !!download.file &&
+    !!download.downloadUrl;
+
+  const onXLink = () => {
     const url = shareUrl();
     const text = shareMessage(X_TWEET_MAX - url.length - 1);
     handoffShare('x', () =>
       openComposer(`https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`)
     );
+  };
+
+  const shareVideoToX = async () => {
+    if (!download.file || !download.downloadUrl) return;
+
+    if (sharingRef.current) return;
+    sharingRef.current = true;
+
+    const url = shareUrl();
+    const operation = observeOperation('share', 'debate', debate.id, undefined, getContext());
+    try {
+      let fellBackToComposer = false;
+      const method = await handoffPreparedSocialVideo({
+        debateId: debate.id,
+        title: debate.claim.claim,
+        text: `${shareMessage(X_TWEET_MAX - url.length - 1)} ${url}`,
+        file: download.file,
+        downloadUrl: download.downloadUrl,
+        onUnshareable: ({ userActivationSpent }) => {
+          fellBackToComposer = true;
+          setVideoShareRefused(true);
+          if (!userActivationSpent) {
+            onXLink();
+            return;
+          }
+          setToast(<span>Couldn&apos;t attach the video. Tap X again to post the link.</span>);
+        },
+      });
+
+      if (fellBackToComposer || method !== 'native_share') return;
+      operation.succeeded({ method: 'share_video' });
+      capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'share_video' });
+      onOpenChange(false);
+    } catch (error) {
+      if (isAbortError(error)) {
+        // They dismissed the share sheet. Not a failure, and not something to report.
+        operation.succeeded({ method: 'share_video_dismissed' });
+        return;
+      }
+      operation.failed('unavailable');
+      setToast(<span>Could not share the video.</span>);
+    } finally {
+      sharingRef.current = false;
+    }
+  };
+
+  const onX = () => {
+    if (canShareVideoToX) {
+      void shareVideoToX();
+      return;
+    }
+    onXLink();
   };
 
   const onLinkedIn = () => {
@@ -265,5 +341,12 @@ function useDebateVideoDownload(debateId: string, enabled: boolean) {
     }
   };
 
-  return { status, error: prepared.error, download };
+  return {
+    status,
+    error: prepared.error,
+    download,
+    file: prepared.file,
+    downloadUrl: prepared.downloadUrl,
+    retry: prepared.retry,
+  };
 }

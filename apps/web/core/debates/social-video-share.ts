@@ -11,6 +11,8 @@ type PreparationStatus = 'preparing' | 'ready' | 'error';
 
 export type SocialVideoHandoffMethod = 'native_share' | 'download';
 
+export type SocialVideoHandoffOutcome = SocialVideoHandoffMethod | 'unshareable';
+
 export type PreparedSocialVideo = {
   status: PreparationStatus;
   previewUrl: string | null;
@@ -180,20 +182,25 @@ export function usePreparedSocialVideo(
 export async function handoffPreparedSocialVideo({
   debateId,
   title,
+  text,
   file,
   downloadUrl,
+  onUnshareable,
 }: {
   debateId: string;
   title: string;
+  text?: string;
   file: File;
   downloadUrl: string;
-}): Promise<SocialVideoHandoffMethod> {
-  const method = getPreparedSocialVideoHandoffMethod(file);
+  onUnshareable?: (info: { userActivationSpent: boolean }) => void;
+}): Promise<SocialVideoHandoffOutcome> {
+  const payload = socialVideoShareData({ title, text, file });
+  const method = getPreparedSocialVideoHandoffMethod(payload);
 
   try {
     if (method === 'native_share') {
       try {
-        const sharePromise = navigator.share({ title, files: [file] });
+        const sharePromise = navigator.share(payload);
         await sharePromise;
       } catch (error) {
         // `navigator.canShare({ files })` chose this path, but it is a *hint* — it answers whether
@@ -214,16 +221,23 @@ export async function handoffPreparedSocialVideo({
         // does: the retry button then looks like a remedy and is a dead end.
         if (!isUnretryableShareError(error)) throw error;
 
-        downloadPreparedVideo(downloadUrl, file.name);
+        if (onUnshareable) onUnshareable({ userActivationSpent: true });
+        else downloadPreparedVideo(downloadUrl, file.name);
+
+        const outcome: SocialVideoHandoffOutcome = onUnshareable ? 'unshareable' : 'download';
         captureSocialVideoEvent('debate_social_video_handoff_resolved', {
           debate_id: debateId,
-          method: 'download',
+          method: outcome,
           // So the rate of this is visible rather than inferred from an absence of share events.
           fell_back_from: 'native_share',
           error_name: errorName(error),
         });
-        return 'download';
+        return outcome;
       }
+    } else if (onUnshareable) {
+      onUnshareable({ userActivationSpent: false });
+      captureSocialVideoEvent('debate_social_video_handoff_resolved', { debate_id: debateId, method: 'unshareable' });
+      return 'unshareable';
     } else {
       downloadPreparedVideo(downloadUrl, file.name);
     }
@@ -245,13 +259,29 @@ export async function handoffPreparedSocialVideo({
   }
 }
 
-export function getPreparedSocialVideoHandoffMethod(file: File): SocialVideoHandoffMethod {
+export function socialVideoShareData({ title, text, file }: { title: string; text?: string; file: File }): ShareData {
+  return text ? { title, text, files: [file] } : { title, files: [file] };
+}
+
+/** Whether this browser will take that exact payload — the same object the share will use. */
+export function getPreparedSocialVideoHandoffMethod(data: ShareData): SocialVideoHandoffMethod {
   if (typeof navigator === 'undefined') return 'download';
   if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return 'download';
   try {
-    return navigator.canShare({ files: [file] }) ? 'native_share' : 'download';
+    return navigator.canShare(data) ? 'native_share' : 'download';
   } catch {
     return 'download';
+  }
+}
+
+/** True when the native share sheet can take a video file. Empty probe file is enough — `canShare` checks the descriptor, not the bytes. */
+export function canNativeShareVideo(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (typeof navigator.share !== 'function' || typeof navigator.canShare !== 'function') return false;
+  try {
+    return navigator.canShare({ files: [new File([], 'debate.mp4', { type: 'video/mp4' })] });
+  } catch {
+    return false;
   }
 }
 

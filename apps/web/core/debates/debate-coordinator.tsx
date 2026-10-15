@@ -46,6 +46,7 @@ import {
   getPreparedSocialVideoHandoffMethod,
   handoffPreparedSocialVideo,
   isAbortError,
+  socialVideoShareData,
   usePreparedSocialVideo,
 } from './social-video-share';
 import { useCurrentGeoChatUserId } from './use-current-geo-chat-user-id';
@@ -575,8 +576,11 @@ function DebateSharePromptDialog({
     finishPrompt(handoffCompleted ? 'shared' : 'dismissed');
   };
   const handoffMethod = React.useMemo(
-    () => (preparedVideo.file ? getPreparedSocialVideoHandoffMethod(preparedVideo.file) : null),
-    [preparedVideo.file]
+    () =>
+      preparedVideo.file
+        ? getPreparedSocialVideoHandoffMethod(socialVideoShareData({ title: prompt.claim, file: preparedVideo.file }))
+        : null,
+    [preparedVideo.file, prompt.claim]
   );
   const share = async () => {
     if (handoffCompleted) {
