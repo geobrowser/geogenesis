@@ -37,3 +37,13 @@ export function useEntitySidePanel() {
     closeSidePanel,
   };
 }
+
+/**
+ * Opens a claim beside a page that navigating away would lose: a lobby's room and audio (GEO-3332),
+ * a rematch's session. In the claim's own space, since neither page has one to fall back on.
+ */
+export function useOpenClaimInSidePanel() {
+  const { openSidePanel } = useEntitySidePanel();
+  return (claim: { claim_entity_id: string; space_id: string }) =>
+    openSidePanel(claim.claim_entity_id, claim.space_id, false, { forceRequestedSpace: true });
+}

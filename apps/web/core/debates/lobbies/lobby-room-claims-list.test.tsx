@@ -16,6 +16,7 @@ import {
 
 const mocks = vi.hoisted(() => ({
   backfill: vi.fn(),
+  openClaim: vi.fn(),
   rootSelectors: [] as (string | undefined)[],
   indexed: null as 'positive' | 'negative' | null,
   snapshot: { status: 'idle', pending: null, runId: null } as {
@@ -57,13 +58,17 @@ vi.mock('../matchmaking/matchmaking-claim-card', () => ({
     header,
     endSlot,
     footer,
+    onOpenClaim,
   }: {
     positions: { total_count: number }[];
     header?: React.ReactNode;
     endSlot?: React.ReactNode;
     footer?: React.ReactNode;
+    onOpenClaim?: () => void;
   }) => (
     <article data-testid="card" data-counts={positions.map(side => side.total_count).join(',')}>
+      {/* Not a button: the tests count the card's buttons. */}
+      {onOpenClaim ? <span data-testid="claim-text" onClick={onOpenClaim} /> : null}
       {header}
       <div data-testid="card-end">{endSlot}</div>
       {footer}
@@ -72,6 +77,7 @@ vi.mock('../matchmaking/matchmaking-claim-card', () => ({
 }));
 
 vi.mock('~/design-system/avatar', () => ({ Avatar: () => <span data-testid="avatar" /> }));
+vi.mock('~/core/hooks/use-entity-side-panel', () => ({ useOpenClaimInSidePanel: () => mocks.openClaim }));
 
 afterEach(() => {
   cleanup();
@@ -130,6 +136,20 @@ describe('LobbyRoomClaimCard scroll root', () => {
 
     rerender(card(undefined));
     expect(mocks.rootSelectors.at(-1)).toBeUndefined();
+  });
+});
+
+// GEO-3332. Reading a claim must not cost the lobby: it opens beside it, never on its own page.
+describe('LobbyRoomClaimCard claim text', () => {
+  it('opens the claim in the side panel', () => {
+    render(
+      <LobbyRoomClaimCard entry={entry(true, [side(true, [], 0), side(false, [], 0)])} renderOffer={renderOffer} />
+    );
+    screen.getByTestId('claim-text').click();
+    expect(mocks.openClaim).toHaveBeenCalledWith(
+      expect.objectContaining({ claim_entity_id: 'claim-1', space_id: 'space-1' })
+    );
+    cleanup();
   });
 });
 
