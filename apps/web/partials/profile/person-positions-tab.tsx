@@ -159,13 +159,14 @@ export function PersonPositionsTab({ spaceId }: { spaceId: string }) {
   const replaceTopics = topics.replace;
 
   React.useEffect(() => {
-    if (isLoadingIndex) return;
+    // A failed lookup cannot establish that a selected topic is unreachable.
+    if (isLoadingIndex || isIndexError) return;
     // `replaceTopics` rather than `topics`: the selection object is rebuilt each
     // render, so depending on it would re-run this on every one. The callback is
     // stable, and `replace` keeps the previous array when nothing changed, so
     // this settles rather than chasing its own output.
     replaceTopics(current => keepSelectableTopics(current, reachableTopics, true));
-  }, [isLoadingIndex, reachableTopics, replaceTopics]);
+  }, [isLoadingIndex, isIndexError, reachableTopics, replaceTopics]);
 
   return (
     <div className="flex flex-col gap-4">

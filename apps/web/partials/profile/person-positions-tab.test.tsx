@@ -52,7 +52,11 @@ vi.mock('./record-filter-row', () => ({
       <button onClick={() => sort.onChange('top')}>Top</button>
       {dimensions.flatMap(dimension =>
         dimension.options.map(option => (
-          <button key={`${dimension.key}-${option.value}`} onClick={() => dimension.onToggle(option.value)}>
+          <button
+            key={`${dimension.key}-${option.value}`}
+            aria-pressed={dimension.values.includes(option.value)}
+            onClick={() => dimension.onToggle(option.value)}
+          >
             {dimension.key}: {option.value} ({option.count})
           </button>
         ))
@@ -69,6 +73,7 @@ vi.mock('./person-record-feed', () => ({
     emptyLabel,
     hasNextPage,
     fetchNextPage,
+    onRetry,
   }: {
     rows: { entityId: string }[];
     isLoading: boolean;
@@ -76,6 +81,7 @@ vi.mock('./person-record-feed', () => ({
     emptyLabel: string;
     hasNextPage: boolean;
     fetchNextPage: () => void;
+    onRetry?: () => void;
   }) => (
     <div>
       {isLoading ? (
@@ -92,6 +98,7 @@ vi.mock('./person-record-feed', () => ({
         <p>{emptyLabel}</p>
       )}
       {hasNextPage && <button onClick={fetchNextPage}>More</button>}
+      {isError && onRetry && <button onClick={onRetry}>Retry</button>}
     </div>
   ),
 }));
@@ -227,6 +234,39 @@ describe('profile Hide my positions', () => {
     setup(true);
     await screen.findByText(/Turn off “Hide my positions”/);
     expect(toggle()).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('preserves selected topics when enabling the exclusion fails', async () => {
+    mocks.graphql.mockImplementation(({ variables }) =>
+      variables.filter ? Effect.fail(new Error('index unavailable')) : Effect.succeed(page(entries))
+    );
+    setup();
+    const topic = await screen.findByRole('button', { name: 'topics: topic (25)' });
+    fireEvent.click(topic);
+    expect(topic).toHaveAttribute('aria-pressed', 'true');
+    fireEvent.click(toggle());
+    await screen.findByText('Could not load positions');
+    fireEvent.click(toggle());
+    expect(await screen.findByRole('button', { name: 'topics: topic (25)' })).toHaveAttribute('aria-pressed', 'true');
+  });
+
+  it('retries the failed exclusion query and restores the filtered record', async () => {
+    mocks.graphql.mockReturnValue(Effect.fail(new Error('index unavailable')));
+    setup(true);
+    await screen.findByText('Could not load positions');
+    mocks.graphql.mockReturnValue(Effect.succeed(page(entries.slice(20))));
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(20)));
+  });
+
+  it('refreshes the exclusion when it is enabled again after the viewer answers more claims', async () => {
+    setup(true);
+    await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(20)));
+    fireEvent.click(toggle());
+    await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(0, 20)));
+    mocks.graphql.mockReturnValue(Effect.succeed(page(entries.slice(23))));
+    fireEvent.click(toggle());
+    await waitFor(() => expect(feedClaims()).toEqual(CLAIMS.slice(23)));
   });
 
   it('does not reuse another viewer’s filtered index after switching accounts', async () => {

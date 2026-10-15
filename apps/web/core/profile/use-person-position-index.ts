@@ -12,7 +12,7 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { orderFacetOptions } from '~/core/debates/matchmaking/topic-facets';
 import { ID } from '~/core/id';
 import { graphql } from '~/core/io/graphql-client';
-import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES } from '~/core/profile/profile-facts';
+import { POSITION_VOTE_KINDS, POSITION_VOTE_TYPES, heldPositionFilter } from '~/core/profile/profile-facts';
 import { normId } from '~/core/utils/norm-id';
 
 /**
@@ -483,9 +483,9 @@ export function usePersonPositionIndex({
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: personPositionIndexQueryKey(spaceId, excludeAnsweredBy),
     enabled: enabled && spaceId !== '',
-    // Held longer than the list. The record's shape changes when this person
-    // votes, which is not something the reader of somebody else's profile does.
-    staleTime: 5 * 60_000,
+    // Refresh an exclusion whenever it is revisited: the viewer can answer claims
+    // on this screen. The unfiltered profile's facets can stay cached longer.
+    staleTime: excludeAnsweredBy ? 0 : 5 * 60_000,
     queryFn: async ({ signal }): Promise<{ entries: PositionIndexEntry[]; names: Map<string, string | null> }> => {
       const entries: PositionIndexEntry[] = [];
       const names = new Map<string, string | null>();
@@ -502,17 +502,7 @@ export function usePersonPositionIndex({
               kinds: [...POSITION_VOTE_KINDS],
               types: [...POSITION_VOTE_TYPES],
               topicsPropertyId: TOPICS_PROPERTY_ID,
-              filter: excludeAnsweredBy
-                ? {
-                    not: {
-                      votedBy: {
-                        userId: ID.uuidToHex(excludeAnsweredBy),
-                        kinds: [...POSITION_VOTE_KINDS],
-                        types: [...POSITION_VOTE_TYPES],
-                      },
-                    },
-                  }
-                : null,
+              filter: excludeAnsweredBy ? { not: heldPositionFilter(excludeAnsweredBy) } : null,
               first: INDEX_PAGE_SIZE,
               after,
             },
