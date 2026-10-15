@@ -12,6 +12,7 @@ import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_N
 import { Check } from '~/design-system/icons/check';
 import { Input } from '~/design-system/input';
 import { Text } from '~/design-system/text';
+import { ElevatedPopoverPortalContext } from '~/design-system/use-elevated-popover-portal';
 
 import { debateRoomPath } from '../rooms/room-routes';
 import { useScrollLock } from '../use-scroll-lock';
@@ -58,6 +59,7 @@ export function lobbyRequestFor(
 /** Open a lobby now or schedule one, then hand over its link (GEO-3133, `lobbyHosting`). */
 export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
   const titleId = React.useId();
+  const [popoverContainer, setPopoverContainer] = React.useState<HTMLDivElement | null>(null);
   const create = useCreateDebateLobby();
   const [name, setName] = React.useState('');
   const [when, setWhen] = React.useState<'now' | 'later'>('now');
@@ -107,6 +109,7 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
 
   return createPortal(
     <div
+      ref={setPopoverContainer}
       role="dialog"
       aria-modal="true"
       aria-labelledby={titleId}
@@ -217,7 +220,9 @@ export function OpenLobbyDialog({ onClose }: { onClose: () => void }) {
               </div>
             ) : null}
 
-            <OpenLobbyClaimListsField value={claimLists} onChange={setClaimLists} />
+            <ElevatedPopoverPortalContext.Provider value={popoverContainer}>
+              <OpenLobbyClaimListsField value={claimLists} onChange={setClaimLists} />
+            </ElevatedPopoverPortalContext.Provider>
 
             {formError || create.error ? (
               <Text as="p" variant="footnote" color="red-01">
