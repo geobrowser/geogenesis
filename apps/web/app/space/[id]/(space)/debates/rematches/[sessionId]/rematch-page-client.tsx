@@ -107,11 +107,11 @@ import { isSpaceDebatePublishable, useDebatePublishableSpaces } from '~/core/deb
 import { useLeaveRematchOnExit } from '~/core/debates/use-leave-rematch-on-exit';
 import { useRelatedDebateClaims } from '~/core/debates/use-related-debate-claims';
 import { useEffectOnceWhen } from '~/core/hooks/use-effect-once';
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
 import { useEntityResponse, useEntityResponseIndexingSnapshot } from '~/core/hooks/use-entity-vote';
 import { useInfiniteScrollSentinel } from '~/core/hooks/use-infinite-scroll-sentinel';
 import { useIsPhoneLayout } from '~/core/hooks/use-is-phone-layout';
 import { useLastSettled } from '~/core/hooks/use-last-settled';
+import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 import { spaceLabel, useSpaceLabels } from '~/core/hooks/use-space-labels';
 import { useSpacesByIds } from '~/core/hooks/use-spaces-by-ids';
 import { equals as idEquals, uuidToHex } from '~/core/id/normalize';
@@ -3395,7 +3395,7 @@ function RematchClaimCard({
         ? null
         : inFlightResponse === 'positive';
 
-  const { openSidePanel } = useEntitySidePanel();
+  const openClaim = useOpenClaimInSidePanel();
 
   const positions = React.useMemo(() => rematchPositionSummaries(claim, session), [claim, session]);
 
@@ -3489,9 +3489,7 @@ function RematchClaimCard({
       reconcileWithIndexedResponse={false}
       // Reading a claim shouldn't cost the session: navigating to its entity page would leave the
       // rematch behind, so open it beside the picker instead.
-      onOpenClaim={() =>
-        openSidePanel(claim.claim.claim_entity_id, claim.claim.space_id, false, { forceRequestedSpace: true })
-      }
+      onOpenClaim={() => openClaim(claim.claim)}
     />
   );
 }

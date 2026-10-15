@@ -13,6 +13,8 @@ const mocks = vi.hoisted(() => ({
   listFailed: false,
 }));
 
+// The signed-out Remind me opens Privy, which needs the wallet provider (GEO-3289).
+vi.mock('~/core/hooks/use-privy-sign-in', () => ({ usePrivySignIn: () => vi.fn() }));
 vi.mock('~/core/state/feature-flags', () => ({
   useFeatureFlag: (id: string) => (id === 'lobbyHosting' ? mocks.hosting : true),
 }));
@@ -29,6 +31,7 @@ vi.mock('./hooks', () => ({
       : { data: { lobbies: [] }, isLoading: false, isError: false },
   useDebateLobbyReminder: () => ({ mutate: mocks.mutate, isPending: false, isError: false }),
   useLobbyReminderError: () => null,
+  useLobbyReminderSaving: () => false,
 }));
 vi.mock('./live-lobbies', () => ({ useLobbyLineup: () => mocks.lineup }));
 vi.mock('./lobby-analytics', () => ({ markLobbyEntry: vi.fn() }));

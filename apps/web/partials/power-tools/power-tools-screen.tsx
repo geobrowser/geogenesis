@@ -237,7 +237,7 @@ export function PowerToolsScreen() {
   const [sortState, setSortState] = React.useState<ColumnSortState>(null);
 
   const serverSort = React.useMemo(() => {
-    if (!sortState) return undefined;
+    if (sortState?.kind !== 'property') return undefined;
     return { propertyId: sortState.columnId, direction: sortState.direction };
   }, [sortState]);
 

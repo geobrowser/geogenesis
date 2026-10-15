@@ -9,6 +9,7 @@ import { NavUtils } from '~/core/utils/utils';
 
 import { lastPageOutsideDebates, rememberLastPageOutsideDebates } from '../debate-return-navigation';
 import type { LobbyPresenceState } from './hooks';
+import { type LobbyExit, lobbyLeft } from './lobby-analytics';
 import type { GuestSessionState } from './lobby-guest-session';
 import { LOBBY_STATE_COPY } from './lobby-state-cards';
 import type { LobbyPageView } from './lobby-view';
@@ -43,7 +44,21 @@ export function useLobbyExitHref() {
 
 type LobbyExitReason = 'left' | 'ended' | 'closed' | 'removed' | 'banned';
 
+/**
+ * The analytics exit for each way out (GEO-3311), as the heartbeat path reports it. Recorded here
+ * too because a refetched view can close the lobby before the next heartbeat, and then admission
+ * stops the heartbeat and the page's unmount would record a plain `left`.
+ */
+const ANALYTICS_EXIT: Record<LobbyExitReason, Exclude<LobbyExit, 'debate_started'>> = {
+  left: 'left',
+  ended: 'lobby_ended',
+  closed: 'unknown',
+  removed: 'unknown',
+  banned: 'unknown',
+};
+
 type LobbyExitInput = {
+  lobbyId: string;
   access: LobbyPageView['access'] | null;
   presence: LobbyPresenceState;
   guestStatus: GuestSessionState['status'];
@@ -62,7 +77,10 @@ type LobbyExitSeen = {
  * Why the viewer is out of a lobby they were in on this page, or null. Arriving at a lobby that
  * has already ended, banned them or removed them earlier keeps its own card.
  */
-function lobbyExitReason({ access, presence, guestStatus }: Omit<LobbyExitInput, 'fresh'>, seen: LobbyExitSeen) {
+function lobbyExitReason(
+  { access, presence, guestStatus }: Omit<LobbyExitInput, 'fresh' | 'lobbyId'>,
+  seen: LobbyExitSeen
+) {
   if (presence.status === 'left') return 'left';
   if (seen.inside && presence.status === 'dropped') return presence.reason;
   if (seen.inside && guestStatus === 'removed') return 'removed';
@@ -93,7 +111,7 @@ function exitNotice(reason: LobbyExitReason, name: string) {
 export function useExitLobbyWhenOut(input: LobbyExitInput & { name: string | null; exitHref: string }) {
   const router = useRouter();
   const setToast = useSetToast();
-  const { access, presence, guestStatus, fresh, name, exitHref } = input;
+  const { lobbyId, access, presence, guestStatus, fresh, name, exitHref } = input;
 
   const [seen, setSeen] = React.useState<LobbyExitSeen>({ inside: false, open: false });
   const inside = seen.inside || presence.status === 'joined' || guestStatus === 'listening';
@@ -109,10 +127,12 @@ export function useExitLobbyWhenOut(input: LobbyExitInput & { name: string | nul
   React.useEffect(() => {
     if (!reason || exitedRef.current) return;
     exitedRef.current = true;
+    // Before the route change unmounts the page, whose unmount would otherwise end the visit as left.
+    lobbyLeft(lobbyId, ANALYTICS_EXIT[reason]);
     const notice = exitNotice(reason, name ?? 'this lobby');
     if (notice) setToast(<span>{notice}</span>);
     router.replace(exitHref);
-  }, [exitHref, name, reason, router, setToast]);
+  }, [exitHref, lobbyId, name, reason, router, setToast]);
 
   return next !== null;
 }

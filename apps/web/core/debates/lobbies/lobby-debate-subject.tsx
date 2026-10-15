@@ -1,6 +1,6 @@
 'use client';
 
-import { useEntitySidePanel } from '~/core/hooks/use-entity-side-panel';
+import { useOpenClaimInSidePanel } from '~/core/hooks/use-open-claim-in-side-panel';
 
 import type { DebateLobbyMember } from '../api';
 import { inDebateLabel } from './lobby-format';
@@ -17,7 +17,7 @@ export function LobbyDebateSubject({
   /** Under an "In a debate" heading: the claim alone, "Picking a claim", or nothing. */
   bare?: boolean;
 }) {
-  const { openSidePanel } = useEntitySidePanel();
+  const openClaim = useOpenClaimInSidePanel();
   const claimName = subject?.phase === 'on_claim' ? subject.claim_name.trim() : '';
 
   if (subject?.phase !== 'on_claim' || !claimName) {
@@ -26,11 +26,7 @@ export function LobbyDebateSubject({
   }
 
   const claim = (
-    <button
-      type="button"
-      className="hover:underline"
-      onClick={() => openSidePanel(subject.claim_entity_id, subject.space_id, false)}
-    >
+    <button type="button" className="hover:underline" onClick={() => openClaim(subject)}>
       {claimName}
     </button>
   );

@@ -15,6 +15,8 @@ const api = vi.hoisted(() => ({
   endDebateLobbyStepOut: vi.fn(),
   listDebateLobbies: vi.fn(),
   listDebateLobbyCalendar: vi.fn(),
+  setDebateLobbyReminder: vi.fn(),
+  endDebateLobby: vi.fn(),
 }));
 
 const capture = vi.hoisted(() => vi.fn());
@@ -31,14 +33,23 @@ vi.mock('../hooks', async importOriginal => ({
   useGeoChatAuth: () => ({ ready: true, ...auth, getPrivyIdentityToken: vi.fn() }),
 }));
 
-const { GeoChatRequestError } = await import('../api');
-const { LOBBY_HEARTBEAT_MS, useDebateLobbies, useDebateLobby, useDebateLobbyCalendar, useLobbyPresence } =
-  await import('./hooks');
+const { GeoChatRequestError, GeoChatSessionError } = await import('../api');
+const {
+  LOBBY_HEARTBEAT_MS,
+  SIGNED_OUT_LOBBIES_POLL_MS,
+  useDebateLobbies,
+  useDebateLobby,
+  useDebateLobbyCalendar,
+  useDebateLobbyReminder,
+  useEndDebateLobby,
+  useLobbyPresence,
+  useLobbyReminderSaving,
+} = await import('./hooks');
 const { debateQueryKeys } = await import('../hooks');
 const { consumeLobbyRejoin, requestLobbyRejoin, routeIntoDebate } = await import('./step-out');
 const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
-const { lobbyDebateSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
+const { lobbyDebateSeen, lobbyRoomVoteSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
 
 const lobbyEvents = (name: string) =>
   capture.mock.calls.filter(([event]) => event === name).map(([, props]) => props as Record<string, unknown>);
@@ -202,6 +213,22 @@ describe('useLobbyPresence', () => {
     const { result } = await goneAfterBeat('ended');
     await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'ended' }));
     expect(joins()).toHaveLength(1);
+  });
+
+  it('ends the room vote a hosting tab was following when the heartbeat says another host ended the lobby', async () => {
+    lobbyRoomVoteSeen('lobby1', {
+      vote_id: 'vote-at-end',
+      claim: { id: 'dc', space_id: 's', claim_entity_id: 'c', claim: 'Claim', description: null },
+      started_by: null,
+      started_at: '2026-10-05T10:00:00Z',
+      tally: { agree: 2, disagree: 1, eligible: 4 },
+    });
+    const { result } = await goneAfterBeat('ended');
+    await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'ended' }));
+
+    expect(lobbyEvents('lobby_room_vote_ended')).toEqual([
+      expect.objectContaining({ room_vote_id: 'vote-at-end', end_reason: 'lobby_ended', agree: 2 }),
+    ]);
   });
 
   it('rejoins on reason lapsed', async () => {
@@ -689,10 +716,13 @@ it('moves a ban this tab heard to the removed screen once unbanned, and Rejoin c
   expect(result.current.state.status).toBe('joined');
 });
 
-// Copilot on #2836 asked for the list to be hidden once signed out. It already is: the key carries
-// the account, which Privy clears with the session, so a signed-out read is a different, empty entry.
-it('shows no lobbies once the viewer signs out', async () => {
-  api.listDebateLobbies.mockResolvedValue({ lobbies: [{ lobby_id: 'members-only' }] });
+// Copilot on #2836 asked for the list to be hidden once signed out. The key carries the account,
+// which Privy clears with the session, so a signed-out read is a different entry: since GEO-3289
+// the anonymous list, never the account's.
+it('drops the account’s lobbies once the viewer signs out, for the anonymous list', async () => {
+  api.listDebateLobbies.mockImplementation(async (_token: unknown, accountKey: string | null) => ({
+    lobbies: [{ lobby_id: accountKey ? 'members-view' : 'anonymous-view' }],
+  }));
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   const wrapper = ({ children }: { children: React.ReactNode }) => (
     <QueryClientProvider client={client}>{children}</QueryClientProvider>
@@ -700,13 +730,129 @@ it('shows no lobbies once the viewer signs out', async () => {
 
   try {
     const { result, rerender } = renderHook(() => useDebateLobbies(), { wrapper });
-    await waitFor(() => expect(result.current.data?.lobbies).toHaveLength(1));
+    await waitFor(() => expect(result.current.data?.lobbies[0]?.lobby_id).toBe('members-view'));
 
     Object.assign(auth, { authenticated: false, accountKey: null });
     rerender();
     expect(result.current.data).toBeUndefined();
+    await waitFor(() => expect(result.current.data?.lobbies[0]?.lobby_id).toBe('anonymous-view'));
   } finally {
     Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
+  }
+});
+
+// Copilot on #2863: a brand-new account is refused for a minute or two. The list waits that out
+// like the account's other reads, so the navbar and a queued reminder do not sit on a failed read.
+it('waits out a new account’s warm-up signed in, and reads once signed out', async () => {
+  const warmingUp = new GeoChatSessionError(new GeoChatRequestError('Unauthorized', null, 401));
+  api.listDebateLobbies.mockRejectedValueOnce(warmingUp).mockResolvedValueOnce({ lobbies: [] });
+  const client = new QueryClient();
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  try {
+    const signedIn = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true), { timeout: 3_000 });
+    expect(api.listDebateLobbies).toHaveBeenCalledTimes(2);
+    signedIn.unmount();
+
+    api.listDebateLobbies.mockReset().mockRejectedValue(new GeoChatRequestError('down', 'unavailable', 503));
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    const signedOut = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedOut.result.current.isError).toBe(true));
+    expect(api.listDebateLobbies).toHaveBeenCalledTimes(1);
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
+  }
+});
+
+// Copilot on #2863: a reminder saving through one control (the navbar's replay) shows as saving on
+// every control for that lobby, so none can take it back while the write is still landing.
+it('shows a reminder saving in one control as saving in every control for that lobby', async () => {
+  let settle: (view: unknown) => void = () => undefined;
+  api.setDebateLobbyReminder.mockImplementationOnce(() => new Promise(done => (settle = done)));
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  const { result } = renderHook(
+    () => ({
+      replay: useDebateLobbyReminder(),
+      panel: useLobbyReminderSaving('abc-123'),
+      other: useLobbyReminderSaving('zzz'),
+    }),
+    { wrapper }
+  );
+  expect(result.current.panel).toBe(false);
+
+  act(() => result.current.replay.mutate({ lobbyId: 'abc123', reminded: true }));
+  await waitFor(() => expect(result.current.panel).toBe(true));
+  expect(result.current.other).toBe(false);
+
+  await act(async () => settle(view(false)));
+  await waitFor(() => expect(result.current.panel).toBe(false));
+});
+
+// Copilot on #2863: the button reads the list's row, so a saved reminder is written there at once
+// rather than waiting on the refetch, which may be slow or fail.
+it('writes a saved reminder into the cached list and calendar rows without waiting for a refetch', async () => {
+  const row = { lobby_id: 'lobby1', open: false, viewer_reminded: false, reminder_count: 0 };
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(debateQueryKeys.lobbies('acct'), { lobbies: [row, { ...row, lobby_id: 'other' }] });
+  client.setQueryData(debateQueryKeys.lobbyCalendar('acct', 1, 2), { lobbies: [{ ...row, state: 'upcoming' }] });
+  api.listDebateLobbies.mockRejectedValue(new GeoChatRequestError('down', 'unavailable', 503));
+  api.listDebateLobbyCalendar.mockReturnValue(new Promise(() => undefined));
+  const saved = { ...view(false), reminder_count: 4, viewer: { ...view(false).viewer, reminded: true } };
+  api.setDebateLobbyReminder.mockResolvedValueOnce(saved);
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+
+  try {
+    const { result } = renderHook(() => useDebateLobbyReminder(), { wrapper });
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }));
+
+    const list = client.getQueryData<{ lobbies: (typeof row)[] }>(debateQueryKeys.lobbies('acct'));
+    expect(list?.lobbies[0]).toMatchObject({ viewer_reminded: true, reminder_count: 4 });
+    expect(list?.lobbies[1]).toMatchObject({ viewer_reminded: false, reminder_count: 0 });
+    const week = client.getQueryData<{ lobbies: (typeof row)[] }>(debateQueryKeys.lobbyCalendar('acct', 1, 2));
+    expect(week?.lobbies[0]).toMatchObject({ viewer_reminded: true, reminder_count: 4, state: 'upcoming' });
+  } finally {
+    api.listDebateLobbies.mockReset();
+    api.listDebateLobbyCalendar.mockReset();
+  }
+});
+
+// GEO-3289. Signed out there is no gateway scope to patch the list, so it is polled.
+it('lists lobbies to a signed-out visitor and polls, and only then', async () => {
+  api.listDebateLobbies.mockResolvedValue({ lobbies: [] });
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const wrapper = ({ children }: { children: React.ReactNode }) => (
+    <QueryClientProvider client={client}>{children}</QueryClientProvider>
+  );
+  const interval = (accountKey: string | null) =>
+    client.getQueryCache().find({ queryKey: debateQueryKeys.lobbies(accountKey) })?.observers[0]?.options
+      .refetchInterval;
+
+  try {
+    Object.assign(auth, { authenticated: false, accountKey: null });
+    const signedOut = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedOut.result.current.isSuccess).toBe(true));
+    expect(api.listDebateLobbies).toHaveBeenCalledWith(expect.anything(), null, expect.anything());
+    expect(interval(null)).toBe(SIGNED_OUT_LOBBIES_POLL_MS);
+    signedOut.unmount();
+
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    const signedIn = renderHook(() => useDebateLobbies(), { wrapper });
+    await waitFor(() => expect(signedIn.result.current.isSuccess).toBe(true));
+    expect(interval('acct')).toBeFalsy();
+  } finally {
+    Object.assign(auth, { authenticated: true, accountKey: 'acct' });
+    api.listDebateLobbies.mockReset();
   }
 });
 
@@ -786,7 +932,14 @@ describe('lobby analytics through useLobbyPresence', () => {
     });
 
     expect(lobbyEvents('lobby_joined')).toEqual([
-      { lobby_id: 'lobby1', lobby_session_id: expect.any(String), is_newcomer: true, entry: 'side_panel' },
+      {
+        lobby_id: 'lobby1',
+        lobby_session_id: expect.any(String),
+        is_newcomer: true,
+        role: 'speaker',
+        hosting: false,
+        entry: 'side_panel',
+      },
     ]);
     expect(lobbyEvents('lobby_left')).toEqual([]);
   });
@@ -854,5 +1007,71 @@ describe('lobby analytics through useLobbyPresence', () => {
 
     expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['link', 'back_after_debate']);
     expect(lobbyEvents('lobby_left').map(props => props.exit)).toEqual(['unknown']);
+  });
+});
+
+describe('lobby analytics from the lobby hooks (GEO-3311)', () => {
+  it('puts the role the join answered with on lobby_joined', async () => {
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    expect(lobbyEvents('lobby_joined')).toEqual([expect.objectContaining({ role: 'speaker', hosting: false })]);
+  });
+
+  it('starts the session from the room the join answered with', async () => {
+    const member = (id: string) => ({
+      user_id: id,
+      profile_space_id: `space-${id}`,
+      display_name: null,
+      avatar_cid: null,
+      role: 'listener' as const,
+      creator: false,
+      acting_host: false,
+      on_roster_since: '2026-10-05T10:00:00Z',
+      stepped_out: false,
+      in_debate: false,
+    });
+    api.setDebateLobbyPresence.mockImplementationOnce(async () => ({
+      ...view(true),
+      members: [member('u1'), member('u2')],
+      guest_count: 1,
+    }));
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+
+    await act(() => result.current.leave());
+
+    expect(lobbyEvents('lobby_left')).toEqual([expect.objectContaining({ peak_headcount: 3 })]);
+  });
+
+  it('records Going on the server’s confirmation, not on a refusal', async () => {
+    api.setDebateLobbyReminder.mockResolvedValueOnce({
+      ...view(false),
+      scheduled: true,
+      reminder_count: 4,
+      viewer: { ...view(false).viewer, reminded: true },
+    });
+    api.setDebateLobbyReminder.mockRejectedValueOnce(
+      new GeoChatRequestError('already open', 'lobby_already_open', 409, null, null)
+    );
+    const { result } = renderHook(() => useDebateLobbyReminder(), { wrapper });
+
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }));
+    await act(() => result.current.mutateAsync({ lobbyId: 'lobby1', reminded: true }).catch(() => undefined));
+
+    expect(lobbyEvents('lobby_rsvp_changed')).toEqual([
+      expect.objectContaining({ lobby_id: 'lobby1', going: true, going_count: 4 }),
+    ]);
+  });
+
+  it('sends lobby_ended once the host’s End is confirmed', async () => {
+    api.endDebateLobby.mockResolvedValueOnce({ ...view(false), scheduled: true });
+    const { result } = renderHook(() => useEndDebateLobby('lobby1'), { wrapper });
+
+    await act(() => result.current.mutateAsync());
+
+    expect(lobbyEvents('lobby_ended')).toEqual([
+      expect.objectContaining({ lobby_id: 'lobby1', scheduled: true, open_ms: expect.any(Number) }),
+    ]);
   });
 });

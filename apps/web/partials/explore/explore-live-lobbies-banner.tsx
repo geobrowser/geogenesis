@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 import { dashlessId } from '~/core/debates/api';
 import type { DebateLobbySummary } from '~/core/debates/api';
+import { useGeoChatAuth } from '~/core/debates/hooks';
 import { useLobbyLineup } from '~/core/debates/lobbies/live-lobbies';
 import { markLobbyEntry } from '~/core/debates/lobbies/lobby-analytics';
 import { LobbyByline } from '~/core/debates/lobbies/lobby-host-names';
@@ -40,6 +41,9 @@ export function lobbyBannerNoticeId(lobbyId: string) {
  * Leads with the busiest live lobby and lists the others under it. A lobby the viewer is already
  * in is left out: the banner is an invitation, and they have accepted it. Dismissing hides the
  * lobbies on screen for good, and only those, so the next lobby to go live brings it back.
+ *
+ * Signed in only (GEO-3289): signed-out visitors find lobbies in the navbar and the debates panel,
+ * which keeps host-written lobby names off the most public page.
  */
 export function ExploreLiveLobbiesBanner() {
   return (
@@ -50,8 +54,10 @@ export function ExploreLiveLobbiesBanner() {
 }
 
 function LiveLobbiesBanner() {
+  const { authenticated } = useGeoChatAuth();
   const { live } = useLobbyLineup();
   const { isDismissed, remember } = useDismissedNotices();
+  if (!authenticated) return null;
 
   const shown = live.filter(lobby => !lobby.viewer_on_roster && !isDismissed(lobbyBannerNoticeId(lobby.lobby_id)));
   const [lead, ...others] = shown;
