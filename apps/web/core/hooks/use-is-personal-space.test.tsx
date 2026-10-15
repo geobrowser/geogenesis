@@ -9,13 +9,13 @@ import { useIsPersonalSpace } from './use-is-personal-space';
 
 const PERSONAL = '73a82967cb12f604f9589ac4bc8024cb';
 
-const fetchPersonalSpaceIds = vi.hoisted(() =>
-  vi.fn(async (ids: string[]) => new Set(ids.filter(id => id === PERSONAL)))
+const fetchSpaceTypes = vi.hoisted(() =>
+  vi.fn(async (ids: string[]) => new Map(ids.map(id => [id, id === PERSONAL ? 'PERSONAL' : 'DAO'])))
 );
-vi.mock('~/core/io/subgraph/fetch-personal-space-ids', () => ({ fetchPersonalSpaceIds }));
+vi.mock('~/core/io/subgraph/fetch-personal-space-ids', () => ({ fetchSpaceTypes }));
 
 afterEach(() => {
-  fetchPersonalSpaceIds.mockClear();
+  fetchSpaceTypes.mockClear();
 });
 
 describe('useIsPersonalSpace', () => {
@@ -33,10 +33,10 @@ describe('useIsPersonalSpace', () => {
     first.unmount();
 
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(client.getQueryData(['is-personal-space', PERSONAL])).toBe(true);
+    expect(client.getQueryData(['space-type', PERSONAL])).toBe('PERSONAL');
 
     const second = renderHook(() => useIsPersonalSpace(PERSONAL), { wrapper });
     expect(second.result.current).toBe(true);
-    expect(fetchPersonalSpaceIds).toHaveBeenCalledTimes(1);
+    expect(fetchSpaceTypes).toHaveBeenCalledTimes(1);
   });
 });

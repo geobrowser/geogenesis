@@ -9,12 +9,13 @@ import { graphql } from './graphql';
 const LOOKUP_SIZE = 100;
 
 /**
- * Which of these ids are personal spaces — a person, where Geo has one (GEO-3236). Asks only for
- * each space's id and type, the one fact needed to tell a person from a topic or a shared space.
+ * Each known space's type (`PERSONAL`, `DAO`), keyed by normalized id. Asks only for id and type,
+ * so it is the cheap way to answer anything that depends on nothing else about a space. Ids the API
+ * doesn't know are absent from the map.
  */
-export async function fetchPersonalSpaceIds(ids: readonly string[], signal?: AbortSignal): Promise<Set<string>> {
+export async function fetchSpaceTypes(ids: readonly string[], signal?: AbortSignal): Promise<Map<string, string>> {
   const unique = [...new Set(ids.map(normId))];
-  const people = new Set<string>();
+  const types = new Map<string, string>();
 
   for (let start = 0; start < unique.length; start += LOOKUP_SIZE) {
     const chunk = unique.slice(start, start + LOOKUP_SIZE);
@@ -33,10 +34,19 @@ export async function fetchPersonalSpaceIds(ids: readonly string[], signal?: Abo
       )
     );
     if (Either.isLeft(result)) {
-      throw new Error('Failed to read which spaces are personal', { cause: result.left });
+      throw new Error('Failed to read space types', { cause: result.left });
     }
-    for (const space of result.right.spaces) if (space.type === 'PERSONAL') people.add(normId(space.id));
+    for (const space of result.right.spaces) types.set(normId(space.id), space.type);
   }
 
-  return people;
+  return types;
+}
+
+/**
+ * Which of these ids are personal spaces — a person, where Geo has one (GEO-3236). Asks only for
+ * each space's id and type, the one fact needed to tell a person from a topic or a shared space.
+ */
+export async function fetchPersonalSpaceIds(ids: readonly string[], signal?: AbortSignal): Promise<Set<string>> {
+  const types = await fetchSpaceTypes(ids, signal);
+  return new Set([...types].filter(([, type]) => type === 'PERSONAL').map(([id]) => id));
 }

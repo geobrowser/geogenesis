@@ -1,10 +1,6 @@
 'use client';
 
-import { useQuery } from '@tanstack/react-query';
-
-import { Effect } from 'effect';
-
-import { getSpace } from '~/core/io/queries';
+import { useSpaceType } from '~/core/hooks/use-space-type';
 
 /**
  * Whether geo-chat indexes a space, as far as we can tell right now.
@@ -31,29 +27,9 @@ import { getSpace } from '~/core/io/queries';
 export type SpaceDebateSupport = 'indexed' | 'not-indexed' | 'unknown';
 
 /**
- * A space's type doesn't change under a reader, and this now runs once per claim row. `getSpace`
- * pulls the whole space — members, editors, its page entity — so without this the gate refetches
- * all of it per row mount and on every window focus.
- */
-const SPACE_TYPE_STALE_TIME = 5 * 60_000;
-
-/** Shares `useSpace`'s cache key, so the answer is usually already warm and costs no extra fetch. */
-function spaceQueryOptions(spaceId: string) {
-  return {
-    queryKey: ['space', spaceId],
-    queryFn: () => (spaceId ? Effect.runPromise(getSpace(spaceId)) : null),
-    enabled: Boolean(spaceId),
-    staleTime: SPACE_TYPE_STALE_TIME,
-  };
-}
-
-/**
- * A settled answer either way, including when the lookup failed. `getSpace` resolves to `null` for
- * a space the API doesn't know, and `SpaceDecoder.decode` also returns `null` on a schema mismatch —
- * a query *success*, so react-query never retries it. Treating any of those as `unknown` would leave
- * debates loading forever on a space whose payload merely tripped one field; treating them as
- * `not-indexed` at least renders a state the reader can understand, and keeps a doomed request off
- * the wire either way.
+ * A settled answer either way, including when the lookup failed or the API doesn't know the space.
+ * Treating those as `unknown` would leave debates loading forever; treating them as `not-indexed` at
+ * least renders a state the reader can understand, and keeps a doomed request off the wire.
  */
 function supportFrom(spaceId: string, isPending: boolean, type: string | undefined): SpaceDebateSupport {
   if (!spaceId) return 'not-indexed';
@@ -61,7 +37,11 @@ function supportFrom(spaceId: string, isPending: boolean, type: string | undefin
   return type === 'DAO' ? 'indexed' : 'not-indexed';
 }
 
+/**
+ * Reads the batched type lookup rather than the full space: a feed runs this once per card, and the
+ * full space (members, editors, page entity) cost one request per space.
+ */
 export function useSpaceDebateSupport(spaceId: string): SpaceDebateSupport {
-  const { data, isPending } = useQuery(spaceQueryOptions(spaceId));
-  return supportFrom(spaceId, isPending, data?.type);
+  const { data, isPending } = useSpaceType(spaceId, { enabled: Boolean(spaceId) });
+  return supportFrom(spaceId, isPending, data ?? undefined);
 }
