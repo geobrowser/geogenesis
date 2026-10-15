@@ -5279,6 +5279,42 @@ describe('DebateRoomPageClient', () => {
     });
   });
 
+  // GEO-3319. The room's moments have sound effects in Open rounds, which a debater can turn off.
+  describe('open rounds sound effects toggle', () => {
+    const soundToggle = () => screen.queryByRole('button', { name: /Turn sound effects (on|off)/ });
+
+    it('sits beside Leave, on by default, and remembers being turned off', async () => {
+      const values = new Map<string, string>();
+      vi.spyOn(window, 'localStorage', 'get').mockReturnValue({
+        getItem: (key: string) => values.get(key) ?? null,
+        setItem: (key: string, value: string) => void values.set(key, value),
+        removeItem: (key: string) => void values.delete(key),
+        clear: () => values.clear(),
+        key: () => null,
+        length: 0,
+      });
+      mocks.getServerTime.mockRejectedValue(new Error('Clock endpoint unavailable'));
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
+      await renderLiveDebate(openRoundsListening());
+
+      const toggle = soundToggle();
+      expect(toggle).toHaveAttribute('aria-pressed', 'true');
+      expect(toggle?.parentElement).toContainElement(screen.getByRole('button', { name: 'Leave debate' }));
+
+      fireEvent.click(toggle!);
+      expect(screen.getByRole('button', { name: 'Turn sound effects on' })).toHaveAttribute('aria-pressed', 'false');
+      expect(values.get('geogenesis.debates.room-sound-effects.v1')).toBe('off');
+    });
+
+    it('is not offered in a fixed format, which stays silent', async () => {
+      vi.spyOn(Date, 'now').mockReturnValue(Date.parse('2026-07-02T00:00:20.000Z'));
+      await renderLiveDebate();
+
+      expect(screen.getByRole('button', { name: 'Leave debate' })).toBeInTheDocument();
+      expect(soundToggle()).toBeNull();
+    });
+  });
+
   // GEO-3178. After every round but the cap, both debaters pick Extend or End on a card over the
   // tiles. Picks are blind until the reveal.
   describe('open rounds microphones between rounds', () => {
