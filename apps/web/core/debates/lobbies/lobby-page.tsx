@@ -150,6 +150,7 @@ export function DebateLobbyPage({ lobbyId }: { lobbyId: string }) {
   useLobbySignInPrompt(lobbyId, signedOut && (admitted || lobby?.access.status === 'not_yet_open'));
   const exitHref = useLobbyExitHref();
   const exiting = useExitLobbyWhenOut({
+    lobbyId,
     access: lobby?.access ?? null,
     presence: presence.state,
     guestStatus: guestSession.state.status,
