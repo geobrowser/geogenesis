@@ -19,6 +19,7 @@ import {
   capRoundLastTurn as openRoundsCapRoundLastTurn,
   deciding as openRoundsDeciding,
   listening as openRoundsListening,
+  requiredRoundListening as openRoundsRequiredRoundListening,
   revealEnd as openRoundsRevealEnd,
   revealRebut as openRoundsRevealRebut,
   roundOneSpeaking as openRoundsRoundOneSpeaking,
@@ -6065,6 +6066,20 @@ describe('DebateRoomPageClient', () => {
       expect(debateVideoTile('local').querySelector('[data-room-dim]')).toHaveAttribute('data-room-dim', 'on');
     });
 
+    it('names no next turn when ending a turn geo-chat closes at once, even one that runs straight on', async () => {
+      // Bob's opening runs straight into a required round, but it is a round's second turn.
+      joinAsBob();
+      vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:01:30.000'));
+      mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
+      await renderLiveDebate(openRoundsRequiredRoundListening());
+
+      fireEvent.click(await screen.findByRole('button', { name: 'End turn' }));
+
+      await waitFor(() => expectMutedIndicator('local'));
+      expect(stamp('local', 'ended')).toBeNull();
+      expect(banner('remote', 'turn')).toBeNull();
+    });
+
     it('fades the timer out as the muted microphone fades in when you end your turn', async () => {
       vi.spyOn(Date, 'now').mockReturnValue(openRoundsAt('20:02:20.000'));
       mocks.endTurnMutateAsync.mockReturnValue(deferred<Debate>().promise);
@@ -6456,10 +6471,12 @@ function expectMutedIndicator(participant: 'local' | 'remote') {
   expect(paths?.[2]).toHaveAttribute('d', 'M28.5 19.5L22.5 29');
 }
 
+/** A copy fading out in Open rounds (GEO-3347) is inert and hidden, so it no longer counts as shown. */
 function expectNoMutedIndicator(participant: 'local' | 'remote') {
-  expect(
-    document.querySelector(`[data-inactive-speaker="${participant}"] [data-muted-indicator="true"]`)
-  ).not.toBeInTheDocument();
+  const shown = [
+    ...document.querySelectorAll(`[data-inactive-speaker="${participant}"] [data-muted-indicator="true"]`),
+  ].filter(indicator => !indicator.closest('[data-room-leaving]'));
+  expect(shown).toEqual([]);
 }
 
 function debateVideoTile(participant: 'local' | 'remote') {

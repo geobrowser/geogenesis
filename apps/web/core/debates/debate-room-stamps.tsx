@@ -129,6 +129,9 @@ const EXIT_CLASS = {
   fade: 'motion-safe:animate-[fadeIn_300ms_linear_reverse_both]',
 } as const;
 
+/** The `fade` exit run forwards: a piece that fades in over `ROOM_EXIT_MS` and out the same way. */
+export const ROOM_ENTER_CLASS = 'motion-safe:animate-[fadeIn_300ms_linear_both]';
+
 function shown(node: React.ReactNode) {
   return node !== null && node !== undefined && node !== false;
 }

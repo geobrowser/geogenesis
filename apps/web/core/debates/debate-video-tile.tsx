@@ -10,7 +10,15 @@ import { Text } from '~/design-system/text';
 
 import { ENDED_TILT, STAMP_INK } from './browse/stamp-styles';
 import { MutedMicrophoneIndicator } from './debate-room-controls';
-import { RoomBanner, RoomDim, RoomExit, RoomMiddleBanner, RoomStamp, RoomTileStamp } from './debate-room-stamps';
+import {
+  ROOM_ENTER_CLASS,
+  RoomBanner,
+  RoomDim,
+  RoomExit,
+  RoomMiddleBanner,
+  RoomStamp,
+  RoomTileStamp,
+} from './debate-room-stamps';
 import { COUNTDOWN_WARNING_COLOR } from './recording-countdown-ring';
 
 export const recordingOverlayTextShadow = {
@@ -205,50 +213,45 @@ export function DebateVideoTile({
     >
       <div className="absolute inset-0 z-0">{children}</div>
       {stamps && <RoomDim on={dimmed || endingTurn || upcoming} />}
-      {stamps ? (
-        // Ending a turn hands the corner from the timer to the muted microphone and takes End turn
-        // away, so each fades rather than cutting (GEO-3347).
-        <>
-          <div className="absolute top-3 left-3 z-40">
+      {/* Ending a turn hands the corner from the timer to the muted microphone and takes End turn
+          away, so in Open rounds each fades rather than cutting (GEO-3347). Fixed formats cut. */}
+      {(stamps || endTurnAction) && (
+        <div className="absolute top-3 left-3 z-40">
+          {stamps ? (
             <RoomExit layout="inline">
               {endTurnAction && <div className="pointer-events-auto">{endTurnAction}</div>}
             </RoomExit>
-          </div>
-          <div
-            aria-hidden="true"
-            data-inactive-speaker={inactiveIndicatorId}
-            data-visible={showInactiveIndicator ? 'true' : 'false'}
-            className="pointer-events-none absolute top-3 right-3 z-20"
-          >
-            <RoomExit layout="inline">
-              {showInactiveIndicator && (
-                <div className="motion-safe:animate-[fadeIn_300ms_linear_both]">
-                  <MutedMicrophoneIndicator />
-                </div>
-              )}
-            </RoomExit>
-          </div>
-          {/* The count-in's number stamp is the countdown, so the timer steps aside for it. */}
-          <div className="pointer-events-none absolute top-3 right-3 z-20">
-            <RoomExit layout="inline">{!upcoming && countdown}</RoomExit>
-          </div>
-        </>
-      ) : (
-        <>
-          {endTurnAction && <div className="absolute top-3 left-3 z-40">{endTurnAction}</div>}
-          <div
-            aria-hidden="true"
-            data-inactive-speaker={inactiveIndicatorId}
-            data-visible={showInactiveIndicator ? 'true' : 'false'}
-            className={cx(
-              'pointer-events-none absolute top-3 right-3 z-20',
-              showInactiveIndicator ? 'opacity-100' : 'opacity-0'
+          ) : (
+            endTurnAction
+          )}
+        </div>
+      )}
+      <div
+        aria-hidden="true"
+        data-inactive-speaker={inactiveIndicatorId}
+        data-visible={showInactiveIndicator ? 'true' : 'false'}
+        className={cx(
+          'pointer-events-none absolute top-3 right-3 z-20',
+          !stamps && (showInactiveIndicator ? 'opacity-100' : 'opacity-0')
+        )}
+      >
+        {stamps ? (
+          <RoomExit layout="inline">
+            {showInactiveIndicator && (
+              <div className={ROOM_ENTER_CLASS}>
+                <MutedMicrophoneIndicator />
+              </div>
             )}
-          >
-            {showInactiveIndicator && <MutedMicrophoneIndicator />}
-          </div>
-          {countdown && <div className="pointer-events-none absolute top-3 right-3 z-20">{countdown}</div>}
-        </>
+          </RoomExit>
+        ) : (
+          showInactiveIndicator && <MutedMicrophoneIndicator />
+        )}
+      </div>
+      {/* The count-in's number stamp is the countdown, so the timer steps aside for it. */}
+      {(stamps || countdown) && (
+        <div className="pointer-events-none absolute top-3 right-3 z-20">
+          {stamps ? <RoomExit layout="inline">{!upcoming && countdown}</RoomExit> : countdown}
+        </div>
       )}
 
       {/* One row rather than three corners, so nothing can end up underneath anything else.

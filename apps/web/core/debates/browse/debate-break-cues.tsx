@@ -5,7 +5,7 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import type { ParticipantSlot } from '~/core/debates/api';
-import { RoomExit } from '~/core/debates/debate-room-stamps';
+import { ROOM_ENTER_CLASS, RoomExit } from '~/core/debates/debate-room-stamps';
 import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
   BREAK_QUESTION_MS,
@@ -333,13 +333,10 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
         {cue && (
           // The debater who ended is dimmed under their stamp, as in the mockup.
           <div data-debate-early-end className={cx(TILE_CLASS[cue.endedSlot], 'grid place-items-center')}>
-            <div className="absolute inset-0 bg-black/42 motion-safe:animate-[fadeIn_300ms_linear_both]" />
+            <div className={cx('absolute inset-0 bg-black/42', ROOM_ENTER_CLASS)} />
             <span
               data-debate-stamp="ended"
-              className={cx(
-                STAMP_CLASS,
-                'relative border-dashed text-[9cqw] text-grey-04 motion-safe:animate-debate-stamp'
-              )}
+              className={cx(STAMP_CLASS, STAMP_INK.none, 'relative text-[9cqw] motion-safe:animate-debate-stamp')}
               style={{ ...STAMP_FONT, transform: `rotate(${ENDED_TILT})` }}
             >
               Ended early
