@@ -19,7 +19,7 @@ import {
 } from '../matchmaking/debate-calendar-week';
 import { debateActionAnalyticsAttributes, debateAnalyticsLabel } from '../matchmaking/hub-analytics';
 import { debateRoomPath } from '../rooms/room-routes';
-import { useDebateLobbies } from './hooks';
+import { useDebateLobbyCalendar } from './hooks';
 import { markLobbyEntry } from './lobby-analytics';
 import { LobbyByline } from './lobby-host-names';
 import {
@@ -67,14 +67,18 @@ export type WeekLobbies = {
  * and the phone's day list, with the read's state so the calendar can tell loading or failed from
  * a week without lobbies.
  *
- * Read from the panel's lobby list, which holds at most 20 upcoming lobbies and two per host, and
- * none that have ended (GEO-3271 asks geo-chat for the whole week).
+ * Read from geo-chat's calendar range (GEO-3271, GEO-3300): every lobby starting that week, without
+ * the panel list's caps of 20 upcoming and two per host. `days` is the calendar's eight midnights,
+ * so the read spans exactly the week drawn. Lobbies that have ended are left out, as on the list.
  */
 export function useWeekLobbies(days: Date[]): WeekLobbies {
-  const { data, isLoading, error, refetch } = useDebateLobbies();
+  const { data, isLoading, error, refetch } = useDebateLobbyCalendar(days[0]!, days[DAYS_IN_WEEK]!);
   const byDay = React.useMemo(() => {
     if (!data) return null;
-    const week = lobbiesByDay(data.lobbies, days);
+    const week = lobbiesByDay(
+      data.lobbies.filter(lobby => lobby.state !== 'ended'),
+      days
+    );
     return week.some(day => day.length > 0) ? week : null;
   }, [data, days]);
 

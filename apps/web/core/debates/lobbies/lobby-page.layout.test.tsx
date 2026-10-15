@@ -321,7 +321,9 @@ describe('DebateLobbyPage layout on a phone', () => {
 
     mocks.highlights = {
       highlights: [],
-      room_vote: { vote_id: 'v1' } as NonNullable<DebateLobbyHighlights['room_vote']>,
+      room_vote: { vote_id: 'v1', claim: { claim_entity_id: 'claim-1' } } as NonNullable<
+        DebateLobbyHighlights['room_vote']
+      >,
     };
     act(() => rerender(<DebateLobbyPage lobbyId="lobby1" />));
     expect(within(claimsTab()).getByRole('img', { name: 'New' })).toBeInTheDocument();

@@ -169,6 +169,68 @@ export type DebateMediaTurnSegment = {
   output_end_ms: number;
   duration_ms: number;
   countdown_start_ms?: number;
+  /** The same turn on the raw recordings' clock (GEO-3293). Absent where the two clocks agree: a
+   * fixed format, or a render with no edits. See `recording-clock.ts`. */
+  source_start_ms?: number;
+  source_end_ms?: number;
+};
+
+/**
+ * The media response serves times on two clocks: the *rendered video's* (`output_*`) and the raw
+ * recordings' (`source_*`), which is what the web player plays. An Open rounds render cuts the pick
+ * window and condenses breaks, so the two drift apart; `recording-clock.ts` reads the source side.
+ *
+ * A break between two Open rounds as a condensed render plays it (GEO-3276): its source stretch
+ * sped up to `duration_ms` with the sound muted, on the same output timeline as the turns.
+ * `round_index` is the round that ended at the break; `next_round_index` the one whose first turn
+ * starts at `output_end_ms`, absent after the final End.
+ */
+export type DebateMediaCondensedBreak = {
+  kind: 'lead_in' | 'extend' | 'final_end';
+  round_index: number;
+  next_round_index?: number | null;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+  speed: number;
+};
+
+/** An early end inside a round, cut down to a short quiet at `output_ms` (GEO-3276). */
+export type DebateMediaEarlyEndGap = {
+  turn_index: number;
+  next_turn_index: number;
+  output_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+  removed_ms: number;
+  quiet_kept_ms: number;
+};
+
+/** An Extend's reveal and count-in as the render kept it (GEO-3176), on both clocks. */
+export type DebateMediaRoundResult = {
+  round_index: number;
+  output_start_ms: number;
+  output_end_ms: number;
+  duration_ms: number;
+  source_start_ms: number;
+  source_end_ms: number;
+};
+
+/** Every pick a debater saved for a round, in order; the last one per slot is what counted. */
+export type DebateMediaRoundPick = {
+  round_index: number;
+  participant_slot: ParticipantSlot;
+  pick: OpenRoundPick;
+  previous_pick: OpenRoundPick | null;
+  turn_index: number;
+  during_decision: boolean;
+  at: string;
+  output_ms: number;
+  /** When the pick was made, on the raw recordings' clock (GEO-3293). A pick made in a pick window the
+   * render cut keeps its real time here, where `output_ms` puts it at the cut. */
+  source_ms?: number;
 };
 
 export type DebateMediaResponse = {
@@ -176,6 +238,11 @@ export type DebateMediaResponse = {
   artifacts: DebateMediaArtifact[];
   transcript_segment_count: number;
   turn_segments?: DebateMediaTurnSegment[];
+  /** Present only on an Open rounds debate rendered with condensed breaks (GEO-3276). */
+  condensed_breaks?: DebateMediaCondensedBreak[];
+  early_end_gaps?: DebateMediaEarlyEndGap[];
+  round_picks?: DebateMediaRoundPick[];
+  round_results?: DebateMediaRoundResult[];
   layout: DebateMediaRenderLayout;
   whisper_model_id: string;
 };
@@ -203,6 +270,10 @@ export type DebateTranscriptSegment = {
   sequence_index: number;
   start_ms: number;
   end_ms: number;
+  /** The line on the raw recordings' clock (GEO-3293). Absent on a fixed format, where the clocks
+   * agree, and on a line in a stretch an Open rounds render cut. */
+  source_start_ms?: number;
+  source_end_ms?: number;
   text: string;
   metadata: Record<string, unknown>;
   created_at: string;
@@ -2502,6 +2573,39 @@ export async function listDebateLobbies(
   signal?: AbortSignal
 ) {
   return geoChatRequest<DebateLobbiesResponse>('/debate-lobbies', {
+    // Signed out, the list a new account sees (GEO-3291); `true` signed in, so a failed token
+    // exchange is an error rather than a quietly anonymous list.
+    auth: accountKey ? true : 'optional',
+    getPrivyIdentityToken,
+    accountKey,
+    signal,
+  });
+}
+
+/** Where a lobby stands for the calendar (GEO-3271). An ended lobby's `open` is false, so this tells it from upcoming. */
+export type DebateLobbyCalendarState = 'upcoming' | 'open' | 'ended';
+
+/** One lobby in `GET /debate-lobbies/calendar`: the list's row, plus its state and when it ended. */
+export type DebateLobbyCalendarRow = DebateLobbySummary & {
+  state: DebateLobbyCalendarState;
+  closed_at: string | null;
+};
+
+export type DebateLobbyCalendarResponse = { lobbies: DebateLobbyCalendarRow[] };
+
+/**
+ * Every lobby starting in `[from, to)`, soonest first (GEO-3271), with none of the list's caps and
+ * ended lobbies included. Account required. Up to 35 days; a lobby ended before it opened is left
+ * out by geo-chat, as a cancellation.
+ */
+export async function listDebateLobbyCalendar(
+  { from, to }: { from: Date; to: Date },
+  getPrivyIdentityToken: GetPrivyIdentityToken,
+  accountKey: string | null,
+  signal?: AbortSignal
+) {
+  const params = new URLSearchParams({ from: from.toISOString(), to: to.toISOString() });
+  return geoChatRequest<DebateLobbyCalendarResponse>(`/debate-lobbies/calendar?${params.toString()}`, {
     auth: true,
     getPrivyIdentityToken,
     accountKey,

@@ -65,6 +65,8 @@ export function PendingPersonalSpaceRunner() {
   // Dedupe: never run two creation chains for the same topic at once (the
   // effect re-fires on every `pending`/atom change).
   const runningRef = React.useRef<string | null>(null);
+  // The persisted failure this load has already offered a retry for.
+  const reportedFailureRef = React.useRef<string | null>(null);
 
   React.useEffect(() => {
     if (!address) return;
@@ -78,9 +80,27 @@ export function PendingPersonalSpaceRunner() {
       return;
     }
 
+    // A failure persisted by an earlier page load. Onboarding stays gated off while a
+    // pending record exists, but the retry that went with the failure lived only in the
+    // status bar, which is in-memory: after a reload the account had no dialog, no retry
+    // and no space, and only signing out cleared it. Offer the retry again, once per
+    // load; re-running creation is idempotent.
+    if (pending.status === 'failed') {
+      if (reportedFailureRef.current === pending.topicId) return;
+      reportedFailureRef.current = pending.topicId;
+      const { topicId } = pending;
+      reportError("Account setup didn't finish.", () => {
+        setPending({ topicId, address, status: 'pending' });
+      });
+      return;
+    }
+
     if (pending.status !== 'pending') return;
 
     const topicId = pending.topicId;
+    // This load has seen this job running, so a failure it reports later is reported
+    // there with its error, not again here.
+    reportedFailureRef.current = topicId;
     if (runningRef.current === topicId) return;
     runningRef.current = topicId;
 

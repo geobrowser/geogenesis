@@ -20,6 +20,7 @@ import {
 } from '../api';
 import { debateQueryKeys, debateQueryNetworkOptions, useGeoChatAuth } from '../hooks';
 import { viewerReadRetryOptions } from '../matchmaking/hooks';
+import { lobbyRoomVoteSeen, lobbyRoomVoteStarted } from './lobby-analytics';
 import { useDebateLobbyGuestView, useIsLobbyGuest } from './lobby-guest-hooks';
 import {
   type LobbyHighlightsState,
@@ -66,7 +67,10 @@ export function useLobbyHighlights(lobbyId: string, enabled = true) {
   return guest ? guestQuery : memberQuery;
 }
 
-/** Lays a host action's returned state over the cache when newer, or seeds it after a failed first GET. */
+/**
+ * Lays a host action's returned state over the cache when newer, or seeds it after a failed first GET.
+ * Returns what the cache holds after: an event can overtake the response, and then the cache stands.
+ */
 function useStoreLobbyHighlights(lobbyId: string) {
   const queryClient = useQueryClient();
   const { accountKey } = useGeoChatAuth();
@@ -74,6 +78,16 @@ function useStoreLobbyHighlights(lobbyId: string) {
     queryClient.setQueryData<LobbyHighlightsState>(debateQueryKeys.lobbyHighlights(accountKey, lobbyId), current =>
       withLobbyHighlights(current, state)
     );
+}
+
+/** Stores a host's room vote action, then follows the room vote from the freshest state, not the response. */
+function useStoreRoomVoteAction(lobbyId: string) {
+  const store = useStoreLobbyHighlights(lobbyId);
+  return (state: DebateLobbyHighlights) => {
+    const current = store(state);
+    // Always set after a store; an unknown state is never read as no vote running.
+    if (current) lobbyRoomVoteSeen(lobbyId, current.room_vote);
+  };
 }
 
 /** Highlight or remove the highlight on one claim, by `DebateClaimSummary.id`. Host only. */
@@ -91,7 +105,7 @@ export function useSetLobbyHighlight(lobbyId: string) {
 /** Ask the room to vote on a claim. `replace` ends a vote another host started. Host only. */
 export function useStartLobbyRoomVote(lobbyId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-  const store = useStoreLobbyHighlights(lobbyId);
+  const storeAction = useStoreRoomVoteAction(lobbyId);
 
   return useMutation({
     mutationFn: ({ claimId, replace }: { claimId: string; replace?: boolean }) =>
@@ -101,19 +115,24 @@ export function useStartLobbyRoomVote(lobbyId: string) {
         getPrivyIdentityToken,
         accountKey
       ),
-    onSuccess: store,
+    onSuccess: (state, { replace }) => {
+      // A vote this one replaced ends first, with the tally it had.
+      storeAction(state);
+      // The response is geo-chat confirming this start, whatever has happened since.
+      if (state.room_vote) lobbyRoomVoteStarted(lobbyId, state.room_vote, { replaced: replace === true });
+    },
   });
 }
 
 /** End the vote; its claim stays highlighted. Host only. */
 export function useEndLobbyRoomVote(lobbyId: string) {
   const { accountKey, getPrivyIdentityToken } = useGeoChatAuth();
-  const store = useStoreLobbyHighlights(lobbyId);
+  const storeAction = useStoreRoomVoteAction(lobbyId);
 
   return useMutation({
     mutationFn: (voteId: string) =>
       endDebateLobbyRoomVote(dashlessId(lobbyId), voteId, getPrivyIdentityToken, accountKey),
-    onSuccess: store,
+    onSuccess: storeAction,
   });
 }
 

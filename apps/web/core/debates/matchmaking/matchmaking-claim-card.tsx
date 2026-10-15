@@ -108,6 +108,11 @@ type Props = {
   responseBlockedReason?: string | null;
   /** Rendered above the claim, e.g. who highlighted it in a lobby. */
   header?: React.ReactNode;
+  /**
+   * Rendered in the meta row beside the space chip, e.g. who said the claim in a debate. Short: the
+   * row is one line and shares it with the end slot.
+   */
+  headerMeta?: React.ReactNode;
   /** Rendered under the summary, for hosts with something extra to say. */
   footer?: React.ReactNode;
   /**
@@ -196,6 +201,7 @@ export function MatchmakingClaimCard({
   answersMayComeFromIndex,
   responseBlockedReason,
   header,
+  headerMeta,
   footer,
   noteFor,
   onOpenClaim,
@@ -264,6 +270,7 @@ export function MatchmakingClaimCard({
           allowsSignedOutVotes={allowsSignedOutVotes}
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
+          headerMeta={headerMeta}
           hasFooter={Boolean(footer)}
         />
       ) : (
@@ -275,6 +282,7 @@ export function MatchmakingClaimCard({
           onOpenClaim={onOpenClaim}
           hideEndSlot={hideEndSlot}
           endSlot={endSlot}
+          headerMeta={headerMeta}
         />
       )}
 
@@ -300,11 +308,14 @@ function ClaimHeader({
   isOnGraph,
   endSlot,
   isControversial,
+  meta,
   onOpenClaim,
 }: {
   claim: DebateClaimSummary;
   isOnGraph: boolean;
   endSlot: React.ReactNode;
+  /** The host's own fact about the claim, after the space chip. */
+  meta?: React.ReactNode;
   /** Flagged beside the space chip — what kind of claim this is, which is the row's own question. */
   isControversial?: boolean;
   onOpenClaim?: () => void;
@@ -337,6 +348,12 @@ function ClaimHeader({
         <span className="flex min-w-0 items-center gap-1.5">
           <SpaceChip spaceId={claim.space_id} />
           {isControversial ? <ControversialTag /> : null}
+          {meta ? (
+            <span className="flex min-w-0 items-center gap-1.5 text-footnoteMedium text-grey-04">
+              <span aria-hidden>·</span>
+              <span className="truncate">{meta}</span>
+            </span>
+          ) : null}
         </span>
         {endSlot}
       </div>
@@ -745,6 +762,7 @@ function RespondableControls({
   allowsSignedOutVotes = false,
   hideEndSlot,
   endSlot,
+  headerMeta,
   hasFooter,
   noteFor,
 }: {
@@ -780,6 +798,7 @@ function RespondableControls({
   allowsSignedOutVotes?: boolean;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
+  headerMeta?: React.ReactNode;
 }) {
   // One read for the card, and now the second half of what the card draws from. The header flags a
   // contested claim, the footer reports the split, and — since GEO-2823 — the viewer's own response
@@ -917,6 +936,7 @@ function RespondableControls({
         isOnGraph
         onOpenClaim={onOpenClaim}
         isControversial={summary.isControversial}
+        meta={headerMeta}
         endSlot={
           endSlot ??
           (hideEndSlot ? null : (
@@ -1116,6 +1136,7 @@ function UnresolvableControls({
   onOpenClaim,
   hideEndSlot,
   endSlot,
+  headerMeta,
 }: {
   claim: DebateClaimSummary;
   positions: DebateClaimPositionSummary[];
@@ -1124,6 +1145,7 @@ function UnresolvableControls({
   onOpenClaim?: () => void;
   hideEndSlot?: boolean;
   endSlot?: React.ReactNode;
+  headerMeta?: React.ReactNode;
 }) {
   return (
     <>
@@ -1131,6 +1153,7 @@ function UnresolvableControls({
         claim={claim}
         isOnGraph={false}
         onOpenClaim={onOpenClaim}
+        meta={headerMeta}
         endSlot={
           /* The slot stays live even though the graph cannot resolve this claim, because nothing in
              it needs the graph. Both the match and the debate are geo-chat state, and the request is

@@ -93,6 +93,13 @@ export type ActionContext = {
   feed_slot?: 'fresh';
   /** GEO-3234. How many cards this visitor had already seen were hidden from this card's page. */
   feed_seen_hidden?: number;
+  /** GEO-3311. The live lobby the action was taken in, in geo-chat's dashless spelling. */
+  lobby_id?: string;
+  /**
+   * GEO-3311. The lobby's running room vote, only on an action whose target is that vote's claim, so
+   * a vote in answer to the room reads apart from one on any other claim in the lobby.
+   */
+  room_vote_id?: string;
 };
 export const ACTION_CONTEXT_FIELDS = [
   'component',
@@ -121,12 +128,17 @@ export const ACTION_CONTEXT_FIELDS = [
   'feed_exploration',
   'feed_slot',
   'feed_seen_hidden',
+  'lobby_id',
+  'room_vote_id',
   'auth_attempt_id',
   'action_session_id',
   'action_anonymous_id',
 ] as const satisfies readonly (keyof ActionContext)[];
 
-export type ActionScope = Partial<Omit<ActionContext, 'page_path' | 'page_view_id'>>;
+export type ActionScope = Partial<Omit<ActionContext, 'page_path' | 'page_view_id'>> & {
+  /** Scope only, never sent: the claim entity `room_vote_id` belongs to. Other targets drop the vote. */
+  room_vote_claim_id?: string;
+};
 
 /** Entity metadata only belongs to the entity that supplied it. */
 export function mergeActionScope(parent: ActionScope, value: ActionScope): ActionScope {
@@ -220,6 +232,9 @@ export function snapshotActionContext(
     ...scopes
   );
   const source = replayContext ?? liveContext;
+  // A replay was snapshotted against its own target already; a live scope's vote is only its claim's.
+  const roomVoteClaimId: string | undefined = replayContext ? undefined : liveContext.room_vote_claim_id;
+  const roomVoteApplies = replayContext !== undefined || (!!roomVoteClaimId && equals(roomVoteClaimId, targetId));
   const metadata = [...(replayContext ? [scope, overrides, replayContext] : scopes)]
     .reverse()
     .filter(candidate => !candidate.target_id || equals(candidate.target_id, targetId));
@@ -230,6 +245,7 @@ export function snapshotActionContext(
     target_type: targetType,
     target_type_ids: metadata.find(candidate => candidate.target_type_ids !== undefined)?.target_type_ids,
     origin_entity_ids: metadata.find(candidate => candidate.origin_entity_ids !== undefined)?.origin_entity_ids,
+    room_vote_id: roomVoteApplies ? source.room_vote_id : undefined,
   };
   // A runtime allowlist as well as a type: structural typing must not admit text or emails.
   return Object.fromEntries(

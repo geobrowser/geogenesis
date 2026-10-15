@@ -17,6 +17,7 @@ import {
   lobbyDateLabel,
   lobbyErrorMessage,
   lobbyHeadcount,
+  lobbyRoomHeadcount,
   lobbyScheduleLabel,
   lobbyTimeLabel,
   memberActions,
@@ -373,6 +374,14 @@ describe('pairs', () => {
     const pair = { people: [person('outsider', false), person('0193aaaabbbb')] };
     expect(pairSubject(pair, [debater])).toBe(subject);
     expect(pairSubject({ people: [person('outsider', false)] }, [debater])).toBeNull();
+  });
+});
+
+describe('lobbyRoomHeadcount (GEO-3311)', () => {
+  it('counts the roster as the lobby header does, plus guests', () => {
+    const steppedOut = { ...member('b', 'listener'), stepped_out: true };
+    expect(lobbyRoomHeadcount({ members: [member('a', 'host'), steppedOut], guest_count: undefined })).toBe(2);
+    expect(lobbyRoomHeadcount({ members: [member('a', 'host')], guest_count: 3 })).toBe(4);
   });
 });
 
