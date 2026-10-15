@@ -26,6 +26,7 @@ import { MatchmakingClaimCard } from './matchmaking-claim-card';
 // refuses to touch the graph for anything else. The space id is hoisted because `vi.mock` factories
 // are lifted above every module-level declaration, so a mock that reads it can't use a plain const.
 const mocks = vi.hoisted(() => ({
+  watchLive: true,
   submitResponse: vi.fn(),
   submitResponseAsync: vi.fn(),
   isConnected: true,
@@ -70,6 +71,14 @@ const mocks = vi.hoisted(() => ({
   nearViewport: true,
   rootSelectors: [] as (string | undefined)[],
   useEntityResponse: vi.fn(),
+}));
+
+// Live watching is off in the product (GEO-3334). On here so the pill's own behaviour stays covered
+// for when it ships; the off state has its own test.
+vi.mock('../watch-live', () => ({
+  get WATCH_LIVE_ENABLED() {
+    return mocks.watchLive;
+  },
 }));
 
 vi.mock('../hooks', () => ({
@@ -274,6 +283,7 @@ function renderCard(card: ReactElement, { smartAccount }: { smartAccount?: objec
 }
 
 beforeEach(() => {
+  mocks.watchLive = true;
   // The disabled-state tooltip uses Radix positioning, which observes its content in the browser.
   vi.stubGlobal(
     'ResizeObserver',
@@ -1379,6 +1389,20 @@ describe('MatchmakingClaimCard', () => {
       'href',
       `/space/${mocks.spaceId}/debates/debate-7`
     );
+  });
+
+  it('offers no Watch live while live watching is off', () => {
+    mocks.watchLive = false;
+    renderCard(
+      <MatchmakingClaimCard
+        claim={claim}
+        positions={positions}
+        readiness={readiness()}
+        activeDebate={{ id: 'debate-7', claim: { ...claim, space_id: mocks.spaceId } } as never}
+      />
+    );
+
+    expect(screen.queryByRole('link', { name: /Watch live/ })).toBeNull();
   });
 
   // A debate room lives under the space its *claim* came from, which is not always the space the
