@@ -236,11 +236,7 @@ const loadProfileHistoryBatched = createBatchLoader<ProfileHistory>({
   maxBatchSize: MAX_HISTORY_BATCH,
 });
 
-/**
- * `fetchProfileHistory`, with every call made in the same tick sent as one aliased query. For
- * lists of people (a debate's participants); the answer is the same, so it shares
- * `profileHistoryQueryKey` with the profile page.
- */
+/** `fetchProfileHistory`, with calls in the same tick sent as one aliased query. Same answer, same key. */
 export function loadProfileHistory(entityId: string, spaceId: string): Promise<ProfileHistory> {
   return loadProfileHistoryBatched(JSON.stringify([entityId, spaceId]));
 }

@@ -99,11 +99,7 @@ type EntityVoteButtonsProps = {
    * announcement is the better failure than none.
    */
   compact?: boolean;
-  /**
-   * Whether the control is close enough to the viewport to load its counts. A list that pre-mounts
-   * rows far below the fold passes its own proximity here; until it is true and nothing is cached,
-   * the control draws its loading skeleton rather than a zero.
-   */
+  /** Whether to load counts yet. Until true, with nothing cached, the skeleton shows instead of a zero. */
   nearViewport?: boolean;
 };
 

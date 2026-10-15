@@ -26,11 +26,7 @@ import { useSpaceType } from '~/core/hooks/use-space-type';
  */
 export type SpaceDebateSupport = 'indexed' | 'not-indexed' | 'unknown';
 
-/**
- * A settled answer either way, including when the lookup failed or the API doesn't know the space.
- * Treating those as `unknown` would leave debates loading forever; treating them as `not-indexed` at
- * least renders a state the reader can understand, and keeps a doomed request off the wire.
- */
+/** A failed lookup or unknown space settles as `not-indexed`, so callers never hold indefinitely. */
 function supportFrom(spaceId: string, isPending: boolean, type: string | undefined): SpaceDebateSupport {
   if (!spaceId) return 'not-indexed';
   if (isPending) return 'unknown';

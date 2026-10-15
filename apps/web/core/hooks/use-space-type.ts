@@ -14,10 +14,8 @@ const loadSpaceType = createBatchLoader<string | null>({
 });
 
 /**
- * A space's type (`PERSONAL`, `DAO`), or `null` for a space the API doesn't know. Cached per space,
- * and batched: a feed asks this of every card in one commit, and those asks go out together rather
- * than one request per space. A full space `useSpace` already loaded answers it without a request.
- * A space's type never changes, so the answer is kept for the session.
+ * A space's type (`PERSONAL`, `DAO`), or `null` if unknown. Batched across a commit, seeded from a
+ * cached full space, and kept for the session since a space's type never changes.
  */
 export function useSpaceType(spaceId: string, { enabled = true }: { enabled?: boolean } = {}) {
   const queryClient = useQueryClient();
