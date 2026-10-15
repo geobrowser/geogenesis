@@ -44,6 +44,21 @@ describe('debate return navigation', () => {
     expect(peekDebateReturnDestination()).toBeNull();
   });
 
+  // GEO-3337: a lobby can stop being the way back mid-flow; the page the flow opened from is kept.
+  it('keeps the page the flow opened from behind a lobby, for when the lobby stops being the way back', () => {
+    rememberDebateReturnDestination('/space/my-space');
+    rememberLobbyReturnDestination('lobby1');
+    rememberLobbyReturnDestination('lobby1');
+
+    expect(consumeDebateReturnDestination({ lobbyId: null })).toBe('/space/my-space');
+  });
+
+  it('has nothing behind a lobby the flow started in', () => {
+    rememberLobbyReturnDestination('lobby1');
+
+    expect(consumeDebateReturnDestination({ lobbyId: null })).toBeNull();
+  });
+
   it('still never returns to a room captured from the address bar', () => {
     rememberDebateReturnDestination('/debate/room1');
 

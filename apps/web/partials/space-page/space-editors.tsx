@@ -8,7 +8,7 @@ import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 
 import { getSpaceEditorRequest } from './get-space-editor-request';
 import { SpaceEditorsChip } from './space-editors-chip';
-import { SpaceEditorsDialogServerContainer } from './space-editors-dialog-server-container';
+import { SpaceEditorsManageDialogContent } from './space-editors-manage-dialog-content';
 import { SpaceEditorsContent } from './space-editors-popover-content';
 import { SpaceMembersMenu } from './space-members-menu';
 import { SpaceMembersPopover } from './space-members-popover';
@@ -60,10 +60,9 @@ export async function SpaceEditors({ spaceId }: Props) {
         <div className="h-4 w-px bg-divider" />
 
         <SpaceMembersMenu
+          label="Manage editors"
           trigger={<ChevronDownSmall color="grey-04" />}
-          manageMembersComponent={
-            <SpaceEditorsDialogServerContainer spaceId={spaceId} initialParticipantsPage={editorsPage} />
-          }
+          content={<SpaceEditorsManageDialogContent spaceId={spaceId} initialParticipantsPage={editorsPage} />}
         />
       </div>
     );

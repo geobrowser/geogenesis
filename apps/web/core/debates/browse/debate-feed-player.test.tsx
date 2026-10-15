@@ -2107,6 +2107,42 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(container.querySelector('[data-debate-banner="turn"]')?.textContent).toMatch(/’s turn$/);
   });
 
+  // GEO-3347: the stamp, its dim and the banner used to cut out in one frame.
+  it('lets "Ended early" and the turn banner leave rather than cutting them', () => {
+    vi.useFakeTimers();
+    try {
+      const turnSegments: DebateMediaTurnSegment[] = [
+        { turn_index: 0, participant_slot: 1, output_start_ms: 0, output_end_ms: 30_000, duration_ms: 30_000 },
+        { turn_index: 1, participant_slot: 2, output_start_ms: 33_000, output_end_ms: 63_000, duration_ms: 30_000 },
+      ];
+      const playbackBreaks = breaks({
+        earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000, endedSlot: 1, nextSlot: 2 }],
+      });
+      const { container, rerender } = renderAt(33.2, { turnSegments, playbackBreaks });
+      const stamp = () => container.querySelector('[data-debate-stamp="ended"]');
+      const banner = () => container.querySelector('[data-debate-banner="turn"]');
+      expect(stamp()?.closest('[data-room-leaving]')).toBeNull();
+
+      // Past the cue's hold: both are still drawn, on their way out.
+      mocks.controller = controllerFixture({
+        mutedByUser: false,
+        turnSlot: 2,
+        playheadSeconds: 34,
+        turnSegments,
+        playbackBreaks,
+      });
+      rerender(<DebateFeedPlayer debate={startedDebate} active />);
+      expect(stamp()?.closest('[data-room-leaving]')).not.toBeNull();
+      expect(banner()?.closest('[data-room-leaving]')?.className).toContain('animate-debate-banner-out');
+
+      act(() => vi.advanceTimersByTime(300));
+      expect(stamp()).toBeNull();
+      expect(banner()).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   // Both mics are open between rounds now: nothing said while nobody holds a turn may be heard or
   // captioned, including an older render's lead-in kept at the front of the next turn.
   it('keeps a break silent and uncaptioned, then plays the round', () => {

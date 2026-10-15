@@ -5,7 +5,8 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { DebateLobbyView } from '../api';
+import type { DebateLobbyMember, DebateLobbyView } from '../api';
+import type { LobbyPresenceRoster } from './hooks';
 
 const api = vi.hoisted(() => ({
   setDebateLobbyPresence: vi.fn(),
@@ -46,8 +47,7 @@ const {
   useLobbyReminderSaving,
 } = await import('./hooks');
 const { debateQueryKeys } = await import('../hooks');
-const { consumeLobbyRejoin, readCarriedLobbyMic, reportLobbyMic, requestLobbyRejoin, routeIntoDebate } =
-  await import('./step-out');
+const { readCarriedLobbyMic, reportLobbyMic, routeIntoDebate } = await import('./step-out');
 const { withLobbyClaimLists } = await import('./lobby-claim-lists-state');
 const { consumeDebateReturnDestination } = await import('../debate-return-navigation');
 const { lobbyDebateSeen, lobbyRoomVoteSeen, markLobbyEntry, resetLobbyAnalytics } = await import('./lobby-analytics');
@@ -305,30 +305,197 @@ describe('useLobbyPresence', () => {
     expect(leaves()).toHaveLength(0);
   });
 
-  it('waits for the viewer to go back after stepping out, then leaves for good on Leave', async () => {
+  // GEO-3337: the debate's exit, browser Back or a link: arriving stepped out is coming back.
+  it('joins straight away on arriving stepped out, as back from the debate', async () => {
     const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
+    await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    expect(joins()).toHaveLength(1);
+    expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['back_after_debate']);
+  });
+
+  // A debate started from another tab steps this open page out; it comes back once that is over.
+  describe('a page left open while the viewer debates in another tab', () => {
+    const me = (inDebate: boolean): DebateLobbyMember => ({
+      user_id: 'me',
+      profile_space_id: 'space-me',
+      display_name: 'Me',
+      avatar_cid: null,
+      role: 'speaker',
+      creator: false,
+      acting_host: false,
+      on_roster_since: '2026-10-05T10:00:00Z',
+      stepped_out: inDebate,
+      in_debate: inDebate,
+    });
+    /** A roster as read from geo-chat: a fresh `members` array, with or without the viewer's row. */
+    const read = (own: DebateLobbyMember | null): LobbyPresenceRoster => ({
+      members: own ? [own] : [],
+      viewerId: 'me',
+    });
+
+    function renderOpenPage(initial: LobbyPresenceRoster | undefined) {
+      return renderHook(
+        ({ roster, removed = false }: { roster: LobbyPresenceRoster | undefined; removed?: boolean }) =>
+          useLobbyPresence('lobby1', true, false, false, removed, roster),
+        { wrapper, initialProps: { roster: initial } as { roster: LobbyPresenceRoster | undefined; removed?: boolean } }
+      );
+    }
+
+    async function steppedOutByAnotherTab() {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+        connection_alive: false,
+        voice_away_at: null,
+        reason: 'stepped_out',
+        current_lobby_id: null,
+      });
+      const shown = read(me(false));
+      const hook = renderOpenPage(shown);
+      await waitFor(() => expect(hook.result.current.state.status).toBe('joined'));
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+      });
+      await waitFor(() => expect(hook.result.current.state.status).toBe('stepped_out'));
+      return { ...hook, shown };
+    }
+
+    // `debate.lobby_claim_lists_changed` and `debate.lobby_guests_changed` patch the view, not the roster.
+    it('stays out on a patch to the view, whose roster is still the one from before the debate', async () => {
+      const { result, rerender, shown } = await steppedOutByAnotherTab();
+      rerender({ roster: { members: shown.members, viewerId: 'me' } });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+    });
+
+    it('stays out while a newer roster shows the debate, and rejoins once one shows it over', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      rerender({ roster: read(me(true)) });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+
+      rerender({ roster: read(me(false)) });
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      expect(joins()).toHaveLength(2);
+      expect(lobbyEvents('lobby_joined').map(props => props.entry)).toEqual(['link', 'back_after_debate']);
+    });
+
+    // The debate can end before this tab sees it running: the first roster after the step-out says over.
+    it('rejoins when the debate was over before this tab ever saw it', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      rerender({ roster: read(me(false)) });
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      expect(joins()).toHaveLength(2);
+    });
+
+    it('leaves with the viewer, without joining, when a newer roster no longer lists them', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      rerender({ roster: read(null) });
+      await waitFor(() => expect(result.current.state.status).toBe('left'));
+      expect(joins()).toHaveLength(1);
+    });
+
+    // The page's removed screen, as for a page still in the room; nothing else would bring it.
+    it('takes the removed screen when a host removes the viewer meanwhile', async () => {
+      const { result, rerender, shown } = await steppedOutByAnotherTab();
+      rerender({ roster: shown, removed: true });
+      await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
+      expect(joins()).toHaveLength(1);
+    });
+
+    it('does not turn a page on its way into its own debate to the removed screen', async () => {
+      const shown = read(me(false));
+      const { result, rerender } = renderOpenPage(shown);
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      act(() => routeIntoDebate(vi.fn()));
+      await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+
+      rerender({ roster: shown, removed: true });
+      expect(result.current.state.status).toBe('stepped_out');
+    });
+
+    // Structural sharing keeps an equal array across refetches; a read equal to the last still counts.
+    it('rejoins on a refetch equal to the roster it was stepped out on, from the real lobby query', async () => {
+      vi.useFakeTimers({ shouldAdvanceTime: true });
+      const lobbyView = (connected: boolean): DebateLobbyView => ({ ...view(connected), members: [me(false)] });
+      api.getDebateLobby.mockImplementation(async () => lobbyView(false));
+      api.setDebateLobbyPresence.mockImplementation(async (_id: string, body: { joined: boolean }) =>
+        lobbyView(body.joined)
+      );
+      api.sendDebateLobbyHeartbeat.mockResolvedValueOnce({
+        connection_alive: false,
+        voice_away_at: null,
+        reason: 'stepped_out',
+        current_lobby_id: null,
+      });
+      // One client across renders, as in the app, so the cache and its sharing are real.
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      const { result } = renderHook(
+        () => {
+          const members = useDebateLobby('lobby1').data?.members;
+          const roster = React.useMemo(() => (members ? { members, viewerId: 'me' } : undefined), [members]);
+          return useLobbyPresence('lobby1', true, false, false, false, roster);
+        },
+        { wrapper: ({ children }) => <QueryClientProvider client={client}>{children}</QueryClientProvider> }
+      );
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      const reads = api.getDebateLobby.mock.calls.length;
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(LOBBY_HEARTBEAT_MS);
+      });
+      // The step-out rereads the lobby, which answers with the same roster: the debate is already over.
+      await waitFor(() => expect(api.getDebateLobby.mock.calls.length).toBeGreaterThan(reads));
+      await waitFor(() => expect(joins()).toHaveLength(2));
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+    });
+
+    it('waits while it cannot tell whose row is the viewer’s', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      rerender({ roster: undefined });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+    });
+
+    // A scheduled room's debate has not started when the step-out answers, and navigation can lag.
+    it('never comes back from a step-out this tab made to go to the debate', async () => {
+      const { result, rerender, unmount } = renderOpenPage(read(me(false)));
+      await waitFor(() => expect(result.current.state.status).toBe('joined'));
+      act(() => routeIntoDebate(vi.fn()));
+      await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
+
+      rerender({ roster: read(me(false)) });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+      unmount();
+      await act(async () => {});
+      expect(leaves()).toHaveLength(0);
+    });
+
+    it('nor once this tab goes to a debate the server already stepped it out for', async () => {
+      const { result, rerender } = await steppedOutByAnotherTab();
+      act(() => routeIntoDebate(vi.fn()));
+      await act(async () => {});
+
+      rerender({ roster: read(me(false)) });
+      expect(result.current.state.status).toBe('stepped_out');
+      expect(joins()).toHaveLength(1);
+    });
+  });
+
+  it('leaves for good on Leave from a page stepped out by another tab', async () => {
+    const { result } = await goneAfterBeat('stepped_out');
     await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
-    expect(joins()).toHaveLength(0);
 
     await act(() => result.current.leaveSteppedOut());
     expect(api.endDebateLobbyStepOut).toHaveBeenCalledTimes(1);
     expect(result.current.state.status).toBe('left');
   });
 
-  it('joins on arrival when the debate’s end card asked to go back to this lobby', async () => {
-    requestLobbyRejoin('lobby1');
-    const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
-    await waitFor(() => expect(result.current.state.status).toBe('joined'));
-    expect(joins()).toHaveLength(1);
-  });
-
   // GEO-3134: a kick ends the step-out, and the debate still routes back to the lobby.
   it('does not join a viewer a host removed, even back from a debate, until they choose to', async () => {
-    requestLobbyRejoin('lobby1');
-    const { result } = renderHook(() => useLobbyPresence('lobby1', true, false, false, true), { wrapper });
+    const { result } = renderHook(() => useLobbyPresence('lobby1', true, true, false, true), { wrapper });
     await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
     expect(joins()).toHaveLength(0);
-    expect(consumeLobbyRejoin('lobby1')).toBe(false);
 
     await act(() => result.current.join(false));
     expect(joins()).toHaveLength(1);
@@ -382,34 +549,6 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(go).toHaveBeenCalled());
     expect(consumeDebateReturnDestination()).toBeNull();
     expect(readCarriedLobbyMic()).toBeNull();
-  });
-
-  it('does not let a rejoin left over from an earlier debate skip the prompt', async () => {
-    // A Back press whose leave failed, then an arrival that never consumed it.
-    requestLobbyRejoin('lobby1');
-    const { result, unmount } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
-    await waitFor(() => expect(result.current.state.status).toBe('joined'));
-    act(() => routeIntoDebate(vi.fn()));
-    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
-    unmount();
-
-    const back = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
-    await waitFor(() => expect(back.result.current.state.status).toBe('stepped_out'));
-    expect(joins()).toHaveLength(1);
-  });
-
-  it('clears a rejoin flag on an arrival that was not stepped out', async () => {
-    requestLobbyRejoin('lobby1');
-    const { result } = renderHook(() => useLobbyPresence('lobby1', true), { wrapper });
-    await waitFor(() => expect(result.current.state.status).toBe('joined'));
-    expect(consumeLobbyRejoin('lobby1')).toBe(false);
-  });
-
-  it('still waits when the rejoin was asked for another lobby', async () => {
-    requestLobbyRejoin('lobby2');
-    const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
-    await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
-    expect(joins()).toHaveLength(0);
   });
 
   it('reports voice from the tab that holds it', async () => {
@@ -648,8 +787,7 @@ describe('useLobbyPresence after a host removed the viewer', () => {
     expect(lastJoinBody()).not.toHaveProperty('rejoin');
   });
 
-  it('does the same on the end card’s rejoin path', async () => {
-    requestLobbyRejoin('lobby1');
+  it('does the same on arriving back from a debate', async () => {
     api.setDebateLobbyPresence.mockRejectedValueOnce(removed());
     const { result } = renderHook(() => useLobbyPresence('lobby1', true, true), { wrapper });
     await waitFor(() => expect(result.current.state).toEqual({ status: 'dropped', reason: 'removed' }));
@@ -1007,7 +1145,7 @@ describe('lobby analytics through useLobbyPresence', () => {
     expect(lobbyEvents('lobby_debate_started')).toHaveLength(1);
   });
 
-  it('marks Back to the room after stepping out as back_after_debate', async () => {
+  it('marks a rejoin after stepping out as back_after_debate', async () => {
     const { result } = await goneAfterBeat('stepped_out');
     await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
     await act(() => result.current.join(false));

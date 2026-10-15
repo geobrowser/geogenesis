@@ -196,11 +196,11 @@ export const debateQueryKeys = {
   rematchRoot: (accountKey: string | null) => ['debates', 'account', accountKey, 'rematch'] as const,
   rematch: (accountKey: string | null, sessionId: string) =>
     ['debates', 'account', accountKey, 'rematch', sessionId] as const,
-  // Deliberately NOT nested under `rematch(...)`: the gateway invalidates that prefix on every
-  // `debate.rematch_changed`, and refetching here would hand `<LiveKitRoom>` a new token and tear
-  // down the live voice connection.
-  rematchLiveKit: (accountKey: string | null, sessionId: string) =>
-    ['debates', 'account', accountKey, 'rematch-livekit', sessionId] as const,
+  // Deliberately outside the `debates` root, as the lobby's voice token is. The gateway refetches
+  // that whole root on every (re)connect, and a fresh token reaching `<LiveKitRoom>` while it is
+  // Reconnecting makes livekit-client abandon the resume and rejoin from scratch (GEO-3343) — and a
+  // network blip is exactly when the socket and the call drop together.
+  rematchLiveKit: (accountKey: string | null, sessionId: string) => ['rematch-livekit', accountKey, sessionId] as const,
   rematchClaims: (accountKey: string | null, sessionId: string, claimIds: string[]) =>
     ['debates', 'account', accountKey, 'rematch', sessionId, 'claims', claimIds] as const,
   sharePrompts: (accountKey: string | null) => ['debates', 'account', accountKey, 'share-prompts'] as const,
