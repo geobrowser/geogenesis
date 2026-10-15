@@ -134,10 +134,11 @@ export const debateQueryKeys = {
   claims: (spaceId: string, claimIds: string[] | null, accountKey: string | null) =>
     ['debates', 'claims', spaceId, claimIds ?? 'all', accountKey] as const,
   spaceDebates: (spaceId: string) => ['debates', 'space', spaceId] as const,
-  debate: (debateId: string) => ['debates', 'detail', debateId] as const,
-  media: (debateId: string) => ['debates', 'media', debateId] as const,
+  /** Per-debate keys are dashless: callers hold either spelling, and both must share one entry. */
+  debate: (debateId: string) => ['debates', 'detail', dashlessId(debateId)] as const,
+  media: (debateId: string) => ['debates', 'media', dashlessId(debateId)] as const,
   /** GEO-2870. geo-chat's extracted claims for one debate, with whether its media job has finished. */
-  extractedClaims: (debateId: string) => ['debates', 'extracted-claims', debateId] as const,
+  extractedClaims: (debateId: string) => ['debates', 'extracted-claims', dashlessId(debateId)] as const,
   /** Viewer-specific: whether a recording can be read at all is decided per identity. */
   recordingUrl: (
     debateId: string,
@@ -145,7 +146,8 @@ export const debateQueryKeys = {
     accountKey: string | null,
     variant: RecordingPlaybackVariant | 'original' = 'original'
   ) => ['debates', 'recording-url', debateId, filename, accountKey, variant] as const,
-  transcript: (debateId: string, format: TranscriptFormat) => ['debates', 'transcript', debateId, format] as const,
+  transcript: (debateId: string, format: TranscriptFormat) =>
+    ['debates', 'transcript', dashlessId(debateId), format] as const,
   activity: (accountKey: string | null) => ['debates', 'account', accountKey, 'activity'] as const,
   schedule: (accountKey: string | null) => ['debates', 'account', accountKey, 'schedule'] as const,
   /** Prefix-matchable, so saving the viewer's own schedule can drop every variant at once. */

@@ -37,6 +37,7 @@ import { CommentSection } from '~/partials/comments/comments-section';
 import { ThreadRetry } from '~/partials/comments/thread-overflow';
 import { Editor } from '~/partials/editor/lazy-editor';
 import { EditableHeading } from '~/partials/entity-page/editable-entity-header';
+import { EntityPageActions } from '~/partials/entity-page/entity-page-actions';
 import { ENTITY_PAGE_CONTENT_ANCHOR, entityPageTitleAnchor } from '~/partials/entity-page/entity-page-anchors';
 import {
   ENTITY_DESCRIPTION_MAX_LINES,
@@ -303,7 +304,21 @@ export function ClaimPageView({
               <div
                 className={cx('col-start-1 mt-4 claim-card-narrow:mt-0', hasChipsRow ? 'row-start-3' : 'row-start-2')}
               >
-                <ClaimPositionSection entityId={entityId} spaceId={spaceId} state={state} row={row} />
+                <ClaimPositionSection
+                  entityId={entityId}
+                  spaceId={spaceId}
+                  state={state}
+                  row={row}
+                  // History and the ⋯ menu (delete, move, copy to a space) sit in the header row on
+                  // every other entity page. A claim's hero has no such row, so in edit mode they
+                  // join the pills. No create, which has nothing to do with this claim, and no
+                  // generic votes: Agree/Disagree is a claim's only response.
+                  endSlot={
+                    isEditing ? (
+                      <EntityPageActions entityId={entityId} spaceId={spaceId} compact showCreate={false} />
+                    ) : undefined
+                  }
+                />
               </div>
 
               {/* From the title's row down, so the share lines up with the claim's first line rather
@@ -652,6 +667,7 @@ function ClaimPositionSection({
   spaceId,
   state,
   row,
+  endSlot,
 }: {
   entityId: string;
   spaceId: string;
@@ -664,6 +680,8 @@ function ClaimPositionSection({
   state: ClaimResponseState;
   /** geo-chat's row, or null — which for a claim nobody has answered is a settled answer. */
   row: DebateClaim | null;
+  /** Rendered after Disagree; see `positionRowEndSlot`. */
+  endSlot?: React.ReactNode;
 }) {
   const { claim, positions, readiness, isResponseKindResolved, isViewerResponseResolved, responseBlockedReason } =
     state;
@@ -704,6 +722,7 @@ function ClaimPositionSection({
         localSide={control.localVoteSide}
         // Explore's pill row width, so the two read as one control.
         positionRowClassName="max-w-[360px]"
+        positionRowEndSlot={endSlot}
       />
       {control.responseError ? (
         <div role="alert" className="mt-2">

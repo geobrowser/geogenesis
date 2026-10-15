@@ -103,4 +103,84 @@ describe('RecordingCountdownRing', () => {
     expect(new Set(gradientIds).size).toBe(2);
     expect(fillReferences).toEqual(gradientIds.map(id => `url(#${id})`));
   });
+
+  describe('the Open rounds build-up (GEO-3315)', () => {
+    const rim = (container: HTMLElement) => container.querySelector('[data-turn-timer-rim]');
+
+    it('keeps the rim draining across a second, rather than remounting it each second', () => {
+      const view = render(
+        <RecordingCountdownRing
+          remainingSeconds={4}
+          progress={0.9}
+          variant="warning"
+          buildUp={{ remainingMs: 3_600 }}
+        />
+      );
+      const before = rim(view.container);
+      expect(before).toBeInTheDocument();
+
+      view.rerender(
+        <RecordingCountdownRing
+          remainingSeconds={3}
+          progress={0.92}
+          variant="warning"
+          buildUp={{ remainingMs: 3_100 }}
+        />
+      );
+      // The same element, so its drain transitions on from where it was rather than snapping.
+      expect(rim(view.container)).toBe(before);
+      expect(before).toHaveStyle({ '--turn-timer-rim': `${(3_100 / 5_000) * 360}deg` });
+    });
+
+    it("restarts the face's pulse and glow each second without remounting it", () => {
+      // The restart takes the face's animations off, has the browser lay it out, and puts them back.
+      // Record what the animation was each time the browser is asked to lay the face out.
+      const restarts: string[] = [];
+      const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
+      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+        configurable: true,
+        get(this: HTMLElement) {
+          restarts.push(this.style.animation);
+          return 0;
+        },
+      });
+      try {
+        const view = render(
+          <RecordingCountdownRing
+            remainingSeconds={4}
+            progress={0.9}
+            variant="warning"
+            buildUp={{ remainingMs: 3_600 }}
+          />
+        );
+        const face = rim(view.container)?.parentElement;
+        restarts.length = 0;
+
+        view.rerender(
+          <RecordingCountdownRing
+            remainingSeconds={4}
+            progress={0.91}
+            variant="warning"
+            buildUp={{ remainingMs: 3_400 }}
+          />
+        );
+        // Not within a second: only a new second lands with a pulse.
+        expect(restarts).toEqual([]);
+
+        view.rerender(
+          <RecordingCountdownRing
+            remainingSeconds={3}
+            progress={0.92}
+            variant="warning"
+            buildUp={{ remainingMs: 3_100 }}
+          />
+        );
+        expect(restarts).toEqual(['none']);
+        expect(face?.style.animation).toBe('');
+        expect(rim(view.container)?.parentElement).toBe(face);
+      } finally {
+        if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
+      }
+    });
+  });
 });
