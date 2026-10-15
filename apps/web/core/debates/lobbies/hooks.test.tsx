@@ -340,7 +340,7 @@ describe('useLobbyPresence', () => {
     await waitFor(() => expect(result.current.state.status).toBe('stepped_out'));
 
     const go = vi.fn();
-    // Reported before the step-out unmounted the voice; kept, since this lobby page is still up.
+    // Stands in for the mic the voice reported before the server's step-out unmounted it.
     reportLobbyMic(true);
     act(() => routeIntoDebate(go));
     await waitFor(() => expect(go).toHaveBeenCalled());

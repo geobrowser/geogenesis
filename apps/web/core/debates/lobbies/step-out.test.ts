@@ -72,14 +72,6 @@ describe('carrying the lobby mic into a debate', () => {
     expect(readCarriedLobbyMic()).toBe(false);
   });
 
-  // A step-out from the server unmounts the lobby voice before the route runs.
-  it('carries the last mic the voice reported after the voice is gone', () => {
-    inLobbyWithMic(true);
-    // Nothing reports on unmount, so the value stays put until the lobby page goes.
-    routeIntoDebate(() => undefined);
-    expect(readCarriedLobbyMic()).toBe(true);
-  });
-
   it('carries nothing for a listener, after the lobby page is gone, or once spent', () => {
     inLobbyWithMic(null);
     routeIntoDebate(() => undefined);

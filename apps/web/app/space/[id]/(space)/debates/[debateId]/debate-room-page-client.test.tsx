@@ -12,7 +12,7 @@ import {
   rememberLobbyReturnDestination,
 } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
-import { carryLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
+import { carryLobbyMic, clearCarriedLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
 import {
   CAP_ROUND_ENDS_AT as OPEN_ROUNDS_CAP_ROUND_ENDS_AT,
   at as openRoundsAt,
@@ -533,6 +533,7 @@ afterEach(async () => {
   delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
   window.localStorage.clear();
   clearDebateReturnDestination();
+  clearCarriedLobbyMic();
   await Promise.resolve();
   await Promise.resolve();
   vi.useRealTimers();
