@@ -51,7 +51,10 @@ describe('playbackBreaksFrom', () => {
         endMs: 333_481,
       },
     ]);
-    expect(BREAKS.earlyEnds).toEqual([{ turnIndex: 4, nextTurnIndex: 5, startMs: 270_944, endMs: 274_650 }]);
+    // Preston (slot 1) ended turn 4; Adam (slot 2) speaks next.
+    expect(BREAKS.earlyEnds).toEqual([
+      { turnIndex: 4, nextTurnIndex: 5, startMs: 270_944, endMs: 274_650, endedSlot: 1, nextSlot: 2 },
+    ]);
   });
 
   it('finds an older render’s lead-in at the front of the round’s first turn, before its countdown', () => {
@@ -143,14 +146,15 @@ describe('breakAnnouncesRound', () => {
 
 describe('earlyEndCueAt', () => {
   it('covers the quiet between Preston’s last word and Adam’s first, and a moment past it', () => {
-    expect(earlyEndCueAt(BREAKS.earlyEnds, segments, 270_944)).toEqual({ endedSlot: 1, nextSlot: 2 });
-    expect(earlyEndCueAt(BREAKS.earlyEnds, segments, 274_650 + EARLY_END_HOLD_MS - 1)).toEqual({
+    expect(earlyEndCueAt(BREAKS.earlyEnds, 270_944)).toEqual({ endedSlot: 1, nextSlot: 2 });
+    expect(earlyEndCueAt(BREAKS.earlyEnds, 274_650 + EARLY_END_HOLD_MS - 1)).toEqual({
       endedSlot: 1,
       nextSlot: 2,
     });
-    expect(earlyEndCueAt(BREAKS.earlyEnds, segments, 270_943)).toBeNull();
-    expect(earlyEndCueAt(BREAKS.earlyEnds, segments, 274_650 + EARLY_END_HOLD_MS)).toBeNull();
-    expect(earlyEndCueAt(BREAKS.earlyEnds, [], 272_000)).toBeNull();
+    expect(earlyEndCueAt(BREAKS.earlyEnds, 270_943)).toBeNull();
+    expect(earlyEndCueAt(BREAKS.earlyEnds, 274_650 + EARLY_END_HOLD_MS)).toBeNull();
+    // An early end whose turns the media lacks has no one to name.
+    expect(earlyEndCueAt([{ ...BREAKS.earlyEnds[0], endedSlot: null }], 272_000)).toBeNull();
   });
 });
 

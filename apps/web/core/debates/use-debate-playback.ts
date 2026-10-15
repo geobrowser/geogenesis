@@ -353,17 +353,22 @@ export function useDebatePlayback(
    * This player plays the raw recordings, so it reads every time on their clock: the source times
    * the API serves beside the rendered video's, which an Open rounds render edits (GEO-3293).
    */
-  const turnSegments = React.useMemo(
-    () => sortTurnSegments((mediaQuery.data?.turn_segments ?? []).map(turnOnRecordings)),
+  const recordingTurns = React.useMemo(
+    () => (mediaQuery.data?.turn_segments ?? []).map(turnOnRecordings),
     [mediaQuery.data?.turn_segments]
   );
+  const turnSegments = React.useMemo(() => sortTurnSegments(recordingTurns), [recordingTurns]);
   /**
    * The breaks between Open rounds and the early ends, at their real length on this clock, and the
    * picks the breaks reveal. Empty on a fixed format.
+   *
+   * Built from every turn, not `turnSegments`, which leaves out a turn with no length. A debater
+   * who yields at once still ends their round there, and the pick window and the early end's two
+   * debaters are found from that turn.
    */
   const playbackBreaks = React.useMemo(
-    () => playbackBreaksFrom(debate, mediaQuery.data, turnSegments),
-    [debate, mediaQuery.data, turnSegments]
+    () => playbackBreaksFrom(debate, mediaQuery.data, recordingTurns),
+    [debate, mediaQuery.data, recordingTurns]
   );
   /**
    * Every turn's place on the timeline, for anything that has to name a turn rather than time it.

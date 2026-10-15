@@ -72,7 +72,15 @@ export type PlayerBreak = {
 };
 
 /** The quiet of an early end inside a round: from the last word of the turn that ended to the next speaker's first. */
-type PlayerEarlyEnd = { turnIndex: number; nextTurnIndex: number; startMs: number; endMs: number };
+type PlayerEarlyEnd = {
+  turnIndex: number;
+  nextTurnIndex: number;
+  startMs: number;
+  endMs: number;
+  /** Who ended their turn early, and who speaks next; null where the media lacks either turn. */
+  endedSlot: ParticipantSlot | null;
+  nextSlot: ParticipantSlot | null;
+};
 
 export type PlaybackBreaks = {
   breaks: PlayerBreak[];
@@ -99,6 +107,9 @@ export function playbackBreaksFrom(
   // Open rounds only, for now: a fixed-format debate plays as it always has, even if its media
   // carries an early-end gap.
   if (!media || !isOpenRoundsDebate(debate)) return NO_PLAYBACK_BREAKS;
+
+  const slotOfTurn = (turnIndex: number) =>
+    segments.find(segment => segment.turn_index === turnIndex)?.participant_slot ?? null;
 
   // The round ended when its last turn did; the pick window runs from there. Falls back to the
   // break's own start, which is where a render that never cut the window put it.
@@ -154,6 +165,8 @@ export function playbackBreaksFrom(
       nextTurnIndex: gap.next_turn_index,
       startMs: gap.source_start_ms,
       endMs: gap.source_end_ms,
+      endedSlot: slotOfTurn(gap.turn_index),
+      nextSlot: slotOfTurn(gap.next_turn_index),
     })),
     picks: media.round_picks ?? [],
   };
@@ -256,17 +269,10 @@ export type EarlyEndCue = {
 };
 
 /** "Ended early" and whose turn it is, over an early end's quiet and a moment past it. */
-export function earlyEndCueAt(
-  earlyEnds: readonly PlayerEarlyEnd[],
-  segments: readonly DebateMediaTurnSegment[],
-  playheadMs: number
-): EarlyEndCue | null {
+export function earlyEndCueAt(earlyEnds: readonly PlayerEarlyEnd[], playheadMs: number): EarlyEndCue | null {
   const current = earlyEnds.find(entry => playheadMs >= entry.startMs && playheadMs < entry.endMs + EARLY_END_HOLD_MS);
-  if (!current) return null;
-  const ended = segments.find(segment => segment.turn_index === current.turnIndex);
-  const next = segments.find(segment => segment.turn_index === current.nextTurnIndex);
-  if (!ended || !next) return null;
-  return { endedSlot: ended.participant_slot, nextSlot: next.participant_slot };
+  if (!current?.endedSlot || !current.nextSlot) return null;
+  return { endedSlot: current.endedSlot, nextSlot: current.nextSlot };
 }
 
 /**

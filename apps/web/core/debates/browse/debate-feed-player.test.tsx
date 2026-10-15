@@ -106,8 +106,22 @@ vi.mock('./debate-claim-ticker', () => ({
 // The Open rounds counter has its own suite; here it stands in so the player's wiring is what is
 // under test: which corner each format draws, and what it is handed.
 vi.mock('./debate-claim-counter', () => ({
-  DebateClaimCounter: ({ history, name }: { history: unknown[]; name: string }) => (
-    <div data-testid="claim-counter" data-count={history.length} data-name={name} />
+  DebateClaimCounter: ({
+    history,
+    name,
+    onActiveChange,
+  }: {
+    history: unknown[];
+    name: string;
+    onActiveChange?: (active: boolean) => void;
+  }) => (
+    <button
+      type="button"
+      data-testid="claim-counter"
+      data-count={history.length}
+      data-name={name}
+      onClick={() => onActiveChange?.(true)}
+    />
   ),
 }));
 
@@ -1952,12 +1966,25 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(second.style.animationDelay).toContain('1380ms');
   });
 
+  /** Gives slot 1's element, the pair's clock, a position: running on with the fake clock from `fromS`, or held. */
+  const recordingAt = (fromS: number, { stalled = false } = {}) => {
+    const element = (mocks.controller as DebatePlaybackController | null)?.slot1VideoRef.current as HTMLVideoElement;
+    const start = Date.now();
+    let held = stalled;
+    Object.defineProperty(element, 'currentTime', {
+      configurable: true,
+      get: () => (held ? fromS : fromS + (Date.now() - start) / 1_000),
+    });
+    return { resume: () => (held = false) };
+  };
+
   it('cuts to the next round after the first couple of seconds of a break, and not while paused', () => {
     vi.useFakeTimers();
     try {
       const seekBoth = vi.fn();
       // The cut is 3.15 s in, at 63.15 s.
       renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
+      recordingAt(62.3);
       vi.advanceTimersByTime(800);
       expect(seekBoth).not.toHaveBeenCalled();
       vi.advanceTimersByTime(100);
@@ -1968,6 +1995,25 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth: pausedSeek, playing: false });
       vi.advanceTimersByTime(5_000);
       expect(pausedSeek).not.toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // A stall to buffer stops the recording and not the wall clock. The cut waits for the recording to
+  // reach it rather than jumping past the speaker's last words (Copilot, #2843).
+  it('holds a cut while the recording has stalled short of it, and makes it once the recording gets there', () => {
+    vi.useFakeTimers();
+    try {
+      const seekBoth = vi.fn();
+      renderAt(62.3, { playbackBreaks: breaks({ breaks: [extendBreak] }), seekBoth });
+      const recording = recordingAt(62.3, { stalled: true });
+      vi.advanceTimersByTime(2_000);
+      expect(seekBoth).not.toHaveBeenCalled();
+
+      recording.resume();
+      vi.advanceTimersByTime(900);
+      expect(seekBoth).toHaveBeenCalledWith(72);
     } finally {
       vi.useRealTimers();
     }
@@ -2010,7 +2056,9 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     ];
     const { container } = renderAt(31, {
       turnSegments,
-      playbackBreaks: breaks({ earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000 }] }),
+      playbackBreaks: breaks({
+        earlyEnds: [{ turnIndex: 0, nextTurnIndex: 1, startMs: 30_000, endMs: 33_000, endedSlot: 1, nextSlot: 2 }],
+      }),
     });
     // In the breaks' design: a stamp on the debater who ended, a banner for the next speaker.
     expect(container.querySelector('[data-debate-stamp="ended"]')?.textContent).toBe('Ended early');
@@ -2108,6 +2156,33 @@ describe('turnTimerScale', () => {
 
 describe('Open rounds in-app player: the last word (GEO-3277)', () => {
   const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+
+  // Copilot, #2843: under a banner the corner faded out but stayed clickable, and an open list faded
+  // with it.
+  it('steps the claim corner out from under a banner, and keeps it while its list is open', () => {
+    const extend = {
+      kind: 'extend' as const,
+      roundIndex: 0,
+      nextRoundIndex: 1,
+      decidingStartMs: 60_000,
+      startMs: 64_000,
+      endMs: 72_000,
+    };
+    mocks.controller = controllerFixture({
+      mutedByUser: false,
+      turnSlot: 1,
+      playheadSeconds: 62.2,
+      playbackBreaks: { breaks: [extend], earlyEnds: [], picks: [] },
+    });
+    const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const corner = () => container.querySelector('[data-debate-slot="1"] [data-claim-corner]') as HTMLElement;
+    expect(corner().style.opacity).toBe('0');
+    expect(corner().hasAttribute('data-yield')).toBe(true);
+
+    act(() => (container.querySelector('[data-debate-slot="1"] [data-testid="claim-counter"]') as HTMLElement).click());
+    expect(corner().style.opacity).toBe('1');
+    expect(corner().hasAttribute('data-yield')).toBe(false);
+  });
 
   it('tags the last speaker before a pick "Last word", and no one else', () => {
     // Round 2's closing turn (index 3) ends at 120 s and an Extend pick follows it.

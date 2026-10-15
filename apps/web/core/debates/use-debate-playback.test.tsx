@@ -1064,6 +1064,59 @@ describe('useDebatePlayback — no invented turn schedule (GEO-2956)', () => {
     expect(mocks.reportEvent).not.toHaveBeenCalled();
   });
 
+  // A debater who yields at once leaves a turn with no length. It still ends their round, so the pick
+  // window runs from there; without it the break starts at the reveal and the pick window plays
+  // ungraphed and audible (Copilot, #2843).
+  it('starts a break’s pick window where a round’s zero-length closing turn ended', async () => {
+    mocks.turnSegments = [
+      {
+        turn_index: 0,
+        participant_slot: 1,
+        output_start_ms: 0,
+        output_end_ms: 50_000,
+        duration_ms: 50_000,
+        source_start_ms: 0,
+        source_end_ms: 50_000,
+      },
+      {
+        turn_index: 1,
+        participant_slot: 2,
+        output_start_ms: 50_000,
+        output_end_ms: 50_000,
+        duration_ms: 0,
+        source_start_ms: 50_000,
+        source_end_ms: 50_000,
+      },
+      {
+        turn_index: 2,
+        participant_slot: 1,
+        output_start_ms: 52_400,
+        output_end_ms: 100_000,
+        duration_ms: 47_600,
+        source_start_ms: 62_000,
+        source_end_ms: 109_600,
+      },
+    ];
+    mocks.condensedBreaks = [
+      {
+        kind: 'extend',
+        round_index: 0,
+        next_round_index: 1,
+        output_start_ms: 50_000,
+        output_end_ms: 52_400,
+        duration_ms: 2_400,
+        source_start_ms: 54_000,
+        source_end_ms: 62_000,
+        speed: 3.33,
+      },
+    ];
+    const openRounds = { ...untimedDebate(), open_rounds: { required_rebuttal_rounds: 0 } } as unknown as Debate;
+    const { result } = renderHook(() => useDebatePlayback(openRounds, true));
+
+    await waitFor(() => expect(result.current.ready).toBe(true));
+    expect(result.current.playbackBreaks.breaks[0]).toMatchObject({ decidingStartMs: 50_000, startMs: 54_000 });
+  });
+
   // GEO-3276/3277: a final End's reveal plays after the last turn, so the video runs past it.
   it('runs the timeline on through a final End’s reveal after the last turn', async () => {
     mocks.turnSegments = renderedSegments;

@@ -164,4 +164,78 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     fireEvent.click(container.querySelector('[aria-label="Agree"]') as HTMLElement);
     expect(mocks.respond).toHaveBeenCalledWith(true);
   });
+
+  // Copilot, #2843: "Hide them" on a list the pointer had opened pinned it open instead.
+  it('closes a hover-opened list from its own button, and keeps it shut until the pointer leaves', () => {
+    const { container } = renderCounter([said('a', 1_000)], 30_000);
+    const button = container.querySelector('[data-claim-count]') as HTMLElement;
+    hover(counter(container));
+    act(() => vi.advanceTimersByTime(200));
+    expect(button.getAttribute('aria-expanded')).toBe('true');
+
+    fireEvent.click(button);
+    act(() => vi.advanceTimersByTime(500));
+    expect(container.querySelector('[data-claim-list]')).toBeNull();
+
+    leave(counter(container));
+    act(() => vi.advanceTimersByTime(300));
+    hover(counter(container));
+    act(() => vi.advanceTimersByTime(200));
+    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+  });
+
+  it('lets a mouse that clicked it open close it by leaving', () => {
+    const { container } = renderCounter([said('a', 1_000)], 30_000);
+    hover(counter(container));
+    fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
+    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    leave(counter(container));
+    act(() => vi.advanceTimersByTime(300));
+    expect(container.querySelector('[data-claim-list]')).toBeNull();
+  });
+
+  // Copilot, #2843: a keyboard user on a vote button lost their place when the pointer left and the
+  // list closed under them.
+  it('stays open while the keyboard is inside it, and closes once focus leaves', () => {
+    const onActiveChange = vi.fn();
+    const { container } = render(
+      <div>
+        <DebateClaimCounter
+          history={[said('a', 1_000)]}
+          playheadMs={30_000}
+          name="Preston"
+          rowsByClaimId={new Map()}
+          entitiesByClaimId={new Map()}
+          onAnswered={() => {}}
+          onActiveChange={onActiveChange}
+        />
+        <button type="button" data-testid="elsewhere" />
+      </div>
+    );
+    hover(counter(container));
+    act(() => vi.advanceTimersByTime(200));
+    const agree = container.querySelector('[aria-label="Agree"]') as HTMLElement;
+    fireEvent.focus(agree);
+    leave(counter(container));
+    act(() => vi.advanceTimersByTime(500));
+    expect(container.querySelector('[data-claim-list]')).not.toBeNull();
+    expect(onActiveChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.blur(agree, { relatedTarget: container.querySelector('[data-testid="elsewhere"]') });
+    expect(container.querySelector('[data-claim-list]')).toBeNull();
+    expect(onActiveChange).toHaveBeenLastCalledWith(false);
+  });
+
+  it('does not hold open for focus a mouse press gave it', () => {
+    const { container } = renderCounter([said('a', 1_000)], 30_000);
+    hover(counter(container));
+    act(() => vi.advanceTimersByTime(200));
+    const agree = container.querySelector('[aria-label="Agree"]') as HTMLElement;
+    fireEvent.pointerDown(agree);
+    fireEvent.focus(agree);
+    fireEvent.pointerUp(agree);
+    leave(counter(container));
+    act(() => vi.advanceTimersByTime(300));
+    expect(container.querySelector('[data-claim-list]')).toBeNull();
+  });
 });

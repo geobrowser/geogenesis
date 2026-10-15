@@ -406,14 +406,24 @@ export function DebateFeedPlayer({
   // The break's banner lies across the seam, over the top tile's name and claim corner: they step
   // out while it is up and come back with the next speaker, as they do for the round card.
   const bannerYield = breakBannerShown(breakCue) ? 1 : 0;
-  useBreakCuts(cuts, { playheadMs, running: playing && !isScrubbing, seek: seekBothRaw });
+  // Slot 1's element is the pair's clock, so where it is is where the recording is.
+  const recordingPositionMs = React.useCallback(() => {
+    const element = slot1VideoRef.current;
+    return element ? element.currentTime * 1_000 : null;
+  }, [slot1VideoRef]);
+  useBreakCuts(cuts, {
+    playheadMs,
+    running: playing && !isScrubbing,
+    seek: seekBothRaw,
+    positionMs: recordingPositionMs,
+  });
   const lastWordSlot = React.useMemo(
     () => (stamped && !reducedOverlays ? lastWordSlotAt(playbackBreaks, turnSegments, playheadMs) : null),
     [playbackBreaks, playheadMs, reducedOverlays, stamped, turnSegments]
   );
   const earlyEndCue = React.useMemo(
-    () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, turnSegments, playheadMs)),
-    [playbackBreaks.earlyEnds, playheadMs, reducedOverlays, turnSegments]
+    () => (reducedOverlays ? null : earlyEndCueAt(playbackBreaks.earlyEnds, playheadMs)),
+    [playbackBreaks.earlyEnds, playheadMs, reducedOverlays]
   );
   /**
    * Nobody holds a turn: a break, from its pick window on, or an early end's quiet. Both mics are
@@ -496,6 +506,22 @@ export function DebateFeedPlayer({
   // Held open by the chip rather than by the pointer — the only way in on a touch screen, where
   // there is no hover to end and so no hover to hold it.
   const [pinnedSlot, setPinnedSlot] = React.useState<number | null>(null);
+  // An Open rounds counter whose list is open, or that a keyboard is inside, per slot: its corner
+  // stays visible under a round banner rather than fading out from under the viewer.
+  const [activeCounters, setActiveCounters] = React.useState<ReadonlySet<number>>(() => new Set());
+  const onCounterActive = React.useCallback(
+    (slot: number, active: boolean) =>
+      setActiveCounters(current => {
+        if (current.has(slot) === active) return current;
+        const next = new Set(current);
+        if (active) next.add(slot);
+        else next.delete(slot);
+        return next;
+      }),
+    []
+  );
+  const onCounterActive1 = React.useCallback((active: boolean) => onCounterActive(1, active), [onCounterActive]);
+  const onCounterActive2 = React.useCallback((active: boolean) => onCounterActive(2, active), [onCounterActive]);
   /**
    * The slot whose backlog the pointer has opened, held until the pointer leaves that tile.
    *
@@ -628,6 +654,7 @@ export function DebateFeedPlayer({
           entitiesByClaimId={ticker.entitiesByClaimId}
           onAnswered={ticker.onAnswered}
           onSeeAll={onOpenClaims}
+          onActiveChange={slot === 1 ? onCounterActive1 : onCounterActive2}
         />
       );
     }
@@ -730,6 +757,7 @@ export function DebateFeedPlayer({
           // The claim corner yields to the break's banner only, which is Open rounds only. The round
           // card plays in every format and leaves the corner as it always has.
           claimsYield={Math.max(bannerYield, stamped ? (roundCard?.opacity ?? 0) : 0)}
+          claimsActive={activeCounters.has(1)}
           stamped={stamped}
           mutedByUser={mutedByUser}
           isResuming={isResuming}
@@ -988,6 +1016,7 @@ function DebaterVideo({
   roundBadge,
   cardYield = 0,
   claimsYield = 0,
+  claimsActive = false,
   mutedByUser,
   isResuming,
   onPlaybackTick,
@@ -1043,6 +1072,8 @@ function DebaterVideo({
   /** How far the claim corner has stepped out from under a round banner, 0–1. A fixed format's
    * backlog, held open, stays; an Open rounds counter steps out with its list. */
   claimsYield?: number;
+  /** An Open rounds counter whose list is open or holds keyboard focus: kept visible under a banner. */
+  claimsActive?: boolean;
   mutedByUser: boolean;
   isResuming: boolean;
   onPlaybackTick: () => void;
@@ -1441,9 +1472,13 @@ function DebaterVideo({
       {claims && (
         <div
           data-claim-corner
-          style={{ opacity: claimsOpen ? 1 : 1 - claimsYield }}
+          data-yield={(!claimsOpen && !claimsActive && claimsYield > 0.5) || undefined}
+          style={{ opacity: claimsOpen || claimsActive ? 1 : 1 - claimsYield }}
           className={cx(
             'pointer-events-none absolute right-3 bottom-3 z-[11] flex flex-col items-end justify-end transition-[padding-bottom,opacity] duration-150',
+            // Stepped out from under a banner, so out of the pointer's way too, as the name row is.
+            // Tabbing into it brings it back: focus inside makes the counter active.
+            '[&[data-yield]_*]:pointer-events-none!',
             // Two widths, by state rather than by screen. A live claim takes the whole tile,
             // because it is one line of somebody's argument and there is nothing to read it
             // against. `100% - 1.75rem` rather than a percentage: the corner hangs off `right-3`,
