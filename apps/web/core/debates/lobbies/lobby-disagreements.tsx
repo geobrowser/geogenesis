@@ -111,7 +111,7 @@ export function LobbyDisagreementsTrigger({
       trigger={
         <button
           type="button"
-          aria-label={`${label} claims with ${name}`}
+          aria-label={`${label} ${count === 1 ? 'claim' : 'claims'} with ${name}`}
           {...debateActionAnalyticsAttributes('hub', 'Lobby disagreements')}
           data-testid="lobby-disagreements-trigger"
           // Above the tile's stretched person button, which covers the rest of the tile.

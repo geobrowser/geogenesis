@@ -180,7 +180,7 @@ describe('LobbyDisagreementsTrigger', () => {
   it('keeps a refusal readable after the refresh it triggers marks the person unrequestable', () => {
     mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, [participant('daniel1')])] };
     const { rerender } = render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claims with Daniel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claim with Daniel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Request debate' }));
 
     // geo-chat refuses, and the refetch it triggers comes back with Daniel no longer requestable.
@@ -276,7 +276,7 @@ describe('LobbyDisagreementsTrigger', () => {
     unready.viewer_debate_ready = false;
     mocks.data = { lobby_id: '0192abc', source: 'room', claims: [unready] };
     render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claims with Daniel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claim with Daniel' }));
 
     expect(mocks.backfill).toHaveBeenCalledWith({
       readiness: expect.objectContaining({
@@ -298,7 +298,7 @@ describe('LobbyDisagreementsTrigger', () => {
     };
     mocks.snapshot = { status: 'publishing', pending: { expectedResponse: 'negative' }, runId: 'run' };
     const { rerender } = render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
-    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claims with Daniel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claim with Daniel' }));
 
     // geo-chat still says Agree; the viewer just switched to Disagree, so no request goes out on Agree.
     const held = screen.getByRole('button', { name: REQUEST_PENDING_LABEL });
@@ -324,7 +324,7 @@ describe('LobbyDisagreementsTrigger', () => {
     mocks.data = { lobby_id: '0192abc', source: 'room', claims: [row('a', true, [participant('daniel1')])] };
     render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={1} variant="pill" />);
 
-    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claims with Daniel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 1 claim with Daniel' }));
     const list = screen.getByTestId('lobby-disagreements');
     // A scroller nested in the menu's wheel trap can't be wheeled; jsdom can't wheel, so check for one.
     expect(list.className).not.toMatch(/overflow-y-(auto|scroll)/);
