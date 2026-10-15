@@ -11,7 +11,6 @@ import { TOPICS_PROPERTY_ID } from '~/core/claims/ontology';
 import { TAG_PROPERTY_ID } from '~/core/constants';
 import type { DebateRematchClaim, DebateRematchSession, MatchmakingClaim } from '~/core/debates/api';
 import { clearDebateReturnDestination, rememberDebateReturnDestination } from '~/core/debates/debate-return-navigation';
-import { rematchEndedSince, resetEndedRematches } from '~/core/debates/ended-rematches';
 import { HUB_CARD_EXIT_TRANSITION } from '~/core/debates/matchmaking/hub-motion';
 import type { ParticipantPosition } from '~/core/debates/participant-positions';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
@@ -70,6 +69,7 @@ const mocks = vi.hoisted(() => ({
   push: vi.fn(),
   mutate: vi.fn(),
   leaveMutate: vi.fn(),
+  forgetEndedRematch: vi.fn(),
   acceptMutate: vi.fn(),
   rejectMutate: vi.fn(),
   /** The last rematch request error and its variables. */
@@ -345,6 +345,7 @@ vi.mock('~/core/debates/hooks', () => ({
     error: mocks.requestError,
     variables: mocks.requestVariables,
   }),
+  useForgetEndedRematch: () => mocks.forgetEndedRematch,
   useLeaveDebateRematch: () => mutation(mocks.leaveMutate),
   useAcceptDebateRematchRequest: () => mutation(mocks.acceptMutate),
   useRejectDebateRematchRequest: () => mutation(mocks.rejectMutate),
@@ -966,6 +967,7 @@ beforeEach(() => {
   mocks.push.mockReset();
   mocks.mutate.mockReset();
   mocks.leaveMutate.mockReset();
+  mocks.forgetEndedRematch.mockReset();
   mocks.acceptMutate.mockReset();
   mocks.rejectMutate.mockReset();
   mocks.requestError = null;
@@ -1138,20 +1140,18 @@ describe('DebateRematchPageClient', () => {
     expect(mocks.replace).not.toHaveBeenCalledWith(`/space/${SPACE_1}/debates`);
   });
 
-  // GEO-3342. The other person left: the session arrives ended with no click from this viewer. The
-  // end is recorded before the page sends them out, so the coordinator cannot route them back in on
-  // activity read before it.
-  it('records the end when the other person leaves, and goes out once', async () => {
+  // GEO-3342. The other person left: the session arrives ended with no click from this viewer. It is
+  // dropped from activity before the way out, or the coordinator routes the viewer straight back in.
+  it('forgets the session before going out when the other person leaves', async () => {
     vi.spyOn(window.history, 'length', 'get').mockReturnValue(2);
-    resetEndedRematches();
-    const before = Date.now();
-    mocks.session = session({ source_debate_id: null, status: 'ended' });
+    const ended = session({ source_debate_id: null, status: 'ended' });
+    mocks.session = ended;
+    mocks.back.mockImplementation(() => expect(mocks.forgetEndedRematch).toHaveBeenCalledWith(ended));
 
     render(<DebateRematchPageClient sessionId="rematch-1" />);
 
     await waitFor(() => expect(mocks.back).toHaveBeenCalledOnce());
-    expect(rematchEndedSince('rematch-1', before)).toBe(true);
-    expect(rematchEndedSince('rematch-other', before)).toBe(false);
+    expect(mocks.forgetEndedRematch).toHaveBeenCalledTimes(1);
   });
 
   it('preserves the debates-page exit for rematches started from a prior debate', async () => {

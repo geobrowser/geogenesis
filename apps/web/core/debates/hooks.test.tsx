@@ -35,6 +35,7 @@ import {
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
   useEndDebateTurn,
+  useForgetEndedRematch,
   useGeoChatAuth,
   useLeaveDebateRematch,
   useMarkDebateReady,
@@ -962,6 +963,51 @@ describe('useAcceptDebateRematchRequest', () => {
     await waitFor(() => expect(result.current.enteringDebateId).toBe('debate-2'));
     expect(queryClient.getQueryData(debateQueryKeys.debate('debate-2'))).toEqual(debate);
     clearEnteringDebate('debate-2');
+  });
+});
+
+// GEO-3342. The other person left: the picker forgets the session the same way Leave does, so
+// activity still reading it as browsing cannot route the viewer straight back into it.
+describe('useForgetEndedRematch', () => {
+  const activityWith = (rematch: DebateActivity['rematch']): DebateActivity => ({
+    online: true,
+    available_to_debate: true,
+    cooldown_until: null,
+    match: null,
+    debate: null,
+    rematch,
+    challenge: null,
+  });
+
+  it('drops the ended session from activity and asks again', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const invalidateQueries = vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    const browsing = { ...rematchSession(), status: 'browsing' as const, source_debate_id: null };
+    queryClient.setQueryData(debateQueryKeys.activity('user-a'), activityWith(browsing));
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useForgetEndedRematch(), { wrapper });
+
+    act(() => result.current({ ...browsing, status: 'ended' }));
+
+    expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(activityWith(null));
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: debateQueryKeys.activity('user-a') });
+  });
+
+  it('leaves a different session in activity alone', () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    vi.spyOn(queryClient, 'invalidateQueries').mockResolvedValue();
+    const current = { ...rematchSession(), id: 'rematch-newer', status: 'browsing' as const };
+    queryClient.setQueryData(debateQueryKeys.activity('user-a'), activityWith(current));
+    const wrapper = ({ children }: { children: ReactNode }) => (
+      <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+    );
+    const { result } = renderHook(() => useForgetEndedRematch(), { wrapper });
+
+    act(() => result.current({ ...rematchSession(), status: 'ended' }));
+
+    expect(queryClient.getQueryData(debateQueryKeys.activity('user-a'))).toEqual(activityWith(current));
   });
 });
 

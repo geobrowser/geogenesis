@@ -25,7 +25,6 @@ import { useDebateRequestReceipts } from './debate-request-receipts';
 import { rememberDebateReturnDestination } from './debate-return-navigation';
 import { debateRematchPath } from './debate-routes';
 import { debateRoomClaimKey, useForeignDebateTabClaim } from './debate-tab-claims';
-import { rematchEndedSince } from './ended-rematches';
 import {
   useAcceptDebateChallenge,
   useDebateActivity,
@@ -127,9 +126,6 @@ export function DebateCoordinator() {
   const activityQuery = useDebateActivity();
   const currentUserId = useCurrentGeoChatUserId();
   const activity = activityQuery.data ?? null;
-  // A refetch that answers the same thing keeps `activity` identical; this still changes, so routing
-  // re-runs once activity is newer than an end the picker saw (GEO-3342).
-  const activityUpdatedAt = activityQuery.dataUpdatedAt ?? 0;
   useLobbyDebateAnalytics(activity?.debate);
   // Hiding the tab drops presence after a short grace (GEO-3119), but never at the cost of the
   // viewer's own pending things: geo-chat refuses an accept from an offline requester, hides their
@@ -423,9 +419,6 @@ export function DebateCoordinator() {
       void refetchUpcomingRooms().finally(() => setRoomsChecked(tick => tick + 1));
       return;
     }
-    // GEO-3342. The picker has already seen this session end and sent the viewer out; activity
-    // older than that is what would send them back in.
-    if (rematchEndedSince(rematch.id, activityUpdatedAt)) return;
     if (rematch.status === 'browsing' || rematch.status === 'request_pending') {
       // A room's session carries geo-chat's `debates` sentinel rather than a space, and the
       // rematch route 404s on it. It also proves the session is a room's when no room list can.
@@ -445,7 +438,6 @@ export function DebateCoordinator() {
     // re-runs the effect when the viewer turns to a tab, so it routes in then rather than never.
   }, [
     activity,
-    activityUpdatedAt,
     atRoom,
     hasAttention,
     hasRoomAwaitingSession,

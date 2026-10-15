@@ -30,7 +30,6 @@ import { debatePublishableSpacePredicate } from '~/core/debates/debate-publish-t
 import { DebateRequestDialog } from '~/core/debates/debate-request-dialog';
 import { DebateOpenElsewhereScreen } from '~/core/debates/debate-room-holding-screens';
 import { claimDebateEntry, debateRoomClaimKey } from '~/core/debates/debate-tab-claims';
-import { markRematchEnded } from '~/core/debates/ended-rematches';
 import { requestOpenRounds } from '~/core/debates/format-details';
 import { defaultDebateFormatId, isOpenRoundsFormatId } from '~/core/debates/formats';
 import {
@@ -48,6 +47,7 @@ import {
   useDebateRematch,
   useDebateRematchClaims,
   useDebateRematchClaimsForIds,
+  useForgetEndedRematch,
   useGeoChatAuth,
   useLeaveDebateRematch,
   useNotInterestedClaimIds,
@@ -350,6 +350,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
   const savedClaimsQuery = useDebateRematchClaims(sessionId);
   const createRequest = useCreateDebateRematchRequest(sessionId);
   const leaveSession = useLeaveDebateRematch(sessionId);
+  const forgetEndedRematch = useForgetEndedRematch();
   const acceptRequest = useAcceptDebateRematchRequest();
   const rejectRequest = useRejectDebateRematchRequest();
   const session = sessionQuery.data ?? null;
@@ -2465,13 +2466,6 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     ((session.status === 'converted' && Boolean(session.converted_debate_id)) ||
       ((session.status === 'ended' || session.status === 'expired') && !inDebateRoom));
 
-  // GEO-3342. Declared ahead of the redirect below so it runs first: the coordinator must not route
-  // straight back in on activity that still reads the session as browsing.
-  const endedSessionId = sessionEnded ? session.id : null;
-  React.useEffect(() => {
-    if (endedSessionId) markRematchEnded(endedSessionId);
-  }, [endedSessionId]);
-
   React.useEffect(() => {
     if (!session) return;
     if (session.status === 'converted' && session.converted_debate_id) {
@@ -2497,7 +2491,12 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     } else if (session.status === 'ended' || session.status === 'expired') {
       // Never out of a room: geo-chat expires a `browsing` session once either party has been
       // offline 90 seconds, which is what waiting for someone looks like.
-      if (!inDebateRoom) returnFromSession(session);
+      if (!inDebateRoom) {
+        // Before the way out, once: activity still reading it as browsing would route straight back
+        // in (GEO-3342). Leaving through the button has already done this and started the exit.
+        if (!exitStartedRef.current) forgetEndedRematch(session);
+        returnFromSession(session);
+      }
       // geo-chat replaces a finished room session on the next join, which someone who never left
       // would not otherwise send. Once per session, so a refusal cannot loop.
       else if (roomRejoin && rejoinedForRef.current !== session.id) {
@@ -2517,7 +2516,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
         });
       }
     }
-  }, [inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session]);
+  }, [forgetEndedRematch, inDebateRoom, rejoinRetry, returnFromSession, roomRejoin, router, session]);
 
   const leave = () => {
     // `leaveDebateRematch` ends the session for *both* people and puts both on a cooldown. In a

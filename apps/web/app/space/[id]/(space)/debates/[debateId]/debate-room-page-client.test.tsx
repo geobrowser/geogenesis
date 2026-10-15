@@ -159,6 +159,7 @@ vi.mock('~/core/debates/hooks', () => ({
     mocks.prefetchRematchClaims(sessionId, claimIds, enabled);
     return { data: undefined, isLoading: enabled, error: null };
   },
+  useForgetEndedRematch: () => () => undefined,
   useLeaveDebateRematch: () => ({ mutateAsync: mocks.leaveRematchMutateAsync, isPending: false }),
   useLiveKitJoin: () => ({ mutateAsync: mocks.liveKitJoinMutateAsync, isPending: false }),
   useMarkDebateJoined: () => ({ mutateAsync: mocks.markJoinedMutateAsync, isPending: false }),
