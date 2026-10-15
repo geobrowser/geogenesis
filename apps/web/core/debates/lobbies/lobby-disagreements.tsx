@@ -6,18 +6,20 @@ import cx from 'classnames';
 
 import { Text } from '~/design-system/text';
 
-import { type DebateLobbyClaim, type DebateLobbyMember, dashlessId } from '../api';
+import type { DebateLobbyClaim, DebateLobbyMember } from '../api';
 import { debateActionAnalyticsAttributes } from '../matchmaking/hub-analytics';
+import { HubQueryState, HubSkeleton } from '../matchmaking/hub-states';
+import { sameId } from '../rooms/room-presence';
 import { personName } from './lobby-format';
 import { LobbyPopup } from './lobby-popup';
 import { LobbyClaimRequest, lobbyRoomClaimFrom } from './lobby-room-claims';
 import { useDebateLobbyClaims } from './lobby-room-claims-hooks';
+import { roomSideOpposing } from './lobby-room-claims-list';
 import type { LobbyPageView } from './lobby-view';
 
 export const LOBBY_DISAGREEMENTS_COPY = {
   disagreesOn: (count: number) => `Disagrees on ${count}`,
   heading: (name: string) => `You and ${name} disagree on`,
-  loading: 'Loading claims…',
   /** geo-chat lists at most 8 people per side, so a busy claim can leave someone off its list. */
   unlisted: (count: number) => `${count} more ${count === 1 ? 'claim isn’t' : 'claims aren’t'} listed here.`,
   none: 'These claims aren’t listed here yet.',
@@ -26,6 +28,7 @@ export const LOBBY_DISAGREEMENTS_COPY = {
 /** A claim the viewer and one person hold opposite sides on, with the request that person can take. */
 export type LobbyDisagreement = {
   row: DebateLobbyClaim;
+  viewerPosition: boolean;
   viewerLabel: string;
   theirLabel: string;
   /** Whether a lobby-scoped request can go to them on this claim now. */
@@ -38,15 +41,20 @@ export type LobbyDisagreement = {
  * gives in `disagreements`.
  */
 export function lobbyDisagreements(claims: DebateLobbyClaim[], userId: string): LobbyDisagreement[] {
-  const id = dashlessId(userId);
   return claims.flatMap(row => {
     const viewer = row.viewer_response;
     if (!viewer) return [];
-    const theirs = row.positions.find(side => side.position !== viewer.position);
-    const person = theirs?.participants.find(participant => dashlessId(participant.user_id) === id);
+    const theirs = roomSideOpposing(row.positions, viewer.position);
+    const person = theirs?.participants.find(participant => sameId(participant.user_id, userId));
     if (!theirs || !person) return [];
     return [
-      { row, viewerLabel: viewer.position_label, theirLabel: theirs.position_label, requestable: person.requestable },
+      {
+        row,
+        viewerPosition: viewer.position,
+        viewerLabel: viewer.position_label,
+        theirLabel: theirs.position_label,
+        requestable: person.requestable,
+      },
     ];
   });
 }
@@ -128,28 +136,31 @@ export function LobbyDisagreementsList({
       <Text as="p" variant="metadataMedium" className="px-3 pt-3 pb-1">
         {LOBBY_DISAGREEMENTS_COPY.heading(name)}
       </Text>
-      {query.isLoading ? (
-        <Text as="p" variant="footnote" color="grey-04" className="px-3 py-2">
-          {LOBBY_DISAGREEMENTS_COPY.loading}
-        </Text>
-      ) : rows.length === 0 ? (
-        <Text as="p" variant="footnote" color="grey-04" className="px-3 py-2">
-          {LOBBY_DISAGREEMENTS_COPY.none}
-        </Text>
-      ) : (
-        <ul className="flex flex-col">
-          {rows.map(entry => (
-            <li key={entry.row.claim.id} className="border-t border-grey-01 first:border-t-0">
-              <DisagreementRow lobbyId={lobby.lobby_id} member={member} entry={entry} />
-            </li>
-          ))}
-        </ul>
-      )}
-      {rows.length > 0 && unlisted > 0 ? (
-        <Text as="p" variant="footnote" color="grey-04" className="px-3 pb-3">
-          {LOBBY_DISAGREEMENTS_COPY.unlisted(unlisted)}
-        </Text>
-      ) : null}
+      <div className="px-3 pb-3">
+        <HubQueryState
+          analyticsSurface="hub"
+          isLoading={query.isLoading}
+          error={query.error}
+          failureReason={query.failureReason}
+          onRetry={() => void query.refetch()}
+          isEmpty={rows.length === 0}
+          emptyMessage={LOBBY_DISAGREEMENTS_COPY.none}
+          loadingFallback={<HubSkeleton rows={2} />}
+        >
+          <ul className="flex flex-col">
+            {rows.map(entry => (
+              <li key={entry.row.claim.id} className="border-t border-grey-01 first:border-t-0">
+                <DisagreementRow lobbyId={lobby.lobby_id} member={member} entry={entry} />
+              </li>
+            ))}
+          </ul>
+          {unlisted > 0 ? (
+            <Text as="p" variant="footnote" color="grey-04" className="pt-1">
+              {LOBBY_DISAGREEMENTS_COPY.unlisted(unlisted)}
+            </Text>
+          ) : null}
+        </HubQueryState>
+      </div>
     </div>
   );
 }
@@ -165,10 +176,9 @@ function DisagreementRow({
 }) {
   const name = personName(member);
   const claim = React.useMemo(() => lobbyRoomClaimFrom(entry.row), [entry.row]);
-  const viewerPosition = entry.row.viewer_response?.position ?? null;
 
   return (
-    <div className="flex flex-col gap-2 px-3 py-2.5" data-testid="lobby-disagreement">
+    <div className="flex flex-col gap-2 py-2.5" data-testid="lobby-disagreement">
       <Text as="p" variant="metadataMedium" className="line-clamp-3">
         {entry.row.claim.claim}
       </Text>
@@ -176,13 +186,13 @@ function DisagreementRow({
         <Text as="p" variant="footnote" color="grey-04">
           You: {entry.viewerLabel} · {name}: {entry.theirLabel}
         </Text>
-        {entry.requestable && viewerPosition !== null ? (
+        {entry.requestable ? (
           <LobbyClaimRequest
             lobbyId={lobbyId}
             recipientUserId={member.user_id}
             offer={{
               entry: claim,
-              viewerPosition,
+              viewerPosition: entry.viewerPosition,
               requestableCount: 1,
               indexedPosition: null,
               indexingDelayed: false,

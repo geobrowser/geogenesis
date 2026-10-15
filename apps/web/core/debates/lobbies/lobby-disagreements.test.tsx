@@ -9,6 +9,8 @@ import type { LobbyPageView } from './lobby-view';
 const mocks = vi.hoisted(() => ({
   data: undefined as DebateLobbyClaims | undefined,
   isLoading: false,
+  error: null as Error | null,
+  refetch: vi.fn(),
   mutate: vi.fn(),
   phone: false,
 }));
@@ -18,7 +20,13 @@ vi.mock('~/core/hooks/use-is-phone-layout', () => ({ useIsPhoneLayout: () => moc
 vi.mock('./lobby-room-claims-hooks', async importOriginal => ({
   ...(await importOriginal<typeof import('./lobby-room-claims-hooks')>()),
   useRefreshLobbyClaimsOnRefusal: () => vi.fn(),
-  useDebateLobbyClaims: () => ({ data: mocks.data, isLoading: mocks.isLoading }),
+  useDebateLobbyClaims: () => ({
+    data: mocks.data,
+    isLoading: mocks.isLoading,
+    error: mocks.error,
+    failureReason: mocks.error,
+    refetch: mocks.refetch,
+  }),
 }));
 
 vi.mock('~/core/claims/browse/use-claim-matchup', async importOriginal => ({
@@ -47,6 +55,8 @@ afterEach(() => {
   cleanup();
   mocks.data = undefined;
   mocks.isLoading = false;
+  mocks.error = null;
+  mocks.refetch.mockReset();
   mocks.mutate.mockReset();
   mocks.phone = false;
 });
@@ -100,8 +110,8 @@ describe('lobbyDisagreements', () => {
     ];
 
     expect(lobbyDisagreements(claims, 'Daniel-1')).toEqual([
-      { row: claims[0], viewerLabel: 'Agree', theirLabel: 'Disagree', requestable: true },
-      { row: claims[3], viewerLabel: 'Disagree', theirLabel: 'Agree', requestable: false },
+      { row: claims[0], viewerPosition: true, viewerLabel: 'Agree', theirLabel: 'Disagree', requestable: true },
+      { row: claims[3], viewerPosition: false, viewerLabel: 'Disagree', theirLabel: 'Agree', requestable: false },
     ]);
   });
 });
@@ -138,11 +148,15 @@ describe('LobbyDisagreementsTrigger', () => {
     );
   });
 
-  it('says so while the claims load', () => {
-    mocks.isLoading = true;
+  it('offers a retry when the claims fail to load, rather than calling them unlisted', () => {
+    mocks.error = new Error('down');
     render(<LobbyDisagreementsTrigger lobby={lobby} member={daniel} count={2} variant="line" />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Disagrees on 2 claims with Daniel' }));
-    expect(screen.getByTestId('lobby-disagreements')).toHaveTextContent('Loading claims…');
+    const list = screen.getByTestId('lobby-disagreements');
+    expect(list).toHaveTextContent('Something went wrong.');
+    expect(list).not.toHaveTextContent('These claims aren’t listed here yet.');
+    fireEvent.click(within(list).getByRole('button', { name: 'Try again' }));
+    expect(mocks.refetch).toHaveBeenCalled();
   });
 });

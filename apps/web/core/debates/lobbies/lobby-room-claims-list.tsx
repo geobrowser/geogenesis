@@ -197,7 +197,10 @@ export function LobbyRoomClaimCard({
 }
 
 /** The side opposite the viewer's, or null when they hold none. */
-export function roomSideOpposing(positions: LobbyRoomSide[], viewerPosition: boolean | null) {
+export function roomSideOpposing<Side extends { position: boolean }>(
+  positions: Side[],
+  viewerPosition: boolean | null
+) {
   if (viewerPosition === null) return null;
   return positions.find(side => side.position !== viewerPosition) ?? null;
 }
