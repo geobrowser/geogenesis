@@ -76,6 +76,12 @@ vi.mock('../debate-room-ownership', () => ({
   }),
 }));
 
+// GEO-3340. Covered on its own in `use-voice-call-telemetry.test`; here only that the lobby wires it.
+const telemetryCalls = vi.hoisted(() => [] as unknown[][]);
+vi.mock('../use-voice-call-telemetry', () => ({
+  useVoiceCallTelemetry: (...args: unknown[]) => void telemetryCalls.push(args),
+}));
+
 vi.mock('@livekit/components-react', () => ({
   LiveKitRoom: (props: Record<string, unknown> & { children: React.ReactNode }) => {
     mocks.roomProps = props;
@@ -183,6 +189,14 @@ describe('LobbyVoice', () => {
       'acct'
     );
     expect(mocks.roomProps).toMatchObject({ token: 'jwt', serverUrl: 'wss://livekit.test', audio: true });
+  });
+
+  // GEO-3340. Call quality is reported for the lobby's room, under the lobby.
+  it('reports call quality for the lobby room under the lobby', async () => {
+    telemetryCalls.length = 0;
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(telemetryCalls.at(-1)).toEqual([fakeRoom, 'lobby', 'lobby1']);
   });
 
   it('honours start_muted and unmutes on the button', async () => {

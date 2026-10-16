@@ -36,6 +36,7 @@ import { MicrophoneIcon } from '../debate-room-controls';
 import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { useVoiceCallTelemetry } from '../use-voice-call-telemetry';
 import { lobbyErrorMessage } from './lobby-format';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
@@ -274,6 +275,7 @@ export function LobbyVoice({
       className="contents"
     >
       <ConnectedVoice
+        lobbyId={lobbyId}
         canPublish={data.can_publish}
         micFailure={micFailure}
         roomRef={roomRef}
@@ -308,6 +310,7 @@ type VoiceNotice = {
 };
 
 function ConnectedVoice({
+  lobbyId,
   canPublish,
   micFailure,
   roomRef,
@@ -319,6 +322,7 @@ function ConnectedVoice({
   onReplaced,
   children,
 }: {
+  lobbyId: string;
   canPublish: boolean;
   micFailure: MediaDeviceFailure | null;
   roomRef: React.MutableRefObject<Room | null>;
@@ -331,6 +335,8 @@ function ConnectedVoice({
   children: React.ReactNode;
 }) {
   const room = useRoomContext();
+  // GEO-3340. Listeners too: what they hear is half of what a choppy room is.
+  useVoiceCallTelemetry(room, 'lobby', lobbyId);
   useRoomEnding(room, {
     onNeverConnected,
     // Another tab or device took this identity; reconnecting would only take it back and forth.
