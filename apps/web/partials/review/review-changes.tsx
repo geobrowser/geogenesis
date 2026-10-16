@@ -24,12 +24,14 @@ import { useLocalChanges } from '~/core/hooks/use-local-changes';
 import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { type ProposalVotingMode, usePublish } from '~/core/hooks/use-publish';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
+import { useSpaceId } from '~/core/hooks/use-space-id';
 import { useToast } from '~/core/hooks/use-toast';
 import { useVotingSettings } from '~/core/hooks/use-voting-settings';
 import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
+import { getNetRelations, getNetValues } from '~/core/review/net-changes';
 import {
   buildIsNewEntity,
   buildOwnershipIndex,
@@ -44,6 +46,7 @@ import {
 import { useDiff } from '~/core/state/diff-store';
 import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
+import { syncedEntities } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -74,6 +77,7 @@ import {
   isBountyTypeRelation,
 } from './bounty-linking';
 import type { Bounty } from './bounty-linking/types';
+import { useReviewSpace } from './use-review-space';
 import {
   clearPersonalProfileSessionDismissStorage,
   editorContentVersionAtom,
@@ -138,6 +142,8 @@ export const ReviewChanges = () => {
   const { profile } = useGeoProfile(address);
   const personalPageEntityId = profile?.id ?? null;
 
+  const currentSpaceId = useSpaceId();
+
   const [proposals, setProposals] = React.useState<Proposals>({});
   const [isPublishing, setIsPublishing] = React.useState(false);
   const [spaces, setSpaces] = React.useState<Space[]>([]);
@@ -155,39 +161,27 @@ export const ReviewChanges = () => {
   });
 
   const dedupedSpacesWithActions = React.useMemo(() => {
-    const valueSpaceIds = valuesWithChanges.map(t => t.spaceId);
-    const relationSpaceIds = relationsWithChanges.map(r => r.spaceId);
+    // Match the flow bar: unchanged values and canceled relations do not make a space reviewable.
+    const valueSpaceIds = getNetValues(valuesWithChanges, syncedEntities).map(t => t.spaceId);
+    const relationSpaceIds = getNetRelations(relationsWithChanges, syncedEntities).map(r => r.spaceId);
 
     return [...new Set([...valueSpaceIds, ...relationSpaceIds])];
   }, [valuesWithChanges, relationsWithChanges]);
 
   const spacesKey = [...dedupedSpacesWithActions].sort().join(',');
-  const [activeSpace, setActiveSpace] = React.useState<string>('');
-  const appliedPreferredSpaceForVersion = React.useRef<number | null>(null);
+  const { activeSpace, setActiveSpace } = useReviewSpace({
+    spaceIds: dedupedSpacesWithActions,
+    isReviewOpen,
+    reviewVersion,
+    preferredSpaceId: diffPreferredSpaceId,
+    currentSpaceId,
+  });
 
   React.useEffect(() => {
     if (!isReviewOpen) {
       setDiffPreferredSpaceId('');
-      appliedPreferredSpaceForVersion.current = null;
     }
   }, [isReviewOpen, setDiffPreferredSpaceId]);
-
-  React.useEffect(() => {
-    const shouldApplyPreferred =
-      reviewVersion !== appliedPreferredSpaceForVersion.current &&
-      Boolean(diffPreferredSpaceId) &&
-      dedupedSpacesWithActions.includes(diffPreferredSpaceId);
-
-    if (shouldApplyPreferred) {
-      appliedPreferredSpaceForVersion.current = reviewVersion;
-      setActiveSpace(diffPreferredSpaceId);
-      return;
-    }
-
-    if (activeSpace === '' && dedupedSpacesWithActions[0]) {
-      setActiveSpace(dedupedSpacesWithActions[0]);
-    }
-  }, [spacesKey, activeSpace, diffPreferredSpaceId, dedupedSpacesWithActions, reviewVersion]);
 
   React.useEffect(() => {
     // Don't clear spaces metadata when dedupedSpacesWithActions becomes empty (e.g. after
@@ -222,14 +216,6 @@ export const ReviewChanges = () => {
         clearTimeout(closeTimerRef.current);
         closeTimerRef.current = null;
       }
-
-      if (dedupedSpacesWithActions.length > 0 && !dedupedSpacesWithActions.includes(activeSpace)) {
-        const next =
-          diffPreferredSpaceId && dedupedSpacesWithActions.includes(diffPreferredSpaceId)
-            ? diffPreferredSpaceId
-            : (dedupedSpacesWithActions[0] ?? '');
-        setActiveSpace(next);
-      }
     }
 
     return () => {
@@ -240,7 +226,7 @@ export const ReviewChanges = () => {
     };
     // `spacesKey` again stands in for `dedupedSpacesWithActions`; see the effect above.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [spacesKey, activeSpace, diffPreferredSpaceId, statusBarState.reviewState, setIsReviewOpen]);
+  }, [spacesKey, statusBarState.reviewState, setIsReviewOpen]);
 
   const rawProposalName = proposals[activeSpace]?.name ?? '';
   const proposalName = rawProposalName.trim();

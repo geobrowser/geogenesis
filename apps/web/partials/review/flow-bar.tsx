@@ -12,12 +12,13 @@ import { RemoveScroll } from 'react-remove-scroll';
 import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useToast } from '~/core/hooks/use-toast';
+import { getNetRelations, getNetValues } from '~/core/review/net-changes';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { syncedEntities } from '~/core/sync/store';
 import { useRelations, useValues } from '~/core/sync/use-store';
-import { Relation, Value } from '~/core/types';
+import { Relation } from '~/core/types';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
 import { Divider } from '~/design-system/divider';
@@ -46,8 +47,11 @@ export const FlowBar = () => {
 
   // Filter to only count net changes (exclude no-ops like created-then-deleted
   // relations and values/relations that match the remote state).
-  const values = React.useMemo(() => getNetValues(allValues), [allValues]);
-  const relations = React.useMemo(() => collapseSlotReplacements(getNetRelations(allRelations)), [allRelations]);
+  const values = React.useMemo(() => getNetValues(allValues, syncedEntities), [allValues]);
+  const relations = React.useMemo(
+    () => collapseSlotReplacements(getNetRelations(allRelations, syncedEntities)),
+    [allRelations]
+  );
 
   const opsCount = values.length + relations.length;
 
@@ -140,84 +144,6 @@ export const FlowBar = () => {
     </>
   );
 };
-
-/**
- * Filter values to only include net changes compared to the remote/synced state.
- * Excludes values created-then-deleted locally and values unchanged from remote.
- * Only compares against non-local values in syncedEntities because the SyncEngine
- * can bake local edits into syncedEntities during re-sync.
- */
-function getNetValues(localValues: Value[]): Value[] {
-  return localValues.filter(v => {
-    const remoteEntity = syncedEntities.get(v.entity.id);
-
-    if (v.isDeleted) {
-      // If no remote entity exists, this value was created and deleted locally — net-zero
-      if (!remoteEntity) return false;
-      return remoteEntity.values.some(remote => remote.id === v.id && !remote.isLocal);
-    }
-
-    // If the value is unchanged from the remote version, skip it
-    if (remoteEntity) {
-      const remoteValue = remoteEntity.values.find(
-        remote =>
-          !remote.isLocal &&
-          (remote.id === v.id || (remote.property.id === v.property.id && remote.spaceId === v.spaceId))
-      );
-      if (remoteValue && remoteValue.value === v.value) return false;
-    }
-
-    return true;
-  });
-}
-
-/**
- * Filter relations to only include net changes compared to the remote/synced state.
- * Excludes relations created-then-deleted locally, relations identical to remote,
- * and delete+create pairs that restore the original state (cycling back).
- * Only compares against non-local relations in syncedEntities because the SyncEngine
- * can bake local edits into syncedEntities during re-sync.
- */
-function getNetRelations(localRelations: Relation[]): Relation[] {
-  // Semantic identity of a relation. toSpaceId is included so that changing only
-  // the "to space" of a relation counts as a change in the flowbar.
-  const relKey = (rel: Relation) =>
-    `${rel.fromEntity.id}:${rel.type.id}:${rel.toEntity.id}:${rel.spaceId}:${rel.toSpaceId ?? ''}`;
-
-  // Build a set of semantic keys for active local relations
-  const activeKeys = new Set(localRelations.filter(r => !r.isDeleted).map(relKey));
-
-  return localRelations.filter(r => {
-    const remoteEntity = syncedEntities.get(r.fromEntity.id);
-
-    if (r.isDeleted) {
-      // If no remote entity, or the relation ID doesn't exist in remote,
-      // this was created and deleted locally — net-zero
-      if (!remoteEntity) return false;
-      const remoteRelation = remoteEntity.relations.find(remote => remote.id === r.id && !remote.isLocal);
-      if (!remoteRelation) return false;
-
-      // If an active local relation restores the same (fromEntity, type, toEntity, space, toSpace)
-      // as the deleted remote relation, both cancel out — net-zero
-      if (activeKeys.has(relKey(remoteRelation))) return false;
-
-      return true;
-    }
-
-    // Active relation — skip if semantically identical to a remote relation.
-    // Position is part of identity here: a pure reorder keeps the same
-    // (from, type, to, space, toSpace) but must still count as a change.
-    if (remoteEntity) {
-      const key = relKey(r);
-      const matchesRemote = remoteEntity.relations.some(
-        remote => !remote.isLocal && relKey(remote) === key && (remote.position ?? null) === (r.position ?? null)
-      );
-      if (matchesRemote) return false;
-    }
-
-    return true;
-  });
-}
 
 /**
  * Collapse a delete+add pair on the same (fromEntity, type, spaceId) slot into
