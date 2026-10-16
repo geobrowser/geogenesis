@@ -1,6 +1,8 @@
 'use client';
 
-import type * as React from 'react';
+import type { TrackReference } from '@livekit/components-react';
+
+import * as React from 'react';
 
 import cx from 'classnames';
 
@@ -141,6 +143,8 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
   // Mic state only means something in a room this tab is connected to.
   const showMic = voice.connected && !member.stepped_out;
   const micOn = voice.micOn.has(voiceId);
+  // Someone stepped out is in a debate elsewhere; their lobby camera is gone or about to be.
+  const camera = member.stepped_out ? undefined : voice.cameras.get(voiceId);
   const name = personName(member);
   const label = isSelf ? `${name} (you)` : name;
 
@@ -178,7 +182,11 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
               speaking && 'ring-2 ring-successTertiary'
             )}
           >
-            <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
+            {camera ? (
+              <TileVideo camera={camera} mirrored={isSelf} />
+            ) : (
+              <Avatar avatarUrl={member.avatar_cid} value={member.profile_space_id} alt="" size={56} />
+            )}
           </span>
           <span className="flex max-w-full min-w-0 items-center gap-1.5 text-[17px] leading-[22px] font-semibold md:gap-1 md:text-[15px] md:leading-[18px] md:font-medium">
             <span className="truncate">{name}</span>
@@ -200,6 +208,30 @@ function SpeakerTile({ lobby, member, isSelf, viewerId, status, disagreements }:
         </Text>
       ) : null}
     </div>
+  );
+}
+
+/** A speaker's camera in their avatar's place. Attached so LiveKit sizes and pauses it with the tile. */
+function TileVideo({ camera, mirrored }: { camera: TrackReference; mirrored: boolean }) {
+  const ref = React.useRef<HTMLVideoElement | null>(null);
+  const track = camera.publication.track;
+  React.useEffect(() => {
+    const element = ref.current;
+    if (!element || !track) return;
+    track.attach(element);
+    return () => {
+      track.detach(element);
+    };
+  }, [track]);
+  return (
+    <video
+      ref={ref}
+      data-testid="lobby-speaker-video"
+      className={cx('size-full object-cover', mirrored && '-scale-x-100')}
+      playsInline
+      muted
+      autoPlay
+    />
   );
 }
 

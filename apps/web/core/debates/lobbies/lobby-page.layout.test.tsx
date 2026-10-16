@@ -72,7 +72,7 @@ vi.mock('./lobby-guest-hooks', async importOriginal => ({
 vi.mock('./lobby-voice', async () => {
   const ReactModule = await import('react');
   const { LobbySlot } = await import('./lobby-slots');
-  const NO = { speaking: new Set(), micOn: new Set(), connected: false };
+  const NO = { speaking: new Set(), micOn: new Set(), cameras: new Map(), connected: false };
   const Context = ReactModule.createContext(NO);
   return {
     NO_LOBBY_VOICE: NO,

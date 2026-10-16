@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import cx from 'classnames';
+
 import { ActionSurfaceArticle } from '~/core/action-context-provider';
 import type { Debate } from '~/core/debates/api';
 import { DebateClaimsPanel } from '~/core/debates/browse/debate-claims-panel';
@@ -415,6 +417,8 @@ export function DebateExploreFeedCard({
               reducedOverlays={compactChrome}
               onOpenClaims={openClaims}
             />
+          ) : item.debatePosters ? (
+            <DebatePosterSkeleton posters={item.debatePosters} compact={compactChrome} />
           ) : (
             <DebateVideoSkeleton />
           )}
@@ -491,6 +495,43 @@ const DebateCardVideos = React.memo(function DebateCardVideos({
     />
   );
 });
+
+/**
+ * The lead debate's stills, painted from the feed response itself (GEO-3280), until the debate and
+ * its media resolve and the player takes over with the same two images. Laid out as the player is,
+ * one surface with no gap, so the handover does not move anything. A missing still leaves its tile
+ * grey, as the player does.
+ */
+function DebatePosterSkeleton({
+  posters,
+  compact,
+}: {
+  posters: NonNullable<ExploreFeedItem['debatePosters']>;
+  compact: boolean;
+}) {
+  return (
+    <div className={cx('flex flex-col overflow-hidden', compact ? 'rounded-lg' : 'rounded-xl')} aria-hidden="true">
+      {[posters.slot1, posters.slot2].map((src, index) => (
+        <div key={index} className="relative aspect-480/289 w-full overflow-hidden bg-grey-01">
+          {src ? (
+            <img
+              src={src}
+              alt=""
+              data-debate-poster=""
+              draggable={false}
+              // The lead card's stills are the page's largest paint, so they go out eagerly and ahead
+              // of the other images.
+              loading="eager"
+              fetchPriority="high"
+              decoding="async"
+              className="pointer-events-none absolute inset-0 h-full w-full object-cover"
+            />
+          ) : null}
+        </div>
+      ))}
+    </div>
+  );
+}
 
 function DebateVideoSkeleton() {
   return (

@@ -24,7 +24,14 @@ const mocks = vi.hoisted(() => ({
   leave: vi.fn(async () => undefined),
   onAudible: null as (() => void) | null,
   onAutoReconnect: null as (() => boolean) | null,
-  onGuestStates: null as ((states: { speaking: Set<string>; micOn: Set<string>; connected: boolean }) => void) | null,
+  onGuestStates: null as
+    | ((states: {
+        speaking: Set<string>;
+        micOn: Set<string>;
+        cameras: Map<string, unknown>;
+        connected: boolean;
+      }) => void)
+    | null,
   onGuestRemoved: null as (() => void) | null,
   /** Whether the mock guest room reports a connection on mount. */
   guestConnects: true,
@@ -112,7 +119,7 @@ vi.mock('./lobby-guest-hooks', async importOriginal => ({
 }));
 vi.mock('./lobby-voice', async () => {
   const ReactModule = await import('react');
-  const NO = { speaking: new Set(), micOn: new Set(), connected: false };
+  const NO = { speaking: new Set(), micOn: new Set(), cameras: new Map(), connected: false };
   const Context = ReactModule.createContext(NO);
   return {
     NO_LOBBY_VOICE: NO,
@@ -128,7 +135,12 @@ vi.mock('./lobby-voice', async () => {
       token: { token: string };
       quiet?: boolean;
       onAutoReconnect: () => boolean;
-      onStates: (states: { speaking: Set<string>; micOn: Set<string>; connected: boolean }) => void;
+      onStates: (states: {
+        speaking: Set<string>;
+        micOn: Set<string>;
+        cameras: Map<string, unknown>;
+        connected: boolean;
+      }) => void;
       onRemoved: () => void;
     }) => {
       mocks.onAutoReconnect = onAutoReconnect;
@@ -136,8 +148,9 @@ vi.mock('./lobby-voice', async () => {
       mocks.onGuestRemoved = onRemoved;
       // Reports the room's connection as the real room does; tests change it through `mocks.onGuestStates`.
       ReactModule.useEffect(() => {
-        if (mocks.guestConnects) onStates({ speaking: new Set(), micOn: new Set(), connected: true });
-        return () => onStates({ speaking: new Set(), micOn: new Set(), connected: false });
+        if (mocks.guestConnects)
+          onStates({ speaking: new Set(), micOn: new Set(), cameras: new Map(), connected: true });
+        return () => onStates({ speaking: new Set(), micOn: new Set(), cameras: new Map(), connected: false });
       }, [onStates]);
       return (
         <div data-testid="guest-room" data-quiet={quiet ? 'yes' : 'no'}>
@@ -684,7 +697,12 @@ describe('DebateLobbyPage banner and the guest room connection', () => {
   // The room can show before the heartbeat effect runs; a removal sent then finds no `checkNow` target.
   const heartbeatArmed = () => act(async () => {});
 
-  const states = (connected: boolean) => ({ speaking: new Set<string>(), micOn: new Set<string>(), connected });
+  const states = (connected: boolean) => ({
+    speaking: new Set<string>(),
+    micOn: new Set<string>(),
+    cameras: new Map(),
+    connected,
+  });
 
   it('invites while connecting, says listening once connected, and stops when it fails or drops', async () => {
     mocks.guestConnects = false;

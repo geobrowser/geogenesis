@@ -3,6 +3,7 @@
 import type { AvailabilityPayload } from '~/core/availability/blocks';
 import { capSearchQuery } from '~/core/io/search-query';
 
+import { getGeoChatApiBaseUrl } from './geo-chat-public-base-url';
 import type { RecordingPlaybackVariant } from './mobile-rendition';
 import type { DebateExtractedClaimsResponse } from './server/extracted-claims';
 
@@ -1124,9 +1125,7 @@ const geoChatSessionRequests = new Map<string, Promise<GeoChatSession>>();
 let geoChatSessionEpoch = 0;
 let geoChatSessionAccountKey: string | null = null;
 
-export function getGeoChatApiBaseUrl() {
-  return (process.env.NEXT_PUBLIC_GEO_CHAT_API_BASE_URL || 'http://localhost:8080').replace(/\/+$/, '');
-}
+export { getGeoChatApiBaseUrl };
 
 export function getCurrentGeoChatUserId() {
   const session = loadSession(null);

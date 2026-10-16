@@ -589,7 +589,7 @@ describe('DebateCoordinator', () => {
 
     expect(mocks.acceptChallengeMutate).toHaveBeenCalled();
     // debateVideo is off here, so the card records the mic alone.
-    expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: false });
+    expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: false, source: 'card' });
   });
 
   it('walks the person who accepted into the picker without a card', async () => {

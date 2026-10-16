@@ -39,6 +39,7 @@ vi.mock('./media-session', async importOriginal => ({
     previewError: null,
     previewStream: null,
     localTracksRef: { current: [{ mediaStreamTrack: { kind: 'audio' } }, { mediaStreamTrack: { kind: 'video' } }] },
+    joinChoiceRef: { current: null },
     ensurePreview: media.ensurePreview,
     beginSession: media.beginSession,
     releaseSession: media.releaseSession,
@@ -192,7 +193,9 @@ describe('ChallengeAcceptedPrompt', () => {
     clearLobbyCapture = registerLobbyCapture('audio', { on: true, release: vi.fn() });
     renderPrompt();
 
-    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: true }));
+    await waitFor(() =>
+      expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: true, source: 'card' })
+    );
     expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
   });
 
@@ -204,34 +207,36 @@ describe('ChallengeAcceptedPrompt', () => {
   });
 
   it('does not overwrite a saved choice with the lobby’s state', async () => {
-    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: false });
+    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: false, source: 'card' });
     clearLobbyCapture = registerLobbyCapture('audio', { on: false, release: vi.fn() });
     renderPrompt();
 
     expect(await screen.findByRole('button', { name: 'Turn microphone off' })).toBeInTheDocument();
     await new Promise(resolve => setTimeout(resolve, 50));
-    expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: false });
+    expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: false, source: 'card' });
   });
 
   it('offers the mic alone and saves no camera choice with debateVideo off', async () => {
     flags.debateVideo = false;
-    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true, source: 'card' });
     renderPrompt();
 
     expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
-    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: true }));
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: true, source: 'card' }));
     expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ video: true }));
   });
 
   it('keeps a remembered camera through the flag reading off on the first render', async () => {
     flags.hydrating = true;
-    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true });
+    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true, source: 'card' });
     renderPrompt();
 
     expect(await screen.findByText('Joining with mic and camera on')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
-    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: true }));
+    await waitFor(() =>
+      expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: true, source: 'card' })
+    );
   });
 
   it('renders nothing when it cannot name both people', () => {
