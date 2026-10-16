@@ -247,42 +247,28 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
   };
 });
 
-vi.mock('livekit-client', () => ({
-  createLocalTracks: mocks.createLocalTracks,
-  Room: class {
-    constructor(options: unknown) {
-      mocks.roomConstruct(options);
-    }
+// Factory-less on purpose: see `__mocks__/livekit-client.ts`. The page imports the SDK twice at
+// once on arrival, and a factory mock hands one of those imports the real SDK.
+vi.mock('livekit-client');
+vi.hoisted(() => {
+  (globalThis as { __liveKitClientMock?: unknown }).__liveKitClientMock = {
+    createLocalTracks: mocks.createLocalTracks,
+    supportsAudioOutputSelection: mocks.supportsAudioOutputSelection,
+    Room: class {
+      constructor(options: unknown) {
+        mocks.roomConstruct(options);
+      }
 
-    localParticipant = mocks.roomLocalParticipant;
+      localParticipant = mocks.roomLocalParticipant;
 
-    on = mocks.roomOn;
-    connect = mocks.roomConnect;
-    disconnect = mocks.roomDisconnect;
-    switchActiveDevice = mocks.roomSwitchActiveDevice;
-    remoteParticipants = mocks.roomRemoteParticipants;
-  },
-  supportsAudioOutputSelection: mocks.supportsAudioOutputSelection,
-  RoomEvent: {
-    TrackSubscribed: 'trackSubscribed',
-    TrackUnsubscribed: 'trackUnsubscribed',
-    ParticipantConnected: 'participantConnected',
-    ParticipantDisconnected: 'participantDisconnected',
-    Reconnecting: 'reconnecting',
-    Reconnected: 'reconnected',
-    Disconnected: 'disconnected',
-  },
-  // Mirrors the runtime shape of the protobuf numeric enum: forward name -> number entries plus
-  // reverse number -> name entries, so disconnectReasonName's reverse-mapping filter is exercised.
-  DisconnectReason: {
-    CLIENT_INITIATED: 1,
-    DUPLICATE_IDENTITY: 2,
-    SERVER_SHUTDOWN: 3,
-    1: 'CLIENT_INITIATED',
-    2: 'DUPLICATE_IDENTITY',
-    3: 'SERVER_SHUTDOWN',
-  },
-}));
+      on = mocks.roomOn;
+      connect = mocks.roomConnect;
+      disconnect = mocks.roomDisconnect;
+      switchActiveDevice = mocks.roomSwitchActiveDevice;
+      remoteParticipants = mocks.roomRemoteParticipants;
+    },
+  };
+});
 
 vi.mock('@livekit/krisp-noise-filter', () => ({
   isKrispNoiseFilterSupported: mocks.krispSupported,
@@ -1700,6 +1686,8 @@ describe('DebateRoomPageClient', () => {
     await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument(), {
       timeout: 3000,
     });
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalled());
+    await waitFor(() => expect(mocks.roomOn).toHaveBeenCalledWith('disconnected', expect.any(Function)));
     mocks.createLocalTracks.mockClear();
 
     act(() => emitRoomEvent('disconnected', 99));
