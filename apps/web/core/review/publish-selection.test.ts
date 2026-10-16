@@ -420,6 +420,13 @@ describe('buildIsNewEntity', () => {
     expect(isNew('a')).toBe(true);
     expect(isNew('b')).toBe(true);
   });
+
+  it('treats an otherwise-unknown id as established when the graph confirms it', () => {
+    const isNew = buildIsNewEntity([], [], new Set(['confirmed']));
+
+    expect(isNew('confirmed')).toBe(false);
+    expect(isNew('unconfirmed')).toBe(true);
+  });
 });
 
 describe('getDeselectionBlockers', () => {
