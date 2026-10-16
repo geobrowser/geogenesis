@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ warmA: vi.fn(), warmB: vi.fn() }));
+const mocks = vi.hoisted(() => ({ warmA: vi.fn(), warmB: vi.fn(), recent: vi.fn() }));
 
 vi.mock('~/core/explore/warm-fresh-lists', () => ({
   WARM_SCOPES: [
     { name: 'a', warm: () => mocks.warmA() },
     { name: 'b', warm: () => mocks.warmB() },
   ],
+  warmRecentScopes: () => mocks.recent(),
 }));
 
 async function call(authorization?: string) {
@@ -22,6 +23,7 @@ beforeEach(() => {
   vi.stubEnv('CRON_SECRET', 'test-secret');
   mocks.warmA.mockReset().mockResolvedValue('warmed');
   mocks.warmB.mockReset().mockResolvedValue('warmed');
+  mocks.recent.mockReset().mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -54,6 +56,18 @@ describe('GET /api/explore/warm-fresh-list', () => {
         { scope: 'b', status: 'skipped' },
       ],
     });
+  });
+
+  it('also reports the recently requested scopes, and survives their warm-up throwing', async () => {
+    mocks.recent.mockResolvedValue([{ scope: 'recent:2spaces', status: 'warmed' }]);
+    const first = await (await call('Bearer test-secret')).json();
+    expect(first.results).toContainEqual({ scope: 'recent:2spaces', status: 'warmed' });
+
+    vi.spyOn(console, 'warn').mockImplementation(() => {});
+    mocks.recent.mockRejectedValue(new Error('upstash down'));
+    const second = await call('Bearer test-secret');
+    expect(second.status).toBe(200);
+    expect((await second.json()).results).toHaveLength(2);
   });
 
   it('keeps going when one scope fails, and logs a warning', async () => {

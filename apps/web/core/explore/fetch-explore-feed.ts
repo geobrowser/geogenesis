@@ -68,6 +68,7 @@ import {
 } from './fresh-slot/fresh-slot-cursor';
 import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-slot';
 import { readSharedFreshList, writeSharedFreshList } from './fresh-slot/shared-fresh-list';
+import { recordRecentFreshScope } from './fresh-slot/recent-fresh-scopes';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
 import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-config';
 
@@ -659,6 +660,67 @@ export const FRESH_LIST_MAX_STALE_MS = 30 * 60_000;
 
 type FreshList = { asOfMs: number; page: ExploreEntitiesPageResponse };
 
+/** The one derivation of a Fresh list's scope key; the request path and the warm-up both use it. */
+export function freshListScopeKey(args: {
+  spaceIds: readonly string[];
+  time: ExploreTime;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  entityFilter?: EntityFilter;
+  freshnessHours: number;
+}) {
+  return JSON.stringify({
+    spaceIds: args.spaceIds.map(normId).sort(),
+    time: args.time,
+    typeIds: args.typeIds.map(normId).sort(),
+    requireName: args.requireName ?? null,
+    requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
+    entityFilter: args.entityFilter ?? null,
+    freshnessHours: args.freshnessHours,
+  });
+}
+
+/**
+ * GEO-3308. A first page that served a scope is remembered, so the cron can keep it warm. The scope
+ * is the space set, types and hours only; nothing about the reader. After the response, fail open,
+ * and at most once a minute per scope per instance.
+ */
+const recentlyRecorded = new Map<string, number>();
+const RECORD_SCOPE_EVERY_MS = 60_000;
+
+function recordRequestedScope(scopeKey: string, scope: Parameters<typeof freshListScopeKey>[0]) {
+  const now = Date.now();
+  const last = recentlyRecorded.get(scopeKey);
+  if (last !== undefined && now - last < RECORD_SCOPE_EVERY_MS) return;
+  recentlyRecorded.set(scopeKey, now);
+  if (recentlyRecorded.size > 200) {
+    const oldest = recentlyRecorded.keys().next().value;
+    if (typeof oldest === 'string') recentlyRecorded.delete(oldest);
+  }
+  runAfterResponse(async () => {
+    try {
+      await recordRecentFreshScope(
+        {
+          spaceIds: scope.spaceIds.map(normId).sort(),
+          typeIds: scope.typeIds.map(normId).sort(),
+          time: scope.time,
+          requireName: scope.requireName ?? null,
+          requireDebateTagOnClaims: scope.requireDebateTagOnClaims ?? null,
+          freshnessHours: scope.freshnessHours,
+        },
+        now
+      );
+    } catch (error) {
+      console.error('explore fresh slot: recording the requested scope failed', error);
+    }
+  });
+}
+
+export function resetRecordedScopesForTests() {
+  recentlyRecorded.clear();
+}
+
 function rememberLatestFreshList(scopeKey: string, list: FreshList) {
   const current = latestFreshLists.get(scopeKey);
   if (current && current.asOfMs > list.asOfMs) return;
@@ -706,15 +768,7 @@ async function fetchFreshEntitiesPage(args: {
   /** The scheduled warm-up (GEO-3308): build this minute's list and share it before returning. */
   warm?: boolean;
 }): Promise<FreshList> {
-  const scopeKey = JSON.stringify({
-    spaceIds: args.spaceIds.map(normId).sort(),
-    time: args.time,
-    typeIds: args.typeIds.map(normId).sort(),
-    requireName: args.requireName ?? null,
-    requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
-    entityFilter: args.entityFilter ?? null,
-    freshnessHours: args.freshnessHours,
-  });
+  const scopeKey = freshListScopeKey(args);
 
   const cacheKey = (asOfMs: number) => JSON.stringify({ scopeKey, asOfSec: Math.floor(asOfMs / 1000) });
   const usable = (list: FreshList | null | undefined): list is FreshList =>
@@ -765,6 +819,8 @@ async function fetchFreshEntitiesPage(args: {
   };
 
   if (args.startsScroll) {
+    // A scope with an entity filter is not one the cron can rebuild from its inputs.
+    if (!args.warm && !args.entityFilter) recordRequestedScope(scopeKey, args);
     let latest = latestFreshLists.get(scopeKey);
     if (!usable(latest)) {
       // A cold instance holds nothing; start from the list another instance shared.
