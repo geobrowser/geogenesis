@@ -529,13 +529,13 @@
   }
 }
 
-/* Votes recede as the next announcement arrives, remaining visible under the headline. */
+/* Votes gradually clear the picture as the next round or wrap announcement arrives. */
 @keyframes debatePlayerPickRecede {
   from {
     opacity: 1;
   }
   to {
-    opacity: 0.65;
+    opacity: 0;
   }
 }
 

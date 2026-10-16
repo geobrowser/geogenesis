@@ -184,8 +184,8 @@ export function DebateBreakOverlay({
             >
               <div
                 data-debate-pick-recede={slot}
-                className="animate-[debatePlayerPickRecede_250ms_linear_both]"
-                // The new headline takes priority, while both votes remain readable beneath it.
+                className="animate-[debatePlayerPickRecede_1000ms_linear_both]"
+                // Give the new headline priority by gradually fading both votes all the way out.
                 // Use the shared media clock so pause and scrub also hold this gentle fade.
                 style={heldAt(bannerAtMs)}
               >

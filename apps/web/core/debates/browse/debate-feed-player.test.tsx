@@ -2006,11 +2006,11 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       expect(container.querySelector('[data-debate-banner]')?.getAttribute('data-debate-banner')).toBe(
         kind === 'final_end' ? 'wrap' : 'round'
       );
-      // Both votes soften together as either headline enters, using its media-clock phase.
+      // Both votes fade away gradually as either headline enters, using its media-clock phase.
       const recedingPicks = [...container.querySelectorAll<HTMLElement>('[data-debate-pick-recede]')];
       expect(recedingPicks).toHaveLength(2);
       for (const vote of recedingPicks) {
-        expect(vote.className).toContain('debatePlayerPickRecede_250ms_linear_both');
+        expect(vote.className).toContain('debatePlayerPickRecede_1000ms_linear_both');
         expect(vote.style.animationDelay).toBe(
           (container.querySelector('[data-debate-banner]') as HTMLElement).style.animationDelay
         );
