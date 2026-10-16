@@ -1,5 +1,6 @@
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react';
 
+import { getDefaultStore } from 'jotai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Debate, DebateMediaTurnSegment, DebateParticipant } from '~/core/debates/api';
@@ -10,6 +11,7 @@ import { recordAnimationRestarts } from '~/core/debates/turn-timer-fixtures';
 import type { DebatePlaybackController } from '~/core/debates/use-debate-playback';
 
 import { DebateFeedPlayer } from './debate-feed-player';
+import { feedFullPlaybackStartedAtom } from './feed-full-playback';
 
 const SPACE_1 = '11111111111111111111111111111111';
 const SPACE_1_DASHED = '11111111-1111-1111-1111-111111111111';
@@ -27,6 +29,8 @@ const mocks = vi.hoisted(() => ({
   endCardEnabled: [] as boolean[],
   /** Each call's `shown`, so a test can see when the card's numbers are refreshed. */
   endCardShown: [] as boolean[],
+  /** Each render's `mediaAttached`, as the player handed it to the playback hook. */
+  mediaAttached: [] as boolean[],
 }));
 
 const watchedMocks = vi.hoisted(() => ({ markDebateWatched: vi.fn() }));
@@ -84,7 +88,10 @@ const emptyTicker = () => ({
 });
 
 vi.mock('~/core/debates/use-debate-playback', () => ({
-  useDebatePlayback: () => mocks.controller,
+  useDebatePlayback: (_debate: unknown, _enabled: boolean, options?: { mediaAttached?: boolean }) => {
+    mocks.mediaAttached.push(options?.mediaAttached ?? true);
+    return mocks.controller;
+  },
 }));
 
 vi.mock('~/core/debates/use-playback-analytics', () => ({
@@ -183,6 +190,8 @@ function controllerFixture(overrides: {
   roundTurns?: DebatePlaybackController['roundTurns'];
   /** Per-tile stills (GEO-3280); null where geo-chat cut none. */
   posters?: { slot1: string | null; slot2: string | null };
+  /** Which slots were signed as the feed rendition rather than the raw recording. */
+  renditions?: { slot1: boolean; slot2: boolean };
 }) {
   /*
    * Four 30s turns from `turnSlot`, and `turnState` read off them rather than pinned.
@@ -204,6 +213,7 @@ function controllerFixture(overrides: {
     slot1Poster: overrides.posters?.slot1 ?? null,
     slot2Poster: overrides.posters?.slot2 ?? null,
     urls: overrides.urls ?? { slot1: 'https://cdn.test/slot1.webm', slot2: 'https://cdn.test/slot2.webm' },
+    renditions: overrides.renditions ?? { slot1: false, slot2: false },
     ready: overrides.ready ?? true,
     error: null,
     playing: overrides.playing ?? true,
@@ -2397,5 +2407,122 @@ describe('Open rounds in-app player: the last word (GEO-3277)', () => {
     };
     expect(tagAt(100)).toEqual(['2']);
     expect(tagAt(70)).toEqual([]);
+  });
+});
+
+describe('holding the full recordings until the viewer asks (feed bandwidth)', () => {
+  beforeEach(() => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+    mocks.mediaAttached = [];
+  });
+  afterEach(() => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+  });
+
+  const stills = { slot1: 'https://cdn.test/still-1.jpg', slot2: 'https://cdn.test/still-2.jpg' };
+
+  it('mounts no recording on a held card, shows the stills and a Play control, and starts nothing', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, getByRole, queryByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(container.querySelectorAll('[data-debate-poster]')).toHaveLength(2);
+    expect(getByRole('button', { name: 'Play debate' })).toBeTruthy();
+    // Nothing to mute, and nothing to scrub, until there is a recording.
+    expect(queryByRole('button', { name: 'Unmute' })).toBeNull();
+    expect(container.querySelector('input[type="range"]')).toBeNull();
+    expect(container.querySelector('[data-debate-full-playback-held="true"]')).toBeTruthy();
+    // Detached, so the hook lapses and re-signs its URLs as it does for a released card.
+    expect(mocks.mediaAttached.at(-1)).toBe(false);
+    const controller = mocks.controller as DebatePlaybackController;
+    expect(controller.resumeBoth).not.toHaveBeenCalled();
+  });
+
+  it('says nothing is loading on a held card without a still', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false });
+    const { container } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    expect(container.textContent).not.toContain('Loading');
+  });
+
+  it('attaches both recordings when Play is pressed', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, getByRole, queryByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+
+    const videos = Array.from(container.querySelectorAll('video'));
+    expect(videos.map(video => video.getAttribute('src'))).toEqual([
+      'https://cdn.test/slot1.webm',
+      'https://cdn.test/slot2.webm',
+    ]);
+    expect(container.querySelector('[data-debate-full-playback-held="false"]')).toBeTruthy();
+    // The pair's own controls take over from the held card's one.
+    expect(queryByRole('button', { name: 'Unmute' })).toBeTruthy();
+    expect(mocks.mediaAttached.at(-1)).toBe(true);
+    expect(getDefaultStore().get(feedFullPlaybackStartedAtom)).toBe(true);
+  });
+
+  it('lifts the hold from a tap anywhere on the video, too', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, getAllByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getAllByRole('button', { name: 'Pause or play' })[0]);
+
+    expect(container.querySelectorAll('video')).toHaveLength(2);
+    // The tap lifted the hold; it did not also toggle the not-yet-attached pair.
+    const controller = mocks.controller as DebatePlaybackController;
+    expect(controller.togglePlayback).not.toHaveBeenCalled();
+  });
+
+  it('lifts the hold for every player once the viewer has started one', () => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, true);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, posters: stills });
+    const { container, queryByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    expect(container.querySelectorAll('video')).toHaveLength(2);
+    expect(queryByRole('button', { name: 'Play debate' })).toBeNull();
+  });
+
+  it('plays as before when the card is not held', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, posters: stills });
+    const { container, queryByRole } = render(<DebateFeedPlayer debate={debate} active />);
+
+    expect(container.querySelectorAll('video')).toHaveLength(2);
+    expect(queryByRole('button', { name: 'Play debate' })).toBeNull();
+    expect(mocks.mediaAttached.at(-1)).toBe(true);
+  });
+
+  it('loops a muted preview clip on the active held card when one is supplied, and the still otherwise', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const previewClips = { slot1: 'https://cdn.test/preview-1.mp4', slot2: null };
+    const { container, rerender } = render(
+      <DebateFeedPlayer debate={debate} active holdFullPlayback previewClips={previewClips} />
+    );
+
+    const clips = Array.from(container.querySelectorAll<HTMLVideoElement>('video[data-debate-preview-clip]'));
+    expect(clips.map(clip => clip.getAttribute('src'))).toEqual(['https://cdn.test/preview-1.mp4']);
+    expect(clips[0].muted).toBe(true);
+    expect(clips[0].loop).toBe(true);
+    // Only clips: the full recordings are still held.
+    expect(container.querySelectorAll('video')).toHaveLength(1);
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} holdFullPlayback previewClips={previewClips} />);
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+  });
+
+  it("leaves the next card's feed rendition at metadata and still buffers a raw recording", () => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, true);
+    mocks.controller = controllerFixture({
+      mutedByUser: true,
+      turnSlot: 1,
+      playing: false,
+      renditions: { slot1: true, slot2: false },
+    });
+    const { container } = render(<DebateFeedPlayer debate={debate} active={false} preload buffer holdFullPlayback />);
+
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    expect(slot1.getAttribute('preload')).toBe('metadata');
+    expect(slot2.getAttribute('preload')).toBe('auto');
   });
 });

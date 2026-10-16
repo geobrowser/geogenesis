@@ -93,11 +93,13 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
       debate,
       active,
       releaseMedia,
+      holdFullPlayback,
       reducedOverlays,
     }: {
       debate: Debate;
       active: boolean;
       releaseMedia?: boolean;
+      holdFullPlayback?: boolean;
       reducedOverlays?: boolean;
     }) => (
       <>
@@ -107,6 +109,7 @@ vi.mock('~/core/debates/browse/debate-feed-player', async () => {
           data-debate={debate.id}
           data-active={active}
           data-release-media={releaseMedia ? 'true' : 'false'}
+          data-hold-full-playback={holdFullPlayback ? 'true' : 'false'}
           data-reduced-overlays={reducedOverlays ? 'true' : 'false'}
           onClick={mocks.playerToggle}
         />
@@ -432,6 +435,16 @@ describe('DebateExploreFeedCard', () => {
 
     intersectAll(0.4);
     expect(screen.getByTestId('player').getAttribute('data-active')).toBe('false');
+  });
+
+  // The lead card used to stream both full recordings on arrival: 76.5 MB of an idle visit's 84 MB.
+  it('holds the full recordings until the viewer starts one', () => {
+    mocks.debateQuery = { data: watchableDebate(), isError: false };
+    mocks.mediaQuery = { data: { artifacts: [{ kind: 'final_video' }] }, isError: false };
+    renderCard();
+    intersectAll(0.7);
+
+    expect(screen.getByTestId('player').getAttribute('data-hold-full-playback')).toBe('true');
   });
 
   describe('releasing media nobody can see', () => {

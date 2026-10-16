@@ -3,6 +3,7 @@
 import * as React from 'react';
 
 import cx from 'classnames';
+import { useAtom } from 'jotai';
 
 import { ActionSurface } from '~/core/action-context-provider';
 import type { Debate, DebateParticipant } from '~/core/debates/api';
@@ -50,6 +51,7 @@ import { DebateClaimCounter } from './debate-claim-counter';
 import { ClaimScrubberMarkers, DebateClaimTickerStack, useDebateClaimTicker } from './debate-claim-ticker';
 import { DebateEndCard } from './debate-end-card';
 import { DebateRoundBadge, DebateRoundBanner, DebateRoundCard } from './debate-round-cues';
+import { type DebatePreviewClips, debatePreviewClips, feedFullPlaybackStartedAtom } from './feed-full-playback';
 import { Pause, Play, Speaker, SpeakerMuted } from './icons';
 import { LABEL_FONT, STAMP_FONT, TAG_CLASS } from './stamp-styles';
 import { useDebateEndCard } from './use-debate-end-card';
@@ -134,6 +136,17 @@ type DebateFeedPlayerProps = {
   initialSeekSeconds?: number | null;
   /** Told whenever this card's playback state changes — the linked debate's card on its own page. */
   onPlaybackState?: (state: DebatePagePlayerState) => void;
+  /**
+   * Attach no full recording until the viewer starts one — the feeds pass
+   * `DEBATE_FEED_HOLDS_FULL_PLAYBACK`. See `feed-full-playback.ts`.
+   *
+   * A held card signs its URLs as before, so the tap plays without a round trip, but mounts no
+   * <video> for them: it shows the stills and a Play control, and neither autoplays nor buffers.
+   * The first tap on any held card lifts the hold for every player in the tab.
+   */
+  holdFullPlayback?: boolean;
+  /** Clips to loop on a held card in place of the stills. Defaults to `debatePreviewClips`. */
+  previewClips?: DebatePreviewClips;
 };
 
 /** The longest `activateBothInGesture` holds pause ticks while its re-plays settle. */
@@ -150,13 +163,19 @@ export function DebateFeedPlayer({
   onPlaybackRequest,
   initialSeekSeconds = null,
   onPlaybackState,
+  holdFullPlayback = false,
+  previewClips,
 }: DebateFeedPlayerProps) {
+  const [fullPlaybackStarted, setFullPlaybackStarted] = useAtom(feedFullPlaybackStartedAtom);
+  const held = holdFullPlayback && !fullPlaybackStarted;
   // Loading is deliberately wider than playing. `useDebatePlayback`'s flag gates only the URL
   // fetch and the transcript query — playback is driven by `active` in the effect below — so a
   // preloading card fetches without autoplaying off-screen.
-  const controller = useDebatePlayback(debate, active || preload, { mediaAttached: !releaseMedia });
-  // What the <video> elements actually hold: a released card, or one re-signing lapsed URLs, has none.
-  const detached = releaseMedia || controller.urlsLapsed;
+  // A held card is detached as a released one is, so its URLs lapse and re-sign the same way.
+  const controller = useDebatePlayback(debate, active || preload, { mediaAttached: !releaseMedia && !held });
+  // What the <video> elements actually hold: a released card, a held one, or one re-signing lapsed
+  // URLs, has none.
+  const detached = releaseMedia || held || controller.urlsLapsed;
   const measurement = usePlaybackAnalytics(debate, active, controller, !detached);
   const {
     slot1VideoRef,
@@ -166,6 +185,7 @@ export function DebateFeedPlayer({
     slot1Poster,
     slot2Poster,
     urls,
+    renditions,
     ready,
     error,
     playing,
@@ -229,8 +249,22 @@ export function DebateFeedPlayer({
   // starts playback lets the pair go first.
   const togglePlayback = () => {
     measurement.control(playing ? 'pause' : playbackEnded ? 'replay' : 'play');
+    if (!playing) setFullPlaybackStarted(true);
     pair.release();
     togglePlaybackRaw();
+  };
+  /**
+   * The viewer asking to watch a held card.
+   *
+   * Lifting the hold is all it takes: the recordings attach, the pair waits until both can play,
+   * and the autoplay effect starts them muted, as on any card before the hold. Muted because the
+   * elements do not exist yet inside this tap, and iOS lets an element make sound only from a
+   * gesture made on it; the mute control appears with the video.
+   */
+  const startFullPlayback = () => {
+    measurement.control('play');
+    setFullPlaybackStarted(true);
+    if (!active) onPlaybackRequest?.();
   };
   const playFromStart = () => {
     measurement.control('replay');
@@ -479,7 +513,8 @@ export function DebateFeedPlayer({
   }, [active, playbackEnded, replayPending]);
   const showControls = ready && (awaitingTap || showReplay);
   // An ended debate always offers a replay; a stopped one shows the paused glyph.
-  const showPausedGlyph = ready && awaitingTap && !playbackEnded;
+  const showPausedGlyph = ready && awaitingTap && !playbackEnded && !held;
+  const clips = previewClips ?? debatePreviewClips(debate);
 
   // Whether the scrubber is on screen, which the claim stack has to know as well as the scrubber
   // itself — it sits in the same bottom band and lifts clear of it. Hover is the remaining case and
@@ -691,6 +726,10 @@ export function DebateFeedPlayer({
     []
   );
   const toggleFromVideo = () => {
+    if (held) {
+      startFullPlayback();
+      return;
+    }
     setFlash({ icon: playing ? 'pause' : 'play', visible: true });
     if (flashTimeoutRef.current) clearTimeout(flashTimeoutRef.current);
     flashTimeoutRef.current = setTimeout(() => setFlash(current => ({ ...current, visible: false })), 600);
@@ -727,6 +766,7 @@ export function DebateFeedPlayer({
         data-debate-playing={playing ? 'true' : 'false'}
         data-debate-autoplay-blocked={autoplayBlocked ? 'true' : 'false'}
         data-debate-pair-held={pairHeld ? 'true' : 'false'}
+        data-debate-full-playback-held={held ? 'true' : 'false'}
         // No gap and one radius on the outside: the two tiles are a single surface in the Figma
         // frame, which is what lets the subtitle and the round card straddle the seam rather than
         // sit inside one tile.
@@ -748,7 +788,11 @@ export function DebateFeedPlayer({
           poster={slot1Poster}
           posterEager={active || preload}
           videoRef={slot1VideoRef}
-          buffer={active || buffer}
+          // The next card's raw WebM has to be buffered to arrive playable on every engine. A feed
+          // rendition is a fast-start MP4 that plays from its header, so it waits to be reached.
+          buffer={active || (buffer && !renditions.slot1)}
+          previewClip={held && active ? clips.slot1 : null}
+          held={held}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 1 && !betweenTurns}
           countdown={playing && turnState?.slot === 1 ? turnState : null}
@@ -772,8 +816,10 @@ export function DebateFeedPlayer({
           lastWord={lastWordSlot === 1}
           claimsOpen={claimsOpenFor(1)}
           onClaimsHoverChange={onTileHover(1)}
+          // Not on a held card: there is nothing to pause, and an unmute there would have no element
+          // to make audible inside the tap.
           topLeft={
-            ready && !playbackEnded ? (
+            ready && !playbackEnded && !held ? (
               <div className="flex items-center gap-2">
                 {/* Desktop: a persistent play/pause beside the mute control. Mobile keeps the
                   centred paused glyph and tap-to-toggle instead. */}
@@ -820,7 +866,9 @@ export function DebateFeedPlayer({
           poster={slot2Poster}
           posterEager={active || preload}
           videoRef={slot2VideoRef}
-          buffer={active || buffer}
+          buffer={active || (buffer && !renditions.slot2)}
+          previewClip={held && active ? clips.slot2 : null}
+          held={held}
           concealed={!pair.mayShow}
           audible={playing && turnState?.slot === 2 && !betweenTurns}
           countdown={playing && turnState?.slot === 2 ? turnState : null}
@@ -843,7 +891,7 @@ export function DebateFeedPlayer({
           // Taller than the top tile's, per the frame.
           scrimClassName="h-[4.625rem]"
           scrubber={
-            ready ? (
+            ready && !held ? (
               // Always available so the viewer can seek. During playback it recedes to
               // hover-only and drops pointer-events so it can't swallow play/pause taps.
               // `pointer-events-none` does not stop keyboard focus reaching the range input, which
@@ -955,6 +1003,18 @@ export function DebateFeedPlayer({
           </button>
         )}
 
+        {/* A held card's one control, at every width: nothing plays until it is pressed. */}
+        {held && (
+          <button
+            type="button"
+            aria-label="Play debate"
+            onClick={startFullPlayback}
+            className={cx(CENTERED_PLAYBACK_CONTROL_CLASS, 'z-30 grid')}
+          >
+            <Play />
+          </button>
+        )}
+
         {/* Desktop only — mobile already shows the centred paused glyph in this spot. */}
         <div
           aria-hidden
@@ -1016,6 +1076,8 @@ function DebaterVideo({
   posterEager = false,
   videoRef,
   buffer = false,
+  previewClip = null,
+  held = false,
   concealed = false,
   audible,
   countdown,
@@ -1055,6 +1117,10 @@ function DebaterVideo({
   videoRef: React.RefObject<HTMLVideoElement | null>;
   /** Ask the browser to buffer this recording rather than stop at its header. See the player's `buffer`. */
   buffer?: boolean;
+  /** A short muted clip to loop while there is no `src`, over the still. See the player's `previewClips`. */
+  previewClip?: string | null;
+  /** The player is holding the full recording: no `src` is coming until the viewer asks, so say nothing is loading. */
+  held?: boolean;
   /**
    * Keep the element invisible while its partner cannot show a frame yet (GEO-2965).
    *
@@ -1383,6 +1449,19 @@ function DebaterVideo({
             onPlay={onPlaybackTick}
             onTimeUpdate={onPlaybackTick}
           />
+        ) : previewClip ? (
+          // Muted, so it may autoplay anywhere; small, so it is fetched whole.
+          <video
+            key={previewClip}
+            data-debate-preview-clip=""
+            className="relative h-full w-full object-cover"
+            src={previewClip}
+            muted
+            loop
+            autoPlay
+            playsInline
+            preload="auto"
+          />
         ) : (
           <div
             className={cx(
@@ -1391,7 +1470,7 @@ function DebaterVideo({
               poster ? 'bg-transparent' : 'bg-bg'
             )}
           >
-            {!poster && 'Loading…'}
+            {!poster && !held && 'Loading…'}
           </div>
         )}
       </button>

@@ -148,7 +148,7 @@ type RecordingUrlRequest = { debateId: string; filename: string; variant?: Recor
 
 /**
  * Signs one recording, carrying `variant` only when one is wanted so the default request is
- * unchanged. A mobile rendition that cannot be signed (GEO-3118) falls back to the recording
+ * unchanged. A feed rendition that cannot be signed (GEO-3118) falls back to the recording
  * itself: the rendition is an optimisation, and failing to get one is no reason to show the
  * viewer a load error for a debate that plays.
  */
@@ -156,10 +156,17 @@ function signRecording(
   sign: (request: RecordingUrlRequest) => Promise<{ url: string }>,
   debateId: string,
   filename: string,
-  variant: RecordingPlaybackVariant | undefined
+  variant: RecordingPlaybackVariant | undefined,
+  renditionUrls: Set<string>
 ) {
   if (!variant) return sign({ debateId, filename });
-  return sign({ debateId, filename, variant }).catch(() => sign({ debateId, filename }));
+  return sign({ debateId, filename, variant }).then(
+    result => {
+      renditionUrls.add(result.url);
+      return result;
+    },
+    () => sign({ debateId, filename })
+  );
 }
 
 export function useDebatePlayback(
@@ -170,6 +177,15 @@ export function useDebatePlayback(
   const recordingUrls = useRecordingPlaybackUrl();
   const [urls, setUrls] = React.useState<PlaybackUrls>({ slot1: null, slot2: null });
   const urlsCommittedAtRef = React.useRef<number | null>(null);
+  /**
+   * The signed URLs that are a feed rendition rather than the recording itself (GEO-3118).
+   *
+   * A slot asked for the rendition may still be holding the recording, since a rendition that
+   * cannot be signed falls back to it. The player has to know which it got, because the two load
+   * differently: the raw WebM has no cues and needs `preload="auto"` to load at all, the
+   * faststart MP4 does not and should not pull its whole file for a card nobody is watching.
+   */
+  const renditionUrlsRef = React.useRef(new Set<string>());
   // Held URLs aged past the reuse window while released; the player renders no <video> until they
   // are re-signed, so a lapsed URL never reaches an element.
   const [urlsLapsed, setUrlsLapsed] = React.useState(false);
@@ -451,9 +467,10 @@ export function useDebatePlayback(
   const slot2Recording = debate.recordings.find(recording => recording.participant_slot === 2) ?? null;
   const slot1RecordingFilename = slot1Recording?.filename ?? null;
   const slot2RecordingFilename = slot2Recording?.filename ?? null;
-  // Which file of each recording to sign: the 720p H.264 rendition on a phone, when the flag is on
-  // and geo-chat has written one (GEO-3118); otherwise the recording itself, as before. Decided
-  // per slot, since a rendition can exist for one recording before the other.
+  // Which file of each recording to sign: the 480p H.264 feed rendition, on any device that can
+  // play it, when the flag is on and geo-chat has written one (GEO-3118); otherwise the recording
+  // itself, as before. Decided per slot, since a rendition can exist for one recording before the
+  // other.
   const slot1MobileContentType = slot1Recording?.mobile_content_type ?? null;
   const slot2MobileContentType = slot2Recording?.mobile_content_type ?? null;
   const slot1Variant = React.useMemo(
@@ -580,8 +597,20 @@ export function useDebatePlayback(
     refreshedSlotsRef.current.clear();
 
     Promise.all([
-      signRecording(recordingUrlsRef.current.lookup, debate.id, slot1RecordingFilename, slot1Variant),
-      signRecording(recordingUrlsRef.current.lookup, debate.id, slot2RecordingFilename, slot2Variant),
+      signRecording(
+        recordingUrlsRef.current.lookup,
+        debate.id,
+        slot1RecordingFilename,
+        slot1Variant,
+        renditionUrlsRef.current
+      ),
+      signRecording(
+        recordingUrlsRef.current.lookup,
+        debate.id,
+        slot2RecordingFilename,
+        slot2Variant,
+        renditionUrlsRef.current
+      ),
     ])
       .then(([slot1Result, slot2Result]) => {
         // Cancelled mid-flight: commit nothing and leave the key unclaimed so the next run
@@ -669,7 +698,8 @@ export function useDebatePlayback(
           recordingUrlsRef.current.refresh,
           debate.id,
           filename,
-          slot === 1 ? slot1Variant : slot2Variant
+          slot === 1 ? slot1Variant : slot2Variant,
+          renditionUrlsRef.current
         );
         // Merged rather than replaced: the other slot's URL is in use and is not ours to touch.
         setUrls(current =>
@@ -710,8 +740,20 @@ export function useDebatePlayback(
     let cancelled = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
     Promise.all([
-      signRecording(recordingUrlsRef.current.refresh, debate.id, slot1RecordingFilename, slot1Variant),
-      signRecording(recordingUrlsRef.current.refresh, debate.id, slot2RecordingFilename, slot2Variant),
+      signRecording(
+        recordingUrlsRef.current.refresh,
+        debate.id,
+        slot1RecordingFilename,
+        slot1Variant,
+        renditionUrlsRef.current
+      ),
+      signRecording(
+        recordingUrlsRef.current.refresh,
+        debate.id,
+        slot2RecordingFilename,
+        slot2Variant,
+        renditionUrlsRef.current
+      ),
     ])
       .then(([slot1Result, slot2Result]) => {
         if (cancelled) return;
@@ -1543,6 +1585,11 @@ export function useDebatePlayback(
     slot1Poster: speakerStillUrl(debate.id, 1, mediaQuery.data?.artifacts),
     slot2Poster: speakerStillUrl(debate.id, 2, mediaQuery.data?.artifacts),
     urls,
+    /** Per slot: whether the URL in `urls` is the feed rendition rather than the raw recording. */
+    renditions: {
+      slot1: urls.slot1 != null && renditionUrlsRef.current.has(urls.slot1),
+      slot2: urls.slot2 != null && renditionUrlsRef.current.has(urls.slot2),
+    },
     // A debate that cannot be timed is never ready, so nothing autoplays it on a zero-length
     // timeline; `error` carries the reason to the card.
     ready: ready && !timingUnavailable,
