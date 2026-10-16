@@ -1700,6 +1700,47 @@ describe('DebateRoomPageClient', () => {
     );
   });
 
+  // The card's mic is live, so turning its camera on keeps the preview 'ready' while the camera is
+  // still opening, and the intro connection can start before the hand-off has landed.
+  it('keeps the hand-off’s state when the intro connection drops while the card was still adding the camera', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const camera = deferred<unknown[]>();
+    mocks.createLocalTracks.mockResolvedValueOnce([createLocalAudioTrack()]);
+    mocks.createLocalTracks.mockReturnValueOnce(camera.promise);
+    mocks.createLocalTracks.mockResolvedValue([
+      createLocalAudioTrack(),
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <CameraAddedHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(2));
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <CameraAddedHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(mocks.roomOn).toHaveBeenCalledWith('disconnected', expect.any(Function)));
+
+    await act(async () => {
+      camera.resolve([{ mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() }]);
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('2'));
+
+    act(() => emitRoomEvent('disconnected', 99));
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument(), {
+      timeout: 3000,
+    });
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+  });
+
   it('opens no devices for a hand-off that chose neither', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
 
@@ -6900,6 +6941,24 @@ function InFlightHandover({ kinds }: { kinds: { audio: boolean; video: boolean }
     media.beginSession(debateMediaSessionKey('debate-1'));
     void media.ensurePreview(kinds).catch(() => undefined);
   }, [kinds, media]);
+
+  return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;
+}
+
+/** A card that opened the mic, then asked for the camera as well, which is still opening. */
+function CameraAddedHandover() {
+  const media = useDebateMediaSession();
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    media.beginSession(debateMediaSessionKey('debate-1'));
+    void (async () => {
+      await media.ensurePreview({ audio: true, video: false }).catch(() => undefined);
+      void media.ensurePreview({ audio: true, video: true }).catch(() => undefined);
+    })();
+  }, [media]);
 
   return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;
 }
