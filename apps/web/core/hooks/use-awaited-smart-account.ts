@@ -1,5 +1,7 @@
 'use client';
 
+import { useIdentityToken } from '@geogenesis/auth';
+
 import * as React from 'react';
 
 import { useSmartAccount } from './use-smart-account';
@@ -30,4 +32,34 @@ export function useAwaitedSmartAccount(signedIn: boolean) {
   }, [awaitingAccount]);
 
   return { smartAccountAddress, awaitingAccount };
+}
+
+/**
+ * The address a feed request is made for, and whether that request must wait before it is sent.
+ *
+ * Unlike `useAwaitedSmartAccount`, this does not wait for the account. The feed routes read the
+ * wallet cookie themselves, so on the client the address only keys the cache, and the cookie the
+ * server rendered the page with holds the very address `useSmartAccount` reports once ZeroDev has
+ * built the account (it writes the cookie from it). Seeding the key from the cookie lets the first
+ * page go out at hydration, and it stays the same key when the account arrives, so nothing refetches.
+ *
+ * A request that carries a Privy identity token (`needsIdentityToken`) still has to wait, but only
+ * for that token, which Privy restores without building the account; at most
+ * `SIGNED_IN_ACCOUNT_WAIT_MS`, after which it goes without one.
+ */
+export function useFeedViewer(cookieAddress: string | null, needsIdentityToken: boolean) {
+  const { smartAccount } = useSmartAccount();
+  const { identityToken } = useIdentityToken();
+  const smartAccountAddress = smartAccount?.account.address ?? null;
+
+  const [waitOver, setWaitOver] = React.useState(false);
+  const awaitingIdentityToken =
+    needsIdentityToken && cookieAddress !== null && smartAccountAddress === null && identityToken === null && !waitOver;
+  React.useEffect(() => {
+    if (!awaitingIdentityToken) return;
+    const timer = setTimeout(() => setWaitOver(true), SIGNED_IN_ACCOUNT_WAIT_MS);
+    return () => clearTimeout(timer);
+  }, [awaitingIdentityToken]);
+
+  return { viewerAddress: smartAccountAddress ?? cookieAddress, awaitingIdentityToken };
 }
