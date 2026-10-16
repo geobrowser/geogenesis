@@ -475,6 +475,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * microphone only — a lobby has no camera to carry.
    */
   const carriedMic = useCarriedLobbyMic();
+  const micLeftToLobby = React.useRef(handedOverSession && mediaSession.lobbyDeferredKindsRef.current.audio);
+  /** A hand-off's state from its tracks; a mic the card left to the lobby comes from the lobby's carried mic. */
+  const handedOverJoinState = React.useCallback(
+    (kinds: readonly string[]) => {
+      const state = inheritedJoinState(kinds, true);
+      return micLeftToLobby.current && carriedMic !== null ? { ...state, audioMuted: !carriedMic } : state;
+    },
+    [carriedMic]
+  );
   /*
    * Three ways a choice can precede this room, in order of how directly they say so: devices a card
    * handed over and still holds, a picker's recorded answer for this debate, and the mic a lobby was
@@ -484,10 +493,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const inherited = React.useMemo(
     () =>
       handedOverSession
-        ? inheritedJoinState(
-            inheritedTracks.map(track => track.mediaStreamTrack.kind),
-            handedOverSession
-          )
+        ? handedOverJoinState(inheritedTracks.map(track => track.mediaStreamTrack.kind))
         : (carriedJoinState ?? { audioMuted: carriedMic === false, videoEnabled: true }),
     // First render only: claiming the session is what erases the evidence of a hand-off.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2738,7 +2744,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
          * the preview 'ready', so the intro connection can start (and cancel this) before the
          * hand-off lands, and a later drop would re-derive from the tracks the disconnect stopped.
          */
-        settledJoinStateRef.current ??= handedOverAtMount.current ? inheritedJoinState(liveKinds, true) : inherited;
+        settledJoinStateRef.current ??= handedOverAtMount.current ? handedOverJoinState(liveKinds) : inherited;
         setAudioMuted(settledJoinStateRef.current.audioMuted);
         setVideoEnabled(settledJoinStateRef.current.videoEnabled);
       }
@@ -2755,6 +2761,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     carriedJoinState,
     debate,
     ensureLocalPreview,
+    handedOverJoinState,
     inherited,
     mediaSession.localTracksRef,
     mediaSession.pendingPreview,

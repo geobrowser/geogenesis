@@ -13,7 +13,12 @@ import {
   rememberLobbyReturnDestination,
 } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
-import { carryLobbyMic, clearCarriedLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
+import {
+  carryLobbyMic,
+  clearCarriedLobbyMic,
+  registerLobbyCapture,
+  reportLobbyMic,
+} from '~/core/debates/lobbies/step-out';
 import { DebateMediaSessionProvider, debateMediaSessionKey, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   CAP_ROUND_ENDS_AT as OPEN_ROUNDS_CAP_ROUND_ENDS_AT,
@@ -29,6 +34,7 @@ import {
   timedOut as openRoundsTimedOut,
 } from '~/core/debates/open-rounds-fixtures';
 import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
+import { DebateRequestMediaPreview } from '~/core/debates/request-media-preview';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
 
 import { DebateRoomPageClient, upcomingTurnLabel } from './debate-room-page-client';
@@ -273,6 +279,8 @@ vi.mock('@livekit/krisp-noise-filter', () => ({
   isKrispNoiseFilterSupported: mocks.krispSupported,
   KrispNoiseFilter: mocks.krispNoiseFilter,
 }));
+
+let lobbyCaptureCleanup = () => {};
 
 function emitRoomEvent(event: string, ...payload: unknown[]) {
   for (const [registeredEvent, callback] of mocks.roomOn.mock.calls) {
@@ -524,6 +532,7 @@ afterEach(async () => {
   window.localStorage.clear();
   clearDebateReturnDestination();
   clearCarriedLobbyMic();
+  lobbyCaptureCleanup();
   await Promise.resolve();
   await Promise.resolve();
   vi.useRealTimers();
@@ -1738,6 +1747,67 @@ describe('DebateRoomPageClient', () => {
       timeout: 3000,
     });
     expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+  });
+
+  // A card opened over a live lobby leaves the mic to it; the room joins with the mic the lobby
+  // carried, and opens it.
+  it.each([
+    { lobbyMicOn: true, button: 'Mute microphone' },
+    { lobbyMicOn: false, button: 'Unmute microphone' },
+  ])('takes the mic a card left to the lobby from the lobby (on: $lobbyMicOn)', async ({ lobbyMicOn, button }) => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    lobbyCaptureCleanup = registerLobbyCapture('audio', { on: lobbyMicOn, release: vi.fn() });
+    reportLobbyMic(lobbyMicOn);
+    carryLobbyMic();
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <CardOverLobby />
+      </DebateMediaSessionProvider>
+    );
+    await screen.findByText(lobbyMicOn ? 'Joining with mic on, camera off' : 'Joining listening only');
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+    // The lobby page goes on the way in.
+    lobbyCaptureCleanup();
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    expect(await screen.findByRole('button', { name: button })).toBeInTheDocument();
+    if (lobbyMicOn) {
+      await waitFor(() =>
+        expect(mocks.createLocalTracks).toHaveBeenCalledWith(expect.objectContaining({ audio: expect.anything() }))
+      );
+    } else {
+      expect(mocks.createLocalTracks).not.toHaveBeenCalledWith(expect.objectContaining({ audio: expect.anything() }));
+    }
+  });
+
+  it('keeps a mic turned off on the card over the lobby’s', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    lobbyCaptureCleanup = registerLobbyCapture('audio', { on: true, release: vi.fn() });
+    reportLobbyMic(true);
+    carryLobbyMic();
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <CardOverLobby />
+      </DebateMediaSessionProvider>
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn microphone off' }));
+    await screen.findByText('Joining listening only');
+    lobbyCaptureCleanup();
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    expect(await screen.findByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument();
   });
 
   it('opens no devices for a hand-off that chose neither', async () => {
@@ -6960,6 +7030,12 @@ function CameraAddedHandover() {
   }, [media]);
 
   return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;
+}
+
+/** A request card that hands its session to the room, as `DebateRequestDialog` does. */
+function CardOverLobby() {
+  const retain = React.useRef(true);
+  return <DebateRequestMediaPreview sessionKey={debateMediaSessionKey('debate-1')} retain={retain} />;
 }
 
 function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteReady: boolean }): Debate {

@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { readSession, removeSession, writeSession } from '~/core/utils/session-storage';
 
@@ -18,14 +19,25 @@ export function registerLobbyStepOut(stepOut: () => Promise<void>) {
 
 export type LobbyCaptureKind = 'audio' | 'video';
 
-/** Devices this tab's lobby is capturing, each with a way to stop it. iPhone Safari keeps one capture per kind. */
-const lobbyCaptures = new Map<LobbyCaptureKind, () => void>();
+/** A device the lobby is capturing: whether it is on (unmuted) and how to stop it. */
+export type LobbyCapture = { on: boolean; release: () => void };
+
+/** Devices this tab's lobby is capturing. iPhone Safari keeps one capture per kind. */
+const lobbyCaptures = new Map<LobbyCaptureKind, LobbyCapture>();
+const lobbyCaptureListeners = new Set<() => void>();
+
+function notifyLobbyCaptures() {
+  lobbyCaptureListeners.forEach(listener => listener());
+}
 
 /** Set by the lobby's voice room while it holds a capture of `kind`; the returned function clears it. */
-export function registerLobbyCapture(kind: LobbyCaptureKind, release: () => void) {
-  lobbyCaptures.set(kind, release);
+export function registerLobbyCapture(kind: LobbyCaptureKind, capture: LobbyCapture) {
+  lobbyCaptures.set(kind, capture);
+  notifyLobbyCaptures();
   return () => {
-    if (lobbyCaptures.get(kind) === release) lobbyCaptures.delete(kind);
+    if (lobbyCaptures.get(kind) !== capture) return;
+    lobbyCaptures.delete(kind);
+    notifyLobbyCaptures();
   };
 }
 
@@ -36,9 +48,25 @@ export function lobbyCaptureLive(kind?: LobbyCaptureKind) {
 
 /** Stops the lobby's capture of `kind`, or every capture when omitted. */
 export function releaseLobbyCapture(kind?: LobbyCaptureKind) {
-  for (const [captured, release] of [...lobbyCaptures]) {
-    if (!kind || captured === kind) release();
+  for (const [captured, capture] of [...lobbyCaptures]) {
+    if (!kind || captured === kind) capture.release();
   }
+}
+
+function subscribeLobbyCaptures(listener: () => void) {
+  lobbyCaptureListeners.add(listener);
+  return () => {
+    lobbyCaptureListeners.delete(listener);
+  };
+}
+
+/** The lobby's capture of `kind`, or null; re-renders as the lobby connects, mutes or lets it go. */
+export function useLobbyCapture(kind: LobbyCaptureKind): LobbyCapture | null {
+  return useSyncExternalStore(
+    subscribeLobbyCaptures,
+    () => lobbyCaptures.get(kind) ?? null,
+    () => null
+  );
 }
 
 /**

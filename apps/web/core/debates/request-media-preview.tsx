@@ -7,7 +7,7 @@ import { Text } from '~/design-system/text';
 
 import { CameraIcon, DebateTileToggleButton, MicrophoneIcon } from './debate-room-controls';
 import { DebateVideoTile } from './debate-video-tile';
-import { lobbyCaptureLive, releaseLobbyCapture } from './lobbies/step-out';
+import { lobbyCaptureLive, releaseLobbyCapture, useLobbyCapture } from './lobbies/step-out';
 import { type DebateMediaSession, preJoinMediaFailure, useOptionalDebateMediaSession } from './media-session';
 import {
   type DebateJoinState,
@@ -18,14 +18,6 @@ import {
 } from './request-join-state';
 
 type DebateMediaPermissions = { camera: DebateMediaPermission; microphone: DebateMediaPermission };
-
-/** Off for any kind a live lobby is capturing: opening a second one cuts the lobby's on iPhone Safari. */
-function withoutLobbyCaptures(state: DebateJoinState): DebateJoinState {
-  return {
-    micOn: state.micOn && !lobbyCaptureLive('audio'),
-    cameraOn: state.cameraOn && !lobbyCaptureLive('video'),
-  };
-}
 
 const UNKNOWN_PERMISSIONS: DebateMediaPermissions = { camera: 'unsupported', microphone: 'unsupported' };
 
@@ -81,9 +73,7 @@ function MediaPreview({
 }: Omit<DebateRequestMediaPreviewProps, 'fallback'> & { session: DebateMediaSession }) {
   const [permission, setPermission] = React.useState<DebateMediaPermissions | null>(null);
 
-  const [want, setWant] = React.useState<DebateJoinState>(() =>
-    withoutLobbyCaptures(initialJoinState ?? { micOn: false, cameraOn: false })
-  );
+  const [want, setWant] = React.useState<DebateJoinState>(initialJoinState ?? { micOn: false, cameraOn: false });
   const [missing, setMissing] = React.useState<{ mic: boolean; camera: boolean }>({ mic: false, camera: false });
   const [failure, setFailure] = React.useState<string | null>(null);
 
@@ -91,6 +81,27 @@ function MediaPreview({
   const acquired = React.useRef<DebateJoinState>({ micOn: false, cameraOn: false });
   const videoRef = React.useRef<HTMLVideoElement | null>(null);
   const initialJoinStateRef = React.useRef(initialJoinState);
+
+  /*
+   * A kind a live lobby is capturing stays the lobby's until toggled here: this card never opens a
+   * second capture of it (iPhone Safari keeps one per kind), and without an earlier choice it shows
+   * the lobby's state, so the next screen joins the way the person already was.
+   */
+  const lobbyMic = useLobbyCapture('audio');
+  const lobbyCamera = useLobbyCapture('video');
+  const [toggledHere, setToggledHere] = React.useState({ mic: false, camera: false });
+  const micToLobby = lobbyMic !== null && !toggledHere.mic;
+  const cameraToLobby = lobbyCamera !== null && !toggledHere.camera;
+  const followLobby = initialJoinStateRef.current === null;
+  const lobbyMicOn = micToLobby && followLobby ? lobbyMic.on : null;
+  const lobbyCameraOn = cameraToLobby && followLobby ? lobbyCamera.on : null;
+  React.useEffect(() => {
+    if (lobbyMicOn === null && lobbyCameraOn === null) return;
+    setWant(current => ({
+      micOn: lobbyMicOn ?? current.micOn,
+      cameraOn: lobbyCameraOn ?? current.cameraOn,
+    }));
+  }, [lobbyCameraOn, lobbyMicOn]);
 
   React.useEffect(() => {
     let active = true;
@@ -103,12 +114,10 @@ function MediaPreview({
       // Two ways a choice can already exist, and a default applies over neither: one arrived with
       // the card, and one was made here while this query was still out.
       if (initialJoinStateRef.current || chosenByViewer.current) return;
-      setWant(
-        withoutLobbyCaptures({
-          micOn: mayAutoStartPreview(answer.microphone),
-          cameraOn: mayAutoStartPreview(answer.camera),
-        })
-      );
+      setWant(current => ({
+        micOn: lobbyCaptureLive('audio') ? current.micOn : mayAutoStartPreview(answer.microphone),
+        cameraOn: lobbyCaptureLive('video') ? current.cameraOn : mayAutoStartPreview(answer.camera),
+      }));
     });
 
     return () => {
@@ -117,25 +126,33 @@ function MediaPreview({
     };
   }, [sessionKey]);
 
-  const wantKey = `${want.micOn}:${want.cameraOn}`;
+  // After `beginSession`, which resets it. The ready room falls back to the mic the lobby carried for a kind left to it.
+  React.useEffect(() => {
+    if (!session.lobbyDeferredKindsRef) return;
+    session.lobbyDeferredKindsRef.current = { audio: micToLobby, video: cameraToLobby };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cameraToLobby, micToLobby]);
+
+  const open = { micOn: want.micOn && !micToLobby, cameraOn: want.cameraOn && !cameraToLobby };
+  const openKey = `${open.micOn}:${open.cameraOn}`;
   React.useEffect(() => {
     let active = true;
 
-    if (!want.micOn && !want.cameraOn) {
+    if (!open.micOn && !open.cameraOn) {
       acquired.current = { micOn: false, cameraOn: false };
       session.stopMedia();
       return;
     }
 
     void session
-      .ensurePreview({ audio: want.micOn, video: want.cameraOn })
+      .ensurePreview({ audio: open.micOn, video: open.cameraOn })
       .then(tracks => {
         if (!active) return;
         const kinds = new Set(tracks.map(track => track.mediaStreamTrack.kind));
         acquired.current = { micOn: kinds.has('audio'), cameraOn: kinds.has('video') };
         setMissing(current => ({
-          mic: want.micOn ? !kinds.has('audio') : current.mic,
-          camera: want.cameraOn ? !kinds.has('video') : current.camera,
+          mic: open.micOn ? !kinds.has('audio') : current.mic,
+          camera: open.cameraOn ? !kinds.has('video') : current.camera,
         }));
       })
       .catch((error: unknown) => {
@@ -143,8 +160,8 @@ function MediaPreview({
         const name = error instanceof Error ? error.name : '';
         if (name === 'NotFoundError') {
           setMissing(current => ({
-            mic: want.micOn && !acquired.current.micOn ? true : current.mic,
-            camera: want.cameraOn && !acquired.current.cameraOn ? true : current.camera,
+            mic: open.micOn && !acquired.current.micOn ? true : current.mic,
+            camera: open.cameraOn && !acquired.current.cameraOn ? true : current.camera,
           }));
         } else {
           const failed = preJoinMediaFailure(error);
@@ -154,16 +171,20 @@ function MediaPreview({
             void readMediaPermission().then(answer => {
               if (!active) return;
               setPermission({
-                camera: answer.camera === 'unsupported' && want.cameraOn ? 'denied' : answer.camera,
-                microphone: answer.microphone === 'unsupported' && want.micOn ? 'denied' : answer.microphone,
+                camera: answer.camera === 'unsupported' && open.cameraOn ? 'denied' : answer.camera,
+                microphone: answer.microphone === 'unsupported' && open.micOn ? 'denied' : answer.microphone,
               });
             });
           }
         }
 
         const fallback = acquired.current;
-        const fallbackJustFailed = fallback.micOn === want.micOn && fallback.cameraOn === want.cameraOn;
-        setWant(fallbackJustFailed ? { micOn: false, cameraOn: false } : fallback);
+        const fallbackJustFailed = fallback.micOn === open.micOn && fallback.cameraOn === open.cameraOn;
+        const next = fallbackJustFailed ? { micOn: false, cameraOn: false } : fallback;
+        setWant(current => ({
+          micOn: micToLobby ? current.micOn : next.micOn,
+          cameraOn: cameraToLobby ? current.cameraOn : next.cameraOn,
+        }));
       });
 
     return () => {
@@ -171,7 +192,7 @@ function MediaPreview({
     };
     // Keyed on the wanted set and session key, not on `session`, whose identity changes on every media event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionKey, wantKey]);
+  }, [sessionKey, openKey]);
 
   const micOn = want.micOn && !missing.mic;
   const cameraOn = want.cameraOn && !missing.camera;
@@ -198,6 +219,8 @@ function MediaPreview({
     if (next.micOn !== undefined && micBlocked) return;
     if (next.cameraOn !== undefined && cameraBlocked) return;
     chosenByViewer.current = true;
+    if (next.micOn !== undefined) setToggledHere(current => ({ ...current, mic: true }));
+    if (next.cameraOn !== undefined) setToggledHere(current => ({ ...current, camera: true }));
     if (next.micOn) releaseLobbyCapture('audio');
     if (next.cameraOn) releaseLobbyCapture('video');
     setFailure(null);

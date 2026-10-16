@@ -364,11 +364,14 @@ function ConnectedVoice({
   const capturedMic = connected ? (microphoneTrack as LocalTrackPublication | undefined)?.track : undefined;
   React.useEffect(() => {
     if (!capturedMic) return;
-    return registerLobbyCapture('audio', () => {
-      onMicChoice(false);
-      void localParticipant.unpublishTrack(capturedMic, true).catch(() => undefined);
+    return registerLobbyCapture('audio', {
+      on: isMicrophoneEnabled,
+      release: () => {
+        onMicChoice(false);
+        void localParticipant.unpublishTrack(capturedMic, true).catch(() => undefined);
+      },
     });
-  }, [capturedMic, localParticipant, onMicChoice]);
+  }, [capturedMic, isMicrophoneEnabled, localParticipant, onMicChoice]);
   const audible = connected && canPlayAudio;
   React.useEffect(() => {
     if (audible) onAudible?.();

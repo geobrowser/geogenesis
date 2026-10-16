@@ -10,12 +10,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateLobbyVoiceToken } from '../api';
 import type { MemberLobbyPageView } from './lobby-view';
 import {
+  type LobbyCapture,
   carryLobbyMic,
   clearCarriedLobbyMic,
   forgetLobbyMic,
   lobbyCaptureLive,
   readCarriedLobbyMic,
   releaseLobbyCapture,
+  useLobbyCapture,
 } from './step-out';
 
 const mocks = vi.hoisted(() => ({
@@ -163,6 +165,7 @@ function renderVoice(view = lobby(), onConnectedChange = vi.fn(), joined = true)
       >
         <Speaking />
       </LobbyVoice>
+      <CaptureProbe />
     </QueryClientProvider>
   );
   const result = render(ui(joined));
@@ -186,6 +189,13 @@ afterEach(() => {
   vi.clearAllMocks();
   mocks.roomListeners.clear();
 });
+
+let latestCapture: LobbyCapture | null = null;
+function CaptureProbe() {
+  latestCapture = useLobbyCapture('audio');
+  return null;
+}
+const captureOn = () => latestCapture?.on ?? null;
 
 describe('LobbyVoice', () => {
   it('mints with this tab’s connection and joins with the mic on', async () => {
@@ -217,6 +227,7 @@ describe('LobbyVoice', () => {
     const view = renderVoice();
     await screen.findByRole('button', { name: /Unmute|Mute/ });
     expect(lobbyCaptureLive('audio')).toBe(true);
+    expect(captureOn()).toBe(false);
 
     act(() => releaseLobbyCapture('audio'));
 
@@ -224,6 +235,15 @@ describe('LobbyVoice', () => {
     expect(mocks.roomProps).toMatchObject({ audio: false });
     view.unmount();
     expect(lobbyCaptureLive('audio')).toBe(false);
+  });
+
+  it('reports whether its captured mic is on', async () => {
+    mocks.microphoneTrack = { track: {} };
+    mocks.isMicrophoneEnabled = true;
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+
+    expect(captureOn()).toBe(true);
   });
 
   it('registers no capture while disconnected', async () => {

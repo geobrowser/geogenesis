@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateChallenge } from './api';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
+import { registerLobbyCapture } from './lobbies/step-out';
 
 const media = vi.hoisted(() => ({
   releaseSession: vi.fn(),
@@ -80,7 +81,12 @@ beforeEach(() => {
   document.documentElement.style.overflow = '';
 });
 
-afterEach(cleanup);
+let clearLobbyCapture: (() => void) | null = null;
+afterEach(() => {
+  cleanup();
+  clearLobbyCapture?.();
+  clearLobbyCapture = null;
+});
 
 describe('DebateChallengeDialog', () => {
   /*
@@ -108,6 +114,33 @@ describe('DebateChallengeDialog', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
 
     expect(onAccept).toHaveBeenCalledWith({ micOn: true, cameraOn: true });
+  });
+
+  // Accepted from a lobby without touching the toggles: the picker should join as the lobby was.
+  it.each([true, false])('accepts with the lobby’s mic (%s) when the card left it to the lobby', async on => {
+    permission = 'granted';
+    media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' } }]);
+    clearLobbyCapture = registerLobbyCapture('audio', { on, release: vi.fn() });
+    const onAccept = vi.fn();
+    renderDialog({ onAccept });
+    await waitFor(() => expect(media.ensurePreview).toHaveBeenCalledWith({ audio: false, video: true }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    expect(onAccept).toHaveBeenCalledWith({ micOn: on, cameraOn: true });
+  });
+
+  it('accepts with the mic chosen on the card over the lobby’s', async () => {
+    permission = 'granted';
+    media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' } }]);
+    clearLobbyCapture = registerLobbyCapture('audio', { on: true, release: vi.fn() });
+    const onAccept = vi.fn();
+    renderDialog({ onAccept });
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn microphone off' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    expect(onAccept).toHaveBeenCalledWith({ micOn: false, cameraOn: true });
   });
 
   it('stops the devices when the card is dismissed', () => {

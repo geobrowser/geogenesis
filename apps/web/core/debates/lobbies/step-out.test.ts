@@ -42,8 +42,8 @@ describe('the lobby capture registry', () => {
   it('tracks each kind and releases only the one asked for', () => {
     const releaseMic = vi.fn();
     const releaseCamera = vi.fn();
-    const clearMic = registerLobbyCapture('audio', releaseMic);
-    const clearCamera = registerLobbyCapture('video', releaseCamera);
+    const clearMic = registerLobbyCapture('audio', { on: true, release: releaseMic });
+    const clearCamera = registerLobbyCapture('video', { on: false, release: releaseCamera });
     expect(lobbyCaptureLive('audio')).toBe(true);
     expect(lobbyCaptureLive()).toBe(true);
 
@@ -60,8 +60,8 @@ describe('the lobby capture registry', () => {
   });
 
   it('keeps a newer registration when an older one clears', () => {
-    const clearOld = registerLobbyCapture('audio', vi.fn());
-    const clearNew = registerLobbyCapture('audio', vi.fn());
+    const clearOld = registerLobbyCapture('audio', { on: true, release: vi.fn() });
+    const clearNew = registerLobbyCapture('audio', { on: false, release: vi.fn() });
 
     clearOld();
     expect(lobbyCaptureLive('audio')).toBe(true);
