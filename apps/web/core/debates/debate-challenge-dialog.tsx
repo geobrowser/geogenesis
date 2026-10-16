@@ -10,6 +10,7 @@ import { Text } from '~/design-system/text';
 
 import type { DebateChallenge, DebateParticipantSummary } from './api';
 import { debateChallengeMediaSessionKey } from './media-session';
+import type { DebateRematchJoinIntent } from './rematch-join-intent';
 import type { DebateJoinState } from './request-join-state';
 import { DebateRequestMediaPreview } from './request-media-preview';
 import { useScrollLock } from './use-scroll-lock';
@@ -19,7 +20,7 @@ type DebateChallengeDialogProps = {
   busy: boolean;
   error: string | null;
   /** Called with the state the card shows, which can run ahead of the devices still opening. */
-  onAccept: (chosen: DebateJoinState) => void;
+  onAccept: (chosen: DebateRematchJoinIntent) => void;
   /** Rejects the challenge for good. */
   onReject: () => void;
   /** Closes this popup and nothing else. The challenge stays live in the hub's Requests tab. */
@@ -124,7 +125,7 @@ export function DebateChallengeDialog({
             </button>
             <button
               type="button"
-              onClick={() => onAccept(shownJoinState.current)}
+              onClick={() => onAccept(videoEnabled ? shownJoinState.current : { micOn: shownJoinState.current.micOn })}
               disabled={busy}
               className={DIALOG_ACTION_BUTTON_CLASS_NAME}
             >

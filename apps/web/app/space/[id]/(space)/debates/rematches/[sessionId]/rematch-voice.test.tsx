@@ -2935,13 +2935,16 @@ describe('with debateVideo off', () => {
     expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
   });
 
-  it('carries no camera into the debate', async () => {
+  it('carries no camera choice into the debate', async () => {
     mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
     rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
     render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
     await flushOwnership();
 
-    await waitFor(() => expect(readRematchJoinIntent('session-1')).toEqual({ micOn: true, cameraOn: false }));
+    await waitFor(() => expect(readRematchJoinIntent('session-1')).toStrictEqual({ micOn: true }));
+    // What the ready room reads: the mic, and no camera choice to override its default.
+    carryJoinIntentIntoDebate('session-1', 'debate-9');
+    expect(readRematchJoinIntent('debate-9')).toStrictEqual({ micOn: true });
   });
 
   it('draws avatars, not the other person’s camera', async () => {

@@ -466,7 +466,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const carriedJoinState = React.useMemo(
     () =>
       chosenBeforeArriving
-        ? { audioMuted: !chosenBeforeArriving.micOn, videoEnabled: chosenBeforeArriving.cameraOn }
+        ? { audioMuted: !chosenBeforeArriving.micOn, videoEnabled: chosenBeforeArriving.cameraOn ?? true }
         : null,
     [chosenBeforeArriving]
   );

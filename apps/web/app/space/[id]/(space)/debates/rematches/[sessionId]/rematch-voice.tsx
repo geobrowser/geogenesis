@@ -434,8 +434,12 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   }, []);
 
   React.useEffect(() => {
-    rememberRematchJoinIntent(session.id, { micOn: micIntent, cameraOn: cameraIntent });
-  }, [cameraIntent, micIntent, session.id]);
+    // No camera choice without the flag, so the ready room keeps its own default.
+    rememberRematchJoinIntent(
+      session.id,
+      videoEnabled ? { micOn: micIntent, cameraOn: cameraIntent } : { micOn: micIntent }
+    );
+  }, [cameraIntent, micIntent, session.id, videoEnabled]);
 
   // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Off a room
   // there is no join event to key on and the dock stays muted, per GEO-2838.

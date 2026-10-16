@@ -204,14 +204,14 @@ describe('ChallengeAcceptedPrompt', () => {
     expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: false });
   });
 
-  it('offers the mic alone and saves no camera with debateVideo off', async () => {
+  it('offers the mic alone and saves no camera choice with debateVideo off', async () => {
     flags.debateVideo = false;
     rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true });
     renderPrompt();
 
     expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
-    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: false }));
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: true }));
     expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ video: true }));
   });
 

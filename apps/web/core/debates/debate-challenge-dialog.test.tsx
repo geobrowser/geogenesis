@@ -163,7 +163,7 @@ describe('DebateChallengeDialog', () => {
     expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
-    expect(onAccept).toHaveBeenCalledWith({ micOn: true, cameraOn: false });
+    expect(onAccept.mock.calls[0]?.[0]).toStrictEqual({ micOn: true });
   });
 
   it('stops the devices when the card is dismissed', () => {

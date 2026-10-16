@@ -1630,6 +1630,21 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.createLocalTracks).not.toHaveBeenCalled();
   });
 
+  // A picker without debateVideo records no camera; the room keeps its own default for it.
+  it('keeps its default camera when the picker recorded only the mic', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    rememberRematchJoinIntent('debate-1', { micOn: false });
+
+    render(
+      <DebateMediaSessionProvider>
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+  });
+
   it('prefers what a card handed over to what a picker recorded', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     rememberRematchJoinIntent('debate-1', { micOn: false, cameraOn: false });

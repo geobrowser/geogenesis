@@ -588,7 +588,8 @@ describe('DebateCoordinator', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Explore claims' }));
 
     expect(mocks.acceptChallengeMutate).toHaveBeenCalled();
-    expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: false, cameraOn: false });
+    // debateVideo is off here, so the card records the mic alone.
+    expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: false });
   });
 
   it('walks the person who accepted into the picker without a card', async () => {
