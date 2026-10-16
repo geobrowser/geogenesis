@@ -25,6 +25,7 @@ import { useGlobalSearchSpaceIds } from './use-global-search-space-ids';
 interface SearchOptions {
   filterByTypes?: string[];
   filterBySpace?: string;
+  filterByTags?: string[];
   initialQuery?: string;
   waitForFilterTypes?: boolean;
   restrictToFilterTypes?: boolean;
@@ -95,20 +96,10 @@ export function searchResultMatchesAllowedTypes(
   return result.types.some(t => allowed.has(t.id) || allowed.has(normalizeTypeId(t.id)));
 }
 
-export function entityTypesMatchFilter(
-  types: { id: string }[] | undefined,
-  relationTargetTypeIds: string[] | undefined
-): boolean {
-  return searchResultMatchesAllowedTypes({ types: types ?? [] }, relationTargetTypeIds);
-}
-
-function resultMatchesFilterTypes(result: { types: { id: string }[] }, filterByTypes: string[] | undefined): boolean {
-  return searchResultMatchesAllowedTypes(result, filterByTypes);
-}
-
 export function useSearch({
   filterByTypes,
   filterBySpace,
+  filterByTags,
   initialQuery,
   waitForFilterTypes,
   restrictToFilterTypes,
@@ -134,6 +125,7 @@ export function useSearch({
   const maybeEntityId = debouncedQuery.trim();
   const cappedQuery = capSearchQuery(debouncedQuery);
   const filterTypeKey = React.useMemo(() => (filterByTypes ? [...filterByTypes].sort() : undefined), [filterByTypes]);
+  const filterTagKey = React.useMemo(() => (filterByTags ? [...filterByTags].sort() : undefined), [filterByTags]);
 
   const searchBlocked =
     (Boolean(waitForFilterTypes) && !filterByTypes?.length) ||
@@ -147,6 +139,7 @@ export function useSearch({
     cappedQuery,
     filterTypeKey,
     filterBySpace,
+    filterTagKey,
     Boolean(waitForFilterTypes),
     Boolean(restrictToFilterTypes),
     additionalSpaceIds,
@@ -169,7 +162,8 @@ export function useSearch({
       try {
         const isValidEntityId = validateEntityId(maybeEntityId);
 
-        if (isValidEntityId) {
+        // Skip the direct-id shortcut when a tag filter is set
+        if (isValidEntityId && !filterByTags?.length) {
           if (pageParam > 0) return emptySearchPage(pageParam);
 
           const merged = await mergeSearchResult({
@@ -177,7 +171,7 @@ export function useSearch({
             store,
           });
           if (!merged) return emptySearchPage(pageParam);
-          if (filterByTypes?.length && !resultMatchesFilterTypes(merged, filterByTypes)) {
+          if (filterByTypes?.length && !searchResultMatchesAllowedTypes(merged, filterByTypes)) {
             return emptySearchPage(pageParam);
           }
           return { rows: [merged], offset: pageParam, serverCount: 1, total: 1, succeeded: true };
@@ -206,11 +200,12 @@ export function useSearch({
           signal,
           additionalSpaceIds,
           includeNonCanonical,
+          tagIds: filterByTags?.length ? filterByTags : undefined,
         });
 
         const rows = !filterByTypes?.length
           ? page.results
-          : page.results.filter(r => resultMatchesFilterTypes(r, filterByTypes));
+          : page.results.filter(r => searchResultMatchesAllowedTypes(r, filterByTypes));
 
         return {
           rows,
