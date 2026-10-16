@@ -1,5 +1,3 @@
-import { SystemIds } from '@geoprotocol/geo-sdk/lite';
-
 import * as Effect from 'effect/Effect';
 
 import type { BrowseSidebarData } from '~/core/browse/fetch-browse-sidebar-data';
@@ -28,7 +26,7 @@ import {
   decodeExploreCardEntity,
 } from './explore-card-item';
 import { exploreCompleteIndexDocument } from './explore-complete-index-document';
-import { EXPLORE_ENTITY_NAME_PROPERTY_ID, EXPLORE_PAGE_SIZE } from './explore-constants';
+import { EXPLORE_PAGE_SIZE } from './explore-constants';
 import { claimsRequireDebateTagFilter } from './explore-debate-tag-filter';
 import {
   EXPLORE_DIVERSITY_WINDOW_SIZE,
@@ -44,6 +42,12 @@ import {
   exploreEntitiesConnectionDocument,
   exploreEntitiesNoPageInfoConnectionDocument,
 } from './explore-entities-document';
+import {
+  type ExploreTime,
+  buildExploreFeedFilter,
+  combineEntityFilters,
+  timeThresholdSec,
+} from './explore-feed-filter';
 import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
 import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import type { ExploreCompleteIndexNode } from './explore-index-selection';
@@ -78,7 +82,8 @@ import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-confi
  * `top` ranks by the integer score property; `new` is reverse-chronological.
  */
 export type ExploreSort = 'new' | 'top' | 'best';
-export type ExploreTime = 'today' | 'week' | 'month' | 'year' | 'all';
+export type { ExploreTime } from './explore-feed-filter';
+export { buildExploreFeedFilter } from './explore-feed-filter';
 
 // Re-exported so the many components importing the card's item shape from here keep working; it is
 // defined alongside the card builder in `explore-card-item`, which the Coverage section also uses.
@@ -144,29 +149,6 @@ export type ExploreCompletePopulationScope = {
   relationFilter?: RelationFilter;
 };
 
-// Entities we never want to surface in any feed.
-// - `System type` relation to the `System` entity: marks system-managed rows.
-// - `types` relation to `Data block` / `Text block`: these are block entities that
-//   exist as internal structure of parent entities and aren't meaningful on their own.
-const SYSTEM_TYPE_PROPERTY_ID = '88b3d6ad288c529ca2120e1c24819185';
-const SYSTEM_ENTITY_ID = '2ff7ea098b9e50bc9be78a0cafa268d0';
-const DATA_BLOCK_TYPE_ID = 'b8803a8665de412bbb357e0c84adf473';
-const TEXT_BLOCK_TYPE_ID = '76474f2f00894e77a0410b39fb17d0bf';
-
-const FEED_EXCLUDED_RELATIONS_FILTER = {
-  relations: {
-    none: {
-      or: [
-        { typeId: { is: SYSTEM_TYPE_PROPERTY_ID }, toEntityId: { is: SYSTEM_ENTITY_ID } },
-        {
-          typeId: { is: SystemIds.TYPES_PROPERTY },
-          toEntityId: { in: [DATA_BLOCK_TYPE_ID, TEXT_BLOCK_TYPE_ID] },
-        },
-      ],
-    },
-  },
-} satisfies EntityFilter;
-
 /**
  * How long one request will keep scanning for a window with something in it, and the hard stop on
  * how many it will look at. See the loop in `fetchExploreFeed` for why the scan happens here.
@@ -184,30 +166,6 @@ const FEED_EXCLUDED_RELATIONS_FILTER = {
  */
 const MAX_EMPTY_WINDOW_SCAN_MS = 3_000;
 const MAX_EMPTY_WINDOW_SCANS = 6;
-
-function timeThresholdSec(filter: ExploreTime): number | null {
-  const now = Math.floor(Date.now() / 1000);
-  switch (filter) {
-    case 'today':
-      return now - 86400;
-    case 'week':
-      return now - 7 * 86400;
-    case 'month':
-      return now - 30 * 86400;
-    case 'year':
-      return now - 365 * 86400;
-    case 'all':
-    default:
-      return null;
-  }
-}
-
-function combineEntityFilters(...filters: Array<EntityFilter | undefined>): EntityFilter | undefined {
-  const present = filters.filter((filter): filter is EntityFilter => filter !== undefined);
-  if (present.length === 0) return undefined;
-  if (present.length === 1) return present[0];
-  return { and: present };
-}
 
 type ExploreEntitiesPageResponse = {
   entities: ExploreCardEntity[];
@@ -395,43 +353,6 @@ function mergeBestFilter(
     ...topicFilterClauses(topicIds),
   };
   return Object.keys(filter).length > 0 ? filter : undefined;
-}
-
-export function buildExploreFeedFilter(args: {
-  spaceIds: string[];
-  time: ExploreTime;
-  typeIds?: readonly string[];
-  topicIds?: readonly string[];
-  requireName?: boolean;
-  requireDebateTagOnClaims?: boolean;
-  includeEntityScopeInFilter?: boolean;
-  entityFilter?: EntityFilter;
-}): EntityFilter {
-  const t = timeThresholdSec(args.time);
-  const base: EntityFilter = {
-    ...FEED_EXCLUDED_RELATIONS_FILTER,
-    ...(args.requireDebateTagOnClaims ? claimsRequireDebateTagFilter(args.spaceIds) : {}),
-    ...topicFilterClauses(args.topicIds),
-    ...(args.includeEntityScopeInFilter
-      ? {
-          spaceIds: { overlaps: [...args.spaceIds] },
-          ...(args.typeIds?.length ? { typeIds: { overlaps: [...args.typeIds] } } : {}),
-        }
-      : {}),
-    ...(args.requireName !== false
-      ? {
-          values: {
-            some: {
-              spaceId: { in: args.spaceIds },
-              propertyId: { is: EXPLORE_ENTITY_NAME_PROPERTY_ID },
-              text: { isNull: false, isNot: '' },
-            },
-          },
-        }
-      : {}),
-    ...(t != null ? { createdAt: { greaterThanOrEqualTo: String(t) } } : {}),
-  };
-  return combineEntityFilters(base, args.entityFilter) ?? base;
 }
 
 async function fetchExploreEntitiesPage(args: {

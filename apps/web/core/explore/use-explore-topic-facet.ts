@@ -14,7 +14,7 @@ import { graphql } from '~/core/io/graphql-client';
 import { type RelationFacetCount, decodeRelationFacet, relationFacetDocument } from '~/core/io/relation-facet';
 import { normId } from '~/core/utils/norm-id';
 
-import { type ExploreTime, buildExploreFeedFilter } from './fetch-explore-feed';
+import { type ExploreTime, buildExploreFeedFilter } from './explore-feed-filter';
 
 // Display cap only; the filter is unaffected. A picked topic is ANDed into this facet's own
 // population, so its count equals the population size and it always sorts to the top — the
