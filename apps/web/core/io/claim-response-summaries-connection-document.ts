@@ -9,7 +9,7 @@ import type { UserVoteFilter } from '~/core/gql/graphql';
  */
 const CLAIM_RESPONSE_SUMMARIES_CONNECTION_SOURCE = /* GraphQL */ `
   query ClaimResponseSummariesConnection($filter: UserVoteFilter!, $first: Int!, $after: Cursor) {
-    userVotesConnection(filter: $filter, first: $first, after: $after, orderBy: [VOTED_AT_DESC, OBJECT_ID_ASC]) {
+    userVotesConnection(filter: $filter, first: $first, after: $after, orderBy: [OBJECT_ID_ASC, VOTE_KIND_ASC, USER_ID_ASC]) {
       pageInfo {
         hasNextPage
         endCursor
