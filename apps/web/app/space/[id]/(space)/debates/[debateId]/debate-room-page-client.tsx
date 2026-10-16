@@ -506,7 +506,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(inherited.videoEnabled);
   const joinStateChosenHere = React.useRef(false);
-  /** Why the last device the room tried to open failed, shown while the controls stay up. */
+  /** Why a device failed to open, shown beside the controls. */
   const [deviceError, setDeviceError] = React.useState<string | null>(null);
   const joinStateOpenAttemptRef = React.useRef(0);
   const settledJoinStateRef = React.useRef<{ audioMuted: boolean; videoEnabled: boolean } | null>(null);
