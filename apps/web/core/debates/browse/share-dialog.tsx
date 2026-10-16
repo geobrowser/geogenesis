@@ -11,6 +11,7 @@ import type { Debate } from '~/core/debates/api';
 import { useDebateMedia } from '~/core/debates/hooks';
 import { useToast } from '~/core/hooks/use-toast';
 import { ID } from '~/core/id';
+import { pushMarketingEvent } from '~/core/marketing-events';
 import { NavUtils } from '~/core/utils/utils';
 
 import { Close } from '~/design-system/icons/close';
@@ -58,6 +59,10 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
   const download = useDebateVideoDownload(debate.id, open && socialVideoReady);
   const [, setToast] = useToast();
 
+  React.useEffect(() => {
+    if (open) pushMarketingEvent('geo_share_open', { debate_id: debate.id, space_id: spaceId });
+  }, [open, debate.id, spaceId]);
+
   const shareUrl = () => `${window.location.origin}${NavUtils.toEntity(spaceId, ID.uuidToHex(debate.id))}`;
 
   const shareMessage = (maxLength: number) => {
@@ -86,6 +91,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
     try {
       capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method });
     } catch {}
+    pushMarketingEvent('geo_share', { debate_id: debate.id, space_id: spaceId, share_method: method });
   };
 
   const onReddit = () => {
@@ -121,6 +127,7 @@ export function DebateShareDialog({ open, onOpenChange, debate, spaceId, openerR
       setToast(<span>Link copied!</span>);
       operation.succeeded({ method: 'copy_link' });
       capture('debate_share_action', { debate_id: debate.id, space_id: spaceId, method: 'copy_link' });
+      pushMarketingEvent('geo_share', { debate_id: debate.id, space_id: spaceId, share_method: 'copy_link' });
     } catch {
       operation.failed('unavailable');
       setToast(<span>Could not copy link.</span>);
