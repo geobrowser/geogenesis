@@ -15,6 +15,7 @@ import { usePersonalSpaceId } from '~/core/hooks/use-personal-space-id';
 import { useSmartAccount } from '~/core/hooks/use-smart-account';
 import { useSmartAccountTransaction } from '~/core/hooks/use-smart-account-transaction';
 import { getIsEditorOfSpace, getIsMemberOfSpace } from '~/core/io/queries';
+import { pushMarketingEvent } from '~/core/marketing-events';
 import { usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { useStatusBar } from '~/core/state/status-bar-store';
 import { runEffectEither } from '~/core/telemetry/effect-runtime';
@@ -94,6 +95,7 @@ export function useRequestToBeMember({ spaceId, space }: UseRequestToBeMemberArg
 
       try {
         await requestSpaceMembership({ spaceId, personalSpaceId: requesterSpaceId, tx, queryClient, space });
+        pushMarketingEvent('geo_join_space', { space_id: normalizedSpaceId });
       } catch (error) {
         dispatch({ type: 'ERROR', payload: `${error}`, retry: () => handleRequestToBeMember() });
         // Necessary to propagate error status to useMutation

@@ -86,6 +86,7 @@ import {
   DebateMediaSessionBoundary,
   type LocalTrackLike,
   debateMediaSessionKey,
+  preJoinMediaFailure,
   useDebateMediaSession,
 } from '~/core/debates/media-session';
 import { OpenRoundPickCard, type OpenRoundPickContext } from '~/core/debates/open-round-pick-card';
@@ -505,6 +506,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(inherited.videoEnabled);
   const joinStateChosenHere = React.useRef(false);
+  /** Why a device failed to open, shown beside the controls. */
+  const [deviceError, setDeviceError] = React.useState<string | null>(null);
+  const joinStateOpenAttemptRef = React.useRef(0);
   const settledJoinStateRef = React.useRef<{ audioMuted: boolean; videoEnabled: boolean } | null>(null);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
@@ -1838,7 +1842,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           }
         }
 
-        const hasPreviewTracks = localTracksRef.current.length > 0;
+        // The intro publishes whatever the preview holds, nothing included: someone who chose to
+        // listen only still joins, and opening devices here would override that choice.
+        const hasPreviewTracks = localTracksRef.current.length > 0 || debateStatusRef.current === 'ready';
         connectionStage = 'local_tracks';
         const tracks = hasPreviewTracks
           ? localTracksRef.current
@@ -1887,8 +1893,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         connectionStage = 'local_preview';
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         // `bindLocalVideo` runs off this and off the element callback ref, so whichever tile is
-        // mounted picks it up.
-        setPreviewStream(stream);
+        // mounted picks it up. A receive-only intro leaves the preview empty, so a device opened
+        // later reads as a new stream and republishes.
+        if (tracks.length > 0) setPreviewStream(stream);
         publishedStreamRef.current = stream;
 
         if (!isCurrent()) {
@@ -2059,14 +2066,69 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     };
   }, [connectionConflictSource, roomState]);
 
+  const liveKindsNow = React.useCallback(
+    () => mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind),
+    [mediaSession.localTracksRef]
+  );
+
+  /**
+   * Opens what `next` needs. On failure the join state falls back to the devices still live and
+   * the preview settles on them, so the controls stay up and the live device keeps publishing.
+   */
+  const openForJoinState = React.useCallback(
+    async (
+      next: { audioMuted: boolean; videoEnabled: boolean },
+      options: { forceRestart?: boolean; fromToggle?: boolean; retry?: boolean } = {}
+    ) => {
+      // Only the person's own toggles and retries supersede each other; the settle effect re-runs
+      // on every debate refetch and must not clear their message.
+      const chosen = options.fromToggle || options.retry;
+      const attempt = chosen ? ++joinStateOpenAttemptRef.current : joinStateOpenAttemptRef.current;
+      if (chosen) setDeviceError(null);
+      const liveBefore = liveKindsNow();
+      const kinds = kindsForJoinState(next, liveBefore);
+      try {
+        await ensureLocalPreview({ ...kinds, forceRestart: options.forceRestart });
+      } catch (error) {
+        if (!mountedRef.current || attempt !== joinStateOpenAttemptRef.current) return;
+        const live = liveKindsNow();
+        // With nothing live, outside a toggle, the preview's own error state explains it and offers
+        // a retry.
+        if (live.length === 0 && !options.fromToggle) return;
+        const reverted = {
+          audioMuted: next.audioMuted || !live.includes('audio'),
+          videoEnabled: next.videoEnabled && live.includes('video'),
+        };
+        // Otherwise the settle effect re-applies the failed state on its next run and tries again.
+        if (!joinStateChosenHere.current) settledJoinStateRef.current = reverted;
+        setAudioMuted(reverted.audioMuted);
+        setVideoEnabled(reverted.videoEnabled);
+        const failed = options.forceRestart
+          ? kinds
+          : {
+              audio: kinds.audio && !liveBefore.includes('audio'),
+              video: kinds.video && !liveBefore.includes('video'),
+            };
+        setDeviceError(preJoinMediaFailure(error, failed).message);
+        await ensureLocalPreview(kindsForJoinState(reverted, live)).catch(() => undefined);
+      }
+    },
+    [ensureLocalPreview, liveKindsNow]
+  );
+
   const ensureKindsForJoinState = React.useCallback(
     (next: { audioMuted: boolean; videoEnabled: boolean }) => {
-      const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
-      if (!joinStateNeedsOpening(next, liveKinds)) return;
-      void ensureLocalPreview(kindsForJoinState(next, liveKinds)).catch(() => undefined);
+      if (!joinStateNeedsOpening(next, liveKindsNow())) return;
+      void openForJoinState(next, { fromToggle: true });
     },
-    [ensureLocalPreview, mediaSession.localTracksRef]
+    [liveKindsNow, openForJoinState]
   );
+
+  const retryMedia = React.useCallback(() => {
+    // Explicit kinds, and a restart only when nothing is live: restarting would stop a device the
+    // intro is publishing.
+    void openForJoinState({ audioMuted, videoEnabled }, { forceRestart: liveKindsNow().length === 0, retry: true });
+  }, [audioMuted, liveKindsNow, openForJoinState, videoEnabled]);
 
   const toggleAudioMuted = React.useCallback(() => {
     const next = !audioMuted;
@@ -2751,7 +2813,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       if (cancelled) return;
 
       const settled = joinStateChosenHere.current ? { audioMuted, videoEnabled } : settledJoinStateRef.current!;
-      await ensureLocalPreview(kindsForJoinState(settled, liveKinds)).catch(() => undefined);
+      await openForJoinState(settled);
     })();
 
     return () => {
@@ -2760,11 +2822,11 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [
     carriedJoinState,
     debate,
-    ensureLocalPreview,
     handedOverJoinState,
     inherited,
     mediaSession.localTracksRef,
     mediaSession.pendingPreview,
+    openForJoinState,
     roomState,
   ]);
 
@@ -2775,9 +2837,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // and is deliberately gated on focus; auto-connecting here would just fight it.
     if (connectionConflictSource !== null) return;
     if (['complete', 'cancelled'].includes(debate.status)) return;
-    // Only once the preview owns the camera: `connect` creates its own tracks when it finds none,
-    // and racing `ensurePreview` for the device leaves one tab holding two captures.
-    if (debate.status === 'ready' && previewState !== 'ready') return;
+    // Only once the preview has settled, so the intro publishes what was chosen. `idle` is a
+    // settled choice to open nothing, and connects receive-only.
+    if (debate.status === 'ready' && !(previewState === 'ready' || (previewState === 'idle' && !previewBusy))) return;
     // `ready` and `connecting` are separate opportunities, so a failed intro connection does not
     // spend the one the debate depends on. A successful one is held by the `roomState` guard.
     const autoConnectKey = `${debate.id}:${debate.status === 'ready' ? 'intro' : 'debate'}`;
@@ -2785,7 +2847,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     autoConnectAttemptedRef.current = autoConnectKey;
     setAutoConnectAttemptedKey(autoConnectKey);
     void connect();
-  }, [connect, connectionConflictSource, debate, previewState, roomState]);
+  }, [connect, connectionConflictSource, debate, previewBusy, previewState, roomState]);
 
   /**
    * Picking a different camera or microphone restarts the preview, which stops the tracks the room
@@ -3059,7 +3121,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             previewState={previewState}
             previewBusy={previewBusy}
             switchingDevice={replacingPreview}
-            error={roomError}
+            error={roomError ?? deviceError}
             mediaError={previewError}
             audioInputDevices={audioInputDevices}
             audioOutputDevices={audioOutputDevices}
@@ -3072,7 +3134,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             onAudioInputChange={changeAudioInput}
             onAudioOutputChange={changeAudioOutput}
             onVideoInputChange={changeVideoInput}
-            onRetryMedia={() => void ensureLocalPreview({ forceRestart: true }).catch(() => undefined)}
+            onRetryMedia={retryMedia}
             devicesLocked={
               Boolean(preScreenLocalParticipant?.ready_at) || roomState === 'connecting' || roomState === 'reconnecting'
             }

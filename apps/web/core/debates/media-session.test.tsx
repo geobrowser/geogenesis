@@ -33,6 +33,10 @@ beforeEach(() => {
     'MediaStream',
     class MediaStream {
       constructor(readonly tracks: MediaStreamTrack[] = []) {}
+
+      getTracks() {
+        return this.tracks;
+      }
     }
   );
   Object.defineProperty(navigator, 'mediaDevices', {
@@ -491,6 +495,25 @@ describe('DebateMediaSessionProvider topping up a handed-over session', () => {
     expect(micStop).not.toHaveBeenCalled();
   });
 
+  it('keeps the same stream and stops asking for the camera after it fails', async () => {
+    const { micStop } = await withMicAlreadyOpen();
+    const streamBefore = screen.getByTestId('preview-stream').textContent;
+    mocks.createLocalTracks.mockRejectedValueOnce(
+      Object.assign(new Error('Could not start video source'), { name: 'NotReadableError' })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure both' }));
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('error'));
+    expect(screen.getByTestId('preview-stream')).toHaveTextContent(streamBefore ?? '');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Ensure preview' }));
+
+    await waitFor(() => expect(screen.getByTestId('preview-state')).toHaveTextContent('ready'));
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+    expect(micStop).not.toHaveBeenCalled();
+    expect(screen.getByTestId('preview-stream')).toHaveTextContent(streamBefore ?? '');
+  });
+
   it('closes a kind that is no longer wanted', async () => {
     const cameraStop = vi.fn();
     mocks.createLocalTracks.mockResolvedValueOnce([
@@ -631,11 +654,21 @@ describe('DebateMediaSessionProvider overlapping requests', () => {
   });
 });
 
+const streamIds = new WeakMap<object, number>();
+let nextStreamId = 1;
+
+function streamId(stream: MediaStream | null) {
+  if (!stream) return 'none';
+  if (!streamIds.has(stream)) streamIds.set(stream, nextStreamId++);
+  return `stream-${streamIds.get(stream)}`;
+}
+
 function MediaSessionHarness() {
   const media = useDebateMediaSession();
 
   return (
     <>
+      <div data-testid="preview-stream">{streamId(media.previewStream)}</div>
       <div data-testid="session-key">{media.activeSessionKey ?? 'none'}</div>
       <div data-testid="preview-state">{media.previewState}</div>
       <div data-testid="audio-output-supported">{media.audioOutputSupported ? 'yes' : 'no'}</div>

@@ -353,7 +353,22 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         if (isCurrent()) {
           stopTracks(localTracksRef.current.filter(track => !keep.includes(track)));
           localTracksRef.current = keep;
-          const kept = keep.length > 0 ? new MediaStream(keep.map(track => track.mediaStreamTrack)) : null;
+          // A later restart with no kinds named reopens what is live, not the kind that just failed.
+          if (keep.length > 0) {
+            wantedKindsRef.current = {
+              audio: keep.some(track => track.mediaStreamTrack.kind === 'audio'),
+              video: keep.some(track => track.mediaStreamTrack.kind === 'video'),
+            };
+          }
+          // The same stream when it already holds exactly what was kept, so a room publishing it
+          // does not read the failure as a new device and reconnect.
+          const current = localMediaStreamRef.current;
+          const unchanged =
+            current !== null &&
+            current.getTracks().length === keep.length &&
+            keep.every(track => current.getTracks().includes(track.mediaStreamTrack));
+          const kept =
+            keep.length === 0 ? null : unchanged ? current : new MediaStream(keep.map(track => track.mediaStreamTrack));
           localMediaStreamRef.current = kept;
           setPreviewStreamState(kept);
           const failure = preJoinMediaFailure(error);
