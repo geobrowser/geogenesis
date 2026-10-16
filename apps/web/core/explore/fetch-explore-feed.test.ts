@@ -725,8 +725,8 @@ describe('leading Best with a playable debate', () => {
 
     expect(lead.entityId).toBe(D1);
     expect(lead.debatePosters).toEqual({
-      slot1: expect.stringMatching(new RegExp(`/debates/${uuid(D1)}/media/artifacts/speaker_still_slot_1/content$`)),
-      slot2: expect.stringMatching(new RegExp(`/debates/${uuid(D1)}/media/artifacts/speaker_still_slot_2/content$`)),
+      slot1: expect.stringMatching(new RegExp(`/debates/${D1}/media/artifacts/speaker_still_slot_1/content$`)),
+      slot2: expect.stringMatching(new RegExp(`/debates/${D1}/media/artifacts/speaker_still_slot_2/content$`)),
     });
     expect(rest.every(item => item.debatePosters === undefined)).toBe(true);
   });
