@@ -1786,6 +1786,33 @@ describe('DebateRoomPageClient', () => {
     }
   });
 
+  // The card is gone before the lobby lets go, so only the room can open the mic.
+  it('opens the lobby’s live mic itself once the card is gone', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    lobbyCaptureCleanup = registerLobbyCapture('audio', { on: true, release: vi.fn() });
+    reportLobbyMic(true);
+    carryLobbyMic();
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <CardOverLobby />
+      </DebateMediaSessionProvider>
+    );
+    await screen.findByText('Joining with mic on, camera off');
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+    lobbyCaptureCleanup();
+
+    expect(await screen.findByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    await waitFor(() =>
+      expect(mocks.createLocalTracks).toHaveBeenCalledWith(expect.objectContaining({ audio: expect.anything() }))
+    );
+  });
+
   it('keeps a mic turned off on the card over the lobby’s', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     lobbyCaptureCleanup = registerLobbyCapture('audio', { on: true, release: vi.fn() });
