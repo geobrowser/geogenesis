@@ -33,6 +33,55 @@ const mocks = vi.hoisted(() => ({
   mediaAttached: [] as boolean[],
 }));
 
+// Cloudflare Stream previews (NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK). Off by default here, as the
+// flag is: no debate has a preview, so every test above is the flag-off player. The hook has its
+// own suite; the pair sync is the real one.
+const previewMocks = vi.hoisted(() => ({
+  state: null as null | {
+    clips: { slot1: string | null; slot2: string | null };
+    available: boolean;
+    offsetSeconds: number;
+    refresh: (slot: 1 | 2) => void;
+  },
+  enabled: [] as boolean[],
+}));
+vi.mock('./use-debate-preview-clips', async importOriginal => {
+  const actual = await importOriginal<typeof import('./use-debate-preview-clips')>();
+  return {
+    ...actual,
+    useDebatePreviewClips: (_debate: unknown, enabled: boolean) => {
+      previewMocks.enabled.push(enabled);
+      return (
+        previewMocks.state ?? {
+          clips: { slot1: null, slot2: null },
+          available: false,
+          offsetSeconds: 0,
+          refresh: () => {},
+        }
+      );
+    },
+  };
+});
+
+// hls.js, for a stream slot in a browser without native HLS (jsdom has none).
+const hlsMocks = vi.hoisted(() => {
+  const instances: Array<{ loadSource: ReturnType<typeof vi.fn>; attachMedia: ReturnType<typeof vi.fn> }> = [];
+  class FakeHls {
+    static isSupported = () => true;
+    static Events = { ERROR: 'hlsError' };
+    loadSource = vi.fn();
+    attachMedia = vi.fn();
+    startLoad = vi.fn();
+    destroy = vi.fn();
+    constructor() {
+      instances.push(this);
+    }
+    on() {}
+  }
+  return { FakeHls, instances };
+});
+vi.mock('hls.js', () => ({ default: hlsMocks.FakeHls }));
+
 const watchedMocks = vi.hoisted(() => ({ markDebateWatched: vi.fn() }));
 // Follow (GEO-3236) writes through the account and reads follows; both have their own suites.
 vi.mock('~/core/follows/follow-button', () => ({
@@ -279,6 +328,9 @@ function renderPlayer(
 }
 
 beforeEach(() => {
+  previewMocks.state = null;
+  previewMocks.enabled = [];
+  hlsMocks.instances.length = 0;
   mocks.controller = null;
   mocks.ticker = emptyTicker();
   mocks.bylines = new Map();
@@ -2524,5 +2576,137 @@ describe('holding the full recordings until the viewer asks (feed bandwidth)', (
     const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
     expect(slot1.getAttribute('preload')).toBe('metadata');
     expect(slot2.getAttribute('preload')).toBe('auto');
+  });
+});
+
+describe('Cloudflare Stream previews and full playback (NEXT_PUBLIC_DEBATE_STREAM_PLAYBACK)', () => {
+  beforeEach(() => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+  });
+  afterEach(() => {
+    getDefaultStore().set(feedFullPlaybackStartedAtom, false);
+  });
+
+  const stills = { slot1: 'https://cdn.test/still-1.jpg', slot2: 'https://cdn.test/still-2.jpg' };
+  const bothClips = { slot1: 'https://stream.test/p1.mp4', slot2: 'https://stream.test/p2.mp4' };
+  const withPreview = (clips: { slot1: string | null; slot2: string | null }, refresh = vi.fn()) => {
+    previewMocks.state = { clips, available: true, offsetSeconds: 0.2, refresh };
+    return refresh;
+  };
+  const clipSrcs = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('video[data-debate-preview-clip]')).map(clip => clip.getAttribute('src'));
+
+  it('with no preview the held card is as before: stills only, and the hold lifts after a tap elsewhere', () => {
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+
+    act(() => getDefaultStore().set(feedFullPlaybackStartedAtom, true));
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    expect(container.querySelectorAll('video')).toHaveLength(2);
+    expect(container.querySelectorAll('video[data-debate-preview-clip]')).toHaveLength(0);
+  });
+
+  it('loops both muted preview clips on the active held card, and keeps them after a tap elsewhere', () => {
+    withPreview(bothClips);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, rerender } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    expect(clipSrcs(container)).toEqual([bothClips.slot1, bothClips.slot2]);
+    const clips = Array.from(container.querySelectorAll<HTMLVideoElement>('video[data-debate-preview-clip]'));
+    for (const clip of clips) {
+      expect(clip.muted).toBe(true);
+      expect(clip.loop).toBe(true);
+      expect(clip.getAttribute('preload')).toBe('auto');
+    }
+    expect(container.querySelectorAll('video')).toHaveLength(2);
+    expect(mocks.mediaAttached.at(-1)).toBe(false);
+
+    // Another card was played: this one has previews, so it stays on them.
+    act(() => getDefaultStore().set(feedFullPlaybackStartedAtom, true));
+    rerender(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+    expect(clipSrcs(container)).toEqual([bothClips.slot1, bothClips.slot2]);
+    expect(container.querySelectorAll('video')).toHaveLength(2);
+    expect(container.querySelector('[data-debate-full-playback-held="true"]')).toBeTruthy();
+  });
+
+  it('shows the still beside the one clip that is ready', () => {
+    withPreview({ slot1: null, slot2: bothClips.slot2 });
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    expect(clipSrcs(container)).toEqual([bothClips.slot2]);
+    expect(container.querySelectorAll('[data-debate-poster]').length).toBeGreaterThanOrEqual(1);
+  });
+
+  it('mounts a nearby card’s clips at metadata, and signs nothing for a card far away', () => {
+    withPreview(bothClips);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, rerender } = render(
+      <DebateFeedPlayer debate={debate} active={false} preload holdFullPlayback />
+    );
+    const clips = Array.from(container.querySelectorAll('video[data-debate-preview-clip]'));
+    expect(clips.map(clip => clip.getAttribute('preload'))).toEqual(['metadata', 'metadata']);
+    expect(previewMocks.enabled.at(-1)).toBe(true);
+
+    rerender(<DebateFeedPlayer debate={debate} active={false} holdFullPlayback />);
+    expect(container.querySelectorAll('video')).toHaveLength(0);
+    expect(previewMocks.enabled.at(-1)).toBe(false);
+  });
+
+  it('asks the hook to re-sign a clip whose element fails', () => {
+    const refresh = withPreview(bothClips);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.error(container.querySelectorAll('video[data-debate-preview-clip]')[1]);
+    expect(refresh).toHaveBeenCalledWith(2);
+  });
+
+  it('plays the full recordings on Play, and stops signing previews for that card', () => {
+    withPreview(bothClips);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, getByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+
+    expect(container.querySelectorAll('video[data-debate-preview-clip]')).toHaveLength(0);
+    expect(Array.from(container.querySelectorAll('video')).map(video => video.getAttribute('src'))).toEqual([
+      'https://cdn.test/slot1.webm',
+      'https://cdn.test/slot2.webm',
+    ]);
+    expect(previewMocks.enabled.at(-1)).toBe(false);
+    expect(mocks.mediaAttached.at(-1)).toBe(true);
+  });
+
+  it('hands a stream slot to hls.js where there is no native HLS, and leaves the other slot a plain src', async () => {
+    mocks.controller = {
+      ...controllerFixture({
+        mutedByUser: true,
+        turnSlot: 1,
+        urls: { slot1: 'https://stream.test/v1/manifest/video.m3u8', slot2: 'https://cdn.test/slot2.webm' },
+      }),
+      streams: { slot1: true, slot2: false },
+    };
+    const { container } = render(<DebateFeedPlayer debate={debate} active />);
+
+    const [slot1, slot2] = Array.from(container.querySelectorAll('video'));
+    expect(slot1.hasAttribute('src')).toBe(false);
+    expect(slot2.getAttribute('src')).toBe('https://cdn.test/slot2.webm');
+    await vi.waitFor(() => expect(hlsMocks.instances).toHaveLength(1));
+    expect(hlsMocks.instances[0].loadSource).toHaveBeenCalledWith('https://stream.test/v1/manifest/video.m3u8');
+    expect(hlsMocks.instances[0].attachMedia).toHaveBeenCalledWith(slot1);
+  });
+
+  it('starts muted after the tap, as today: unmuting is the viewer’s own tap', () => {
+    withPreview(bothClips);
+    mocks.controller = controllerFixture({ mutedByUser: true, turnSlot: 1, playing: false, posters: stills });
+    const { container, getByRole } = render(<DebateFeedPlayer debate={debate} active holdFullPlayback />);
+
+    fireEvent.click(getByRole('button', { name: 'Play debate' }));
+
+    const controller = mocks.controller as DebatePlaybackController;
+    expect(controller.setMutedByUser).not.toHaveBeenCalled();
+    expect(Array.from(container.querySelectorAll('video')).every(video => video.muted)).toBe(true);
   });
 });
