@@ -1358,8 +1358,10 @@ function DebaterVideo({
           <video
             ref={videoRef}
             // Both tiles fade in together, and only once both have a frame — see `concealed`.
+            // `relative` so it stacks above the absolutely positioned still; a static video paints
+            // under any positioned sibling whatever the DOM order.
             className={cx(
-              'h-full w-full object-cover transition-opacity duration-200',
+              'relative h-full w-full object-cover transition-opacity duration-200',
               concealed ? 'opacity-0' : 'opacity-100'
             )}
             playsInline

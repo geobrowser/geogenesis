@@ -413,6 +413,8 @@ describe('poster stills (GEO-3280)', () => {
     expect(stills.map(img => img.getAttribute('src'))).toEqual([posters.slot1, posters.slot2]);
     // Under the video in the same button, so the video covers it once it has a frame.
     expect(stills[0].nextElementSibling?.tagName).toBe('VIDEO');
+    // DOM order alone is not enough: an absolute still paints over a static video.
+    expect(stills[0].nextElementSibling?.classList.contains('relative')).toBe(true);
     expect(stills[0].getAttribute('loading')).toBe('eager');
   });
 
