@@ -40,7 +40,10 @@ import {
   targetMixAppliesTo,
 } from './explore-diversity';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
-import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import {
+  exploreEntitiesConnectionDocument,
+  exploreEntitiesNoPageInfoConnectionDocument,
+} from './explore-entities-document';
 import { exploreForYouBestConnectionDocument, exploreForYouConnectionDocument } from './explore-for-you-document';
 import { FOR_YOU_FEED, composeForYouPage } from './explore-for-you-mix';
 import type { ExploreCompleteIndexNode } from './explore-index-selection';
@@ -58,11 +61,14 @@ import {
 import { BEST_FEED_VERSION, type FeedDescriptor } from './for-you/feed-version';
 import { type FreshSlotConfig, freshSlotActive } from './fresh-slot/fresh-slot-config';
 import {
+  FRESH_SLOT_AS_OF_STEP_MS,
   FRESH_SLOT_CANDIDATE_LIMIT,
   decodeFreshSlotCursor,
   encodeFreshSlotCursor,
 } from './fresh-slot/fresh-slot-cursor';
 import { type FreshMergedRow, mergeFreshSlot } from './fresh-slot/merge-fresh-slot';
+import { readSharedFreshList, writeSharedFreshList } from './fresh-slot/shared-fresh-list';
+import { recordRecentFreshScope } from './fresh-slot/recent-fresh-scopes';
 import { leadWithPlayableDebate } from './lead-with-playable-debate';
 import type { SeenDemotionPageConfig } from './seen-demotion/seen-demotion-config';
 
@@ -418,10 +424,12 @@ async function fetchExploreEntitiesPage(args: {
   requireName?: boolean;
   requireDebateTagOnClaims?: boolean;
   entityFilter?: EntityFilter;
+  /** For callers that read neither `hasNextPage` nor `endCursor`; the page then reports false / null. */
+  skipPageInfo?: boolean;
 }): Promise<ExploreEntitiesPageResponse> {
   return Effect.runPromise(
     graphql({
-      query: exploreEntitiesConnectionDocument,
+      query: args.skipPageInfo ? exploreEntitiesNoPageInfoConnectionDocument : exploreEntitiesConnectionDocument,
       decoder: decodeExploreEntities,
       variables: {
         limit: args.limit,
@@ -652,6 +660,67 @@ export const FRESH_LIST_MAX_STALE_MS = 30 * 60_000;
 
 type FreshList = { asOfMs: number; page: ExploreEntitiesPageResponse };
 
+/** The one derivation of a Fresh list's scope key; the request path and the warm-up both use it. */
+export function freshListScopeKey(args: {
+  spaceIds: readonly string[];
+  time: ExploreTime;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  entityFilter?: EntityFilter;
+  freshnessHours: number;
+}) {
+  return JSON.stringify({
+    spaceIds: args.spaceIds.map(normId).sort(),
+    time: args.time,
+    typeIds: args.typeIds.map(normId).sort(),
+    requireName: args.requireName ?? null,
+    requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
+    entityFilter: args.entityFilter ?? null,
+    freshnessHours: args.freshnessHours,
+  });
+}
+
+/**
+ * GEO-3308. A first page that served a scope is remembered, so the cron can keep it warm. The scope
+ * is the space set, types and hours only; nothing about the reader. After the response, fail open,
+ * and at most once a minute per scope per instance.
+ */
+const recentlyRecorded = new Map<string, number>();
+const RECORD_SCOPE_EVERY_MS = 60_000;
+
+function recordRequestedScope(scopeKey: string, scope: Parameters<typeof freshListScopeKey>[0]) {
+  const now = Date.now();
+  const last = recentlyRecorded.get(scopeKey);
+  if (last !== undefined && now - last < RECORD_SCOPE_EVERY_MS) return;
+  recentlyRecorded.set(scopeKey, now);
+  if (recentlyRecorded.size > 200) {
+    const oldest = recentlyRecorded.keys().next().value;
+    if (typeof oldest === 'string') recentlyRecorded.delete(oldest);
+  }
+  runAfterResponse(async () => {
+    try {
+      await recordRecentFreshScope(
+        {
+          spaceIds: scope.spaceIds.map(normId).sort(),
+          typeIds: scope.typeIds.map(normId).sort(),
+          time: scope.time,
+          requireName: scope.requireName ?? null,
+          requireDebateTagOnClaims: scope.requireDebateTagOnClaims ?? null,
+          freshnessHours: scope.freshnessHours,
+        },
+        now
+      );
+    } catch (error) {
+      console.error('explore fresh slot: recording the requested scope failed', error);
+    }
+  });
+}
+
+export function resetRecordedScopesForTests() {
+  recentlyRecorded.clear();
+}
+
 function rememberLatestFreshList(scopeKey: string, list: FreshList) {
   const current = latestFreshLists.get(scopeKey);
   if (current && current.asOfMs > list.asOfMs) return;
@@ -696,18 +765,20 @@ async function fetchFreshEntitiesPage(args: {
   asOfMs: number;
   freshnessHours: number;
   startsScroll: boolean;
+  /** The scheduled warm-up (GEO-3308): build this minute's list and share it before returning. */
+  warm?: boolean;
 }): Promise<FreshList> {
-  const scopeKey = JSON.stringify({
-    spaceIds: args.spaceIds.map(normId).sort(),
-    time: args.time,
-    typeIds: args.typeIds.map(normId).sort(),
-    requireName: args.requireName ?? null,
-    requireDebateTagOnClaims: args.requireDebateTagOnClaims ?? null,
-    entityFilter: args.entityFilter ?? null,
-    freshnessHours: args.freshnessHours,
-  });
+  const scopeKey = freshListScopeKey(args);
 
-  const load = async (asOfMs: number): Promise<FreshList> => {
+  const cacheKey = (asOfMs: number) => JSON.stringify({ scopeKey, asOfSec: Math.floor(asOfMs / 1000) });
+  const usable = (list: FreshList | null | undefined): list is FreshList =>
+    !!list && list.asOfMs <= args.asOfMs && args.asOfMs - list.asOfMs <= FRESH_LIST_MAX_STALE_MS;
+
+  /**
+   * `pinned`: a later page of a scroll, whose pin is in the past. Another instance may have built
+   * exactly that list and shared it; a pinned list is never shared, since it is not the newest.
+   */
+  const load = async (asOfMs: number, { pinned }: { pinned: boolean }): Promise<FreshList> => {
     const asOfSec = Math.floor(asOfMs / 1000);
     const range: EntityFilter = {
       createdAt: {
@@ -715,8 +786,12 @@ async function fetchFreshEntitiesPage(args: {
         lessThanOrEqualTo: String(asOfSec),
       },
     };
-    const page = await freshListCache.get(JSON.stringify({ scopeKey, asOfSec }), () =>
-      fetchExploreEntitiesPage({
+    const page = await freshListCache.get(cacheKey(asOfMs), async () => {
+      if (pinned) {
+        const shared = await readSharedFreshList<ExploreEntitiesPageResponse>(scopeKey);
+        if (shared?.asOfMs === asOfMs) return shared.page;
+      }
+      const fetched = await fetchExploreEntitiesPage({
         spaceIds: args.spaceIds,
         time: args.time,
         limit: FRESH_SLOT_CANDIDATE_LIMIT,
@@ -728,19 +803,39 @@ async function fetchFreshEntitiesPage(args: {
         requireName: args.requireName,
         requireDebateTagOnClaims: args.requireDebateTagOnClaims,
         entityFilter: combineEntityFilters(args.entityFilter, range),
-      })
-    );
+        // Only `entities` is read from this list; `hasNextPage` would re-run the whole filter (~2s).
+        skipPageInfo: true,
+      });
+      if (!pinned) {
+        const share = () => writeSharedFreshList(scopeKey, { asOfMs, page: fetched }, FRESH_LIST_MAX_STALE_MS);
+        if (args.warm) await share();
+        else runAfterResponse(share);
+      }
+      return fetched;
+    });
     const list = { asOfMs, page };
     rememberLatestFreshList(scopeKey, list);
     return list;
   };
 
   if (args.startsScroll) {
-    const latest = latestFreshLists.get(scopeKey);
-    if (latest && latest.asOfMs <= args.asOfMs && args.asOfMs - latest.asOfMs <= FRESH_LIST_MAX_STALE_MS) {
+    // A scope with an entity filter is not one the cron can rebuild from its inputs.
+    if (!args.warm && !args.entityFilter) recordRequestedScope(scopeKey, args);
+    let latest = latestFreshLists.get(scopeKey);
+    if (!usable(latest)) {
+      // A cold instance holds nothing; start from the list another instance shared.
+      const shared = await readSharedFreshList<ExploreEntitiesPageResponse>(scopeKey);
+      if (usable(shared)) {
+        rememberLatestFreshList(scopeKey, shared);
+        // So this scroll's later pages, pinned to it, find it here too.
+        void freshListCache.get(cacheKey(shared.asOfMs), async () => shared.page);
+        latest = shared;
+      }
+    }
+    if (usable(latest)) {
       if (latest.asOfMs < args.asOfMs) {
         runAfterResponse(() =>
-          load(args.asOfMs).catch(error => {
+          load(args.asOfMs, { pinned: false }).catch(error => {
             console.error('explore fresh slot: background Fresh list refresh failed', error);
           })
         );
@@ -748,7 +843,30 @@ async function fetchFreshEntitiesPage(args: {
       return latest;
     }
   }
-  return load(args.asOfMs);
+  return load(args.asOfMs, { pinned: !args.startsScroll && !args.warm });
+}
+
+/**
+ * GEO-3308. Builds and shares the Fresh list for the current minute, the way a first page would
+ * have, so the first visitor of a scope after a quiet spell reads it instead of waiting on gaia.
+ * The arguments are the ones the request path derives for the scope.
+ */
+export async function warmSharedFreshList(args: {
+  spaceIds: string[];
+  time: ExploreTime;
+  typeIds: readonly string[];
+  requireName?: boolean;
+  requireDebateTagOnClaims?: boolean;
+  freshnessHours: number;
+  now?: number;
+}): Promise<FreshList> {
+  const { now = Date.now(), ...scope } = args;
+  return fetchFreshEntitiesPage({
+    ...scope,
+    asOfMs: Math.floor(now / FRESH_SLOT_AS_OF_STEP_MS) * FRESH_SLOT_AS_OF_STEP_MS,
+    startsScroll: false,
+    warm: true,
+  });
 }
 
 // "Top" sort: rank by the integer score property via `entitiesOrderedByPropertyConnection`.

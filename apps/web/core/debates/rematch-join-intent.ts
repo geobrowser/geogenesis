@@ -2,7 +2,8 @@
 
 export type DebateRematchJoinIntent = {
   micOn: boolean;
-  cameraOn: boolean;
+  /** Unset when no camera was offered: the next screen uses its own default. */
+  cameraOn?: boolean;
 };
 
 const joinIntentBySessionId = new Map<string, DebateRematchJoinIntent>();

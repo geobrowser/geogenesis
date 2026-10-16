@@ -466,7 +466,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const carriedJoinState = React.useMemo(
     () =>
       chosenBeforeArriving
-        ? { audioMuted: !chosenBeforeArriving.micOn, videoEnabled: chosenBeforeArriving.cameraOn }
+        ? { audioMuted: !chosenBeforeArriving.micOn, videoEnabled: chosenBeforeArriving.cameraOn ?? true }
         : null,
     [chosenBeforeArriving]
   );
@@ -475,6 +475,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * microphone only — a lobby has no camera to carry.
    */
   const carriedMic = useCarriedLobbyMic();
+  const micLeftToLobby = React.useRef(handedOverSession && mediaSession.lobbyDeferredKindsRef.current.audio);
+  /** A hand-off's state from its tracks; a mic the card left to the lobby comes from the lobby's carried mic. */
+  const handedOverJoinState = React.useCallback(
+    (kinds: readonly string[]) => {
+      const state = inheritedJoinState(kinds, true);
+      return micLeftToLobby.current && carriedMic !== null ? { ...state, audioMuted: !carriedMic } : state;
+    },
+    [carriedMic]
+  );
   /*
    * Three ways a choice can precede this room, in order of how directly they say so: devices a card
    * handed over and still holds, a picker's recorded answer for this debate, and the mic a lobby was
@@ -484,10 +493,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const inherited = React.useMemo(
     () =>
       handedOverSession
-        ? inheritedJoinState(
-            inheritedTracks.map(track => track.mediaStreamTrack.kind),
-            handedOverSession
-          )
+        ? handedOverJoinState(inheritedTracks.map(track => track.mediaStreamTrack.kind))
         : (carriedJoinState ?? { audioMuted: carriedMic === false, videoEnabled: true }),
     // First render only: claiming the session is what erases the evidence of a hand-off.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2725,30 +2731,26 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     let cancelled = false;
     void (async () => {
       const pending = mediaSession.pendingPreview();
-      if (pending) {
-        await pending.catch(() => undefined);
-        if (cancelled) return;
-      }
+      if (pending) await pending.catch(() => undefined);
 
       const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
-      let settled: { audioMuted: boolean; videoEnabled: boolean };
-      if (joinStateChosenHere.current) {
-        settled = { audioMuted, videoEnabled };
-      } else {
+      if (!joinStateChosenHere.current) {
         /*
          * A hand-off re-reads its tracks here, because they may not have landed at first render.
          * A cold arrival keeps the first-render decision instead: that one knows about the picker's
          * answer and the mic a lobby carried, and re-deriving would read "no tracks" over both.
+         *
+         * Settled and applied even when this run was cancelled: a card still adding a device keeps
+         * the preview 'ready', so the intro connection can start (and cancel this) before the
+         * hand-off lands, and a later drop would re-derive from the tracks the disconnect stopped.
          */
-        settled =
-          settledJoinStateRef.current ?? (handedOverAtMount.current ? inheritedJoinState(liveKinds, true) : inherited);
-        settledJoinStateRef.current = settled;
+        settledJoinStateRef.current ??= handedOverAtMount.current ? handedOverJoinState(liveKinds) : inherited;
+        setAudioMuted(settledJoinStateRef.current.audioMuted);
+        setVideoEnabled(settledJoinStateRef.current.videoEnabled);
       }
+      if (cancelled) return;
 
-      if (!joinStateChosenHere.current) {
-        setAudioMuted(settled.audioMuted);
-        setVideoEnabled(settled.videoEnabled);
-      }
+      const settled = joinStateChosenHere.current ? { audioMuted, videoEnabled } : settledJoinStateRef.current!;
       await ensureLocalPreview(kindsForJoinState(settled, liveKinds)).catch(() => undefined);
     })();
 
@@ -2759,6 +2761,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     carriedJoinState,
     debate,
     ensureLocalPreview,
+    handedOverJoinState,
     inherited,
     mediaSession.localTracksRef,
     mediaSession.pendingPreview,
@@ -3367,12 +3370,14 @@ function DebateRecordingModal({
   const connecting = countdown.effectiveStatus === 'connecting';
   const remoteEndingTurn =
     countdown.yieldingSlot !== null && countdown.yieldingSlot === remoteParticipant?.participant_slot;
+  // Only a yield that hands over to the other speaker gets a handoff window to stamp "Turn ended" and
+  // name their turn in. Any other closes as soon as geo-chat accepts it (GEO-3347).
+  const localYieldHandsOver = localEndingTurn && turnYieldHandsOver(debate, countdown.turnIndex);
   // You ended your turn and theirs follows straight on, which they are counted into on their own
   // screen. Otherwise the pick, a lead-in or the end comes next.
   const remoteTurnIsNext =
     stamps &&
-    localEndingTurn &&
-    openRoundRunsStraightOn(debate, countdown.turnIndex) &&
+    localYieldHandsOver &&
     countdown.incomingSlot !== null &&
     countdown.incomingSlot === remoteParticipant?.participant_slot;
   const remoteSpeaking = remoteParticipant !== null && countdown.activeSlot === remoteParticipant.participant_slot;
@@ -3401,6 +3406,7 @@ function DebateRecordingModal({
       upcomingSeconds={localUpcomingSeconds}
       upcomingLabel={localUpcomingLabel}
       endingTurn={localEndingTurn}
+      turnEndedStamp={localYieldHandsOver}
       endTurnAction={
         canEndLocalTurn || (endTurnPending && localEndingTurn) ? (
           <button
@@ -4038,6 +4044,17 @@ export function localTurnStartsInSeconds(
 function openRoundRunsStraightOn(debate: Debate, turnIndex: number | null) {
   if (turnIndex === null) return false;
   return openRoundLastWord(debate, turnIndex) === null && openRoundLeadInAfterTurn(debate, turnIndex) === 0;
+}
+
+/**
+ * Whether ending a turn early hands over to the other speaker, the only yield geo-chat gives a
+ * handoff window, as its `ends_round` rule has it. An Open round's second turn hands over to the
+ * pick, a required round's lead-in or the end, and the debate's last turn to the end; either yield
+ * closes the moment the server accepts it.
+ */
+function turnYieldHandsOver(debate: Debate, turnIndex: number | null) {
+  if (turnIndex === null || turnIndex + 1 >= debate.turn_durations_ms.length) return false;
+  return !isOpenRoundsDebate(debate) || turnIndex % 2 === 0;
 }
 
 function participantSlotForTurn(firstParticipantSlot: ParticipantSlot, turnIndex: number): ParticipantSlot {

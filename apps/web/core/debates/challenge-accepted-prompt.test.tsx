@@ -7,7 +7,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from './api';
 import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
-import { clearRematchJoinIntents, readRematchJoinIntent } from './rematch-join-intent';
+import { registerLobbyCapture } from './lobbies/step-out';
+import { clearRematchJoinIntents, readRematchJoinIntent, rememberRematchJoinIntent } from './rematch-join-intent';
+
+const flags = vi.hoisted(() => ({ debateVideo: true }));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => (id === 'debateVideo' ? flags.debateVideo : false),
+}));
 
 const media = vi.hoisted(() => ({
   releaseSession: vi.fn(),
@@ -78,6 +85,7 @@ function renderPrompt(props: Partial<React.ComponentProps<typeof ChallengeAccept
 }
 
 beforeEach(() => {
+  flags.debateVideo = true;
   clearRematchJoinIntents();
   media.beginSession.mockReset();
   media.releaseSession.mockReset();
@@ -96,7 +104,12 @@ beforeEach(() => {
   });
 });
 
-afterEach(cleanup);
+let clearLobbyCapture: (() => void) | null = null;
+afterEach(() => {
+  cleanup();
+  clearLobbyCapture?.();
+  clearLobbyCapture = null;
+});
 
 describe('ChallengeAcceptedPrompt', () => {
   it('names who accepted', () => {
@@ -163,6 +176,43 @@ describe('ChallengeAcceptedPrompt', () => {
     renderPrompt();
 
     expect(await screen.findByRole('button', { name: 'Turn microphone off' })).toBeInTheDocument();
+  });
+
+  // The sender is talking in a lobby: the card shows and saves the lobby's mic, opening none.
+  it('saves a live lobby mic as on for the picker, without opening a second one', async () => {
+    clearLobbyCapture = registerLobbyCapture('audio', { on: true, release: vi.fn() });
+    renderPrompt();
+
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: true }));
+    expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
+  });
+
+  it('saves a muted lobby mic as muted', async () => {
+    clearLobbyCapture = registerLobbyCapture('audio', { on: false, release: vi.fn() });
+    renderPrompt();
+
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')?.micOn).toBe(false));
+  });
+
+  it('does not overwrite a saved choice with the lobby’s state', async () => {
+    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: false });
+    clearLobbyCapture = registerLobbyCapture('audio', { on: false, release: vi.fn() });
+    renderPrompt();
+
+    expect(await screen.findByRole('button', { name: 'Turn microphone off' })).toBeInTheDocument();
+    await new Promise(resolve => setTimeout(resolve, 50));
+    expect(readRematchJoinIntent('rematch-1')).toEqual({ micOn: true, cameraOn: false });
+  });
+
+  it('offers the mic alone and saves no camera choice with debateVideo off', async () => {
+    flags.debateVideo = false;
+    rememberRematchJoinIntent('rematch-1', { micOn: true, cameraOn: true });
+    renderPrompt();
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+    await waitFor(() => expect(readRematchJoinIntent('rematch-1')).toStrictEqual({ micOn: true }));
+    expect(media.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ video: true }));
   });
 
   it('renders nothing when it cannot name both people', () => {

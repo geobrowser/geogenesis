@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { registerLobbyCapture } from './lobbies/step-out';
 import { DebateRequestMediaPreview } from './request-media-preview';
 
 const mocks = vi.hoisted(() => ({
@@ -21,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   previewState: 'idle' as string,
   previewStream: null as unknown,
   previewError: null as string | null,
+  lobbyDeferredKindsRef: { current: { audio: false, video: false } },
   /** What `ensurePreview` hands back — the per-device truth the card reads. */
   tracks: [] as { mediaStreamTrack: { kind: string } }[],
 }));
@@ -37,6 +39,7 @@ vi.mock('./media-session', async importOriginal => ({
     previewError: mocks.previewError,
     previewStream: mocks.previewStream,
     localTracksRef: { current: mocks.tracks },
+    lobbyDeferredKindsRef: mocks.lobbyDeferredKindsRef,
     ensurePreview: mocks.ensurePreview,
     beginSession: mocks.beginSession,
     releaseSession: mocks.releaseSession,
@@ -61,6 +64,7 @@ beforeEach(() => {
   mocks.cameraPermission = null;
   mocks.micPermission = null;
   mocks.previewState = 'idle';
+  mocks.lobbyDeferredKindsRef.current = { audio: false, video: false };
   mocks.previewStream = null;
   mocks.previewError = null;
   mocks.tracks = [{ mediaStreamTrack: { kind: 'audio' } }, { mediaStreamTrack: { kind: 'video' } }];
@@ -86,9 +90,19 @@ beforeEach(() => {
   mocks.stopMedia.mockReset();
 });
 
-afterEach(cleanup);
+const lobbyCaptureCleanups: (() => void)[] = [];
 
-function mount() {
+afterEach(() => {
+  cleanup();
+  lobbyCaptureCleanups.splice(0).forEach(clear => clear());
+});
+
+function lobbyCapturing(kind: 'audio' | 'video', { on = true, release = vi.fn() } = {}) {
+  lobbyCaptureCleanups.push(registerLobbyCapture(kind, { on, release }));
+  return release;
+}
+
+function mount(props: Partial<React.ComponentProps<typeof DebateRequestMediaPreview>> = {}) {
   // Installed here rather than in `beforeEach`, which runs before a case has chosen its answer.
   Object.defineProperty(navigator, 'permissions', {
     configurable: true,
@@ -104,7 +118,7 @@ function mount() {
             }),
           },
   });
-  return render(<DebateRequestMediaPreview sessionKey="debate:debate-1" />);
+  return render(<DebateRequestMediaPreview sessionKey="debate:debate-1" {...props} />);
 }
 
 describe('DebateRequestMediaPreview', () => {
@@ -164,6 +178,134 @@ describe('DebateRequestMediaPreview', () => {
 
     await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalled());
     expect(await screen.findByText('Joining with mic and camera on')).toBeInTheDocument();
+  });
+
+  // iPhone Safari keeps one capture per kind: a kind the lobby holds is shown as the lobby has it
+  // and never opened a second time, so the next screen joins the way the person already was.
+  it('shows a live lobby mic as on without opening a second one', async () => {
+    mocks.permission = 'granted';
+    lobbyCapturing('audio', { on: true });
+    const onJoinStateChange = vi.fn();
+    mount({ onJoinStateChange });
+
+    expect(await screen.findByText('Joining with mic and camera on')).toBeInTheDocument();
+    expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: true, cameraOn: true });
+    expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: false, video: true });
+    expect(mocks.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
+    expect(mocks.lobbyDeferredKindsRef.current).toEqual({ audio: true, video: false });
+  });
+
+  it('shows a muted lobby mic as muted', async () => {
+    mocks.permission = 'granted';
+    lobbyCapturing('audio', { on: false });
+    const onJoinStateChange = vi.fn();
+    mount({ onJoinStateChange });
+
+    expect(await screen.findByText('Joining muted')).toBeInTheDocument();
+    expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: false, cameraOn: true });
+  });
+
+  it('follows the lobby mic while the card is open', async () => {
+    mocks.permission = 'granted';
+    lobbyCapturing('audio', { on: true });
+    mount();
+    await screen.findByText('Joining with mic and camera on');
+
+    act(() => {
+      lobbyCapturing('audio', { on: false });
+    });
+
+    expect(await screen.findByText('Joining muted')).toBeInTheDocument();
+  });
+
+  it('keeps an earlier choice over the lobby’s state, still without opening the mic', async () => {
+    mocks.permission = 'granted';
+    lobbyCapturing('audio', { on: false });
+    const onJoinStateChange = vi.fn();
+    mount({ initialJoinState: { micOn: true, cameraOn: false }, onJoinStateChange });
+
+    expect(await screen.findByText('Joining with mic on, camera off')).toBeInTheDocument();
+    expect(onJoinStateChange).not.toHaveBeenCalledWith(expect.objectContaining({ micOn: false }));
+    expect(mocks.ensurePreview).not.toHaveBeenCalledWith(expect.objectContaining({ audio: true }));
+  });
+
+  it('opens nothing on open while the lobby captures both devices', async () => {
+    mocks.permission = 'granted';
+    lobbyCapturing('audio');
+    lobbyCapturing('video');
+    mount();
+
+    // Past the permission answer, which is what would have started the preview.
+    await act(async () => {
+      await new Promise(resolve => setTimeout(resolve, 20));
+    });
+    expect(screen.getByText('Joining with mic and camera on')).toBeInTheDocument();
+    expect(mocks.ensurePreview).not.toHaveBeenCalled();
+  });
+
+  it('stops the lobby’s mic before opening the card’s', async () => {
+    mocks.permission = 'granted';
+    const order: string[] = [];
+    lobbyCapturing('audio', { on: false, release: vi.fn(() => order.push('release')) });
+    lobbyCapturing('video', { on: false, release: vi.fn(() => order.push('release camera')) });
+    mocks.ensurePreview.mockImplementation(async (options: { audio?: boolean }) => {
+      order.push(options.audio ? 'acquire mic' : 'acquire');
+      return [{ mediaStreamTrack: { kind: 'audio' } }];
+    });
+    mount();
+    await screen.findByText('Joining listening only');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn microphone on' }));
+
+    await waitFor(() => expect(order).toEqual(['release', 'acquire mic']));
+    expect(mocks.lobbyDeferredKindsRef.current).toEqual({ audio: false, video: true });
+  });
+
+  it('takes the mic off the lobby’s hands when it is turned off here', async () => {
+    mocks.permission = 'granted';
+    const release = lobbyCapturing('audio', { on: true });
+    const onJoinStateChange = vi.fn();
+    mount({ onJoinStateChange });
+    await screen.findByText('Joining with mic and camera on');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Turn microphone off' }));
+
+    expect(await screen.findByText('Joining muted')).toBeInTheDocument();
+    expect(release).not.toHaveBeenCalled();
+    expect(mocks.lobbyDeferredKindsRef.current).toEqual({ audio: false, video: false });
+  });
+
+  // A lobby that connects after the card opened its mic gets it back.
+  it('stops the card’s mic when the lobby starts capturing one', async () => {
+    mocks.permission = 'granted';
+    mount();
+    await waitFor(() => expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: true, video: true }));
+
+    act(() => {
+      lobbyCapturing('audio', { on: true });
+    });
+
+    await waitFor(() => expect(mocks.ensurePreview).toHaveBeenLastCalledWith({ audio: false, video: true }));
+  });
+
+  it('offers and opens the mic alone when the card has no camera', async () => {
+    mocks.permission = 'granted';
+    const onJoinStateChange = vi.fn();
+    mount({ camera: false, onJoinStateChange });
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(mocks.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false });
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+    expect(onJoinStateChange).toHaveBeenLastCalledWith({ micOn: true, cameraOn: false });
+  });
+
+  it('reports no camera block on a card with no camera', async () => {
+    mocks.permission = 'granted';
+    mocks.cameraPermission = 'denied';
+    mount({ camera: false });
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(screen.queryByText(/Camera is blocked/)).toBeNull();
   });
 
   it('does not touch the camera when permission has never been asked', async () => {

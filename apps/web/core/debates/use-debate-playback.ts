@@ -31,6 +31,7 @@ import {
 } from './playback-utils';
 import { transcriptOnRecordings, turnOnRecordings } from './recording-clock';
 import type { TurnCount } from './round-cues';
+import { speakerStillUrl } from './speaker-still';
 
 type PlaybackUrls = {
   slot1: string | null;
@@ -1537,6 +1538,10 @@ export function useDebatePlayback(
     slot2VideoRef,
     slot1Participant,
     slot2Participant,
+    // Per-tile stills from the media artifacts already in hand, for the card to paint before video
+    // data arrives (GEO-3280). Null where geo-chat cut none.
+    slot1Poster: speakerStillUrl(debate.id, 1, mediaQuery.data?.artifacts),
+    slot2Poster: speakerStillUrl(debate.id, 2, mediaQuery.data?.artifacts),
     urls,
     // A debate that cannot be timed is never ready, so nothing autoplays it on a zero-length
     // timeline; `error` carries the reason to the card.

@@ -37,6 +37,7 @@ import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession
 import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
 import { useDebateRoomContext } from '~/core/debates/rooms/room-context';
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { ChevronDownSmall } from '~/design-system/icons/chevron-down-small';
 import { useElevatedPopoverPortal } from '~/design-system/use-elevated-popover-portal';
@@ -60,13 +61,8 @@ function cameraEnabledByDefault(session: DebateRematchSession) {
 // A pair arriving from a recorded debate was already speaking with the microphone open, so the
 // debate-again room preserves that live conversation. A profile challenge has no preceding call or
 // user gesture that opened the microphone; it continues to join listen-only until the user unmutes.
-/**
- * Whether the microphone opens on arrival: a choice already made wins, if there is one. Otherwise
- * live after a debate, muted off a challenge.
- */
+/** Whether the microphone opens on arrival when nothing chose: live after a debate, muted off a challenge. */
 function microphoneEnabledByDefault(session: DebateRematchSession) {
-  const chosen = readRematchJoinIntent(session.id);
-  if (chosen) return chosen.micOn;
   return session.source_debate_id !== null;
 }
 
@@ -401,8 +397,11 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   const [micFailure, setMicFailure] = React.useState<MediaDeviceFailure | null>(null);
   const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
 
-  const cameraAllowed = join.data ? tokenAllowsCamera(join.data.token) : false;
-  const [cameraIntent, setCameraIntent] = React.useState(() => cameraEnabledByDefault(session));
+  // Off: audio only, as before GEO-3165. Gated where read, since the flag reads off until hydration.
+  const videoEnabled = useFeatureFlag('debateVideo');
+  const cameraAllowed = videoEnabled && join.data ? tokenAllowsCamera(join.data.token) : false;
+  const [cameraChoice, setCameraIntent] = React.useState(() => cameraEnabledByDefault(session));
+  const cameraIntent = videoEnabled && cameraChoice;
   const handleCameraIntentChange = React.useCallback((enabled: boolean) => {
     if (enabled) setCameraFailure(null);
     setCameraIntent(enabled);
@@ -415,24 +414,36 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // would put a muted user back on air the moment they hit Retry. The prop has to track what the
   // user wants. (A plain reconnect is not the risk here: that republishes the existing tracks and
   // preserves their mute state, without re-running the handler.)
+  //
+  // Card choice, then lobby mic, then default: the same order as the ready room. A card is answered
+  // after the lobby step-out carries the lobby mic, so it is the later, more direct choice.
   const carriedMic = useCarriedLobbyMic();
-  const [micIntent, setMicIntent] = React.useState(() => carriedMic ?? microphoneEnabledByDefault(session));
+  const [chosenAtMount] = React.useState(() => readRematchJoinIntent(session.id));
+  const [micIntent, setMicIntent] = React.useState(
+    () => chosenAtMount?.micOn ?? carriedMic ?? microphoneEnabledByDefault(session)
+  );
 
   // Latched by the auto-open below *and* by the user's own toggle, so a mute chosen while waiting
-  // is not undone the moment the opponent walks in. A mic carried from the lobby is a choice too.
-  const micSettledRef = React.useRef(carriedMic !== null);
+  // is not undone the moment the opponent walks in. A card's or a lobby's mic is a choice too. A
+  // room never shows a card, so a remembered intent there is this picker's own echo, not a choice.
+  const roomContext = useDebateRoomContext();
+  const micSettledRef = React.useRef((chosenAtMount !== null && roomContext === null) || carriedMic !== null);
   const handleMicIntentChange = React.useCallback((enabled: boolean) => {
     micSettledRef.current = true;
     setMicIntent(enabled);
   }, []);
 
   React.useEffect(() => {
-    rememberRematchJoinIntent(session.id, { micOn: micIntent, cameraOn: cameraIntent });
-  }, [cameraIntent, micIntent, session.id]);
+    // No camera choice without the flag, so the ready room keeps its own default.
+    rememberRematchJoinIntent(
+      session.id,
+      videoEnabled ? { micOn: micIntent, cameraOn: cameraIntent } : { micOn: micIntent }
+    );
+  }, [cameraIntent, micIntent, session.id, videoEnabled]);
 
   // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Off a room
   // there is no join event to key on and the dock stays muted, per GEO-2838.
-  const roomOpponentPresent = useDebateRoomContext()?.presence?.opponentPresent ?? false;
+  const roomOpponentPresent = roomContext?.presence?.opponentPresent ?? false;
   React.useEffect(() => {
     if (!roomOpponentPresent || micSettledRef.current) return;
     micSettledRef.current = true;
@@ -639,6 +650,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
         onRoomLive={handleRoomLive}
         opponentUserId={opponent.user_id}
         micFailure={micFailure}
+        videoEnabled={videoEnabled}
         cameraAllowed={cameraAllowed}
         cameraFailure={cameraFailure}
         cameraIntent={cameraIntent}
@@ -719,6 +731,7 @@ function VoiceHeaderBody({
   onRoomLive,
   opponentUserId,
   micFailure,
+  videoEnabled,
   cameraAllowed,
   cameraFailure,
   cameraIntent,
@@ -738,6 +751,8 @@ function VoiceHeaderBody({
   onRoomLive: () => void;
   opponentUserId: string;
   micFailure: MediaDeviceFailure | null;
+  /** Off: no video tiles, the other person's included. */
+  videoEnabled: boolean;
   cameraAllowed: boolean;
   cameraFailure: MediaDeviceFailure | null;
   cameraIntent: boolean;
@@ -936,9 +951,12 @@ function VoiceHeaderBody({
         : null;
 
   const opponentCamera = opponentParticipant?.getTrackPublication(Track.Source.Camera);
-  const localVideo = cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} /> : null;
+  const localVideo =
+    videoEnabled && cameraTrack?.track && !cameraTrack.isMuted ? <TrackVideo track={cameraTrack.track} /> : null;
   const opponentVideo =
-    opponentCamera?.track && !opponentCamera.isMuted ? <TrackVideo track={opponentCamera.track} /> : null;
+    videoEnabled && opponentCamera?.track && !opponentCamera.isMuted ? (
+      <TrackVideo track={opponentCamera.track} />
+    ) : null;
 
   const opponentState: PairMicState = !opponentParticipant
     ? 'waiting'

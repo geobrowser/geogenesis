@@ -2,6 +2,8 @@
 
 import * as React from 'react';
 
+import { useFeatureFlag } from '~/core/state/feature-flags';
+
 import { Avatar } from '~/design-system/avatar';
 import { DIALOG_ACTION_BUTTON_CLASS_NAME, DIALOG_SECONDARY_ACTION_BUTTON_CLASS_NAME } from '~/design-system/button';
 import { Text } from '~/design-system/text';
@@ -34,17 +36,20 @@ export function ChallengeAcceptedPrompt({
 
   const [initialJoinState] = React.useState(() => {
     const remembered = readRematchJoinIntent(session.id);
-    return remembered ?? null;
+    return remembered ? { micOn: remembered.micOn, cameraOn: remembered.cameraOn ?? false } : null;
   });
-  const rememberChoice = React.useCallback(
-    (state: { micOn: boolean; cameraOn: boolean }) => rememberRematchJoinIntent(session.id, state),
-    [session.id]
-  );
 
   const you = session.participants.find(participant => participant.user_id === currentUserId) ?? null;
   const other = session.participants.find(participant => participant.user_id !== currentUserId) ?? null;
 
   useScrollLock();
+  // Leads into the claim picker, which is audio-only without the flag: no camera choice to carry.
+  const videoEnabled = useFeatureFlag('debateVideo');
+  const rememberChoice = React.useCallback(
+    (state: { micOn: boolean; cameraOn: boolean }) =>
+      rememberRematchJoinIntent(session.id, videoEnabled ? state : { micOn: state.micOn }),
+    [session.id, videoEnabled]
+  );
 
   if (!you || !other) return null;
 
@@ -71,6 +76,7 @@ export function ChallengeAcceptedPrompt({
             avatarValue={you.profile_space_id}
             initialJoinState={initialJoinState}
             onJoinStateChange={rememberChoice}
+            camera={videoEnabled}
             fallback={<RematchParticipant participant={you} label="You" />}
           />
           <div className="relative grid w-7 place-items-center">

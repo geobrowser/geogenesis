@@ -49,6 +49,8 @@ export type DebateMediaSession = {
   selectedVideoInputIdRef: React.MutableRefObject<string>;
   audioOutputSupportedRef: React.MutableRefObject<boolean>;
   audioOutputSelectionPromiseRef: React.MutableRefObject<Promise<void> | null>;
+  /** Kinds the card left to a live lobby rather than choosing; kept through `promoteSession`. */
+  lobbyDeferredKindsRef: React.MutableRefObject<{ audio: boolean; video: boolean }>;
   beginSession: (sessionKey: string) => void;
   promoteSession: (fromSessionKey: string, toSessionKey: string) => void;
   releaseSession: (sessionKey: string) => void;
@@ -98,6 +100,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
+  const lobbyDeferredKindsRef = React.useRef({ audio: false, video: false });
   /** What the in-flight acquisition asked for, so a call wanting something else is not handed it. */
   const localPreviewWantRef = React.useRef<{ audio: boolean; video: boolean } | null>(null);
   /**
@@ -139,6 +142,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       // A new surface has chosen nothing yet. `promoteSession` deliberately leaves this alone: a
       // hand-off keeps the choice the card made.
       wantedKindsRef.current = { audio: true, video: true };
+      lobbyDeferredKindsRef.current = { audio: false, video: false };
       audioOutputSelectionFailedRef.current = false;
       setAudioOutputError(null);
       activeSessionKeyRef.current = sessionKey;
@@ -518,6 +522,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       selectedVideoInputIdRef,
       audioOutputSupportedRef,
       audioOutputSelectionPromiseRef,
+      lobbyDeferredKindsRef,
       beginSession,
       promoteSession,
       releaseSession,

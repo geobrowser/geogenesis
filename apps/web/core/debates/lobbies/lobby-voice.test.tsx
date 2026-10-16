@@ -10,12 +10,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateLobbyVoiceToken } from '../api';
 import type { MemberLobbyPageView } from './lobby-view';
 import {
+  type LobbyCapture,
   carryLobbyMic,
   clearCarriedLobbyMic,
   forgetLobbyMic,
+  lobbyCaptureLive,
   readCarriedLobbyMic,
   registerLobbyStepOut,
+  releaseLobbyCapture,
   routeIntoDebate,
+  useLobbyCapture,
 } from './step-out';
 
 const mocks = vi.hoisted(() => ({
@@ -30,6 +34,7 @@ const mocks = vi.hoisted(() => ({
   setMicrophoneEnabled: vi.fn(async () => undefined),
   setCameraEnabled: vi.fn(async () => undefined),
   unpublishTrack: vi.fn(async () => undefined),
+  microphoneTrack: undefined as { track: object } | undefined,
   /** The local camera track LiveKit holds, if any. */
   localCamera: null as { stop: () => void } | null,
   cameraTracks: [] as { participant: { identity: string }; publication: { track: object | null; isMuted: boolean } }[],
@@ -102,7 +107,12 @@ vi.mock('@livekit/components-react', () => ({
   useRoomContext: () => fakeRoom,
   useConnectionState: () => mocks.connectionState,
   useAudioPlayback: () => ({ canPlayAudio: mocks.canPlayAudio, startAudio: mocks.startAudio }),
-  useLocalParticipant: () => ({ localParticipant, isMicrophoneEnabled: mocks.isMicrophoneEnabled }),
+  useLocalParticipant: () => ({
+    localParticipant,
+    isMicrophoneEnabled: mocks.isMicrophoneEnabled,
+    microphoneTrack: mocks.microphoneTrack,
+    cameraTrack: mocks.localCamera ? { track: mocks.localCamera } : undefined,
+  }),
   useLocalParticipantPermissions: () => mocks.permissions,
   useParticipants: () => mocks.participants,
   useTracks: () => mocks.cameraTracks,
@@ -167,6 +177,7 @@ function renderVoice(view = lobby(), onConnectedChange = vi.fn(), joined = true)
       >
         <Speaking />
       </LobbyVoice>
+      <CaptureProbe />
     </QueryClientProvider>
   );
   const result = render(ui(joined));
@@ -180,6 +191,7 @@ beforeEach(() => {
   mocks.connectionState = ConnectionState.Connected;
   mocks.canPlayAudio = true;
   mocks.isMicrophoneEnabled = false;
+  mocks.microphoneTrack = undefined;
   mocks.participants = [];
   mocks.permissions = undefined;
   mocks.localCamera = null;
@@ -192,6 +204,13 @@ afterEach(() => {
   vi.clearAllMocks();
   mocks.roomListeners.clear();
 });
+
+let latestCapture: LobbyCapture | null = null;
+function CaptureProbe() {
+  latestCapture = useLobbyCapture('audio');
+  return null;
+}
+const captureOn = () => latestCapture?.on ?? null;
 
 describe('LobbyVoice', () => {
   it('mints with this tab’s connection and joins with the mic on', async () => {
@@ -215,6 +234,48 @@ describe('LobbyVoice', () => {
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
     // Kept for the next connect, so a reconnect does not undo the choice.
     expect(mocks.roomProps).toMatchObject({ audio: true });
+  });
+
+  it('registers its mic capture for a request card to release', async () => {
+    const track = {};
+    mocks.microphoneTrack = { track };
+    const view = renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(lobbyCaptureLive('audio')).toBe(true);
+    expect(captureOn()).toBe(false);
+
+    act(() => releaseLobbyCapture('audio'));
+
+    expect(mocks.unpublishTrack).toHaveBeenCalledWith(track, true);
+    expect(mocks.roomProps).toMatchObject({ audio: false });
+    view.unmount();
+    expect(lobbyCaptureLive('audio')).toBe(false);
+  });
+
+  it('reports whether its captured mic is on', async () => {
+    mocks.microphoneTrack = { track: {} };
+    mocks.isMicrophoneEnabled = true;
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+
+    expect(captureOn()).toBe(true);
+  });
+
+  it('keeps its mic capture registered through a reconnect', async () => {
+    mocks.microphoneTrack = { track: {} };
+    mocks.connectionState = ConnectionState.Reconnecting;
+    renderVoice();
+    await waitFor(() => expect(mocks.roomProps).not.toBeNull());
+
+    expect(lobbyCaptureLive('audio')).toBe(true);
+  });
+
+  it('registers no capture without a mic track', async () => {
+    mocks.connectionState = ConnectionState.Connecting;
+    renderVoice();
+    await waitFor(() => expect(mocks.roomProps).not.toBeNull());
+
+    expect(lobbyCaptureLive('audio')).toBe(false);
   });
 
   it('gives a listener no mic', async () => {
@@ -437,9 +498,10 @@ describe('LobbyVoice camera (GEO-3307)', () => {
   it('turns the camera off and frees it when a host moves the viewer to listeners', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     const { setJoined } = renderVoice();
-    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    const turnOn = await screen.findByRole('button', { name: 'Turn camera on' });
     const camera = { stop: vi.fn() };
     mocks.localCamera = camera;
+    fireEvent.click(turnOn);
 
     mocks.permissions = { canPublish: false };
     setJoined(true);
@@ -484,9 +546,10 @@ describe('LobbyVoice camera (GEO-3307)', () => {
   it('frees the camera when stepping out into a debate', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     renderVoice();
-    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    const turnOn = await screen.findByRole('button', { name: 'Turn camera on' });
     const camera = { stop: vi.fn() };
     mocks.localCamera = camera;
+    fireEvent.click(turnOn);
 
     const unregister = registerLobbyStepOut(async () => undefined);
     const go = vi.fn();
@@ -501,9 +564,10 @@ describe('LobbyVoice camera (GEO-3307)', () => {
   it('stops the camera synchronously when the room unmounts', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     const { unmount } = renderVoice();
-    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    const turnOn = await screen.findByRole('button', { name: 'Turn camera on' });
     const camera = { stop: vi.fn() };
     mocks.localCamera = camera;
+    fireEvent.click(turnOn);
 
     unmount();
     expect(camera.stop).toHaveBeenCalled();

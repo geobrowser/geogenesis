@@ -21,6 +21,7 @@ import {
   ConnectionState,
   DisconnectReason,
   type LocalParticipant,
+  type LocalTrackPublication,
   MediaDeviceFailure,
   ParticipantEvent,
   type Room,
@@ -44,7 +45,7 @@ import { HubPillButton } from '../matchmaking/hub-pill-button';
 import { lobbyErrorMessage } from './lobby-format';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
-import { registerLobbyCameraRelease, reportLobbyMic } from './step-out';
+import { registerLobbyCapture, reportLobbyMic } from './step-out';
 
 type OwnershipState = 'pending' | 'owned' | 'elsewhere';
 
@@ -417,7 +418,21 @@ function ConnectedVoice({
 
   // Autoplay can be blocked with no click before connecting (iOS); playback needs a user gesture.
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
-  const { localParticipant, isMicrophoneEnabled } = useLocalParticipant();
+  const { localParticipant, isMicrophoneEnabled, microphoneTrack, cameraTrack } = useLocalParticipant();
+
+  // A request card over the lobby releases this before opening its own mic. Held through a reconnect,
+  // which republishes the same track.
+  const capturedMic = (microphoneTrack as LocalTrackPublication | undefined)?.track;
+  React.useEffect(() => {
+    if (!capturedMic) return;
+    return registerLobbyCapture('audio', {
+      on: isMicrophoneEnabled,
+      release: () => {
+        onMicChoice(false);
+        void localParticipant.unpublishTrack(capturedMic, true).catch(() => undefined);
+      },
+    });
+  }, [capturedMic, isMicrophoneEnabled, localParticipant, onMicChoice]);
   const audible = connected && canPlayAudio;
   React.useEffect(() => {
     if (audible) onAudible?.();
@@ -444,15 +459,18 @@ function ConnectedVoice({
     });
   }, [cameraAllowed, cameraOn, connected, localParticipant, mayPublish, onCameraFailure]);
 
-  // Stepping out into a debate stops the camera before the next screen asks for it.
-  React.useEffect(
-    () =>
-      registerLobbyCameraRelease(() => {
+  // Stepping out into a debate, or a request card opening its own camera, stops this one first.
+  const capturedCamera = (cameraTrack as LocalTrackPublication | undefined)?.track;
+  React.useEffect(() => {
+    if (!capturedCamera) return;
+    return registerLobbyCapture('video', {
+      on: cameraOn,
+      release: () => {
         onCameraChoice(false);
         releaseLocalCamera(localParticipant);
-      }),
-    [localParticipant, onCameraChoice]
-  );
+      },
+    });
+  }, [cameraOn, capturedCamera, localParticipant, onCameraChoice]);
   // A server step-out unmounts this before the route runs, and the room's disconnect only stops the
   // camera after awaiting the network; iPhone needs the device free by the time the next screen asks.
   React.useEffect(() => () => stopLocalCamera(localParticipant), [localParticipant]);

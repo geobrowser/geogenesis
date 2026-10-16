@@ -10,14 +10,26 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
-import { carryLobbyMic, clearCarriedLobbyMic, forgetLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
-import { clearRematchJoinIntents, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
+import {
+  carryLobbyMic,
+  clearCarriedLobbyMic,
+  forgetLobbyMic,
+  readCarriedLobbyMic,
+  reportLobbyMic,
+} from '~/core/debates/lobbies/step-out';
+import {
+  carryJoinIntentIntoDebate,
+  clearRematchJoinIntents,
+  readRematchJoinIntent,
+  rememberRematchJoinIntent,
+} from '~/core/debates/rematch-join-intent';
 import { DebateRoomProvider } from '~/core/debates/rooms/room-context';
 
 import { PAIR_PILL } from './rematch-pair-header';
 import { RematchVoiceHeader } from './rematch-voice';
 
 const mocks = vi.hoisted(() => ({
+  debateVideo: true,
   joinData: null as { token: string; url: string; room_name: string; participant_slot: 1 | 2 } | null,
   joinError: null as Error | null,
   joinLoading: false,
@@ -193,6 +205,10 @@ vi.mock('livekit-client', () => ({
     Other: 'Other',
   },
   Track: { Source: { Microphone: 'microphone', Camera: 'camera' } },
+}));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => (id === 'debateVideo' ? mocks.debateVideo : false),
 }));
 
 vi.mock('~/core/debates/hooks', () => ({
@@ -401,6 +417,7 @@ function stepOutOfLobbyWithMic(on: boolean) {
 }
 
 beforeEach(() => {
+  mocks.debateVideo = true;
   stubMicrophoneApis();
   // The settings popover measures its trigger to place itself; jsdom has no ResizeObserver.
   vi.stubGlobal(
@@ -578,6 +595,22 @@ describe('RematchVoiceHeader', () => {
     await flushOwnership();
 
     expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
+  });
+
+  // A challenge card answered inside a lobby: the step-out carries the lobby mic, then the card
+  // records its own choice. The card is the later, more direct answer.
+  it('joins with the card’s muted mic over a live mic carried from the lobby', async () => {
+    stepOutOfLobbyWithMic(true);
+    rememberRematchJoinIntent('session-1', { micOn: false, cameraOn: false });
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(mocks.livekitRoomProps[0]?.audio).toBe(false);
+
+    // The ready room reads the picker's recorded answer, and finds no lobby mic left to outrank it.
+    carryJoinIntentIntoDebate('session-1', 'debate-1');
+    expect(readRematchJoinIntent('debate-1')).toEqual({ micOn: false, cameraOn: false });
+    expect(readCarriedLobbyMic()).toBeNull();
   });
 
   it('resets the microphone default when the route moves between rematch sessions', async () => {
@@ -2443,6 +2476,34 @@ describe('the mic inside a debate room', () => {
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
   });
 
+  // Leaving the room in-app and coming back remounts the picker over its own remembered default.
+  it('still opens the mic when the opponent arrives after the picker remounts', async () => {
+    const first = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    first.unmount();
+
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await flushOwnership();
+    expect(lastAudio()).toBe(false);
+
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(lastAudio()).toBe(true));
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
+  });
+
   // A mute chosen while waiting is a choice, and the opponent walking in must not undo it.
   it('leaves a deliberate mute alone when the opponent arrives', async () => {
     const view = render(
@@ -2853,5 +2914,48 @@ describe('letting the devices go on the way to the debate', () => {
 
     expect(mocks.publishedMicStop).toHaveBeenCalled();
     expect(mocks.publishedCameraStop).toHaveBeenCalled();
+  });
+});
+
+describe('with debateVideo off', () => {
+  beforeEach(() => {
+    mocks.debateVideo = false;
+  });
+
+  it('offers no camera and publishes none, even where the token and a choice allow one', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+    expect(mocks.setCameraEnabled).not.toHaveBeenCalled();
+    expect(screen.queryByText('Video isn’t available in this call.')).toBeNull();
+    // Still joins with the mic the choice asked for.
+    expect(mocks.livekitRoomProps.at(-1)?.audio).toBe(true);
+  });
+
+  it('carries no camera choice into the debate', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(readRematchJoinIntent('session-1')).toStrictEqual({ micOn: true }));
+    // What the ready room reads: the mic, and no camera choice to override its default.
+    carryJoinIntentIntoDebate('session-1', 'debate-9');
+    expect(readRematchJoinIntent('debate-9')).toStrictEqual({ micOn: true });
+  });
+
+  it('draws avatars, not the other person’s camera', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    mocks.opponentCameraPublication = { track: { attach: vi.fn(), detach: vi.fn() } };
+    mocks.localCameraTrack = { track: { attach: vi.fn(), detach: vi.fn() } };
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    expect(document.querySelector('video')).toBeNull();
+    expect(mocks.opponentCameraPublication.track.attach).not.toHaveBeenCalled();
+    expect(screen.getByTestId('rematch-opponent-card').querySelector('[data-testid="avatar"]')).not.toBeNull();
   });
 });

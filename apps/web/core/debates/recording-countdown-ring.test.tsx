@@ -4,6 +4,7 @@ import { cleanup, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { RecordingCountdownRing } from './recording-countdown-ring';
+import { recordAnimationRestarts } from './turn-timer-fixtures';
 
 const circumference = 2 * Math.PI * 21;
 
@@ -133,17 +134,7 @@ describe('RecordingCountdownRing', () => {
     });
 
     it("restarts the face's pulse and glow each second without remounting it", () => {
-      // The restart takes the face's animations off, has the browser lay it out, and puts them back.
-      // Record what the animation was each time the browser is asked to lay the face out.
-      const restarts: string[] = [];
-      const offsetWidth = Object.getOwnPropertyDescriptor(HTMLElement.prototype, 'offsetWidth');
-      Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
-        configurable: true,
-        get(this: HTMLElement) {
-          restarts.push(this.style.animation);
-          return 0;
-        },
-      });
+      const { restarts, restore } = recordAnimationRestarts();
       try {
         const view = render(
           <RecordingCountdownRing
@@ -179,7 +170,7 @@ describe('RecordingCountdownRing', () => {
         expect(face?.style.animation).toBe('');
         expect(rim(view.container)?.parentElement).toBe(face);
       } finally {
-        if (offsetWidth) Object.defineProperty(HTMLElement.prototype, 'offsetWidth', offsetWidth);
+        restore();
       }
     });
   });

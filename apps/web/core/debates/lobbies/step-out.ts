@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { readSession, removeSession, writeSession } from '~/core/utils/session-storage';
 
@@ -16,15 +17,56 @@ export function registerLobbyStepOut(stepOut: () => Promise<void>) {
   };
 }
 
-/** Stops this tab's lobby camera, set while a lobby room may be publishing one. */
-let releaseLobbyCamera: (() => void) | null = null;
+export type LobbyCaptureKind = 'audio' | 'video';
 
-/** Set by the lobby's voice room; the returned function clears it. */
-export function registerLobbyCameraRelease(release: () => void) {
-  releaseLobbyCamera = release;
+/** A device the lobby is capturing: whether it is on (unmuted) and how to stop it. */
+export type LobbyCapture = { on: boolean; release: () => void };
+
+/** Devices this tab's lobby is capturing. iPhone Safari keeps one capture per kind. */
+const lobbyCaptures = new Map<LobbyCaptureKind, LobbyCapture>();
+const lobbyCaptureListeners = new Set<() => void>();
+
+function notifyLobbyCaptures() {
+  lobbyCaptureListeners.forEach(listener => listener());
+}
+
+/** Set by the lobby's voice room while it holds a capture of `kind`; the returned function clears it. */
+export function registerLobbyCapture(kind: LobbyCaptureKind, capture: LobbyCapture) {
+  lobbyCaptures.set(kind, capture);
+  notifyLobbyCaptures();
   return () => {
-    if (releaseLobbyCamera === release) releaseLobbyCamera = null;
+    if (lobbyCaptures.get(kind) !== capture) return;
+    lobbyCaptures.delete(kind);
+    notifyLobbyCaptures();
   };
+}
+
+/** Whether the lobby holds a capture of `kind`, or of any kind when omitted. */
+export function lobbyCaptureLive(kind?: LobbyCaptureKind) {
+  return kind ? lobbyCaptures.has(kind) : lobbyCaptures.size > 0;
+}
+
+/** Stops the lobby's capture of `kind`, or every capture when omitted. */
+export function releaseLobbyCapture(kind?: LobbyCaptureKind) {
+  for (const [captured, capture] of [...lobbyCaptures]) {
+    if (!kind || captured === kind) capture.release();
+  }
+}
+
+function subscribeLobbyCaptures(listener: () => void) {
+  lobbyCaptureListeners.add(listener);
+  return () => {
+    lobbyCaptureListeners.delete(listener);
+  };
+}
+
+/** The lobby's capture of `kind`, or null; re-renders as the lobby connects, mutes or lets it go. */
+export function useLobbyCapture(kind: LobbyCaptureKind): LobbyCapture | null {
+  return useSyncExternalStore(
+    subscribeLobbyCaptures,
+    () => lobbyCaptures.get(kind) ?? null,
+    () => null
+  );
 }
 
 /**
@@ -35,7 +77,7 @@ export function routeIntoDebate(go: () => void) {
   // Only the lobby being stepped out of now carries its mic; `stepOut` writes it.
   clearCarriedLobbyMic();
   // iPhone Safari keeps one camera capture: the lobby's must stop before the next screen opens its own.
-  releaseLobbyCamera?.();
+  releaseLobbyCapture('video');
   const stepOut = stepOutOfCurrentLobby;
   if (!stepOut) return go();
   void Promise.race([stepOut(), new Promise<void>(resolve => setTimeout(resolve, STEP_OUT_WAIT_MS))]).then(go);
