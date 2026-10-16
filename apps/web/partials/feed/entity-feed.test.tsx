@@ -11,8 +11,9 @@ import {
   EXPLORE_ENTITY_TYPE_IDS,
   PAPER_TYPE_ID,
 } from '~/core/explore/explore-constants';
+import { PUBLIC_BEST_FEED_PATH } from '~/core/explore/explore-feed-params';
 
-import { EntityFeed } from './entity-feed';
+import { EntityFeed, buildFeedQuery } from './entity-feed';
 
 const mocks = vi.hoisted(() => ({
   queryOptions: null as Record<string, unknown> | null,
@@ -761,5 +762,67 @@ describe('EntityFeed for a reader with a wallet cookie', () => {
     expect(placeholderData(previous, { queryKey: [...key.slice(0, -1), ADDRESS] })).toBe(previous);
     expect(placeholderData(previous, { queryKey: [key[0], 'new', ...key.slice(2)] })).toBeUndefined();
     expect(placeholderData(previous, undefined)).toBeUndefined();
+  });
+});
+
+// The CDN ignores cookies, so only the plain signed-out first Best page may use the cacheable URL.
+describe('EntityFeed cacheable first page', () => {
+  function renderFeed(props: Partial<React.ComponentProps<typeof EntityFeed>> = {}) {
+    return render(
+      <EntityFeed apiEndpoint="/api/explore/feed" initialSort="best" showSortFilter cdnFirstPage {...props} />
+    );
+  }
+
+  it('uses the public URL for a signed-out reader, matching the preload exactly', async () => {
+    renderFeed();
+
+    expect(await requestedUrl()).toBe(PUBLIC_BEST_FEED_PATH);
+  });
+
+  it('keeps the personal URL when a wallet cookie is present', async () => {
+    renderFeed({ walletAddress: '0xabc' });
+
+    expect(await requestedUrl()).toBe('/api/explore/feed?sort=best');
+  });
+
+  it('keeps the personal URL once a smart account has resolved', async () => {
+    mocks.accountAddress = '0xabc';
+    renderFeed();
+
+    expect(await requestedUrl()).toBe('/api/explore/feed?sort=best');
+  });
+
+  it('keeps the personal URL for other sorts', async () => {
+    renderFeed({ initialSort: 'new' });
+
+    expect(await requestedUrl()).not.toContain('public=');
+  });
+
+  it('stays off unless the feed opts in', async () => {
+    renderFeed({ cdnFirstPage: false });
+
+    expect(await requestedUrl()).toBe('/api/explore/feed?sort=best');
+  });
+
+  it('never marks a later page, a filter or a scoped feed', () => {
+    const base = {
+      sort: 'best' as const,
+      time: undefined,
+      spaceIds: [],
+      typeIds: undefined,
+      topicIds: [],
+      followedTopicIds: [],
+      fixedParams: {},
+      cursor: undefined,
+      anonymous: true,
+    };
+    expect(buildFeedQuery(base)).toBe('sort=best&public=1');
+    expect(buildFeedQuery({ ...base, cursor: 'abc' })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, typeIds: ['a'] })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, spaceIds: ['a'] })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, time: 'month' })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, fixedParams: { topicId: 't' } })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, sort: 'top' })).not.toContain('public');
+    expect(buildFeedQuery({ ...base, anonymous: false })).toBe('sort=best');
   });
 });
