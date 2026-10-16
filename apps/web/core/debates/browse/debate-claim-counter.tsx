@@ -5,11 +5,13 @@ import * as React from 'react';
 import cx from 'classnames';
 
 import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
-import type { DebateClaim } from '~/core/debates/api';
+import type { DebateClaim, DebateParticipant } from '~/core/debates/api';
 import type { StackedCard } from '~/core/debates/claim-ticker';
+import { speakerLabel } from '~/core/debates/playback-utils';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
+import { Avatar } from '~/design-system/avatar';
 import { TargetSolid } from '~/design-system/icons/target-solid';
 
 import { ClaimIconButton } from './debate-claim-ticker';
@@ -39,6 +41,7 @@ const CLOSE_AFTER_MS = 250;
 export function DebateClaimCounter({
   history,
   name,
+  speaker = null,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
@@ -49,6 +52,7 @@ export function DebateClaimCounter({
   history: StackedCard[];
   /** The debater's first name, for the list's header. */
   name: string;
+  speaker?: DebateParticipant | null;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -159,6 +163,7 @@ export function DebateClaimCounter({
         <ClaimList
           history={history}
           name={name}
+          speaker={speaker}
           rowsByClaimId={rowsByClaimId}
           entitiesByClaimId={entitiesByClaimId}
           onAnswered={onAnswered}
@@ -207,6 +212,7 @@ function ClaimCount({ count }: { count: number }) {
 function ClaimList({
   history,
   name,
+  speaker,
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
@@ -214,6 +220,7 @@ function ClaimList({
 }: {
   history: StackedCard[];
   name: string;
+  speaker: DebateParticipant | null;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -263,6 +270,8 @@ function ClaimList({
           <ClaimListCard
             key={card.window.claim.id}
             card={card}
+            name={name}
+            speaker={speaker}
             row={rowsByClaimId.get(card.window.claim.id) ?? null}
             entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
             onAnswered={onAnswered}
@@ -304,6 +313,8 @@ function paintTopFade(list: HTMLElement, fades: boolean) {
 
 function ClaimListCard(props: {
   card: StackedCard;
+  name: string;
+  speaker: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -319,17 +330,21 @@ function ClaimListCard(props: {
 }
 
 /**
- * A claim and its vote column: Agree, the share who agree, Disagree. The share only shows once a
- * claim has a vote. Thumbs are solid so they read at this size, each with a 24px target.
+ * The classic card: debater, agreement percentage and thumbs in a header above the claim.
+ * The share only shows once a claim has votes; the outlined thumbs keep a 24px minimum target.
  */
 function ClaimListCardBody({
   card,
+  name,
+  speaker,
   row,
   entity,
   onAnswered,
   spaceId,
 }: {
   card: StackedCard;
+  name: string;
+  speaker: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
@@ -355,7 +370,7 @@ function ClaimListCardBody({
         title={control.actionTitle(side) || label}
         onClick={() => control.respond(side)}
         tone="glass"
-        layout="column"
+        layout="header"
       />
     );
   };
@@ -365,23 +380,25 @@ function ClaimListCardBody({
     // measures (and so reports an impression) through an `ActionSurfaceDiv` beneath it.
     <ActionSurfaceDiv
       data-claim-list-card={claim.id}
-      className="grid grid-cols-[1fr_auto] items-center gap-x-[2.4cqw] rounded-[3cqw] border border-white/15 bg-black/60 [mask-image:var(--claim-ramp,none)] py-[1.4cqw] pr-[1.2cqw] pl-[2.6cqw] text-white backdrop-blur-[22px] [-webkit-mask-image:var(--claim-ramp,none)]"
+      className="grid gap-[1.2cqw] rounded-lg bg-[#151515]/55 [mask-image:var(--claim-ramp,none)] p-[2.4cqw] text-left text-white backdrop-blur-[22px] [-webkit-mask-image:var(--claim-ramp,none)]"
     >
-      <span className="line-clamp-3 text-[3.3cqw] leading-[1.25]">{claim.text}</span>
-      <span className="grid min-w-[7cqw] content-center justify-items-center" style={PLAYER_LABEL_FONT}>
-        {vote(true)}
-        {summary.percent === null ? (
-          <span aria-hidden className="h-[2.4cqw]" />
-        ) : (
-          <span
-            className="py-[0.6cqw] text-[2.6cqw] leading-none font-semibold tabular-nums"
-            title={`${summary.percent}% agree`}
-          >
-            {summary.percent}% agree
-          </span>
+      <div
+        data-claim-list-header
+        className="flex items-center gap-[1.2cqw] text-[2.7cqw] leading-none whitespace-nowrap"
+      >
+        <span className="block size-[3.4cqw] shrink-0 overflow-hidden rounded-full bg-white [&>svg]:size-full">
+          <Avatar avatarUrl={speaker?.avatar_cid} value={speaker?.profile_space_id ?? name} size={16} />
+        </span>
+        <span className="min-w-0 truncate">{speaker ? speakerLabel(speaker) : name}</span>
+        {summary.percent !== null && (
+          <span className="shrink-0 text-white/70 tabular-nums">· {summary.percent}% agree</span>
         )}
-        {vote(false)}
-      </span>
+        <span className="ml-auto flex shrink-0 gap-[1.6cqw]">
+          {vote(true)}
+          {vote(false)}
+        </span>
+      </div>
+      <div className="line-clamp-2 text-[3.3cqw] leading-[1.25]">{claim.text}</div>
     </ActionSurfaceDiv>
   );
 }

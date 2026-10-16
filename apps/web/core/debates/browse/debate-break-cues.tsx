@@ -22,7 +22,6 @@ import { PlayerRoundTitle } from './debate-round-cues';
 import {
   PLAYER_ENTER_CLASS,
   PLAYER_EXIT_CLASS,
-  PLAYER_GLASS_CLASS,
   PLAYER_LABEL_FONT,
   PLAYER_PICK_BASE_CLASS,
   PLAYER_PICK_CLASS,
@@ -232,7 +231,7 @@ export function DebateBreakOverlay({
         <div className="absolute inset-0 grid place-items-center px-4 text-center">
           <div
             data-debate-question
-            className={cx(PLAYER_TITLE_CLASS, PLAYER_ENTER_CLASS, 'text-[7cqw]')}
+            className={cx(PLAYER_TITLE_CLASS, PLAYER_ENTER_CLASS, 'text-[8cqw]')}
             style={{ ...PLAYER_TITLE_STYLE, ...heldAt(BREAK_SETTLE_MS) }}
           >
             Keep debating?
@@ -247,7 +246,7 @@ export function DebateBreakOverlay({
             <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
               <span
                 data-debate-stamp={key}
-                className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS[key], PLAYER_ENTER_CLASS, 'text-[7cqw]')}
+                className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS[key], PLAYER_ENTER_CLASS)}
                 style={
                   {
                     ...PLAYER_LABEL_FONT,
@@ -274,7 +273,7 @@ export function DebateBreakOverlay({
             style={heldAt(bannerAtMs)}
           >
             {wrap ? (
-              <div className={cx(PLAYER_TITLE_CLASS, 'text-[10cqw]')} style={PLAYER_TITLE_STYLE}>
+              <div className={cx(PLAYER_TITLE_CLASS, 'text-[11cqw]')} style={PLAYER_TITLE_STYLE}>
                 That’s a wrap
               </div>
             ) : (
@@ -283,7 +282,7 @@ export function DebateBreakOverlay({
             {opener && (
               <span
                 data-debate-banner-sub
-                className={cx(PLAYER_TITLE_CLASS, 'mt-[2cqw] block truncate text-[4cqw]')}
+                className={cx(PLAYER_TITLE_CLASS, 'mt-[1.6cqw] block truncate text-[4.8cqw]')}
                 style={PLAYER_TITLE_STYLE}
               >
                 {opener}
@@ -293,9 +292,9 @@ export function DebateBreakOverlay({
         </div>
       )}
       {note && cue.elapsedMs >= bannerAtMs - MOUNT_AHEAD_MS && (
-        <div className={cx('absolute inset-x-0 top-[calc(50%+7.5cqw)] text-center', APPEAR)} style={heldAt(bannerAtMs)}>
+        <div className={cx('absolute inset-x-0 top-[calc(50%+9cqw)] text-center', APPEAR)} style={heldAt(bannerAtMs)}>
           <span
-            className={cx(PLAYER_GLASS_CLASS, 'inline-block max-w-[90%] text-[2.8cqw] whitespace-normal text-white')}
+            className="inline-block max-w-[90%] rounded-full bg-black/72 px-[2.8cqw] py-[1.4cqw] text-[2.8cqw] leading-[1.2] tracking-[0.01em] text-white backdrop-blur-[10px]"
             style={PLAYER_LABEL_FONT}
           >
             {note}
@@ -317,7 +316,7 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
             <div className={cx('absolute inset-0 bg-black/42', ROOM_ENTER_CLASS)} />
             <span
               data-debate-stamp="ended"
-              className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS.none, PLAYER_ENTER_CLASS, 'relative text-[6cqw]')}
+              className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS.none, PLAYER_ENTER_CLASS, 'relative')}
               style={PLAYER_LABEL_FONT}
             >
               Ended early
@@ -330,11 +329,7 @@ export function DebateEarlyEndLabels({ cue, names }: { cue: EarlyEndCue | null; 
           <div className={cx(TILE_CLASS[cue.nextSlot], 'grid place-items-center')}>
             <div
               data-debate-banner="turn"
-              className={cx(
-                PLAYER_GLASS_CLASS,
-                PLAYER_ENTER_CLASS,
-                'max-w-[90%] truncate px-[4cqw] py-[2cqw] text-[6cqw] text-white'
-              )}
+              className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS.end, PLAYER_ENTER_CLASS, 'max-w-[90%] truncate')}
               style={PLAYER_LABEL_FONT}
             >
               {names[cue.nextSlot]}’s turn

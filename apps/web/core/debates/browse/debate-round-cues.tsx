@@ -176,7 +176,7 @@ export function DebateRoundBadge({
       <span
         aria-hidden
         data-round-tag={stamped || undefined}
-        className={cx('truncate', stamped && cx(PLAYER_GLASS_CLASS, 'text-[2.8cqw]'))}
+        className={cx('truncate', stamped && cx(PLAYER_GLASS_CLASS, 'text-[3cqw]'))}
         style={stamped ? PLAYER_LABEL_FONT : undefined}
       >
         {cue.label}
@@ -196,7 +196,7 @@ export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
       style={{ '--round-opacity': cue.opacity } as React.CSSProperties}
     >
       <div
-        className="motion-safe:animate-[debatePlayerSettle_220ms_ease-out_both]"
+        className="motion-safe:animate-[debatePlayerSettle_250ms_ease-out_both]"
         style={{ animationDelay: `-${cue.ageMs ?? 0}ms` }}
       >
         <PlayerRoundTitle round={cue.round} role={cue.role} />
@@ -205,12 +205,16 @@ export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
   );
 }
 
-/** Shared by the opening and the next-round announcement over a break. Geist fits at 15cqw. */
+/** Shared by the opening and the next-round announcement, at the export's 9/18cqw sizes. */
 export function PlayerRoundTitle({ round, role }: { round: string; role: string | null }) {
   return (
-    <div className={PLAYER_TITLE_CLASS} style={PLAYER_TITLE_STYLE}>
-      <span className={cx('block', role ? 'text-[7.5cqw]' : 'text-[15cqw]')}>{round}</span>
-      {role && <span className="block text-[15cqw] leading-[0.95]">{role}</span>}
+    <div className={cx(PLAYER_TITLE_CLASS, 'mx-auto w-max max-w-[92%]')} style={PLAYER_TITLE_STYLE}>
+      <span
+        className={cx('block', role ? 'text-[9cqw] leading-none tracking-[-0.01em] text-white/88' : 'text-[18cqw]')}
+      >
+        {round}
+      </span>
+      {role && <span className="block text-[18cqw] tracking-[-0.03em]">{role}</span>}
     </div>
   );
 }

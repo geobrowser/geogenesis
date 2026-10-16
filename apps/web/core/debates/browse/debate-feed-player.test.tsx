@@ -2007,11 +2007,10 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       expect(pills).toHaveLength(2);
       expect(pills[0].getAttribute('data-debate-stamp')).toBe(choice ?? 'none');
       expect(pills[0].className).toContain(
-        choice === 'extend' ? 'bg-white/90' : choice === 'end' ? 'bg-black/60' : 'border-dashed'
+        choice === 'extend' ? 'bg-white' : choice === 'end' ? 'bg-[rgba(36,36,40,0.48)]' : 'border-dashed'
       );
       for (const pill of pills) {
         expect(pill.className).toContain('rounded-full');
-        expect(pill.className).toContain('backdrop-blur');
         expect(pill.style.transform).toBe('');
       }
       expect(container.innerHTML).not.toContain('purple');

@@ -642,6 +642,7 @@ export function DebateFeedPlayer({
         <DebateClaimCounter
           history={history}
           name={breakNames[slot as 1 | 2]}
+          speaker={slot === 1 ? slot1Participant : slot2Participant}
           rowsByClaimId={ticker.rowsByClaimId}
           entitiesByClaimId={ticker.entitiesByClaimId}
           onAnswered={ticker.onAnswered}
@@ -1601,7 +1602,7 @@ function DebaterVideo({
         {lastWord && (
           <span
             data-last-word
-            className={cx(PLAYER_GLASS_CLASS, 'absolute bottom-full left-0 mb-[1.5cqw] text-[2.6cqw] text-white')}
+            className={cx(PLAYER_GLASS_CLASS, 'absolute bottom-full left-0 mb-[1.5cqw] text-[3cqw]')}
             style={PLAYER_LABEL_FONT}
           >
             Last word

@@ -41,6 +41,17 @@ const renderCounter = (history: StackedCard[], onSeeAll?: () => void) =>
     <DebateClaimCounter
       history={history}
       name="Preston"
+      speaker={{
+        user_id: 'user-1',
+        profile_space_id: 'profile-1',
+        display_name: 'Preston Mantel',
+        avatar_cid: null,
+        participant_slot: 1,
+        position: true,
+        position_label: 'Agree',
+        joined_at: null,
+        ready_at: null,
+      }}
       rowsByClaimId={new Map()}
       entitiesByClaimId={new Map()}
       onAnswered={() => {}}
@@ -137,7 +148,12 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
 
     const card = (id: string) => container.querySelector(`[data-claim-list-card="${id}"]`) as HTMLElement;
-    expect(card('b').textContent).toContain('64% agree');
+    const header = card('b').querySelector('[data-claim-list-header]');
+    expect(header?.textContent).toContain('Preston Mantel');
+    expect(header?.textContent).toContain('64% agree');
+    expect(header?.querySelectorAll('button')).toHaveLength(2);
+    expect(header?.textContent).not.toContain('Claim b');
+    expect(card('b').lastElementChild?.textContent).toBe('Claim b');
     expect(card('a').textContent).not.toContain('%');
   });
 
@@ -147,7 +163,7 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     const cards = [...container.querySelectorAll('[data-claim-list-card]')];
     expect(cards).toHaveLength(2);
     for (const card of cards) {
-      expect(card.className).toContain('bg-black/60');
+      expect(card.className).toContain('bg-[#151515]/55');
       expect(card.className).toContain('backdrop-blur');
     }
     expect(container.innerHTML).not.toContain('purple');

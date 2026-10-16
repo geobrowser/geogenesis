@@ -920,7 +920,7 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
 @keyframes debatePlayerEnter {
   from {
     opacity: 0;
-    scale: 0.97;
+    scale: 1.06;
   }
   to {
     opacity: 1;
@@ -929,7 +929,7 @@ body[data-slide-up-open] [data-radix-popper-content-wrapper] {
 }
 @keyframes debatePlayerSettle {
   from {
-    scale: 0.97;
+    scale: 1.06;
   }
   to {
     scale: 1;

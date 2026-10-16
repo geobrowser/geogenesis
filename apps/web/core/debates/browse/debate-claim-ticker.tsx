@@ -993,6 +993,7 @@ function TickerClaimHeader({
  *
  * `column` is the Open rounds claim list's vote column (GEO-3317): a round 24px target sized to the
  * player, with a solid glyph that reads at that size, coloured once the reader takes a side.
+ * `header` pairs outlined thumbs above the claim, as the classic + glass design shows.
  */
 export function ClaimIconButton({
   responseKind,
@@ -1013,7 +1014,7 @@ export function ClaimIconButton({
   title: string;
   onClick?: () => void;
   tone: ClaimCardTone;
-  layout?: 'inline' | 'column';
+  layout?: 'inline' | 'column' | 'header';
 }) {
   const glass = tone === 'glass';
   const column = layout === 'column';
@@ -1043,17 +1044,28 @@ export function ClaimIconButton({
         column
           ? // 6cqw, overlapping the column's gaps, and never under 24px.
             '-my-[1cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3.6cqw]'
-          : '-my-0.5 size-5 rounded-sm md:-my-1.5 md:size-7',
+          : layout === 'header'
+            ? '-my-[1.5cqw] size-[6cqw] min-h-6 min-w-6 rounded-full [&>svg]:size-[3cqw]'
+            : '-my-0.5 size-5 rounded-sm md:-my-1.5 md:size-7',
         // Recessive until it matters: dim at rest, brighter on hover, and unmistakable once the
         // reader has actually taken a side.
         selected
-          ? cx(glass ? 'bg-white/15' : 'bg-divider', position ? 'text-green' : 'text-red-01')
+          ? cx(
+              layout === 'header' ? 'hover:bg-white/15' : glass ? 'bg-white/15' : 'bg-divider',
+              position ? 'text-green' : 'text-red-01'
+            )
           : glass
-            ? 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
+            ? layout === 'header'
+              ? 'text-white/65 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/65'
+              : 'text-white/55 hover:bg-white/15 hover:text-white disabled:hover:bg-transparent disabled:hover:text-white/55'
             : 'text-grey-04 hover:bg-divider hover:text-text disabled:hover:bg-transparent disabled:hover:text-grey-04'
       )}
     >
-      <ResponsePositionIcon responseKind={responseKind} position={position} selected={selected || column} />
+      <ResponsePositionIcon
+        responseKind={responseKind}
+        position={position}
+        selected={layout === 'header' ? false : selected || column}
+      />
     </button>
   );
 }
