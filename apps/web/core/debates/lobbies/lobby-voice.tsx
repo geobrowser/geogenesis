@@ -33,6 +33,7 @@ import {
 } from 'livekit-client';
 
 import { ExtendedReconnectPolicy } from '~/core/livekit/extended-reconnect-policy';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Text } from '~/design-system/text';
 
@@ -213,8 +214,9 @@ export function LobbyVoice({
     if (listenOnly) setMicChoice(false);
   }, [listenOnly]);
 
-  // A mic-only token (lobby video off, GEO-3161) or a listen-only one offers no camera.
-  const cameraAllowed = Boolean(data?.can_publish) && tokenAllowsCamera(data?.token ?? '');
+  // Off with the debateVideo flag, a mic-only token (lobby video off, GEO-3161) or a listen-only one.
+  const videoEnabled = useFeatureFlag('debateVideo');
+  const cameraAllowed = videoEnabled && Boolean(data?.can_publish) && tokenAllowsCamera(data?.token ?? '');
   // Off on join and on every promotion until the speaker turns it on.
   const [cameraIntent, setCameraIntent] = React.useState(false);
   const [cameraFailure, setCameraFailure] = React.useState<MediaDeviceFailure | null>(null);
@@ -458,6 +460,10 @@ function ConnectedVoice({
       if (cameraOn) onCameraFailure(error instanceof Error ? (MediaDeviceFailure.getFailure(error) ?? null) : null);
     });
   }, [cameraAllowed, cameraOn, connected, localParticipant, mayPublish, onCameraFailure]);
+  // A camera no longer allowed (the flag turned off mid-call) goes down rather than staying published.
+  React.useEffect(() => {
+    if (!cameraAllowed) releaseLocalCamera(localParticipant);
+  }, [cameraAllowed, localParticipant]);
 
   // Stepping out into a debate, or a request card opening its own camera, stops this one first.
   const capturedCamera = (cameraTrack as LocalTrackPublication | undefined)?.track;
@@ -602,6 +608,8 @@ const CAMERA_UPDATES = { updateOnlyOn: [RoomEvent.TrackMuted, RoomEvent.TrackUnm
 function useParticipantVoiceStates(connected: boolean) {
   const participants = useParticipants();
   const cameraTracks = useTracks(CAMERA_SOURCES, CAMERA_UPDATES);
+  // Without the debateVideo flag every tile keeps its avatar, whoever else publishes a camera.
+  const videoEnabled = useFeatureFlag('debateVideo');
   return React.useMemo<LobbyVoiceStates>(() => {
     const speaking = new Set<string>();
     const micOn = new Set<string>();
@@ -612,12 +620,12 @@ function useParticipantVoiceStates(connected: boolean) {
       if (participant.isSpeaking) speaking.add(id);
     }
     const cameras = new Map<string, TrackReference>();
-    for (const reference of cameraTracks) {
+    for (const reference of videoEnabled ? cameraTracks : []) {
       if (!reference.publication.track || reference.publication.isMuted) continue;
       cameras.set(dashlessId(reference.participant.identity).toLowerCase(), reference);
     }
     return { speaking, micOn, cameras, connected };
-  }, [cameraTracks, connected, participants]);
+  }, [cameraTracks, connected, participants, videoEnabled]);
 }
 
 export function cameraFailureMessage(failure: MediaDeviceFailure): string {

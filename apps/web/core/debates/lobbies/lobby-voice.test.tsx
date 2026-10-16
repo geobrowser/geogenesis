@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   getDebateLobbyVoiceToken: vi.fn(),
   acquired: true,
   requestTakeover: false,
+  videoEnabled: true,
   roomProps: null as Record<string, unknown> | null,
   connectionState: 'connected',
   canPlayAudio: true,
@@ -78,6 +79,10 @@ const localParticipant = {
   on: (event: string, listener: (...args: unknown[]) => void) => mocks.listeners.set(event, listener),
   off: (event: string) => mocks.listeners.delete(event),
 };
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => id === 'debateVideo' && mocks.videoEnabled,
+}));
 
 vi.mock('../api', async importOriginal => ({
   ...(await importOriginal<typeof import('../api')>()),
@@ -187,6 +192,7 @@ function renderVoice(view = lobby(), onConnectedChange = vi.fn(), joined = true)
 beforeEach(() => {
   mocks.acquired = true;
   mocks.requestTakeover = false;
+  mocks.videoEnabled = true;
   mocks.roomProps = null;
   mocks.connectionState = ConnectionState.Connected;
   mocks.canPlayAudio = true;
@@ -611,6 +617,84 @@ describe('LobbyVoice camera (GEO-3307)', () => {
       </QueryClientProvider>
     );
     await waitFor(() => expect(screen.getByTestId('cameras').textContent).toBe('aabb'));
+  });
+
+  it('registers the camera as the lobby’s video capture while it holds one', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    const camera = { stop: vi.fn() };
+    mocks.localCamera = camera;
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(lobbyCaptureLive('video')).toBe(true));
+
+    act(() => releaseLobbyCapture('video'));
+    expect(camera.stop).toHaveBeenCalled();
+    expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true);
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeTruthy();
+  });
+});
+
+describe('LobbyVoice camera with debateVideo off', () => {
+  beforeEach(() => {
+    mocks.videoEnabled = false;
+  });
+
+  it('offers no camera, publishes none and registers no video capture, even on a token that allows one', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    renderVoice();
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(screen.queryByRole('button', { name: /Turn camera/ })).toBeNull();
+    expect(mocks.setCameraEnabled).not.toHaveBeenCalled();
+    expect(lobbyCaptureLive('video')).toBe(false);
+    expect(screen.queryByText(/Camera/)).toBeNull();
+  });
+
+  it('hands the roster no cameras, whoever else publishes one', async () => {
+    mocks.cameraTracks = [{ participant: { identity: 'AA-BB' }, publication: { track: {}, isMuted: false } }];
+    function Cameras() {
+      const { cameras } = useLobbyVoiceStates();
+      return <p data-testid="cameras">{`count:${cameras.size}`}</p>;
+    }
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    render(
+      <QueryClientProvider client={client}>
+        <LobbyVoice lobby={lobby()} connectionId="conn-1" joined currentUserId="u1" onConnectedChange={vi.fn()}>
+          <Cameras />
+        </LobbyVoice>
+      </QueryClientProvider>
+    );
+    await screen.findByRole('button', { name: /Unmute|Mute/ });
+    expect(screen.getByTestId('cameras').textContent).toBe('count:0');
+  });
+
+  it('hands a visitor’s roster no cameras', async () => {
+    mocks.cameraTracks = [{ participant: { identity: 'U-2' }, publication: { track: {}, isMuted: false } }];
+    const onStates = vi.fn();
+    render(
+      <LobbyGuestVoice
+        token={token({ can_publish: false, token: 'guest-jwt' })}
+        onStates={onStates}
+        onReconnect={vi.fn()}
+        onAutoReconnect={() => false}
+        onRemoved={vi.fn()}
+      />
+    );
+    await waitFor(() => expect(onStates).toHaveBeenLastCalledWith(expect.objectContaining({ connected: true })));
+    expect(onStates.mock.lastCall?.[0].cameras.size).toBe(0);
+  });
+
+  it('takes a published camera down when the flag turns off mid-call', async () => {
+    mocks.videoEnabled = true;
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    const camera = { stop: vi.fn() };
+    mocks.localCamera = camera;
+    const { setJoined } = renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+
+    mocks.videoEnabled = false;
+    setJoined(true);
+    await waitFor(() => expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true));
+    expect(screen.queryByRole('button', { name: /Turn camera/ })).toBeNull();
   });
 });
 
