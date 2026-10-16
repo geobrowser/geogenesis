@@ -246,6 +246,7 @@ describe('signup visitor attribution', () => {
     auth.beginPrivyAuth();
     auth.completePrivyAuth(completion());
     window.lytics = runtime;
+    window.dispatchEvent(new Event('pointerdown'));
     document.querySelector<HTMLScriptElement>('script[data-geo-analytics-loader]')!.dispatchEvent(new Event('load'));
     expect(runtime.signedUp).toHaveBeenCalledWith(
       expect.anything(),

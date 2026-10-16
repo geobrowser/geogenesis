@@ -107,7 +107,7 @@ describe('ExplorePage For you sort', () => {
   // Privy restores the wallet after mount; until then the follows read as empty.
   it('waits for a signed-in account instead of serving Best first', () => {
     mocks.flags = { forYouFeed: true };
-    render(<ExplorePage sidePanel={null} signedIn />);
+    render(<ExplorePage sidePanel={null} walletAddress="0x00000000000000000000000000000000000000aa" />);
 
     expect(mocks.feedProps.at(-1)?.followedTopicIds).toBeNull();
   });

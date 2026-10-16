@@ -34,6 +34,7 @@ import {
   type DebateParticipantSummary,
   type DebateRematchClaimsResponse,
   type DebateRematchParticipant,
+  type DebateRematchSession,
   type DebateScheduleResponse,
   GEO_CHAT_CLAIM_IDS_PER_REQUEST,
   GeoChatRequestError,
@@ -1123,19 +1124,48 @@ export function useLeaveDebateRematch(sessionId: string) {
     mutationFn: () => leaveDebateRematch(sessionId, getPrivyIdentityToken, accountKey),
     onSuccess: session => {
       queryClient.setQueryData(debateQueryKeys.rematch(accountKey, session.id), session);
-      const activityKey = debateQueryKeys.activity(accountKey);
-      const activity = queryClient.getQueryData<DebateActivity>(activityKey);
-      if (activity) {
-        const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
-        const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
-        if (debate !== activity.debate || rematch !== activity.rematch) {
-          queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
-        }
-      }
+      forgetEndedRematch(queryClient, accountKey, session);
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.rematch(accountKey, session.id) });
-      void queryClient.invalidateQueries({ queryKey: activityKey });
     },
   });
+}
+
+/**
+ * Drops an ended debate-again session from the viewer's cached activity, then asks again.
+ *
+ * `DebateCoordinator` routes into a picker for as long as activity says its session is browsing, and
+ * activity refreshes on its own schedule. A session the viewer has just seen end stays in it until
+ * then, so the coordinator sent them straight back into the picker they had just left, which sent
+ * them out again (GEO-3342). The same reason `useClearDebateActivityCache` drops a room's rematch.
+ *
+ * A poll already in flight is cancelled too: its answer predates the end.
+ */
+function forgetEndedRematch(queryClient: QueryClient, accountKey: string | null, session: DebateRematchSession) {
+  const activityKey = debateQueryKeys.activity(accountKey);
+  const activity = queryClient.getQueryData<DebateActivity>(activityKey);
+  if (activity) {
+    const debate = activity.debate?.id === session.source_debate_id ? null : activity.debate;
+    const rematch = activity.rematch?.id === session.id ? null : activity.rematch;
+    if (debate !== activity.debate || rematch !== activity.rematch) {
+      queryClient.setQueryData(activityKey, { ...activity, debate, rematch });
+    }
+  }
+  // Cancelled first, then asked again. An invalidation alone cancels a request in flight only when
+  // there is data to protect: with none cached yet it joins that request, whose answer predates the
+  // end and would put the session straight back. The patch above stays synchronous, ahead of this.
+  void queryClient
+    .cancelQueries({ queryKey: activityKey })
+    .then(() => queryClient.invalidateQueries({ queryKey: activityKey }));
+}
+
+/** For the picker, which learns its session ended without a Leave of its own: the other person left. */
+export function useForgetEndedRematch() {
+  const queryClient = useQueryClient();
+  const { accountKey } = useGeoChatAuth();
+  return React.useCallback(
+    (session: DebateRematchSession) => forgetEndedRematch(queryClient, accountKey, session),
+    [accountKey, queryClient]
+  );
 }
 
 /**

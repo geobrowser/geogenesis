@@ -5,7 +5,7 @@ import { exploreBestByTypeConnectionDocument } from './explore-best-by-type-docu
 import { exploreBestConnectionDocument } from './explore-best-document';
 import { exploreCompleteIndexDocument } from './explore-complete-index-document';
 import { exploreEntitiesByPropertyConnectionDocument } from './explore-entities-by-property-document';
-import { exploreEntitiesConnectionDocument } from './explore-entities-document';
+import { exploreEntitiesConnectionDocument, exploreEntitiesNoPageInfoConnectionDocument } from './explore-entities-document';
 import { exploreRelationIndexDocument } from './explore-relation-index-document';
 
 function operation(doc: DocumentNode): OperationDefinitionNode {
@@ -68,6 +68,16 @@ describe('explore feed documents', () => {
     expect(nodeFieldNames(exploreBestByTypeConnectionDocument)).toEqual(forNew);
     expect(forNew).toContain('name');
     expect(forNew).toContain('createdAt');
+  });
+
+  it('the Fresh list document selects no pageInfo, and New keeps hasNextPage', () => {
+    // hasNextPage re-runs the whole filter server-side (~2s); the Fresh list never reads it.
+    expect(print(exploreEntitiesNoPageInfoConnectionDocument)).not.toContain('hasNextPage');
+    expect(print(exploreEntitiesNoPageInfoConnectionDocument)).not.toContain('pageInfo');
+    expect(print(exploreEntitiesConnectionDocument)).toContain('hasNextPage');
+    expect(nodeFieldNames(exploreEntitiesNoPageInfoConnectionDocument)).toEqual(
+      nodeFieldNames(exploreEntitiesConnectionDocument)
+    );
   });
 
   describe('the Best sort', () => {

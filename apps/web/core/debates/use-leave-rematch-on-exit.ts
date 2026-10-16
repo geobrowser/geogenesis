@@ -13,6 +13,17 @@ import { debateRematchClaimKey, debateTabId, hasOtherOpenDebateTab, holdOpenDeba
 const pendingExitLeaves = new Map<string, number>();
 
 /**
+ * A picker someone could still be choosing in: browsing or with a request out, and not a room's
+ * session, which has no browsing deadline and is ended by the room when it closes (GEO-2941).
+ * What leaving the picker may end, from the picker itself or from the lobby (GEO-3338).
+ */
+export function isPickerSessionOpen(session: Pick<DebateRematchSession, 'status' | 'browsing_expires_at'>) {
+  return (
+    (session.status === 'browsing' || session.status === 'request_pending') && session.browsing_expires_at !== null
+  );
+}
+
+/**
  * Ends a debate-again session when the picker unmounts while the session is still open (GEO-3024).
  *
  * The Leave button used to be the only exit that ended it. Browser back, a link, the nav, anything
@@ -75,8 +86,7 @@ export function useLeaveRematchOnExit({
         pendingExitLeaves.delete(sessionId);
         const { session: current, leave: leaveSession, exiting: isExiting } = latest.current;
         if (!current || current.id !== sessionId) return;
-        if (current.status !== 'browsing' && current.status !== 'request_pending') return;
-        if (current.browsing_expires_at === null) return;
+        if (!isPickerSessionOpen(current)) return;
         if (isExiting()) return;
         void hasOtherOpenDebateTab(tabKey, tabId).then(otherTabOpen => {
           if (!otherTabOpen) leaveSession();
