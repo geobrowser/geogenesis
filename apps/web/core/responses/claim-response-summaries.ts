@@ -10,7 +10,8 @@ import {
   getClaimResponseSummaryPage,
   getSpaces,
 } from '~/core/io/queries';
-import { profileBySpaceIdQueryKey, profilesBySpaceIdsQueryKey, spacesByIdsQueryKey } from '~/core/io/query-keys';
+import { profileBySpaceIdQueryKey, profilesBySpaceIdsQueryKey, spaceByIdQueryKey } from '~/core/io/query-keys';
+import { SPACE_STALE_TIME, spacesByRequestedId } from '~/core/io/space-batch-loader';
 import { fetchProfilesBySpaceIds } from '~/core/io/subgraph/fetch-profile';
 import type { Profile } from '~/core/types';
 import { mapWithConcurrency } from '~/core/utils/map-with-concurrency';
@@ -230,7 +231,13 @@ export async function loadClaimResponderMetadataCaches({
   const responderSpaceIds = claimResponseSummaryResponderSpaceIds(summaries);
   if (responderSpaceIds.length === 0) return;
 
-  const [profilesBySpaceId, responderSpaces] = await Promise.all([
+  // Spaces are cached per id, so only responders not already fresh there are fetched.
+  const uncachedSpaceIds = responderSpaceIds.filter(id => {
+    const state = queryClient.getQueryState<Space | null>(spaceByIdQueryKey(id));
+    return !state?.data || Date.now() - state.dataUpdatedAt >= SPACE_STALE_TIME;
+  });
+
+  const [profilesBySpaceId, fetchedSpaces] = await Promise.all([
     queryClient.fetchQuery({
       queryKey: profilesBySpaceIdsQueryKey(responderSpaceIds),
       queryFn: async () => {
@@ -244,21 +251,10 @@ export async function loadClaimResponderMetadataCaches({
       staleTime: 60_000,
       retry: false,
     }),
-    queryClient.fetchQuery({
-      queryKey: spacesByIdsQueryKey(responderSpaceIds),
-      queryFn: async () => {
-        const spaceChunks = await mapWithConcurrency(
-          chunk(responderSpaceIds, RESPONDER_METADATA_CHUNK_SIZE),
-          RESPONDER_METADATA_CONCURRENCY,
-          ids => fetchSpaces(ids, signal)
-        );
-        return spaceChunks.flat();
-      },
-      staleTime: 60_000,
-      retry: false,
-    }),
+    mapWithConcurrency(chunk(uncachedSpaceIds, RESPONDER_METADATA_CHUNK_SIZE), RESPONDER_METADATA_CONCURRENCY, ids =>
+      fetchSpaces(ids, signal)
+    ).then(spaceChunks => spacesByRequestedId(uncachedSpaceIds, spaceChunks.flat())),
   ]);
-  const spacesById = new Map(responderSpaces.map(space => [space.id, space]));
 
   signal?.throwIfAborted();
 
@@ -267,6 +263,9 @@ export async function loadClaimResponderMetadataCaches({
   // is the only thing that fills that cache for them.
   for (const [responderSpaceId, profile] of profilesBySpaceId) {
     queryClient.setQueryData(profileBySpaceIdQueryKey(responderSpaceId), profile);
+  }
+  for (const id of uncachedSpaceIds) {
+    queryClient.setQueryData(spaceByIdQueryKey(id), fetchedSpaces.get(id) ?? null);
   }
 
   for (const target of normalizedTargets) {
@@ -285,13 +284,6 @@ export async function loadClaimResponderMetadataCaches({
       queryClient.setQueryData(
         profilesBySpaceIdsQueryKey(responderIds),
         new Map(responderProfiles.map(profile => [profile.spaceId, profile]))
-      );
-      queryClient.setQueryData(
-        spacesByIdsQueryKey(responderIds),
-        [...responderIds].sort().flatMap(id => {
-          const space = spacesById.get(id);
-          return space ? [space] : [];
-        })
       );
     }
   }
