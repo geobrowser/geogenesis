@@ -3,12 +3,28 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-const mocks = vi.hoisted(() => ({ mutate: vi.fn(), pickerAdded: [] as readonly string[] }));
+import { parseShareLink } from '~/core/sharing/share-link';
+
+const mocks = vi.hoisted(() => ({
+  mutate: vi.fn(),
+  pickerAdded: [] as readonly string[],
+  capture: vi.fn(),
+  created: null as null | { lobby_id: string; name: string; access: { status: string } },
+}));
+vi.mock('~/core/analytics', () => ({ capture: mocks.capture, analyticsContextRevision: () => 0 }));
 
 vi.mock('./hooks', () => ({
-  useCreateDebateLobby: () => ({ mutate: mocks.mutate, data: undefined, error: null, isPending: false }),
+  useCreateDebateLobby: () => ({
+    mutate: mocks.mutate,
+    data: mocks.created ?? undefined,
+    error: null,
+    isPending: false,
+  }),
 }));
-vi.mock('./lobby-analytics', () => ({ lobbyShareUrl: (id: string) => `/debate/${id}`, markLobbyEntry: vi.fn() }));
+vi.mock('./lobby-analytics', () => ({
+  lobbyShareUrl: (id: string) => `${window.location.origin}/debate/${id}?via=lobby`,
+  markLobbyEntry: vi.fn(),
+}));
 vi.mock('../use-scroll-lock', () => ({ useScrollLock: () => {} }));
 // The real picker reads the graph; here it offers six pages and reports what it was told is added.
 vi.mock('./lobby-claim-list-picker', async importOriginal => ({
@@ -49,7 +65,12 @@ vi.stubGlobal(
 const { OpenLobbyDialog, lobbyRequestFor, localTimeZone, toDateTimeLocalValue } = await import('./open-lobby-dialog');
 const { claimListsRequestField } = await import('./open-lobby-claim-lists');
 
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  mocks.created = null;
+  mocks.capture.mockReset();
+  vi.restoreAllMocks();
+});
 
 describe('lobbyRequestFor', () => {
   const now = new Date(2026, 9, 5, 12, 0).getTime();
@@ -81,6 +102,30 @@ describe('lobbyRequestFor', () => {
 });
 
 describe('OpenLobbyDialog', () => {
+  it('reserves the displayed link ID across renders and consumes one per copy', async () => {
+    mocks.created = { lobby_id: '11111111111141118111111111111111', name: 'Lobby', access: { status: 'admitted' } };
+    const write = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { configurable: true, value: { writeText: write } });
+    const view = render(<OpenLobbyDialog onClose={vi.fn()} />);
+    const initial = (screen.getByRole('textbox', { name: 'Lobby link' }) as HTMLInputElement).value;
+    expect(parseShareLink(new URL(initial).searchParams)).not.toBeNull();
+    view.rerender(<OpenLobbyDialog onClose={vi.fn()} />);
+    expect((screen.getByRole('textbox', { name: 'Lobby link' }) as HTMLInputElement).value).toBe(initial);
+    expect(mocks.capture).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Copy' }));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Copied' })).toBeTruthy());
+    expect(write).toHaveBeenCalledExactlyOnceWith(initial);
+    const next = (screen.getByRole('textbox', { name: 'Lobby link' }) as HTMLInputElement).value;
+    expect(next).not.toBe(initial);
+    fireEvent.click(screen.getByRole('button', { name: 'Copied' }));
+    await waitFor(() =>
+      expect(mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff')).toHaveLength(2)
+    );
+    expect(write.mock.calls.map(([url]) => parseShareLink(new URL(url).searchParams)!.share_id)).toEqual(
+      mocks.capture.mock.calls.filter(([name]) => name === 'share_link_handoff').map(([, props]) => props.share_id)
+    );
+  });
+
   it('keeps the claim-list picker above the lobby dialog and outside its scrolling form', () => {
     render(<OpenLobbyDialog onClose={vi.fn()} />);
     fireEvent.click(screen.getByRole('button', { name: 'Add a list' }));

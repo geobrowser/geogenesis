@@ -95,6 +95,7 @@ export type AnalyticsEventName =
   | 'search_result_clicked'
   | 'search_submitted'
   | 'session_restored'
+  | 'share_link_handoff'
   | 'signed_in'
   | 'signed_out'
   | 'signed_up'
