@@ -190,22 +190,30 @@ export function DebateRoundBanner({ cue }: { cue: RoundCue | null }) {
 /** Opening and next-round announcements use the same type weights and outline as fixed formats. */
 export function PlayerRoundTitle({ round, role, sub }: { round: string; role: string | null; sub?: string | null }) {
   return (
-    <div
-      className="mx-auto grid w-max max-w-[92%] justify-items-center text-center text-white"
-      style={PLAYER_TITLE_STYLE}
-    >
+    <div className="mx-auto grid w-max max-w-[92%] justify-items-center text-center text-white">
+      {/* Apply the em-based outline to each sized line. Inheriting it from this wrapper would
+          freeze the shadow lengths at the wrapper's smaller font size. */}
       <span
         className={
           role
             ? cx(PLAYBACK_ROUND_EYEBROW_CLASS, 'text-[9cqw] leading-none')
             : cx(PLAYBACK_ROUND_HEADLINE_CLASS, 'text-[18cqw] leading-none')
         }
+        style={PLAYER_TITLE_STYLE}
       >
         {round}
       </span>
-      {role && <span className={cx(PLAYBACK_ROUND_HEADLINE_CLASS, 'text-[18cqw] leading-[0.95]')}>{role}</span>}
+      {role && (
+        <span className={cx(PLAYBACK_ROUND_HEADLINE_CLASS, 'text-[18cqw] leading-[0.95]')} style={PLAYER_TITLE_STYLE}>
+          {role}
+        </span>
+      )}
       {sub && (
-        <span data-debate-banner-sub className="mt-[1.6cqw] text-[4.8cqw] leading-none font-semibold">
+        <span
+          data-debate-banner-sub
+          className="mt-[1.6cqw] text-[4.8cqw] leading-none font-semibold"
+          style={PLAYER_TITLE_STYLE}
+        >
           {sub}
         </span>
       )}
