@@ -90,6 +90,7 @@ import {
   useParticipantPositions,
 } from '~/core/debates/participant-positions';
 import { useRecommendedClaimSections } from '~/core/debates/recommended-claims';
+import { carryJoinIntentIntoDebate } from '~/core/debates/rematch-join-intent';
 import { useRegisterRematchPanelContext } from '~/core/debates/rematch-panel-context';
 import { RematchRequestControl } from '~/core/debates/rematch-request-control';
 import { useDebateRoomContext, useInDebateRoom, useRoomOpponentPresent } from '~/core/debates/rooms/room-context';
@@ -2477,6 +2478,8 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
       const spaceId = validateSpaceId(session.source_space_id) ? session.source_space_id : remembered;
       if (!spaceId) return;
       const debateId = session.converted_debate_id;
+
+      carryJoinIntentIntoDebate(session.id, debateId);
       if (enteringConvertedDebateRef.current === debateId) return;
       enteringConvertedDebateRef.current = debateId;
       const path = `/space/${spaceId}/debates/${debateId}`;
@@ -2856,7 +2859,7 @@ export function DebateRematchPageClient({ sessionId }: { sessionId: string }) {
     // scrollable. Anything wider than the viewport — the tab strip, on a phone — panned the whole
     // screen sideways instead of scrolling itself.
     <div data-rematch-scroll className="fixed inset-0 z-[150] overflow-x-hidden overflow-y-auto bg-white text-text">
-      <main className="mx-auto min-h-dvh w-full max-w-[720px] px-5 pt-8 pb-8 mobile:px-8">
+      <main className="mx-auto min-h-dvh w-full max-w-[820px] px-5 pt-8 pb-8 mobile:px-8">
         {/* Pinned together, tabs included. The list pages forever, so both the tab strip and the
             controls under it were a full scroll away by the time the viewer wanted either — and
             pinning the filters alone would have left them floating over a tab strip scrolling

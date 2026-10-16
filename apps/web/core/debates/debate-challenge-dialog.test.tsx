@@ -7,6 +7,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { DebateChallenge } from './api';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
+import { registerLobbyCapture } from './lobbies/step-out';
+
+const flags = vi.hoisted(() => ({ debateVideo: true }));
+
+vi.mock('~/core/state/feature-flags', () => ({
+  useFeatureFlag: (id: string) => (id === 'debateVideo' ? flags.debateVideo : false),
+}));
 
 const media = vi.hoisted(() => ({
   releaseSession: vi.fn(),
@@ -67,6 +74,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof DebateChallenge
 let permission: PermissionState = 'prompt';
 
 beforeEach(() => {
+  flags.debateVideo = true;
   permission = 'prompt';
   Object.defineProperty(navigator, 'permissions', {
     configurable: true,
@@ -80,7 +88,12 @@ beforeEach(() => {
   document.documentElement.style.overflow = '';
 });
 
-afterEach(cleanup);
+let clearLobbyCapture: (() => void) | null = null;
+afterEach(() => {
+  cleanup();
+  clearLobbyCapture?.();
+  clearLobbyCapture = null;
+});
 
 describe('DebateChallengeDialog', () => {
   /*
@@ -96,6 +109,61 @@ describe('DebateChallengeDialog', () => {
     view.unmount();
 
     expect(media.releaseSession).toHaveBeenCalledWith('debate-challenge:challenge-1');
+  });
+
+  it('accepts with the state the card shows while its devices are still opening', async () => {
+    permission = 'granted';
+    media.ensurePreview.mockReturnValue(new Promise(() => undefined));
+    const onAccept = vi.fn();
+    renderDialog({ onAccept });
+    await waitFor(() => expect(media.ensurePreview).toHaveBeenCalledWith({ audio: true, video: true }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    expect(onAccept).toHaveBeenCalledWith({ micOn: true, cameraOn: true });
+  });
+
+  // Accepted from a lobby without touching the toggles: the picker should join as the lobby was.
+  it.each([true, false])('accepts with the lobby’s mic (%s) when the card left it to the lobby', async on => {
+    permission = 'granted';
+    media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' } }]);
+    clearLobbyCapture = registerLobbyCapture('audio', { on, release: vi.fn() });
+    const onAccept = vi.fn();
+    renderDialog({ onAccept });
+    await waitFor(() => expect(media.ensurePreview).toHaveBeenCalledWith({ audio: false, video: true }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    expect(onAccept).toHaveBeenCalledWith({ micOn: on, cameraOn: true });
+  });
+
+  it('accepts with the mic chosen on the card over the lobby’s', async () => {
+    permission = 'granted';
+    media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' } }]);
+    clearLobbyCapture = registerLobbyCapture('audio', { on: true, release: vi.fn() });
+    const onAccept = vi.fn();
+    renderDialog({ onAccept });
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn microphone off' }));
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+
+    expect(onAccept).toHaveBeenCalledWith({ micOn: false, cameraOn: true });
+  });
+
+  // Without debateVideo the picker it leads to is audio-only, so the card offers the mic alone.
+  it('offers and opens the mic alone with debateVideo off', async () => {
+    flags.debateVideo = false;
+    permission = 'granted';
+    media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'audio' } }]);
+    const onAccept = vi.fn();
+    renderDialog({ onAccept });
+
+    expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
+    expect(media.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false });
+    expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
+    expect(onAccept.mock.calls[0]?.[0]).toStrictEqual({ micOn: true });
   });
 
   it('stops the devices when the card is dismissed', () => {
@@ -149,15 +217,10 @@ describe('DebateChallengeDialog', () => {
   });
 
   /*
-   * Once there is a picture, the switches sit on it — the ready room's arrangement, the tile's own
-   * overlay band, so the control is on the thing it controls. Over an avatar they covered the one
-   * thing saying whose tile this is, which is why the camera-off case keeps them underneath.
-   *
-   * Asserted against the real tile, which is what decides where `tileControls` land: with the tile
-   * mocked the buttons go wherever the mock puts them, so such a test passes with the controls on
-   * the tile, under it, or clipped out of view.
+   * Switches sit under the preview: on this half-card tile they covered the face. Asserted
+   * against the real tile, since a mock would pass with the controls anywhere.
    */
-  it('puts the switches on the tile once the camera is on', async () => {
+  it('keeps the switches under the preview once the camera is on', async () => {
     permission = 'granted';
     media.ensurePreview.mockResolvedValue([{ mediaStreamTrack: { kind: 'video' } }]);
     renderDialog();
@@ -167,9 +230,10 @@ describe('DebateChallengeDialog', () => {
       expect(found).not.toBeNull();
       return found;
     });
+    const mic = screen.getByRole('button', { name: /microphone/i });
 
-    expect(tile?.contains(screen.getByRole('button', { name: /microphone/i }))).toBe(true);
-    expect(tile?.contains(screen.getByRole('button', { name: /camera/i }))).toBe(true);
+    expect(tile?.contains(mic)).toBe(false);
+    expect(tile?.compareDocumentPosition(mic)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
   });
 
   /*

@@ -3890,7 +3890,7 @@ describe('DebateRematchPageClient', () => {
   });
 
   // GEO-2992. The unmute control used to live in a 200px dock fixed to the bottom-right of the
-  // viewport — outside the 720px column, and a scroll away from everything the viewer was reading.
+  // viewport — outside the content column, and a scroll away from everything the viewer was reading.
   // Its replacement has to be in the column, above the tabs, and pinned with them.
   it('pins the pair header at the top of the content column', async () => {
     render(<DebateRematchPageClient sessionId="rematch-1" />);

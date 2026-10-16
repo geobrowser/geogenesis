@@ -105,6 +105,7 @@ import {
   refreshRematchClaimBatches,
   rematchClaimBatchesWithClaim,
 } from './rematch-claims-query-key';
+import { markRematchAnswered } from './rematch-join-intent';
 import { type SpaceDebateSupport, useSpaceDebateSupport } from './space-debate-support';
 import { withQueryData } from './with-query-data';
 
@@ -1408,6 +1409,7 @@ export function useAcceptDebateChallenge() {
     mutationFn: (challengeId: string) => acceptDebateChallenge(challengeId, getPrivyIdentityToken, accountKey),
     onSuccess: result => {
       if (result.session) {
+        markRematchAnswered(result.session.id);
         queryClient.setQueryData(debateQueryKeys.rematch(accountKey, result.session.id), result.session);
       }
       void queryClient.invalidateQueries({ queryKey: debateQueryKeys.activity(accountKey) });

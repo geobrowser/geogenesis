@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -15,7 +16,7 @@ import { CloseSmall } from '~/design-system/icons/close-small';
  * The "You VS them" header for the rematch claim picker (GEO-2992).
  *
  * The voice controls used to live in a 200px dock pinned to the bottom-right corner, outside the
- * 720px column the viewer is actually reading. People were not finding it, so they never learned
+ * content column the viewer is actually reading. People were not finding it, so they never learned
  * they could unmute and talk while picking a claim. This puts the same controls in the page header,
  * inside the column, and gives the room a face: two participant cards either side of a VS badge —
  * them on the left, you on the right.
@@ -56,6 +57,8 @@ export type PairHeaderVoice =
       onRetryMic: () => void;
       /** The mute/unmute pill and its attached settings chevron. Owned by `rematch-voice.tsx`. */
       controls: React.ReactNode;
+      localVideo?: React.ReactNode;
+      cameraMessage?: string | null;
       opponentState: PairMicState;
       /**
        * The viewer is making sound the room cannot hear. Wired to nothing today — see the note on
@@ -97,6 +100,8 @@ type RematchPairHeaderProps = {
    * "View profile" on the other card, so each card's corner is that person's secondary action, and
    * the row it used to occupy at the end of the tab strip is now the tabs' alone.
    */
+  /** The other person's camera, where they have one running. */
+  opponentVideo?: React.ReactNode;
   leaveAction?: React.ReactNode;
 };
 
@@ -109,6 +114,7 @@ export function RematchPairHeader({
   toast,
   onOpenOpponentSpace,
   leaveAction,
+  opponentVideo,
 }: RematchPairHeaderProps) {
   /**
    * Everything about the opponent that their card cannot say for itself.
@@ -134,6 +140,7 @@ export function RematchPairHeader({
           of this change. */}
       <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-stretch gap-2 mobile:grid-cols-1">
         <OpponentCard
+          video={opponentVideo}
           opponent={opponent}
           name={opponentName}
           state={voice.kind === 'live' ? voice.opponentState : 'waiting'}
@@ -230,6 +237,8 @@ function PairCardBody({
   /** The corner: Leave on your side, View profile on theirs. */
   action?: React.ReactNode;
 }) {
+  // The video layout (larger tiles) only with debateVideo; master's layout otherwise.
+  const videoLayout = useFeatureFlag('debateVideo');
   return (
     <>
       <div className="flex w-full items-center gap-2.5">
@@ -240,7 +249,11 @@ function PairCardBody({
           </span>
           {state}
         </div>
-        {action ? <div className="flex shrink-0 items-center">{action}</div> : null}
+        {action ? (
+          <div className={cx('flex shrink-0 items-center', videoLayout && 'max-sm:self-center self-start')}>
+            {action}
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -279,10 +292,13 @@ function YouCard({
     if (voice.kind === 'message') return voice.message;
     if (voice.micFailureMessage) return voice.micFailureMessage;
     if (talkingWhileMuted) return `Muted · ${firstName(opponentName)} can’t hear you`;
+    if (voice.cameraMessage) return voice.cameraMessage;
     return null;
   })();
 
-  const captionTone = voice.kind === 'live' ? 'text-red-01' : 'text-grey-04';
+  const captionIsCameraNote =
+    voice.kind === 'live' && !voice.micFailureMessage && !talkingWhileMuted && Boolean(voice.cameraMessage);
+  const captionTone = voice.kind === 'live' && !captionIsCameraNote ? 'text-red-01' : 'text-grey-04';
 
   /**
    * The same two states, for a screen reader.
@@ -331,6 +347,7 @@ function YouCard({
             value={local?.profileSpaceId}
             name="You"
             speaking={speaking}
+            video={live ? voice.localVideo : null}
           />
         }
         name="You"
@@ -369,6 +386,7 @@ function OpponentCard({
   showMicState,
   onOpen,
   describedBy,
+  video,
 }: {
   opponent: PairHeaderParticipant;
   name: string;
@@ -377,6 +395,7 @@ function OpponentCard({
   onOpen: (event: React.MouseEvent) => void;
   /** The header's live region, which also serves as this button's description. */
   describedBy: string;
+  video?: React.ReactNode;
 }) {
   const talking = showMicState && state === 'talking';
 
@@ -394,6 +413,7 @@ function OpponentCard({
           value={opponent.profileSpaceId}
           name={name}
           speaking={talking}
+          video={video}
         />
       }
       name={name}
@@ -429,22 +449,27 @@ function ParticipantAvatar({
   value,
   name,
   speaking,
+  video,
 }: {
   avatarUrl: string | null;
   value?: string;
   name: string;
   speaking: boolean;
+  video?: React.ReactNode;
 }) {
+  const videoLayout = useFeatureFlag('debateVideo');
   return (
     // The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the generated
     // fallback, while a real avatar renders `h-full w-full` and takes whatever box it is given.
     <span
+      data-testid="pair-avatar"
       className={cx(
-        'inline-flex size-8 shrink-0 overflow-hidden rounded-full',
+        'inline-flex shrink-0 overflow-hidden rounded-full',
+        videoLayout ? 'size-14 bg-grey-01' : 'size-8',
         speaking && 'ring-2 ring-successTertiary'
       )}
     >
-      <Avatar avatarUrl={avatarUrl} value={value ?? name} size={32} alt="" />
+      {video ?? <Avatar avatarUrl={avatarUrl} value={value ?? name} size={videoLayout ? 56 : 32} alt="" />}
     </span>
   );
 }

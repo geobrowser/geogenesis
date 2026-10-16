@@ -1,4 +1,5 @@
 import type * as React from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { readSession, removeSession, writeSession } from '~/core/utils/session-storage';
 
@@ -14,6 +15,58 @@ export function registerLobbyStepOut(stepOut: () => Promise<void>) {
   return () => {
     if (stepOutOfCurrentLobby === stepOut) stepOutOfCurrentLobby = null;
   };
+}
+
+export type LobbyCaptureKind = 'audio' | 'video';
+
+/** A device the lobby is capturing: whether it is on (unmuted) and how to stop it. */
+export type LobbyCapture = { on: boolean; release: () => void };
+
+/** Devices this tab's lobby is capturing. iPhone Safari keeps one capture per kind. */
+const lobbyCaptures = new Map<LobbyCaptureKind, LobbyCapture>();
+const lobbyCaptureListeners = new Set<() => void>();
+
+function notifyLobbyCaptures() {
+  lobbyCaptureListeners.forEach(listener => listener());
+}
+
+/** Set by the lobby's voice room while it holds a capture of `kind`; the returned function clears it. */
+export function registerLobbyCapture(kind: LobbyCaptureKind, capture: LobbyCapture) {
+  lobbyCaptures.set(kind, capture);
+  notifyLobbyCaptures();
+  return () => {
+    if (lobbyCaptures.get(kind) !== capture) return;
+    lobbyCaptures.delete(kind);
+    notifyLobbyCaptures();
+  };
+}
+
+/** Whether the lobby holds a capture of `kind`, or of any kind when omitted. */
+export function lobbyCaptureLive(kind?: LobbyCaptureKind) {
+  return kind ? lobbyCaptures.has(kind) : lobbyCaptures.size > 0;
+}
+
+/** Stops the lobby's capture of `kind`, or every capture when omitted. */
+export function releaseLobbyCapture(kind?: LobbyCaptureKind) {
+  for (const [captured, capture] of [...lobbyCaptures]) {
+    if (!kind || captured === kind) capture.release();
+  }
+}
+
+function subscribeLobbyCaptures(listener: () => void) {
+  lobbyCaptureListeners.add(listener);
+  return () => {
+    lobbyCaptureListeners.delete(listener);
+  };
+}
+
+/** The lobby's capture of `kind`, or null; re-renders as the lobby connects, mutes or lets it go. */
+export function useLobbyCapture(kind: LobbyCaptureKind): LobbyCapture | null {
+  return useSyncExternalStore(
+    subscribeLobbyCaptures,
+    () => lobbyCaptures.get(kind) ?? null,
+    () => null
+  );
 }
 
 /**

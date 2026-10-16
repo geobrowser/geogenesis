@@ -49,6 +49,8 @@ export type DebateMediaSession = {
   selectedVideoInputIdRef: React.MutableRefObject<string>;
   audioOutputSupportedRef: React.MutableRefObject<boolean>;
   audioOutputSelectionPromiseRef: React.MutableRefObject<Promise<void> | null>;
+  /** Kinds the card left to a live lobby rather than choosing; kept through `promoteSession`. */
+  lobbyDeferredKindsRef: React.MutableRefObject<{ audio: boolean; video: boolean }>;
   beginSession: (sessionKey: string) => void;
   promoteSession: (fromSessionKey: string, toSessionKey: string) => void;
   releaseSession: (sessionKey: string) => void;
@@ -98,6 +100,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
   const localTracksRef = React.useRef<LocalTrackLike[]>([]);
   const localMediaStreamRef = React.useRef<MediaStream | null>(null);
   const localPreviewPromiseRef = React.useRef<Promise<LocalTrackLike[]> | null>(null);
+  const lobbyDeferredKindsRef = React.useRef({ audio: false, video: false });
   /** What the in-flight acquisition asked for, so a call wanting something else is not handed it. */
   const localPreviewWantRef = React.useRef<{ audio: boolean; video: boolean } | null>(null);
   /**
@@ -139,6 +142,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       // A new surface has chosen nothing yet. `promoteSession` deliberately leaves this alone: a
       // hand-off keeps the choice the card made.
       wantedKindsRef.current = { audio: true, video: true };
+      lobbyDeferredKindsRef.current = { audio: false, video: false };
       audioOutputSelectionFailedRef.current = false;
       setAudioOutputError(null);
       activeSessionKeyRef.current = sessionKey;
@@ -349,7 +353,22 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
         if (isCurrent()) {
           stopTracks(localTracksRef.current.filter(track => !keep.includes(track)));
           localTracksRef.current = keep;
-          const kept = keep.length > 0 ? new MediaStream(keep.map(track => track.mediaStreamTrack)) : null;
+          // A later restart with no kinds named reopens what is live, not the kind that just failed.
+          if (keep.length > 0) {
+            wantedKindsRef.current = {
+              audio: keep.some(track => track.mediaStreamTrack.kind === 'audio'),
+              video: keep.some(track => track.mediaStreamTrack.kind === 'video'),
+            };
+          }
+          // The same stream when it already holds exactly what was kept, so a room publishing it
+          // does not read the failure as a new device and reconnect.
+          const current = localMediaStreamRef.current;
+          const unchanged =
+            current !== null &&
+            current.getTracks().length === keep.length &&
+            keep.every(track => current.getTracks().includes(track.mediaStreamTrack));
+          const kept =
+            keep.length === 0 ? null : unchanged ? current : new MediaStream(keep.map(track => track.mediaStreamTrack));
           localMediaStreamRef.current = kept;
           setPreviewStreamState(kept);
           const failure = preJoinMediaFailure(error);
@@ -518,6 +537,7 @@ export function DebateMediaSessionProvider({ children }: { children: React.React
       selectedVideoInputIdRef,
       audioOutputSupportedRef,
       audioOutputSelectionPromiseRef,
+      lobbyDeferredKindsRef,
       beginSession,
       promoteSession,
       releaseSession,
@@ -592,6 +612,11 @@ export function debateChallengeMediaSessionKey(challengeId: string) {
   return `debate-challenge:${challengeId}`;
 }
 
+/** The session a claim-picker card owns, which has a picker session but no debate yet. */
+export function debateRematchMediaSessionKey(sessionId: string) {
+  return `debate-rematch:${sessionId}`;
+}
+
 export function debateRequestMediaSessionKey(requestId: string) {
   return `debate-request:${requestId}`;
 }
@@ -621,26 +646,32 @@ function sameMediaDeviceOptions(current: MediaDeviceOption[], next: MediaDeviceO
  * `error.message` is the browser's own text — "Permission denied", or a sentence about user agents
  * and platform contexts.
  */
-export function preJoinMediaFailure(error: unknown): {
+export function preJoinMediaFailure(
+  error: unknown,
+  /** The kinds that were asked for, so a mic-only surface never mentions a camera. */
+  kinds: { audio: boolean; video: boolean } = { audio: true, video: true }
+): {
   state: Exclude<PreJoinMediaState, 'requesting' | 'ready'>;
   message: string;
 } {
+  const both = kinds.audio && kinds.video;
+  const devices = both ? 'camera and microphone' : kinds.video ? 'camera' : 'microphone';
   const name = error instanceof DOMException || error instanceof Error ? error.name : '';
   if (name === 'NotAllowedError' || name === 'SecurityError') {
-    return { state: 'denied', message: 'Allow access to your camera and microphone to continue.' };
+    return { state: 'denied', message: `Allow access to your ${devices} to continue.` };
   }
   if (name === 'NotFoundError' || name === 'DevicesNotFoundError') {
-    return { state: 'unavailable', message: 'Connect a camera and microphone, then try again.' };
+    return { state: 'unavailable', message: `Connect a ${devices}, then try again.` };
   }
   if (name === 'NotReadableError' || name === 'TrackStartError' || name === 'AbortError') {
     return {
       state: 'error',
-      message: 'Your camera or microphone may be in use by another app. Close it and try again.',
+      message: `Your ${both ? 'camera or microphone' : devices} may be in use by another app. Close it and try again.`,
     };
   }
   return {
     state: 'error',
-    message: 'We could not start your camera and microphone. Check your devices and try again.',
+    message: `We could not start your ${devices}. Check your devices and try again.`,
   };
 }
 

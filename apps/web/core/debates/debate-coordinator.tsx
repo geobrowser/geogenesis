@@ -14,6 +14,7 @@ import { Text } from '~/design-system/text';
 
 import { activeDebate } from './activity-state';
 import { type DebateSharePrompt, GeoChatRequestError } from './api';
+import { ChallengeAcceptedPrompt } from './challenge-accepted-prompt';
 import { useClaimResponseIndexedNotifier } from './claim-response-indexed-notifier';
 import { useDebateAttention, useDebatePresence } from './debate-attention';
 import { DebateChallengeDialog } from './debate-challenge-dialog';
@@ -31,6 +32,7 @@ import {
   useDebateSharePrompts,
   useGeoChatAuth,
   useHandleDebateSharePrompt,
+  useLeaveDebateRematch,
   useRejectDebateChallenge,
 } from './hooks';
 import { useLobbyDebateAnalytics } from './lobbies/lobby-analytics';
@@ -38,6 +40,7 @@ import { routeIntoDebate } from './lobbies/step-out';
 import { useDebateRequests } from './matchmaking/hooks';
 import { IncomingRequestPopup } from './matchmaking/incoming-request-popup';
 import { useUnexpiredRequests } from './matchmaking/use-request-countdown';
+import { hasAnsweredRematchJoin, markRematchAnswered, rememberRematchJoinIntent } from './rematch-join-intent';
 import { useDebateRoom, useFinishedRoomIds, useUpcomingDebateRooms } from './rooms/hooks';
 import { DebateRoomJoinPrompt } from './rooms/room-join-prompt';
 import { sameId } from './rooms/room-presence';
@@ -228,7 +231,16 @@ export function DebateCoordinator() {
   // The claimless challenge gets the same treatment: "Not now" only closes the popup, and the
   // challenge keeps its place in the hub's Requests tab until it is answered or expires.
   const [snoozedChallengeId, setSnoozedChallengeId] = React.useState<string | null>(null);
+  /*
+   * Re-read on every render rather than held in state: the answer lives in module memory so that
+   * it survives the walk into the picker, and this is what closes the card as soon as it is given.
+   */
+  const rematchAnswered = Boolean(activity?.rematch && hasAnsweredRematchJoin(activity.rematch.id));
+  const [, setAnsweredRematchTick] = React.useState(0);
+  const leaveRematch = useLeaveDebateRematch(activity?.rematch?.id ?? '');
+  const [rematchJoinError, setRematchJoinError] = React.useState<string | null>(null);
   const promptedChallenge = challenge && challenge.id !== snoozedChallengeId ? challenge : null;
+
   // Only the recipient is prompted. `challenge` itself stays live for everyone, since `activeFlow`
   // above reads it to keep other popups from stacking on top of an outstanding challenge.
   const isChallengeRecipient = promptedChallenge?.recipient.user_id === currentUserId;
@@ -295,6 +307,25 @@ export function DebateCoordinator() {
   const roomsQueryError = upcomingRoomsQuery.error;
   const roomsKnown =
     upcomingRoomsQuery.isSuccess || (roomsQueryError instanceof GeoChatRequestError && roomsQueryError.status === 404);
+
+  const rematchSenderUserId =
+    activity?.rematch?.participants.find(participant => participant.participant_slot === 1)?.user_id ?? null;
+
+  const promptedRematchSender =
+    hasAttention &&
+    activity?.rematch &&
+    !activity.rematch.source_debate_id &&
+    !rematchAnswered &&
+    (activity.rematch.status === 'browsing' || activity.rematch.status === 'request_pending') &&
+    !atRoom &&
+    !roomSessionIds.has(activity.rematch.id) &&
+    roomsKnown &&
+    validateSpaceId(activity.rematch.source_space_id) &&
+    pathname !== debateRematchPath(activity.rematch) &&
+    rematchSenderUserId === currentUserId
+      ? activity.rematch
+      : null;
+
   const refetchUpcomingRooms = upcomingRoomsQuery.refetch;
   // One refetch per session before routing on it, and a tick so the effect re-runs even when the
   // refetch changes nothing.
@@ -394,6 +425,16 @@ export function DebateCoordinator() {
     // coordinator sent every other open tab into that room, where ownership correctly rejected it.
     // The room handles deciding, recording finalization, browsing, and conversion itself.
     if (sourceDebatePath) return;
+    /*
+     * A profile challenge waits for its sender to say how they want to join.
+     */
+    if (
+      !rematch.source_debate_id &&
+      rematchSenderUserId === currentUserId &&
+      !hasAnsweredRematchJoin(rematch.id) &&
+      rematch.participants.length >= 2
+    )
+      return;
     // Past that guard there is no room to hand off from — a session with no source debate comes
     // from the matchmaking hub or a profile challenge, so this coordinator is the only thing that
     // can route the viewer in, and it must. But it runs in *every* tab, and the guard above only
@@ -439,6 +480,7 @@ export function DebateCoordinator() {
   }, [
     activity,
     atRoom,
+    currentUserId,
     hasAttention,
     hasRoomAwaitingSession,
     joinableRooms,
@@ -446,6 +488,7 @@ export function DebateCoordinator() {
     roomsKnown,
     roomSessionsReported,
     refetchUpcomingRooms,
+    rematchSenderUserId,
     roomSessionIds,
     roomsChecked,
     router,
@@ -484,12 +527,44 @@ export function DebateCoordinator() {
       {/* Recipient only: they have a decision to make. The sender's copy waits under Sent in the
           hub's Requests tab, and the rematch routing effect above walks them into the claim picker
           the moment it is accepted. */}
+      {promptedRematchSender && currentUserId && (
+        <ChallengeAcceptedPrompt
+          key={promptedRematchSender.id}
+          session={promptedRematchSender}
+          currentUserId={currentUserId}
+          busy={leaveRematch.isPending}
+          error={rematchJoinError}
+          onExplore={() => {
+            markRematchAnswered(promptedRematchSender.id);
+            setAnsweredRematchTick(tick => tick + 1);
+            rememberDebateReturnDestination();
+            routeIntoDebate(() => router.push(debateRematchPath(promptedRematchSender)));
+          }}
+          onDecline={() => {
+            setRematchJoinError(null);
+            leaveRematch.mutate(undefined, {
+              onSuccess: () => markRematchAnswered(promptedRematchSender.id),
+              onError: error =>
+                setRematchJoinError(error instanceof Error ? error.message : 'Could not decline. Try again.'),
+            });
+          }}
+        />
+      )}
       {promptedChallenge && isChallengeRecipient && !debate && !activity?.rematch && (
         <DebateChallengeDialog
           challenge={promptedChallenge}
           busy={acceptChallenge.isPending || rejectChallenge.isPending}
           error={challengeError instanceof Error ? challengeError.message : null}
-          onAccept={() => acceptChallenge.mutate(promptedChallenge.id)}
+          onAccept={chosen => {
+            // Recorded against the session id, which is also what stops the sender's card
+            // appearing in front of the person who just answered here.
+            acceptChallenge.mutate(promptedChallenge.id, {
+              onSuccess: result => {
+                if (!result.session) return;
+                rememberRematchJoinIntent(result.session.id, chosen);
+              },
+            });
+          }}
           onReject={() => rejectChallenge.mutate(promptedChallenge.id)}
           onNotNow={() => setSnoozedChallengeId(promptedChallenge.id)}
         />
