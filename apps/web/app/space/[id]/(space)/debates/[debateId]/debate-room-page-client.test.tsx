@@ -1,6 +1,7 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 
+import * as React from 'react';
 import { type ComponentPropsWithoutRef, StrictMode } from 'react';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -13,6 +14,7 @@ import {
 } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import { carryLobbyMic, clearCarriedLobbyMic, reportLobbyMic } from '~/core/debates/lobbies/step-out';
+import { DebateMediaSessionProvider, debateMediaSessionKey, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   CAP_ROUND_ENDS_AT as OPEN_ROUNDS_CAP_ROUND_ENDS_AT,
   at as openRoundsAt,
@@ -1615,6 +1617,170 @@ describe('DebateRoomPageClient', () => {
     expect(await screen.findByRole('button', { name: "I'm ready to debate" })).toBeInTheDocument();
     expect(within(debateVideoTile('remote')).getByText('Not ready')).toBeInTheDocument();
     expect(within(debateVideoTile('local')).queryByText('Not ready')).not.toBeInTheDocument();
+  });
+
+  it('keeps the hand-off’s state through a dropped intro connection', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockResolvedValue([
+      createLocalAudioTrack(),
+      { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+    ]);
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <InFlightHandover kinds={{ audio: true, video: true }} />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('2'));
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <InFlightHandover kinds={{ audio: true, video: true }} />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument());
+    mocks.createLocalTracks.mockClear();
+
+    act(() => emitRoomEvent('disconnected', 99));
+
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
+    expect(mocks.createLocalTracks).toHaveBeenLastCalledWith(
+      expect.objectContaining({ audio: expect.anything(), video: expect.anything() })
+    );
+  });
+
+  it('opens no devices for a hand-off that chose neither', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <ListeningOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('0'));
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <ListeningOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument());
+    expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.getByText('Enable video and audio to start')).toBeInTheDocument();
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+  });
+
+  it('waits for a hand-off still in flight rather than closing it', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    let open!: (tracks: unknown[]) => void;
+    mocks.createLocalTracks.mockReturnValue(
+      new Promise(resolve => {
+        open = resolve;
+      })
+    );
+    const audioTrack = createLocalAudioTrack();
+    const videoTrack = { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() };
+    const kinds = { audio: true, video: true };
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <InFlightHandover kinds={kinds} />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+    mocks.createLocalTracks.mockClear();
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <InFlightHandover kinds={kinds} />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    await act(async () => {
+      open([audioTrack, videoTrack]);
+      await Promise.resolve();
+    });
+
+    // Kept, not closed and reopened.
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('2'));
+    expect(audioTrack.stop).not.toHaveBeenCalled();
+    expect(videoTrack.stop).not.toHaveBeenCalled();
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+  });
+
+  it('takes up the hand-off that lands after it has already decided', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    let open!: (tracks: unknown[]) => void;
+    mocks.createLocalTracks.mockReturnValue(
+      new Promise(resolve => {
+        open = resolve;
+      })
+    );
+    const kinds = { audio: true, video: true };
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <InFlightHandover kinds={kinds} />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1));
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <InFlightHandover kinds={kinds} />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+    expect(screen.getByText('Enable video and audio to start')).toBeInTheDocument();
+
+    await act(async () => {
+      open([
+        createLocalAudioTrack(),
+        { mediaStreamTrack: { kind: 'video', enabled: true }, stop: vi.fn(), detach: vi.fn() },
+      ]);
+      await Promise.resolve();
+    });
+
+    await waitFor(() => expect(screen.queryByText('Enable video and audio to start')).toBeNull());
+  });
+
+  /*
+   * Arriving from a card that chose mic-only. The room requires both kinds to be ready, but it must
+   * not go and get the camera on arrival.
+   */
+  it('does not reach for the camera when a card handed over the microphone only', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack()]);
+
+    // The card's session, opened and settled before the room mounts.
+    const view = render(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('1'));
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+    mocks.createLocalTracks.mockClear();
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <MicOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    // The gate holds, and nothing went looking for a camera to satisfy it.
+    expect(await screen.findByText('Enable video to start')).toBeInTheDocument();
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+    // Nor was the preview re-announced over a session that already had one.
+    expect(screen.queryByText('Requesting camera and mic…')).toBeNull();
   });
 
   it('starts muted for a viewer who was muted in the lobby they just left', async () => {
@@ -6638,6 +6804,56 @@ function completedDebateOutsideThankYou(): Debate {
     turn_ends_at: '2026-07-02T00:00:20.000Z',
     completed_at: '2026-07-02T00:00:20.000Z',
   };
+}
+
+/**
+ * A card that handed over one device. It claims the debate's own session and opens the microphone
+ * only, which is what accepting a request with the camera off leaves behind.
+ */
+function MicOnlyHandover() {
+  const media = useDebateMediaSession();
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    media.beginSession(debateMediaSessionKey('debate-1'));
+    void media.ensurePreview({ audio: true, video: false }).catch(() => undefined);
+  }, [media]);
+
+  return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;
+}
+
+/** A card that handed the room a session and opened nothing: the listening-only choice. */
+function ListeningOnlyHandover() {
+  const media = useDebateMediaSession();
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    media.beginSession(debateMediaSessionKey('debate-1'));
+  }, [media]);
+
+  return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;
+}
+
+/**
+ * A card whose acquisition is still running when the room mounts, which is what tapping Accept the
+ * moment the camera comes on looks like — or a cold `livekit-client` import on a phone.
+ */
+function InFlightHandover({ kinds }: { kinds: { audio: boolean; video: boolean } }) {
+  const media = useDebateMediaSession();
+  const started = React.useRef(false);
+
+  React.useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+    media.beginSession(debateMediaSessionKey('debate-1'));
+    void media.ensurePreview(kinds).catch(() => undefined);
+  }, [kinds, media]);
+
+  return <div data-testid="handover-tracks">{media.localTracksRef.current.length}</div>;
 }
 
 function readyDebate({ localReady, remoteReady }: { localReady: boolean; remoteReady: boolean }): Debate {

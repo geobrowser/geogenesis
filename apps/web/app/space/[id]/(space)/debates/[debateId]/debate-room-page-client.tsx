@@ -127,7 +127,7 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
-import { inheritedJoinState } from '~/core/debates/request-join-state';
+import { inheritedJoinState, joinStateNeedsOpening, kindsForJoinState } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
@@ -455,6 +455,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
    * evidence.
    */
   const handedOverSession = mediaSession.activeSessionKey === mediaSessionKey;
+  const handedOverAtMount = React.useRef(handedOverSession);
   /*
    * The mic a lobby carried, for someone who stepped out of one to get here. Spent on read, and a
    * microphone only — a lobby has no camera to carry.
@@ -481,6 +482,8 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
   const [videoEnabled, setVideoEnabled] = React.useState(inherited.videoEnabled);
+  const joinStateChosenHere = React.useRef(false);
+  const settledJoinStateRef = React.useRef<{ audioMuted: boolean; videoEnabled: boolean } | null>(null);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');
@@ -2034,17 +2037,32 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     };
   }, [connectionConflictSource, roomState]);
 
+  const ensureKindsForJoinState = React.useCallback(
+    (next: { audioMuted: boolean; videoEnabled: boolean }) => {
+      const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
+      if (!joinStateNeedsOpening(next, liveKinds)) return;
+      void ensureLocalPreview(kindsForJoinState(next, liveKinds)).catch(() => undefined);
+    },
+    [ensureLocalPreview, mediaSession.localTracksRef]
+  );
+
   const toggleAudioMuted = React.useCallback(() => {
-    setAudioMuted(current => !current);
-  }, []);
+    const next = !audioMuted;
+    joinStateChosenHere.current = true;
+    setAudioMuted(next);
+    ensureKindsForJoinState({ audioMuted: next, videoEnabled });
+  }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
 
   const toggleRemoteAudioEnabled = React.useCallback(() => {
     setRemoteAudioEnabled(current => !current);
   }, []);
 
   const toggleVideoEnabled = React.useCallback(() => {
-    setVideoEnabled(current => !current);
-  }, []);
+    const next = !videoEnabled;
+    joinStateChosenHere.current = true;
+    setVideoEnabled(next);
+    ensureKindsForJoinState({ audioMuted, videoEnabled: next });
+  }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
 
   const savePickAsync = saveOpenRoundPick.mutateAsync;
   const pickOpenRound = React.useCallback(
@@ -2439,7 +2457,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const markLocalReady = React.useCallback(async () => {
     setRoomError(null);
     try {
-      await ensureLocalPreview();
+      await ensureLocalPreview({ audio: true, video: true });
       await markReady.mutateAsync();
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
@@ -2675,8 +2693,41 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // Warm the route's largest client-only dependency before the ten/finite-second connecting
     // window starts. The import is cached by the module loader; media preview remains independent.
     void import('livekit-client').catch(() => undefined);
-    void ensureLocalPreview().catch(() => undefined);
-  }, [debate, ensureLocalPreview, roomState]);
+
+    let cancelled = false;
+    void (async () => {
+      const pending = mediaSession.pendingPreview();
+      if (pending) {
+        await pending.catch(() => undefined);
+        if (cancelled) return;
+      }
+
+      const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
+      let settled: { audioMuted: boolean; videoEnabled: boolean };
+      if (joinStateChosenHere.current) {
+        settled = { audioMuted, videoEnabled };
+      } else {
+        /*
+         * A hand-off re-reads its tracks here, because they may not have landed at first render.
+         * A cold arrival keeps the first-render decision instead: that one knows about the mic a
+         * lobby carried, and re-deriving would read "no tracks" over it and unmute.
+         */
+        settled =
+          settledJoinStateRef.current ?? (handedOverAtMount.current ? inheritedJoinState(liveKinds, true) : inherited);
+        settledJoinStateRef.current = settled;
+      }
+
+      if (!joinStateChosenHere.current) {
+        setAudioMuted(settled.audioMuted);
+        setVideoEnabled(settled.videoEnabled);
+      }
+      await ensureLocalPreview(kindsForJoinState(settled, liveKinds)).catch(() => undefined);
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [debate, ensureLocalPreview, inherited, mediaSession.localTracksRef, mediaSession.pendingPreview, roomState]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;

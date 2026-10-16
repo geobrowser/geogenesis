@@ -7,6 +7,8 @@ import {
   formatTotalSpeakingTime,
   inheritedJoinState,
   isMediaBlocked,
+  joinStateNeedsOpening,
+  kindsForJoinState,
   mayAutoStartPreview,
 } from './request-join-state';
 
@@ -145,5 +147,45 @@ describe('inheritedJoinState', () => {
 
   it('falls back to the old defaults when no devices were inherited', () => {
     expect(inheritedJoinState([])).toEqual({ audioMuted: false, videoEnabled: true });
+  });
+});
+
+describe('kindsForJoinState', () => {
+  it('does not ask for a camera the card left off', () => {
+    expect(kindsForJoinState({ audioMuted: false, videoEnabled: false }, ['audio'])).toEqual({
+      audio: true,
+      video: false,
+    });
+  });
+
+  it('asks for both on a cold arrival, where the room defaults apply', () => {
+    expect(kindsForJoinState({ audioMuted: false, videoEnabled: true }, [])).toEqual({ audio: true, video: true });
+  });
+
+  it('never asks for less than what is already open', () => {
+    expect(kindsForJoinState({ audioMuted: true, videoEnabled: false }, ['audio', 'video'])).toEqual({
+      audio: true,
+      video: true,
+    });
+  });
+});
+
+describe('joinStateNeedsOpening', () => {
+  it('needs the camera when the card handed over the microphone only', () => {
+    expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: true }, ['audio'])).toBe(true);
+  });
+
+  it('needs the microphone when the card handed over the camera only', () => {
+    expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: true }, ['video'])).toBe(true);
+  });
+
+  it('needs nothing when both kinds are already open', () => {
+    expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: true }, ['audio', 'video'])).toBe(false);
+  });
+
+  it('needs nothing when a device is being turned off, or was never wanted', () => {
+    expect(joinStateNeedsOpening({ audioMuted: true, videoEnabled: true }, ['audio', 'video'])).toBe(false);
+    expect(joinStateNeedsOpening({ audioMuted: false, videoEnabled: false }, ['audio'])).toBe(false);
+    expect(joinStateNeedsOpening({ audioMuted: true, videoEnabled: false }, [])).toBe(false);
   });
 });

@@ -104,7 +104,7 @@ function MediaPreview({
     }
 
     void session
-      .ensurePreview({ audio: want.micOn, video: want.cameraOn, forceRestart: true })
+      .ensurePreview({ audio: want.micOn, video: want.cameraOn })
       .then(tracks => {
         if (!active) return;
         const kinds = new Set(tracks.map(track => track.mediaStreamTrack.kind));
@@ -145,9 +145,9 @@ function MediaPreview({
     return () => {
       active = false;
     };
-    // Keyed on the wanted set, not on `session`, whose identity changes on every media event.
+    // Keyed on the wanted set and session key, not on `session`, whose identity changes on every media event.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [wantKey]);
+  }, [sessionKey, wantKey]);
 
   const micOn = want.micOn && !missing.mic;
   const cameraOn = want.cameraOn && !missing.camera;
