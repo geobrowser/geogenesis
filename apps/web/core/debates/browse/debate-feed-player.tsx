@@ -1360,9 +1360,12 @@ function DebaterVideo({
             // Both tiles fade in together, and only once both have a frame — see `concealed`.
             // `relative` so it stacks above the absolutely positioned still; a static video paints
             // under any positioned sibling whatever the DOM order.
+            // The fade in is slower than the fade out: the still is cut ten seconds into the
+            // debater's first turn, not at the frame playback starts on, so a quick fade reads as a
+            // jump cut between two poses. Hiding stays quick.
             className={cx(
-              'relative h-full w-full object-cover transition-opacity duration-200',
-              concealed ? 'opacity-0' : 'opacity-100'
+              'relative h-full w-full object-cover transition-opacity',
+              concealed ? 'opacity-0 duration-200' : 'opacity-100 duration-500'
             )}
             playsInline
             // `metadata` by default: enough to paint a frame and know the shape of the recording,
