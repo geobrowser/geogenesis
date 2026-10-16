@@ -165,7 +165,7 @@ function MediaPreview({
             camera: open.cameraOn && !acquired.current.cameraOn ? true : current.camera,
           }));
         } else {
-          const failed = preJoinMediaFailure(error);
+          const failed = preJoinMediaFailure(error, camera ? undefined : { audio: true, video: false });
           setFailure(failed.message);
 
           if (failed.state === 'denied') {

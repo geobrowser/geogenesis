@@ -30,6 +30,7 @@ import { RematchVoiceHeader } from './rematch-voice';
 
 const mocks = vi.hoisted(() => ({
   debateVideo: true,
+  hydrating: false,
   joinData: null as { token: string; url: string; room_name: string; participant_slot: 1 | 2 } | null,
   joinError: null as Error | null,
   joinLoading: false,
@@ -207,9 +208,17 @@ vi.mock('livekit-client', () => ({
   Track: { Source: { Microphone: 'microphone', Camera: 'camera' } },
 }));
 
-vi.mock('~/core/state/feature-flags', () => ({
-  useFeatureFlag: (id: string) => (id === 'debateVideo' ? mocks.debateVideo : false),
-}));
+// `hydrating` reproduces the real hook: false on a component's first render, the flag after.
+vi.mock('~/core/state/feature-flags', async () => {
+  const { useHydrated } = await import('~/core/hooks/use-hydrated');
+  return {
+    useFeatureFlag: (id: string) => {
+      const hydrated = useHydrated();
+      if (id !== 'debateVideo') return false;
+      return mocks.hydrating ? hydrated && mocks.debateVideo : mocks.debateVideo;
+    },
+  };
+});
 
 vi.mock('~/core/debates/hooks', () => ({
   debateQueryKeys: {
@@ -418,6 +427,7 @@ function stepOutOfLobbyWithMic(on: boolean) {
 
 beforeEach(() => {
   mocks.debateVideo = true;
+  mocks.hydrating = false;
   stubMicrophoneApis();
   // The settings popover measures its trigger to place itself; jsdom has no ResizeObserver.
   vi.stubGlobal(
@@ -2947,6 +2957,19 @@ describe('with debateVideo off', () => {
     expect(readRematchJoinIntent('debate-9')).toStrictEqual({ micOn: true });
   });
 
+  it('keeps master’s layout: small avatars and a Mute label at every width', async () => {
+    mocks.remoteParticipants = [remoteOpponent()];
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    for (const avatar of screen.getAllByTestId('pair-avatar')) {
+      expect(avatar.className).toContain('size-8');
+      expect(avatar.className).not.toContain('size-14');
+    }
+    const label = screen.getByRole('button', { name: /^(Mute|Unmute)( microphone)?$/ }).querySelector('span');
+    expect(label?.className ?? '').not.toContain('max-[400px]:hidden');
+  });
+
   it('draws avatars, not the other person’s camera', async () => {
     mocks.remoteParticipants = [remoteOpponent()];
     mocks.opponentCameraPublication = { track: { attach: vi.fn(), detach: vi.fn() } };
@@ -2957,5 +2980,19 @@ describe('with debateVideo off', () => {
     expect(document.querySelector('video')).toBeNull();
     expect(mocks.opponentCameraPublication.track.attach).not.toHaveBeenCalled();
     expect(screen.getByTestId('rematch-opponent-card').querySelector('[data-testid="avatar"]')).not.toBeNull();
+  });
+});
+
+// The flag reads off on the first render and on once hydrated.
+describe('debateVideo through hydration', () => {
+  it('keeps a remembered camera and turns it on once the flag reads on', async () => {
+    mocks.hydrating = true;
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    rememberRematchJoinIntent('session-1', { micOn: true, cameraOn: true });
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
+    expect(readRematchJoinIntent('session-1')).toEqual({ micOn: true, cameraOn: true });
   });
 });

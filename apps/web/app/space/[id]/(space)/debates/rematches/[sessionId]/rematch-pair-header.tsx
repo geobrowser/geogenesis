@@ -6,6 +6,7 @@ import cx from 'classnames';
 
 import { DebateNotice } from '~/core/debates/debate-notice';
 import { MicrophoneIcon } from '~/core/debates/debate-room-controls';
+import { useFeatureFlag } from '~/core/state/feature-flags';
 
 import { Avatar } from '~/design-system/avatar';
 import { ChevronRight } from '~/design-system/icons/chevron-right';
@@ -236,6 +237,8 @@ function PairCardBody({
   /** The corner: Leave on your side, View profile on theirs. */
   action?: React.ReactNode;
 }) {
+  // The video layout (larger tiles) only with debateVideo; master's layout otherwise.
+  const videoLayout = useFeatureFlag('debateVideo');
   return (
     <>
       <div className="flex w-full items-center gap-2.5">
@@ -246,7 +249,11 @@ function PairCardBody({
           </span>
           {state}
         </div>
-        {action ? <div className="max-sm:self-center flex shrink-0 items-center self-start">{action}</div> : null}
+        {action ? (
+          <div className={cx('flex shrink-0 items-center', videoLayout && 'max-sm:self-center self-start')}>
+            {action}
+          </div>
+        ) : null}
       </div>
     </>
   );
@@ -450,14 +457,19 @@ function ParticipantAvatar({
   speaking: boolean;
   video?: React.ReactNode;
 }) {
+  const videoLayout = useFeatureFlag('debateVideo');
   return (
+    // The size lives on the wrapper, not on `<Avatar>`: its `size` prop only reaches the generated
+    // fallback, while a real avatar renders `h-full w-full` and takes whatever box it is given.
     <span
+      data-testid="pair-avatar"
       className={cx(
-        'inline-flex size-14 shrink-0 overflow-hidden rounded-full bg-grey-01',
+        'inline-flex shrink-0 overflow-hidden rounded-full',
+        videoLayout ? 'size-14 bg-grey-01' : 'size-8',
         speaking && 'ring-2 ring-successTertiary'
       )}
     >
-      {video ?? <Avatar avatarUrl={avatarUrl} value={value ?? name} size={56} alt="" />}
+      {video ?? <Avatar avatarUrl={avatarUrl} value={value ?? name} size={videoLayout ? 56 : 32} alt="" />}
     </span>
   );
 }

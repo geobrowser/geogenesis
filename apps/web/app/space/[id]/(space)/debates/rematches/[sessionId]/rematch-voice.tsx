@@ -1163,7 +1163,8 @@ function LocalAudioControls({
   const cameraSettings = useVoiceCameraSettings(room);
   const cameraPrimary = !cameraOn;
 
-  const labelAtWidth = 'max-[400px]:hidden';
+  // Narrow screens drop the labels only in the video layout, where the camera pill shares the row.
+  const labelAtWidth = useFeatureFlag('debateVideo') ? 'max-[400px]:hidden' : undefined;
   const [cameraPanelOpen, setCameraPanelOpen] = React.useState(false);
   const cameraTriggerRef = React.useRef<HTMLButtonElement | null>(null);
 
@@ -1355,6 +1356,7 @@ function DesktopSettingsPopover({
 }) {
   // Radix's default portal wrapper is globally capped at z-60, below this picker's z-[150].
   const elevatedPopoverPortal = useElevatedPopoverPortal();
+  const videoLayout = useFeatureFlag('debateVideo');
 
   return (
     <Popover.Root open={open} onOpenChange={onOpenChange}>
@@ -1366,7 +1368,7 @@ function DesktopSettingsPopover({
             aria-label={label}
             side="bottom"
             align="end"
-            sideOffset={20}
+            sideOffset={videoLayout ? 20 : 12}
             collisionPadding={16}
             onCloseAutoFocus={event => {
               event.preventDefault();
