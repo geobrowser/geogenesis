@@ -420,8 +420,10 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   );
 
   // Latched by the auto-open below *and* by the user's own toggle, so a mute chosen while waiting
-  // is not undone the moment the opponent walks in. A card's or a lobby's mic is a choice too.
-  const micSettledRef = React.useRef(chosenAtMount !== null || carriedMic !== null);
+  // is not undone the moment the opponent walks in. A card's or a lobby's mic is a choice too. A
+  // room never shows a card, so a remembered intent there is this picker's own echo, not a choice.
+  const roomContext = useDebateRoomContext();
+  const micSettledRef = React.useRef((chosenAtMount !== null && roomContext === null) || carriedMic !== null);
   const handleMicIntentChange = React.useCallback((enabled: boolean) => {
     micSettledRef.current = true;
     setMicIntent(enabled);
@@ -433,7 +435,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
 
   // GEO-2941 state 3: inside a room the mic opens when the opponent actually arrives. Off a room
   // there is no join event to key on and the dock stays muted, per GEO-2838.
-  const roomOpponentPresent = useDebateRoomContext()?.presence?.opponentPresent ?? false;
+  const roomOpponentPresent = roomContext?.presence?.opponentPresent ?? false;
   React.useEffect(() => {
     if (!roomOpponentPresent || micSettledRef.current) return;
     micSettledRef.current = true;

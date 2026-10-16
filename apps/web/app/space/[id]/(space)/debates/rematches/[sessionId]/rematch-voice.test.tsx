@@ -2470,6 +2470,34 @@ describe('the mic inside a debate room', () => {
     expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
   });
 
+  // Leaving the room in-app and coming back remounts the picker over its own remembered default.
+  it('still opens the mic when the opponent arrives after the picker remounts', async () => {
+    const first = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await waitFor(() => expect(mocks.livekitRoomProps.length).toBeGreaterThan(0));
+    first.unmount();
+
+    const view = render(
+      <DebateRoomProvider roomId="room-1" presence={presence(false)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+    await flushOwnership();
+    expect(lastAudio()).toBe(false);
+
+    view.rerender(
+      <DebateRoomProvider roomId="room-1" presence={presence(true)}>
+        <RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />
+      </DebateRoomProvider>
+    );
+
+    await waitFor(() => expect(lastAudio()).toBe(true));
+    expect(mocks.setMicrophoneEnabled).toHaveBeenCalledWith(true);
+  });
+
   // A mute chosen while waiting is a choice, and the opponent walking in must not undo it.
   it('leaves a deliberate mute alone when the opponent arrives', async () => {
     const view = render(
