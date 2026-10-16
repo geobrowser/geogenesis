@@ -121,6 +121,7 @@ export const ReviewChanges = () => {
     isReviewOpen,
     setIsReviewOpen,
     reviewVersion,
+    reviewTargetVersion,
     activeSpace: diffPreferredSpaceId,
     setActiveSpace: setDiffPreferredSpaceId,
   } = useDiff();
@@ -155,7 +156,7 @@ export const ReviewChanges = () => {
   const { activeSpace, setActiveSpace } = useReviewSpace({
     spaceIds: dedupedSpacesWithActions,
     isReviewOpen,
-    reviewVersion,
+    preferredSpaceVersion: reviewTargetVersion,
     preferredSpaceId: diffPreferredSpaceId,
     currentSpaceId,
   });

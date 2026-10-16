@@ -1,6 +1,6 @@
 import type { Entity, Relation, Value } from '~/core/types';
 
-type SyncedEntities = ReadonlyMap<string, Pick<Entity, 'values' | 'relations'>>;
+type SyncedEntities = ReadonlyMap<string, Pick<Entity, 'values' | 'relations'> | null>;
 
 /**
  * Filter values to only include net changes compared to the remote/synced state.
@@ -15,7 +15,7 @@ export function getNetValues(localValues: Value[], syncedEntities: SyncedEntitie
     if (v.isDeleted) {
       // Persisted deletions can be restored before their remote entity is hydrated.
       // Only discard a deletion when a known baseline proves it was created locally.
-      if (!remoteEntity) return true;
+      if (!remoteEntity) return !syncedEntities.has(v.entity.id);
       return remoteEntity.values.some(remote => remote.id === v.id && !remote.isLocal);
     }
 
@@ -54,7 +54,7 @@ export function getNetRelations(localRelations: Relation[], syncedEntities: Sync
 
     if (r.isDeleted) {
       // An absent cache entry is unknown, not proof that the relation never existed.
-      if (!remoteEntity) return true;
+      if (!remoteEntity) return !syncedEntities.has(r.fromEntity.id);
       const remoteRelation = remoteEntity.relations.find(remote => remote.id === r.id && !remote.isLocal);
       if (!remoteRelation) return false;
 

@@ -3,7 +3,7 @@ import * as React from 'react';
 type ReviewSpaceOptions = {
   spaceIds: string[];
   isReviewOpen: boolean;
-  reviewVersion: number;
+  preferredSpaceVersion: number;
   preferredSpaceId: string;
   currentSpaceId?: string;
 };
@@ -11,12 +11,12 @@ type ReviewSpaceOptions = {
 export function useReviewSpace({
   spaceIds,
   isReviewOpen,
-  reviewVersion,
+  preferredSpaceVersion,
   preferredSpaceId,
   currentSpaceId,
 }: ReviewSpaceOptions) {
   const [activeSpace, setActiveSpace] = React.useState('');
-  const session = React.useRef<{ version: number; preferredApplied: boolean } | null>(null);
+  const session = React.useRef<{ preferredAppliedVersion: number | null } | null>(null);
 
   React.useEffect(() => {
     if (!isReviewOpen) {
@@ -26,13 +26,13 @@ export function useReviewSpace({
     // Keep the published space's metadata during completion and import's clear/rebuild gap.
     if (spaceIds.length === 0) return;
 
-    const isNewReview = session.current?.version !== reviewVersion;
-    if (isNewReview) session.current = { version: reviewVersion, preferredApplied: false };
+    const isNewReview = session.current === null;
+    if (isNewReview) session.current = { preferredAppliedVersion: null };
 
-    // Explicit targets (e.g. reopening a rejected proposal) override the route once per review.
+    // Explicit targets override the route once per request, independently of diff refreshes.
     // Wait for their operations if they have not reached the local store yet.
-    if (!session.current?.preferredApplied && spaceIds.includes(preferredSpaceId)) {
-      session.current = { version: reviewVersion, preferredApplied: true };
+    if (session.current?.preferredAppliedVersion !== preferredSpaceVersion && spaceIds.includes(preferredSpaceId)) {
+      session.current = { preferredAppliedVersion: preferredSpaceVersion };
       setActiveSpace(preferredSpaceId);
       return;
     }
@@ -42,7 +42,7 @@ export function useReviewSpace({
       if (spaceIds.includes(current)) return current;
       return spaceIds[0];
     });
-  }, [spaceIds, isReviewOpen, reviewVersion, preferredSpaceId, currentSpaceId]);
+  }, [spaceIds, isReviewOpen, preferredSpaceVersion, preferredSpaceId, currentSpaceId]);
 
   return { activeSpace, setActiveSpace };
 }

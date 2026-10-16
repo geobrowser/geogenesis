@@ -7,7 +7,7 @@ import { useReviewSpace } from './use-review-space';
 const base = {
   spaceIds: ['personal', 'public'],
   isReviewOpen: true,
-  reviewVersion: 1,
+  preferredSpaceVersion: 1,
   preferredSpaceId: '',
   currentSpaceId: undefined as string | undefined,
 };
@@ -94,7 +94,7 @@ describe('useReviewSpace', () => {
     const { result, rerender } = renderHook(useReviewSpace, {
       initialProps: { ...base, preferredSpaceId: 'personal' },
     });
-    rerender({ ...base, reviewVersion: 2, preferredSpaceId: 'public' });
+    rerender({ ...base, preferredSpaceVersion: 2, preferredSpaceId: 'public' });
     expect(result.current.activeSpace).toBe('public');
   });
 });

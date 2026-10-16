@@ -135,4 +135,37 @@ describe('useNetChanges', () => {
     });
     expect(result.current).toEqual({ values: [], relations: [], spaceIds: [] });
   });
+
+  it.each(['hydrateWith', 'sync'] as const)(
+    'observes an empty baseline from %s with no incoming operations',
+    async source => {
+      reactiveValues.set([{ ...value, isDeleted: true }]);
+      reactiveRelations.set([{ ...relation, isDeleted: true }]);
+      const { result } = renderHook(useNetChanges);
+      expect(result.current.spaceIds).toEqual(['personal']);
+      const empty = { id: 'profile', name: null, description: null, types: [], spaces: [], values: [], relations: [] };
+      await act(async () => {
+        if (source === 'hydrateWith') store.hydrateWith([empty]);
+        else stream.emit({ type: GeoEventStream.ENTITIES_SYNCED, entities: [empty], remoteEntities: [empty] });
+      });
+      expect(result.current).toEqual({ values: [], relations: [], spaceIds: [] });
+    }
+  );
+
+  it('observes confirmed absence without inventing a materialized entity', async () => {
+    reactiveValues.set([{ ...value, isDeleted: true }]);
+    reactiveRelations.set([{ ...relation, isDeleted: true }]);
+    const { result } = renderHook(useNetChanges);
+    expect(result.current.spaceIds).toEqual(['personal']);
+    await act(async () => {
+      stream.emit({
+        type: GeoEventStream.ENTITIES_SYNCED,
+        entities: [],
+        remoteEntities: [],
+        confirmedAbsentEntityIds: ['profile'],
+      });
+    });
+    expect(result.current).toEqual({ values: [], relations: [], spaceIds: [] });
+    expect(store.getEntity('profile')).toBeUndefined();
+  });
 });
