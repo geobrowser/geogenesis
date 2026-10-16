@@ -33,14 +33,22 @@ const mocks = vi.hoisted(() => ({
   startAudio: vi.fn(),
   isMicrophoneEnabled: false,
   setMicrophoneEnabled: vi.fn(async () => undefined),
-  setCameraEnabled: vi.fn(async () => undefined),
-  // Unpublishing the camera takes its track away, as LiveKit's LocalTrackUnpublished does.
-  unpublishTrack: vi.fn(async (track: unknown) => {
-    if (track === mocks.localCamera) mocks.localCamera = null;
+  /** getUserMedia for the camera: a fresh track each time unless a test holds it back. */
+  createTracks: vi.fn(async (_options: unknown): Promise<CameraTrack[]> => [cameraTrack()]),
+  /** Every camera track acquired, oldest first. */
+  created: [] as CameraTrack[],
+  publishTrack: vi.fn(async (track: CameraTrack) => {
+    mocks.published.add(track);
   }),
+  // As LiveKit's, waits out a publish of the track still in flight.
+  unpublishTrack: vi.fn(async (track: unknown) => {
+    await mocks.publishing.get(track as CameraTrack);
+    mocks.published.delete(track as CameraTrack);
+  }),
+  publishing: new Map<CameraTrack, Promise<void>>(),
+  /** Camera tracks published and not yet unpublished. */
+  published: new Set<CameraTrack>(),
   microphoneTrack: undefined as { track: object } | undefined,
-  /** The local camera track LiveKit holds, if any. */
-  localCamera: null as { stop: () => void } | null,
   cameraTracks: [] as { participant: { identity: string }; publication: { track: object | null; isMuted: boolean } }[],
   participants: [] as { identity: string; isMicrophoneEnabled: boolean; isSpeaking: boolean }[],
   permissions: undefined as { canPublish: boolean } | undefined,
@@ -49,6 +57,42 @@ const mocks = vi.hoisted(() => ({
   /** Room event listeners, by event name; `emitRoom` plays connection states. */
   roomListeners: new Map<string, Set<(...args: unknown[]) => void>>(),
 }));
+
+type CameraTrack = { stop: ReturnType<typeof vi.fn> };
+function cameraTrack(): CameraTrack {
+  const track = { stop: vi.fn() };
+  mocks.created.push(track);
+  return track;
+}
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>(settle => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
+/** Holds the next camera acquisition until `resolve` hands it its track. */
+function holdCameraAcquisition() {
+  const pending = deferred<CameraTrack[]>();
+  mocks.createTracks.mockImplementationOnce(() => pending.promise);
+  const track = cameraTrack();
+  return { track, resolve: async () => act(async () => pending.resolve([track])) };
+}
+
+/** Holds the next camera publish until `resolve`. */
+function holdCameraPublish() {
+  const pending = deferred<void>();
+  mocks.publishTrack.mockImplementationOnce(track => {
+    const publishing = pending.promise.then(() => {
+      mocks.published.add(track);
+    });
+    mocks.publishing.set(track, publishing);
+    return publishing;
+  });
+  return { resolve: async () => act(async () => pending.resolve()) };
+}
 
 const fakeRoom = {
   state: 'disconnected',
@@ -75,10 +119,9 @@ async function emitRoom(states: string[], disconnectReason?: number) {
 
 const localParticipant = {
   setMicrophoneEnabled: mocks.setMicrophoneEnabled,
-  setCameraEnabled: mocks.setCameraEnabled,
+  createTracks: mocks.createTracks,
+  publishTrack: mocks.publishTrack,
   unpublishTrack: mocks.unpublishTrack,
-  getTrackPublication: (source: string) =>
-    source === 'camera' && mocks.localCamera ? { track: mocks.localCamera } : undefined,
   on: (event: string, listener: (...args: unknown[]) => void) => mocks.listeners.set(event, listener),
   off: (event: string) => mocks.listeners.delete(event),
 };
@@ -119,7 +162,6 @@ vi.mock('@livekit/components-react', () => ({
     localParticipant,
     isMicrophoneEnabled: mocks.isMicrophoneEnabled,
     microphoneTrack: mocks.microphoneTrack,
-    cameraTrack: mocks.localCamera ? { track: mocks.localCamera } : undefined,
   }),
   useLocalParticipantPermissions: () => mocks.permissions,
   useParticipants: () => mocks.participants,
@@ -203,7 +245,9 @@ beforeEach(() => {
   mocks.microphoneTrack = undefined;
   mocks.participants = [];
   mocks.permissions = undefined;
-  mocks.localCamera = null;
+  mocks.published.clear();
+  mocks.created = [];
+  mocks.publishing.clear();
   mocks.cameraTracks = [];
   mocks.getDebateLobbyVoiceToken.mockResolvedValue(token());
 });
@@ -484,13 +528,17 @@ describe('LobbyVoice camera (GEO-3307)', () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     renderVoice();
     const turnOn = await screen.findByRole('button', { name: 'Turn camera on' });
-    expect(mocks.setCameraEnabled).not.toHaveBeenCalledWith(true);
+    expect(mocks.createTracks).not.toHaveBeenCalled();
     expect(mocks.roomProps).toMatchObject({ video: false });
 
     fireEvent.click(turnOn);
-    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    expect(mocks.createTracks).toHaveBeenCalledWith({ video: true });
+    const [camera] = mocks.created;
     fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
-    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(false));
+    expect(camera!.stop).toHaveBeenCalled();
+    await waitFor(() => expect(mocks.published.size).toBe(0));
+    expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true);
   });
 
   // GEO-3161: the off switch mints a mic-only token.
@@ -499,7 +547,7 @@ describe('LobbyVoice camera (GEO-3307)', () => {
     renderVoice();
     await screen.findByRole('button', { name: /Unmute|Mute/ });
     expect(cameraButton()).toBeNull();
-    expect(mocks.setCameraEnabled).not.toHaveBeenCalled();
+    expect(mocks.createTracks).not.toHaveBeenCalled();
     expect(screen.queryByText(/Camera/)).toBeNull();
   });
 
@@ -513,15 +561,15 @@ describe('LobbyVoice camera (GEO-3307)', () => {
   it('turns the camera off and frees it when a host moves the viewer to listeners', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     const { setJoined } = renderVoice();
-    const turnOn = await screen.findByRole('button', { name: 'Turn camera on' });
-    const camera = { stop: vi.fn() };
-    mocks.localCamera = camera;
-    fireEvent.click(turnOn);
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    const [camera] = mocks.created;
 
     mocks.permissions = { canPublish: false };
     setJoined(true);
     await screen.findByText('You’re listening');
     expect(cameraButton()).toBeNull();
+    expect(camera!.stop).toHaveBeenCalled();
     expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true);
     await waitFor(() => expect(lobbyCaptureLive('video')).toBe(false));
   });
@@ -542,34 +590,45 @@ describe('LobbyVoice camera (GEO-3307)', () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     rerender(ui(lobby('speaker')));
     fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
-    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
   });
 
   it('says a blocked camera is the camera, leaving the mic alone', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    mocks.createTracks.mockRejectedValueOnce(Object.assign(new Error('denied'), { name: 'NotAllowedError' }));
     renderVoice();
     fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
-    const onFailure = mocks.roomProps!.onMediaDeviceFailure as (failure: string, kind: string) => void;
-    act(() => onFailure('PermissionDenied', 'videoinput'));
 
     expect(await screen.findByText('Camera blocked. Allow it in your browser, then try again.')).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeTruthy();
     expect(screen.queryByText('Your microphone isn’t available.')).toBeNull();
     expect(mocks.roomProps).toMatchObject({ audio: true });
+    expect(lobbyCaptureLive('video')).toBe(false);
+  });
+
+  it('routes a camera failure LiveKit reports to the camera, not the mic', async () => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+    renderVoice();
+    await screen.findByRole('button', { name: 'Turn camera on' });
+    const onFailure = mocks.roomProps!.onMediaDeviceFailure as (failure: string, kind: string) => void;
+    act(() => onFailure('PermissionDenied', 'videoinput'));
+
+    expect(await screen.findByText('Camera blocked. Allow it in your browser, then try again.')).toBeTruthy();
+    expect(screen.queryByText('Your microphone isn’t available.')).toBeNull();
   });
 
   // iPhone Safari holds one capture: the picker or ready room cannot open the camera otherwise.
   it('frees the camera when stepping out into a debate', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     renderVoice();
-    const turnOn = await screen.findByRole('button', { name: 'Turn camera on' });
-    const camera = { stop: vi.fn() };
-    mocks.localCamera = camera;
-    fireEvent.click(turnOn);
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    const [camera] = mocks.created;
 
     const unregister = registerLobbyStepOut(async () => undefined);
     const go = vi.fn();
     act(() => routeIntoDebate(go));
+    expect(camera!.stop).toHaveBeenCalled();
     expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true);
     await waitFor(() => expect(go).toHaveBeenCalled());
     expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeTruthy();
@@ -580,26 +639,26 @@ describe('LobbyVoice camera (GEO-3307)', () => {
   it('stops the camera synchronously when the room unmounts', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     const { unmount } = renderVoice();
-    const turnOn = await screen.findByRole('button', { name: 'Turn camera on' });
-    const camera = { stop: vi.fn() };
-    mocks.localCamera = camera;
-    fireEvent.click(turnOn);
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    const [camera] = mocks.created;
 
-    await waitFor(() => expect(lobbyCaptureLive('video')).toBe(true));
+    expect(lobbyCaptureLive('video')).toBe(true);
     unmount();
-    expect(camera.stop).toHaveBeenCalled();
+    expect(camera!.stop).toHaveBeenCalled();
     expect(lobbyCaptureLive('video')).toBe(false);
     // Nothing is registered any more, so a later route cannot reach it.
-    camera.stop.mockClear();
+    camera!.stop.mockClear();
     routeIntoDebate(vi.fn());
-    expect(camera.stop).not.toHaveBeenCalled();
+    expect(camera!.stop).not.toHaveBeenCalled();
   });
 
   it('starts with the camera off after taking voice back from another tab', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
     renderVoice();
     fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
-    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(true));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    const [camera] = mocks.created;
 
     mocks.requestTakeover = true;
     act(() =>
@@ -607,7 +666,8 @@ describe('LobbyVoice camera (GEO-3307)', () => {
     );
     fireEvent.click(await screen.findByRole('button', { name: 'Use voice here' }));
     expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeTruthy();
-    expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(false);
+    expect(camera!.stop).toHaveBeenCalled();
+    expect(mocks.createTracks).toHaveBeenCalledTimes(1);
   });
 
   it('hands the roster each unmuted camera, by dashless id', async () => {
@@ -633,26 +693,131 @@ describe('LobbyVoice camera (GEO-3307)', () => {
 
   it('registers the camera as the lobby’s video capture while it holds one', async () => {
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
-    const camera = { stop: vi.fn() };
-    mocks.localCamera = camera;
     renderVoice();
     render(<VideoCaptureProbe />);
     fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
     await waitFor(() => expect(latestVideoCapture?.on).toBe(true));
 
-    // Turning it off mutes: still held, so still registered, but off.
+    // Turning it off lets the device go, so nothing is left to register.
     fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
-    await waitFor(() => expect(latestVideoCapture?.on).toBe(false));
-    expect(lobbyCaptureLive('video')).toBe(true);
+    expect(lobbyCaptureLive('video')).toBe(false);
+    await waitFor(() => expect(latestVideoCapture).toBeNull());
 
     fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
-    await waitFor(() => expect(latestVideoCapture?.on).toBe(true));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    expect(latestVideoCapture?.on).toBe(true);
+    const camera = mocks.created[1];
     act(() => releaseLobbyCapture('video'));
-    expect(camera.stop).toHaveBeenCalled();
+    expect(camera!.stop).toHaveBeenCalled();
     expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true);
     expect(screen.getByRole('button', { name: 'Turn camera on' })).toBeTruthy();
+    expect(lobbyCaptureLive('video')).toBe(false);
+    await waitFor(() => expect(latestVideoCapture).toBeNull());
+  });
+});
+
+// A camera being acquired or published has no publication yet; every release must still reach it.
+describe('LobbyVoice camera still being acquired', () => {
+  beforeEach(() => {
+    mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
+  });
+
+  it('registers the capture as soon as the acquisition starts', async () => {
+    holdCameraAcquisition();
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.createTracks).toHaveBeenCalled());
+    expect(lobbyCaptureLive('video')).toBe(true);
+  });
+
+  it('stops a camera that arrives after the room unmounted, and never publishes it', async () => {
+    const acquisition = holdCameraAcquisition();
+    const { unmount } = renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.createTracks).toHaveBeenCalled());
+
+    unmount();
+    expect(lobbyCaptureLive('video')).toBe(false);
+    await acquisition.resolve();
+    expect(acquisition.track.stop).toHaveBeenCalled();
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+  });
+
+  it('stops a camera at once when released while its publish is in flight', async () => {
+    const publish = holdCameraPublish();
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalled());
+    const [camera] = mocks.created;
+
+    act(() => releaseLobbyCapture('video'));
+    expect(camera!.stop).toHaveBeenCalled();
+    expect(lobbyCaptureLive('video')).toBe(false);
+    await publish.resolve();
+    await waitFor(() => expect(mocks.published.size).toBe(0));
+    expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true);
+  });
+
+  it('ends a quick off and on with exactly one live camera', async () => {
+    const first = holdCameraAcquisition();
+    renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.createTracks).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera off' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+
+    await first.resolve();
+    expect(first.track.stop).toHaveBeenCalled();
+    expect(mocks.publishTrack).not.toHaveBeenCalledWith(first.track);
+    const live = [...mocks.published];
+    expect(live).toHaveLength(1);
+    expect(live[0]!.stop).not.toHaveBeenCalled();
+    expect(lobbyCaptureLive('video')).toBe(true);
+  });
+
+  it('stops a camera that arrives after a host moved the viewer to listeners', async () => {
+    const acquisition = holdCameraAcquisition();
+    const { setJoined } = renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.createTracks).toHaveBeenCalled());
+
+    mocks.permissions = { canPublish: false };
+    setJoined(true);
+    await screen.findByText('You’re listening');
+    expect(lobbyCaptureLive('video')).toBe(false);
+    await acquisition.resolve();
+    expect(acquisition.track.stop).toHaveBeenCalled();
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+  });
+
+  it('stops a camera that arrives after the debateVideo flag turned off', async () => {
+    const acquisition = holdCameraAcquisition();
+    const { setJoined } = renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.createTracks).toHaveBeenCalled());
+
+    mocks.videoEnabled = false;
+    setJoined(true);
+    await waitFor(() => expect(screen.queryByRole('button', { name: /Turn camera/ })).toBeNull());
+    expect(lobbyCaptureLive('video')).toBe(false);
+    await acquisition.resolve();
+    expect(acquisition.track.stop).toHaveBeenCalled();
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+  });
+
+  it('stops a camera that arrives after the room disconnected', async () => {
+    const acquisition = holdCameraAcquisition();
+    const { setJoined } = renderVoice();
+    fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
+    await waitFor(() => expect(mocks.createTracks).toHaveBeenCalled());
+
+    mocks.connectionState = ConnectionState.Disconnected;
+    setJoined(true);
     await waitFor(() => expect(lobbyCaptureLive('video')).toBe(false));
-    expect(latestVideoCapture).toBeNull();
+    await acquisition.resolve();
+    expect(acquisition.track.stop).toHaveBeenCalled();
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
   });
 });
 
@@ -666,7 +831,7 @@ describe('LobbyVoice camera with debateVideo off', () => {
     renderVoice();
     await screen.findByRole('button', { name: /Unmute|Mute/ });
     expect(screen.queryByRole('button', { name: /Turn camera/ })).toBeNull();
-    expect(mocks.setCameraEnabled).not.toHaveBeenCalled();
+    expect(mocks.createTracks).not.toHaveBeenCalled();
     expect(lobbyCaptureLive('video')).toBe(false);
     expect(screen.queryByText(/Camera/)).toBeNull();
   });
@@ -708,15 +873,15 @@ describe('LobbyVoice camera with debateVideo off', () => {
   it('takes a published camera down when the flag turns off mid-call', async () => {
     mocks.videoEnabled = true;
     mocks.getDebateLobbyVoiceToken.mockResolvedValue(token({ token: CAMERA_TOKEN }));
-    const camera = { stop: vi.fn() };
-    mocks.localCamera = camera;
     const { setJoined } = renderVoice();
     fireEvent.click(await screen.findByRole('button', { name: 'Turn camera on' }));
-    await waitFor(() => expect(lobbyCaptureLive('video')).toBe(true));
+    await waitFor(() => expect(mocks.published.size).toBe(1));
+    const [camera] = mocks.created;
 
     mocks.videoEnabled = false;
     setJoined(true);
     await waitFor(() => expect(mocks.unpublishTrack).toHaveBeenCalledWith(camera, true));
+    expect(camera!.stop).toHaveBeenCalled();
     expect(screen.queryByRole('button', { name: /Turn camera/ })).toBeNull();
     await waitFor(() => expect(lobbyCaptureLive('video')).toBe(false));
   });

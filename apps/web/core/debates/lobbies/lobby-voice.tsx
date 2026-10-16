@@ -20,7 +20,6 @@ import cx from 'classnames';
 import {
   ConnectionState,
   DisconnectReason,
-  type LocalParticipant,
   type LocalTrackPublication,
   MediaDeviceFailure,
   ParticipantEvent,
@@ -44,6 +43,7 @@ import { createDebateRoomOwnershipCoordinator } from '../debate-room-ownership';
 import { useGeoChatAuth } from '../hooks';
 import { tokenAllowsCamera } from '../livekit-grant';
 import { HubPillButton } from '../matchmaking/hub-pill-button';
+import { createLobbyCamera } from './lobby-camera';
 import { lobbyErrorMessage } from './lobby-format';
 import { LobbySlot } from './lobby-slots';
 import type { MemberLobbyPageView } from './lobby-view';
@@ -260,7 +260,7 @@ export function LobbyVoice({
     if (micProblem) return setMicFailure(micProblem);
     if (!connectedRef.current) setConnectFailed(true);
   }, []);
-  // The camera's failures come through here too; they must not read as a mic problem.
+  // A camera failure reported here must not read as a mic problem.
   const handleMediaDeviceFailure = React.useCallback(
     (failure?: MediaDeviceFailure, kind?: MediaDeviceKind) => {
       if (kind === 'videoinput') return handleCameraFailure(failure ?? null);
@@ -421,7 +421,7 @@ function ConnectedVoice({
 
   // Autoplay can be blocked with no click before connecting (iOS); playback needs a user gesture.
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
-  const { localParticipant, isMicrophoneEnabled, microphoneTrack, cameraTrack } = useLocalParticipant();
+  const { localParticipant, isMicrophoneEnabled, microphoneTrack } = useLocalParticipant();
 
   // A request card over the lobby releases this before opening its own mic. Held through a reconnect,
   // which republishes the same track.
@@ -445,42 +445,57 @@ function ConnectedVoice({
   // brings the new role and a listen-only token; the mic goes down now.
   const permissions = useLocalParticipantPermissions();
   const mayPublish = canPublish && permissions?.canPublish !== false;
+  const camera = React.useMemo(() => createLobbyCamera(localParticipant), [localParticipant]);
   React.useEffect(() => {
     if (!canPublish || mayPublish) return;
     onMicChoice(false);
     void localParticipant.setMicrophoneEnabled(false).catch(() => undefined);
     onCameraChoice(false);
-    releaseLocalCamera(localParticipant);
-  }, [canPublish, localParticipant, mayPublish, onCameraChoice, onMicChoice]);
+    camera.release();
+  }, [camera, canPublish, localParticipant, mayPublish, onCameraChoice, onMicChoice]);
 
-  // `<LiveKitRoom video>` only applies on connect, so the camera follows the choice from here.
+  // `<LiveKitRoom video>` only applies on connect, so the camera follows the choice from here. Off
+  // (toggled, demoted, flag off) or disconnected releases it; reconnecting keeps it.
   const cameraOn = cameraAllowed && mayPublish && cameraIntent;
   React.useEffect(() => {
-    if (!connected || !cameraAllowed || !mayPublish) return;
-    void Promise.resolve(localParticipant.setCameraEnabled(cameraOn)).catch((error: unknown) => {
-      if (cameraOn) onCameraFailure(error instanceof Error ? (MediaDeviceFailure.getFailure(error) ?? null) : null);
-    });
-  }, [cameraAllowed, cameraOn, connected, localParticipant, mayPublish, onCameraFailure]);
-  // A camera no longer allowed (the flag turned off mid-call) goes down rather than staying published.
-  React.useEffect(() => {
-    if (!cameraAllowed) releaseLocalCamera(localParticipant);
-  }, [cameraAllowed, localParticipant]);
+    if (connected && cameraOn) {
+      camera.enable().catch((error: unknown) => {
+        onCameraFailure(error instanceof Error ? (MediaDeviceFailure.getFailure(error) ?? null) : null);
+      });
+    } else if (!cameraOn || connectionState === ConnectionState.Disconnected) {
+      camera.release();
+    }
+  }, [camera, cameraOn, connected, connectionState, onCameraFailure]);
 
   // Stepping out into a debate, or a request card opening its own camera, stops this one first.
-  const capturedCamera = (cameraTrack as LocalTrackPublication | undefined)?.track;
+  // Registered the moment an acquisition starts, not once it publishes.
   React.useEffect(() => {
-    if (!capturedCamera) return;
-    return registerLobbyCapture('video', {
-      on: cameraOn,
-      release: () => {
-        onCameraChoice(false);
-        releaseLocalCamera(localParticipant);
-      },
-    });
-  }, [cameraOn, capturedCamera, localParticipant, onCameraChoice]);
+    let unregister: (() => void) | null = null;
+    const sync = () => {
+      if (camera.held() === (unregister !== null)) return;
+      if (unregister) {
+        unregister();
+        unregister = null;
+        return;
+      }
+      unregister = registerLobbyCapture('video', {
+        on: true,
+        release: () => {
+          onCameraChoice(false);
+          camera.release();
+        },
+      });
+    };
+    const unsubscribe = camera.subscribe(sync);
+    sync();
+    return () => {
+      unsubscribe();
+      unregister?.();
+    };
+  }, [camera, onCameraChoice]);
   // A server step-out unmounts this before the route runs, and the room's disconnect only stops the
   // camera after awaiting the network; iPhone needs the device free by the time the next screen asks.
-  React.useEffect(() => () => stopLocalCamera(localParticipant), [localParticipant]);
+  React.useEffect(() => () => camera.release(), [camera]);
 
   // A host's mute arrives as a muted track; remembering it keeps a reconnect from unmuting.
   React.useEffect(() => {
@@ -584,21 +599,6 @@ function useRoomEnding(
       room.off(RoomEvent.Disconnected, onDisconnected);
     };
   }, [room]);
-}
-
-/** Stops this tab's camera device at once, so the camera light goes off and the device is free. */
-function stopLocalCamera(participant: LocalParticipant) {
-  participant.getTrackPublication(Track.Source.Camera)?.track?.stop();
-}
-
-/** Stops and unpublishes this tab's camera. */
-function releaseLocalCamera(participant: LocalParticipant) {
-  const track = participant.getTrackPublication(Track.Source.Camera)?.track;
-  // A camera still publishing has no publication yet, so it is missed here and keeps capturing
-  // until that publish fails after the disconnect.
-  if (!track) return;
-  track.stop();
-  void participant.unpublishTrack(track, true).catch(() => undefined);
 }
 
 const CAMERA_SOURCES = [Track.Source.Camera];
