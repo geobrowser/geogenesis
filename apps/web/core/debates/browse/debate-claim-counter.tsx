@@ -45,19 +45,16 @@ export function DebateClaimCounter({
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
-  onSeeAll,
   onActiveChange,
 }: {
   /** What this debater has claimed so far, oldest first. */
   history: StackedCard[];
-  /** The debater's first name, for the list's header. */
+  /** Fallback name for a claim card whose speaker is unavailable. */
   name: string;
   speaker?: DebateParticipant | null;
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean | null) => void;
-  /** Opens the debate's Claims panel. Without it, the list has no "See all". */
-  onSeeAll?: () => void;
   /** Whether the list is open or a keyboard is inside it, so the player keeps the corner visible. */
   onActiveChange?: (active: boolean) => void;
 }) {
@@ -146,7 +143,7 @@ export function DebateClaimCounter({
       onPointerCancel={() => {
         pressing.current = false;
       }}
-      // Keyboard focus anywhere inside (the counter, a vote, See all) holds the list open, so the
+      // Keyboard focus anywhere inside (the counter or a vote) holds the list open, so the
       // control a keyboard user is on is never unmounted under them. It lets go when focus leaves.
       onFocus={() => {
         if (!pressing.current) setKeyboardInside(true);
@@ -167,7 +164,6 @@ export function DebateClaimCounter({
           rowsByClaimId={rowsByClaimId}
           entitiesByClaimId={entitiesByClaimId}
           onAnswered={onAnswered}
-          onSeeAll={onSeeAll}
         />
       )}
       <span className="relative inline-flex">
@@ -216,7 +212,6 @@ function ClaimList({
   rowsByClaimId,
   entitiesByClaimId,
   onAnswered,
-  onSeeAll,
 }: {
   history: StackedCard[];
   name: string;
@@ -224,7 +219,6 @@ function ClaimList({
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
   onAnswered: (claimId: string, position: boolean | null) => void;
-  onSeeAll?: () => void;
 }) {
   // Newest first in the document, laid out bottom-up: the newest sits nearest the counter, and a
   // list taller than its cap opens scrolled to it, older claims above.
@@ -238,27 +232,7 @@ function ClaimList({
   React.useLayoutEffect(paint);
 
   return (
-    <div data-claim-list className="grid w-[76cqw] gap-[1.2cqw]">
-      <div
-        className="flex items-baseline justify-between gap-[2cqw] px-[0.4cqw] text-[2.8cqw] leading-none font-medium text-white [text-shadow:0_1px_3px_rgba(0,0,0,0.6)]"
-        style={PLAYER_LABEL_FONT}
-      >
-        <span className="truncate">
-          {name}’s claims · {history.length}
-        </span>
-        {onSeeAll && (
-          <button
-            type="button"
-            onClick={event => {
-              event.stopPropagation();
-              onSeeAll();
-            }}
-            className="shrink-0 text-white/85 underline underline-offset-[0.3em] hover:text-white"
-          >
-            See all
-          </button>
-        )}
-      </div>
+    <div data-claim-list className="w-[76cqw]">
       {/* Never more than about two and a half cards tall: older claims scroll, fading at the top,
           and the list stays clear of the round tag and timer at the tile's top. */}
       <div

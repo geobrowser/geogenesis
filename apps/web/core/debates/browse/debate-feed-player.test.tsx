@@ -1944,7 +1944,11 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     ...overrides,
   });
   // Picks are placed on the player's clock from the debate's start.
-  const startedDebate = { ...debate, started_at: '2026-10-13T19:00:00.000Z' } as unknown as Debate;
+  const startedDebate = {
+    ...debate,
+    open_rounds: { required_rebuttal_rounds: 1 },
+    started_at: '2026-10-13T19:00:00.000Z',
+  } as unknown as Debate;
   const renderAt = (
     playheadSeconds: number,
     overrides: Parameters<typeof controllerFixture>[0] extends infer T ? Partial<T> : never
@@ -1956,9 +1960,8 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
   const stamps = (container: HTMLElement) =>
     [...container.querySelectorAll('[data-debate-stamp]')].map(stamp => stamp.getAttribute('data-debate-stamp'));
 
-  // The banner crosses the seam, so the top tile's name steps out from under it and comes back
-  // after the cut; the bottom tile's, half a player away, stays.
-  it('hides the top debater’s name while the banner is up, and only then', () => {
+  // Both identity rows leave with the caption and claim corners, then return after the cut.
+  it('hides both debaters’ names throughout the break, in sync with the caption', () => {
     const playbackBreaks = breaks({
       breaks: [extendBreak],
       picks: [pick(0, 1, 'extend', '2026-10-13T19:01:01.000Z'), pick(0, 2, 'extend', '2026-10-13T19:01:03.000Z')],
@@ -1967,12 +1970,12 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       ([...container.querySelectorAll('[data-debater-row]')] as HTMLElement[]).map(row => row.style.opacity);
 
     const { container, rerender } = renderAt(61.5, { playbackBreaks });
-    expect(rows(container)).toEqual(['1', '1']);
+    expect(rows(container)).toEqual(['0', '0']);
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 62.2, playbackBreaks });
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
     expect(container.querySelector('[data-debate-banner]')).not.toBeNull();
-    expect(rows(container)).toEqual(['0', '1']);
+    expect(rows(container)).toEqual(['0', '0']);
 
     mocks.controller = controllerFixture({ mutedByUser: false, turnSlot: 2, playheadSeconds: 72.5, playbackBreaks });
     rerender(<DebateFeedPlayer debate={startedDebate} active />);
@@ -2062,7 +2065,9 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(root.style.getPropertyValue('--break-t')).toBe('1200');
     const second = container.querySelectorAll('[data-debate-stamp]')[1] as HTMLElement;
     expect(second.style.animationPlayState).toBe('paused');
-    expect(second.style.animationDelay).toContain('1380ms');
+    expect(second.style.animationDelay).toContain('1100ms');
+    const first = container.querySelector('[data-debate-stamp]') as HTMLElement;
+    expect(first.style.animationDelay).toBe(second.style.animationDelay);
   });
 
   /** Gives the recording a position on the debate's clock: running on with the fake clock from `fromS`, or held. */
@@ -2339,12 +2344,101 @@ describe('turnTimerScale', () => {
   });
 });
 
-describe('Open rounds in-app player: the last word (GEO-3277)', () => {
+describe('Open rounds in-app player: announcement visibility', () => {
   const openRounds = { ...debate, open_rounds: { required_rebuttal_rounds: 1 } } as unknown as Debate;
+
+  it('hides and restores covered furniture together through every round, a pause, and the final wrap', () => {
+    const subtitle = 'The current subtitle';
+    const at = (playheadSeconds: number, playing = true, finalWrap = false) =>
+      controllerFixture({
+        mutedByUser: false,
+        turnSlot: 1,
+        playheadSeconds,
+        playing,
+        subtitle,
+        playbackBreaks: {
+          breaks: finalWrap
+            ? [
+                {
+                  kind: 'final_end',
+                  roundIndex: 1,
+                  nextRoundIndex: null,
+                  decidingStartMs: 60_000,
+                  startMs: 64_000,
+                  endMs: 72_000,
+                },
+              ]
+            : [],
+          earlyEnds: [],
+          picks: [],
+        },
+      });
+    mocks.controller = at(12);
+    const { container, rerender, queryByText } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const top = container.querySelector('[data-debate-slot="1"]') as HTMLElement;
+    const row = top.querySelector('[data-debater-row]') as HTMLElement;
+    const furniture = [...container.querySelectorAll<HTMLElement>('[data-debater-row], [data-claim-corner]')];
+    expect(furniture).toHaveLength(4);
+    fireEvent.focus(row.querySelector('button') as HTMLElement);
+    fireEvent.click(top.querySelector('[data-testid="claim-counter"]') as HTMLElement);
+
+    for (const [seconds, playing, wrap] of [
+      [0.1, true, false],
+      [0.5, false, false],
+      [1.7, true, false],
+      [60.1, true, false],
+      [62.2, true, true],
+      [63, false, true],
+    ] as const) {
+      mocks.controller = at(seconds, playing, wrap);
+      rerender(<DebateFeedPlayer debate={openRounds} active />);
+      expect(container.querySelector(wrap ? '[data-debate-banner="wrap"]' : '[data-round-banner]')).not.toBeNull();
+      for (const element of furniture) {
+        expect(element.style.opacity).toBe('0');
+        expect(element.style.visibility).toBe('hidden');
+        expect(element.hasAttribute('inert')).toBe(true);
+        expect(element.className).not.toContain('transition-[padding-bottom,opacity]');
+      }
+      expect(queryByText(subtitle)).toBeNull();
+      expect(container.querySelector('[data-turn-timer]')).toBeNull();
+      expect(container.querySelector('[data-round-badge]')).toBeNull();
+    }
+
+    mocks.controller = at(12);
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    for (const element of furniture) {
+      expect(element.style.opacity).toBe('1');
+      expect(element.style.visibility).toBe('');
+      expect(element.hasAttribute('inert')).toBe(false);
+    }
+    expect(queryByText(subtitle)).not.toBeNull();
+    expect(container.querySelector('[data-turn-timer]')).not.toBeNull();
+    expect(container.querySelector('[data-round-badge]')).not.toBeNull();
+  });
+
+  it('puts play and pause feedback above the popup without dismissing a paused announcement', () => {
+    const controller = controllerFixture({ mutedByUser: false, turnSlot: 1, playheadSeconds: 0.5 });
+    mocks.controller = controller;
+    const { container, rerender } = render(<DebateFeedPlayer debate={openRounds} active />);
+    const video = container.querySelector('[aria-label="Pause or play"]') as HTMLElement;
+    fireEvent.click(video);
+    expect(controller.togglePlayback).toHaveBeenCalledOnce();
+    const feedback = container.querySelector('[data-playback-feedback]') as HTMLElement;
+    expect(feedback.className).toContain('z-30');
+    expect(feedback.className).toContain('opacity-100');
+
+    mocks.controller = { ...controller, playing: false };
+    rerender(<DebateFeedPlayer debate={openRounds} active />);
+    expect(container.querySelector('[data-round-banner]')).not.toBeNull();
+    fireEvent.click(video);
+    expect(controller.togglePlayback).toHaveBeenCalledTimes(2);
+    expect(feedback.className).toContain('z-30');
+    expect(feedback.className).toContain('opacity-100');
+  });
 
   // Copilot, #2843: under a banner the corner faded out but stayed clickable, and an open list faded
   // with it.
-  it('steps the claim corner out from under a banner, and keeps it while its list is open', () => {
+  it('keeps an active claim list hidden while an announcement covers it', () => {
     const extend = {
       kind: 'extend' as const,
       roundIndex: 0,
@@ -2365,11 +2459,13 @@ describe('Open rounds in-app player: the last word (GEO-3277)', () => {
     expect(corner().hasAttribute('data-yield')).toBe(true);
 
     act(() => (container.querySelector('[data-debate-slot="1"] [data-testid="claim-counter"]') as HTMLElement).click());
-    expect(corner().style.opacity).toBe('1');
-    expect(corner().hasAttribute('data-yield')).toBe(false);
+    expect(corner().style.opacity).toBe('0');
+    expect(corner().style.visibility).toBe('hidden');
+    expect(corner().hasAttribute('inert')).toBe(true);
+    expect(corner().hasAttribute('data-yield')).toBe(true);
   });
 
-  it('tags the last speaker before a pick "Last word", and no one else', () => {
+  it('never shows a Last word label, including before a pick', () => {
     // Round 2's closing turn (index 3) ends at 120 s and an Extend pick follows it.
     const turnSegments: DebateMediaTurnSegment[] = [
       { turn_index: 2, participant_slot: 1, output_start_ms: 60_000, output_end_ms: 90_000, duration_ms: 30_000 },
@@ -2398,14 +2494,9 @@ describe('Open rounds in-app player: the last word (GEO-3277)', () => {
         playbackBreaks,
       });
       const { container } = render(<DebateFeedPlayer debate={openRounds} active />);
-      return [...container.querySelectorAll('[data-last-word]')].map(tag => {
-        expect(tag.closest('button')).toBeNull();
-        expect(tag.className).toContain('rounded-full');
-        expect(tag.className).toContain('bottom-full');
-        return tag.closest('[data-debate-slot]')?.getAttribute('data-debate-slot');
-      });
+      return [...container.querySelectorAll('[data-last-word]')];
     };
-    expect(tagAt(100)).toEqual(['2']);
+    expect(tagAt(100)).toEqual([]);
     expect(tagAt(70)).toEqual([]);
   });
 });

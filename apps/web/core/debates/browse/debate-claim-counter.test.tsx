@@ -36,7 +36,7 @@ const said = (id: string, saidMs: number, text = `Claim ${id}`): StackedCard => 
   opacity: 1,
 });
 
-const renderCounter = (history: StackedCard[], onSeeAll?: () => void) =>
+const renderCounter = (history: StackedCard[]) =>
   render(
     <DebateClaimCounter
       history={history}
@@ -55,7 +55,6 @@ const renderCounter = (history: StackedCard[], onSeeAll?: () => void) =>
       rowsByClaimId={new Map()}
       entitiesByClaimId={new Map()}
       onAnswered={() => {}}
-      onSeeAll={onSeeAll}
     />
   );
 
@@ -126,9 +125,8 @@ describe('DebateClaimCounter (GEO-3317)', () => {
     expect(container.querySelector('[data-claim-list]')).toBeNull();
   });
 
-  it('lists the claims newest nearest the counter, names the debater, and offers the Claims panel', () => {
-    const onSeeAll = vi.fn();
-    const { container, getByText } = renderCounter([said('a', 1_000), said('b', 2_000)], onSeeAll);
+  it('lists only the claim cards, newest nearest the counter, without a heading or See all', () => {
+    const { container } = renderCounter([said('a', 1_000), said('b', 2_000)]);
     fireEvent.click(container.querySelector('[data-claim-count]') as HTMLElement);
 
     // Newest first in the document; the list lays out bottom-up, so it sits nearest the counter.
@@ -136,10 +134,8 @@ describe('DebateClaimCounter (GEO-3317)', () => {
       card.getAttribute('data-claim-list-card')
     );
     expect(cards).toEqual(['b', 'a']);
-    expect(container.querySelector('[data-claim-list]')?.textContent).toContain('Preston’s claims · 2');
-
-    fireEvent.click(getByText('See all'));
-    expect(onSeeAll).toHaveBeenCalledOnce();
+    expect(container.querySelector('[data-claim-list]')?.textContent).not.toContain('Preston’s claims');
+    expect(container.querySelector('[data-claim-list]')?.textContent).not.toContain('See all');
   });
 
   it('shows the share who agree only once a claim has votes', () => {

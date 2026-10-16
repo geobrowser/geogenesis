@@ -10,7 +10,6 @@ import { openRoundWrapNote } from '~/core/debates/open-round-reveal';
 import {
   BREAK_QUESTION_MS,
   BREAK_SETTLE_MS,
-  BREAK_STAMP_GAP_MS,
   type BreakCue,
   type BreakCut,
   type EarlyEndCue,
@@ -246,7 +245,7 @@ export function DebateBreakOverlay({
 
       {picks &&
         (wrap || cue.elapsedMs < bannerAtMs) &&
-        SLOTS.map((slot, order) => {
+        SLOTS.map(slot => {
           const key = picks[slot] ?? 'none';
           return (
             <div key={slot} className={cx(TILE_CLASS[slot], 'grid place-items-center')}>
@@ -256,7 +255,7 @@ export function DebateBreakOverlay({
                 style={
                   {
                     ...PLAYER_PICK_STYLE,
-                    ...heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS + order * BREAK_STAMP_GAP_MS),
+                    ...heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS),
                   } as React.CSSProperties
                 }
               >
