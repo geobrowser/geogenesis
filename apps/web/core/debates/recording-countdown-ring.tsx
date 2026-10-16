@@ -17,10 +17,9 @@ export const COUNTDOWN_WARNING_COLOR = '#FF4A26';
 type RecordingCountdownVariant = 'default' | 'warning' | 'muted';
 
 /**
- * How large the turn timer is drawn in a turn's last ten seconds (GEO-3316): a step bigger with
- * each second's pulse from 10 s, reaching 1.3x as 5 s arrives, then held there. 1 the rest of the
- * time. The room's timer and the published player's share it: the player in every format since
- * GEO-3353, the room for Open rounds only.
+ * How large the turn timer is drawn in an Open rounds debate's last ten seconds of a turn (GEO-3316):
+ * a step bigger with each second's pulse from 10 s, reaching 1.3x as 5 s arrives, then held there.
+ * 1 the rest of the time. The room's timer and the published player's share it.
  */
 export function turnTimerScale(seconds: number) {
   if (seconds > 10) return 1;
@@ -29,8 +28,8 @@ export function turnTimerScale(seconds: number) {
 }
 
 /**
- * Where a turn timer is in its last ten seconds, shared by the room's timer (Open rounds) and the
- * published player's (every format): `building` from 10 s, growing a step with each pulse; `final` from 5 s, red at
+ * Where an Open rounds turn timer is in its last ten seconds, shared by the room's timer and the
+ * published player's: `building` from 10 s, growing a step with each pulse; `final` from 5 s, red at
  * its full size. `swell` is the once-a-second pulse's peak, relative to `scale`: the mockup's swell is
  * absolute, 0.08 of the timer's size while it grows and 0.05 once red.
  */

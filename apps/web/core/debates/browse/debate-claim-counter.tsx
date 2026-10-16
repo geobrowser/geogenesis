@@ -6,7 +6,7 @@ import cx from 'classnames';
 
 import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
 import type { DebateClaim } from '~/core/debates/api';
-import type { ClaimHistoryEntry } from '~/core/debates/claim-ticker';
+import type { StackedCard } from '~/core/debates/claim-ticker';
 import { CLAIM_RESPONSE_COPY } from '~/core/responses/entity-response';
 import type { Entity } from '~/core/types';
 
@@ -25,8 +25,8 @@ const OPEN_AFTER_MS = 150;
 const CLOSE_AFTER_MS = 250;
 
 /**
- * One debater's claims in the published player (GEO-3317, every format since GEO-3353): a count
- * rather than each claim's text over the video.
+ * One debater's claims in an Open rounds debate (GEO-3317): a count rather than each claim's text
+ * over the video.
  *
  * - The counter sits in the tile's bottom-right corner from the start, at 0.
  * - When a claim is said it goes up by one, and a "+1 claim" rises out of it and fades.
@@ -51,7 +51,7 @@ export function DebateClaimCounter({
   onActiveChange,
 }: {
   /** What this debater has claimed so far, oldest first. */
-  history: ClaimHistoryEntry[];
+  history: StackedCard[];
   playheadMs: number;
   /** The debater's first name, for the list's header. */
   name: string;
@@ -255,7 +255,7 @@ function ClaimList({
   onAnswered,
   onSeeAll,
 }: {
-  history: ClaimHistoryEntry[];
+  history: StackedCard[];
   name: string;
   freshClaimId: string | null;
   freshness: number;
@@ -349,7 +349,7 @@ function paintTopFade(list: HTMLElement, fades: boolean) {
 }
 
 function ClaimListCard(props: {
-  card: ClaimHistoryEntry;
+  card: StackedCard;
   freshness: number;
   row: DebateClaim | null;
   entity: Entity | null;
@@ -377,7 +377,7 @@ function ClaimListCardBody({
   onAnswered,
   spaceId,
 }: {
-  card: ClaimHistoryEntry;
+  card: StackedCard;
   freshness: number;
   row: DebateClaim | null;
   entity: Entity | null;
@@ -387,7 +387,7 @@ function ClaimListCardBody({
   const claim = card.window.claim;
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId: claim.id, spaceId, row, entity });
   const position = control.viewerPosition;
-  // The session's answers feed the end-of-debate scorecard.
+  // The session's answers feed the end-of-debate scorecard, as the live card's always have.
   React.useEffect(() => {
     onAnswered(claim.id, position);
   }, [claim.id, onAnswered, position]);
@@ -410,7 +410,7 @@ function ClaimListCardBody({
   };
 
   return (
-    // The surface's measurement root, as the end card's claim card's is: with `asChild`, `ActionSurface` only
+    // The surface's measurement root, as the live card's is: with `asChild`, `ActionSurface` only
     // measures (and so reports an impression) through an `ActionSurfaceDiv` beneath it.
     <ActionSurfaceDiv
       data-claim-list-card={claim.id}

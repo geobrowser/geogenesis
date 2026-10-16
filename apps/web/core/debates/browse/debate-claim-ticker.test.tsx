@@ -1,5 +1,6 @@
 import '@testing-library/jest-dom/vitest';
 import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -10,6 +11,7 @@ import type { TimedClaim } from '~/core/debates/claim-timing';
 import {
   ClaimScrubberMarkers,
   DebateClaimTickerCard,
+  DebateClaimTickerStack,
   markerHitWidth,
   useDebateClaimTicker,
 } from './debate-claim-ticker';
@@ -201,6 +203,14 @@ describe('DebateClaimTickerCard', () => {
     expect(screen.getByText('Peter Feldip')).toBeInTheDocument();
   });
 
+  it('fades with its window rather than holding at full strength', () => {
+    const { container } = renderCard({ opacity: 0.4 });
+
+    expect(container.firstElementChild).toHaveStyle({ opacity: '0.4' });
+  });
+
+  // The card above the newest one dissolves into the video; the newest sits at full strength. In
+  // Figma that is one gradient over the whole stack, reproduced per-card — see `OLDER_CARD_FADE`.
   it('shows the crowd split before the viewer has answered, per the design', () => {
     mocks.percent = 65;
 
@@ -362,6 +372,597 @@ describe('the claim text', () => {
   });
 });
 
+describe('DebateClaimTickerStack', () => {
+  const resting = [{ window: window(), opacity: 1 }];
+  const history = [
+    { window: window({ id: 'older', text: 'Congress has ceded its war powers over decades' }), opacity: 1 },
+    { window: window(), opacity: 1 },
+  ];
+
+  function renderStack(props: Partial<React.ComponentProps<typeof DebateClaimTickerStack>> = {}) {
+    return render(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={history}
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+        {...props}
+      />
+    );
+  }
+
+  it('shows only the live cards while closed, not the whole backlog', () => {
+    renderStack();
+
+    expect(screen.queryByText(/Congress has ceded/)).not.toBeInTheDocument();
+  });
+
+  // The point of the corner is that the backlog is one movement away — no pause, no panel.
+  it('shows everything said so far when opened', () => {
+    renderStack({ open: true });
+
+    expect(screen.getByText(/Congress has ceded/)).toBeInTheDocument();
+  });
+
+  // Opening is the player's call, not the stack's: a card is on screen for a few seconds at a
+  // time, so a hover target made of the cards would usually not be there to hover.
+  it('still draws the backlog when no card is live', () => {
+    renderStack({ cards: [], open: true });
+
+    expect(screen.getByText(/Congress has ceded/)).toBeInTheDocument();
+  });
+
+  // A caller that gives it no way to be pressed is hover-only, and an empty corner is correct there.
+  it('draws nothing at all when closed, nothing live, and there is no chip to press', () => {
+    const { container } = renderStack({ cards: [] });
+
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  // The way in where there is no hover. Whether it is *drawn* is a media query — `no-hover:flex`,
+  // which jsdom does not evaluate — so what is checked here is that it exists and counts correctly.
+  it('rests on a chip naming how many claims are behind the playhead', () => {
+    renderStack({ cards: [], onTogglePinned: vi.fn() });
+
+    expect(screen.getByRole('button', { name: 'Show the 2 claims said so far' })).toHaveTextContent('2 claims');
+  });
+
+  it('presses through to the caller, which owns whether the corner is open', () => {
+    const onTogglePinned = vi.fn();
+    renderStack({ cards: [], onTogglePinned });
+
+    fireEvent.click(screen.getByRole('button', { name: /Show the 2 claims/ }));
+
+    expect(onTogglePinned).toHaveBeenCalledOnce();
+  });
+
+  // A pointer closes the corner by leaving the tile. A tap has nowhere to go, so the way in has to
+  // double as the way out — and only in that case, or a mouse user gets a control they never need.
+  it('offers a way back out only when the chip is what opened it', () => {
+    renderStack({ open: true, pinned: true, onTogglePinned: vi.fn() });
+    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
+
+    cleanup();
+    renderStack({ open: true, onTogglePinned: vi.fn() });
+    expect(screen.queryByRole('button', { name: /Hide the claims/ })).not.toBeInTheDocument();
+  });
+
+  /**
+   * The chip sits under the card in the column, so one that stayed up while a claim was live held
+   * the card 43px higher than it needed to be — the difference, on a phone tile, between a card
+   * under the speaker's chin and a card across their face. It has nothing to announce in that
+   * moment either: the claim it would point at is already on screen.
+   */
+  it('gives way to a live claim so the card can sit at the bottom', () => {
+    renderStack({ onTogglePinned: vi.fn() });
+
+    expect(screen.getByText(/Supreme Court/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /claims said so far/ })).not.toBeInTheDocument();
+  });
+
+  // Still the way back out of an opened backlog, live card or not.
+  it('keeps the chip while the backlog is open', () => {
+    renderStack({ open: true, pinned: true, onTogglePinned: vi.fn() });
+
+    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
+  });
+
+  /**
+   * The open list dissolves into the tile's edge rather than being cut off square, and it may not
+   * do that with a mask on the box.
+   *
+   * A `mask-image` makes its element a Backdrop Root, which leaves `backdrop-filter` on anything
+   * inside with nothing to sample — masking this box flattened the glass on every card in the list
+   * until it was scrolled back to the very top, where the mask came off again. The ramp goes on the
+   * cards, whose own masks do not blind their own backdrop-filter.
+   */
+  it('dissolves its top edge without masking the box the glass cards sit in', () => {
+    const { container } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+
+    expect(list.style.maskImage).toBe('');
+    expect(list.style.webkitMaskImage).toBe('');
+  });
+
+  /**
+   * The ramp's two stops, in px.
+   *
+   * Read off `--claim-ramp` rather than `mask-image`: the ramp is written to a custom property so
+   * the card's stylesheet can refuse it on a device with no pointer, where the fade is in the way.
+   */
+  const ramp = (card: HTMLElement) => card.style.getPropertyValue('--claim-ramp');
+  const rampStops = (card: HTMLElement) => [...ramp(card).matchAll(/(-?[\d.]+)px/g)].map(m => Number(m[1]));
+
+  /** Three deep, so the ramp has a card above it, one across it, and one below its reach. */
+  const deepHistory = [
+    { window: window({ id: 'oldest', text: 'Congress has ceded its war powers over decades' }), opacity: 1 },
+    { window: window({ id: 'older', text: 'The court has expanded executive deference' }), opacity: 1 },
+    { window: window(), opacity: 1 },
+  ];
+
+  /** jsdom lays nothing out, so the list's geometry is stated outright. */
+  function layOut(list: HTMLElement) {
+    // Only real card boxes have geometry; display:contents wrappers keep jsdom's zeros.
+    const cards = [...list.querySelectorAll<HTMLElement>('[class*="backdrop-blur-"]')];
+    cards.forEach((card, index) => {
+      Object.defineProperty(card, 'offsetTop', { configurable: true, value: index * 100 });
+      Object.defineProperty(card, 'offsetHeight', { configurable: true, value: 90 });
+    });
+    return cards;
+  }
+
+  const listOf = (container: HTMLElement) => container.firstElementChild!.firstElementChild as HTMLElement;
+
+  /**
+   * One ramp for the whole list, anchored to its top edge — the construction the Figma frame uses,
+   * where a single 209×168 mask is positioned per card rather than each card getting its own.
+   *
+   * The stops are the frame's: clear for 4.65px, fully opaque at 71.5px.
+   */
+  it('anchors one ramp to the top of the list rather than to each card', () => {
+    const { container } = renderStack({ open: true, history: deepHistory });
+    const list = listOf(container);
+    const cards = layOut(list);
+
+    fireEvent.scroll(list, { target: { scrollTop: 100 } });
+
+    // The second card's top is exactly at the edge, so it carries the ramp from its own origin.
+    expect(rampStops(cards[1])).toEqual([4.65, 71.5]);
+    // The first has travelled wholly above the edge, where the list's overflow already hides it.
+    expect(ramp(cards[0])).toBe('none');
+    // The third starts below the ramp's reach and is drawn whole.
+    expect(ramp(cards[2])).toBe('none');
+  });
+
+  // The ramp stays with the edge while the cards move under it.
+  it('shifts the ramp as the list scrolls under it', () => {
+    const { container } = renderStack({ open: true, history: deepHistory });
+    const list = listOf(container);
+    const cards = layOut(list);
+
+    fireEvent.scroll(list, { target: { scrollTop: 150 } });
+
+    // Same card, now 50px above the edge: the whole ramp slides down it by that much.
+    expect(rampStops(cards[1])).toEqual([54.65, 121.5]);
+  });
+
+  /**
+   * Preston, from the preview: "if you scroll all the way to the top we should take off the blur
+   * mask". The ramp is there to say there is more above — at the top there is not, and dissolving
+   * the oldest claim is the one moment it works against the reader who scrolled back to find it.
+   */
+  it('takes the ramp off once the list is scrolled to the very top', () => {
+    const { container } = renderStack({ open: true, history: deepHistory });
+    const list = listOf(container);
+    const cards = layOut(list);
+
+    fireEvent.scroll(list, { target: { scrollTop: 100 } });
+    expect(ramp(cards[1])).not.toBe('none');
+
+    fireEvent.scroll(list, { target: { scrollTop: 0 } });
+
+    for (const card of cards) expect(ramp(card)).toBe('none');
+  });
+
+  // The ramp is written to the nodes, and the newest card survives the close.
+  it('takes the ramp off again when the corner closes', () => {
+    const { container, rerender } = renderStack({ open: true, history: deepHistory });
+    const list = listOf(container);
+    const cards = layOut(list);
+
+    fireEvent.scroll(list, { target: { scrollTop: 100 } });
+    expect(ramp(cards[1])).not.toBe('none');
+
+    rerender(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={history}
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+      />
+    );
+
+    for (const card of [...list.children] as HTMLElement[]) expect(ramp(card)).toBe('none');
+  });
+
+  // The gaps between cards are holes in the list, and the video behind is one big play/pause
+  // button. A thumb aiming at a card and missing by a few px should not stop the debate.
+  it('does not toggle playback when a gap between cards is clicked', () => {
+    const onToggle = vi.fn();
+    const { container } = render(
+      <div onClick={onToggle}>
+        <DebateClaimTickerStack
+          cards={resting}
+          history={history}
+          open
+          participantByClaimId={new Map([['claim-1', SPEAKER]])}
+          rowsByClaimId={new Map()}
+          entitiesByClaimId={new Map()}
+          onAnswered={vi.fn()}
+        />
+      </div>
+    );
+
+    // The scrolling list itself — the element the cards sit in, and the only part of the corner
+    // that takes pointer events across the gaps between them.
+    fireEvent.click(container.firstElementChild!.firstElementChild!.firstElementChild!);
+
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  /**
+   * A reader who has scrolled back is reading. The debate keeps talking while they do, and the list
+   * used to jump to the newest claim every time one arrived — which took the sentence they were
+   * halfway through off the screen and read as the list closing and starting over.
+   */
+  it('leaves a reader where they are when a new claim arrives', () => {
+    const { container, rerender } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+
+    // jsdom lays nothing out, so the scroll geometry is stated outright: a list twice its own
+    // height, scrolled to the top of it.
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 400 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+    fireEvent.scroll(list, { target: { scrollTop: 0 } });
+
+    rerender(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={[...history, { window: window({ id: 'newest', text: 'And one more thing' }), opacity: 1 }]}
+        open
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+      />
+    );
+
+    expect(list.scrollTop).toBe(0);
+    // Still added, and at the bottom — it is only the view that stays put.
+    expect(screen.getByText(/And one more thing/)).toBeInTheDocument();
+  });
+
+  it('observes the real card box and follows its growth only while pinned to the bottom', () => {
+    const observers: { elements: Set<Element>; callback: ResizeObserverCallback }[] = [];
+    vi.stubGlobal(
+      'ResizeObserver',
+      class {
+        elements = new Set<Element>();
+        constructor(callback: ResizeObserverCallback) {
+          observers.push({ elements: this.elements, callback });
+        }
+        observe = (element: Element) => this.elements.add(element);
+        unobserve = (element: Element) => this.elements.delete(element);
+        disconnect = () => this.elements.clear();
+      }
+    );
+    try {
+      const { container } = renderStack({ open: true });
+      const list = listOf(container);
+      const card = list.querySelector<HTMLElement>('[class*="backdrop-blur-"]')!;
+      let height = 400;
+      Object.defineProperty(list, 'scrollHeight', { configurable: true, get: () => height });
+      Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+      fireEvent.scroll(list, { target: { scrollTop: 200 } });
+      const resize = () =>
+        act(() => {
+          for (const observer of observers)
+            if (observer.elements.has(card))
+              observer.callback([{ target: card } as unknown as ResizeObserverEntry], {} as ResizeObserver);
+        });
+      height = 500;
+      resize();
+      expect(list.scrollTop).toBe(500);
+      expect(card.parentElement).toBe(list);
+      fireEvent.scroll(list, { target: { scrollTop: 50 } });
+      height = 600;
+      resize();
+      expect(list.scrollTop).toBe(50);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  // The other half of the same bargain: someone watching the newest claim keeps watching it.
+  it('follows the newest claim for a reader already at the bottom', () => {
+    const { container, rerender } = renderStack({ open: true });
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+
+    Object.defineProperty(list, 'scrollHeight', { configurable: true, value: 400 });
+    Object.defineProperty(list, 'clientHeight', { configurable: true, value: 200 });
+    fireEvent.scroll(list, { target: { scrollTop: 200 } });
+
+    rerender(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={[...history, { window: window({ id: 'newest', text: 'And one more thing' }), opacity: 1 }]}
+        open
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+      />
+    );
+
+    expect(list.scrollTop).toBe(400);
+  });
+
+  // Hover is not available to a keyboard, and the backlog is content rather than decoration, so
+  // focus reaching the stack has to open it the way the pointer does.
+  it('reports focus entering and leaving so the player can open it', async () => {
+    const onFocusChange = vi.fn();
+    const { container } = renderStack({ onFocusChange });
+
+    // A keyboard reaches this stack by landing on the first control inside a card, and React's
+    // onFocus bubbles from there to the list. Which control that is belongs to the card's own
+    // layout, so this asserts only that focus arrived somewhere inside.
+    await userEvent.tab();
+    const focused = document.activeElement as HTMLElement;
+    expect(container.firstElementChild?.contains(focused)).toBe(true);
+    expect(onFocusChange).toHaveBeenLastCalledWith(true);
+
+    fireEvent.blur(focused);
+    expect(onFocusChange).toHaveBeenLastCalledWith(false);
+  });
+
+  /**
+   * The premise behind the player clearing this itself: a stack that is removed reports nothing.
+   *
+   * Browsers fire no `blur` or `focusout` for a focused element taken out of the document, and this
+   * handler is the only thing that ever says focus left. So the stack going away with a keyboard
+   * inside it — the debate ending, or the tile scrolling out of the preload window — leaves the
+   * player's `focusedSlot` latched on a stack that no longer exists. Asserting the *absence* here
+   * is what makes the cleanup in `debate-feed-player.tsx` necessary rather than belt-and-braces.
+   */
+  it('reports nothing when it is removed with focus still inside it', async () => {
+    const onFocusChange = vi.fn();
+    const { unmount } = renderStack({ onFocusChange });
+
+    await userEvent.tab();
+    expect(onFocusChange).toHaveBeenLastCalledWith(true);
+
+    unmount();
+
+    expect(onFocusChange).not.toHaveBeenCalledWith(false);
+  });
+
+  /**
+   * A click inside a live card is not a request for the backlog.
+   *
+   * The player opens the backlog on focus, and draws it narrower than a live card. Any focus
+   * counting meant clicking the expand toggle on a clamped claim swapped the card for the list
+   * mid-read, and re-laid the claim out at the list's width — so the reader asked for the rest of
+   * the sentence in front of them and got it in a different column.
+   */
+  it('does not report focus when a click lands inside it', async () => {
+    forceClampedOverflow();
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange });
+
+    await userEvent.click(screen.getByTitle('Show the whole claim'));
+
+    expect(screen.getByTitle('Show less')).toHaveAttribute('aria-expanded', 'true');
+    expect(onFocusChange).not.toHaveBeenCalledWith(true);
+  });
+
+  /**
+   * The chip is a sibling of the scroll box, so a boundary drawn around the box alone reported
+   * focus *gone* the moment a keyboard tabbed from the last card out to the chip. The player then
+   * closed the backlog, `showChip` went false with a live card present, and the chip unmounted
+   * mid-tab — dropping focus to the body, with the one control that reopens the list now missing.
+   */
+  it('keeps reporting focus when a keyboard tabs from a card out to the chip', async () => {
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange, open: true, pinned: true, onTogglePinned: vi.fn() });
+    const user = userEvent.setup();
+
+    // Into the stack, then on until the chip has it. The cards' own controls come first.
+    const chip = screen.getByRole('button', { name: /claims said so far|Hide the claims/i });
+    for (let i = 0; i < 12 && document.activeElement !== chip; i += 1) await user.tab();
+
+    expect(chip).toHaveFocus();
+    expect(onFocusChange).toHaveBeenLastCalledWith(true);
+    expect(onFocusChange).not.toHaveBeenCalledWith(false);
+  });
+
+  // Same for the thumbs, which is the other thing a pointer comes to a live card to do.
+  it('does not report focus when a thumb is clicked', async () => {
+    const onFocusChange = vi.fn();
+    renderStack({ onFocusChange });
+
+    await userEvent.click(screen.getByLabelText('Agree'));
+
+    expect(onFocusChange).not.toHaveBeenCalledWith(true);
+  });
+});
+
+/**
+ * One gate decides what the ticker will offer, and all three offers read from it.
+ *
+ * A claim needs a speaker the participant list recognises and a space to answer in before a card
+ * can be drawn for it. The card layer has always enforced that; the scrubber and the chip did not,
+ * so both pointed at claims that could never appear. These assert the three agree.
+ */
+/**
+ * GEO-3114. On a phone the 80px card climbed across the speaker's face, and two clamped lines could
+ * not be read in full. Under `@max-md` — 448px of *player*, a container query, so the compact
+ * gallery on a desktop gets it too — the live card docks to one line and a tap opens the list as a
+ * sheet with every claim printed whole.
+ *
+ * jsdom evaluates no stylesheet, let alone a container query, so what is pinned here is the class
+ * contract: the small-panel layout exists only behind `@max-md:`, every wide-panel class is still
+ * there unchanged beside it, and the behaviour hanging off it (the read-in-full tap) is wired to the
+ * same toggle the chip uses. What it looks like was checked in a browser at 390px and at desktop.
+ */
+describe('the small-panel layout', () => {
+  const resting = [{ window: window(), opacity: 1 }];
+  const history = [
+    { window: window({ id: 'older', text: 'Congress has ceded its war powers over decades' }), opacity: 1 },
+    { window: window(), opacity: 1 },
+  ];
+
+  function renderStack(props: Partial<React.ComponentProps<typeof DebateClaimTickerStack>> = {}) {
+    return render(
+      <DebateClaimTickerStack
+        cards={resting}
+        history={history}
+        participantByClaimId={new Map([['claim-1', SPEAKER]])}
+        rowsByClaimId={new Map()}
+        entitiesByClaimId={new Map()}
+        onAnswered={vi.fn()}
+        {...props}
+      />
+    );
+  }
+
+  const claimText = (pattern: RegExp) => screen.getByText(pattern);
+  const cardOf = (element: HTMLElement) => element.closest('.rounded-lg') as HTMLElement;
+
+  afterEach(() => {
+    // @ts-expect-error — dropping the stubs restores jsdom's own zero-height getters.
+    delete HTMLElement.prototype.scrollHeight;
+    // @ts-expect-error — as above.
+    delete HTMLElement.prototype.clientHeight;
+  });
+
+  it('docks the live card to one line on a small panel, and keeps the wide card beside it', () => {
+    renderStack({ onTogglePinned: vi.fn() });
+
+    const text = claimText(/Supreme Court/);
+    // Wide: the card as it always was.
+    expect(text).toHaveClass('line-clamp-2');
+    expect(cardOf(text)).toHaveClass('flex-col', 'p-3');
+    // Small: one row, one line.
+    expect(text).toHaveClass('@max-md:line-clamp-1');
+    expect(cardOf(text)).toHaveClass('@max-md:flex-row', '@max-md:py-1.5', '@max-md:min-h-9');
+  });
+
+  // The name and the share are a tap away in the sheet; on a 337px line they would leave the claim
+  // a handful of characters. The avatar stays, so the line still says whose claim it is.
+  it('steps the name and the share aside on the line, but keeps them in the DOM for wide panels', () => {
+    mocks.percent = 65;
+    renderStack({ onTogglePinned: vi.fn() });
+
+    expect(screen.getByText('Peter Feldip')).toHaveClass('@max-md:hidden');
+    expect(screen.getByText('65% agree')).toHaveClass('@max-md:hidden');
+    expect(screen.getByTestId('avatar')).toBeInTheDocument();
+  });
+
+  it('opens the sheet from the line through the same toggle the chip uses, without pausing', () => {
+    const onTogglePinned = vi.fn();
+    const onToggle = vi.fn();
+    render(
+      <div onClick={onToggle}>
+        <DebateClaimTickerStack
+          cards={resting}
+          history={history}
+          participantByClaimId={new Map([['claim-1', SPEAKER]])}
+          rowsByClaimId={new Map()}
+          entitiesByClaimId={new Map()}
+          onAnswered={vi.fn()}
+          onTogglePinned={onTogglePinned}
+        />
+      </div>
+    );
+
+    const read = screen.getByRole('button', { name: 'Read the whole claim' });
+    // Drawn only under the container query, which also takes it out of the tab order when wide.
+    expect(read).toHaveClass('hidden', '@max-md:block');
+
+    fireEvent.click(read);
+
+    expect(onTogglePinned).toHaveBeenCalledOnce();
+    expect(onToggle).not.toHaveBeenCalled();
+  });
+
+  // Hover-only callers have no sheet to open, and a tap that goes nowhere is worse than none.
+  it('offers no read-in-full tap where there is no toggle to open the list with', () => {
+    renderStack();
+
+    expect(screen.queryByRole('button', { name: 'Read the whole claim' })).not.toBeInTheDocument();
+  });
+
+  it('prints every claim whole in the opened list, which is allowed the height to show them', () => {
+    const { container } = renderStack({ open: true, pinned: true, onTogglePinned: vi.fn() });
+
+    for (const text of [claimText(/Congress has ceded/), claimText(/Supreme Court/)]) {
+      expect(text).toHaveClass('line-clamp-2', '@max-md:line-clamp-none');
+      // No edge dissolve over a claim the reader opened the sheet to read.
+      expect(cardOf(text)).toHaveClass('@max-md:[mask-image:none]');
+      // A card in the list is a card, not a line.
+      expect(cardOf(text)).not.toHaveClass('@max-md:flex-row');
+    }
+    const list = container.firstElementChild!.firstElementChild as HTMLElement;
+    expect(list).toHaveClass('max-h-[9.75rem]', '@max-md:max-h-none');
+    expect(screen.queryByRole('button', { name: 'Read the whole claim' })).not.toBeInTheDocument();
+    // The way back out.
+    expect(screen.getByRole('button', { name: 'Hide the claims said so far' })).toBeInTheDocument();
+  });
+
+  /**
+   * On the line the tap opens the sheet, so the wide layout's expand-in-place toggle must not also
+   * be reachable there. It wraps the claim, so it cannot be `hidden` without hiding the claim too:
+   * `invisible` takes it out of the tab order and the accessibility tree, and the text sets itself
+   * visible again.
+   */
+  it('keeps the wide expand toggle out of reach on the line without hiding the claim', () => {
+    forceClampedOverflow();
+    renderStack({ onTogglePinned: vi.fn() });
+
+    expect(screen.getByTitle('Show the whole claim')).toHaveClass('@max-md:invisible');
+    expect(claimText(/Supreme Court/)).toHaveClass('@max-md:visible');
+  });
+
+  /**
+   * The wrapper the read-in-full tap needs must not change the wide card. In a plain block box the
+   * expand toggle is an inline-level `<button>` on a line box of its own, and every truncated claim
+   * in the desktop backlog came out 87px rather than 80px. Measured on the preview; jsdom has no
+   * layout, so what is pinned is the flex column that blockifies it.
+   */
+  it('keeps the expand toggle a flex item, so the wide card keeps its height', () => {
+    forceClampedOverflow();
+    renderStack({ open: true, onTogglePinned: vi.fn() });
+
+    for (const toggle of screen.getAllByTitle('Show the whole claim')) {
+      expect(toggle.parentElement).toHaveClass('flex', 'flex-col');
+    }
+  });
+
+  // The end card's carousel draws the same card on white, inside the same `@container`, with its
+  // own small-panel layout. It must not inherit this one.
+  it('leaves the card untouched where no small-panel layout is asked for', () => {
+    forceClampedOverflow();
+    const { container } = renderCard({ tone: 'light' });
+
+    expect(container.innerHTML).not.toContain('@max-md');
+    expect(screen.queryByRole('button', { name: 'Read the whole claim' })).not.toBeInTheDocument();
+  });
+});
+
 describe('useDebateClaimTicker', () => {
   const DEBATE_SPACE = '52c7ae149838b6d47ce0f3b2a5974546';
   const SPEAKER_SPACE = '4582fbbee28a16589154f7e36f1ee3c5';
@@ -397,6 +998,7 @@ describe('useDebateClaimTicker', () => {
 
     expect(ticker.markers).toEqual([]);
     expect(ticker.historyBySlot.size).toBe(0);
+    expect(ticker.cardsBySlot.size).toBe(0);
   });
 
   /**
@@ -441,6 +1043,7 @@ describe('useDebateClaimTicker', () => {
     ).result.current;
 
     expect(ticker.markers).toEqual([]);
+    expect(ticker.cardsBySlot.size).toBe(0);
     expect(ticker.historyBySlot.size).toBe(0);
   });
 

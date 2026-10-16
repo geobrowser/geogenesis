@@ -7,12 +7,14 @@ import cx from 'classnames';
 import { ActionSurface, ActionSurfaceDiv } from '~/core/action-context-provider';
 import type { Debate, DebateClaim, DebateParticipant } from '~/core/debates/api';
 import {
-  type ClaimHistoryEntry,
   type ClaimMarker,
+  type StackedCard,
   type TickerWindow,
   backlogWindows,
   claimHistory,
   claimMarkers,
+  tickerStack,
+  tickerWindows,
 } from '~/core/debates/claim-ticker';
 import { useDebateClaimsBySpaces } from '~/core/debates/hooks';
 import { speakerLabel } from '~/core/debates/playback-utils';
@@ -21,6 +23,7 @@ import { CLAIM_RESPONSE_COPY, type ResponseKind } from '~/core/responses/entity-
 import type { Entity } from '~/core/types';
 
 import { Avatar } from '~/design-system/avatar';
+import { InfoSmall } from '~/design-system/icons/info-small';
 import { ResponsePositionIcon } from '~/design-system/icons/response-position-icon';
 import { Tooltip } from '~/design-system/tooltip';
 
@@ -30,13 +33,20 @@ import { useOpenDebaterProfile } from './use-open-debater-profile';
 
 type DebateTicker = {
   /**
-   * Every claim each debater has said so far, oldest first, keyed by the participant slot that said
-   * them — what their counter counts and opens into.
+   * The cards to draw right now, oldest first, keyed by the participant slot that said them.
+   *
+   * One corner per debater rather than one for the player. A viewer watching a debate is looking at
+   * whoever is talking, so that is where their claims should appear — a single shared corner asks
+   * the eye to leave the speaker to read what the speaker is saying.
+   */
+  cardsBySlot: Map<number, StackedCard[]>;
+  /**
+   * Every claim each debater has said so far, oldest first — what their corner opens into.
    *
    * Bounded by the playhead, so it is a record of what has been said rather than a table of
    * contents for what is coming.
    */
-  historyBySlot: Map<number, ClaimHistoryEntry[]>;
+  historyBySlot: Map<number, StackedCard[]>;
   /** Every precisely-placed claim, for the scrubber. */
   markers: ClaimMarker[];
   /** Which way the viewer answered each claim this session. */
@@ -45,6 +55,8 @@ type DebateTicker = {
   /** Per-claim lookups, hoisted so the card and the end-of-debate stack share one batch. */
   rowsByClaimId: Map<string, DebateClaim>;
   entitiesByClaimId: Map<string, Entity>;
+  /** Claim id → the debater who said it, for the avatar and name the live card wears. */
+  participantByClaimId: Map<string, DebateParticipant>;
 };
 
 /**
@@ -97,7 +109,7 @@ export function useDebateClaimTicker(
    * A claim needs two things before it can be drawn: a speaker the participant list recognises, so
    * the card can attribute it, and a space to answer in — without either, `DebateClaimTickerCard`
    * renders nothing. Applied here rather than at each consumer because the consumers were drifting:
-   * cards dropped these claims, while the scrubber drew a clickable hash for them and the counter
+   * cards dropped these claims, while the scrubber drew a clickable hash for them and the chip
    * counted them, so both promised a card that could never appear. A hash nothing is behind is the
    * same broken promise {@link claimMarkers} already turns low-confidence matches away to avoid.
    *
@@ -108,11 +120,11 @@ export function useDebateClaimTicker(
    * but the feed card and the explore card fetch the same query ungated, so a disabled ticker reads
    * a full claim list out of a warm cache. `groupBySlot` already refused to build cards from it;
    * the markers did not, so an inactive feed card could draw a clickable hash that seeks to a claim
-   * whose counter and list are both deliberately empty. One gate now, not two half-gates.
+   * whose card and backlog are both deliberately empty. One gate now, not two half-gates.
    *
    * **The third rule is about what a viewer can tell apart.** Two claim entities can carry the same
    * text *and* the same published moment, and then everything downstream doubles: two identical
-   * cards in the list, a counter counting them twice, and two markers at one spot where the later
+   * cards in the backlog, a chip counting them twice, and two markers at one spot where the later
    * one covers the earlier so the first is unreachable by pointer. Measured: 11 such claims, all in
    * one debate, whose claims appear to have been published twice; and zero cases of the same text
    * at *different* moments, which is why the key is text **and** moment rather than text alone — a
@@ -124,7 +136,9 @@ export function useDebateClaimTicker(
    */
   const renderableClaims = React.useMemo(() => (enabled ? drawable : []), [enabled, drawable]);
 
-  // Markers assert a moment; the backlog only says "already said" — see `backlogWindows`.
+  // Two lists, because the live layer and the backlog answer different questions — see
+  // `backlogWindows`. Cards and markers assert a moment; the backlog only says "already said".
+  const windows = React.useMemo(() => tickerWindows(renderableClaims), [renderableClaims]);
   const backlog = React.useMemo(() => backlogWindows(renderableClaims), [renderableClaims]);
   const markers = React.useMemo(() => claimMarkers(renderableClaims, timelineMs), [renderableClaims, timelineMs]);
 
@@ -157,7 +171,7 @@ export function useDebateClaimTicker(
     return map;
   }, [rowsQuery.claims]);
 
-  // One list per debater, under their own tile. A claim whose speaker could not be resolved —
+  // One stack per debater, over their own tile. A claim whose speaker could not be resolved —
   // attribution and the participant list can disagree — never reaches here, because
   // `renderableClaims` has already turned it away rather than letting it be parked over whichever
   // half: putting a claim over the wrong face is the misquote this whole layer is careful about,
@@ -182,38 +196,84 @@ export function useDebateClaimTicker(
     [enabled, participantByClaimId]
   );
 
+  const liveBySlot = React.useMemo(() => groupBySlot(windows), [groupBySlot, windows]);
   const backlogBySlot = React.useMemo(() => groupBySlot(backlog), [groupBySlot, backlog]);
 
+  const cardsBySlot = React.useMemo(() => {
+    const cards = new Map<number, StackedCard[]>();
+    for (const [slot, slotWindows] of liveBySlot) cards.set(slot, tickerStack(slotWindows, playheadMs));
+    return cards;
+  }, [liveBySlot, playheadMs]);
+
   const historyBySlot = React.useMemo(() => {
-    const history = new Map<number, ClaimHistoryEntry[]>();
+    const history = new Map<number, StackedCard[]>();
     for (const [slot, slotWindows] of backlogBySlot) history.set(slot, claimHistory(slotWindows, playheadMs));
     return history;
   }, [backlogBySlot, playheadMs]);
 
   return {
+    cardsBySlot,
     historyBySlot,
     markers,
     answers,
     onAnswered,
     rowsByClaimId,
     entitiesByClaimId,
+    participantByClaimId,
   };
 }
 
 /**
- * One claim as a card on a white surface: who said it, how the crowd has answered, the two ways to
- * answer, and the claim. The debate end card's carousel draws these (GEO-3353 retired the dark
- * card that rose over the video; claims there are the counter's now, `DebateClaimCounter`).
+ * The stack's dissolve, taken from the mask the Figma frame actually ships.
  *
- * It never pauses the video or opens anything — the only thing that interrupts playback is the
- * sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a thumb
- * while signed out.
+ * That mask is a 209×168 alpha rect filled with a vertical gradient running `y1=0 → y2=71.5`, with
+ * stops at `0.065` (white, opacity 0) and `1` (white): nothing shows for the first 4.65px, the ramp
+ * climbs from there to fully opaque at 71.5px, and the remaining ~96px of the rect is solid. The
+ * frame positions that one rect per card — `mask-position 0,-71px` on the newest, `0,18px` on the
+ * one above — rather than giving each card a gradient of its own, which is the same thing as
+ * anchoring the ramp to the top of the stack region and letting each card carry its slice.
+ *
+ * Reproduced per card for a second reason as well: a `mask-image` makes its element a Backdrop
+ * Root, so a mask on the scroll box leaves any `backdrop-filter` inside it nothing to sample. An
+ * element's own mask does not blind its own — measured in Chrome, a card over hard stripes reads
+ * 160 contrast unmasked, 178 masked itself, and 249 with the mask on its parent.
+ */
+const HISTORY_EDGE_OPAQUE_PX = 71.5;
+/** The lead-in: the gradient's first stop sits 6.5% down its 71.5px, and nothing shows above it. */
+const HISTORY_EDGE_CLEAR_PX = 4.65;
+
+/** `glass` over the video; `light` on a white surface, as the end card's carousel is. */
+export type ClaimCardTone = 'glass' | 'light';
+
+/**
+ * What a claim card turns into on a small player — under `@max-md`, 448px of *player*, which is a
+ * phone and also the compact gallery on a desktop. Container queries rather than breakpoints for
+ * the same reason the end card uses them: this one component is a feed card, an explore card and
+ * a fullscreen player, and the viewport is the wrong question for two of the three.
+ *
+ * - `line`: the live card, docked to the bottom edge as one line, tap to read in full (GEO-3114).
+ *   The full card is 80px of a ~217px phone tile and climbed across the speaker's face.
+ * - `sheet`: a card in the opened list, with the whole claim printed rather than clamped. The list
+ *   is something the viewer opened on purpose, and on a phone it is the one place to read a claim
+ *   all the way through.
+ */
+export type ClaimCardSmallPanel = 'line' | 'sheet';
+
+/**
+ * The claim card that rises over the video as it is said.
+ *
+ * A translucent dark card in the player's bottom-right corner, stacked upward: the newest arrives
+ * at the bottom and earlier ones ride up and dissolve, which is the shape of a chat rather than a
+ * dialog. It never pauses the video or opens anything — the only thing that interrupts playback is
+ * the sign-in prompt, which is the app's standard prompt and only appears if the viewer presses a
+ * thumb while signed out.
  */
 export function DebateClaimTickerCard(props: Parameters<typeof DebateClaimTickerCardBody>[0]) {
   if (!props.window.claim.spaceId) return null;
   return (
     <ActionSurface
       asChild
+      trackImpression={props.opacity === undefined || props.opacity > 0}
       value={{ component: 'debate_claim_ticker', target_id: props.window.claim.id, target_type: 'claim' }}
     >
       <DebateClaimTickerCardBody {...props} />
@@ -223,29 +283,100 @@ export function DebateClaimTickerCard(props: Parameters<typeof DebateClaimTicker
 
 function DebateClaimTickerCardBody({
   window,
+  opacity = 1,
   speaker = null,
   row,
   entity,
   onAnswered,
+  tone = 'glass',
+  smallPanel,
+  onReadInFull,
 }: {
   window: TickerWindow;
-  /** Who said it. The card names them. */
+  /**
+   * `glass` over the video, as it rises while the claim is said. `light` on a white surface — the
+   * debate end card's carousel — where the dark glass would be white text on near-white.
+   */
+  tone?: ClaimCardTone;
+  /** Driven by the playhead, so a scrub lands on the right strength rather than mid-animation. */
+  opacity?: number;
+  /** Who said it. The card names them, so it no longer has to sit over their tile to attribute. */
   speaker?: DebateParticipant | null;
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
+  /**
+   * How the card redraws itself on a small player (`@max-md`, under 448px of player), and only
+   * there — at any wider panel these add nothing and the card is exactly the card it always was.
+   * See {@link ClaimCardSmallPanel}. Left unset by the end card's carousel, which has its own
+   * small-panel layout and must not inherit this one.
+   */
+  smallPanel?: ClaimCardSmallPanel;
+  /**
+   * Open the full claim, and the list it belongs to. The compact `line` card is one truncated
+   * line, so this is how a reader on a phone gets the rest of it. Only drawn on a small panel.
+   */
+  onReadInFull?: () => void;
 }) {
   const { claim } = window;
 
   if (!claim.spaceId) return null;
+
+  const line = smallPanel === 'line';
 
   return (
     <ActionSurfaceDiv
       // The video behind is one big play/pause button; without this every tap on a thumb would
       // also toggle playback.
       onClick={event => event.stopPropagation()}
-      // 8px radius, 12px padding, 6px between the header and the claim, read off the frame.
-      className="pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg bg-grey-01 p-3"
+      // Left off entirely at full strength, so the open list's edge fade — which writes this
+      // property straight to the node on scroll — is not overwritten on the next render.
+      style={opacity === 1 ? undefined : { opacity }}
+      /**
+       * `rgba(21,21,21,0.3)`, 8px radius, 12px padding, 6px between the header and the claim, over a
+       * 44px backdrop blur.
+       *
+       * Every value but the blur is read straight off the frame. The blur is fitted, because the
+       * Dev Mode export does not carry it — there is no `filter` or `backdrop` anywhere in that
+       * file, and taking the omission at face value is how this card ended up flat.
+       *
+       * What gives it away is the render itself. Down the card's right edge the video outside runs
+       * 176 → 54 as the tile's scrim ramps to black, while inside the card the same column barely
+       * moves, 118 → 98 — and at the bottom the card is *brighter* than the backdrop it covers,
+       * which no amount of dark translucent fill can do. Only a blur can, by averaging in the
+       * brightness above. Rebuilding the tile from the same still and sweeping the radius puts the
+       * best fit at 44px: mean error 5.7/255 against the frame, where no blur at all scores 20.0.
+       *
+       * `shrink-0` so the open list scrolls a full-height card rather than compressing it to fit.
+       *
+       * The ramp arrives as `--claim-ramp`, which {@link paintEdgeFade} only ever sets while the
+       * backlog is open — a live card is never dissolved, on any device.
+       *
+       * It did come off entirely on touch for a while, because an expanded claim could end up half
+       * dissolved with no way to bring it back. Two things since have made that the wrong cure: the
+       * ramp lifts at the top of the list, which is where a reader who has scrolled back is, and
+       * the open list is narrower than the live card on a phone now, so the fade reads as the edge
+       * of a list rather than as damage to the claim you are reading.
+       */
+      className={cx(
+        'pointer-events-auto flex w-full shrink-0 flex-col gap-1.5 rounded-lg p-3',
+        tone === 'glass'
+          ? 'bg-[#151515]/30 [mask-image:var(--claim-ramp,none)] backdrop-blur-[44px] [-webkit-mask-image:var(--claim-ramp,none)]'
+          : 'bg-grey-01',
+        // One row on a small panel: avatar, the claim on a single line, the two thumbs. 36px tall
+        // against the 80px card, so on a ~217px phone tile it sits under the speaker's chin rather
+        // than across their face. The header's own box dissolves (`contents`) so its two halves
+        // can sit either side of the text.
+        //
+        // `min-h-9` because the line sits over the debater's own name row, which is 36px with its
+        // byline. A 29px line left the top of the name and the position chip showing above it,
+        // half-hidden behind the blur; matching the row covers it cleanly, as the full card did.
+        line && '@max-md:min-h-9 @max-md:flex-row @max-md:items-center @max-md:gap-2 @max-md:px-2.5 @max-md:py-1.5',
+        // The opened list on a small panel is a sheet you have asked for in order to read, and the
+        // edge dissolve would eat into the very claim that was tapped to get there — the sheet is
+        // often shorter than the ramp's 71.5px plus a whole unclamped card.
+        smallPanel === 'sheet' && '@max-md:[mask-image:none] @max-md:[-webkit-mask-image:none]'
+      )}
     >
       <TickerClaimHeader
         claimId={claim.id}
@@ -254,29 +385,71 @@ function DebateClaimTickerCardBody({
         row={row}
         entity={entity}
         onAnswered={onAnswered}
+        tone={tone}
+        compactLine={line}
       />
       {/* A flex column, so the text — or the expand toggle wrapping it — stays a blockified flex
-          item. In a plain block box the toggle is an inline-level `<button>`, which sits on a line
-          box of its own and adds the strut's 7px under every truncated claim. */}
-      <div className="relative flex flex-col">
-        <TickerClaimText text={claim.text} />
+          item exactly as it was before this wrapper existed. In a plain block box the toggle is an
+          inline-level `<button>`, which sits on a line box of its own and adds the strut's 7px
+          under every truncated claim in the wide backlog. */}
+      <div className={cx('relative flex flex-col', line && '@max-md:order-2 @max-md:min-w-0 @max-md:flex-1')}>
+        <TickerClaimText text={claim.text} tone={tone} smallPanel={smallPanel} />
+        {line && onReadInFull && (
+          /* The whole line is the target on a small panel, and it does not expand in place: one
+             line growing into four is a card climbing back over the face this layout exists to
+             keep clear. It opens the sheet instead, where the claim is printed in full alongside
+             the rest of what this debater has said, and the chip under it closes it again.
+
+             Drawn over the text rather than wrapping it, so the claim stays one node — the one
+             the wide layout's expand toggle wraps — and is not printed twice. `hidden` above
+             448px, which also takes it out of the tab order there. */
+          <button
+            type="button"
+            aria-label="Read the whole claim"
+            title="Read the whole claim"
+            onClick={event => {
+              event.stopPropagation();
+              onReadInFull();
+            }}
+            className="absolute inset-0 hidden cursor-pointer @max-md:block"
+          />
+        )}
       </div>
     </ActionSurfaceDiv>
   );
 }
 
-/** Two lines of a claim, then the expand toggle: the card stays one height across the carousel. */
+/**
+ * Two lines of a claim before the card starts covering the face saying it.
+ *
+ * Three was the frame's, and the arithmetic changed when the card got wider. Measured over all 854
+ * published claims: three lines at 260px shows 66% of them whole, two lines at 360px shows 62% —
+ * near enough the same reading, in a card 17px shorter. Height is the expensive dimension here,
+ * because the speaker's face is in the middle of the tile and the card grows up towards it, while
+ * width runs along the bottom where there is far less to cover.
+ */
 const TICKER_CLAMP_LINES = 2;
 
 /**
- * The claim itself, clamped to {@link TICKER_CLAMP_LINES} lines, and expandable in place when there
- * is more. The alternative is "go and find it in the panel", which means leaving the end card to
- * read a sentence that is on screen — so the text opens where it is, and closes again the same way.
+ * The claim itself, clamped to three lines, and expandable in place when there is more.
+ *
+ * A claim runs to a sentence or two and three lines of a 209px card is often not all of it. The
+ * alternative to expanding here is "go and find it in the panel", which means leaving the debate
+ * to read a sentence that is on screen — so the text opens where it is, and closes again the same
+ * way.
  *
  * Only interactive when it is actually truncated. A button that visibly does nothing is worse than
  * no button, and most short claims fit.
  */
-function TickerClaimText({ text }: { text: string }) {
+function TickerClaimText({
+  text,
+  tone,
+  smallPanel,
+}: {
+  text: string;
+  tone: ClaimCardTone;
+  smallPanel?: ClaimCardSmallPanel;
+}) {
   // In state rather than a ref: wrapping the text in a button below remounts this node, and the
   // measurement has to follow it. See `useLineClampOverflow`.
   const [textElement, setTextElement] = React.useState<HTMLSpanElement | null>(null);
@@ -298,8 +471,17 @@ function TickerClaimText({ text }: { text: string }) {
       // clamp off, so the card grows to fit the whole claim and nothing ever reports as truncated.
       // The clamp already blockifies the box; only the expanded state needs `block` of its own.
       className={cx(
-        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px] text-text',
-        expanded ? 'block' : 'line-clamp-2'
+        'text-[1rem] leading-[1.0625rem] tracking-[-0.16px]',
+        tone === 'glass' ? 'text-white' : 'text-text',
+        expanded ? 'block' : 'line-clamp-2',
+        // Container-query overrides, which `useLineClampOverflow` reads back off the computed style
+        // so it measures against the clamp actually drawn rather than the wide layout's two lines.
+        smallPanel === 'line' && '@max-md:line-clamp-1',
+        smallPanel === 'sheet' && '@max-md:line-clamp-none',
+        // The expand toggle below is hidden on the compact line (the sheet button does that job),
+        // and `visibility` is inherited — so the claim itself opts back in, or it would vanish
+        // with the control around it.
+        smallPanel === 'line' && '@max-md:visible'
       )}
     >
       {text}
@@ -314,9 +496,335 @@ function TickerClaimText({ text }: { text: string }) {
       aria-expanded={expanded}
       title={expanded ? 'Show less' : 'Show the whole claim'}
       onClick={() => setExpanded(current => !current)}
-      className="w-full cursor-pointer text-left"
+      className={cx(
+        'w-full cursor-pointer text-left',
+        // On the compact line the tap opens the sheet instead (see the card). `invisible` rather
+        // than `hidden`, because this button wraps the text: it leaves the tab order and the
+        // accessibility tree, and the text inside sets itself visible again.
+        smallPanel === 'line' && '@max-md:invisible'
+      )}
     >
       {body}
+    </button>
+  );
+}
+
+/**
+ * The claim cards in the player's bottom-right corner, oldest at the top.
+ *
+ * Anchored in the corner rather than centred over the video: a card in the middle reads as a
+ * dialog demanding an answer, and it covers the face of the person making the argument.
+ *
+ * Two modes. Closed, it is the live layer: a claim appears as it is said, lingers, and goes, so the
+ * corner is empty most of the time. Open — the viewer's pointer is anywhere over the player, or
+ * they have tabbed into the stack — it becomes the whole of what has been said so far, scrollable,
+ * newest at the bottom. That is the Twitch-chat bargain: the corner stays a corner while you are
+ * watching, and the backlog is one movement away without pausing the video or opening a panel.
+ *
+ * `open` is the caller's, because the pointer has to be able to open this from anywhere over the
+ * video — including when nothing is on screen here to point at, which is most of the time.
+ */
+export function DebateClaimTickerStack({
+  cards,
+  history,
+  open = false,
+  pinned = false,
+  onTogglePinned,
+  onFocusChange,
+  participantByClaimId,
+  rowsByClaimId,
+  entitiesByClaimId,
+  onAnswered,
+}: {
+  cards: StackedCard[];
+  /** Everything said so far. Falls back to the live cards where a caller has no history. */
+  history?: StackedCard[];
+  /** Show the backlog rather than the live cards. */
+  open?: boolean;
+  /** Open because the chip was pressed rather than because the pointer is over the tile. */
+  pinned?: boolean;
+  /** Pressing the chip. Without it the corner has no chip and is hover-only. */
+  onTogglePinned?: () => void;
+  /** Keyboard focus entering or leaving the stack, which opens it the way the pointer does. */
+  onFocusChange?: (focused: boolean) => void;
+  participantByClaimId?: Map<string, DebateParticipant>;
+  rowsByClaimId: Map<string, DebateClaim>;
+  entitiesByClaimId: Map<string, Entity>;
+  onAnswered: (claimId: string, position: boolean | null) => void;
+}) {
+  const scrollRef = React.useRef<HTMLDivElement | null>(null);
+
+  const shown = open ? (history ?? cards) : cards;
+  const backlog = history ?? cards;
+
+  /**
+   * Whether the list is sitting at its newest claim, and so should follow the next one down.
+   *
+   * A ref rather than state: it is read inside effects and never drawn, so tracking it in state
+   * would re-render the list on every scroll frame to change nothing on screen.
+   */
+  const followingLatest = React.useRef(true);
+
+  /**
+   * Dissolve the top of the open list — see {@link HISTORY_EDGE_OPAQUE_PX}.
+   *
+   * Each card carries the slice of the ramp that falls across it, found by shifting the gradient's
+   * stops by how far the card's own top sits from the top of the list. A card below the ramp
+   * entirely gets no mask at all, which is nearly all of them.
+   *
+   * Written straight to the node rather than through state, because this runs on every scroll frame
+   * and re-rendering the list to change a gradient on one card is work the browser should not be
+   * asked to do while a finger is moving. React never sets `mask-image` on these cards, so there is
+   * no tug of war over the property.
+   */
+  const paintEdgeFade = React.useCallback(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    const atTop = element.scrollTop <= 1;
+    for (const card of Array.from(element.children) as HTMLElement[]) {
+      // The card's top edge, measured from the top of what the list is showing. Negative once the
+      // card has started to travel up past it.
+      const fromEdge = card.offsetTop - element.scrollTop;
+      const clear = -fromEdge + HISTORY_EDGE_CLEAR_PX;
+      const opaque = -fromEdge + HISTORY_EDGE_OPAQUE_PX;
+      // Nothing to paint on a card the ramp does not reach, nor on one that has travelled wholly
+      // above the edge, where the list's own overflow has it already.
+      const untouched = opaque <= 0 || fromEdge + card.offsetHeight < 0;
+      // `open` is checked here rather than by the callers, because the closed corner is a
+      // content-sized box whose top *is* the card's top — the ramp would dissolve the live claim.
+      //
+      // `atTop` because a reader who has scrolled the list as far back as it goes is looking at the
+      // oldest claim, and dissolving what they just scrolled to is the one moment the ramp works
+      // against them. It is there to say "more above"; at the top there is not.
+      const ramp =
+        !open || atTop || untouched ? '' : `linear-gradient(to bottom, transparent ${clear}px, #000 ${opaque}px)`;
+      // Through a custom property rather than `mask-image` itself: the card declares the standard
+      // and `-webkit-` masks together in its own className, so one variable drives both and the
+      // declarations stay with the rest of the card's styling.
+      card.style.setProperty('--claim-ramp', ramp || 'none');
+    }
+  }, [open]);
+
+  const onScroll = React.useCallback(() => {
+    const element = scrollRef.current;
+    if (element) {
+      // A few px of slack: a list scrolled to the end is often a fraction of a pixel short of it.
+      followingLatest.current = element.scrollHeight - element.scrollTop - element.clientHeight < 8;
+    }
+    paintEdgeFade();
+  }, [paintEdgeFade]);
+
+  // Opens on the most recent claim — scrolling *up* from there is the "go back through it" this
+  // exists for. Closing repaints too, and has to: the ramp is written to the card nodes, and the
+  // newest card survives the close, so a stale slice of gradient would follow it back out.
+  React.useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    if (open) {
+      followingLatest.current = true;
+      element.scrollTop = element.scrollHeight;
+    }
+    paintEdgeFade();
+  }, [open, paintEdgeFade]);
+
+  /**
+   * The list also re-follows the bottom when its geometry changes under it, not only when a claim
+   * arrives. Two ways that happens, both reported from the preview:
+   *
+   * The scrubber appearing lifts the corner by `pb-5`, which shortens the scroll box. A shorter box
+   * raises the maximum scrollTop, so a list that was resting at the bottom is suddenly short of it
+   * and the newest card is cut off by the scrubber.
+   *
+   * Expanding a clamped claim makes its card taller. The card grows downward, past the bottom of
+   * the box, so the reader taps to read the rest of a claim and the rest of it goes under the edge.
+   *
+   * Watching the children as well as the box is what catches the second one — the box does not
+   * change size there, only its content does.
+   */
+  React.useEffect(() => {
+    const element = scrollRef.current;
+    if (!element || typeof ResizeObserver === 'undefined') return;
+
+    const observer = new ResizeObserver(() => {
+      if (open && followingLatest.current) element.scrollTop = element.scrollHeight;
+      paintEdgeFade();
+    });
+    observer.observe(element);
+    for (const card of Array.from(element.children)) observer.observe(card);
+    return () => observer.disconnect();
+  }, [open, shown.length, paintEdgeFade]);
+
+  // A claim arriving while the list is open lands at the bottom, and the list follows it only if
+  // the reader was already down there. They open this to read back through what was said, and a
+  // debate keeps talking while they do: yanking the view to the newest card took the sentence they
+  // were halfway through off the screen, which read as the list closing and starting over.
+  React.useEffect(() => {
+    const element = scrollRef.current;
+    if (!element) return;
+    if (open && followingLatest.current) element.scrollTop = element.scrollHeight;
+    paintEdgeFade();
+  }, [open, shown.length, paintEdgeFade]);
+
+  /**
+   * The chip is the only thing on screen saying the backlog exists at all, and on a touch screen it
+   * is the only way to reach it: there is no hover, and the video behind is one large play/pause
+   * button, so the corner cannot quietly swallow a tap to mean something else.
+   *
+   * It yields to a live card, though. The card sits on top of it in the column, so a chip that
+   * stayed up held the card 43px higher than it needed to be — and 43px up a phone tile is the
+   * difference between a card under the speaker's chin and a card across their face. There is also
+   * nothing for the chip to say in that moment: a claim is already on screen, which is the thing it
+   * exists to announce.
+   *
+   * Still drawn while the backlog is *open*, because there it is the way back out.
+   */
+  const showChip = backlog.length > 0 && onTogglePinned !== undefined && (open || cards.length === 0);
+  if (shown.length === 0 && !showChip) return null;
+
+  return (
+    <div
+      className="flex min-h-0 w-full flex-col items-end gap-1.5"
+      /**
+       * The focus boundary is the whole stack, chip included, and it has to be.
+       *
+       * These lived on the scroll box, which is the chip's *sibling*. Tabbing from the last card to
+       * the chip therefore left the box — `relatedTarget` outside `currentTarget` — and reported
+       * focus gone. The player closed the backlog, `showChip` went false with a live card present,
+       * and the chip unmounted underneath the keyboard mid-tab, dropping focus to the body. The one
+       * control that can reopen the list was the one that could not be reached from inside it.
+       */
+      onFocus={event => {
+        // A keyboard arriving, not a click landing.
+        //
+        // The player opens the backlog on this, and the backlog is drawn narrower than a live card
+        // — so when any focus counted, clicking the expand toggle on a clamped claim swapped the
+        // card the reader was halfway through for the list, at the list's width. They asked for
+        // more of the sentence in front of them and got it somewhere else, in a different column.
+        // Pressing a thumb on a live card did the same thing.
+        //
+        // `:focus-visible` is the browser's own answer to "did this focus come from a pointer",
+        // which is exactly the question, and the same signal the backlog chip already uses to
+        // decide when it is reachable. A click still focuses the control it landed on — it just no
+        // longer reads as having tabbed in.
+        if (event.target instanceof Element && !event.target.matches(':focus-visible')) return;
+        onFocusChange?.(true);
+      }}
+      // Only when focus leaves the stack entirely — moving between two cards, or out to the chip,
+      // must not collapse the list out from under the keyboard.
+      onBlur={event => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) onFocusChange?.(false);
+      }}
+    >
+      <div
+        ref={scrollRef}
+        onScroll={onScroll}
+        // The video behind is one big play/pause button, and the gaps between cards are holes in
+        // this list that a thumb aiming at a card can find. The cards stop their own clicks; this
+        // catches the misses.
+        onClick={event => event.stopPropagation()}
+        className={cx(
+          'pointer-events-auto flex w-full flex-col gap-1.5',
+          // Nothing live and nothing open: the chip is on its own, and an empty box between it and
+          // the tile edge would still take its gap.
+          shown.length === 0 && 'hidden',
+          /**
+           * 156px of backlog, and the number is picked between two constraints rather than chosen.
+           *
+           * Cards are 80px and sit 6px apart. The newest one is crisp only if the box is at least
+           * `71.5 + 80 = 151.5px`, or the ramp reaches down into it. Two cards want 166px, so a box
+           * of 166 or more never scrolls — and a list that never scrolls sits at its own top, where
+           * the ramp correctly declines to fade anything. 156px is inside both: the newest card
+           * clears the ramp by 4px, and two cards overflow by 10.
+           *
+           * In px on this element rather than a percentage on the host, which is what it used to
+           * be. A percentage there was measured against the tile and then shared with the chip, so
+           * on a phone the chip's 43px came out of the list's 130 and left 87 — one card, most of
+           * it inside the ramp.
+           */
+          open && 'no-scrollbar max-h-[9.75rem] min-h-0 overflow-y-auto',
+          /**
+           * On a small panel the opened list is a sheet over this debater's tile, and it is as tall
+           * as the corner the player gives it rather than 156px — see `data-claim-corner`, which
+           * pins its top edge below the tile's controls while open. Its cards print the whole
+           * claim, so the list has to be allowed the height to show one.
+           */
+          open && '@max-md:max-h-none'
+        )}
+      >
+        {shown.map(card => (
+          <DebateClaimTickerCard
+            key={card.window.claim.id}
+            window={card.window}
+            opacity={card.opacity}
+            speaker={participantByClaimId?.get(card.window.claim.id) ?? null}
+            row={rowsByClaimId.get(card.window.claim.id) ?? null}
+            entity={entitiesByClaimId.get(card.window.claim.id) ?? null}
+            onAnswered={onAnswered}
+            smallPanel={open ? 'sheet' : 'line'}
+            // Only where there is a sheet to open into. Without the chip's toggle the corner is
+            // hover-only, and the line would offer a tap that goes nowhere.
+            onReadInFull={!open ? onTogglePinned : undefined}
+          />
+        ))}
+      </div>
+
+      {/* `expanded` only where the chip is what is holding it open. A pointer closes the list by
+          leaving the tile, so a chip offering to Hide it would be describing something it cannot
+          do; a tap has nowhere to go, and there the way in has to double as the way out. */}
+      {showChip && onTogglePinned && (
+        <ClaimBacklogChip count={backlog.length} expanded={open && pinned} onClick={onTogglePinned} />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The way into the backlog where there is no pointer to open it with.
+ *
+ * Shown on a device that cannot hover. Everywhere else the corner opens by pointing at the tile,
+ * and a permanent pill duplicating that would be furniture over the video — the Figma frame has no
+ * chip in it, and the resting player is quieter without one. It stays in the DOM there all the
+ * same, because a keyboard has no pointer either; how that is done, and why not with `sr-only`, is
+ * on the `className` below rather than restated here.
+ *
+ * Deliberately the same glyph the Claims button in the interaction bar uses, because it opens the
+ * same set of claims. Two different icons for one idea would be the harder thing to learn.
+ */
+function ClaimBacklogChip({ count, expanded, onClick }: { count: number; expanded: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      aria-expanded={expanded}
+      aria-label={expanded ? 'Hide the claims said so far' : `Show the ${count} claims said so far`}
+      // The video behind is one big play/pause button.
+      onClick={event => {
+        event.stopPropagation();
+        onClick();
+      }}
+      /**
+       * 20px tall, which is the debater's avatar across the band from it — the two read as one row
+       * when they match and as a mistake when they do not. The tap target is kept at ~36px by an
+       * `::after` that reaches past the box without taking any layout.
+       *
+       * On a pointer device it is present but out of the way, not absent. It used to be `hidden`,
+       * which took it out of the tab order too — and since the corner draws nothing at all when no
+       * claim is live, which is most of a debate, that left a keyboard with no way into the backlog
+       * whatsoever. `absolute opacity-0` keeps it focusable and costs no layout, and focus brings it
+       * back into the flow so the focus ring lands on something the viewer can see.
+       *
+       * `pointer-events-none` is stated rather than inherited from the host. It already resolved to
+       * `none` through inheritance — measured, clicks at the invisible chip's own coordinates land
+       * on the card behind it — but that depended on an ancestor nobody editing this file can see,
+       * and the sibling scroll box next to it sets `auto`. One class makes the intent local.
+       *
+       * Hidden by position rather than by `sr-only`: that utility also zeroes padding and height,
+       * and Tailwind emits its `not-sr-only` counterpart *after* `px-2` and `h-5`, so restoring the
+       * chip would have stripped its own shape. Checked, not assumed.
+       */
+      className="pointer-events-none absolute flex h-5 shrink-0 items-center gap-1.5 rounded-lg bg-[#151515]/30 px-2 text-[0.75rem] leading-[1.0625rem] text-white opacity-0 backdrop-blur-[44px] transition-colors after:absolute after:-inset-x-1 after:-inset-y-2 after:content-[''] hover:bg-[#151515]/50 focus-visible:pointer-events-auto focus-visible:relative focus-visible:opacity-100 no-hover:pointer-events-auto no-hover:relative no-hover:opacity-100"
+    >
+      <InfoSmall color="white" />
+      <span className="tabular-nums">{expanded ? 'Hide' : `${count} ${count === 1 ? 'claim' : 'claims'}`}</span>
     </button>
   );
 }
@@ -325,8 +833,8 @@ function TickerClaimText({ text }: { text: string }) {
  * The card's top line: who said it, how the crowd has answered it, and the two ways to answer.
  *
  * `PositionRow` is not reused here, and the reason is size rather than taste: it is a container
- * query that stacks its two pills vertically below ~230px, which is about the width this card is
- * drawn at, so reusing it would stack the header the card means to keep on one line. What
+ * query that stacks its two pills vertically below ~230px, which is exactly the width this card
+ * wants to be. Reusing it would force the card wide enough to cover the face it sits beside. What
  * matters is shared underneath — `useClaimResponseState` and `useClaimPositionControl` resolve the
  * response and publish it, so the share is the same number the claim page prints.
  *
@@ -342,6 +850,8 @@ function TickerClaimHeader({
   row,
   entity,
   onAnswered,
+  tone,
+  compactLine = false,
 }: {
   claimId: string;
   spaceId: string;
@@ -349,6 +859,13 @@ function TickerClaimHeader({
   row: DebateClaim | null;
   entity: Entity | null;
   onAnswered: (claimId: string, position: boolean | null) => void;
+  tone: ClaimCardTone;
+  /**
+   * The card is the one-line `line` layout on a small panel: this row's box dissolves so the avatar
+   * and the thumbs sit either side of the claim, and the name and the share step aside — both are
+   * in the sheet a tap away, and on a 337px line they would leave the claim about 15 characters.
+   */
+  compactLine?: boolean;
 }) {
   const { responseKind, summary, control } = useDebateClaimResponse({ claimId, spaceId, row, entity });
   const openProfile = useOpenDebaterProfile(speaker);
@@ -377,14 +894,20 @@ function TickerClaimHeader({
   const percent = summary.percent;
 
   return (
-    <div className="flex items-center justify-between gap-2">
+    <div className={cx('flex items-center justify-between gap-2', compactLine && '@max-md:contents')}>
       {/* `text-box` trimmed, as the frame has it, and on each text node rather than on the row.
           The trim acts on a box's own line boxes, and these are flex items with their own; the
           frame gives this line a 7px box in a 16px row, which is its cap height. Trimmed, the row
           is the avatar's 16px and the words centre against it. Untrimmed, each 17px line box sets
           the row instead and the card comes out a pixel taller than the frame draws. Per node and
           not via a child selector, because the name now sits inside a button. */}
-      <span className="flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem] text-grey-04">
+      <span
+        className={cx(
+          'flex min-w-0 items-center gap-1.5 text-[0.75rem] leading-[1.0625rem]',
+          tone === 'glass' ? 'text-white' : 'text-grey-04',
+          compactLine && '@max-md:order-1 @max-md:shrink-0'
+        )}
+      >
         {speaker && (
           // The same link as the name in the corner of the tile, and the same person — a reader
           // looking at who said this should be able to go and look at them from here.
@@ -394,22 +917,34 @@ function TickerClaimHeader({
             title={`Open ${speakerLabel(speaker)}`}
             className="flex min-w-0 items-center gap-1.5 text-left hover:underline"
           >
-            <span className="block size-4 shrink-0 overflow-hidden rounded-full bg-grey-02">
+            <span
+              className={cx(
+                'block size-4 shrink-0 overflow-hidden rounded-full',
+                tone === 'glass' ? 'bg-white' : 'bg-grey-02'
+              )}
+            >
               <Avatar avatarUrl={speaker.avatar_cid} value={speaker.profile_space_id} size={16} />
             </span>
-            <span className="truncate [text-box:trim-both_cap_alphabetic]">{speakerLabel(speaker)}</span>
+            <span className={cx('truncate [text-box:trim-both_cap_alphabetic]', compactLine && '@max-md:hidden')}>
+              {speakerLabel(speaker)}
+            </span>
           </button>
         )}
         {percent !== null && (
           <>
             {speaker && (
-              <span aria-hidden className="[text-box:trim-both_cap_alphabetic]">
+              <span aria-hidden className={cx('[text-box:trim-both_cap_alphabetic]', compactLine && '@max-md:hidden')}>
                 ·
               </span>
             )}
             {/* Same wording as the verdict on the claim page — "65% agree" — so the share reads
                 the same wherever it is printed. */}
-            <span className="shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]">
+            <span
+              className={cx(
+                'shrink-0 tabular-nums [text-box:trim-both_cap_alphabetic]',
+                compactLine && '@max-md:hidden'
+              )}
+            >
               {percent}% {copy.positiveAction.toLowerCase()}
             </span>
           </>
@@ -418,7 +953,7 @@ function TickerClaimHeader({
       {/* 4px apart rather than the Figma card's 12px: those are bare 12px glyphs and these are
           20px buttons, so the same gap between glyph *centres* needs a smaller gap between boxes.
           No error text here — it would make the card grow while the reader is part-way through it. */}
-      <span className="flex shrink-0 items-center gap-1">
+      <span className={cx('flex shrink-0 items-center gap-1', compactLine && '@max-md:order-3')}>
         <ClaimIconButton
           responseKind={responseKind}
           position
@@ -427,7 +962,7 @@ function TickerClaimHeader({
           disabled={!control.canRespond}
           title={control.actionTitle(true) || copy.positiveAction}
           onClick={() => control.respond(true)}
-          tone="light"
+          tone={tone}
         />
         <ClaimIconButton
           responseKind={responseKind}
@@ -437,7 +972,7 @@ function TickerClaimHeader({
           disabled={!control.canRespond}
           title={control.actionTitle(false) || copy.negativeAction}
           onClick={() => control.respond(false)}
-          tone="light"
+          tone={tone}
         />
       </span>
     </div>
@@ -456,12 +991,9 @@ function TickerClaimHeader({
  * agreeing with a position were different acts; claims ask one question now, so there is one
  * glyph.
  *
- * `column` is the claim counter's list's vote column (GEO-3317): a round 24px target sized to the
+ * `column` is the Open rounds claim list's vote column (GEO-3317): a round 24px target sized to the
  * player, with a solid glyph that reads at that size, coloured once the reader takes a side.
  */
-/** `glass` over the video, as the claim counter's list is; `light` on a white surface, as the end card's carousel is. */
-type ClaimCardTone = 'glass' | 'light';
-
 export function ClaimIconButton({
   responseKind,
   position,
