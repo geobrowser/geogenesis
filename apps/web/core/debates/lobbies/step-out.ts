@@ -76,6 +76,8 @@ export function useLobbyCapture(kind: LobbyCaptureKind): LobbyCapture | null {
 export function routeIntoDebate(go: () => void) {
   // Only the lobby being stepped out of now carries its mic; `stepOut` writes it.
   clearCarriedLobbyMic();
+  // iPhone Safari keeps one camera capture: the lobby's must stop before the next screen opens its own.
+  releaseLobbyCapture('video');
   const stepOut = stepOutOfCurrentLobby;
   if (!stepOut) return go();
   void Promise.race([stepOut(), new Promise<void>(resolve => setTimeout(resolve, STEP_OUT_WAIT_MS))]).then(go);
