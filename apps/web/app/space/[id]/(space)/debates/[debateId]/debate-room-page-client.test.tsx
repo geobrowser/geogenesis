@@ -247,8 +247,7 @@ vi.mock('~/core/debates/debate-room-ownership', async importOriginal => {
   };
 });
 
-// Factory-less on purpose: see `__mocks__/livekit-client.ts`. The page imports the SDK twice at
-// once on arrival, and a factory mock hands one of those imports the real SDK.
+// No factory: the page imports the SDK twice at once, which a factory mock leaks (`__mocks__/livekit-client.ts`).
 vi.mock('livekit-client');
 vi.hoisted(() => {
   (globalThis as { __liveKitClientMock?: unknown }).__liveKitClientMock = {

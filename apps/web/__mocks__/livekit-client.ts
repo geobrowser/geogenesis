@@ -1,10 +1,6 @@
 /*
- * Redirect mock for `vi.mock('livekit-client')` with no factory. Each export delegates to
- * `globalThis.__liveKitClientMock`, which the test sets up from its own `vi.hoisted` mocks.
- *
- * Exists because a factory mock races: Vitest skips the mock for a dynamic import made while
- * another import of it from the same module is still running the factory, and that one gets the
- * real SDK. A redirect mock is resolved without that window.
+ * Redirect mock for a factory-less `vi.mock('livekit-client')`; exports delegate to
+ * `globalThis.__liveKitClientMock`. A factory mock gives a concurrent second import the real SDK.
  */
 type LiveKitClientMock = {
   createLocalTracks: (...args: unknown[]) => unknown;
