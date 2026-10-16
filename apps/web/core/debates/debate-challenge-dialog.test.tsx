@@ -159,7 +159,7 @@ describe('DebateChallengeDialog', () => {
     renderDialog({ onAccept });
 
     expect(await screen.findByText('Joining with mic on')).toBeInTheDocument();
-    expect(media.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false });
+    await waitFor(() => expect(media.ensurePreview).toHaveBeenCalledWith({ audio: true, video: false }));
     expect(screen.queryByRole('button', { name: /camera/i })).toBeNull();
 
     fireEvent.click(screen.getByRole('button', { name: 'Explore claims' }));
