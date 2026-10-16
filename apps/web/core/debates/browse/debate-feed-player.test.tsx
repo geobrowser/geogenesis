@@ -2006,6 +2006,16 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
       expect(container.querySelector('[data-debate-banner]')?.getAttribute('data-debate-banner')).toBe(
         kind === 'final_end' ? 'wrap' : 'round'
       );
+      // Both votes soften together as either headline enters, using its media-clock phase.
+      const recedingPicks = [...container.querySelectorAll<HTMLElement>('[data-debate-pick-recede]')];
+      expect(recedingPicks).toHaveLength(2);
+      for (const vote of recedingPicks) {
+        expect(vote.className).toContain('debatePlayerPickRecede_250ms_linear_both');
+        expect(vote.style.animationDelay).toBe(
+          (container.querySelector('[data-debate-banner]') as HTMLElement).style.animationDelay
+        );
+        expect(vote.style.animationPlayState).toBe('paused');
+      }
     }
   );
 
@@ -2048,7 +2058,7 @@ describe('open rounds breaks in published playback (GEO-3277)', () => {
     expect(pickExits[0].style.animationDelay).toContain('2850ms');
     const titleExit = container.querySelector('[data-debate-banner-out]') as HTMLElement;
     expect(pickExits[0].style.animationDelay).toBe(titleExit.style.animationDelay);
-    // Picks stay fully visible while the round title arrives, then fade with it before the cut.
+    // Picks remain under the round title, then finish their exit together before the cut.
     expect(pickExits[0].style.animationDelay).toBe(pickExits[1].style.animationDelay);
   });
 

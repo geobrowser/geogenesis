@@ -181,21 +181,29 @@ export function DebateBreakOverlay({
               key={slot}
               data-debate-pick-out={slot}
               className={cx(TILE_CLASS[slot], 'grid place-items-center', !wrap && PLAYER_EXIT_CLASS)}
-              // Keep both votes readable under the next title, as they are under the wrap.
+              // Keep both votes under the title, then leave with it at the next-round cut.
               style={wrap ? undefined : heldAt(cue.playedMs - BREAK_BANNER_OUT_MS)}
             >
-              <span
-                data-debate-stamp={key}
-                className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS[key], PLAYER_ENTER_CLASS)}
-                style={
-                  {
-                    ...PLAYER_PICK_STYLE,
-                    ...heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS),
-                  } as React.CSSProperties
-                }
+              <div
+                data-debate-pick-recede={slot}
+                className="animate-[debatePlayerPickRecede_250ms_linear_both]"
+                // The new headline takes priority, while both votes remain readable beneath it.
+                // Use the shared media clock so pause and scrub also hold this gentle fade.
+                style={heldAt(bannerAtMs)}
               >
-                {STAMP_WORD[key]}
-              </span>
+                <span
+                  data-debate-stamp={key}
+                  className={cx(PLAYER_PICK_BASE_CLASS, PLAYER_PICK_CLASS[key], PLAYER_ENTER_CLASS)}
+                  style={
+                    {
+                      ...PLAYER_PICK_STYLE,
+                      ...heldAt(BREAK_SETTLE_MS + BREAK_QUESTION_MS),
+                    } as React.CSSProperties
+                  }
+                >
+                  {STAMP_WORD[key]}
+                </span>
+              </div>
             </div>
           );
         })}
