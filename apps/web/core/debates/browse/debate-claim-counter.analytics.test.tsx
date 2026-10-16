@@ -4,7 +4,7 @@ import * as React from 'react';
 
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 
-import type { ClaimHistoryEntry, TickerWindow } from '~/core/debates/claim-ticker';
+import type { StackedCard, TickerWindow } from '~/core/debates/claim-ticker';
 
 import { DebateClaimCounter } from './debate-claim-counter';
 
@@ -36,12 +36,13 @@ afterEach(() => {
   observed.clear();
 });
 
-const said = (id: string, saidMs: number): ClaimHistoryEntry => ({
+const said = (id: string, saidMs: number): StackedCard => ({
   window: {
     claim: { id, text: `Claim ${id}`, spaceId: 'space-1' },
     startMs: saidMs,
     endMs: saidMs + 8_000,
   } as unknown as TickerWindow,
+  opacity: 1,
 });
 
 // Copilot, #2843: with `asChild`, a surface measures only through an `ActionSurfaceDiv` under it,
