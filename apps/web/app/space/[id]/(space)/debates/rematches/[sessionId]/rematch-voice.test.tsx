@@ -11,10 +11,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { DebateRematchSession } from '~/core/debates/api';
 import { GeoChatRequestError } from '~/core/debates/api';
 import {
-  carryLobbyMic,
-  clearCarriedLobbyMic,
-  forgetLobbyMic,
-  readCarriedLobbyMic,
+  carryLobbyJoinChoice,
+  clearCarriedLobbyChoice,
+  forgetLobbyDevices,
+  readCarriedLobbyChoice,
+  reportLobbyCamera,
   reportLobbyMic,
 } from '~/core/debates/lobbies/step-out';
 import {
@@ -421,8 +422,8 @@ function callToken(sources: string[]) {
 /** What stepping out of a lobby whose mic is `on` leaves behind. */
 function stepOutOfLobbyWithMic(on: boolean) {
   reportLobbyMic(on);
-  carryLobbyMic();
-  forgetLobbyMic();
+  carryLobbyJoinChoice();
+  forgetLobbyDevices();
 }
 
 beforeEach(() => {
@@ -507,7 +508,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   // A carry no picker mounted to spend must not reach the next test.
-  clearCarriedLobbyMic();
+  clearCarriedLobbyChoice();
 });
 
 describe('RematchVoiceHeader', () => {
@@ -620,7 +621,7 @@ describe('RematchVoiceHeader', () => {
     // The ready room reads the picker's recorded answer, and finds no lobby mic left to outrank it.
     carryJoinIntentIntoDebate('session-1', 'debate-1');
     expect(readRematchJoinIntent('debate-1')).toEqual({ micOn: false, cameraOn: false, source: 'card' });
-    expect(readCarriedLobbyMic()).toBeNull();
+    expect(readCarriedLobbyChoice()).toBeNull();
   });
 
   it('resets the microphone default when the route moves between rematch sessions', async () => {
@@ -2648,6 +2649,20 @@ describe('the camera', () => {
     await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
     fireEvent.click(await screen.findByRole('button', { name: 'Turn camera off' }));
     await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenLastCalledWith(false));
+  });
+
+  it('joins with the camera the viewer had on in the lobby they just left', async () => {
+    mocks.joinData = { ...mocks.joinData!, token: callToken(['microphone', 'camera']) };
+    reportLobbyMic(true);
+    reportLobbyCamera(true);
+    carryLobbyJoinChoice();
+    forgetLobbyDevices();
+
+    render(<RematchVoiceHeader session={makeSession('browsing')} currentUserId="me" />);
+    await flushOwnership();
+
+    await waitFor(() => expect(mocks.setCameraEnabled).toHaveBeenCalledWith(true));
+    expect(await screen.findByRole('button', { name: 'Turn camera off' })).toBeInTheDocument();
   });
 
   it('joins with the camera the chosen state asked for', async () => {

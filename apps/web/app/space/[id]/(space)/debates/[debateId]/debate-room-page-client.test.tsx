@@ -14,9 +14,11 @@ import {
 } from '~/core/debates/debate-return-navigation';
 import type { DebateRoomTakeoverContext } from '~/core/debates/debate-room-ownership';
 import {
-  carryLobbyMic,
-  clearCarriedLobbyMic,
+  carryLobbyJoinChoice,
+  clearCarriedLobbyChoice,
+  forgetLobbyDevices,
   registerLobbyCapture,
+  reportLobbyCamera,
   reportLobbyMic,
 } from '~/core/debates/lobbies/step-out';
 import { DebateMediaSessionProvider, debateMediaSessionKey, useDebateMediaSession } from '~/core/debates/media-session';
@@ -144,9 +146,9 @@ vi.mock('~/core/debates/api', async importOriginal => {
 // The server-first return lives in lobby-return's own tests; here this tab's record decides.
 vi.mock('~/core/debates/lobbies/lobby-return', async importOriginal => {
   const { consumeDebateReturnDestination } = await import('~/core/debates/debate-return-navigation');
-  const { useCarriedLobbyMic } = await importOriginal<typeof import('~/core/debates/lobbies/lobby-return')>();
+  const { useCarriedLobbyChoice } = await importOriginal<typeof import('~/core/debates/lobbies/lobby-return')>();
   return {
-    useCarriedLobbyMic,
+    useCarriedLobbyChoice,
     useConsumeDebateReturnDestination: () => consumeDebateReturnDestination,
   };
 });
@@ -531,7 +533,7 @@ afterEach(async () => {
   delete (document as { visibilityState?: DocumentVisibilityState }).visibilityState;
   window.localStorage.clear();
   clearDebateReturnDestination();
-  clearCarriedLobbyMic();
+  clearCarriedLobbyChoice();
   lobbyCaptureCleanup();
   await Promise.resolve();
   await Promise.resolve();
@@ -1773,7 +1775,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     lobbyCaptureCleanup = registerLobbyCapture('audio', { on: lobbyMicOn, release: vi.fn() });
     reportLobbyMic(lobbyMicOn);
-    carryLobbyMic();
+    carryLobbyJoinChoice();
 
     const view = render(
       <DebateMediaSessionProvider>
@@ -1806,7 +1808,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     lobbyCaptureCleanup = registerLobbyCapture('audio', { on: true, release: vi.fn() });
     reportLobbyMic(true);
-    carryLobbyMic();
+    carryLobbyJoinChoice();
 
     const view = render(
       <DebateMediaSessionProvider>
@@ -1832,7 +1834,7 @@ describe('DebateRoomPageClient', () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     lobbyCaptureCleanup = registerLobbyCapture('audio', { on: true, release: vi.fn() });
     reportLobbyMic(true);
-    carryLobbyMic();
+    carryLobbyJoinChoice();
 
     const view = render(
       <DebateMediaSessionProvider>
@@ -2163,7 +2165,7 @@ describe('DebateRoomPageClient', () => {
   it('starts muted for a viewer who was muted in the lobby they just left', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     reportLobbyMic(false);
-    carryLobbyMic();
+    carryLobbyJoinChoice();
 
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
 
@@ -2174,6 +2176,22 @@ describe('DebateRoomPageClient', () => {
     cleanup();
     render(<DebateRoomPageClient spaceId="space-1" debateId="debate-2" />);
     expect(await screen.findByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+  });
+
+  it('starts with the camera the viewer had in the lobby they just left', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    reportLobbyMic(true);
+    reportLobbyCamera(false);
+    carryLobbyJoinChoice();
+    forgetLobbyDevices();
+    mocks.createLocalTracks.mockResolvedValue([createLocalAudioTrack()]);
+
+    render(<DebateRoomPageClient spaceId="space-1" debateId="debate-1" />);
+
+    expect(await screen.findByRole('button', { name: 'Turn camera on' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Mute microphone' })).toBeInTheDocument();
+    await waitFor(() => expect(mocks.createLocalTracks).toHaveBeenCalled());
+    expect(mocks.createLocalTracks.mock.calls.every(([options]) => !options?.video)).toBe(true);
   });
 
   // The intro's answer to GEO-2819's objection to having these toggles at all: the state is

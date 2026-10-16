@@ -33,7 +33,7 @@ import { createDebateRoomOwnershipCoordinator } from '~/core/debates/debate-room
 import { DeviceOptionGroup } from '~/core/debates/device-option-group';
 import { debateQueryKeys, useGeoChatAuth, useRematchLiveKitJoin } from '~/core/debates/hooks';
 import { tokenAllowsCamera } from '~/core/debates/livekit-grant';
-import { useCarriedLobbyMic } from '~/core/debates/lobbies/lobby-return';
+import { useCarriedLobbyChoice } from '~/core/debates/lobbies/lobby-return';
 import { type MediaDeviceOption, systemDefaultAudioOutput, useDebateMediaSession } from '~/core/debates/media-session';
 import {
   type DebateJoinChoiceSource,
@@ -400,12 +400,12 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // Off: audio only, as before GEO-3165. Gated where read, since the flag reads off until hydration.
   const videoEnabled = useFeatureFlag('debateVideo');
   const cameraAllowed = videoEnabled && join.data ? tokenAllowsCamera(join.data.token) : false;
-  // Card or room choice, then lobby mic, then default: the order the ready room uses too. The camera
-  // is off unless chosen; the mic is live after a debate and muted off a challenge.
-  const carriedMic = useCarriedLobbyMic();
+  // Card or room choice, then lobby, then default: the order the ready room uses too. The camera is
+  // off unless chosen; the mic is live after a debate and muted off a challenge.
+  const carriedLobby = useCarriedLobbyChoice();
   const [chosenAtMount] = React.useState(() => readRematchJoinIntent(session.id));
   const [joinAtMount] = React.useState(() =>
-    resolveJoinChoice(chosenAtMount, carriedMic === null ? null : { micOn: carriedMic }, {
+    resolveJoinChoice(chosenAtMount, carriedLobby, {
       micOn: microphoneEnabledByDefault(session),
       cameraOn: false,
     })
@@ -430,7 +430,7 @@ function SessionRematchVoiceHeader({ session, currentUserId, leaveAction, exitin
   // below and by the user's own toggle, so a mute chosen while waiting is not undone the moment the
   // opponent walks in; a lobby's mic counts too. Recorded with the intent, so a remount keeps it.
   const [micSource, setMicSource] = React.useState<DebateJoinChoiceSource | null>(() =>
-    isChosenJoinIntent(chosenAtMount) ? chosenAtMount.source : carriedMic !== null ? 'picker' : null
+    isChosenJoinIntent(chosenAtMount) ? chosenAtMount.source : carriedLobby !== null ? 'picker' : null
   );
   const handleMicIntentChange = React.useCallback((enabled: boolean) => {
     setMicSource('picker');

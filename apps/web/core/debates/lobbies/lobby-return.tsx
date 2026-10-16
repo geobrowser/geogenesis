@@ -7,10 +7,11 @@ import {
   peekDebateReturnDestination,
   rememberLobbyReturnDestination,
 } from '../debate-return-navigation';
+import type { DebateJoinChoice } from '../request-join-state';
 import { sameId } from '../rooms/room-presence';
 import { debateRoomIdFromPath } from '../rooms/room-routes';
 import { useMyDebateLobby } from './hooks';
-import { clearCarriedLobbyMic, readCarriedLobbyMic } from './step-out';
+import { clearCarriedLobbyChoice, readCarriedLobbyChoice } from './step-out';
 
 /** The lobby in this tab's record of where the flow returns to, or null when it is a page. */
 function storedLobbyId(): string | null {
@@ -56,11 +57,12 @@ export function useConsumeDebateReturnDestination() {
 }
 
 /**
- * The mic the viewer had in the lobby they stepped out of to get here, so the picker or ready room
- * starts the same way: null when they did not come straight from one. Read once per mount and spent.
+ * The mic and camera the viewer had in the lobby they stepped out of to get here, so the picker or
+ * ready room starts the same way: null when they did not come straight from one. Read once per
+ * mount and spent.
  */
-export function useCarriedLobbyMic(): boolean | null {
-  const [carried] = React.useState(readCarriedLobbyMic);
-  React.useEffect(() => clearCarriedLobbyMic(), []);
+export function useCarriedLobbyChoice(): DebateJoinChoice | null {
+  const [carried] = React.useState(readCarriedLobbyChoice);
+  React.useEffect(() => clearCarriedLobbyChoice(), []);
   return carried;
 }

@@ -79,7 +79,7 @@ import {
   useMarkDebateReady,
   useSaveOpenRoundPick,
 } from '~/core/debates/hooks';
-import { useCarriedLobbyMic, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
+import { useCarriedLobbyChoice, useConsumeDebateReturnDestination } from '~/core/debates/lobbies/lobby-return';
 import { type LocalAudioGateInput, MIC_OVERRUN_MAX_MS, shouldEnableLocalAudio } from '~/core/debates/local-audio-gate';
 import { useFocusTrap } from '~/core/debates/matchmaking/use-focus-trap';
 import {
@@ -447,7 +447,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
 
-  const carriedMic = useCarriedLobbyMic();
+  const carriedLobby = useCarriedLobbyChoice();
   /*
    * How this person joins, read once on arrival. A card that handed over its session (already
    * active under this room's key) recorded its choice there; otherwise the picker or room that led
@@ -456,8 +456,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const [arrivalJoinState] = React.useState(() => {
     const handedOver = mediaSession.activeSessionKey === mediaSessionKey;
     const chosen = handedOver ? mediaSession.joinChoiceRef.current : readRematchJoinIntent(debateId);
-    const lobby = carriedMic === null ? null : { micOn: carriedMic };
-    const { micOn, cameraOn } = resolveJoinChoice(chosen, lobby, { micOn: true, cameraOn: true });
+    const { micOn, cameraOn } = resolveJoinChoice(chosen, carriedLobby, { micOn: true, cameraOn: true });
     return { audioMuted: !micOn, videoEnabled: cameraOn };
   });
 
