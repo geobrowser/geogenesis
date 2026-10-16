@@ -6,11 +6,11 @@ import {
   describeJoinState,
   describeMicOnlyJoinState,
   formatTotalSpeakingTime,
-  inheritedJoinState,
   isMediaBlocked,
   joinStateNeedsOpening,
   kindsForJoinState,
   mayAutoStartPreview,
+  resolveJoinChoice,
 } from './request-join-state';
 
 describe('describeJoinState', () => {
@@ -78,19 +78,33 @@ describe('isMediaBlocked', () => {
  * listening only holds none, and neither does a room reached without a card at all — and reading
  * them as one made the choice to stay quiet arrive unmuted with the camera on.
  */
-describe('inheritedJoinState', () => {
-  it('starts muted and dark when a card handed over nothing', () => {
-    expect(inheritedJoinState([], true)).toEqual({ audioMuted: true, videoEnabled: false });
+describe('resolveJoinChoice', () => {
+  const fallback = { micOn: true, cameraOn: true };
+
+  it('takes the person’s choice over the lobby’s and the default', () => {
+    expect(resolveJoinChoice({ micOn: false, cameraOn: false }, { micOn: true, cameraOn: true }, fallback)).toEqual({
+      micOn: false,
+      cameraOn: false,
+    });
   });
 
-  it('keeps the room defaults when no card preceded it', () => {
-    expect(inheritedJoinState([], false)).toEqual({ audioMuted: false, videoEnabled: true });
+  it('takes the lobby’s over the default', () => {
+    expect(resolveJoinChoice(null, { micOn: false, cameraOn: false }, fallback)).toEqual({
+      micOn: false,
+      cameraOn: false,
+    });
   });
 
-  it('follows the devices a card did hand over', () => {
-    expect(inheritedJoinState(['audio'], true)).toEqual({ audioMuted: false, videoEnabled: false });
-    expect(inheritedJoinState(['audio', 'video'], true)).toEqual({ audioMuted: false, videoEnabled: true });
-    expect(inheritedJoinState(['video'], true)).toEqual({ audioMuted: true, videoEnabled: true });
+  it('falls through per device for a choice that offered no camera', () => {
+    expect(resolveJoinChoice({ micOn: false }, { micOn: true, cameraOn: false }, fallback)).toEqual({
+      micOn: false,
+      cameraOn: false,
+    });
+    expect(resolveJoinChoice({ micOn: false }, { micOn: true }, fallback)).toEqual({ micOn: false, cameraOn: true });
+  });
+
+  it('keeps the default when nothing chose', () => {
+    expect(resolveJoinChoice(null, null, fallback)).toEqual(fallback);
   });
 });
 
@@ -136,18 +150,6 @@ describe('formatTotalSpeakingTime', () => {
     expect(formatTotalSpeakingTime(240_000)).toBe('4 min');
     expect(formatTotalSpeakingTime(270_000)).toBe('4 min 30s');
     expect(formatTotalSpeakingTime(45_000)).toBe('45s');
-  });
-});
-
-describe('inheritedJoinState', () => {
-  it('reads the chosen state off the devices that were handed over', () => {
-    expect(inheritedJoinState(['audio', 'video'])).toEqual({ audioMuted: false, videoEnabled: true });
-    expect(inheritedJoinState(['audio'])).toEqual({ audioMuted: false, videoEnabled: false });
-    expect(inheritedJoinState(['video'])).toEqual({ audioMuted: true, videoEnabled: true });
-  });
-
-  it('falls back to the old defaults when no devices were inherited', () => {
-    expect(inheritedJoinState([])).toEqual({ audioMuted: false, videoEnabled: true });
   });
 });
 

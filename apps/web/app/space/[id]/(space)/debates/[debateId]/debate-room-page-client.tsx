@@ -128,9 +128,8 @@ import {
   isStorageQuotaError,
   requestPersistentRecordingStorage,
 } from '~/core/debates/recording-upload-queue';
-import { rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
-import { readRematchJoinIntent } from '~/core/debates/rematch-join-intent';
-import { inheritedJoinState, joinStateNeedsOpening, kindsForJoinState } from '~/core/debates/request-join-state';
+import { readRematchJoinIntent, rememberRematchJoinIntent } from '~/core/debates/rematch-join-intent';
+import { joinStateNeedsOpening, kindsForJoinState, resolveJoinChoice } from '~/core/debates/request-join-state';
 import { createLocalServerClock, synchronizeServerClock } from '~/core/debates/server-clock';
 import { isDebateInThankYouPeriod } from '~/core/debates/thank-you-period';
 import { useSetThankingDebate } from '~/core/debates/thanking-debate-store';
@@ -448,68 +447,37 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   const rematchLeavePublishedRef = React.useRef(false);
   const [recordingRemovalAcknowledged, setRecordingRemovalAcknowledged] = React.useState(false);
 
-  const inheritedTracks = mediaSession.localTracksRef.current;
-  /*
-   * Whether a card chose on this reader's behalf before the room opened. The session is already
-   * active under this room's key when one did — the ready prompt keys on the debate directly, and
-   * an accepted request is promoted onto it — and `beginSession` below is a no-op in that case.
-   *
-   * Read at first render, before that effect runs, because claiming the session is what erases the
-   * evidence.
-   */
-  const handedOverSession = mediaSession.activeSessionKey === mediaSessionKey;
-  const handedOverAtMount = React.useRef(handedOverSession);
-
-  // First render only, with `inherited` below, and for the same reason.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const chosenBeforeArriving = React.useMemo(() => (handedOverSession ? null : readRematchJoinIntent(debateId)), []);
-  /** The picker's choice as a join state, or null when no picker preceded this room. */
-  const carriedJoinState = React.useMemo(
-    () =>
-      chosenBeforeArriving
-        ? { audioMuted: !chosenBeforeArriving.micOn, videoEnabled: chosenBeforeArriving.cameraOn ?? true }
-        : null,
-    [chosenBeforeArriving]
-  );
-  /*
-   * The mic a lobby carried, for someone who stepped out of one to get here. Spent on read, and a
-   * microphone only — a lobby has no camera to carry.
-   */
   const carriedMic = useCarriedLobbyMic();
-  const micLeftToLobby = React.useRef(handedOverSession && mediaSession.lobbyDeferredKindsRef.current.audio);
-  /** A hand-off's state from its tracks; a mic the card left to the lobby comes from the lobby's carried mic. */
-  const handedOverJoinState = React.useCallback(
-    (kinds: readonly string[]) => {
-      const state = inheritedJoinState(kinds, true);
-      return micLeftToLobby.current && carriedMic !== null ? { ...state, audioMuted: !carriedMic } : state;
-    },
-    [carriedMic]
-  );
   /*
-   * Three ways a choice can precede this room, in order of how directly they say so: devices a card
-   * handed over and still holds, a picker's recorded answer for this debate, and the mic a lobby was
-   * left with. A lobby carries into the picker and is spent there, so the picker's answer is both
-   * later and about both devices.
+   * How this person joins, read once on arrival. A card that handed over its session (already
+   * active under this room's key) recorded its choice there; otherwise the picker or room that led
+   * here remembered one for this debate. First render only: claiming the session ends the hand-off.
    */
-  const inherited = React.useMemo(
-    () =>
-      handedOverSession
-        ? handedOverJoinState(inheritedTracks.map(track => track.mediaStreamTrack.kind))
-        : (carriedJoinState ?? { audioMuted: carriedMic === false, videoEnabled: true }),
-    // First render only: claiming the session is what erases the evidence of a hand-off.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    []
-  );
+  const [arrivalJoinState] = React.useState(() => {
+    const handedOver = mediaSession.activeSessionKey === mediaSessionKey;
+    const chosen = handedOver ? mediaSession.joinChoiceRef.current : readRematchJoinIntent(debateId);
+    const lobby = carriedMic === null ? null : { micOn: carriedMic };
+    const { micOn, cameraOn } = resolveJoinChoice(chosen, lobby, { micOn: true, cameraOn: true });
+    return { audioMuted: !micOn, videoEnabled: cameraOn };
+  });
 
-  const [audioMuted, setAudioMuted] = React.useState(inherited.audioMuted);
+  const [audioMuted, setAudioMuted] = React.useState(arrivalJoinState.audioMuted);
   const [pendingTurnYield, setPendingTurnYield] = React.useState<PendingTurnYield | null>(null);
   const [remoteAudioEnabled, setRemoteAudioEnabled] = React.useState(true);
-  const [videoEnabled, setVideoEnabled] = React.useState(inherited.videoEnabled);
-  const joinStateChosenHere = React.useRef(false);
+  const [videoEnabled, setVideoEnabled] = React.useState(arrivalJoinState.videoEnabled);
+  /** The join state as last set, for the settle effect, which must not re-run on every change. */
+  const joinStateRef = React.useRef(arrivalJoinState);
+  const setJoinState = React.useCallback((next: { audioMuted: boolean; videoEnabled: boolean }) => {
+    joinStateRef.current = next;
+    setAudioMuted(next.audioMuted);
+    setVideoEnabled(next.videoEnabled);
+  }, []);
   /** Why a device failed to open, shown beside the controls. */
-  const [deviceError, setDeviceError] = React.useState<string | null>(null);
+  const [deviceError, setDeviceError] = React.useState<{
+    message: string;
+    kinds: { audio: boolean; video: boolean };
+  } | null>(null);
   const joinStateOpenAttemptRef = React.useRef(0);
-  const settledJoinStateRef = React.useRef<{ audioMuted: boolean; videoEnabled: boolean } | null>(null);
   const [serverClock, setServerClock] = React.useState(createLocalServerClock);
   const [serverClockSettled, setServerClockSettled] = React.useState(false);
   const [noiseFilterStatus, setNoiseFilterStatus] = React.useState<DebateNoiseFilterStatus>('initializing');
@@ -2079,9 +2047,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     async (
       next: { audioMuted: boolean; videoEnabled: boolean },
       options: { forceRestart?: boolean; fromToggle?: boolean; retry?: boolean } = {}
-    ) => {
-      // Only the person's own toggles and retries supersede each other; the settle effect re-runs
-      // on every debate refetch and must not clear their message.
+    ): Promise<boolean> => {
+      // Only the person's own toggles and retries supersede each other; the settle path must not
+      // clear their message.
       const chosen = options.fromToggle || options.retry;
       const attempt = chosen ? ++joinStateOpenAttemptRef.current : joinStateOpenAttemptRef.current;
       if (chosen) setDeviceError(null);
@@ -2089,32 +2057,40 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
       const kinds = kindsForJoinState(next, liveBefore);
       try {
         await ensureLocalPreview({ ...kinds, forceRestart: options.forceRestart });
+        return true;
       } catch (error) {
-        if (!mountedRef.current || attempt !== joinStateOpenAttemptRef.current) return;
+        if (!mountedRef.current || attempt !== joinStateOpenAttemptRef.current) return false;
         const live = liveKindsNow();
         // With nothing live, outside a toggle, the preview's own error state explains it and offers
         // a retry.
-        if (live.length === 0 && !options.fromToggle) return;
+        if (live.length === 0 && !options.fromToggle) return false;
         const reverted = {
           audioMuted: next.audioMuted || !live.includes('audio'),
           videoEnabled: next.videoEnabled && live.includes('video'),
         };
-        // Otherwise the settle effect re-applies the failed state on its next run and tries again.
-        if (!joinStateChosenHere.current) settledJoinStateRef.current = reverted;
-        setAudioMuted(reverted.audioMuted);
-        setVideoEnabled(reverted.videoEnabled);
+        setJoinState(reverted);
         const failed = options.forceRestart
           ? kinds
           : {
               audio: kinds.audio && !liveBefore.includes('audio'),
               video: kinds.video && !liveBefore.includes('video'),
             };
-        setDeviceError(preJoinMediaFailure(error, failed).message);
+        setDeviceError({ message: preJoinMediaFailure(error, failed).message, kinds: failed });
         await ensureLocalPreview(kindsForJoinState(reverted, live)).catch(() => undefined);
+        return false;
       }
     },
-    [ensureLocalPreview, liveKindsNow]
+    [ensureLocalPreview, liveKindsNow, setJoinState]
   );
+
+  // Whatever opens the failed kind later, Ready or the settle path included, takes the message down.
+  React.useEffect(() => {
+    if (!deviceError) return;
+    const live = liveKindsNow();
+    if (deviceError.kinds.audio && !live.includes('audio')) return;
+    if (deviceError.kinds.video && !live.includes('video')) return;
+    setDeviceError(null);
+  }, [deviceError, liveKindsNow, previewStream]);
 
   const ensureKindsForJoinState = React.useCallback(
     (next: { audioMuted: boolean; videoEnabled: boolean }) => {
@@ -2131,14 +2107,14 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, [audioMuted, liveKindsNow, openForJoinState, videoEnabled]);
 
   const toggleAudioMuted = React.useCallback(() => {
-    const next = !audioMuted;
-    joinStateChosenHere.current = true;
-    setAudioMuted(next);
-    ensureKindsForJoinState({ audioMuted: next, videoEnabled });
-  }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
+    const next = { audioMuted: !audioMuted, videoEnabled };
+    setJoinState(next);
+    ensureKindsForJoinState(next);
+  }, [audioMuted, ensureKindsForJoinState, setJoinState, videoEnabled]);
 
   const rememberJoinStateForPicker = React.useCallback(
-    (sessionId: string) => rememberRematchJoinIntent(sessionId, { micOn: !audioMuted, cameraOn: videoEnabled }),
+    (sessionId: string) =>
+      rememberRematchJoinIntent(sessionId, { micOn: !audioMuted, cameraOn: videoEnabled, source: 'room' }),
     [audioMuted, videoEnabled]
   );
 
@@ -2147,11 +2123,10 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
   }, []);
 
   const toggleVideoEnabled = React.useCallback(() => {
-    const next = !videoEnabled;
-    joinStateChosenHere.current = true;
-    setVideoEnabled(next);
-    ensureKindsForJoinState({ audioMuted, videoEnabled: next });
-  }, [audioMuted, ensureKindsForJoinState, videoEnabled]);
+    const next = { audioMuted, videoEnabled: !videoEnabled };
+    setJoinState(next);
+    ensureKindsForJoinState(next);
+  }, [audioMuted, ensureKindsForJoinState, setJoinState, videoEnabled]);
 
   const savePickAsync = saveOpenRoundPick.mutateAsync;
   const pickOpenRound = React.useCallback(
@@ -2547,13 +2522,15 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
 
   const markLocalReady = React.useCallback(async () => {
     setRoomError(null);
+    // Ready needs both devices. A failure takes the toggle's way back, or with nothing live leaves
+    // the preview's error and a Try again that asks for both.
+    if (!(await openForJoinState({ audioMuted: false, videoEnabled: true }, { retry: true }))) return;
     try {
-      await ensureLocalPreview({ audio: true, video: true });
       await markReady.mutateAsync();
     } catch (error) {
       setRoomError(error instanceof Error ? error.message : 'Could not mark you ready.');
     }
-  }, [ensureLocalPreview, markReady]);
+  }, [markReady, openForJoinState]);
 
   const publishRematchLeave = React.useCallback(async () => {
     if (rematchLeavePublishedRef.current) return;
@@ -2784,51 +2761,19 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     void requestPersistentRecordingStorage();
   }, [debate]);
 
+  /*
+   * Opens what the join state needs whenever the intro is idle: on arrival, and again after a drop
+   * stopped the devices. Keyed on the status, not the debate object, so a refetch does not re-run
+   * it over a toggle that is still opening.
+   */
+  const debateStatus = debate?.status;
   React.useEffect(() => {
-    if (!debate || debate.status !== 'ready' || roomState !== 'idle') return;
+    if (debateStatus !== 'ready' || roomState !== 'idle') return;
     // Warm the route's largest client-only dependency before the ten/finite-second connecting
     // window starts. The import is cached by the module loader; media preview remains independent.
     void import('livekit-client').catch(() => undefined);
-
-    let cancelled = false;
-    void (async () => {
-      const pending = mediaSession.pendingPreview();
-      if (pending) await pending.catch(() => undefined);
-
-      const liveKinds = mediaSession.localTracksRef.current.map(track => track.mediaStreamTrack.kind);
-      if (!joinStateChosenHere.current) {
-        /*
-         * A hand-off re-reads its tracks here, because they may not have landed at first render.
-         * A cold arrival keeps the first-render decision instead: that one knows about the picker's
-         * answer and the mic a lobby carried, and re-deriving would read "no tracks" over both.
-         *
-         * Settled and applied even when this run was cancelled: a card still adding a device keeps
-         * the preview 'ready', so the intro connection can start (and cancel this) before the
-         * hand-off lands, and a later drop would re-derive from the tracks the disconnect stopped.
-         */
-        settledJoinStateRef.current ??= handedOverAtMount.current ? handedOverJoinState(liveKinds) : inherited;
-        setAudioMuted(settledJoinStateRef.current.audioMuted);
-        setVideoEnabled(settledJoinStateRef.current.videoEnabled);
-      }
-      if (cancelled) return;
-
-      const settled = joinStateChosenHere.current ? { audioMuted, videoEnabled } : settledJoinStateRef.current!;
-      await openForJoinState(settled);
-    })();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [
-    carriedJoinState,
-    debate,
-    handedOverJoinState,
-    inherited,
-    mediaSession.localTracksRef,
-    mediaSession.pendingPreview,
-    openForJoinState,
-    roomState,
-  ]);
+    void openForJoinState(joinStateRef.current);
+  }, [debateStatus, openForJoinState, roomState]);
 
   React.useEffect(() => {
     if (!debate || roomState !== 'idle') return;
@@ -3121,7 +3066,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
             previewState={previewState}
             previewBusy={previewBusy}
             switchingDevice={replacingPreview}
-            error={roomError ?? deviceError}
+            error={roomError ?? deviceError?.message ?? null}
             mediaError={previewError}
             audioInputDevices={audioInputDevices}
             audioOutputDevices={audioOutputDevices}

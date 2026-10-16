@@ -127,13 +127,6 @@ function MediaPreview({
     };
   }, [sessionKey]);
 
-  // After `beginSession`, which resets it. The ready room falls back to the mic the lobby carried for a kind left to it.
-  React.useEffect(() => {
-    if (!session.lobbyDeferredKindsRef) return;
-    session.lobbyDeferredKindsRef.current = { audio: micToLobby, video: cameraToLobby };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cameraToLobby, micToLobby]);
-
   const open = { micOn: want.micOn && !micToLobby, cameraOn: camera && want.cameraOn && !cameraToLobby };
   const openKey = `${open.micOn}:${open.cameraOn}`;
   React.useEffect(() => {
@@ -215,6 +208,13 @@ function MediaPreview({
     if (permission === null) return;
     onJoinStateChange?.({ micOn, cameraOn });
   }, [cameraOn, micOn, onJoinStateChange, permission]);
+
+  // What the room this session is handed to starts with, rather than reading it off live tracks.
+  // After `beginSession`, which clears it; no camera choice where none was offered.
+  React.useEffect(() => {
+    session.joinChoiceRef.current = camera ? { micOn, cameraOn } : { micOn };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [camera, cameraOn, micOn, sessionKey]);
 
   const toggle = (next: Partial<DebateJoinState>) => {
     if (next.micOn !== undefined && micBlocked) return;

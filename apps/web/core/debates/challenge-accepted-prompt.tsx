@@ -47,7 +47,10 @@ export function ChallengeAcceptedPrompt({
   const videoEnabled = useFeatureFlag('debateVideo');
   const rememberChoice = React.useCallback(
     (state: { micOn: boolean; cameraOn: boolean }) =>
-      rememberRematchJoinIntent(session.id, videoEnabled ? state : { micOn: state.micOn }),
+      rememberRematchJoinIntent(
+        session.id,
+        videoEnabled ? { ...state, source: 'card' } : { micOn: state.micOn, source: 'card' }
+      ),
     [session.id, videoEnabled]
   );
 
