@@ -117,7 +117,12 @@ export function DebateChallengeDialog({
             >
               Not now
             </button>
-            <button type="button" onClick={() => onAccept(shownJoinState.current)} disabled={busy} className={DIALOG_ACTION_BUTTON_CLASS_NAME}>
+            <button
+              type="button"
+              onClick={() => onAccept(shownJoinState.current)}
+              disabled={busy}
+              className={DIALOG_ACTION_BUTTON_CLASS_NAME}
+            >
               Explore claims
             </button>
           </div>
