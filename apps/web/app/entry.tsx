@@ -17,6 +17,7 @@ import { useKeyboardShortcuts } from '~/core/hooks/use-keyboard-shortcuts';
 import { Toast } from '~/core/hooks/use-toast';
 import { browseSidebarShownAtom } from '~/core/state/browse-sidebar-state';
 import { useDiff } from '~/core/state/diff-store';
+import { EntityPanelSlotReset } from '~/core/state/entity-panel-slot-reset';
 import { Persistence } from '~/core/state/persistence';
 
 import { ClientOnly } from '~/design-system/client-only';
@@ -191,6 +192,7 @@ export function App({ children }: { children: React.ReactNode }) {
         <EntitySidePanel />
         <PlaybackDiagnostics />
         <EntityCommentsPanelHost />
+        <EntityPanelSlotReset />
         {/* Client-side rendered due to `window.localStorage` usage */}
         <ClientOnly>
           <OnboardingDialog />
