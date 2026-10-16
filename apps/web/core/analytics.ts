@@ -7,6 +7,7 @@ import { notifyActionPageView, pageContext } from './action-context';
 import { analyticsRuntime, isAnalyticsEnabled } from './analytics-context';
 import type { AnalyticsEventName } from './analytics-events';
 import { withSignupVisitor } from './auth/signup-visitor';
+import { pushMarketingEvent } from './marketing-events';
 
 export type { AnalyticsEventName } from './analytics-events';
 
@@ -638,6 +639,7 @@ export function trackPrivyAuth(params: PrivyAuthComplete, properties: AnalyticsP
     sessionRestored(identity, authProperties);
   } else if (params.isNewUser) {
     signedUp(identity, authProperties);
+    pushMarketingEvent('geo_account_created', { user_id: identity.user_id as string });
   } else {
     loggedIn(identity, authProperties);
   }
