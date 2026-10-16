@@ -5,7 +5,12 @@ import { Effect } from 'effect';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { EntitiesOrderBy } from '../gql/graphql';
-import { getAllEntities, getBatchEntities, getEntitiesOrderedByPropertyConnection } from '../io/queries';
+import {
+  getAllEntities,
+  getBatchEntities,
+  getEntitiesOrderedByPropertyConnection,
+  getEntityNames,
+} from '../io/queries';
 import type { Entity, Value } from '../types';
 import { E } from './orm';
 import { GeoStore, reactiveRelations, reactiveValues, syncedEntities } from './store';
@@ -71,6 +76,17 @@ describe('E.syncMany pagination', () => {
     syncedEntities.clear();
     store = new GeoStore(mockStream);
     cache = new QueryClient();
+  });
+
+  it('returns confirmed absent pending ids independently of merged entities', async () => {
+    reactiveValues.set([
+      { ...makeNameValue('missing', 'New'), isDeleted: true, isLocal: true, hasBeenPublished: false },
+    ]);
+    vi.mocked(getBatchEntities).mockReturnValue(Effect.succeed([]));
+    vi.mocked(getEntityNames).mockReturnValue(Effect.succeed([]));
+    const result = await E.syncMany({ store, cache, where: { id: { in: ['missing'] } }, first: 1 });
+    expect(result.merged).toEqual([]);
+    expect(result.confirmedAbsentEntityIds).toEqual(['missing']);
   });
 
   it('returns only the requested page when entities from other pages are in the local store (GEO-2181)', async () => {

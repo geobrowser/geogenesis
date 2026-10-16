@@ -133,7 +133,23 @@ export function stableStringify(value: unknown): string {
 
 export const reactiveValues = createAtom<Value[]>([]);
 export const reactiveRelations = createAtom<Relation[]>([]);
-export const syncedEntities = new Map<string, Entity>();
+// Missing key: unknown. Null: a requested ID was confirmed absent remotely.
+export const syncedEntities = new Map<string, Entity | null>();
+export const syncedEntitiesVersion = createAtom(0);
+
+function writeSyncedBaselines(entities: Entity[], absentIds: string[] = []) {
+  if (entities.length === 0 && absentIds.length === 0) return;
+  for (const entity of entities) {
+    syncedEntities.set(entity.id, {
+      ...entity,
+      values: entity.values.filter(value => !value.isLocal),
+      relations: entity.relations.filter(relation => !relation.isLocal),
+    });
+  }
+  for (const id of absentIds) syncedEntities.set(id, null);
+  // Empty baselines carry information even when there are no operations to hydrate.
+  syncedEntitiesVersion.set(version => version + 1);
+}
 
 /** See `GeoStore.seedFromServer`. */
 const SERVER_SEED_LIMIT = 2000;
@@ -260,21 +276,7 @@ export class GeoStore {
       // leak local edits into the baseline and break net-change diffing in the
       // flowbar (values and relations that were deleted locally would stop
       // matching any remote counterpart after a re-sync).
-      const baselineById = new Map<string, Entity>();
-      if (event.remoteEntities) {
-        for (const remote of event.remoteEntities) {
-          baselineById.set(remote.id, remote);
-        }
-      }
-
-      for (const entity of event.entities) {
-        const baseline = baselineById.get(entity.id) ?? entity;
-        syncedEntities.set(entity.id, {
-          ...baseline,
-          values: baseline.values.filter(v => !v.isLocal),
-          relations: baseline.relations.filter(r => !r.isLocal),
-        });
-      }
+      writeSyncedBaselines(event.remoteEntities ?? event.entities, event.confirmedAbsentEntityIds);
       this.pendingSyncEntities.push(...event.entities);
       if (!this.syncScheduled) {
         this.syncScheduled = true;
@@ -394,14 +396,7 @@ export class GeoStore {
   }
 
   public hydrateWith(entities: Entity[]) {
-    for (const entity of entities) {
-      syncedEntities.set(entity.id, {
-        ...entity,
-        values: entity.values.filter(v => !v.isLocal),
-        relations: entity.relations.filter(r => !r.isLocal),
-      });
-    }
-
+    writeSyncedBaselines(entities);
     this.hydrateReactiveState(entities);
   }
 
@@ -421,6 +416,7 @@ export class GeoStore {
     if (typeof window === 'undefined') {
       if (syncedEntities.size > SERVER_SEED_LIMIT) {
         syncedEntities.clear();
+        syncedEntitiesVersion.set(version => version + 1);
         reactiveValues.set([]);
         reactiveRelations.set([]);
       }
@@ -429,7 +425,7 @@ export class GeoStore {
       return;
     }
 
-    const missing = entities.filter(entity => !syncedEntities.has(entity.id));
+    const missing = entities.filter(entity => !syncedEntities.get(entity.id));
     if (missing.length > 0) this.hydrateWith(missing);
   }
 

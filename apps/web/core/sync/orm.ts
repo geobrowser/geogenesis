@@ -30,6 +30,7 @@ import { compareBySpaceRank } from '../utils/space/space-ranking';
 import { hasName } from '../utils/utils';
 // @TODO replace with Values.merge()
 import { merge } from '../utils/value/values';
+import { confirmAbsentPendingEntities } from './confirm-absent-pending-entities';
 import { EntityQuery, WhereCondition } from './experimental_query-layer';
 import { GeoStore, dedupeRelationsByKey, relationKey } from './store';
 
@@ -400,7 +401,13 @@ export class E {
     orderBy?: EntitiesOrderBy[];
     includeEmptyNames?: boolean;
     signal?: AbortController['signal'];
-  }): Promise<{ merged: Entity[]; remote: Entity[]; endCursor: string | null; hasNextPage: boolean }> {
+  }): Promise<{
+    merged: Entity[];
+    remote: Entity[];
+    endCursor: string | null;
+    hasNextPage: boolean;
+    confirmedAbsentEntityIds?: string[];
+  }> {
     // A relation target can be '' (#1410). The server rejects an empty id in a
     // list, so it is dropped before any path below sees the list.
     const requestedIds = where?.id?.in;
@@ -440,14 +447,28 @@ export class E {
       });
 
       const nonNullEntities = entities.filter((e): e is Entity => e !== null);
+      const absentIds = await confirmAbsentPendingEntities(requestIds, remoteEntities);
+      const confirmedAbsence = absentIds.length ? { confirmedAbsentEntityIds: absentIds } : {};
 
       const hasAdditionalFilters = Object.keys(where).some(key => key !== 'id');
       if (hasAdditionalFilters) {
         const localQuery = new EntityQuery(nonNullEntities).where(where);
-        return { merged: localQuery.execute(), remote: remoteEntities, endCursor: null, hasNextPage: false };
+        return {
+          merged: localQuery.execute(),
+          remote: remoteEntities,
+          endCursor: null,
+          hasNextPage: false,
+          ...confirmedAbsence,
+        };
       }
 
-      return { merged: nonNullEntities, remote: remoteEntities, endCursor: null, hasNextPage: false };
+      return {
+        merged: nonNullEntities,
+        remote: remoteEntities,
+        endCursor: null,
+        hasNextPage: false,
+        ...confirmedAbsence,
+      };
     }
 
     // An explicit id list already is the population: keep unnamed members, as

@@ -5,12 +5,15 @@ import { Duration, Effect } from 'effect';
 
 import { getBatchEntities } from '../io/queries';
 import { Entity } from '../types';
+import { confirmAbsentPendingEntities } from './confirm-absent-pending-entities';
 import { E, syncFetchQuery } from './orm';
 import { GeoStore } from './store';
 import { GeoEvent, GeoEventStream } from './stream';
 
 /** TTL for synced entities cache in milliseconds (5 minutes) */
 const SYNC_TTL_MS = 5 * 60 * 1000;
+
+type SyncResult = { merged: Entity[]; remote: Entity[]; confirmedAbsentEntityIds?: string[] };
 
 function serializeForLog(value: unknown): unknown {
   if (value instanceof Error) {
@@ -89,24 +92,21 @@ export class SyncEngine {
     this.batcher = new AsyncBatcher(this.processSyncQueue.bind(this), {
       wait: Duration.toMillis('100 millis'),
       started: true,
-      onSuccess: ({ merged, remote }: { merged: Entity[]; remote: Entity[] }) => {
-        if (merged.length > 0) {
-          /**
-           * We track the synced entities that have actually been merged instead of
-           * using the uniqueEntityIds we calculate above. This is to ensure that
-           * we only track synced entities that have a valid state after merging.
-           * Otherwise we can get in a state where an entity failed syncing in the past,
-           * and now can no longer be synced in the future.
-           */
+      onSuccess: ({ merged, remote, confirmedAbsentEntityIds }: SyncResult) => {
+        if (merged.length > 0 || confirmedAbsentEntityIds?.length) {
+          // Only a remote record justifies throttling later syncs. A local-only merge
+          // can disappear on the next edit; its deletions still need absence confirmation.
           const now = Date.now();
+          const remoteIds = new Set(remote.map(entity => entity.id));
           for (const entity of merged) {
-            this.syncedEntities.set(entity.id, now);
+            if (remoteIds.has(entity.id)) this.syncedEntities.set(entity.id, now);
           }
 
           this.stream.emit({
             type: GeoEventStream.ENTITIES_SYNCED,
             entities: merged,
             remoteEntities: remote,
+            ...(confirmedAbsentEntityIds?.length ? { confirmedAbsentEntityIds } : {}),
           });
         }
       },
@@ -180,7 +180,7 @@ export class SyncEngine {
 
   // @TODO This can eventually happen in a Worker so it can happen
   // in a separate thread that doesn't block UI ever
-  private async processSyncQueue(events: GeoEvent[]): Promise<{ merged: Entity[]; remote: Entity[] }> {
+  private async processSyncQueue(events: GeoEvent[]): Promise<SyncResult> {
     const entityIds: string[] = [];
 
     for (const event of events) {
@@ -276,6 +276,7 @@ export class SyncEngine {
 
     const remote = uniqueEntityIds.map(id => entities[id]).filter((e): e is Entity => e !== undefined);
 
-    return { merged, remote };
+    const confirmedAbsentEntityIds = await confirmAbsentPendingEntities(uniqueEntityIds, remote);
+    return { merged, remote, ...(confirmedAbsentEntityIds.length ? { confirmedAbsentEntityIds } : {}) };
   }
 }
