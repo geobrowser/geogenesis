@@ -45,12 +45,16 @@ describe('net review changes', () => {
     expect(getNetValues([personal, publicEdit], synced)).toEqual([publicEdit]);
   });
 
-  it('excludes personal-space values and relations created then deleted locally', () => {
-    expect(getNetValues([value({ isDeleted: true })], new Map())).toEqual([]);
-    expect(getNetRelations([relation({ isDeleted: true })], new Map())).toEqual([]);
-    // A remote entity may exist without either newly created operation.
+  it('excludes values and relations created then deleted when the baseline confirms they never existed', () => {
     expect(getNetValues([value({ isDeleted: true })], baseline())).toEqual([]);
     expect(getNetRelations([relation({ isDeleted: true })], baseline())).toEqual([]);
+  });
+
+  it('keeps restored deletions reviewable until their remote baseline loads', () => {
+    const deletedValue = value({ isDeleted: true });
+    const deletedRelation = relation({ isDeleted: true });
+    expect(getNetValues([deletedValue], new Map())).toEqual([deletedValue]);
+    expect(getNetRelations([deletedRelation], new Map())).toEqual([deletedRelation]);
   });
 
   it('retains actual additions, changes, and deletions of remote data', () => {

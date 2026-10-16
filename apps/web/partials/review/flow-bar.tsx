@@ -12,12 +12,10 @@ import { RemoveScroll } from 'react-remove-scroll';
 import { useAppBottomInset } from '~/core/app-bottom-inset';
 import { useEnterAnimationSettled } from '~/core/hooks/use-enter-animation-settled';
 import { useToast } from '~/core/hooks/use-toast';
-import { getNetRelations, getNetValues } from '~/core/review/net-changes';
+import { useNetChanges } from '~/core/review/use-net-changes';
 import { useDiff } from '~/core/state/diff-store';
 import { useEditable } from '~/core/state/editable-store';
 import { useStatusBar } from '~/core/state/status-bar-store';
-import { syncedEntities } from '~/core/sync/store';
-import { useRelations, useValues } from '~/core/sync/use-store';
 import { Relation } from '~/core/types';
 import { Z_LAYER_CLASS } from '~/core/z-layers';
 
@@ -35,23 +33,8 @@ export const FlowBar = () => {
   const sidePanelWantsEdit = useAtomValue(entitySidePanelWantsEditAtom);
   const { isReviewOpen, setIsReviewOpen, bumpReviewVersion } = useDiff();
 
-  const allValues = useValues({
-    selector: t => t.hasBeenPublished === false && t.isLocal === true,
-    includeDeleted: true,
-  });
-
-  const allRelations = useRelations({
-    includeDeleted: true,
-    selector: r => r.hasBeenPublished === false && r.isLocal === true,
-  });
-
-  // Filter to only count net changes (exclude no-ops like created-then-deleted
-  // relations and values/relations that match the remote state).
-  const values = React.useMemo(() => getNetValues(allValues, syncedEntities), [allValues]);
-  const relations = React.useMemo(
-    () => collapseSlotReplacements(getNetRelations(allRelations, syncedEntities)),
-    [allRelations]
-  );
+  const { values, relations: netRelations, spaceIds } = useNetChanges();
+  const relations = React.useMemo(() => collapseSlotReplacements(netRelations), [netRelations]);
 
   const opsCount = values.length + relations.length;
 
@@ -61,7 +44,7 @@ export const FlowBar = () => {
     A.length
   );
 
-  const spacesCount = pipe([...new Set([...values.map(t => t.spaceId), ...relations.map(r => r.spaceId)])], A.length);
+  const spacesCount = spaceIds.length;
 
   const hideFlowbar = shouldHideFlowBar({
     opsCount,

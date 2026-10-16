@@ -13,8 +13,9 @@ export function getNetValues(localValues: Value[], syncedEntities: SyncedEntitie
     const remoteEntity = syncedEntities.get(v.entity.id);
 
     if (v.isDeleted) {
-      // If no remote entity exists, this value was created and deleted locally — net-zero
-      if (!remoteEntity) return false;
+      // Persisted deletions can be restored before their remote entity is hydrated.
+      // Only discard a deletion when a known baseline proves it was created locally.
+      if (!remoteEntity) return true;
       return remoteEntity.values.some(remote => remote.id === v.id && !remote.isLocal);
     }
 
@@ -52,9 +53,8 @@ export function getNetRelations(localRelations: Relation[], syncedEntities: Sync
     const remoteEntity = syncedEntities.get(r.fromEntity.id);
 
     if (r.isDeleted) {
-      // If no remote entity, or the relation ID doesn't exist in remote,
-      // this was created and deleted locally — net-zero
-      if (!remoteEntity) return false;
+      // An absent cache entry is unknown, not proof that the relation never existed.
+      if (!remoteEntity) return true;
       const remoteRelation = remoteEntity.relations.find(remote => remote.id === r.id && !remote.isLocal);
       if (!remoteRelation) return false;
 

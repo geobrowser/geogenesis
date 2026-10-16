@@ -31,7 +31,6 @@ import { ID } from '~/core/id';
 import type { Space } from '~/core/io/dto/spaces';
 import { getAllEntities, getRelationsByToEntityIds, getSpaces } from '~/core/io/queries';
 import { fetchSpaceWithParents } from '~/core/io/subgraph/fetch-space-with-parents';
-import { getNetRelations, getNetValues } from '~/core/review/net-changes';
 import {
   buildIsNewEntity,
   buildOwnershipIndex,
@@ -43,10 +42,10 @@ import {
   getDeselectionBlockers,
   selectOpsForPublish,
 } from '~/core/review/publish-selection';
+import { useNetChanges } from '~/core/review/use-net-changes';
 import { useDiff } from '~/core/state/diff-store';
 import { isPendingPersonalSpaceId, usePendingPersonalSpace } from '~/core/state/pending-personal-space';
 import { statusBarStateAtom, useStatusBar } from '~/core/state/status-bar-store';
-import { syncedEntities } from '~/core/sync/store';
 import { useMutate } from '~/core/sync/use-mutate';
 import { useRelations, useValues } from '~/core/sync/use-store';
 import { useSyncEngine } from '~/core/sync/use-sync-engine';
@@ -150,23 +149,7 @@ export const ReviewChanges = () => {
   const [isBountyLinkingOpen, setIsBountyLinkingOpen] = React.useState(false);
   const [selectedBountyIds, setSelectedBountyIds] = React.useState<Set<string>>(new Set());
 
-  const valuesWithChanges = useValues({
-    selector: t => t.hasBeenPublished === false && t.isLocal === true,
-    includeDeleted: true,
-  });
-
-  const relationsWithChanges = useRelations({
-    selector: r => r.hasBeenPublished === false && r.isLocal === true,
-    includeDeleted: true,
-  });
-
-  const dedupedSpacesWithActions = React.useMemo(() => {
-    // Match the flow bar: unchanged values and canceled relations do not make a space reviewable.
-    const valueSpaceIds = getNetValues(valuesWithChanges, syncedEntities).map(t => t.spaceId);
-    const relationSpaceIds = getNetRelations(relationsWithChanges, syncedEntities).map(r => r.spaceId);
-
-    return [...new Set([...valueSpaceIds, ...relationSpaceIds])];
-  }, [valuesWithChanges, relationsWithChanges]);
+  const { spaceIds: dedupedSpacesWithActions } = useNetChanges();
 
   const spacesKey = [...dedupedSpacesWithActions].sort().join(',');
   const { activeSpace, setActiveSpace } = useReviewSpace({
@@ -985,21 +968,23 @@ export const ReviewChanges = () => {
     });
   }, [bountyIdSet, selectedBountyIds.size]);
 
-  const spaceOptions = spaces.map(space => ({
-    label: (
-      <div className="flex items-center gap-2">
-        {space.entity.image && (
-          <div className="h-5 w-5 overflow-hidden rounded">
-            <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
-          </div>
-        )}
-        <span>{space.entity.name ?? space.id}</span>
-      </div>
-    ),
-    value: space.id,
-    disabled: false,
-    onClick: () => setActiveSpace(space.id),
-  }));
+  const spaceOptions = spaces
+    .filter(space => dedupedSpacesWithActions.includes(space.id))
+    .map(space => ({
+      label: (
+        <div className="flex items-center gap-2">
+          {space.entity.image && (
+            <div className="h-5 w-5 overflow-hidden rounded">
+              <NativeGeoImage value={space.entity.image} alt="" className="h-full w-full object-cover" />
+            </div>
+          )}
+          <span>{space.entity.name ?? space.id}</span>
+        </div>
+      ),
+      value: space.id,
+      disabled: false,
+      onClick: () => setActiveSpace(space.id),
+    }));
 
   return (
     <>
