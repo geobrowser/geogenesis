@@ -1838,7 +1838,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
           }
         }
 
-        const hasPreviewTracks = localTracksRef.current.length > 0;
+        // The intro publishes whatever the preview holds, nothing included: someone who chose to
+        // listen only still joins, and opening devices here would override that choice.
+        const hasPreviewTracks = localTracksRef.current.length > 0 || debateStatusRef.current === 'ready';
         connectionStage = 'local_tracks';
         const tracks = hasPreviewTracks
           ? localTracksRef.current
@@ -1887,8 +1889,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
         connectionStage = 'local_preview';
         const stream = new MediaStream(tracks.map(track => track.mediaStreamTrack));
         // `bindLocalVideo` runs off this and off the element callback ref, so whichever tile is
-        // mounted picks it up.
-        setPreviewStream(stream);
+        // mounted picks it up. A receive-only intro leaves the preview empty, so a device opened
+        // later reads as a new stream and republishes.
+        if (tracks.length > 0) setPreviewStream(stream);
         publishedStreamRef.current = stream;
 
         if (!isCurrent()) {
@@ -2775,9 +2778,9 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     // and is deliberately gated on focus; auto-connecting here would just fight it.
     if (connectionConflictSource !== null) return;
     if (['complete', 'cancelled'].includes(debate.status)) return;
-    // Only once the preview owns the camera: `connect` creates its own tracks when it finds none,
-    // and racing `ensurePreview` for the device leaves one tab holding two captures.
-    if (debate.status === 'ready' && previewState !== 'ready') return;
+    // Only once the preview has settled, so the intro publishes what was chosen. `idle` is a
+    // settled choice to open nothing, and connects receive-only.
+    if (debate.status === 'ready' && !(previewState === 'ready' || (previewState === 'idle' && !previewBusy))) return;
     // `ready` and `connecting` are separate opportunities, so a failed intro connection does not
     // spend the one the debate depends on. A successful one is held by the `roomState` guard.
     const autoConnectKey = `${debate.id}:${debate.status === 'ready' ? 'intro' : 'debate'}`;
@@ -2785,7 +2788,7 @@ function DebateRoomSurface({ spaceId, debateId }: DebateRoomPageClientProps) {
     autoConnectAttemptedRef.current = autoConnectKey;
     setAutoConnectAttemptedKey(autoConnectKey);
     void connect();
-  }, [connect, connectionConflictSource, debate, previewState, roomState]);
+  }, [connect, connectionConflictSource, debate, previewBusy, previewState, roomState]);
 
   /**
    * Picking a different camera or microphone restarts the preview, which stops the tracks the room

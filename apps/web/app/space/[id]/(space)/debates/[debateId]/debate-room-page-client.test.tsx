@@ -1876,6 +1876,59 @@ describe('DebateRoomPageClient', () => {
     expect(mocks.createLocalTracks).not.toHaveBeenCalled();
   });
 
+  it('joins the intro receive-only for a hand-off that chose neither', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <ListeningOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('0'));
+
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <ListeningOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeInTheDocument());
+    expect(mocks.publishTrack).not.toHaveBeenCalled();
+    expect(mocks.createLocalTracks).not.toHaveBeenCalled();
+  });
+
+  it('publishes the mic turned on after joining the intro listening only', async () => {
+    mocks.debate = readyDebate({ localReady: false, remoteReady: false });
+    const audioTrack = createLocalAudioTrack();
+    mocks.createLocalTracks.mockResolvedValue([audioTrack]);
+
+    const view = render(
+      <DebateMediaSessionProvider>
+        <ListeningOnlyHandover />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(screen.getByTestId('handover-tracks')).toHaveTextContent('0'));
+    view.rerender(
+      <DebateMediaSessionProvider>
+        <ListeningOnlyHandover />
+        <DebateRoomPageClient spaceId="space-1" debateId="debate-1" />
+      </DebateMediaSessionProvider>
+    );
+    await waitFor(() => expect(mocks.roomConnect).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Unmute microphone' })).toBeEnabled());
+
+    fireEvent.click(screen.getByRole('button', { name: 'Unmute microphone' }));
+
+    await waitFor(() => expect(mocks.publishTrack).toHaveBeenCalledWith(audioTrack), {
+      timeout: 3000,
+    });
+    expect(mocks.createLocalTracks).toHaveBeenCalledTimes(1);
+    expect(mocks.createLocalTracks).toHaveBeenCalledWith(expect.objectContaining({ video: false }));
+    expect(mocks.roomConnect).toHaveBeenCalledTimes(2);
+  });
+
   it('waits for a hand-off still in flight rather than closing it', async () => {
     mocks.debate = readyDebate({ localReady: false, remoteReady: false });
     let open!: (tracks: unknown[]) => void;
